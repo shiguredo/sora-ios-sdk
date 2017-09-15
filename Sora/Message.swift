@@ -208,9 +208,9 @@ struct SignalingConnect {
         
         // スナップショットの設定
         if mediaOption.snapshotEnabled {
-            mediaOption.videoCodec = .VP8
-            mediaOption.videoEnabled = true
-            mediaOption.audioEnabled = true
+            self.mediaOption.videoCodec = .VP8
+            self.mediaOption.videoEnabled = true
+            self.mediaOption.audioEnabled = true
         }
     }
 
