@@ -8,10 +8,10 @@ Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライ�
 
 - iOS 10.1 以降 (シミュレーターは非対応)
 - Mac OS X 10.11.6 以降
-- Xcode 8.1 以降
-- Swift 3.0.1
+- Xcode 8.3.2 以降
+- Swift 3.1
 - WebRTC M57
-- WebRTC SFU Sora 17.02 以降
+- WebRTC SFU Sora 17.04 以降
 
 ## サポートについて
 
