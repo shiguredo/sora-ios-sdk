@@ -9,6 +9,7 @@ Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライ�
 ## システム条件
 
 - iOS 10.0 以降 (シミュレーターは非対応)
+- アーキテクチャ arm64, armv7
 - Mac OS X 10.12.5 以降
 - Xcode 8.3.3 以降
 - Swift 3.1

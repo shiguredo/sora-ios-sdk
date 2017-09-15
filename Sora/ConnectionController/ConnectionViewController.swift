@@ -302,19 +302,6 @@ class ConnectionViewController: UITableViewController {
         
         updateControls()
 
-        switch shared.tupleOfAvailableStreamTypes {
-        case (true, true), (false, false):
-            break
-        case (true, false):
-            enableMultistreamLabel.textColor = UIColor.lightGray
-            enableMultistreamSwitch.isOn = false
-            enableMultistreamSwitch.isEnabled = false
-        case (false, true):
-            enableMultistreamLabel.textColor = UIColor.lightGray
-            enableMultistreamSwitch.isOn = true
-            enableMultistreamSwitch.isEnabled = false
-        }
-        
         // build info
         if let version = BuildInfo.WebRTCVersion {
             WebRTCVersionValueLabel.text = version
@@ -384,6 +371,7 @@ class ConnectionViewController: UITableViewController {
         let labels: [UILabel] = [
             enableWebSocketSSLLabel, hostLabel, portLabel,
             signalingPathLabel, channelIdLabel, roleLabel,
+            enableMultistreamLabel,
             enableVideoLabel, videoCodecLabel,
             bitRateLabel, enableSnapshotLabel,
             enableAudioLabel, audioCodecLabel,
@@ -392,12 +380,6 @@ class ConnectionViewController: UITableViewController {
             label.isEnabled = isEnabled
         }
         
-        switch shared.tupleOfAvailableStreamTypes {
-        case (true, false), (false, true):
-            enableMultistreamLabel.isEnabled = false
-        default:
-            enableMultistreamLabel.isEnabled = true
-        }
         
         let fields: [UITextField] = [hostTextField,
                                      portTextField,

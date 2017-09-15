@@ -26,16 +26,8 @@ class RoleViewController: UITableViewController {
         didSet {
             for comp in components {
                 comp.cell.accessoryType = .none
-                if connectionController.availableRoles.contains(comp.role) {
-                    comp.label.textColor = UIColor.black
-                    comp.cell.isUserInteractionEnabled = true
-                    if selectedRoles.contains(comp.role) {
-                        comp.cell.accessoryType = .checkmark
-                    }
-                } else {
-                    comp.label.textColor = UIColor.lightGray
-                    comp.cell.isUserInteractionEnabled = false
-                }
+                comp.label.textColor = UIColor.lightGray
+                comp.cell.isUserInteractionEnabled = false
             }
         }
     }

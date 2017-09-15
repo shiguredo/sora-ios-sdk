@@ -18,7 +18,7 @@ public enum AudioCodec {
     
 }
 
-public class MediaOption {
+public struct MediaOption {
     
     public var videoCodec: VideoCodec = .default
     public var audioCodec: AudioCodec = .default
