@@ -9,6 +9,16 @@
 - FIX
     - バグ修正
 
+## 1.2.3
+
+### CHANGE
+
+- API: VideoView: ``contentMode`` に応じて映像のサイズを変更するようにした
+
+### FIX
+
+- API: 残っていたデバッグプリントを削除した
+
 ## 1.2.2
 
 ### CHANGE
