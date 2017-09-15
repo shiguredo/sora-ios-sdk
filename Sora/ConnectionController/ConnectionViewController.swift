@@ -81,13 +81,13 @@ class ConnectionViewController: UITableViewController {
     
     weak var touchedField: UITextField?
     
-    static var videoCodecTable: TextValueTable<VideoCodec> =
+    static let videoCodecTable: TextValueTable<VideoCodec> =
         TextValueTable(pairs: [("Default", .default),
                                ("VP8", .VP8),
                                ("VP9", .VP9),
                                ("H.264", .H264)])
     
-    static var bitRateTable: TextValueTable<Int> =
+    static let bitRateTable: TextValueTable<Int> =
         TextValueTable(pairs: [("100", 100),
                                ("300", 300),
                                ("500", 500),
@@ -99,7 +99,7 @@ class ConnectionViewController: UITableViewController {
                                ("3000", 3000),
                                ("5000", 5000)])
     
-    static var audioCodecTable: TextValueTable<AudioCodec> =
+    static let audioCodecTable: TextValueTable<AudioCodec> =
         TextValueTable(pairs: [("Default", .default),
                                ("Opus", .Opus),
                                ("PCMU", .PCMU)])

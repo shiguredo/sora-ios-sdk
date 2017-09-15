@@ -9,6 +9,18 @@
 - FIX
     - バグ修正
 
+## 1.2.2
+
+### CHANGE
+
+- API: 一部の静的変数を定数に変更した
+
+### FIX
+
+- API: VideoView: メモリー解放時に Key-Value Observing に関する例外が発生する現象を修正した
+
+- API: VideoView: メモリー解放時にクラッシュする現象を修正した
+
 ## 1.2.1
 
 ### FIX

@@ -28,31 +28,19 @@ public class VideoView: UIView, VideoRenderer {
 
     override public init(frame: CGRect) {
         super.init(frame: frame)
-        setUp()
     }
     
     required public init?(coder: NSCoder) {
         super.init(coder: coder)
-        setUp()
     }
     
-    func setUp() {
-        addObserver(self, forKeyPath: "frame", options: .new, context: nil)
+    deinit {
+        print("# deinit VideoView")
     }
     
-    override public func observeValue(forKeyPath keyPath: String?,
-                                      of object: Any?,
-                                      change: [NSKeyValueChangeKey : Any]?,
-                                      context: UnsafeMutableRawPointer?) {
-        switch keyPath {
-        case "frame"?:
-            guard let change = change else { return }
-            if let frame = change[NSKeyValueChangeKey.newKey] as? CGRect {
-                contentView.setRemoteVideoViewSize(frame.size)
-            }
-        default:
-            break
-        }
+    override public func layoutSubviews() {
+        super.layoutSubviews()
+        contentView.setRemoteVideoViewSize(frame.size)
     }
     
     public func onChangedSize(_ size: CGSize) {
