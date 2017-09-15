@@ -3,35 +3,36 @@ import CoreMedia
 import WebRTC
 
 public enum VideoFrameHandle {
-    case webRTC(RTCVideoFrame)
+    case WebRTC(RTCVideoFrame)
+    case snapshot(Snapshot)
 }
 
 public protocol VideoFrame {
 
     var videoFrameHandle: VideoFrameHandle? { get }
-    var width: Int32 { get }
-    var height: Int32 { get }
-    var timestamp: CMTime { get }
+    var width: Int { get }
+    var height: Int { get }
+    var timestamp: CMTime? { get }
 
 }
 
-struct RemoteVideoFrame: VideoFrame {
+class RemoteVideoFrame: VideoFrame {
     
     var nativeVideoFrame: RTCVideoFrame
     
     var videoFrameHandle: VideoFrameHandle? {
-        get { return VideoFrameHandle.webRTC(nativeVideoFrame) }
+        get { return VideoFrameHandle.WebRTC(nativeVideoFrame) }
     }
 
-    var width: Int32 {
-        get { return nativeVideoFrame.width }
+    var width: Int {
+        get { return Int(nativeVideoFrame.width) }
     }
     
-    var height: Int32 {
-        get { return nativeVideoFrame.height }
+    var height: Int {
+        get { return Int(nativeVideoFrame.height) }
     }
     
-    var timestamp: CMTime {
+    var timestamp: CMTime? {
         get { return CMTimeMake(nativeVideoFrame.timeStampNs, 1000000000) }
     }
     
@@ -39,4 +40,30 @@ struct RemoteVideoFrame: VideoFrame {
         self.nativeVideoFrame = nativeVideoFrame
     }
     
+}
+
+class SnapshotVideoFrame: VideoFrame {
+    
+    var snapshot: Snapshot
+    
+    init(snapshot: Snapshot) {
+        self.snapshot = snapshot
+    }
+    
+    public var videoFrameHandle: VideoFrameHandle? {
+        get { return VideoFrameHandle.snapshot(snapshot) }
+    }
+    
+    public var width: Int {
+        get { return snapshot.image.width }
+    }
+    
+    public var height: Int {
+        get { return snapshot.image.height }
+    }
+    
+    public var timestamp: CMTime? {
+        get { return nil }
+    }
+
 }

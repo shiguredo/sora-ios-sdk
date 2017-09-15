@@ -49,6 +49,7 @@ class ConnectionViewController: UITableViewController {
     @IBOutlet weak var videoCodecCell: UITableViewCell!
     @IBOutlet weak var bitRateLabel: UILabel!
     @IBOutlet weak var bitRateCell: UITableViewCell!
+    @IBOutlet weak var enableSnapshotLabel: UILabel!
     @IBOutlet weak var enableAudioLabel: UILabel!
     @IBOutlet weak var audioCodecLabel: UILabel!
     @IBOutlet weak var audioCodecCell: UITableViewCell!
@@ -69,6 +70,7 @@ class ConnectionViewController: UITableViewController {
     @IBOutlet weak var enableVideoSwitch: UISwitch!
     @IBOutlet weak var videoCodecValueLabel: UILabel!
     @IBOutlet weak var bitRateValueLabel: UILabel!
+    @IBOutlet weak var enableSnapshotSwitch: UISwitch!
     @IBOutlet weak var enableAudioSwitch: UISwitch!
     @IBOutlet weak var audioCodecValueLabel: UILabel!
     @IBOutlet weak var autofocusSwitch: UISwitch!
@@ -186,6 +188,20 @@ class ConnectionViewController: UITableViewController {
         set { bitRateValueLabel.text = newValue.description }
     }
     
+    var snapshotEnabled: Bool {
+        get { return enableSnapshotSwitch.isOn }
+        
+        set {
+            enableVideoLabel.isEnabled = !newValue
+            enableVideoSwitch.isEnabled = !newValue
+            enableSnapshotSwitch.setOn(newValue, animated: true)
+            videoCodecLabel.isEnabled = !newValue
+            videoCodecCell.isUserInteractionEnabled = !newValue
+            enableAudioLabel.isEnabled = !newValue
+            enableAudioSwitch.isEnabled = !newValue
+        }
+    }
+    
     var audioEnabled: Bool {
         get { return enableAudioSwitch.isOn }
         set { enableAudioSwitch.setOn(newValue, animated: true) }
@@ -204,11 +220,8 @@ class ConnectionViewController: UITableViewController {
         }
     }
     
-    var connectionController: ConnectionController! {
-        get {
-            return (navigationController as! ConnectionNavigationController?)!
-                .connectionController!
-        }
+    var shared: ConnectionController {
+        get { return ConnectionController.shared }
     }
     
     var connection: Connection?
@@ -233,31 +246,34 @@ class ConnectionViewController: UITableViewController {
                          name: NSNotification.Name.UIApplicationDidEnterBackground,
                          object: nil)
         
-        enableWebSocketSSLSwitch.addTarget(connectionController,
+        enableWebSocketSSLSwitch.addTarget(shared,
                                            action: ConnectionController.Action.updateWebSocketSSLEnabled,
                                            for: .valueChanged)
-        hostTextField.addTarget(connectionController,
+        hostTextField.addTarget(shared,
                                 action: ConnectionController.Action.updateHost,
                                 for: .editingChanged)
-        portTextField.addTarget(connectionController,
+        portTextField.addTarget(shared,
                                 action: ConnectionController.Action.updatePort,
                                 for: .editingChanged)
-        signalingPathTextField.addTarget(connectionController,
+        signalingPathTextField.addTarget(shared,
                                          action: ConnectionController.Action.updateSignalingPath,
                                          for: .editingChanged)
-        channelIdTextField.addTarget(connectionController,
+        channelIdTextField.addTarget(shared,
                                      action: ConnectionController.Action.updateChannelId,
                                      for: .editingChanged)
-        enableMultistreamSwitch.addTarget(connectionController,
+        enableMultistreamSwitch.addTarget(shared,
                                           action: ConnectionController.Action.updateMultistreamEnabled,
                                           for: .valueChanged)
-        enableVideoSwitch.addTarget(connectionController,
+        enableSnapshotSwitch.addTarget(shared,
+                                       action: ConnectionController.Action.updateSnapshotEnabled,
+                                       for: .valueChanged)
+        enableVideoSwitch.addTarget(shared,
                                     action: ConnectionController.Action.updateVideoEnabled,
                                     for: .valueChanged)
-        enableAudioSwitch.addTarget(connectionController,
+        enableAudioSwitch.addTarget(shared,
                                     action: ConnectionController.Action.updateAudioEnabled,
                                     for: .valueChanged)
-        autofocusSwitch.addTarget(connectionController,
+        autofocusSwitch.addTarget(shared,
                                   action: ConnectionController.Action.updateAutofocus,
                                   for: .valueChanged)
         
@@ -265,29 +281,29 @@ class ConnectionViewController: UITableViewController {
             .addObserver(self,
                          selector: #selector(userDefaultsDidLoad(_:)),
                          name: ConnectionController.userDefaultsDidLoadNotificationName,
-                         object: connectionController)
+                         object: shared)
         
         state = .disconnected
         roles = [.publisher, .subscriber]
         videoCodec = .default
         audioCodec = .default
-        enableLabel(enableMicrophoneLabel, isEnabled: false)
+        enableMicrophoneLabel.isEnabled = false
         enableMicrophoneSwitch.setOn(false, animated: false)
         autofocusSwitch.setOn(false, animated: false)
         connectionTimeValueLabel.text = nil
-        hostTextField.text = connectionController?.host
+        hostTextField.text = shared.host
         hostTextField.placeholder = "ex) www.example.com"
-        portTextField.text = connectionController?.port?.description
+        portTextField.text = shared.port?.description
         portTextField.placeholder = "ex) 5000"
-        signalingPathTextField.text = connectionController?.signalingPath
+        signalingPathTextField.text = shared.signalingPath
         signalingPathTextField.placeholder = "ex) signaling"
-        channelIdTextField.text = connectionController?.channelId
+        channelIdTextField.text = shared.channelId
         channelIdTextField.placeholder = "your channel ID"
         
         //loadSettings() // deprecated
         updateControls()
 
-        switch connectionController!.tupleOfAvailableStreamTypes {
+        switch shared.tupleOfAvailableStreamTypes {
         case (true, true), (false, false):
             break
         case (true, false):
@@ -333,28 +349,29 @@ class ConnectionViewController: UITableViewController {
     // MARK: 設定の保存
     
     func updateControls() {
-        if let connectionController = connectionController {
-            enableWebSocketSSLSwitch.setOn(connectionController.WebSocketSSLEnabled, animated: true)
-            hostTextField.text = connectionController.host
-            portTextField.text = connectionController.port?.description
-            signalingPathTextField.text = connectionController.signalingPath
-            channelIdTextField.text = connectionController.channelId
-            
-            roles = connectionController.roles
-            enableMultistreamSwitch.setOn(connectionController.multistreamEnabled, animated: true)
-            enableVideoSwitch.setOn(connectionController.videoEnabled, animated: true)
-            if let codec = connectionController.videoCodec {
-                videoCodecValueLabel.text = ConnectionViewController.videoCodecTable.text(value: codec)
-            }
-            if let bitRate = connectionController.bitRate {
-                bitRateValueLabel.text = bitRate.description
-            } else {
-                bitRateValueLabel.text = "Default"
-            }
-            enableAudioSwitch.setOn(connectionController.audioEnabled, animated: true)
-            if let codec = connectionController.audioCodec {
-                audioCodecValueLabel.text = ConnectionViewController.audioCodecTable.text(value: codec)
-            }
+        enableWebSocketSSLSwitch.setOn(shared.WebSocketSSLEnabled, animated: true)
+        hostTextField.text = shared.host
+        portTextField.text = shared.port?.description
+        signalingPathTextField.text = shared.signalingPath
+        channelIdTextField.text = shared.channelId
+        
+        roles = shared.roles
+        enableMultistreamSwitch.setOn(shared.multistreamEnabled, animated: true)
+        enableVideoSwitch.setOn(shared.videoEnabled, animated: true)
+        if let codec = shared.videoCodec {
+            videoCodecValueLabel.text = ConnectionViewController.videoCodecTable.text(value: codec)
+        }
+        if let bitRate = shared.bitRate {
+            bitRateValueLabel.text = bitRate.description
+        } else {
+            bitRateValueLabel.text = "Default"
+        }
+        enableSnapshotSwitch.setOn(shared.snapshotEnabled,
+                                   animated: true)
+        
+        enableAudioSwitch.setOn(shared.audioEnabled, animated: true)
+        if let codec = shared.audioCodec {
+            audioCodecValueLabel.text = ConnectionViewController.audioCodecTable.text(value: codec)
         }
     }
     
@@ -364,26 +381,23 @@ class ConnectionViewController: UITableViewController {
     
     // MARK: アクション
     
-    func enableLabel(_ label: UILabel, isEnabled: Bool) {
-        label.textColor = isEnabled ? nil : UIColor.lightGray
-    }
-    
     func enableControls(_ isEnabled: Bool) {
         let labels: [UILabel] = [
             enableWebSocketSSLLabel, hostLabel, portLabel,
             signalingPathLabel, channelIdLabel, roleLabel,
             enableVideoLabel, videoCodecLabel,
+            bitRateLabel, enableSnapshotLabel,
             enableAudioLabel, audioCodecLabel,
             ]
         for label in labels {
-            enableLabel(label, isEnabled: isEnabled)
+            label.isEnabled = isEnabled
         }
         
-        switch connectionController!.tupleOfAvailableStreamTypes {
+        switch shared.tupleOfAvailableStreamTypes {
         case (true, false), (false, true):
-            enableMultistreamLabel.textColor = UIColor.lightGray
+            enableMultistreamLabel.isEnabled = false
         default:
-            enableMultistreamLabel.textColor = nil
+            enableMultistreamLabel.isEnabled = true
         }
         
         let fields: [UITextField] = [hostTextField,
@@ -391,11 +405,7 @@ class ConnectionViewController: UITableViewController {
                                      signalingPathTextField,
                                      channelIdTextField]
         for field in fields {
-            if isEnabled {
-                field.textColor = nil
-            } else {
-                field.textColor = UIColor.lightGray
-            }
+            field.isEnabled = isEnabled
         }
         
         let controls: [UIView] = [
@@ -403,21 +413,21 @@ class ConnectionViewController: UITableViewController {
             signalingPathTextField, channelIdTextField, roleCell,
             enableMultistreamSwitch,
             enableVideoSwitch, enableAudioSwitch,
-            videoCodecCell, bitRateCell, audioCodecCell]
+            videoCodecCell, bitRateCell, enableSnapshotSwitch, audioCodecCell]
         for control: UIView in controls {
             control.isUserInteractionEnabled = isEnabled
         }
     }
 
     @IBAction func back(_ sender: AnyObject) {
-        connectionController.saveToUserDefaults()
+        shared.saveToUserDefaults()
         dismiss(animated: true)
     }
     
     var connectingAlertController: UIAlertController!
     
     @IBAction func connectOrDisconnect(_ sender: AnyObject) {
-        connectionController.saveToUserDefaults()
+        shared.saveToUserDefaults()
         
         switch state {
         case .connecting:
@@ -474,6 +484,7 @@ class ConnectionViewController: UITableViewController {
             }
             
             connection = Connection(URL: URL, mediaChannelId: channelId)
+            shared.connection = connection
             eventLog = connection?.eventLog
             let request = ConnectionController
                 .Request(URL: URL,
@@ -483,9 +494,10 @@ class ConnectionViewController: UITableViewController {
                          videoEnabled: videoEnabled,
                          videoCodec: videoCodec ?? .default,
                          bitRate: bitRate,
+                         snapshotEnabled: snapshotEnabled,
                          audioEnabled: audioEnabled,
                          audioCodec: audioCodec ?? .default)
-            connectionController.onRequestHandler?(connection!, request)
+            shared.onRequestHandler?(connection!, request)
             
             connectingAlertController = UIAlertController(
                 title: nil,
@@ -527,7 +539,7 @@ class ConnectionViewController: UITableViewController {
                     return
                 }
                 
-                self.enableLabel(self.enableMicrophoneLabel, isEnabled: true)
+                self.enableMicrophoneLabel.isEnabled = true
                 self.enableMicrophoneSwitch.isEnabled = true
                 self.enableMicrophoneSwitch.setOn(true, animated: true)
                 
@@ -566,7 +578,7 @@ class ConnectionViewController: UITableViewController {
         }
         state = .disconnected
         connectingAlertController = nil
-        enableLabel(enableMicrophoneLabel, isEnabled: false)
+        enableMicrophoneLabel.isEnabled = false
         enableMicrophoneSwitch.isEnabled = false
         enableMicrophoneSwitch.isUserInteractionEnabled = true
         enableMicrophoneSwitch.setOn(false, animated: true)
@@ -579,6 +591,7 @@ class ConnectionViewController: UITableViewController {
             mediaConn.mediaOption.videoCodec = codec
         }
         mediaConn.mediaOption.bitRate = bitRate
+        mediaConn.mediaOption.snapshotEnabled = snapshotEnabled
         mediaConn.mediaOption.audioEnabled = audioEnabled
         if let codec = audioCodec {
             mediaConn.mediaOption.audioCodec = codec
@@ -601,7 +614,7 @@ class ConnectionViewController: UITableViewController {
     func finishFailure(title: String, message: String, error: ConnectionError) {
         presentSimpleAlert(title: title, message: message)
         state = .disconnected
-        connectionController?.onConnectHandler?(nil, nil, error)
+        shared.onConnectHandler?(nil, nil, error)
     }
     
     func finishConnection(_ mediaConnection: MediaConnection) {
@@ -638,7 +651,7 @@ class ConnectionViewController: UITableViewController {
                 }
             }
         }
-        connectionController!.onConnectHandler?(connection, roles, nil)
+        shared.onConnectHandler?(connection, roles, nil)
         back(self)
     }
     
@@ -658,7 +671,11 @@ class ConnectionViewController: UITableViewController {
         
         pub.microphoneEnabled = enableMicrophoneSwitch.isOn
     }
-        
+    
+    @IBAction func switchSnapshotEnabled(_ sender: AnyObject) {
+        snapshotEnabled = enableSnapshotSwitch.isOn
+    }
+    
     // MARK: テキストフィールドの編集
     
     @IBAction func hostTextFieldDidTouchDown(_ sender: AnyObject) {

@@ -10,6 +10,7 @@ public class Event {
         case MediaPublisher
         case MediaSubscriber
         case MediaStream
+        case Snapshot
         case VideoRenderer
         case VideoView
     }

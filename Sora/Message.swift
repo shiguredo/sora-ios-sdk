@@ -13,6 +13,7 @@ public class Message {
         case pong = "pong"
         case notify = "notify"
         case update = "update"
+        case snapshot = "snapshot"
     }
     
     public var type: MessageType?
@@ -204,6 +205,13 @@ struct SignalingConnect {
         self.metadata = metadata
         self.multistream = multistream
         self.mediaOption = mediaOption
+        
+        // スナップショットの設定
+        if mediaOption.snapshotEnabled {
+            mediaOption.videoCodec = .VP8
+            mediaOption.videoEnabled = true
+            mediaOption.audioEnabled = true
+        }
     }
 
 }
@@ -234,6 +242,10 @@ extension SignalingConnect: Messageable {
                 video["codec_type"] = SignalingVideoCodec.VP9.rawValue
             case .H264:
                 video["codec_type"] = SignalingVideoCodec.H264.rawValue
+            }
+            
+            if mediaOption.snapshotEnabled {
+                video["snapshot"] = true
             }
             
             if let bitRate = mediaOption.bitRate {
@@ -456,6 +468,22 @@ extension SignalingUpdateAnswer: Messageable {
     
     func message() -> Message {
         return Message(type: .update, data: ["sdp": sdp as Any])
+    }
+    
+}
+
+public struct SignalingSnapshot {
+    
+    public var mediaChannelId: String
+    public var base64EncodedString: String
+    
+}
+
+extension SignalingSnapshot: Unboxable {
+    
+    public init(unboxer: Unboxer) throws {
+        mediaChannelId = try unboxer.unbox(key: "channel_id")
+        base64EncodedString = try unboxer.unbox(key: "base64ed_webp")
     }
     
 }

@@ -506,12 +506,40 @@
                                             <segue destination="7ng-h1-EHi" kind="show" id="AVN-bg-3wh"/>
                                         </connections>
                                     </tableViewCell>
+                                    <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" hidesAccessoryWhenEditing="NO" indentationLevel="1" indentationWidth="0.0" id="xJN-Xu-XTA">
+                                        <rect key="frame" x="0.0" y="955" width="320" height="52"/>
+                                        <autoresizingMask key="autoresizingMask"/>
+                                        <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" contentMode="center" tableViewCell="xJN-Xu-XTA" id="cDT-0B-Bb0">
+                                            <rect key="frame" x="0.0" y="0.0" width="320" height="51.5"/>
+                                            <autoresizingMask key="autoresizingMask"/>
+                                            <subviews>
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Enable Snapshot" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="HQW-Xf-qwH">
+                                                    <rect key="frame" x="20" y="16" width="129" height="21"/>
+                                                    <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
+                                                    <nil key="textColor"/>
+                                                    <nil key="highlightedColor"/>
+                                                </label>
+                                                <switch opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" on="YES" translatesAutoresizingMaskIntoConstraints="NO" id="NSY-tg-o8w">
+                                                    <rect key="frame" x="243" y="11" width="51" height="31"/>
+                                                    <connections>
+                                                        <action selector="switchSnapshotEnabled:" destination="1nR-he-y4W" eventType="valueChanged" id="XLB-Uv-GwZ"/>
+                                                    </connections>
+                                                </switch>
+                                            </subviews>
+                                            <constraints>
+                                                <constraint firstItem="HQW-Xf-qwH" firstAttribute="leading" secondItem="cDT-0B-Bb0" secondAttribute="leadingMargin" constant="12" id="JD0-5T-oG2"/>
+                                                <constraint firstItem="NSY-tg-o8w" firstAttribute="centerY" secondItem="cDT-0B-Bb0" secondAttribute="centerY" id="PkX-oa-RBQ"/>
+                                                <constraint firstItem="HQW-Xf-qwH" firstAttribute="centerY" secondItem="cDT-0B-Bb0" secondAttribute="centerY" id="X5T-2o-Afm"/>
+                                                <constraint firstAttribute="trailingMargin" secondItem="NSY-tg-o8w" secondAttribute="trailing" constant="20" id="f9v-M1-JeE"/>
+                                            </constraints>
+                                        </tableViewCellContentView>
+                                    </tableViewCell>
                                 </cells>
                             </tableViewSection>
                             <tableViewSection headerTitle=" Audio" id="2GC-Ls-yf7">
                                 <cells>
                                     <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" hidesAccessoryWhenEditing="NO" indentationLevel="1" indentationWidth="0.0" id="2HA-gi-nJ0">
-                                        <rect key="frame" x="0.0" y="1011" width="320" height="52"/>
+                                        <rect key="frame" x="0.0" y="1063" width="320" height="52"/>
                                         <autoresizingMask key="autoresizingMask"/>
                                         <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="2HA-gi-nJ0" id="xNc-sW-e67">
                                             <rect key="frame" x="0.0" y="0.0" width="320" height="51.5"/>
@@ -540,7 +568,7 @@
                                         </tableViewCellContentView>
                                     </tableViewCell>
                                     <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" accessoryType="disclosureIndicator" hidesAccessoryWhenEditing="NO" indentationLevel="1" indentationWidth="0.0" id="fZ7-UR-oy0">
-                                        <rect key="frame" x="0.0" y="1063" width="320" height="52"/>
+                                        <rect key="frame" x="0.0" y="1115" width="320" height="52"/>
                                         <autoresizingMask key="autoresizingMask"/>
                                         <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="fZ7-UR-oy0" id="BY6-yi-eUQ">
                                             <rect key="frame" x="0.0" y="0.0" width="287" height="51.5"/>
@@ -579,7 +607,7 @@
                             <tableViewSection headerTitle="Build Info" id="Wxg-Vb-2Gi">
                                 <cells>
                                     <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" hidesAccessoryWhenEditing="NO" indentationLevel="1" indentationWidth="0.0" id="ZzL-Eh-yuA">
-                                        <rect key="frame" x="0.0" y="1171" width="320" height="52"/>
+                                        <rect key="frame" x="0.0" y="1223" width="320" height="52"/>
                                         <autoresizingMask key="autoresizingMask"/>
                                         <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="ZzL-Eh-yuA" id="EK4-tb-R6f">
                                             <rect key="frame" x="0.0" y="0.0" width="320" height="51.5"/>
@@ -611,7 +639,7 @@
                                         </tableViewCellContentView>
                                     </tableViewCell>
                                     <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" hidesAccessoryWhenEditing="NO" indentationLevel="1" indentationWidth="0.0" id="yUi-lD-Bfy">
-                                        <rect key="frame" x="0.0" y="1223" width="320" height="52"/>
+                                        <rect key="frame" x="0.0" y="1275" width="320" height="52"/>
                                         <autoresizingMask key="autoresizingMask"/>
                                         <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="yUi-lD-Bfy" id="AmS-zH-uRa">
                                             <rect key="frame" x="0.0" y="0.0" width="320" height="51.5"/>
@@ -684,6 +712,8 @@
                         <outlet property="enableMicrophoneSwitch" destination="265-Jb-c3B" id="svu-Qi-euo"/>
                         <outlet property="enableMultistreamLabel" destination="crp-wV-AgE" id="rxQ-I9-5gk"/>
                         <outlet property="enableMultistreamSwitch" destination="BHD-gB-4yj" id="AkU-fU-Kda"/>
+                        <outlet property="enableSnapshotLabel" destination="HQW-Xf-qwH" id="Dui-dE-F6A"/>
+                        <outlet property="enableSnapshotSwitch" destination="NSY-tg-o8w" id="YQ0-ec-KPo"/>
                         <outlet property="enableVideoLabel" destination="dL5-RL-3Ec" id="Krh-w8-9JJ"/>
                         <outlet property="enableVideoSwitch" destination="if8-Ug-MaX" id="sda-fd-33g"/>
                         <outlet property="enableWebSocketSSLLabel" destination="EXc-lo-yz9" id="iC0-br-cGz"/>
