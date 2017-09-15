@@ -2,6 +2,7 @@ import Foundation
 import WebRTC
 import SocketRocket
 import Unbox
+import SDWebImage
 
 public enum StatusCode: Int {
     
@@ -635,6 +636,9 @@ class PeerConnectionContext: NSObject, SRWebSocketDelegate, RTCPeerConnectionDel
                 case .update?:
                     receiveSignalingUpdate(json)
                     
+                case .snapshot?:
+                    receiveSignalingSnapshot(json: json)
+                    
                 default:
                     return
                 }
@@ -888,7 +892,53 @@ class PeerConnectionContext: NSObject, SRWebSocketDelegate, RTCPeerConnectionDel
         }
     }
     
-    // マルチストリームのシグナリングのエラー
+    func receiveSignalingSnapshot(json: [String: Any]) {
+        eventLog?.markFormat(type: .Signaling, format: "received 'snapshot'")
+        guard peerConnection?.mediaConnection?.mediaOption.snapshotEnabled ?? false else {
+            eventLog?.markFormat(type: .Snapshot,
+                                 format: "snapshot disabled")
+            return
+        }
+        
+        switch state {
+        case .connected:
+            let sigSnapshot: SignalingSnapshot!
+            do {
+                sigSnapshot = Optional.some(try unbox(dictionary: json))
+            } catch {
+                eventLog?.markFormat(type: .Snapshot,
+                                     format: "parsing 'snapshot' failed")
+                return
+            }
+            guard connection.mediaChannelId == sigSnapshot.mediaChannelId else {
+                eventLog?.markFormat(type: .Snapshot,
+                                     format: "unknown media channel ID: %@",
+                                     arguments: sigSnapshot.mediaChannelId)
+                return
+            }
+            
+            eventLog?.markFormat(type: .Snapshot,
+                                 format: "try decode snapshot base64 encoded text")
+            signalingEventHandlers?.onSnapshotHandler?(sigSnapshot)
+            
+            guard let data = Data(base64Encoded: sigSnapshot.base64EncodedString) else {
+                eventLog?.markFormat(type: .Snapshot,
+                                     format: "invalid snapshot base64 format")
+                return
+            }
+            guard let image = UIImage.sd_image(with: data) else {
+                eventLog?.markFormat(type: .Snapshot,
+                                     format: "snapshot WebP decode failed")
+                return
+            }
+            let snapshot = Snapshot(image: image.cgImage!, timestamp: Date())
+            mediaConnection.render(snapshot: snapshot)
+            
+        default:
+            return
+        }
+    }
+        // マルチストリームのシグナリングのエラー
     func terminateUpdate(_ error: Error) {
         state = .connected
         let connError = ConnectionError.peerConnectionError(error)

@@ -68,6 +68,7 @@ public class VideoView: UIView, VideoRenderer {
 class VideoViewContentView: UIView, VideoRenderer {
     
     @IBOutlet weak var nativeVideoView: RTCEAGLVideoView!
+    @IBOutlet weak var snapshotView: UIImageView!
     
     var allowsRender: Bool {
         get {
@@ -109,8 +110,14 @@ class VideoViewContentView: UIView, VideoRenderer {
         if let frame = videoFrame {
             if let handle = frame.videoFrameHandle {
                 switch handle {
-                case .webRTC(let frame):
+                case .WebRTC(let frame):
+                    snapshotView.isHidden = true
+                    nativeVideoView.isHidden = false
                     nativeVideoView.renderFrame(frame)
+                case .snapshot(let snapshot):
+                    snapshotView.isHidden = false
+                    nativeVideoView.isHidden = true
+                    snapshotView.image = UIImage(cgImage: snapshot.image)
                 }
             }
         } else {

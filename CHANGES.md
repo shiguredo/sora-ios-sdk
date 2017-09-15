@@ -9,6 +9,33 @@
 - FIX
     - バグ修正
 
+## 1.2.0
+
+### CHANGE
+
+- WebRTC M60 に対応した
+- Bitcode に対応した
+- スナップショットに対応した
+- リンクするフレームワークに SDWebImage.framework を追加した
+- API: Event.EventType: 次のケースを追加した
+    - ``case Snapshot``
+- API: MediaOption: 次のプロパティを追加した
+    - ``var snapshotEnabled``
+- API: SignalingEventHandlers: 次のメソッドを追加した
+    - ``func onSnapshot(handler: (SignalingSnapshot) -> Void)``
+- API: SignalingSnapshot: 追加した
+- API: Snapshot: 追加した
+- API: VideoFrame
+    - ``var width``: ``Int32`` -> ``Int``
+    - ``var height``: ``Int32`` -> ``Int``
+    - ``var timestamp``: ``CMTime`` -> ``CMTime?``
+- API: VideoFrameHandle: 次のプロパティ名を変更した
+    - ``case webRTC`` -> ``case WebRTC``
+- API: VideoFrameHandle: 次のプロパティを追加した
+    - ``case snapshot``
+- API: VideoView: スナップショットの描画に対応した
+- API: ConnectionController: スナップショットの項目を追加した
+
 ## 1.1.0
 
 ### CHANGE
