@@ -14,11 +14,8 @@ class AudioCodecViewController: UITableViewController {
         [(.default, self.defaultCell), (.Opus, self.OpusCell), (.PCMU, self.PCMUCell)]
 
 
-    var connectionController: ConnectionController? {
-        get {
-            return (navigationController as! ConnectionNavigationController?)?
-                .connectionController
-        }
+    var connectionController: ConnectionController {
+        get { return ConnectionController.shared }
     }
     
     override func viewDidLoad() {
@@ -27,7 +24,7 @@ class AudioCodecViewController: UITableViewController {
     
     override func willMove(toParentViewController parent: UIViewController?) {
         if parent == nil {
-            connectionController?.audioCodec = selectedCodec
+            connectionController.audioCodec = selectedCodec
         }
     }
     

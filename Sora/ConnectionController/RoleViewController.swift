@@ -14,10 +14,7 @@ class RoleViewController: UITableViewController {
     @IBOutlet weak var subscriberCell: UITableViewCell!
 
     var connectionController: ConnectionController {
-        get {
-            return (navigationController as! ConnectionNavigationController?)!
-                .connectionController!
-        }
+        get { return ConnectionController.shared }
     }
     
     lazy var components: [Component] = [

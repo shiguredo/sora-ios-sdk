@@ -4,11 +4,8 @@ class EventLogTextViewController: UIViewController {
     
     @IBOutlet weak var logTextView: UITextView!
     
-    var connectionController: ConnectionController? {
-        get {
-            return (navigationController as! ConnectionNavigationController?)?
-                .connectionController
-        }
+    var connectionController: ConnectionController {
+        get { return ConnectionController.shared }
     }
     
     weak var settings: EventLogViewController!
@@ -25,7 +22,7 @@ class EventLogTextViewController: UIViewController {
     func reload() {
         let _ = self.view
         logTextView.text = ""
-        if let events = connectionController?.connection?.eventLog.events {
+        if let events = connectionController.connection?.eventLog.events {
             for event in events {
                 add(event: event)
             }
@@ -86,7 +83,7 @@ class EventLogTextViewController: UIViewController {
     
     @IBAction func clear(_ sender: AnyObject) {
         logTextView.text = nil
-        connectionController?.connection?.eventLog.clear()
+        connectionController.connection?.eventLog.clear()
     }
     
     @IBAction func copyToClipboard(_ sender: AnyObject) {

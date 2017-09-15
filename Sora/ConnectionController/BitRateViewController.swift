@@ -18,10 +18,7 @@ class BitRateViewController: UITableViewController {
         [nil, 100, 300, 500, 800, 1000, 1500, 2000, 2500, 3000, 5000]
     
     var connectionController: ConnectionController {
-        get {
-            return (navigationController as! ConnectionNavigationController?)!
-                .connectionController
-        }
+        get { return ConnectionController.shared }
     }
     
     var allValueCells: [UITableViewCell] {

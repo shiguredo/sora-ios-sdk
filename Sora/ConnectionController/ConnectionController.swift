@@ -30,6 +30,7 @@ public class ConnectionController: UIViewController {
         public var channelId: String
         public var roles: [Role]
         public var multistreamEnabled: Bool
+        public var snapshotEnabled: Bool
         public var videoEnabled: Bool
         public var videoCodec: VideoCodec
         public var bitRate: Int
@@ -43,6 +44,7 @@ public class ConnectionController: UIViewController {
                     videoEnabled: Bool,
                     videoCodec: VideoCodec,
                     bitRate: Int,
+                    snapshotEnabled: Bool,
                     audioEnabled: Bool,
                     audioCodec: AudioCodec) {
             self.URL = URL
@@ -52,6 +54,7 @@ public class ConnectionController: UIViewController {
             self.videoEnabled = videoEnabled
             self.videoCodec = videoCodec
             self.bitRate = bitRate
+            self.snapshotEnabled = snapshotEnabled
             self.audioEnabled = audioEnabled
             self.audioCodec = audioCodec
         }
@@ -66,6 +69,7 @@ public class ConnectionController: UIViewController {
         case channelId = "SoraConnectionControllerChannelId"
         case roles = "SoraConnectionControllerRoles"
         case multistreamEnabled = "SoraConnectionControllerMultistreamEnabled"
+        case snapshotEnabled = "SoraConnectionControllerSnapshotEnabled"
         case videoEnabled = "SoraConnectionControllerVideoEnabled"
         case videoCodec = "SoraConnectionControllerVideoCodec"
         case bitRate = "SoraConnectionControllerBitRate"
@@ -73,6 +77,8 @@ public class ConnectionController: UIViewController {
         case audioCodec = "SoraConnectionControllerAudioCodec"
         case autofocusEnabled = "SoraConnectionControllerAutofocusEnabled"
     }
+    
+    static var shared: ConnectionController!
     
     static var defaultBitRate: Int = 800
     
@@ -92,6 +98,7 @@ public class ConnectionController: UIViewController {
     public var roles: [Role] = [.publisher, .subscriber]
     public var autofocusEnabled: Bool = false
     public var multistreamEnabled: Bool = false
+    public var snapshotEnabled: Bool = false
     public var videoEnabled: Bool = true
     public var videoCodec: VideoCodec? = .default
     public var bitRate: Int? = 800
@@ -133,9 +140,7 @@ public class ConnectionController: UIViewController {
             as! ConnectionNavigationController? else {
             fatalError("failed loading ConnectionViewController")
         }
-        connectionNavigationController = navi
-        connectionNavigationController.connectionController = self
-        
+        connectionNavigationController = navi        
         addChildViewController(connectionNavigationController)
         view.addSubview(connectionNavigationController.view)
         connectionNavigationController.didMove(toParentViewController: self)
@@ -156,6 +161,8 @@ public class ConnectionController: UIViewController {
         if useUserDefaults {
             loadFromUserDefaults()
         }
+        
+        ConnectionController.shared = self
     }
     
     required public init?(coder aDecoder: NSCoder) {
@@ -230,6 +237,7 @@ public class ConnectionController: UIViewController {
         }
         
         multistreamEnabled = defaults.bool(forKey: UserDefaultsKey.multistreamEnabled.rawValue)
+        snapshotEnabled = defaults.bool(forKey: UserDefaultsKey.snapshotEnabled.rawValue)
         videoEnabled = defaults.bool(forKey: UserDefaultsKey.videoEnabled.rawValue)
         bitRate = defaults.integer(forKey: UserDefaultsKey.bitRate.rawValue)
         if bitRate == 0 {
@@ -278,6 +286,8 @@ public class ConnectionController: UIViewController {
         defaults.set(roleValue, forKey: UserDefaultsKey.roles.rawValue)
         defaults.set(multistreamEnabled,
                      forKey: UserDefaultsKey.multistreamEnabled.rawValue)
+        defaults.set(snapshotEnabled,
+                     forKey: UserDefaultsKey.snapshotEnabled.rawValue)
         defaults.set(videoEnabled, forKey: UserDefaultsKey.videoEnabled.rawValue)
         defaults.set(bitRate, forKey: UserDefaultsKey.bitRate.rawValue)
         defaults.set(audioEnabled, forKey: UserDefaultsKey.audioEnabled.rawValue)
@@ -331,6 +341,8 @@ extension ConnectionController {
             #selector(ConnectionController.updateMultistreamEnabled(_:))
         static let updateVideoEnabled =
             #selector(ConnectionController.updateVideoEnabled(_:))
+        static let updateSnapshotEnabled =
+            #selector(ConnectionController.updateSnapshotEnabled(_:))
         static let updateAudioEnabled =
             #selector(ConnectionController.updateAudioEnabled(_:))
         static let updateAutofocus =
@@ -379,6 +391,12 @@ extension ConnectionController {
     func updateVideoEnabled(_ sender: AnyObject) {
         if let control = sender as? UISwitch {
             videoEnabled = control.isOn
+        }
+    }
+    
+    func updateSnapshotEnabled(_ sender: AnyObject) {
+        if let control = sender as? UISwitch {
+            snapshotEnabled = control.isOn
         }
     }
     

@@ -13,7 +13,6 @@ Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライ�
 - Xcode 8.3.3 以降
 - Swift 3.1
 - Carthage 0.23.0 以降
-- WebRTC M59
 - WebRTC SFU Sora 17.06 以降
 
 ## サンプル
@@ -43,12 +42,9 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 
 ### 2.0
 
-- スナップショット機能に対応する
+**2017 年 9 月末リリース予定**
+
+- スクリーンシェア機能
 - パブリッシャーに渡す映像の編集と加工に対応する
 - パブリッシャーに任意の映像を渡せるようにする
-
-### 1.2
-
-- IPv6 に対応する
-- WebRTC.Framework を M60 にアップデートする
 

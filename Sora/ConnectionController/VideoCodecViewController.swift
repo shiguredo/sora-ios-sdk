@@ -16,11 +16,8 @@ class VideoCodecViewController: UITableViewController {
         [(.default, self.defaultCell), (.VP8, self.VP8Cell),
          (.VP9, self.VP9Cell), (.H264, self.H264Cell)]
     
-    var connectionController: ConnectionController? {
-        get {
-            return (navigationController as! ConnectionNavigationController?)?
-                .connectionController
-        }
+    var connectionController: ConnectionController {
+        get { return ConnectionController.shared }
     }
     
     var selectedCodec: VideoCodec? {
@@ -41,7 +38,7 @@ class VideoCodecViewController: UITableViewController {
     
     override func willMove(toParentViewController parent: UIViewController?) {
         if parent == nil {
-            connectionController?.videoCodec = selectedCodec
+            connectionController.videoCodec = selectedCodec
         }
     }
     
