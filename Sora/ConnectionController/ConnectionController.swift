@@ -6,7 +6,7 @@ public class ConnectionController: UIViewController {
         case publisher
         case subscriber
         
-        static var allRoles: [Role] = [.publisher, .subscriber]
+        static let allRoles: [Role] = [.publisher, .subscriber]
         
         static func containsAll(_ roles: [Role]) -> Bool {
             let allRoles: [Role] = [.publisher, .subscriber]
@@ -80,9 +80,9 @@ public class ConnectionController: UIViewController {
     
     static var shared: ConnectionController!
     
-    static var defaultBitRate: Int = 800
+    static let defaultBitRate: Int = 800
     
-    static var userDefaultsDidLoadNotificationName: Notification.Name
+    static let userDefaultsDidLoadNotificationName: Notification.Name
         = Notification.Name("SoraConnectionControllerUserDefaultsDidLoad")
     
     public var connection: Connection?
@@ -207,7 +207,8 @@ public class ConnectionController: UIViewController {
             return
         }
         
-        WebSocketSSLEnabled = defaults.bool(forKey: UserDefaultsKey.WebSocketSSLEnabled.rawValue)
+        WebSocketSSLEnabled = defaults.bool(default: true,
+                                            forKey: UserDefaultsKey.WebSocketSSLEnabled.rawValue)
         if let host = defaults.string(forKey: UserDefaultsKey.host.rawValue) {
             self.host = host
         }
@@ -236,15 +237,20 @@ public class ConnectionController: UIViewController {
             self.roles = roles
         }
         
-        multistreamEnabled = defaults.bool(forKey: UserDefaultsKey.multistreamEnabled.rawValue)
-        snapshotEnabled = defaults.bool(forKey: UserDefaultsKey.snapshotEnabled.rawValue)
-        videoEnabled = defaults.bool(forKey: UserDefaultsKey.videoEnabled.rawValue)
+        multistreamEnabled = defaults.bool(default: false,
+                                           forKey: UserDefaultsKey.multistreamEnabled.rawValue)
+        snapshotEnabled = defaults.bool(default: false,
+                                        forKey: UserDefaultsKey.snapshotEnabled.rawValue)
+        videoEnabled = defaults.bool(default: true,
+                                     forKey: UserDefaultsKey.videoEnabled.rawValue)
         bitRate = defaults.integer(forKey: UserDefaultsKey.bitRate.rawValue)
         if bitRate == 0 {
             bitRate = ConnectionController.defaultBitRate
         }
-        audioEnabled = defaults.bool(forKey: UserDefaultsKey.audioEnabled.rawValue)
-        autofocusEnabled = defaults.bool(forKey: UserDefaultsKey.autofocusEnabled.rawValue)
+        audioEnabled = defaults.bool(default: true,
+                                     forKey: UserDefaultsKey.audioEnabled.rawValue)
+        autofocusEnabled = defaults.bool(default: false,
+                                         forKey: UserDefaultsKey.autofocusEnabled.rawValue)
         
         videoCodec = nil
         if let name = defaults.string(forKey: UserDefaultsKey.videoCodec.rawValue) {
@@ -409,6 +415,18 @@ extension ConnectionController {
     func updateAutofocus(_ sender: AnyObject) {
         if let control = sender as? UISwitch {
             autofocusEnabled = control.isOn
+        }
+    }
+    
+}
+
+extension UserDefaults {
+    
+    func bool(default value: Bool, forKey: String) -> Bool {
+        if let value = self.object(forKey: forKey) as? Bool {
+            return value
+        } else {
+            return value
         }
     }
     
