@@ -300,7 +300,6 @@ class ConnectionViewController: UITableViewController {
         channelIdTextField.text = shared.channelId
         channelIdTextField.placeholder = "your channel ID"
         
-        //loadSettings() // deprecated
         updateControls()
 
         switch shared.tupleOfAvailableStreamTypes {
@@ -587,13 +586,13 @@ class ConnectionViewController: UITableViewController {
     func setMediaConnectionSettings(_ mediaConn: MediaConnection) {
         mediaConn.multistreamEnabled = multistreamEnabled
         mediaConn.mediaOption.videoEnabled = videoEnabled
-        if let codec = videoCodec {
+        if let codec = shared.videoCodec {
             mediaConn.mediaOption.videoCodec = codec
         }
         mediaConn.mediaOption.bitRate = bitRate
         mediaConn.mediaOption.snapshotEnabled = snapshotEnabled
         mediaConn.mediaOption.audioEnabled = audioEnabled
-        if let codec = audioCodec {
+        if let codec = shared.audioCodec {
             mediaConn.mediaOption.audioCodec = codec
         }
         

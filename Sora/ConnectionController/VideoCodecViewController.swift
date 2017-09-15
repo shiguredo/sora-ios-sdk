@@ -29,11 +29,15 @@ class VideoCodecViewController: UITableViewController {
                     cell.accessoryType = .none
                 }
             }
+            if selectedCodec == nil {
+                defaultCell.accessoryType = .checkmark
+            }
         }
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        selectedCodec = connectionController.videoCodec
     }
     
     override func willMove(toParentViewController parent: UIViewController?) {
