@@ -20,6 +20,7 @@ class AudioCodecViewController: UITableViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        selectedCodec = connectionController.audioCodec
     }
     
     override func willMove(toParentViewController parent: UIViewController?) {
@@ -46,6 +47,9 @@ class AudioCodecViewController: UITableViewController {
                 } else {
                     cell.accessoryType = .none
                 }
+            }
+            if selectedCodec == nil {
+                defaultCell.accessoryType = .checkmark
             }
         }
     }

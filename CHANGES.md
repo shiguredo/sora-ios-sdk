@@ -9,6 +9,12 @@
 - FIX
     - バグ修正
 
+## 1.2.1
+
+### FIX
+
+- API: ConnectionController: 指定した映像・音声コーデックが UI とシグナリングに反映されない現象を修正した
+
 ## 1.2.0
 
 ### CHANGE
