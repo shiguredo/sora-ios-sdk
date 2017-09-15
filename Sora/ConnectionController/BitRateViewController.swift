@@ -14,7 +14,7 @@ class BitRateViewController: UITableViewController {
     @IBOutlet weak var value3000Cell: UITableViewCell!
     @IBOutlet weak var value5000Cell: UITableViewCell!
     
-    static var selectionValues: [Int?] =
+    static let selectionValues: [Int?] =
         [nil, 100, 300, 500, 800, 1000, 1500, 2000, 2500, 3000, 5000]
     
     var connectionController: ConnectionController {

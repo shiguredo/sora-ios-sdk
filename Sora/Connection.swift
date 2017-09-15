@@ -88,11 +88,11 @@ public class Connection {
             case mediaConnection = "Sora.Connection.UserInfo.mediaConnection"
         }
         
-        public static var onConnect =
+        public static let onConnect =
             Notification.Name("Sora.Connection.Notification.onConnect")
-        public static var onDisconnect =
+        public static let onDisconnect =
             Notification.Name("Sora.Connection.Notification.onDisconnect")
-        public static var onFailure =
+        public static let onFailure =
             Notification.Name("Sora.Connection.Notification.onFailure")
         
     }

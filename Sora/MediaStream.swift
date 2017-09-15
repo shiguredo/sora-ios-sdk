@@ -14,9 +14,9 @@ public class MediaStream {
         
     }
     
-    static var defaultStreamId: String = "mainStream"
-    static var defaultVideoTrackId: String = "mainVideo"
-    static var defaultAudioTrackId: String = "mainAudio"
+    static let defaultStreamId: String = "mainStream"
+    static let defaultVideoTrackId: String = "mainVideo"
+    static let defaultAudioTrackId: String = "mainAudio"
     
     public weak var peerConnection: PeerConnection?
     public var nativeMediaStream: RTCMediaStream
@@ -88,6 +88,7 @@ public class MediaStream {
     
     func terminate() {
         stopConnectionTimer()
+        videoRendererAdapter = nil
     }
     
     // MARK: タイマー

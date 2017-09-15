@@ -21,11 +21,11 @@ public class MediaConnection {
             case connectionError = "Sora.MediaConnection.UserInfo.connectionError"
         }
         
-        public static var onConnect =
+        public static let onConnect =
             Notification.Name("Sora.MediaConnection.Notification.onConnect")
-        public static var onDisconnect =
+        public static let onDisconnect =
             Notification.Name("Sora.MediaConnection.Notification.onDisconnect")
-        public static var onFailure =
+        public static let onFailure =
             Notification.Name("Sora.MediaConnection.Notification.onFailure")
         
     }

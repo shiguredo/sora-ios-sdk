@@ -19,7 +19,7 @@ public class PeerConnection {
         case disconnected
     }
     
-    public static var nativeFactory: RTCPeerConnectionFactory = {
+    public static let nativeFactory: RTCPeerConnectionFactory = {
         RTCInitializeSSL()
         RTCEnableMetrics()
         return RTCPeerConnectionFactory()

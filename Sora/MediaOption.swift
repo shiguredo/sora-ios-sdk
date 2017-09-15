@@ -26,7 +26,7 @@ public class MediaOption {
     public var audioEnabled: Bool = true
     public var snapshotEnabled: Bool = false
 
-    public static var maxBitRate = 5000
+    public static let maxBitRate = 5000
     
     public var bitRate: Int? {
         didSet {
@@ -43,7 +43,7 @@ public class MediaOption {
     public lazy var videoCaptureTrackId: String = MediaOption.createCaptureTrackId()
     public lazy var audioCaptureTrackId: String = MediaOption.createCaptureTrackId()
     
-    static var defaultConfiguration: RTCConfiguration = {
+    static let defaultConfiguration: RTCConfiguration = {
         () -> RTCConfiguration in
         let config = RTCConfiguration()
         config.iceServers = [
@@ -52,7 +52,7 @@ public class MediaOption {
         return config
     }()
     
-    static var defaultMediaConstraints: RTCMediaConstraints =
+    static let defaultMediaConstraints: RTCMediaConstraints =
         RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
     
     // MARK: - トラック ID
