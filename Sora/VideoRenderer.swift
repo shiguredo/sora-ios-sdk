@@ -22,6 +22,10 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     }
     
     func setSize(_ size: CGSize) {
+        // RTCVideoRenderer.setSize(_:) は WebRTC.framework native 側の実装により、
+        // OnFrame (動画フレーム描画直前のタイミング) で呼び出されるようになっています。
+        // https://chromium.googlesource.com/external/webrtc/+/master/webrtc/sdk/objc/Framework/Classes/PeerConnection/RTCVideoRendererAdapter.mm#50
+        // この時の size は WebRTC 側の回転処理を施した後の正確な size が送られてきます。
         eventLog?.markFormat(type: .VideoRenderer,
                              format: "set size %@ for %@",
                              arguments: size.debugDescription, self)
