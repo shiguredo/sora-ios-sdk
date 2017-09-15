@@ -9,6 +9,14 @@
 - FIX
     - バグ修正
 
+## 1.0.1
+
+- [CHANGE] システム条件を更新した
+    - Xcode 8.1 以降 -> 8.3.2 以降
+    - Swift 3.0.1 -> 3.1
+    - Sora 17.02 -> 17.04
+- [UPDATE] SoraApp の Cartfile で利用する shiguredo/sora-ios-sdk を 1.0.1 にアップデートした
+
 ## 1.0.0
 
 - [CHANGE] WebRTC M57 に対応した
