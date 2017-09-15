@@ -1,0 +1,15 @@
+module: Sora
+module_version: 1.0
+author: Shiguredo Inc.
+author_url: https://shiguredo.jp/
+github_url: https://github.com/shiguredo/sora-ios-sdk
+swift_version: 2.2
+theme: fullwidth
+clean: true
+output: doc
+framework_root: .
+umbrella_header: Sora/Sora.h
+documentation: guides/*.md
+readme: guides/README.md
+skip_undocumented: true
+hide_documentation_coverage: true
