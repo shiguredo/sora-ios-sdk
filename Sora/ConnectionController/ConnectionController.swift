@@ -19,11 +19,6 @@ public class ConnectionController: UIViewController {
         }
     }
     
-    public enum StreamType {
-        case single
-        case multiple
-    }
-
     public class Request {
         
         public var URL: URL
@@ -105,19 +100,10 @@ public class ConnectionController: UIViewController {
     public var audioEnabled: Bool = true
     public var audioCodec: AudioCodec? = .default
     
-    public var availableRoles: [Role] = [.publisher, .subscriber]
-    public var availableStreamTypes: [StreamType] = [.single, .multiple]
     public var userDefaultsSuiteName: String? = "jp.shiguredo.SoraConnectionController"
     
     public var userDefaults: UserDefaults? {
         get { return UserDefaults(suiteName: userDefaultsSuiteName) }
-    }
-    
-    var tupleOfAvailableStreamTypes: (Bool, Bool) {
-        get {
-            return (availableStreamTypes.contains(.single),
-                    availableStreamTypes.contains(.multiple))
-        }
     }
     
     // MARK: Initialization
@@ -127,8 +113,6 @@ public class ConnectionController: UIViewController {
                 port: Int? = nil,
                 signalingPath: String? = "signaling",
                 channelId: String? = nil,
-                availableRoles: [Role]? = nil,
-                availableStreamTypes: [StreamType]? = nil,
                 userDefaultsSuiteName: String? = nil,
                 useUserDefaults: Bool = true) {
         super.init(nibName: nil, bundle: nil)
@@ -150,12 +134,6 @@ public class ConnectionController: UIViewController {
         self.port = port
         self.signalingPath = signalingPath
         self.channelId = channelId
-        if let roles = availableRoles {
-            self.availableRoles = roles
-        }
-        if let streamTypes = availableStreamTypes {
-            self.availableStreamTypes = streamTypes
-        }
         self.userDefaultsSuiteName = userDefaultsSuiteName
         
         if useUserDefaults {

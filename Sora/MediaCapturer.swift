@@ -3,22 +3,24 @@ import WebRTC
 
 class MediaCapturer {
     
+    public var mediaOption: MediaOption?
     public var videoCaptureTrack: RTCVideoTrack
     public var videoCaptureSource: RTCAVFoundationVideoSource
     public var audioCaptureTrack: RTCAudioTrack
     public var cameraVideoCapturer: RTCCameraVideoCapturer?
     
     init(factory: RTCPeerConnectionFactory, mediaOption: MediaOption?) {
+        self.mediaOption = mediaOption
         videoCaptureSource = factory
             .avFoundationVideoSource(with:
                 mediaOption?.videoCaptureSourceMediaConstraints ??
                     MediaOption.defaultMediaConstraints)
         videoCaptureTrack = factory
             .videoTrack(with: videoCaptureSource,
-                        trackId: mediaOption?.videoCaptureTrackId ??
+                        trackId: self.mediaOption?.videoCaptureTrackId ??
                             MediaOption.createCaptureTrackId())
         audioCaptureTrack = factory
-            .audioTrack(withTrackId: mediaOption?.audioCaptureTrackId ??
+            .audioTrack(withTrackId: self.mediaOption?.audioCaptureTrackId ??
                 MediaOption.createCaptureTrackId())
     }
     

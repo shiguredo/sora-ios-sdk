@@ -997,11 +997,10 @@ class PeerConnectionContext: NSObject, SRWebSocketDelegate, RTCPeerConnectionDel
                 return
             }
             
-            peerConnectionEventHandlers?.onAddStreamHandler?(nativePeerConnection, stream)
-            nativePeerConnection.add(stream)
             let wrap = MediaStream(peerConnection: peerConnection!,
                                    nativeMediaStream: stream)
             peerConnection!.mediaConnection!.addMediaStream(wrap)
+            peerConnectionEventHandlers?.onAddStreamHandler?(nativePeerConnection, stream)
             
         }
     }
@@ -1015,10 +1014,9 @@ class PeerConnectionContext: NSObject, SRWebSocketDelegate, RTCPeerConnectionDel
             break
             
         default:
+            peerConnection?.mediaConnection?.removeMediaStream(stream.streamId)
             peerConnectionEventHandlers?
                 .onRemoveStreamHandler?(nativePeerConnection, stream)
-            nativePeerConnection.remove(stream)
-            peerConnection?.mediaConnection?.removeMediaStream(stream.streamId)
         }
     }
     
