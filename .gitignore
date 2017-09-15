@@ -51,8 +51,7 @@ playground.xcworkspace
 # Carthage/Checkouts
 
 Carthage/Build
-Sora/Carthage/Build
-Sora/Carthage/Checkouts
+Carthage/Checkouts
 examples/SoraApp/Carthage/Build
 examples/SoraApp/Carthage/Checkouts
 
