@@ -21,6 +21,7 @@ class TestCaseViewController: UITableViewController {
     
     @IBOutlet weak var configurationCell: UITableViewCell!
     @IBOutlet weak var connectCell: UITableViewCell!
+    @IBOutlet weak var numberOfStreamsCell: UITableViewCell!
     @IBOutlet weak var clearLogCell: UITableViewCell!
     @IBOutlet weak var duplicateCell: UITableViewCell!
 
@@ -52,6 +53,7 @@ class TestCaseViewController: UITableViewController {
                 case .connected:
                     print("state changed: connected")
                     self.connectLabel.text = "Disconnect"
+                    self.numberOfStreamsCell.isUserInteractionEnabled = true
                     self.numberOfStreamsLabel.setTextOn(true)
                     self.numberOfStreams = 0
                     self.startConnectionTimer()
@@ -60,6 +62,7 @@ class TestCaseViewController: UITableViewController {
                     print("state changed: disconnected")
                     self.mediaChannel = nil
                     self.connectLabel.text = "Connect"
+                    self.numberOfStreamsCell.isUserInteractionEnabled = false
                     self.numberOfStreamsLabel.setTextOn(false)
                     self.numberOfStreams = 0
                     self.stopConnectionTimer()
@@ -86,6 +89,16 @@ class TestCaseViewController: UITableViewController {
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
+    }
+    
+    // MARK: Navigation
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        print("prepare segue \(segue.identifier)")
+        if let page = segue.destination as? VideoListViewController {
+            print("segue settings \(mediaChannel)")
+            page.mediaChannel = mediaChannel
+        }
     }
     
     // MARK: Table View Delegate

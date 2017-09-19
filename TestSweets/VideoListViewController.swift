@@ -1,4 +1,5 @@
 import UIKit
+import Sora
 
 private let reuseIdentifier = "Cell"
 
@@ -8,6 +9,12 @@ class VideoListViewController: UICollectionViewController {
 
     var videoControlViewController: VideoControlViewController!
     
+    var mediaChannel: MediaChannel? {
+        didSet {
+            collectionView?.reloadData()
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -15,7 +22,8 @@ class VideoListViewController: UICollectionViewController {
         // self.clearsSelectionOnViewWillAppear = false
 
         // Register cell classes
-        self.collectionView!.register(UICollectionViewCell.self, forCellWithReuseIdentifier: reuseIdentifier)
+        self.collectionView!.register(VideoViewCollectionViewCell.self,
+                                      forCellWithReuseIdentifier: reuseIdentifier)
 
         // Do any additional setup after loading the view.
         let control = UIBarButtonItem.init(title: "Control",
@@ -56,21 +64,23 @@ class VideoListViewController: UICollectionViewController {
     // MARK: UICollectionViewDataSource
 
     override func numberOfSections(in collectionView: UICollectionView) -> Int {
-        // #warning Incomplete implementation, return the number of sections
-        return 0
+        print("number of sections = ", mediaChannel?.streams.count)
+        return mediaChannel?.streams.count ?? 0
     }
 
 
     override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        // #warning Incomplete implementation, return the number of items
-        return 0
+        return 1
     }
 
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseIdentifier, for: indexPath)
-    
-        // Configure the cell
-    
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "VideoViewCell", for: indexPath)
+        print("reuse: \(reuseIdentifier) cellForItemAt \(indexPath) for \(cell)")
+        if let cell = cell as? VideoViewCollectionViewCell {
+            cell.stream = mediaChannel?.streams[indexPath.row]
+            print("stream \(cell.stream)")
+            print("video view = \(cell.videoView)")
+        }
         return cell
     }
 

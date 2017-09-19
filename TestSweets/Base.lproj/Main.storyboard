@@ -215,7 +215,7 @@
                                             </constraints>
                                         </tableViewCellContentView>
                                         <connections>
-                                            <segue destination="DAC-L9-PN8" kind="show" id="kgJ-HG-WCd"/>
+                                            <segue destination="DAC-L9-PN8" kind="show" identifier="VideoList" id="kgJ-HG-WCd"/>
                                         </connections>
                                     </tableViewCell>
                                     <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" indentationWidth="10" id="Hbi-Zz-ZT0">
@@ -350,6 +350,7 @@
                         <outlet property="duplicateCell" destination="2sy-Z6-wBm" id="h7T-gX-hjW"/>
                         <outlet property="keepConnectionSwitch" destination="P8j-EF-HQG" id="0ht-NV-jyx"/>
                         <outlet property="logTextView" destination="tLQ-lF-a9O" id="OI1-zA-Rao"/>
+                        <outlet property="numberOfStreamsCell" destination="aWO-rD-7aj" id="7wf-dp-DB1"/>
                         <outlet property="numberOfStreamsLabel" destination="Z16-xx-1Sg" id="ikQ-Kc-Evc"/>
                         <outlet property="numberOfStreamsValueLabel" destination="l09-JM-dte" id="98o-0b-KVI"/>
                         <outlet property="tapGestureRecognizer" destination="50U-0W-io9" id="70W-ca-Vix"/>
@@ -374,22 +375,22 @@
                         <rect key="frame" x="0.0" y="0.0" width="320" height="568"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
-                        <collectionViewFlowLayout key="collectionViewLayout" minimumLineSpacing="10" minimumInteritemSpacing="10" id="aPa-71-sBE">
-                            <size key="itemSize" width="293" height="142"/>
+                        <collectionViewFlowLayout key="collectionViewLayout" minimumLineSpacing="10" minimumInteritemSpacing="0.0" id="aPa-71-sBE">
+                            <size key="itemSize" width="295" height="142"/>
                             <size key="headerReferenceSize" width="0.0" height="0.0"/>
                             <size key="footerReferenceSize" width="0.0" height="0.0"/>
                             <inset key="sectionInset" minX="0.0" minY="0.0" maxX="0.0" maxY="0.0"/>
                         </collectionViewFlowLayout>
                         <cells>
-                            <collectionViewCell opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" id="l57-sH-tR6" customClass="VideoViewCollectionViewCell" customModule="TestSweets" customModuleProvider="target">
-                                <rect key="frame" x="13.5" y="0.0" width="293" height="142"/>
+                            <collectionViewCell opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" restorationIdentifier="Cell" reuseIdentifier="VideoViewCell" id="l57-sH-tR6" customClass="VideoViewCollectionViewCell" customModule="TestSweets" customModuleProvider="target">
+                                <rect key="frame" x="12.5" y="0.0" width="295" height="142"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                                 <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO">
-                                    <rect key="frame" x="0.0" y="0.0" width="293" height="142"/>
+                                    <rect key="frame" x="0.0" y="0.0" width="295" height="142"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                     <subviews>
                                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ttG-o1-l0D" customClass="VideoView" customModule="Sora">
-                                            <rect key="frame" x="0.0" y="0.0" width="293" height="142"/>
+                                            <rect key="frame" x="0.0" y="0.0" width="295" height="142"/>
                                             <color key="backgroundColor" white="0.0" alpha="1" colorSpace="calibratedWhite"/>
                                         </view>
                                     </subviews>
