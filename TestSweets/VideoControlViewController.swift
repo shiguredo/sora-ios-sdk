@@ -52,5 +52,5 @@ class VideoControlViewController: UITableViewController {
     @IBAction func switchMuteMicrophone(_ sender: Any) {
         
     }
-    
+
 }
