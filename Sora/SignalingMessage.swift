@@ -46,6 +46,8 @@ public struct SignalingNotifyMessage {
     
 }
 
+public struct SignalingPongMessage {}
+
 public enum SignalingMessage {
     
     case connect(request: SignalingConnectRequest)
@@ -53,6 +55,8 @@ public enum SignalingMessage {
     case answer(sdp: String)
     case candidate(ICECandidate)
     case notify(message: SignalingNotifyMessage)
+    case ping
+    case pong
     
 }
 
@@ -223,6 +227,8 @@ extension SignalingMessage: Codable {
         case answer
         case candidate
         case notify
+        case ping
+        case pong
     }
     
     enum CodingKeys: String, CodingKey {
@@ -239,6 +245,8 @@ extension SignalingMessage: Codable {
             self = .offer(request: try SignalingOfferRequest(from: decoder))
         case "notify":
             self = .notify(message: try SignalingNotifyMessage(from: decoder))
+        case "ping":
+            self = .ping
         default:
             fatalError("not supported decoding '\(type)'")
         }
@@ -261,6 +269,10 @@ extension SignalingMessage: Codable {
             try container.encode(candidate.sdp, forKey: .candidate)
         case .notify(message: _):
             fatalError("not supported encoding 'notify'")
+        case .ping:
+            fatalError("not supported encoding 'ping'")
+        case .pong:
+            try container.encode(MessageType.pong.rawValue, forKey: .type)
         }
     }
     

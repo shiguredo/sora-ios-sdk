@@ -122,6 +122,7 @@ public class PeerChannelHandlers {
     public var onRemoveStreamHandler: Callback1<MediaStream, Void> = Callback1(repeats: true)
     public var onNotifyHandler: Callback1<SignalingNotifyMessage, Void> =
         Callback1(repeats: true)
+    public var onPingHandler: Callback0<Void> = Callback0(repeats: true)
 
     public func onFailure(handler: @escaping (Error) -> Void) {
         onFailureHandler.onExecute(handler: handler)
@@ -139,6 +140,10 @@ public class PeerChannelHandlers {
         onNotifyHandler.onExecute(handler: handler)
     }
 
+    public func onNotify(handler: @escaping () -> Void) {
+        onPingHandler.onExecute(handler: handler)
+    }
+    
 }
 
 public enum PeerChannelState {
@@ -426,6 +431,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             case .notify(message: let message):
                 Log.debug(type: .peerChannel, message: "receive notify")
                 channel.handlers.onNotifyHandler.execute(message)
+                
+            case .ping:
+                Log.debug(type: .peerChannel, message: "receive ping")
+                channel.handlers.onPingHandler.execute()
+                signalingChannel.send(message: .pong)
                 
             default:
                 // discard
