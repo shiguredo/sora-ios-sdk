@@ -6,7 +6,18 @@ class VideoViewAspectRatioViewController: UITableViewController {
     @IBOutlet weak var wideCell: UITableViewCell!
     @IBOutlet weak var screenWidthCell: UITableViewCell!
     @IBOutlet weak var halfScreenWidthCell: UITableViewCell!
+    
+    var videoControl: VideoControl!
 
+    var cells: [UITableViewCell] {
+        get {
+            return [standardCell,
+                    wideCell,
+                    screenWidthCell,
+                    halfScreenWidthCell]
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -17,6 +28,31 @@ class VideoViewAspectRatioViewController: UITableViewController {
         // self.navigationItem.rightBarButtonItem = self.editButtonItem
     }
 
+    func clearCheckmarks() {
+        for cell in cells {
+            cell.accessoryType = .none
+        }
+    }
+    
+    func reloadData() {
+        clearCheckmarks()
+        switch videoControl.aspectRatio {
+        case .standard:
+            standardCell.accessoryType = .checkmark
+        case .wide:
+            wideCell.accessoryType = .checkmark
+        case .screenWidth:
+            screenWidthCell.accessoryType = .checkmark
+        case .halfScreenWidth:
+            halfScreenWidthCell.accessoryType = .checkmark
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadData()
+    }
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -81,6 +117,25 @@ class VideoViewAspectRatioViewController: UITableViewController {
     }
     */
 
+    override func tableView(_ tableView: UITableView,
+                            didSelectRowAt indexPath: IndexPath) {
+        clearCheckmarks()
+        let cell = tableView.cellForRow(at: indexPath)
+        if cell == wideCell {
+            wideCell.accessoryType = .checkmark
+            videoControl.aspectRatio = .wide
+        } else if cell == screenWidthCell {
+            screenWidthCell.accessoryType = .checkmark
+            videoControl.aspectRatio = .screenWidth
+        } else if cell == halfScreenWidthCell {
+            halfScreenWidthCell.accessoryType = .checkmark
+            videoControl.aspectRatio = .halfScreenWidth
+        } else {
+            standardCell.accessoryType = .checkmark
+            videoControl.aspectRatio = .standard
+        }
+    }
+    
     /*
     // MARK: - Navigation
 

@@ -1,5 +1,20 @@
 import UIKit
 
+enum AspectRatio {
+    case standard // 4:3
+    case wide // 16:9
+    case screenWidth
+    case halfScreenWidth
+}
+
+class VideoControl {
+    
+    var numberOfColumns: Int = 1
+    var aspectRatio: AspectRatio = .standard
+    var contentMode: UIViewContentMode = .scaleToFill
+    
+}
+
 class VideoControlViewController: UITableViewController {
 
     @IBOutlet weak var cameraAutofocusSwitch: UISwitch!
@@ -8,6 +23,7 @@ class VideoControlViewController: UITableViewController {
     @IBOutlet weak var disconnectCell: UITableViewCell!
 
     weak var testCase: TestCase!
+    var videoControl: VideoControl = VideoControl()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -35,15 +51,16 @@ class VideoControlViewController: UITableViewController {
         }
     }
     
-    /*
     // MARK: - Navigation
 
     // In a storyboard-based application, you will often want to do a little preparation before navigation
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destinationViewController.
-        // Pass the selected object to the new view controller.
+        if let aspect = segue.destination as? VideoViewAspectRatioViewController {
+            aspect.videoControl = videoControl
+        } else if let contentMode = segue.destination as? VideoViewContentModeViewController {
+            contentMode.videoControl = videoControl
+        }
     }
-    */
 
     @IBAction func switchCameraAutofocus(_ sender: Any) {
         

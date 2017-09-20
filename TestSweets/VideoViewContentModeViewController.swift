@@ -6,6 +6,16 @@ class VideoViewContentModeViewController: UITableViewController {
     @IBOutlet weak var scaleAspectFitCell: UITableViewCell!
     @IBOutlet weak var scaleAspectFillCell: UITableViewCell!
 
+    var videoControl: VideoControl!
+
+    var cells: [UITableViewCell] {
+        get {
+            return [scaleToFillCell,
+                    scaleAspectFitCell,
+                    scaleAspectFillCell]
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -16,6 +26,31 @@ class VideoViewContentModeViewController: UITableViewController {
         // self.navigationItem.rightBarButtonItem = self.editButtonItem
     }
 
+    func clearCheckmarks() {
+        for cell in cells {
+            cell.accessoryType = .none
+        }
+    }
+    
+    func reloadData() {
+        clearCheckmarks()
+        switch videoControl.contentMode {
+        case .scaleToFill:
+            scaleToFillCell.accessoryType = .checkmark
+        case .scaleAspectFit:
+            scaleAspectFitCell.accessoryType = .checkmark
+        case .scaleAspectFill:
+            scaleAspectFillCell.accessoryType = .checkmark
+        default:
+            scaleToFillCell.accessoryType = .checkmark
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadData()
+    }
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -79,7 +114,23 @@ class VideoViewContentModeViewController: UITableViewController {
         return true
     }
     */
-
+    
+    override func tableView(_ tableView: UITableView,
+                            didSelectRowAt indexPath: IndexPath) {
+        clearCheckmarks()
+        let cell = tableView.cellForRow(at: indexPath)
+        if cell == scaleAspectFitCell {
+            scaleAspectFitCell.accessoryType = .checkmark
+            videoControl.contentMode = .scaleAspectFit
+        } else if cell == scaleAspectFillCell {
+            scaleAspectFillCell.accessoryType = .checkmark
+            videoControl.contentMode = .scaleAspectFill
+        } else {
+            scaleToFillCell.accessoryType = .checkmark
+            videoControl.contentMode = .scaleToFill
+        }
+    }
+    
     /*
     // MARK: - Navigation
 
