@@ -11,6 +11,7 @@ class VideoCodecViewController: UITableViewController, ConfigurationViewControll
     
     var selectedCodec: VideoCodec = .default {
         didSet {
+            configurationViewController?.videoCodec = selectedCodec
             defaultCell.accessoryType = .none
             vp8Cell.accessoryType = .none
             vp9Cell.accessoryType = .none

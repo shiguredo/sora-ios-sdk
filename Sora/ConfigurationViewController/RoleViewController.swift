@@ -14,6 +14,7 @@ class RoleViewController: UITableViewController, ConfigurationViewControllable {
             subscriberCell.accessoryType = .none
             groupCell.accessoryType = .none
             if let role = selectedRole {
+                configurationViewController?.role = role
                 switch role {
                 case .publisher:
                     publisherCell.accessoryType = .checkmark
@@ -31,14 +32,6 @@ class RoleViewController: UITableViewController, ConfigurationViewControllable {
     override func viewDidLoad() {
         super.viewDidLoad()
         selectedRole = configurationViewController?.role
-    }
-    
-    override func willMove(toParentViewController parent: UIViewController?) {
-        if parent == nil {
-            if let role = selectedRole {
-                configurationViewController?.role = role
-            }
-        }
     }
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

@@ -9,7 +9,7 @@ public protocol ConfigurationViewControllable: class {
 let defaultSignalingPath = "signaling"
 
 public class ConfigurationViewController: UIViewController {
-    
+
     public var webSocketSSLEnabled: Bool = true
     public var host: String?
     public var port: Int?
@@ -130,9 +130,9 @@ public class ConfigurationViewController: UIViewController {
     
     // MARK: Navigation
 
-    override public func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if let page = segue.destination as? ConfigurationViewControllable {
-            page.configurationViewController = self
+    func set(for segue: UIStoryboardSegue) {
+        if let vc = segue.destination as? ConfigurationViewControllable {
+            vc.configurationViewController = self
         }
     }
     

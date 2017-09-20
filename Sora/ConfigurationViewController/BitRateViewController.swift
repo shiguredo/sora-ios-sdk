@@ -37,6 +37,7 @@ class BitRateViewController: UITableViewController, ConfigurationViewControllabl
     
     var selectedBitRate: Int? {
         didSet {
+            configurationViewController?.videoBitRate = selectedBitRate
             for cell: UITableViewCell in allValueCells {
                 cell.accessoryType = .none
             }

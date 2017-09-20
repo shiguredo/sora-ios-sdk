@@ -1,6 +1,7 @@
 import UIKit
 
-class ConfigurationMainViewController: UITableViewController {
+class ConfigurationMainViewController: UITableViewController,
+    ConfigurationViewControllable {
     
     enum State {
         case connected
@@ -35,11 +36,10 @@ class ConfigurationMainViewController: UITableViewController {
     @IBOutlet weak var webRTCRevisionValueLabel: UILabel!
     
     @IBOutlet weak var tapGestureRecognizer: UITapGestureRecognizer!
-    
-    public var configurationViewController: ConfigurationViewController? {
-        get {
-            return (navigationController as! ConfigurationNavigationController?)?
-                .configurationViewController
+
+    weak var configurationViewController: ConfigurationViewController? {
+        didSet {
+            updateControls()
         }
     }
 
@@ -48,7 +48,7 @@ class ConfigurationMainViewController: UITableViewController {
     override open func viewDidLoad() {
         super.viewDidLoad()
     }
-    
+
     func enable(label: UILabel, isEnabled: Bool) {
         label.isEnabled = isEnabled
         if isEnabled {
@@ -127,6 +127,10 @@ class ConfigurationMainViewController: UITableViewController {
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+    }
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        configurationViewController?.set(for: segue)
     }
     
     override open func didReceiveMemoryWarning() {

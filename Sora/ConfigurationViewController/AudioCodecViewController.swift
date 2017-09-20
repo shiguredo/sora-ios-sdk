@@ -10,6 +10,7 @@ class AudioCodecViewController: UITableViewController, ConfigurationViewControll
 
     var selectedCodec: AudioCodec = .default {
         didSet {
+            configurationViewController?.audioCodec = selectedCodec
             defaultCell.accessoryType = .none
             opusCell.accessoryType = .none
             pcmuCell.accessoryType = .none
