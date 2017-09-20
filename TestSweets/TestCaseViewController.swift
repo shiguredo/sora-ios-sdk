@@ -58,7 +58,8 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                     self.connectLabel.text = "Disconnect"
                     self.numberOfStreamsCell.isUserInteractionEnabled = true
                     self.numberOfStreamsLabel.setTextOn(true)
-                    self.numberOfStreams = 0
+                    self.numberOfStreams =
+                        self.testCaseController.mediaChannel!.streams.count
                     self.startConnectionTimer()
                     
                 case .disconnected:
