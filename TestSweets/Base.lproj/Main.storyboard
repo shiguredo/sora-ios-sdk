@@ -367,10 +367,10 @@
             </objects>
             <point key="canvasLocation" x="1215" y="37"/>
         </scene>
-        <!--Video List View Controller-->
+        <!--Video View List View Controller-->
         <scene sceneID="jra-rW-T9S">
             <objects>
-                <collectionViewController id="DAC-L9-PN8" customClass="VideoListViewController" customModule="TestSweets" customModuleProvider="target" sceneMemberID="viewController">
+                <collectionViewController id="DAC-L9-PN8" customClass="VideoViewListViewController" customModule="TestSweets" customModuleProvider="target" sceneMemberID="viewController">
                     <collectionView key="view" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" pagingEnabled="YES" dataMode="prototypes" id="YYX-qW-CAS">
                         <rect key="frame" x="0.0" y="0.0" width="320" height="568"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>

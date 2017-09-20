@@ -26,7 +26,7 @@
 		91332B231F6C13F000A3128F /* VideoViewCollectionViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91332B1B1F6C13F000A3128F /* VideoViewCollectionViewCell.swift */; };
 		91332B241F6C13F000A3128F /* TestSuite.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91332B1C1F6C13F000A3128F /* TestSuite.swift */; };
 		91332B251F6C13F000A3128F /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91332B1D1F6C13F000A3128F /* MainViewController.swift */; };
-		91332B261F6C13F000A3128F /* VideoListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91332B1E1F6C13F000A3128F /* VideoListViewController.swift */; };
+		91332B261F6C13F000A3128F /* VideoViewListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91332B1E1F6C13F000A3128F /* VideoViewListViewController.swift */; };
 		91332B271F6C13F000A3128F /* VideoControlViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91332B1F1F6C13F000A3128F /* VideoControlViewController.swift */; };
 		91332B291F6C140E00A3128F /* Sora.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91C7B0891D54636A006F5FA2 /* Sora.framework */; };
 		91332B2A1F6C143B00A3128F /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
@@ -150,7 +150,7 @@
 		91332B1B1F6C13F000A3128F /* VideoViewCollectionViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoViewCollectionViewCell.swift; sourceTree = "<group>"; };
 		91332B1C1F6C13F000A3128F /* TestSuite.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TestSuite.swift; sourceTree = "<group>"; };
 		91332B1D1F6C13F000A3128F /* MainViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
-		91332B1E1F6C13F000A3128F /* VideoListViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoListViewController.swift; sourceTree = "<group>"; };
+		91332B1E1F6C13F000A3128F /* VideoViewListViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoViewListViewController.swift; sourceTree = "<group>"; };
 		91332B1F1F6C13F000A3128F /* VideoControlViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoControlViewController.swift; sourceTree = "<group>"; };
 		9138B4CF1E655728006A76FB /* WebRTCInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebRTCInfo.swift; sourceTree = "<group>"; };
 		9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTimer.swift; sourceTree = "<group>"; };
@@ -254,7 +254,7 @@
 				91332B1C1F6C13F000A3128F /* TestSuite.swift */,
 				91332B1A1F6C13F000A3128F /* TestSuiteManager.swift */,
 				91332B1F1F6C13F000A3128F /* VideoControlViewController.swift */,
-				91332B1E1F6C13F000A3128F /* VideoListViewController.swift */,
+				91332B1E1F6C13F000A3128F /* VideoViewListViewController.swift */,
 				9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */,
 				91332B1B1F6C13F000A3128F /* VideoViewCollectionViewCell.swift */,
 				9160866F1F715BF500FC52A7 /* VideoViewContentModeViewController.swift */,
@@ -588,7 +588,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				91332B261F6C13F000A3128F /* VideoListViewController.swift in Sources */,
+				91332B261F6C13F000A3128F /* VideoViewListViewController.swift in Sources */,
 				91332B201F6C13F000A3128F /* TestCaseViewController.swift in Sources */,
 				916C44841F724ADC000E9F4E /* TestCase.swift in Sources */,
 				91332B231F6C13F000A3128F /* VideoViewCollectionViewCell.swift in Sources */,

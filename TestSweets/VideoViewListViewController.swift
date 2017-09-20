@@ -3,7 +3,7 @@ import Sora
 
 private let reuseIdentifier = "Cell"
 
-class VideoListViewController: UICollectionViewController, TestCaseControllable {
+class VideoViewListViewController: UICollectionViewController, TestCaseControllable {
     
     weak var testCaseController: TestCaseController!
 

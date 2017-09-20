@@ -98,7 +98,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     // MARK: Navigation
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if let vc = segue.destination as? VideoListViewController {
+        if let vc = segue.destination as? VideoViewListViewController {
             vc.testCaseController = testCaseController
         }
     }
