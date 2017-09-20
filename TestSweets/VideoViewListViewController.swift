@@ -3,7 +3,8 @@ import Sora
 
 private let reuseIdentifier = "Cell"
 
-class VideoViewListViewController: UICollectionViewController, TestCaseControllable {
+class VideoViewListViewController:
+    UICollectionViewController, TestCaseControllable {
     
     weak var testCaseController: TestCaseController!
 
@@ -58,12 +59,31 @@ class VideoViewListViewController: UICollectionViewController, TestCaseControlla
     // MARK: UICollectionViewDataSource
 
     override func numberOfSections(in collectionView: UICollectionView) -> Int {
-        return testCaseController.mediaChannel?.streams.count ?? 0
+        if let chan = testCaseController.mediaChannel {
+            let sections = testCaseController.testCase
+                .numberOfItemsInVideoViewSection
+            let streams = chan.streams.count
+            return streams / sections + (streams % sections == 0 ? 0 : 1)
+        } else {
+            return 0
+        }
     }
 
-
     override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return 1
+        if let chan = testCaseController.mediaChannel {
+            let items = testCaseController.testCase
+                .numberOfItemsInVideoViewSection
+            let streams = chan.streams.count - section * items
+            if streams == 0 {
+                return 0
+            } else if streams % items == 0 {
+                return items
+            } else {
+                return streams % items
+            }
+        } else {
+            return 0
+        }
     }
 
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -108,4 +128,7 @@ class VideoViewListViewController: UICollectionViewController, TestCaseControlla
     }
     */
 
+    // MARK: UICollectionViewDelegateFlowLayout
+    
+    
 }

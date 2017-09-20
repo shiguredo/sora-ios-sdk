@@ -39,7 +39,7 @@ final class TestCase {
     var title: String
     var configuration: Configuration
     
-    var numberOfVideoViewListColumns: Int = 1
+    var numberOfItemsInVideoViewSection: Int = 1
     var videoViewAspectRatio: AspectRatio = .standard
     var videoViewContentMode: UIViewContentMode = .scaleToFill
     
