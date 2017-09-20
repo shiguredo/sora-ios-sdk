@@ -27,7 +27,7 @@ class TestSuiteManager {
         set { testSuite.testCases = newValue }
     }
 
-    var updateHandler: Callback0<Void> = Callback0(repeats: true)
+    var onAddHandler: Callback1<TestCase, Void> = Callback1(repeats: true)
 
     func load() {
         if let path = saveFilePath {
@@ -42,7 +42,6 @@ class TestSuiteManager {
             testSuite = TestSuite(testCases: [])
             save()
         }
-        update()
     }
     
     func save() {
@@ -58,12 +57,9 @@ class TestSuiteManager {
         save()
     }
     
-    func update() {
-        updateHandler.execute()
-    }
-    
     func add(testCase: TestCase) {
         testSuite.add(testCase: testCase)
+        onAddHandler.execute(testCase)
     }
     
     func remove(testCase: TestCase) {

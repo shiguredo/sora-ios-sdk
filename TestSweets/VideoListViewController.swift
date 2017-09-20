@@ -3,18 +3,12 @@ import Sora
 
 private let reuseIdentifier = "Cell"
 
-class VideoListViewController: UICollectionViewController {
+class VideoListViewController: UICollectionViewController, TestCaseControllable {
     
-    weak var testCase: TestCase!
+    weak var testCaseController: TestCaseController!
 
     var videoControlViewController: VideoControlViewController!
-    
-    var mediaChannel: MediaChannel? {
-        didSet {
-            collectionView?.reloadData()
-        }
-    }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -46,7 +40,7 @@ class VideoListViewController: UICollectionViewController {
                 as! VideoControlViewController
             assert(videoControlViewController != nil)
         }
-        videoControlViewController.testCase = testCase
+        videoControlViewController.testCaseController = testCaseController
         videoControlViewController.navigationItem.title = "Video Control"
         navigationController?.pushViewController(videoControlViewController, animated: true)
     }
@@ -64,8 +58,7 @@ class VideoListViewController: UICollectionViewController {
     // MARK: UICollectionViewDataSource
 
     override func numberOfSections(in collectionView: UICollectionView) -> Int {
-        print("number of sections = ", mediaChannel?.streams.count)
-        return mediaChannel?.streams.count ?? 0
+        return testCaseController.mediaChannel?.streams.count ?? 0
     }
 
 
@@ -77,7 +70,7 @@ class VideoListViewController: UICollectionViewController {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "VideoViewCell", for: indexPath)
         print("reuse: \(reuseIdentifier) cellForItemAt \(indexPath) for \(cell)")
         if let cell = cell as? VideoViewCollectionViewCell {
-            cell.stream = mediaChannel?.streams[indexPath.row]
+            cell.stream = testCaseController.mediaChannel?.streams[indexPath.row]
             print("stream \(cell.stream)")
             print("video view = \(cell.videoView)")
         }

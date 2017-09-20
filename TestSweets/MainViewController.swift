@@ -3,21 +3,34 @@ import Sora
 
 class MainViewController: UITableViewController {
     
-    var testCases: [TestCase] {
-        get { return TestSuiteManager.shared.testSuite.testCases }
-    }
+    var testCaseControllers: [TestCaseController] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        TestSuiteManager.shared.load()
-        TestSuiteManager.shared.updateHandler.onExecute {
+        TestSuiteManager.shared.onAddHandler.onExecute { testCase in
+            let cont = TestCaseController(testCase: testCase)
+            self.testCaseControllers.append(cont)
             self.tableView.reloadData()
         }
-
+        
+        loadTestCases()
         navigationItem.leftBarButtonItem = editButtonItem
     }
 
+    func loadTestCases() {
+        TestSuiteManager.shared.load()
+        testCaseControllers = []
+        for testCase in TestSuiteManager.shared.testCases {
+            testCaseControllers.append(TestCaseController(testCase: testCase))
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        tableView.reloadData()
+    }
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -30,7 +43,7 @@ class MainViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return testCases.count
+        return testCaseControllers.count
     }
 
     override func tableView(_ tableView: UITableView,
@@ -38,7 +51,7 @@ class MainViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: "testCaseName",
                                                  for: indexPath)
         cell.accessoryType = .disclosureIndicator
-        let title = testCases[indexPath.row].title
+        let title = testCaseControllers[indexPath.row].testCase.title
         if title.isEmpty {
             cell.textLabel?.textColor = UIColor.lightGray
             cell.textLabel?.text = "No Name"
@@ -52,13 +65,15 @@ class MainViewController: UITableViewController {
     override func tableView(_ tableView: UITableView,
                             didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let testCase = testCases[indexPath.row]
-        if testCase.viewController == nil {
-            testCase.viewController = createTestCaseViewController(testCase: testCase)
+        let testCaseController = testCaseControllers[indexPath.row]
+        if testCaseController.viewController == nil {
+            testCaseController.viewController =
+                createTestCaseViewController(testCaseController: testCaseController)
         }
-        testCase.viewController!.navigationItem.title = "Test Case"
-        testCase.viewController!.reloadTestCase()
-        navigationController?.pushViewController(testCase.viewController!, animated: true)
+        let vc = testCaseController.viewController!
+        vc.navigationItem.title = "Test Case"
+        vc.reloadTestCase()
+        navigationController?.pushViewController(vc, animated: true)
     }
     
     /*
@@ -83,7 +98,7 @@ class MainViewController: UITableViewController {
 
     // Override to support rearranging the table view.
     override func tableView(_ tableView: UITableView, moveRowAt fromIndexPath: IndexPath, to: IndexPath) {
-        let testCase = testCases[fromIndexPath.row]
+        let testCase = testCaseControllers[fromIndexPath.row].testCase!
         TestSuiteManager.shared.remove(testCase: testCase)
         TestSuiteManager.shared.insert(testCase: testCase, at: to.row)
     }
@@ -114,6 +129,7 @@ class MainViewController: UITableViewController {
             TestSuiteManager.shared.save { manager in
                 manager.remove(testCaseAt: indexPath.row)
             }
+            testCaseControllers.remove(at: indexPath.row)
             tableView.deleteRows(at: [indexPath], with: .fade)
         default:
             break
@@ -122,12 +138,12 @@ class MainViewController: UITableViewController {
     
     // MARK: アクション
     
-    func createTestCaseViewController(testCase: TestCase) -> TestCaseViewController {
-        let controller = storyboard!
+    func createTestCaseViewController(testCaseController: TestCaseController) -> TestCaseViewController {
+        let vc = storyboard!
             .instantiateViewController(withIdentifier: "TestCaseViewController")
             as! TestCaseViewController
-        controller.testCase = testCase
-        return controller
+        vc.testCaseController = testCaseController
+        return vc
     }
     
     @IBAction func addNewConfiguration(_ sender: Any) {
@@ -135,7 +151,7 @@ class MainViewController: UITableViewController {
         let config = Configuration(url: URL(string: "wss:///signaling")!,
                                    channelId: Utilities.randomString(),
                                    role: .publisher)
-        let title = "Configuration \(testCases.count+1)"
+        let title = "Configuration \(testCaseControllers.count+1)"
         let testCase = TestCase(id: id, title: title, configuration: config)
         TestSuiteManager.shared.save { manager in
             manager.add(testCase: testCase)

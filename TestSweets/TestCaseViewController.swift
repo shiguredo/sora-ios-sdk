@@ -1,7 +1,7 @@
 import UIKit
 import Sora
 
-class TestCaseViewController: UITableViewController {
+class TestCaseViewController: UITableViewController, TestCaseControllable {
 
     enum State {
         case connecting
@@ -27,14 +27,17 @@ class TestCaseViewController: UITableViewController {
 
     @IBOutlet weak var tapGestureRecognizer: UITapGestureRecognizer!
 
-    weak var testCase: TestCase! {
+    weak var testCaseController: TestCaseController! {
         didSet {
             configurationViewController?.configuration = testCase.configuration
         }
     }
     
+    var testCase: TestCase! {
+        get { return testCaseController.testCase }
+    }
+    
     var configurationViewController: ConfigurationViewController!
-    var mediaChannel: MediaChannel?
 
     var numberOfStreams: Int = 0 {
         didSet {
@@ -60,7 +63,7 @@ class TestCaseViewController: UITableViewController {
                     
                 case .disconnected:
                     print("state changed: disconnected")
-                    self.mediaChannel = nil
+                    self.testCaseController.mediaChannel = nil
                     self.connectLabel.text = "Connect"
                     self.numberOfStreamsCell.isUserInteractionEnabled = false
                     self.numberOfStreamsLabel.setTextOn(false)
@@ -94,10 +97,8 @@ class TestCaseViewController: UITableViewController {
     // MARK: Navigation
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        print("prepare segue \(segue.identifier)")
-        if let page = segue.destination as? VideoListViewController {
-            print("segue settings \(mediaChannel)")
-            page.mediaChannel = mediaChannel
+        if let vc = segue.destination as? VideoListViewController {
+            vc.testCaseController = testCaseController
         }
     }
     
@@ -151,8 +152,7 @@ class TestCaseViewController: UITableViewController {
     }
     
     func disconnect() {
-        mediaChannel?.disconnect(error: nil)
-        mediaChannel = nil
+        testCaseController.disconnect(error: nil)
         state = .disconnected
     }
     
@@ -186,7 +186,7 @@ class TestCaseViewController: UITableViewController {
                         return
                     }
                     
-                    self.mediaChannel = chan
+                    self.testCaseController.mediaChannel = chan
                     guard !chan!.streams.isEmpty else {
                         self.state = .disconnected
                         self.showAlert(title: "Connection Failure",
@@ -231,9 +231,7 @@ class TestCaseViewController: UITableViewController {
         let newTestCase = TestCase(id: Utilities.randomString(),
                                    title: testCase.title,
                                    configuration: testCase.configuration)
-        newTestCase.viewController = self
         TestSuiteManager.shared.add(testCase: newTestCase)
-        TestSuiteManager.shared.update()
     }
     
     @IBAction func titleTextFieldEditingDidEndOnExit(_ sender: AnyObject) {

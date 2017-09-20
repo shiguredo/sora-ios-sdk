@@ -52,6 +52,7 @@
 		916086701F715BF500FC52A7 /* VideoViewContentModeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9160866F1F715BF500FC52A7 /* VideoViewContentModeViewController.swift */; };
 		9161BB401F2B31C200569748 /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
 		916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916BBF711F19EF5800846166 /* ICECandidate.swift */; };
+		916C44841F724ADC000E9F4E /* TestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916C44831F724ADC000E9F4E /* TestCase.swift */; };
 		91705B801DED66D300D79306 /* WebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201901D58668E00178E2B /* WebRTC.framework */; };
 		9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9173595D1F2CCEBF00806F8B /* Configuration.swift */; };
 		9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */; };
@@ -160,6 +161,7 @@
 		9160866F1F715BF500FC52A7 /* VideoViewContentModeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoViewContentModeViewController.swift; sourceTree = "<group>"; };
 		9161BB3F1F2B31C200569748 /* SDWebImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SDWebImage.framework; path = Carthage/Build/iOS/SDWebImage.framework; sourceTree = "<group>"; };
 		916BBF711F19EF5800846166 /* ICECandidate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICECandidate.swift; sourceTree = "<group>"; };
+		916C44831F724ADC000E9F4E /* TestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCase.swift; sourceTree = "<group>"; };
 		9173595D1F2CCEBF00806F8B /* Configuration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
 		9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoCapturer.swift; sourceTree = "<group>"; };
 		917EF3451F160B9E00756DF2 /* Snapshot.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
@@ -247,6 +249,7 @@
 				91332AFA1F6C120500A3128F /* AppDelegate.swift */,
 				91332B191F6C13F000A3128F /* MainNavigationViewController.swift */,
 				91332B1D1F6C13F000A3128F /* MainViewController.swift */,
+				916C44831F724ADC000E9F4E /* TestCase.swift */,
 				91332B181F6C13F000A3128F /* TestCaseViewController.swift */,
 				91332B1C1F6C13F000A3128F /* TestSuite.swift */,
 				91332B1A1F6C13F000A3128F /* TestSuiteManager.swift */,
@@ -587,6 +590,7 @@
 			files = (
 				91332B261F6C13F000A3128F /* VideoListViewController.swift in Sources */,
 				91332B201F6C13F000A3128F /* TestCaseViewController.swift in Sources */,
+				916C44841F724ADC000E9F4E /* TestCase.swift in Sources */,
 				91332B231F6C13F000A3128F /* VideoViewCollectionViewCell.swift in Sources */,
 				91332B211F6C13F000A3128F /* MainNavigationViewController.swift in Sources */,
 				916086701F715BF500FC52A7 /* VideoViewContentModeViewController.swift in Sources */,

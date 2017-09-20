@@ -1,26 +1,10 @@
 import Foundation
 import Sora
 
-final class TestCase {
-    
-    var id: String
-    var title: String
-    var configuration: Configuration
-    var viewController: TestCaseViewController?
-    var testSuite: TestSuite?
-    
-    init(id: String, title: String, configuration: Configuration) {
-        self.id = id
-        self.title = title
-        self.configuration = configuration
-    }
-    
-}
-
 final class TestSuite {
 
     var testCases: [TestCase]
-
+    
     init(testCases: [TestCase]) {
         self.testCases = testCases
     }
@@ -70,31 +54,6 @@ final class TestSuite {
         } catch let e {
             print("failed to save test suite (\(e.localizedDescription))")
         }
-    }
-    
-}
-
-extension TestCase: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case configuration
-    }
-    
-    public convenience init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let id = try container.decode(String.self, forKey: .id)
-        let title = try container.decode(String.self, forKey: .title)
-        let configuration = try container.decode(Configuration.self, forKey: .configuration)
-        self.init(id: id, title: title, configuration: configuration)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var encoder = encoder.container(keyedBy: CodingKeys.self)
-        try encoder.encode(id, forKey: .id)
-        try encoder.encode(title, forKey: .title)
-        try encoder.encode(configuration, forKey: .configuration)
     }
     
 }

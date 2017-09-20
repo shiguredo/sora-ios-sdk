@@ -1,13 +1,13 @@
 import UIKit
 
-class VideoViewAspectRatioViewController: UITableViewController {
+class VideoViewAspectRatioViewController: UITableViewController, TestCaseControllable {
 
     @IBOutlet weak var standardCell: UITableViewCell!
     @IBOutlet weak var wideCell: UITableViewCell!
     @IBOutlet weak var screenWidthCell: UITableViewCell!
     @IBOutlet weak var halfScreenWidthCell: UITableViewCell!
     
-    var videoControl: VideoControl!
+    weak var testCaseController: TestCaseController!
 
     var cells: [UITableViewCell] {
         get {
@@ -16,6 +16,10 @@ class VideoViewAspectRatioViewController: UITableViewController {
                     screenWidthCell,
                     halfScreenWidthCell]
         }
+    }
+    
+    var testCase: TestCase! {
+        get { return testCaseController.testCase }
     }
     
     override func viewDidLoad() {
@@ -36,7 +40,7 @@ class VideoViewAspectRatioViewController: UITableViewController {
     
     func reloadData() {
         clearCheckmarks()
-        switch videoControl.aspectRatio {
+        switch testCase.videoViewAspectRatio {
         case .standard:
             standardCell.accessoryType = .checkmark
         case .wide:
@@ -123,16 +127,16 @@ class VideoViewAspectRatioViewController: UITableViewController {
         let cell = tableView.cellForRow(at: indexPath)
         if cell == wideCell {
             wideCell.accessoryType = .checkmark
-            videoControl.aspectRatio = .wide
+            testCase.videoViewAspectRatio = .wide
         } else if cell == screenWidthCell {
             screenWidthCell.accessoryType = .checkmark
-            videoControl.aspectRatio = .screenWidth
+            testCase.videoViewAspectRatio = .screenWidth
         } else if cell == halfScreenWidthCell {
             halfScreenWidthCell.accessoryType = .checkmark
-            videoControl.aspectRatio = .halfScreenWidth
+            testCase.videoViewAspectRatio = .halfScreenWidth
         } else {
             standardCell.accessoryType = .checkmark
-            videoControl.aspectRatio = .standard
+            testCase.videoViewAspectRatio = .standard
         }
     }
     

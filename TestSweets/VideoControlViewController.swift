@@ -1,29 +1,13 @@
 import UIKit
 
-enum AspectRatio {
-    case standard // 4:3
-    case wide // 16:9
-    case screenWidth
-    case halfScreenWidth
-}
-
-class VideoControl {
-    
-    var numberOfColumns: Int = 1
-    var aspectRatio: AspectRatio = .standard
-    var contentMode: UIViewContentMode = .scaleToFill
-    
-}
-
-class VideoControlViewController: UITableViewController {
+class VideoControlViewController: UITableViewController, TestCaseControllable {
 
     @IBOutlet weak var cameraAutofocusSwitch: UISwitch!
     @IBOutlet weak var muteMicrophoneSwitch: UISwitch!
     
     @IBOutlet weak var disconnectCell: UITableViewCell!
 
-    weak var testCase: TestCase!
-    var videoControl: VideoControl = VideoControl()
+    weak var testCaseController: TestCaseController!
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -46,7 +30,7 @@ class VideoControlViewController: UITableViewController {
         if let cell = tableView.cellForRow(at: indexPath) {
             tableView.deselectRow(at: indexPath, animated: true)
             if cell == disconnectCell {
-                testCase.viewController?.disconnect()
+                testCaseController.disconnect(error: nil)
             }
         }
     }
@@ -56,9 +40,9 @@ class VideoControlViewController: UITableViewController {
     // In a storyboard-based application, you will often want to do a little preparation before navigation
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if let aspect = segue.destination as? VideoViewAspectRatioViewController {
-            aspect.videoControl = videoControl
+            aspect.testCaseController = testCaseController
         } else if let contentMode = segue.destination as? VideoViewContentModeViewController {
-            contentMode.videoControl = videoControl
+            contentMode.testCaseController = testCaseController
         }
     }
 

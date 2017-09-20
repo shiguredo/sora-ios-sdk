@@ -1,12 +1,12 @@
 import UIKit
 
-class VideoViewContentModeViewController: UITableViewController {
+class VideoViewContentModeViewController: UITableViewController, TestCaseControllable {
 
     @IBOutlet weak var scaleToFillCell: UITableViewCell!
     @IBOutlet weak var scaleAspectFitCell: UITableViewCell!
     @IBOutlet weak var scaleAspectFillCell: UITableViewCell!
 
-    var videoControl: VideoControl!
+    weak var testCaseController: TestCaseController!
 
     var cells: [UITableViewCell] {
         get {
@@ -14,6 +14,10 @@ class VideoViewContentModeViewController: UITableViewController {
                     scaleAspectFitCell,
                     scaleAspectFillCell]
         }
+    }
+    
+    var testCase: TestCase! {
+        get { return testCaseController.testCase }
     }
     
     override func viewDidLoad() {
@@ -34,7 +38,7 @@ class VideoViewContentModeViewController: UITableViewController {
     
     func reloadData() {
         clearCheckmarks()
-        switch videoControl.contentMode {
+        switch testCaseController.testCase.videoViewContentMode {
         case .scaleToFill:
             scaleToFillCell.accessoryType = .checkmark
         case .scaleAspectFit:
@@ -121,13 +125,13 @@ class VideoViewContentModeViewController: UITableViewController {
         let cell = tableView.cellForRow(at: indexPath)
         if cell == scaleAspectFitCell {
             scaleAspectFitCell.accessoryType = .checkmark
-            videoControl.contentMode = .scaleAspectFit
+            testCase.videoViewContentMode = .scaleAspectFit
         } else if cell == scaleAspectFillCell {
             scaleAspectFillCell.accessoryType = .checkmark
-            videoControl.contentMode = .scaleAspectFill
+            testCase.videoViewContentMode = .scaleAspectFill
         } else {
             scaleToFillCell.accessoryType = .checkmark
-            videoControl.contentMode = .scaleToFill
+            testCase.videoViewContentMode = .scaleToFill
         }
     }
     
