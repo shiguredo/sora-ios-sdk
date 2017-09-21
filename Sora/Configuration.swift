@@ -25,7 +25,6 @@ public struct Configuration {
     public var optionalConstraints: [String: String] = [:]
     
     public var iceServerInfos: [ICEServerInfo]
-    // offer 時にセットされる
     public var iceTransportPolicy: ICETransportPolicy = .none
     
     public var signalingChannelType: SignalingChannel.Type = BasicSignalingChannel.self
