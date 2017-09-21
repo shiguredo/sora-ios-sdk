@@ -25,11 +25,7 @@ public struct WebRTCInfo {
     public var revision: String = "Unknown"
     
     public var shortRevision: String {
-        get {
-            return revision.substring(to:
-                revision.index(revision.startIndex,
-                                     offsetBy: 7))
-        }
+        return String(revision[revision.index(revision.startIndex, offsetBy: 7)])
     }
 
 }
