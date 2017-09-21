@@ -1,22 +1,6 @@
 import Foundation
 import WebRTC
 
-var tlsSecurityPolicyTable: [TLSSecurityPolicy: RTCTlsCertPolicy] =
-    [.secure: .secure, .insecure: .insecureNoCheck]
-
-public enum TLSSecurityPolicy {
-    
-    case secure
-    case insecure
-    
-    var nativeValue: RTCTlsCertPolicy {
-        get {
-            return tlsSecurityPolicyTable[self]!
-        }
-    }
-    
-}
-
 public final class ICEServerInfo {
     
     public var urls: [URL] = []
@@ -43,4 +27,28 @@ public final class ICEServerInfo {
         self.tlsSecurityPolicy = tlsSecurityPolicy
     }
     
+}
+
+extension ICEServerInfo: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case urls
+        case userName = "username"
+        case credential
+    }
+    
+    public convenience init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let urls = try container.decode([URL].self, forKey: .urls)
+        let userName = try container.decode(String.self, forKey: .userName)
+        let credential = try container.decode(String.self, forKey: .credential)
+        self.init(urls: urls,
+                  userName: userName,
+                  credential: credential,
+                  tlsSecurityPolicy: .secure)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        fatalError("not supported")
+    }
 }

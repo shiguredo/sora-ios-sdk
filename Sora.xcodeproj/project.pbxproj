@@ -55,6 +55,12 @@
 		91705B801DED66D300D79306 /* WebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201901D58668E00178E2B /* WebRTC.framework */; };
 		9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9173595D1F2CCEBF00806F8B /* Configuration.swift */; };
 		9174A88F1F7395CA00D586C4 /* CGSize+VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */; };
+		9174A8911F73F89400D586C4 /* Role.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8901F73F89400D586C4 /* Role.swift */; };
+		9174A8931F73F8CF00D586C4 /* VideoCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8921F73F8CF00D586C4 /* VideoCodec.swift */; };
+		9174A8951F73F90B00D586C4 /* AudioCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8941F73F90B00D586C4 /* AudioCodec.swift */; };
+		9174A8971F73F93B00D586C4 /* ICETransportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8961F73F93B00D586C4 /* ICETransportPolicy.swift */; };
+		9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */; };
+		9174A89B1F73F9EE00D586C4 /* CameraPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */; };
 		9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */; };
 		917EF3461F160B9E00756DF2 /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917EF3451F160B9E00756DF2 /* Snapshot.swift */; };
 		917FDCC41F5F14700006BCAA /* ConfigurationViewController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 91C109201E4A3198009F11F7 /* ConfigurationViewController.storyboard */; };
@@ -163,6 +169,12 @@
 		916C44831F724ADC000E9F4E /* TestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCase.swift; sourceTree = "<group>"; };
 		9173595D1F2CCEBF00806F8B /* Configuration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
 		9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CGSize+VideoView.swift"; sourceTree = "<group>"; };
+		9174A8901F73F89400D586C4 /* Role.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Role.swift; sourceTree = "<group>"; };
+		9174A8921F73F8CF00D586C4 /* VideoCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCodec.swift; sourceTree = "<group>"; };
+		9174A8941F73F90B00D586C4 /* AudioCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCodec.swift; sourceTree = "<group>"; };
+		9174A8961F73F93B00D586C4 /* ICETransportPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICETransportPolicy.swift; sourceTree = "<group>"; };
+		9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSSecurityPolicy.swift; sourceTree = "<group>"; };
+		9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPosition.swift; sourceTree = "<group>"; };
 		9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoCapturer.swift; sourceTree = "<group>"; };
 		917EF3451F160B9E00756DF2 /* Snapshot.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
 		918201901D58668E00178E2B /* WebRTC.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebRTC.framework; path = Carthage/Build/iOS/WebRTC.framework; sourceTree = "<group>"; };
@@ -340,23 +352,29 @@
 				91C7B08C1D54636A006F5FA2 /* Sora.h */,
 				91C7B08E1D54636A006F5FA2 /* Info.plist */,
 				91A9AC271F400EE500B4A1A3 /* AliveMonitor.swift */,
+				9174A8941F73F90B00D586C4 /* AudioCodec.swift */,
 				910D444C1F4D6C8500D35917 /* Callback.swift */,
+				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,
 				9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */,
 				910D444E1F4D7ACC00D35917 /* Event.swift */,
 				916BBF711F19EF5800846166 /* ICECandidate.swift */,
 				918A38F71F30F49500D047BA /* ICEServerInfo.swift */,
+				9174A8961F73F93B00D586C4 /* ICETransportPolicy.swift */,
 				9106C27D1F31A3470019E3C7 /* Log.swift */,
 				91A19B8D1F19367700A76852 /* MediaChannel.swift */,
 				9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */,
 				910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */,
 				91A19B8B1F19366B00A76852 /* PeerChannel.swift */,
+				9174A8901F73F89400D586C4 /* Role.swift */,
 				91A19B891F19366000A76852 /* SignalingChannel.swift */,
 				91FAB3EB1F29130700EDF53C /* SignalingMessage.swift */,
 				917EF3451F160B9E00756DF2 /* Snapshot.swift */,
 				91CD2A491F288A6A00D039D1 /* Sora.swift */,
+				9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
 				9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */,
+				9174A8921F73F8CF00D586C4 /* VideoCodec.swift */,
 				91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */,
 				91B1D6451D75E11F00112A4E /* VideoRenderer.swift */,
 				9100904F1E58B5450099E00E /* VideoView.swift */,
@@ -620,11 +638,14 @@
 				91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */,
 				91FAB3EC1F29130700EDF53C /* SignalingMessage.swift in Sources */,
 				91BDC1D71F62C8A50084DC3A /* UILabel+ConfigurationViewController.swift in Sources */,
+				9174A89B1F73F9EE00D586C4 /* CameraPosition.swift in Sources */,
 				913D5E1E1F57E8F300A82DEA /* ConfigurationViewController.swift in Sources */,
+				9174A8951F73F90B00D586C4 /* AudioCodec.swift in Sources */,
 				91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */,
 				918A38F81F30F49500D047BA /* ICEServerInfo.swift in Sources */,
 				916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */,
 				9138B4D01E655728006A76FB /* WebRTCInfo.swift in Sources */,
+				9174A8971F73F93B00D586C4 /* ICETransportPolicy.swift in Sources */,
 				91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */,
 				9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */,
 				91A9AC281F400EE500B4A1A3 /* AliveMonitor.swift in Sources */,
@@ -635,6 +656,7 @@
 				9174A88F1F7395CA00D586C4 /* CGSize+VideoView.swift in Sources */,
 				913D5E1C1F57E8F300A82DEA /* AudioCodecViewController.swift in Sources */,
 				913D5E211F57E8F300A82DEA /* RoleViewController.swift in Sources */,
+				9174A8931F73F8CF00D586C4 /* VideoCodec.swift in Sources */,
 				910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */,
 				910D444F1F4D7ACC00D35917 /* Event.swift in Sources */,
 				910090501E58B5450099E00E /* VideoView.swift in Sources */,
@@ -644,8 +666,10 @@
 				913D5E201F57E8F300A82DEA /* ConfigurationMainViewController.swift in Sources */,
 				913D5E1F1F57E8F300A82DEA /* ConfigurationNavigationController.swift in Sources */,
 				910D444D1F4D6C8500D35917 /* Callback.swift in Sources */,
+				9174A8911F73F89400D586C4 /* Role.swift in Sources */,
 				91BDC1D91F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift in Sources */,
 				9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */,
+				9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */,
 				9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */,
 				9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */,
 				913D5E1D1F57E8F300A82DEA /* BitRateViewController.swift in Sources */,
