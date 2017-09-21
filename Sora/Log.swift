@@ -72,22 +72,24 @@ public enum LogLevel: Int {
     
 }
 
-public class Log {
-    
-    public static var level: LogLevel = .debug
-    
-    public static func debug(type: LogType, message: String) {
-        Log(level: .debug, type: type, message: message).output()
+public class LogMessage {
+
+    public let level: LogLevel
+    public let type: LogType
+    public let timestamp: Date
+    public let message: String
+
+    public var description: String {
+        get {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            return String(format: "%@ %@ %@: %@",
+                          formatter.string(from: timestamp),
+                          type.description(),
+                          level.description(),
+                          message)
+        }
     }
-    
-    public static func trace(type: LogType, message: String) {
-        Log(level: .trace, type: type, message: message).output()
-    }
-    
-    var level: LogLevel
-    var type: LogType
-    var timestamp: Date
-    var message: String
     
     init(level: LogLevel, type: LogType, message: String) {
         self.level = level
@@ -96,15 +98,53 @@ public class Log {
         self.message = message
     }
     
-    func output() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        let desc = String(format: "%@ %@ %@: %@",
-                          formatter.string(from: timestamp),
-                          type.description(),
-                          level.description(),
-                          message)
-        print(desc)
+}
+
+public class Log {
+    
+    public static var shared: Log = Log()
+        
+    public var onOutputHandler: ((LogMessage) -> Void)?
+    
+    public static func fatal(type: LogType, message: String) {
+        Log.shared.output(message: LogMessage(level: .fatal,
+                                              type: type,
+                                              message: message))
+    }
+    
+    public static func error(type: LogType, message: String) {
+        Log.shared.output(message: LogMessage(level: .error,
+                                              type: type,
+                                              message: message))
+    }
+    
+    public static func debug(type: LogType, message: String) {
+        Log.shared.output(message: LogMessage(level: .debug,
+                                              type: type,
+                                              message: message))
+    }
+    
+    public static func warn(type: LogType, message: String) {
+        Log.shared.output(message: LogMessage(level: .warn,
+                                              type: type,
+                                              message: message))
+    }
+    
+    public static func info(type: LogType, message: String) {
+        Log.shared.output(message: LogMessage(level: .info,
+                                              type: type,
+                                              message: message))
+    }
+    
+    public static func trace(type: LogType, message: String) {
+        Log.shared.output(message: LogMessage(level: .trace,
+                                              type: type,
+                                              message: message))
+    }
+    
+    func output(message: LogMessage) {
+        onOutputHandler?(message)
+        print(message.description)
     }
     
 }
