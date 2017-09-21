@@ -32,7 +32,7 @@ public class MediaChannelHandlers {
 
 // MARK: -
 
-open class MediaChannel {
+public class MediaChannel {
     
     public enum State {
         case connecting
