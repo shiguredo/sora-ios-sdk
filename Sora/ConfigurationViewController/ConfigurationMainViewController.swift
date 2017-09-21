@@ -45,7 +45,7 @@ class ConfigurationMainViewController: UITableViewController,
 
     // MARK: View Controller
     
-    override open func viewDidLoad() {
+    override func viewDidLoad() {
         super.viewDidLoad()
     }
 
@@ -133,7 +133,7 @@ class ConfigurationMainViewController: UITableViewController,
         configurationViewController?.set(for: segue)
     }
     
-    override open func didReceiveMemoryWarning() {
+    override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
     }
