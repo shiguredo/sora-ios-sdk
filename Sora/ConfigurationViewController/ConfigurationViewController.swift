@@ -42,7 +42,7 @@ public class ConfigurationViewController: UIViewController {
     public var configuration: Configuration {
         
         get {
-            let config = Configuration(url: url ?? URL(string: "wss://")!,
+            var config = Configuration(url: url ?? URL(string: "wss://")!,
                                        channelId: channelId ?? "",
                                        role: role)
             config.snapshotEnabled = snapshotEnabled

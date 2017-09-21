@@ -260,6 +260,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     
     var configuration: Configuration {
         get { return channel.configuration }
+        set { channel.configuration = newValue }
     }
     
     var aliveState: AliveState {

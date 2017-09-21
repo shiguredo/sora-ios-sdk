@@ -50,7 +50,7 @@ public enum ICETransportPolicy {
     
 }
 
-public final class Configuration {
+public struct Configuration {
     
     public static let maxVideoVideoBitRate = 5000
     public static let defaultConnectionTimeout = 10
@@ -254,7 +254,7 @@ extension Configuration: Codable {
         case publisherAudioTrackId
     }
     
-    public convenience init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
