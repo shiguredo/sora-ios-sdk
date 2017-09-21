@@ -55,6 +55,7 @@
 		916C44841F724ADC000E9F4E /* TestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916C44831F724ADC000E9F4E /* TestCase.swift */; };
 		91705B801DED66D300D79306 /* WebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201901D58668E00178E2B /* WebRTC.framework */; };
 		9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9173595D1F2CCEBF00806F8B /* Configuration.swift */; };
+		9174A88F1F7395CA00D586C4 /* CGSize+VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */; };
 		9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */; };
 		917EF3461F160B9E00756DF2 /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917EF3451F160B9E00756DF2 /* Snapshot.swift */; };
 		917FDCC41F5F14700006BCAA /* ConfigurationViewController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 91C109201E4A3198009F11F7 /* ConfigurationViewController.storyboard */; };
@@ -163,6 +164,7 @@
 		916BBF711F19EF5800846166 /* ICECandidate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICECandidate.swift; sourceTree = "<group>"; };
 		916C44831F724ADC000E9F4E /* TestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCase.swift; sourceTree = "<group>"; };
 		9173595D1F2CCEBF00806F8B /* Configuration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
+		9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CGSize+VideoView.swift"; sourceTree = "<group>"; };
 		9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoCapturer.swift; sourceTree = "<group>"; };
 		917EF3451F160B9E00756DF2 /* Snapshot.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
 		918201901D58668E00178E2B /* WebRTC.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebRTC.framework; path = Carthage/Build/iOS/WebRTC.framework; sourceTree = "<group>"; };
@@ -288,9 +290,10 @@
 		91BDC1D31F6285D10084DC3A /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
+				9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */,
 				91FD95741DCA06F700047BA9 /* RTC+Description.swift */,
-				91BDC1D61F62C8A40084DC3A /* UILabel+ConfigurationViewController.swift */,
 				91BDC1D81F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift */,
+				91BDC1D61F62C8A40084DC3A /* UILabel+ConfigurationViewController.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -633,6 +636,7 @@
 				913D5E221F57E8F300A82DEA /* VideoCodecViewController.swift in Sources */,
 				91CD2A4A1F288A6A00D039D1 /* Sora.swift in Sources */,
 				9106C27E1F31A3470019E3C7 /* Log.swift in Sources */,
+				9174A88F1F7395CA00D586C4 /* CGSize+VideoView.swift in Sources */,
 				913D5E1C1F57E8F300A82DEA /* AudioCodecViewController.swift in Sources */,
 				913D5E211F57E8F300A82DEA /* RoleViewController.swift in Sources */,
 				910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */,
