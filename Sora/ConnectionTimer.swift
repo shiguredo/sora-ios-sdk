@@ -7,7 +7,7 @@ public class ConnectionTimer {
     public var isRunning: Bool = false
     
     private var timer: Timer?
-    private var onTimeoutHandler: Callback0<Void> = Callback0(repeats: true)
+    private var onTimeoutHandler: (() -> Void)?
     
     public init(target: AliveMonitorable? = nil, timeout: Int) {
         self.target = target
@@ -20,21 +20,21 @@ public class ConnectionTimer {
         if let timeout = timeout {
             self.timeout = timeout
         }
-        onTimeoutHandler.onExecute(handler: handler)
+        onTimeoutHandler = handler
         timer = Timer(timeInterval: TimeInterval(self.timeout), repeats: false)
         { timer in
             self.stop()
             if let target = self.target {
                 switch target.aliveState {
                 case .connecting:
-                    self.onTimeoutHandler.execute()
+                    self.onTimeoutHandler?()
                 default:
                     break
                 }
             } else {
-                self.onTimeoutHandler.execute()
+                self.onTimeoutHandler?()
             }
-            self.onTimeoutHandler.clear()
+            self.onTimeoutHandler = nil
         }
         RunLoop.main.add(timer!, forMode: .commonModes)
         isRunning = true

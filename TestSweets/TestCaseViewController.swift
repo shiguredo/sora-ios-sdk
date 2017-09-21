@@ -195,15 +195,15 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                         return
                     }
                     
-                    chan!.handlers.onAddStream { stream in
+                    chan!.handlers.onAddStreamHandler = { stream in
                         self.numberOfStreams += 1
                     }
                     
-                    chan!.handlers.onRemoveStream { stream in
+                    chan!.handlers.onRemoveStreamHandler = { stream in
                         self.numberOfStreams -= 1
                     }
                     
-                    chan!.handlers.onFailure { error in
+                    chan!.handlers.onFailureHandler = { error in
                         self.state = .disconnected
                         self.showAlert(title: "Connection Failure",
                                        message: error.localizedDescription)

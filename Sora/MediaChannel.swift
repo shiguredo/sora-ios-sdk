@@ -2,31 +2,11 @@ import Foundation
 
 public class MediaChannelHandlers {
     
-    public let onFailureHandler: Callback1<Error, Void> = Callback1(repeats: true)
-    public let onMessageHandler: Callback1<SignalingMessage, Void> = Callback1(repeats: true)
-    public let onAddStreamHandler: Callback1<MediaStream, Void> = Callback1(repeats: true)
-    public let onRemoveStreamHandler: Callback1<MediaStream, Void> = Callback1(repeats: true)
-    public let onEventHandler: Callback1<Event, Void> = Callback1(repeats: true)
-    
-    public func onFailure(handler: @escaping (Error) -> Void) {
-        onFailureHandler.onExecute(handler: handler)
-    }
-    
-    public func onMessage(handler: @escaping (SignalingMessage) -> Void) {
-        onMessageHandler.onExecute(handler: handler)
-    }
-    
-    public func onAddStream(handler: @escaping (MediaStream) -> Void) {
-        onAddStreamHandler.onExecute(handler: handler)
-    }
-    
-    public func onRemoveStream(handler: @escaping (MediaStream) -> Void) {
-        onRemoveStreamHandler.onExecute(handler: handler)
-    }
-    
-    public func onEvent(handler: @escaping (Event) -> Void) {
-        onEventHandler.onExecute(handler: handler)
-    }
+    public var onFailureHandler: ((Error) -> Void)?
+    public var onMessageHandler: ((SignalingMessage) -> Void)?
+    public var onAddStreamHandler: ((MediaStream) -> Void)?
+    public var onRemoveStreamHandler: ((MediaStream) -> Void)?
+    public var onEventHandler: ((Event) -> Void)?
     
 }
 
@@ -66,7 +46,7 @@ public class MediaChannel {
     
     private let aliveMonitor: AliveMonitor = AliveMonitor()
     private var connectionTimer: ConnectionTimer?
-    private var onConnectHandler: Callback1<Error?, Void> = Callback1(repeats: false)
+    private var onConnectHandler: ((Error?) -> Void)?
     
     public init(configuration: Configuration) {
         Log.debug(type: .mediaChannel,
@@ -92,7 +72,7 @@ public class MediaChannel {
                         handler: @escaping (Error?) -> Void) {
         Log.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
-        onConnectHandler.onExecute(handler: handler)
+        onConnectHandler = handler
         
         let timer = ConnectionTimer(target: self, timeout: configuration.connectionTimeout)
         timer.run {
@@ -101,19 +81,19 @@ public class MediaChannel {
         }
         connectionTimer = timer
         
-        peerChannel.handlers.onAddStream { stream in
+        peerChannel.handlers.onAddStreamHandler = { stream in
             Log.debug(type: .mediaChannel, message: "added a stream")
-            self.handlers.onAddStreamHandler.execute(stream)
+            self.handlers.onAddStreamHandler?(stream)
         }
         
-        peerChannel.handlers.onRemoveStream { stream in
+        peerChannel.handlers.onRemoveStreamHandler = { stream in
             Log.debug(type: .mediaChannel, message: "removed a stream")
-            self.handlers.onRemoveStreamHandler.execute(stream)
+            self.handlers.onRemoveStreamHandler?(stream)
         }
         
-        peerChannel.handlers.onNotify { message in
+        peerChannel.handlers.onNotifyHandler = { message in
             Log.debug(type: .mediaChannel, message: "receive event notification")
-            self.handlers.onEventHandler.execute(Event(message: message))
+            self.handlers.onEventHandler?(Event(message: message))
         }
         
         peerChannel.connect { error in
@@ -124,7 +104,8 @@ public class MediaChannel {
             }
             Log.debug(type: .mediaChannel, message: "did connect")
             self.state = .connected
-            self.onConnectHandler.execute(error)
+            self.onConnectHandler?(error)
+            self.onConnectHandler = nil
         }
     }
     
@@ -146,9 +127,10 @@ public class MediaChannel {
             state = .disconnected
             
             if let error = error {
-                handlers.onFailureHandler.execute(error)
+                handlers.onFailureHandler?(error)
             }
-            onConnectHandler.execute(error)
+            onConnectHandler?(error)
+            onConnectHandler = nil
         }
     }
     

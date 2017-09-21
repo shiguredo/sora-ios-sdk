@@ -21,8 +21,8 @@ open class BasicMediaStream: MediaStream {
     
     public var videoCapturer: VideoCapturer? {
         didSet {
-            oldValue?.handlers.onCaptureHandler.clear()
-            videoCapturer?.handlers.onCapture(handler: handleFrame)
+            oldValue?.handlers.onCaptureHandler = nil
+            videoCapturer?.handlers.onCaptureHandler = handleFrame
         }
     }
     

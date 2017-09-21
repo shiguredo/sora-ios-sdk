@@ -93,7 +93,7 @@ public class PeerChannelInternalState {
         }
     }
     
-    private var onCompleteHandler: Callback0<Void> = Callback0(repeats: false)
+    var onCompleteHandler: (() -> Void)?
     
     public init(signalingState: PeerChannelSignalingState,
                 iceConnectionState: ICEConnectionState,
@@ -105,45 +105,20 @@ public class PeerChannelInternalState {
     
     private func validate() {
         if isCompleted {
-            onCompleteHandler.execute()
+            onCompleteHandler?()
+            onCompleteHandler = nil
         }
     }
-    
-    public func onComplete(handler: @escaping () -> Void) {
-        onCompleteHandler.onExecute(handler: handler)
-    }
-    
 }
 
 public class PeerChannelHandlers {
     
-    public var onFailureHandler: Callback1<Error, Void> = Callback1(repeats: true)
-    public var onAddStreamHandler: Callback1<MediaStream, Void> = Callback1(repeats: true)
-    public var onRemoveStreamHandler: Callback1<MediaStream, Void> = Callback1(repeats: true)
-    public var onNotifyHandler: Callback1<SignalingNotifyMessage, Void> =
-        Callback1(repeats: true)
-    public var onPingHandler: Callback0<Void> = Callback0(repeats: true)
+    public var onFailureHandler: ((Error) -> Void)?
+    public var onAddStreamHandler: ((MediaStream) -> Void)?
+    public var onRemoveStreamHandler: ((MediaStream) -> Void)?
+    public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
+    public var onPingHandler: (() -> Void)?
 
-    public func onFailure(handler: @escaping (Error) -> Void) {
-        onFailureHandler.onExecute(handler: handler)
-    }
-    
-    public func onAddStream(handler: @escaping (MediaStream) -> Void) {
-        onAddStreamHandler.onExecute(handler: handler)
-    }
-    
-    public func onRemoveStream(handler: @escaping (MediaStream) -> Void) {
-        onRemoveStreamHandler.onExecute(handler: handler)
-    }
-    
-    public func onNotify(handler: @escaping (SignalingNotifyMessage) -> Void) {
-        onNotifyHandler.onExecute(handler: handler)
-    }
-
-    public func onNotify(handler: @escaping () -> Void) {
-        onPingHandler.onExecute(handler: handler)
-    }
-    
 }
 
 public enum PeerChannelState {
@@ -208,7 +183,7 @@ open class BasicPeerChannel: PeerChannel {
     
     public func addStream(_ stream: MediaStream) {
         streams.append(stream)
-        handlers.onAddStreamHandler.execute(stream)
+        handlers.onAddStreamHandler?(stream)
     }
     
     public func removeStream(id: String) {
@@ -220,7 +195,7 @@ open class BasicPeerChannel: PeerChannel {
     
     public func removeStream(_ stream: MediaStream) {
         streams = streams.filter { each in each.streamId != stream.streamId }
-        handlers.onRemoveStreamHandler.execute(stream)
+        handlers.onRemoveStreamHandler?(stream)
     }
     
     public func addICECandidate(_ candidate: ICECandidate) {
@@ -276,7 +251,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         }
     }
     
-    fileprivate var onConnectHandler: Callback1<Error?, Void> = Callback1(repeats: false)
+    var onConnectHandler: ((Error?) -> Void)?
     
     init(channel: BasicPeerChannel) {
         self.channel = channel
@@ -294,15 +269,15 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                 nativeValue: nativeChannel.iceConnectionState),
             iceGatheringState: ICEGatheringState(
                 nativeValue: nativeChannel.iceGatheringState))
-        internalState.onComplete(handler: finishConnecting)
-        signalingChannel.handlers.onMessage(handler: handleMessage)
+        internalState.onCompleteHandler = finishConnecting
+        signalingChannel.handlers.onMessageHandler = handleMessage
     }
 
     func connect(handler: @escaping (Error?) -> Void) {
         Log.debug(type: .peerChannel, message: "try connecting")
         Log.debug(type: .peerChannel, message: "try connecting to signaling channel")
         state = .connecting
-        onConnectHandler.onExecute(handler: handler)
+        onConnectHandler = handler
         signalingChannel.connect(handler: sendConnectRequest)
     }
     
@@ -431,11 +406,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             switch message {
             case .notify(message: let message):
                 Log.debug(type: .peerChannel, message: "receive notify")
-                channel.handlers.onNotifyHandler.execute(message)
+                channel.handlers.onNotifyHandler?(message)
                 
             case .ping:
                 Log.debug(type: .peerChannel, message: "receive ping")
-                channel.handlers.onPingHandler.execute()
+                channel.handlers.onPingHandler?()
                 signalingChannel.send(message: .pong)
                 
             default:
@@ -454,7 +429,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         Log.debug(type: .peerChannel,
                   message: "media streams = \(channel.streams.count)")
         state = .connected
-        onConnectHandler.execute(nil)
+        onConnectHandler?(nil)
+        onConnectHandler = nil
     }
     
     func disconnect(error: Error?) {
@@ -468,7 +444,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             nativeChannel.close()
             signalingChannel.disconnect(error: error)
             state = .disconnected
-            onConnectHandler.execute(error)
+            onConnectHandler?(error)
+            onConnectHandler = nil
             Log.debug(type: .peerChannel, message: "did disconnect")
         }
     }

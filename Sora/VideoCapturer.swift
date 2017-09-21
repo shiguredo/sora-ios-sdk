@@ -3,11 +3,7 @@ import WebRTC
 
 public class VideoCapturerHandlers {
     
-    public var onCaptureHandler: Callback1<VideoFrame, Void> = Callback1(repeats: true)
-
-    public func onCapture(handler: @escaping (VideoFrame) -> Void) {
-        onCaptureHandler.onExecute(handler: handler)
-    }
+    public var onCaptureHandler: ((VideoFrame) -> Void)?
     
 }
 
@@ -147,7 +143,7 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     
     func capturer(_ capturer: RTCVideoCapturer, didCapture frame: RTCVideoFrame) {
         let frame = VideoFrame.native(capturer: capturer, frame: frame)
-        cameraVideoCapturer.handlers.onCaptureHandler.execute(frame)
+        cameraVideoCapturer.handlers.onCaptureHandler?(frame)
     }
     
 }

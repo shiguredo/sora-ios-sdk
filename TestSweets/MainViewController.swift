@@ -8,7 +8,7 @@ class MainViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        TestSuiteManager.shared.onAddHandler.onExecute { testCase in
+        TestSuiteManager.shared.onAddHandler = { testCase in
             let cont = TestCaseController(testCase: testCase)
             self.testCaseControllers.append(cont)
             self.tableView.reloadData()

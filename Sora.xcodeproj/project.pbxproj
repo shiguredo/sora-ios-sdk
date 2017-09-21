@@ -10,7 +10,6 @@
 		9100904E1E58B4470099E00E /* VideoView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 9100904D1E58B4470099E00E /* VideoView.xib */; };
 		910090501E58B5450099E00E /* VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9100904F1E58B5450099E00E /* VideoView.swift */; };
 		9106C27E1F31A3470019E3C7 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9106C27D1F31A3470019E3C7 /* Log.swift */; };
-		910D444D1F4D6C8500D35917 /* Callback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910D444C1F4D6C8500D35917 /* Callback.swift */; };
 		910D444F1F4D7ACC00D35917 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910D444E1F4D7ACC00D35917 /* Event.swift */; };
 		910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */; };
 		9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */; };
@@ -136,7 +135,6 @@
 		9100904D1E58B4470099E00E /* VideoView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = VideoView.xib; sourceTree = "<group>"; };
 		9100904F1E58B5450099E00E /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		9106C27D1F31A3470019E3C7 /* Log.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
-		910D444C1F4D6C8500D35917 /* Callback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Callback.swift; sourceTree = "<group>"; };
 		910D444E1F4D7ACC00D35917 /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
 		9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaStream.swift; sourceTree = "<group>"; };
@@ -353,7 +351,6 @@
 				91C7B08E1D54636A006F5FA2 /* Info.plist */,
 				91A9AC271F400EE500B4A1A3 /* AliveMonitor.swift */,
 				9174A8941F73F90B00D586C4 /* AudioCodec.swift */,
-				910D444C1F4D6C8500D35917 /* Callback.swift */,
 				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,
 				9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */,
@@ -665,7 +662,6 @@
 				91A19B8C1F19366B00A76852 /* PeerChannel.swift in Sources */,
 				913D5E201F57E8F300A82DEA /* ConfigurationMainViewController.swift in Sources */,
 				913D5E1F1F57E8F300A82DEA /* ConfigurationNavigationController.swift in Sources */,
-				910D444D1F4D6C8500D35917 /* Callback.swift in Sources */,
 				9174A8911F73F89400D586C4 /* Role.swift in Sources */,
 				91BDC1D91F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift in Sources */,
 				9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */,

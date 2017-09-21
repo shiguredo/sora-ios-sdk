@@ -20,10 +20,10 @@ public final class AliveMonitor {
     
     public var objects: [AliveMonitorable] = []
     
-    private var timer: Timer?
+    public var onObserveHandler: (([AliveMonitorable]) -> Void)?
+    public var onChangeHandler: (([AliveMonitorable]) -> Void)?
 
-    private var onObserveHandler: Callback1<[AliveMonitorable], Void> = Callback1(repeats: true)
-    private var onChangeHandler: Callback1<[AliveMonitorable], Void> = Callback1(repeats: true)
+    private var timer: Timer?
 
     public func addObject(_ object: AliveMonitorable) {
         objects.append(object)
@@ -34,7 +34,7 @@ public final class AliveMonitor {
         timer = Timer(timeInterval: timeInterval, repeats: true) { timer in
             Log.trace(type: .aliveMonitor,
                       message: "validate available state")
-            self.onObserveHandler.execute(self.objects)
+            self.onObserveHandler?(self.objects)
 
             var changed: [AliveMonitorable] = []
             for object in self.objects {
@@ -49,7 +49,7 @@ public final class AliveMonitor {
                 }
             }
             if !changed.isEmpty {
-                self.onChangeHandler.execute(changed)
+                self.onChangeHandler?(changed)
             }
         }
         RunLoop.main.add(timer!, forMode: .commonModes)
@@ -59,14 +59,6 @@ public final class AliveMonitor {
         Log.debug(type: .aliveMonitor, message: "stop")
         timer!.invalidate()
         timer = nil
-    }
-    
-    public func onObserve(handler: @escaping ([AliveMonitorable]) -> Void) {
-        onObserveHandler.onExecute(handler: handler)
-    }
-    
-    public func onChange(handler: @escaping ([AliveMonitorable]) -> Void) {
-        onChangeHandler.onExecute(handler: handler)
     }
     
 }

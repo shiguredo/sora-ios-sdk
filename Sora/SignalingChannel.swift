@@ -14,16 +14,8 @@ public enum SignalingChannelState {
 
 public class SignalingChannelHandlers {
     
-    public var onFailureHandler: Callback1<Error, Void> = Callback1(repeats: true)
-    public var onMessageHandler: Callback1<SignalingMessage, Void> = Callback1(repeats: true)
-    
-    public func onFailure(handler: @escaping (Error) -> Void) {
-        onFailureHandler.onExecute(handler: handler)
-    }
-    
-    public func onMessage(handler: @escaping (SignalingMessage) -> Void) {
-        onMessageHandler.onExecute(handler: handler)
-    }
+    public var onFailureHandler: ((Error) -> Void)?
+    public var onMessageHandler: ((SignalingMessage) -> Void)?
     
 }
 
@@ -73,20 +65,20 @@ public class BasicSignalingChannel: SignalingChannel {
     }
     
     private var connectionTimer: ConnectionTimer?
-    private var onConnectHandler: Callback1<Error?, Void> = Callback1(repeats: false)
+    private var onConnectHandler: ((Error?) -> Void)?
     
     public required init(configuration: Configuration) {
         self.configuration = configuration
         self.webSocketChannel = configuration
             .webSocketChannelType.init(url: configuration.url)
         
-        webSocketChannel!.handlers.onFailure(handler: handleFailure)
-        webSocketChannel!.handlers.onMessage(handler: handleMessage)
+        webSocketChannel!.handlers.onFailureHandler = handleFailure
+        webSocketChannel!.handlers.onMessageHandler = handleMessage
     }
     
     public func connect(handler: @escaping (Error?) -> Void) {
         Log.debug(type: .signalingChannel, message: "try connecting")
-        onConnectHandler.onExecute(handler: handler)
+        onConnectHandler = handler
         state = .connecting
         
         connectionTimer = ConnectionTimer(target: self,
@@ -97,7 +89,7 @@ public class BasicSignalingChannel: SignalingChannel {
         }
         
         webSocketChannel!.connect { error in
-            self.onConnectHandler.execute(error)
+            self.onConnectHandler?(error)
             if let error = error {
                 Log.debug(type: .signalingChannel,
                           message: "connecting failed (\(error))")
@@ -121,9 +113,10 @@ public class BasicSignalingChannel: SignalingChannel {
             state = .disconnected
             if let error = error {
                 Log.debug(type: .signalingChannel, message: "error = \(error)")
-                handlers.onFailureHandler.execute(error)
+                handlers.onFailureHandler?(error)
             }
-            onConnectHandler.execute(error)
+            onConnectHandler?(error)
+            onConnectHandler = nil
             Log.debug(type: .signalingChannel, message: "did disconnect")
         }
     }
@@ -169,7 +162,7 @@ public class BasicSignalingChannel: SignalingChannel {
             let decoder = JSONDecoder()
             do {
                 let sigMessage = try decoder.decode(SignalingMessage.self, from: data)
-                handlers.onMessageHandler.execute(sigMessage)
+                handlers.onMessageHandler?(sigMessage)
             } catch let error {
                 Log.debug(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription))")
