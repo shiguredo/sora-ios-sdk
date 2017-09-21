@@ -21,17 +21,17 @@ public struct WebRTCInfo {
         }
     }
     
-    public var version: String = "Unknown"
-    public var revision: String = "Unknown"
+    public let version: String
+    public let revision: String
     
     public var shortRevision: String {
         return String(revision[revision.index(revision.startIndex, offsetBy: 7)])
     }
-
+    
 }
 
 extension WebRTCInfo: Decodable {
- 
+    
     enum CodingKeys: String, CodingKey {
         case version = "webrtc_version"
         case revision = "webrtc_revision"
