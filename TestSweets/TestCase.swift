@@ -39,8 +39,7 @@ final class TestCase {
     
     var numberOfItemsInVideoViewSection: Int = 1
     var videoViewAspectRatio: AspectRatio = .standard
-    var videoViewContentMode: UIViewContentMode = .scaleToFill
-    
+
     init(id: String, title: String, configuration: Configuration) {
         self.id = id
         self.title = title

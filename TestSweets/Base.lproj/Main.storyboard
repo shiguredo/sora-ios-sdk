@@ -531,21 +531,39 @@
                                             </constraints>
                                         </tableViewCellContentView>
                                     </tableViewCell>
-                                    <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" accessoryType="disclosureIndicator" indentationWidth="10" textLabel="SA2-h6-HMb" style="IBUITableViewCellStyleDefault" id="WRk-Qs-Kfs">
+                                    <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" accessoryType="disclosureIndicator" indentationWidth="10" id="WRk-Qs-Kfs">
                                         <rect key="frame" x="0.0" y="243.5" width="320" height="44"/>
                                         <autoresizingMask key="autoresizingMask"/>
                                         <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" tableViewCell="WRk-Qs-Kfs" id="6ZJ-yE-gFY">
                                             <rect key="frame" x="0.0" y="0.0" width="287" height="43.5"/>
                                             <autoresizingMask key="autoresizingMask"/>
                                             <subviews>
-                                                <label opaque="NO" multipleTouchEnabled="YES" contentMode="left" insetsLayoutMarginsFromSafeArea="NO" text="Aspect Ratio" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" id="SA2-h6-HMb">
-                                                    <rect key="frame" x="16" y="0.0" width="269" height="43.5"/>
-                                                    <autoresizingMask key="autoresizingMask"/>
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="meK-gN-lbS">
+                                                    <rect key="frame" x="237" y="10.5" width="42" height="21"/>
+                                                    <constraints>
+                                                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="42" id="MKP-OI-fMr"/>
+                                                    </constraints>
+                                                    <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
+                                                    <color key="textColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
+                                                    <nil key="highlightedColor"/>
+                                                </label>
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Aspect Ratio" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5yL-JT-fdZ">
+                                                    <rect key="frame" x="16" y="11.5" width="98" height="21"/>
+                                                    <constraints>
+                                                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="98" id="EJP-sQ-yqm"/>
+                                                    </constraints>
                                                     <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
                                                     <nil key="textColor"/>
                                                     <nil key="highlightedColor"/>
                                                 </label>
                                             </subviews>
+                                            <constraints>
+                                                <constraint firstItem="5yL-JT-fdZ" firstAttribute="leading" secondItem="6ZJ-yE-gFY" secondAttribute="leadingMargin" constant="8" id="3Kt-F7-G5y"/>
+                                                <constraint firstItem="meK-gN-lbS" firstAttribute="centerY" secondItem="6ZJ-yE-gFY" secondAttribute="centerY" id="Fas-bX-qr8"/>
+                                                <constraint firstItem="meK-gN-lbS" firstAttribute="leading" relation="lessThanOrEqual" secondItem="5yL-JT-fdZ" secondAttribute="trailing" constant="123" id="WcO-gS-4O8"/>
+                                                <constraint firstItem="5yL-JT-fdZ" firstAttribute="centerY" secondItem="6ZJ-yE-gFY" secondAttribute="centerY" id="fmi-U3-bJZ"/>
+                                                <constraint firstAttribute="trailingMargin" secondItem="meK-gN-lbS" secondAttribute="trailing" id="lfh-6V-ZM7"/>
+                                            </constraints>
                                         </tableViewCellContentView>
                                         <connections>
                                             <segue destination="uEA-b8-MjN" kind="show" id="xSy-Tp-Fcl"/>
@@ -584,6 +602,7 @@
                         </connections>
                     </tableView>
                     <connections>
+                        <outlet property="aspectRatioValueLabel" destination="meK-gN-lbS" id="nUR-sh-MR1"/>
                         <outlet property="cameraAutofocusSwitch" destination="Nnp-7i-miw" id="8Yq-aK-7Ps"/>
                         <outlet property="disconnectCell" destination="bnO-5y-nbO" id="zYc-cA-pTB"/>
                         <outlet property="muteMicrophoneSwitch" destination="imR-Im-VIZ" id="a34-Dr-5Hq"/>

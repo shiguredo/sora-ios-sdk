@@ -6,6 +6,7 @@ class VideoControlViewController: UITableViewController, TestCaseControllable {
     @IBOutlet weak var muteMicrophoneSwitch: UISwitch!
     
     @IBOutlet weak var disconnectCell: UITableViewCell!
+    @IBOutlet weak var aspectRatioValueLabel: UILabel!
 
     weak var testCaseController: TestCaseController!
     
@@ -19,6 +20,23 @@ class VideoControlViewController: UITableViewController, TestCaseControllable {
         // self.navigationItem.rightBarButtonItem = self.editButtonItem
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadData()
+    }
+    
+    func reloadData() {
+        guard let cont = testCaseController else {
+            return
+        }
+        switch cont.testCase.videoViewAspectRatio {
+        case .standard:
+            aspectRatioValueLabel.text = "4:3"
+        case .wide:
+            aspectRatioValueLabel.text = "16:9"
+        }
+    }
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
