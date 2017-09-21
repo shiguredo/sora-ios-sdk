@@ -4,32 +4,35 @@ class VideoViewAspectRatioViewController: UITableViewController, TestCaseControl
 
     @IBOutlet weak var standardCell: UITableViewCell!
     @IBOutlet weak var wideCell: UITableViewCell!
-    @IBOutlet weak var screenWidthCell: UITableViewCell!
-    @IBOutlet weak var halfScreenWidthCell: UITableViewCell!
     
     weak var testCaseController: TestCaseController!
 
     var cells: [UITableViewCell] {
         get {
             return [standardCell,
-                    wideCell,
-                    screenWidthCell,
-                    halfScreenWidthCell]
+                    wideCell]
         }
     }
     
     var testCase: TestCase! {
         get { return testCaseController.testCase }
     }
+
+    var selectedRatio: AspectRatio = .standard {
+        didSet {
+            clearCheckmarks()
+            testCase.videoViewAspectRatio = selectedRatio
+            switch selectedRatio {
+            case .standard:
+                standardCell.accessoryType = .checkmark
+            case .wide:
+                wideCell.accessoryType = .checkmark
+            }
+        }
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        // Uncomment the following line to preserve selection between presentations
-        // self.clearsSelectionOnViewWillAppear = false
-
-        // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
-        // self.navigationItem.rightBarButtonItem = self.editButtonItem
     }
 
     func clearCheckmarks() {
@@ -45,10 +48,6 @@ class VideoViewAspectRatioViewController: UITableViewController, TestCaseControl
             standardCell.accessoryType = .checkmark
         case .wide:
             wideCell.accessoryType = .checkmark
-        case .screenWidth:
-            screenWidthCell.accessoryType = .checkmark
-        case .halfScreenWidth:
-            halfScreenWidthCell.accessoryType = .checkmark
         }
     }
     
@@ -127,16 +126,10 @@ class VideoViewAspectRatioViewController: UITableViewController, TestCaseControl
         let cell = tableView.cellForRow(at: indexPath)
         if cell == wideCell {
             wideCell.accessoryType = .checkmark
-            testCase.videoViewAspectRatio = .wide
-        } else if cell == screenWidthCell {
-            screenWidthCell.accessoryType = .checkmark
-            testCase.videoViewAspectRatio = .screenWidth
-        } else if cell == halfScreenWidthCell {
-            halfScreenWidthCell.accessoryType = .checkmark
-            testCase.videoViewAspectRatio = .halfScreenWidth
+            selectedRatio = .wide
         } else {
             standardCell.accessoryType = .checkmark
-            testCase.videoViewAspectRatio = .standard
+            selectedRatio = .standard
         }
     }
     

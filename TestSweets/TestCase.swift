@@ -4,8 +4,6 @@ import Sora
 enum AspectRatio {
     case standard // 4:3
     case wide // 16:9
-    case screenWidth
-    case halfScreenWidth
 }
 
 protocol TestCaseControllable {

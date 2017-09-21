@@ -762,54 +762,6 @@
                                             </constraints>
                                         </tableViewCellContentView>
                                     </tableViewCell>
-                                    <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" indentationWidth="10" id="wdN-Hw-u3D">
-                                        <rect key="frame" x="0.0" y="123" width="320" height="44"/>
-                                        <autoresizingMask key="autoresizingMask"/>
-                                        <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" tableViewCell="wdN-Hw-u3D" id="nxd-rM-efP">
-                                            <rect key="frame" x="0.0" y="0.0" width="320" height="43.5"/>
-                                            <autoresizingMask key="autoresizingMask"/>
-                                            <subviews>
-                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Screen Width" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="WTd-Ee-M7s">
-                                                    <rect key="frame" x="16" y="11.5" width="104" height="21"/>
-                                                    <constraints>
-                                                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="104" id="ZbO-rf-2Al"/>
-                                                    </constraints>
-                                                    <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
-                                                    <nil key="textColor"/>
-                                                    <nil key="highlightedColor"/>
-                                                </label>
-                                            </subviews>
-                                            <constraints>
-                                                <constraint firstAttribute="trailingMargin" relation="lessThanOrEqual" secondItem="WTd-Ee-M7s" secondAttribute="trailing" constant="192" id="8it-gu-e6j"/>
-                                                <constraint firstItem="WTd-Ee-M7s" firstAttribute="leading" secondItem="nxd-rM-efP" secondAttribute="leading" constant="16" id="QlT-RR-Kcc"/>
-                                                <constraint firstItem="WTd-Ee-M7s" firstAttribute="centerY" secondItem="nxd-rM-efP" secondAttribute="centerY" id="Zd9-0c-VRQ"/>
-                                            </constraints>
-                                        </tableViewCellContentView>
-                                    </tableViewCell>
-                                    <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="none" indentationWidth="10" id="qUv-oN-NJB">
-                                        <rect key="frame" x="0.0" y="167" width="320" height="44"/>
-                                        <autoresizingMask key="autoresizingMask"/>
-                                        <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" tableViewCell="qUv-oN-NJB" id="GND-Oc-FUW">
-                                            <rect key="frame" x="0.0" y="0.0" width="320" height="43.5"/>
-                                            <autoresizingMask key="autoresizingMask"/>
-                                            <subviews>
-                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Half Screen Width" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="mNG-v0-t8O">
-                                                    <rect key="frame" x="16" y="11.5" width="139" height="21"/>
-                                                    <constraints>
-                                                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="139" id="zY0-7h-Gtn"/>
-                                                    </constraints>
-                                                    <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
-                                                    <nil key="textColor"/>
-                                                    <nil key="highlightedColor"/>
-                                                </label>
-                                            </subviews>
-                                            <constraints>
-                                                <constraint firstItem="mNG-v0-t8O" firstAttribute="leading" secondItem="GND-Oc-FUW" secondAttribute="leading" constant="16" id="JaQ-Wr-5fG"/>
-                                                <constraint firstItem="mNG-v0-t8O" firstAttribute="centerY" secondItem="GND-Oc-FUW" secondAttribute="centerY" id="bi6-fL-uQ9"/>
-                                                <constraint firstAttribute="trailingMargin" relation="lessThanOrEqual" secondItem="mNG-v0-t8O" secondAttribute="trailing" constant="157" id="h2P-f4-JW6"/>
-                                            </constraints>
-                                        </tableViewCellContentView>
-                                    </tableViewCell>
                                 </cells>
                             </tableViewSection>
                         </sections>
@@ -819,8 +771,6 @@
                         </connections>
                     </tableView>
                     <connections>
-                        <outlet property="halfScreenWidthCell" destination="qUv-oN-NJB" id="C8s-e0-OWg"/>
-                        <outlet property="screenWidthCell" destination="wdN-Hw-u3D" id="CCU-ra-faj"/>
                         <outlet property="standardCell" destination="jAa-d9-yS7" id="Q0d-Za-mW0"/>
                         <outlet property="wideCell" destination="2Kg-rm-3kh" id="9Gm-eP-xbI"/>
                     </connections>
