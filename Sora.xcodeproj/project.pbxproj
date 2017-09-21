@@ -49,7 +49,6 @@
 		9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9145A58F1F0CB093002D6EC6 /* Utilities.swift */; };
 		91554F431F179CFD00403C39 /* WebSocketChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91554F421F179CFD00403C39 /* WebSocketChannel.swift */; };
 		9160866E1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */; };
-		916086701F715BF500FC52A7 /* VideoViewContentModeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9160866F1F715BF500FC52A7 /* VideoViewContentModeViewController.swift */; };
 		9161BB401F2B31C200569748 /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
 		916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916BBF711F19EF5800846166 /* ICECandidate.swift */; };
 		916C44841F724ADC000E9F4E /* TestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916C44831F724ADC000E9F4E /* TestCase.swift */; };
@@ -159,7 +158,6 @@
 		91545C0A1EA7AAA900523AAE /* BitRateViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BitRateViewController.swift; sourceTree = "<group>"; };
 		91554F421F179CFD00403C39 /* WebSocketChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebSocketChannel.swift; sourceTree = "<group>"; };
 		9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoViewAspectRatioViewController.swift; sourceTree = "<group>"; };
-		9160866F1F715BF500FC52A7 /* VideoViewContentModeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoViewContentModeViewController.swift; sourceTree = "<group>"; };
 		9161BB3F1F2B31C200569748 /* SDWebImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SDWebImage.framework; path = Carthage/Build/iOS/SDWebImage.framework; sourceTree = "<group>"; };
 		916BBF711F19EF5800846166 /* ICECandidate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICECandidate.swift; sourceTree = "<group>"; };
 		916C44831F724ADC000E9F4E /* TestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCase.swift; sourceTree = "<group>"; };
@@ -259,7 +257,6 @@
 				91332B1E1F6C13F000A3128F /* VideoViewListViewController.swift */,
 				9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */,
 				91332B1B1F6C13F000A3128F /* VideoViewCollectionViewCell.swift */,
-				9160866F1F715BF500FC52A7 /* VideoViewContentModeViewController.swift */,
 				91332AFC1F6C120500A3128F /* ViewController.swift */,
 				91332B011F6C120500A3128F /* Assets.xcassets */,
 				91332B031F6C120500A3128F /* LaunchScreen.storyboard */,
@@ -596,7 +593,6 @@
 				916C44841F724ADC000E9F4E /* TestCase.swift in Sources */,
 				91332B231F6C13F000A3128F /* VideoViewCollectionViewCell.swift in Sources */,
 				91332B211F6C13F000A3128F /* MainNavigationViewController.swift in Sources */,
-				916086701F715BF500FC52A7 /* VideoViewContentModeViewController.swift in Sources */,
 				91332B241F6C13F000A3128F /* TestSuite.swift in Sources */,
 				91332AFD1F6C120500A3128F /* ViewController.swift in Sources */,
 				91332B271F6C13F000A3128F /* VideoControlViewController.swift in Sources */,

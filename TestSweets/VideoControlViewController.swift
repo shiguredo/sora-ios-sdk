@@ -39,10 +39,8 @@ class VideoControlViewController: UITableViewController, TestCaseControllable {
 
     // In a storyboard-based application, you will often want to do a little preparation before navigation
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if let aspect = segue.destination as? VideoViewAspectRatioViewController {
-            aspect.testCaseController = testCaseController
-        } else if let contentMode = segue.destination as? VideoViewContentModeViewController {
-            contentMode.testCaseController = testCaseController
+        if var vc = segue.destination as? TestCaseControllable {
+            vc.testCaseController = testCaseController
         }
     }
 
