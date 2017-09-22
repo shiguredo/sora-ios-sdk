@@ -128,6 +128,8 @@ public enum PeerChannelState {
     case disconnected
 }
 
+// MARK: -
+
 public protocol PeerChannel: AliveMonitorable {
     
     var configuration: Configuration { get }
@@ -147,6 +149,8 @@ public protocol PeerChannel: AliveMonitorable {
     func removeICECandidate(_ candidate: ICECandidate)
     
 }
+
+// MARK: -
 
 open class BasicPeerChannel: PeerChannel {
 
@@ -215,6 +219,8 @@ open class BasicPeerChannel: PeerChannel {
     }
 
 }
+
+// MARK: -
 
 class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitorable {
 
