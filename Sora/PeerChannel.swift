@@ -416,9 +416,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                 
             case .ping:
                 Log.debug(type: .peerChannel, message: "receive ping")
-                channel.handlers.onPingHandler?()
                 signalingChannel.send(message: .pong)
-                
+                channel.handlers.onPingHandler?()
+
             default:
                 // discard
                 break
