@@ -15,8 +15,8 @@ public class NativePeerChannelFactory {
     func createNativePeerChannel(configuration: Configuration,
                                  delegate: RTCPeerConnectionDelegate) -> RTCPeerConnection {
         return nativeFactory
-            .peerConnection(with: configuration.nativeConfiguration,
-                            constraints: configuration.nativeConstraints,
+            .peerConnection(with: configuration.webRTCConfiguration.nativeValue,
+                            constraints: configuration.mediaConstraints.nativeValue,
                             delegate: delegate)
     }
     
@@ -55,7 +55,7 @@ public class NativePeerChannelFactory {
         
         if configuration.audioEnabled {
             let audioTrack = createNativeAudioTrack(trackId: configuration.publisherAudioTrackId,
-                                                    constraints: configuration.nativeConstraints)
+                                                    constraints: configuration.mediaConstraints.nativeValue)
             nativeStream.addAudioTrack(audioTrack)
         }
         

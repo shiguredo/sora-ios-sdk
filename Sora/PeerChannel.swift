@@ -118,7 +118,7 @@ public class PeerChannelHandlers {
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
     public var onPingHandler: (() -> Void)?
-
+    
 }
 
 public enum PeerChannelState {
@@ -149,7 +149,7 @@ public protocol PeerChannel: AliveMonitorable {
 }
 
 open class BasicPeerChannel: PeerChannel {
-
+    
     public var handlers: PeerChannelHandlers = PeerChannelHandlers()
     public var configuration: Configuration
     public var streams: [MediaStream] = []
@@ -175,7 +175,7 @@ open class BasicPeerChannel: PeerChannel {
     }
     
     var context: BasicPeerChannelContext!
-
+    
     public required init(configuration: Configuration) {
         self.configuration = configuration
         context = BasicPeerChannelContext(channel: self)
@@ -205,7 +205,7 @@ open class BasicPeerChannel: PeerChannel {
     public func removeICECandidate(_ candidate: ICECandidate) {
         iceCandidates = iceCandidates.filter { each in each == candidate }
     }
-
+    
     public func connect(handler: @escaping (Error?) -> Void) {
         context.connect(handler: handler)
     }
@@ -213,11 +213,11 @@ open class BasicPeerChannel: PeerChannel {
     public func disconnect(error: Error?) {
         context.disconnect(error: error)
     }
-
+    
 }
 
 class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitorable {
-
+    
     enum State {
         case connecting
         case waitingOffer
@@ -234,8 +234,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     var signalingChannel: SignalingChannel
     
     var configuration: Configuration {
-        get { return channel.configuration }
-        set { channel.configuration = newValue }
+        return channel.configuration
     }
     
     var aliveState: AliveState {
@@ -272,7 +271,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         internalState.onCompleteHandler = finishConnecting
         signalingChannel.handlers.onMessageHandler = handleMessage
     }
-
+    
     func connect(handler: @escaping (Error?) -> Void) {
         Log.debug(type: .peerChannel, message: "try connecting")
         Log.debug(type: .peerChannel, message: "try connecting to signaling channel")
@@ -338,10 +337,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         
         if let config = offer.configuration {
             Log.debug(type: .peerChannel, message: "update configuration")
-            configuration.iceServerInfos = config.iceServerInfos
-            configuration.iceTransportPolicy = config.iceTransportPolicy
-            nativeChannel.setConfiguration(
-                configuration.nativeConfiguration)
+            configuration.webRTCConfiguration.iceServerInfos = config.iceServerInfos
+            configuration.webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
+            nativeChannel.setConfiguration(configuration.webRTCConfiguration.nativeValue)
         }
         
         Log.debug(type: .peerChannel, message: "try setting remote description")
@@ -357,7 +355,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             Log.debug(type: .peerChannel, message: "did set remote description")
             Log.debug(type: .peerChannel, message: "\(nativeOffer.sdpDescription)")
             Log.debug(type: .peerChannel, message: "try creating native answer")
-            self.nativeChannel.answer(for: self.channel.configuration.nativeConstraints,
+            self.nativeChannel.answer(for: self.channel.configuration.mediaConstraints.nativeValue,
                                       completionHandler: self.setLocalDescription)
         }
     }
@@ -387,7 +385,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             self.signalingChannel.send(message: answer)
         }
     }
-
+    
     func handleMessage(_ message: SignalingMessage) {
         Log.debug(type: .mediaStream, message: "handle message")
         switch state {
