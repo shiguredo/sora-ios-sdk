@@ -3,40 +3,6 @@ import WebRTC
 
 public struct Configuration {
     
-    class WebRTCConfiguration {
-        var iceServerInfos: [ICEServerInfo]
-        var iceTransportPolicy: ICETransportPolicy = .none
-        
-        var nativeValue: RTCConfiguration {
-            let config = RTCConfiguration()
-            config.iceServers = iceServerInfos.map { info in
-                return info.nativeValue
-            }
-            config.iceTransportPolicy = iceTransportPolicy.nativeValue
-            return config
-        }
-        
-        init() {
-            self.iceServerInfos = [
-                ICEServerInfo(urls: [URL(string: "stun:stun.l.google.com:19302")!],
-                              userName: nil,
-                              credential: nil,
-                              tlsSecurityPolicy: .secure)]
-        }
-        
-    }
-    
-    class MediaConstraints {
-        var mandatoryConstraints: [String: String] = [:]
-        var optionalConstraints: [String: String] = [:]
-        
-        var nativeValue: RTCMediaConstraints {
-            return RTCMediaConstraints(mandatoryConstraints: mandatoryConstraints,
-                                       optionalConstraints: optionalConstraints)
-        }
-        
-    }
-    
     public static let maxVideoVideoBitRate = 5000
     public static let defaultConnectionTimeout = 10
     public static let defaultPublisherStreamId: String = "mainStream"
@@ -55,8 +21,11 @@ public struct Configuration {
     public var audioEnabled: Bool = true
     public var snapshotEnabled: Bool = false
     
-    let mediaConstraints: MediaConstraints = MediaConstraints()
-    let webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
+    public var mandatoryConstraints: [String: String] = [:]
+    public var optionalConstraints: [String: String] = [:]
+    
+    public var iceServerInfos: [ICEServerInfo]
+    public var iceTransportPolicy: ICETransportPolicy = .none
     
     public var signalingChannelType: SignalingChannel.Type = BasicSignalingChannel.self
     public var webSocketChannelType: WebSocketChannel.Type = BasicWebSocketChannel.self
@@ -66,10 +35,33 @@ public struct Configuration {
     public var publisherVideoTrackId: String = Configuration.defaultPublisherVideoTrackId
     public var publisherAudioTrackId: String = Configuration.defaultPublisherAudioTrackId
     
+    var nativeConstraints: RTCMediaConstraints {
+        get {
+            return RTCMediaConstraints(mandatoryConstraints: mandatoryConstraints,
+                                       optionalConstraints: optionalConstraints)
+        }
+    }
+    
+    var nativeConfiguration: RTCConfiguration {
+        get {
+            let config = RTCConfiguration()
+            config.iceServers = iceServerInfos.map { info in
+                return info.nativeValue
+            }
+            config.iceTransportPolicy = iceTransportPolicy.nativeValue
+            return config
+        }
+    }
+    
     public init(url: URL, channelId: String, role: Role) {
         self.url = url
         self.channelId = channelId
         self.role = role
+        iceServerInfos = [
+            ICEServerInfo(urls: [URL(string: "stun:stun.l.google.com:19302")!],
+                          userName: nil,
+                          credential: nil,
+                          tlsSecurityPolicy: .secure)]
     }
     
 }
