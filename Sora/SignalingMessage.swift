@@ -117,7 +117,7 @@ extension SignalingConnectRequest: Codable {
         if videoEnabled {
             switch (videoCodec, videoBitRate) {
             case (.default, nil):
-                try container.encode(true, forKey: .video)
+                break
             case (let codec, let rate):
                 var videoContainer = container
                     .nestedContainer(keyedBy: VideoCodingKeys.self,
@@ -132,7 +132,7 @@ extension SignalingConnectRequest: Codable {
         if audioEnabled {
             switch audioCodec {
             case .default:
-                try container.encode(true, forKey: .audio)
+                break
             default:
                 var audioContainer = container
                     .nestedContainer(keyedBy: AudioCodingKeys.self, forKey: .audio)
