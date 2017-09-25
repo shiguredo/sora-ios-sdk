@@ -295,10 +295,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                 nativeValue: nativeChannel.iceGatheringState))
         internalState.onCompleteHandler = finishConnecting
         
-        signalingChannel.connect(handler: sendConnectRequest)
+        signalingChannel.connect(handler: sendConnectMessage)
     }
     
-    func sendConnectRequest(error: Error?) {
+    func sendConnectMessage(error: Error?) {
         if error != nil {
             Logger.debug(type: .peerChannel,
                       message: "failed connecting to signaling channel")
@@ -323,8 +323,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             multistream = true
             initializePublisherStream()
         }
-        let request =
-            SignalingConnectRequest(role: role,
+        let connect =
+            SignalingConnectMessage(role: role,
                                     channelId: configuration.channelId,
                                     metadata: configuration.metadata,
                                     multistreamEnabled: multistream,
@@ -333,7 +333,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                                     videoBitRate: configuration.videoBitRate,
                                     audioEnabled: configuration.audioEnabled,
                                     audioCodec: configuration.audioCodec)
-        let message = SignalingMessage.connect(request: request)
+        let message = SignalingMessage.connect(message: connect)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: message)
     }
@@ -354,7 +354,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         channel.addStream(stream)
     }
     
-    func sendAnswerResponse(offer: SignalingOfferRequest) {
+    func sendAnswerMessage(offer: SignalingOfferMessage) {
         Logger.debug(type: .peerChannel, message: "try sending answer")
         state = .waitingComplete
         
@@ -416,7 +416,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             switch message {
             case .offer(let offer):
                 Logger.debug(type: .peerChannel, message: "receive offer")
-                sendAnswerResponse(offer: offer)
+                sendAnswerMessage(offer: offer)
                 
             default:
                 // discard

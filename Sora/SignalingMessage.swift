@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SignalingConnectRequest {
+public struct SignalingConnectMessage {
     
     public var role: SignalingRole
     public var channelId: String
@@ -14,7 +14,7 @@ public struct SignalingConnectRequest {
 
 }
 
-public struct SignalingOfferRequest {
+public struct SignalingOfferMessage {
     
     public struct Configuration {
         var iceServerInfos: [ICEServerInfo]
@@ -58,8 +58,8 @@ public struct SignalingPongMessage {}
 
 public enum SignalingMessage {
     
-    case connect(request: SignalingConnectRequest)
-    case offer(request: SignalingOfferRequest)
+    case connect(message: SignalingConnectMessage)
+    case offer(message: SignalingOfferMessage)
     case answer(sdp: String)
     case candidate(ICECandidate)
     case update(sdp: String)
@@ -91,7 +91,7 @@ extension SignalingRole: Codable {
     
 }
 
-extension SignalingConnectRequest: Codable {
+extension SignalingConnectMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
         case role
@@ -161,7 +161,7 @@ extension SignalingConnectRequest: Codable {
     
 }
 
-extension SignalingOfferRequest.Configuration: Codable {
+extension SignalingOfferMessage.Configuration: Codable {
     
     enum CodingKeys: String, CodingKey {
         case iceServerInfos = "iceServers"
@@ -182,7 +182,7 @@ extension SignalingOfferRequest.Configuration: Codable {
     
 }
 
-extension SignalingOfferRequest: Codable {
+extension SignalingOfferMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
         case clientId = "client_id"
@@ -276,7 +276,7 @@ extension SignalingMessage: Codable {
         let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "offer":
-            self = .offer(request: try SignalingOfferRequest(from: decoder))
+            self = .offer(message: try SignalingOfferMessage(from: decoder))
         case "update":
             let update = try SignalingUpdateOfferMessage(from: decoder)
             self = .update(sdp: update.sdp)
@@ -292,12 +292,12 @@ extension SignalingMessage: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .connect(request: let request):
+        case .connect(message: let message):
             try container.encode(MessageType.connect.rawValue, forKey: .type)
-            try request.encode(to: encoder)
-        case .offer(request: let request):
+            try message.encode(to: encoder)
+        case .offer(message: let message):
             try container.encode(MessageType.offer.rawValue, forKey: .type)
-            try request.encode(to: encoder)
+            try message.encode(to: encoder)
         case .answer(sdp: let sdp):
             try container.encode(MessageType.answer.rawValue, forKey: .type)
             try container.encode(sdp, forKey: .sdp)
