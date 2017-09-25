@@ -52,6 +52,7 @@
 		9163401B1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */; };
 		91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */; };
 		91672C7B1F78FCA6002300E7 /* MediaStreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C7A1F78FCA6002300E7 /* MediaStreamConfiguration.swift */; };
+		91672C7D1F796E81002300E7 /* UIViewController+Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C7C1F796E81002300E7 /* UIViewController+Alert.swift */; };
 		916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916BBF711F19EF5800846166 /* ICECandidate.swift */; };
 		916C44841F724ADC000E9F4E /* TestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916C44831F724ADC000E9F4E /* TestCase.swift */; };
 		91705B801DED66D300D79306 /* WebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201901D58668E00178E2B /* WebRTC.framework */; };
@@ -169,6 +170,7 @@
 		9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RTCPeerConnection+SessionDescription.swift"; sourceTree = "<group>"; };
 		91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCConfigration.swift; sourceTree = "<group>"; };
 		91672C7A1F78FCA6002300E7 /* MediaStreamConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaStreamConfiguration.swift; sourceTree = "<group>"; };
+		91672C7C1F796E81002300E7 /* UIViewController+Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIViewController+Alert.swift"; sourceTree = "<group>"; };
 		916BBF711F19EF5800846166 /* ICECandidate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICECandidate.swift; sourceTree = "<group>"; };
 		916C44831F724ADC000E9F4E /* TestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCase.swift; sourceTree = "<group>"; };
 		9173595D1F2CCEBF00806F8B /* Configuration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
@@ -305,9 +307,10 @@
 			children = (
 				9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */,
 				91FD95741DCA06F700047BA9 /* RTC+Description.swift */,
+				9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */,
 				91BDC1D81F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift */,
 				91BDC1D61F62C8A40084DC3A /* UILabel+ConfigurationViewController.swift */,
-				9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */,
+				91672C7C1F796E81002300E7 /* UIViewController+Alert.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -658,6 +661,7 @@
 				91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */,
 				9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */,
 				91A9AC281F400EE500B4A1A3 /* AliveMonitor.swift in Sources */,
+				91672C7D1F796E81002300E7 /* UIViewController+Alert.swift in Sources */,
 				91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */,
 				913D5E221F57E8F300A82DEA /* VideoCodecViewController.swift in Sources */,
 				91CD2A4A1F288A6A00D039D1 /* Sora.swift in Sources */,
