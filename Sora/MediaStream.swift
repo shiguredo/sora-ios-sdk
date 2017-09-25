@@ -12,7 +12,7 @@ public protocol MediaStream: class {
  
 }
 
-open class BasicMediaStream: MediaStream {
+public class BasicMediaStream: MediaStream {
     
     public var streamId: String = ""
     public var videoTrackId: String = ""

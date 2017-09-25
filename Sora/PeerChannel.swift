@@ -154,7 +154,7 @@ public protocol PeerChannel: AliveMonitorable {
 
 // MARK: -
 
-open class BasicPeerChannel: PeerChannel {
+public class BasicPeerChannel: PeerChannel {
 
     public let handlers: PeerChannelHandlers = PeerChannelHandlers()
     public let configuration: Configuration
