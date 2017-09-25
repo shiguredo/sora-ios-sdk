@@ -141,7 +141,8 @@ public protocol PeerChannel: AliveMonitorable {
     
     init(configuration: Configuration)
     
-    func connect(handler: @escaping (Error?) -> Void)
+    func connect(webRTCConfiguration: WebRTCConfiguration,
+                 handler: @escaping (Error?) -> Void)
     func disconnect(error: Error?)
     
     func addStream(_ stream: MediaStream)
@@ -155,10 +156,11 @@ public protocol PeerChannel: AliveMonitorable {
 
 open class BasicPeerChannel: PeerChannel {
 
-    public var handlers: PeerChannelHandlers = PeerChannelHandlers()
-    public var configuration: Configuration
-    public var streams: [MediaStream] = []
-    public var iceCandidates: [ICECandidate] = [] // TODO: remove?
+    public let handlers: PeerChannelHandlers = PeerChannelHandlers()
+    public let configuration: Configuration
+    
+    public private(set) var streams: [MediaStream] = []
+    public private(set) var iceCandidates: [ICECandidate] = [] // TODO: remove?
     
     public var state: PeerChannelState {
         get {
@@ -211,8 +213,10 @@ open class BasicPeerChannel: PeerChannel {
         iceCandidates = iceCandidates.filter { each in each == candidate }
     }
 
-    public func connect(handler: @escaping (Error?) -> Void) {
-        context.connect(handler: handler)
+    public func connect(webRTCConfiguration: WebRTCConfiguration,
+                        handler: @escaping (Error?) -> Void) {
+        context.connect(webRTCConfiguration: webRTCConfiguration,
+                        handler: handler)
     }
     
     public func disconnect(error: Error?) {
@@ -240,10 +244,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     var nativeChannel: RTCPeerConnection!
     var internalState: PeerChannelInternalState!
     var signalingChannel: SignalingChannel
+    var webRTCConfiguration: WebRTCConfiguration!
     
     var configuration: Configuration {
         get { return channel.configuration }
-        set { channel.configuration = newValue }
     }
     
     var aliveState: AliveState {
@@ -267,8 +271,20 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             .init(configuration: channel.configuration)
         super.init()
         
+        signalingChannel.handlers.onMessageHandler = handleMessage
+    }
+
+    func connect(webRTCConfiguration: WebRTCConfiguration,
+                 handler: @escaping (Error?) -> Void) {
+        Logger.debug(type: .peerChannel, message: "try connecting")
+        Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
+        
+        state = .connecting
+        onConnectHandler = handler
+        self.webRTCConfiguration = webRTCConfiguration
         nativeChannel = NativePeerChannelFactory.default
-            .createNativePeerChannel(configuration: configuration,
+            .createNativePeerChannel(configuration: webRTCConfiguration,
+                                     constraints: webRTCConfiguration.constraints,
                                      delegate: self)
         internalState = PeerChannelInternalState(
             signalingState: PeerChannelSignalingState(
@@ -278,14 +294,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             iceGatheringState: ICEGatheringState(
                 nativeValue: nativeChannel.iceGatheringState))
         internalState.onCompleteHandler = finishConnecting
-        signalingChannel.handlers.onMessageHandler = handleMessage
-    }
-
-    func connect(handler: @escaping (Error?) -> Void) {
-        Logger.debug(type: .peerChannel, message: "try connecting")
-        Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
-        state = .connecting
-        onConnectHandler = handler
+        
         signalingChannel.connect(handler: sendConnectRequest)
     }
     
@@ -330,8 +339,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     }
     
     func initializePublisherStream() {
+        let pubConfig = configuration.publisherConfiguration
         let nativeStream = NativePeerChannelFactory.default
-            .createNativePublisherStream(configuration: configuration)
+            .createNativePublisherStream(streamId: pubConfig.streamId,
+                                         videoTrackId:
+                configuration.videoEnabled ? pubConfig.videoTrackId: nil,
+                                         audioTrackId: configuration.audioEnabled ? pubConfig.audioTrackId : nil,
+                                         constraints: webRTCConfiguration.constraints)
         let stream = BasicMediaStream(nativeStream: nativeStream)
         if configuration.videoEnabled {
             CameraVideoCapturer.shared.start()
@@ -346,10 +360,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         
         if let config = offer.configuration {
             Logger.debug(type: .peerChannel, message: "update configuration")
-            configuration.iceServerInfos = config.iceServerInfos
-            configuration.iceTransportPolicy = config.iceTransportPolicy
-            nativeChannel.setConfiguration(
-                configuration.nativeConfiguration)
+            webRTCConfiguration.iceServerInfos = config.iceServerInfos
+            webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
+            nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
         }
         
         Logger.debug(type: .peerChannel, message: "try setting remote description")
@@ -365,7 +378,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             Logger.debug(type: .peerChannel, message: "did set remote description")
             Logger.debug(type: .peerChannel, message: "\(nativeOffer.sdpDescription)")
             Logger.debug(type: .peerChannel, message: "try creating native answer")
-            self.nativeChannel.answer(for: self.channel.configuration.nativeConstraints,
+            self.nativeChannel.answer(for: self.webRTCConfiguration.nativeConstraints,
                                       completionHandler: self.setLocalDescription)
         }
     }
@@ -440,7 +453,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     func createAndSendUpdateAnswer(forOffer offer: String) {
         state = .waitingUpdateComplete
         nativeChannel.createAnswer(forOffer: offer,
-                                   constraints: configuration.nativeConstraints)
+                                   constraints: webRTCConfiguration.nativeConstraints)
         { answer, error in
             guard error == nil else {
                 self.disconnect(error: error)

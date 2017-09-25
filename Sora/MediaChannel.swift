@@ -68,7 +68,8 @@ public class MediaChannel {
          */
     }
     
-    public func connect(timeout: Int = Configuration.defaultConnectionTimeout,
+    public func connect(webRTCConfiguration: WebRTCConfiguration,
+                        timeout: Int = Configuration.defaultConnectionTimeout,
                         handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
@@ -96,7 +97,7 @@ public class MediaChannel {
             self.handlers.onEventHandler?(Event(message: message))
         }
         
-        peerChannel.connect { error in
+        peerChannel.connect(webRTCConfiguration: webRTCConfiguration) { error in
             if let error = error {
                 Logger.debug(type: .mediaChannel, message: "failed connecting")
                 self.disconnect(error: error)

@@ -12,11 +12,12 @@ public class NativePeerChannelFactory {
         nativeFactory = RTCPeerConnectionFactory()
     }
     
-    func createNativePeerChannel(configuration: Configuration,
+    func createNativePeerChannel(configuration: WebRTCConfiguration,
+                                 constraints: MediaConstraints,
                                  delegate: RTCPeerConnectionDelegate) -> RTCPeerConnection {
         return nativeFactory
-            .peerConnection(with: configuration.nativeConfiguration,
-                            constraints: configuration.nativeConstraints,
+            .peerConnection(with: configuration.nativeValue,
+                            constraints: constraints.nativeValue,
                             delegate: delegate)
     }
     
@@ -33,29 +34,32 @@ public class NativePeerChannelFactory {
         return nativeFactory.videoTrack(with: videoSource, trackId: trackId)
     }
     
-    func createNativeAudioSource(constraints: RTCMediaConstraints?) -> RTCAudioSource {
-        return nativeFactory.audioSource(with: constraints)
+    func createNativeAudioSource(constraints: MediaConstraints?) -> RTCAudioSource {
+        return nativeFactory.audioSource(with: constraints?.nativeValue)
     }
     
     func createNativeAudioTrack(trackId: String,
-                          constraints: RTCMediaConstraints) -> RTCAudioTrack {
+                                constraints: RTCMediaConstraints) -> RTCAudioTrack {
         let audioSource = nativeFactory.audioSource(with: constraints)
         return nativeFactory.audioTrack(with: audioSource, trackId: trackId)
     }
     
-    func createNativePublisherStream(configuration: Configuration) -> RTCMediaStream {
-        let nativeStream = createNativeStream(streamId: configuration.publisherStreamId)
+    func createNativePublisherStream(streamId: String,
+                                     videoTrackId: String?,
+                                     audioTrackId: String?,
+                                     constraints: MediaConstraints) -> RTCMediaStream {
+        let nativeStream = createNativeStream(streamId: streamId)
         
-        if configuration.videoEnabled {
+        if let trackId = videoTrackId {
             let videoSource = createNativeVideoSource()
             let videoTrack = createNativeVideoTrack(videoSource: videoSource,
-                                                    trackId: configuration.publisherVideoTrackId)
+                                                    trackId: trackId)
             nativeStream.addVideoTrack(videoTrack)
         }
         
-        if configuration.audioEnabled {
-            let audioTrack = createNativeAudioTrack(trackId: configuration.publisherAudioTrackId,
-                                                    constraints: configuration.nativeConstraints)
+        if let trackId = audioTrackId {
+            let audioTrack = createNativeAudioTrack(trackId: trackId,
+                                                    constraints: constraints.nativeValue)
             nativeStream.addAudioTrack(audioTrack)
         }
         

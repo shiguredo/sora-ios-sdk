@@ -44,10 +44,11 @@ public class Sora {
     }
     
     public func connect(configuration: Configuration,
+                        webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
                         handler: @escaping (MediaChannel?, Error?) -> Void) {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(configuration: configuration)
-        mediaChan.connect { error in
+        mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
             if let error = error {
                 handler(nil, error)
             } else {
