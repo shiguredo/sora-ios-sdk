@@ -159,10 +159,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     
     func connectOrDisconnect() {
         switch state {
-        case .connecting:
-            break
-            
-        case .connected:
+        case .connecting, .connected:
             disconnect()
             
         case .disconnected:
