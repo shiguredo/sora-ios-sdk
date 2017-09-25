@@ -3,10 +3,10 @@ import UIKit
 import CoreMedia
 import SDWebImage
 
-public class Snapshot {
+public struct Snapshot {
     
-    public var image: CGImage
-    public var timestamp: Date
+    public let image: CGImage
+    public let timestamp: Date
     
     init(image: CGImage, timestamp: Date) {
         self.image = image

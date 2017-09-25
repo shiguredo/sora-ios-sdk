@@ -13,8 +13,11 @@ public enum LogType {
     case videoView
     case user(String)
     case configurationViewController
+}
+
+extension LogType: CustomStringConvertible {
     
-    func description() -> String {
+    public var description: String {
         switch self {
         case .sora:
             return "Sora"
@@ -45,6 +48,8 @@ public enum LogType {
     
 }
 
+// MARK: -
+
 public enum LogLevel: Int {
     case fatal
     case error
@@ -52,8 +57,11 @@ public enum LogLevel: Int {
     case info
     case debug
     case trace
+}
+
+extension LogLevel: CustomStringConvertible {
     
-    public func description() -> String {
+    public var description: String {
         switch self {
         case .fatal:
             return "FATAL"
@@ -72,24 +80,14 @@ public enum LogLevel: Int {
     
 }
 
-public class LogMessage {
+// MARK: -
 
+public struct LogMessage {
+    
     public let level: LogLevel
     public let type: LogType
     public let timestamp: Date
     public let message: String
-
-    public var description: String {
-        get {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            return String(format: "%@ %@ %@: %@",
-                          formatter.string(from: timestamp),
-                          type.description(),
-                          level.description(),
-                          message)
-        }
-    }
     
     init(level: LogLevel, type: LogType, message: String) {
         self.level = level
@@ -100,10 +98,30 @@ public class LogMessage {
     
 }
 
+extension LogMessage: CustomStringConvertible {
+    
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
+    
+    public var description: String {
+        return String(format: "%@ %@ %@: %@",
+                      LogMessage.formatter.string(from: timestamp),
+                      type.description,
+                      level.description,
+                      message)
+    }
+    
+}
+
+// MARK: -
+
 public class Log {
     
     public static var shared: Log = Log()
-        
+    
     public var onOutputHandler: ((LogMessage) -> Void)?
     
     public static func fatal(type: LogType, message: String) {
