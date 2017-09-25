@@ -22,6 +22,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     @IBOutlet weak var configurationCell: UITableViewCell!
     @IBOutlet weak var connectCell: UITableViewCell!
     @IBOutlet weak var numberOfStreamsCell: UITableViewCell!
+    @IBOutlet weak var copyLogCell: UITableViewCell!
     @IBOutlet weak var clearLogCell: UITableViewCell!
     @IBOutlet weak var duplicateCell: UITableViewCell!
 
@@ -137,6 +138,8 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                 present(configurationViewController, animated: true)
             } else if cell == connectCell {
                 connectOrDisconnect()
+            } else if cell == copyLogCell {
+                copyLog()
             } else if cell == clearLogCell {
                 clearLog()
             } else if cell == duplicateCell {
@@ -241,6 +244,13 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         alert.addAction(UIAlertAction(title: "OK",
                                       style: .cancel))
         present(alert, animated: true)
+    }
+    
+    func copyLog() {
+        if let log = logTextView.text {
+            UIPasteboard.general.setValue(log, forPasteboardType: "TestSweets")
+            showTemporaryAlert(title: "Copied")
+        }
     }
     
     func clearLog() {
