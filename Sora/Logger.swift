@@ -85,7 +85,7 @@ extension LogLevel: CustomStringConvertible {
 
 // MARK: -
 
-public struct LogMessage {
+public struct Log {
     
     public let level: LogLevel
     public let type: LogType
@@ -101,7 +101,7 @@ public struct LogMessage {
     
 }
 
-extension LogMessage: CustomStringConvertible {
+extension Log: CustomStringConvertible {
     
     private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -111,7 +111,7 @@ extension LogMessage: CustomStringConvertible {
     
     public var description: String {
         return String(format: "%@ %@ %@: %@",
-                      LogMessage.formatter.string(from: timestamp),
+                      Log.formatter.string(from: timestamp),
                       type.description,
                       level.description,
                       message)
@@ -121,51 +121,51 @@ extension LogMessage: CustomStringConvertible {
 
 // MARK: -
 
-public class Log {
+public class Logger {
     
-    public static var shared: Log = Log()
+    public static var shared: Logger = Logger()
     
-    public var onOutputHandler: ((LogMessage) -> Void)?
+    public var onOutputHandler: ((Log) -> Void)?
     
     public static func fatal(type: LogType, message: String) {
-        Log.shared.output(message: LogMessage(level: .fatal,
-                                              type: type,
-                                              message: message))
+        Logger.shared.output(log: Log(level: .fatal,
+                                      type: type,
+                                      message: message))
     }
     
     public static func error(type: LogType, message: String) {
-        Log.shared.output(message: LogMessage(level: .error,
-                                              type: type,
-                                              message: message))
+        Logger.shared.output(log: Log(level: .error,
+                                      type: type,
+                                      message: message))
     }
     
     public static func debug(type: LogType, message: String) {
-        Log.shared.output(message: LogMessage(level: .debug,
-                                              type: type,
-                                              message: message))
+        Logger.shared.output(log: Log(level: .debug,
+                                      type: type,
+                                      message: message))
     }
     
     public static func warn(type: LogType, message: String) {
-        Log.shared.output(message: LogMessage(level: .warn,
-                                              type: type,
-                                              message: message))
+        Logger.shared.output(log: Log(level: .warn,
+                                      type: type,
+                                      message: message))
     }
     
     public static func info(type: LogType, message: String) {
-        Log.shared.output(message: LogMessage(level: .info,
-                                              type: type,
-                                              message: message))
+        Logger.shared.output(log: Log(level: .info,
+                                      type: type,
+                                      message: message))
     }
     
     public static func trace(type: LogType, message: String) {
-        Log.shared.output(message: LogMessage(level: .trace,
-                                              type: type,
-                                              message: message))
+        Logger.shared.output(log: Log(level: .trace,
+                                      type: type,
+                                      message: message))
     }
     
-    func output(message: LogMessage) {
-        onOutputHandler?(message)
-        print(message.description)
+    func output(log: Log) {
+        onOutputHandler?(log)
+        print(log.description)
     }
     
 }

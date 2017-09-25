@@ -45,7 +45,7 @@ public class Sora {
     
     public func connect(configuration: Configuration,
                         handler: @escaping (MediaChannel?, Error?) -> Void) {
-        Log.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
+        Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(configuration: configuration)
         mediaChan.connect { error in
             if let error = error {

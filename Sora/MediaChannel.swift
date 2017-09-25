@@ -39,7 +39,7 @@ public class MediaChannel {
     
     public private(set) var state: State = .disconnected {
         didSet {
-            Log.trace(type: .mediaChannel,
+            Logger.trace(type: .mediaChannel,
                       message: "changed state from \(oldValue) to \(state)")
         }
     }
@@ -49,9 +49,9 @@ public class MediaChannel {
     private var onConnectHandler: ((Error?) -> Void)?
     
     public init(configuration: Configuration) {
-        Log.debug(type: .mediaChannel,
+        Logger.debug(type: .mediaChannel,
                   message: "create signaling channel (\(configuration.signalingChannelType))")
-        Log.debug(type: .mediaChannel,
+        Logger.debug(type: .mediaChannel,
                   message: "create peer channel (\(configuration.peerChannelType))")
         
         self.configuration = configuration
@@ -70,39 +70,39 @@ public class MediaChannel {
     
     public func connect(timeout: Int = Configuration.defaultConnectionTimeout,
                         handler: @escaping (Error?) -> Void) {
-        Log.debug(type: .mediaChannel, message: "try connecting")
+        Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
         onConnectHandler = handler
         
         let timer = ConnectionTimer(target: self, timeout: configuration.connectionTimeout)
         timer.run {
-            Log.debug(type: .mediaChannel, message: "connection timeout")
+            Logger.debug(type: .mediaChannel, message: "connection timeout")
             self.disconnect(error: SoraError.connectionTimeout)
         }
         connectionTimer = timer
         
         peerChannel.handlers.onAddStreamHandler = { stream in
-            Log.debug(type: .mediaChannel, message: "added a stream")
+            Logger.debug(type: .mediaChannel, message: "added a stream")
             self.handlers.onAddStreamHandler?(stream)
         }
         
         peerChannel.handlers.onRemoveStreamHandler = { stream in
-            Log.debug(type: .mediaChannel, message: "removed a stream")
+            Logger.debug(type: .mediaChannel, message: "removed a stream")
             self.handlers.onRemoveStreamHandler?(stream)
         }
         
         peerChannel.handlers.onNotifyHandler = { message in
-            Log.debug(type: .mediaChannel, message: "receive event notification")
+            Logger.debug(type: .mediaChannel, message: "receive event notification")
             self.handlers.onEventHandler?(Event(message: message))
         }
         
         peerChannel.connect { error in
             if let error = error {
-                Log.debug(type: .mediaChannel, message: "failed connecting")
+                Logger.debug(type: .mediaChannel, message: "failed connecting")
                 self.disconnect(error: error)
                 return
             }
-            Log.debug(type: .mediaChannel, message: "did connect")
+            Logger.debug(type: .mediaChannel, message: "did connect")
             self.state = .connected
             self.onConnectHandler?(error)
             self.onConnectHandler = nil
@@ -119,11 +119,11 @@ public class MediaChannel {
             break
             
         default:
-            Log.debug(type: .mediaChannel, message: "try disconnecting")
+            Logger.debug(type: .mediaChannel, message: "try disconnecting")
             state = .disconnecting
             peerChannel.disconnect(error: error)
             
-            Log.debug(type: .mediaChannel, message: "did disconnect")
+            Logger.debug(type: .mediaChannel, message: "did disconnect")
             state = .disconnected
             
             if let error = error {

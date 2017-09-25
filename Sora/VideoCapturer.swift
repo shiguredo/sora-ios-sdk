@@ -118,14 +118,14 @@ public class CameraVideoCapturer: VideoCapturer {
         if _isRunning {
             return
         }
-        Log.debug(type: .sora, message: "start camera video capture")
+        Logger.debug(type: .sora, message: "start camera video capture")
         startCurrentCameraDevice()
         _isRunning = true
     }
     
     public func stop() {
         if _isRunning {
-            Log.debug(type: .sora, message: "stop camera video capture")
+            Logger.debug(type: .sora, message: "stop camera video capture")
             stopCurrentCameraDevice()
         }
         _isRunning = false

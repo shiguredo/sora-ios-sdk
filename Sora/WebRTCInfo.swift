@@ -8,7 +8,7 @@ public struct WebRTCInfo {
         guard let url = bundle.url(forResource: "build_info",
                                    withExtension: "json") else
         {
-            Log.debug(type: .sora, message: "failed to load 'build_info.json'")
+            Logger.debug(type: .sora, message: "failed to load 'build_info.json'")
             return nil
         }
         do {
@@ -16,7 +16,7 @@ public struct WebRTCInfo {
             let decoder = JSONDecoder()
             return try decoder.decode(WebRTCInfo.self, from: data)
         } catch let e {
-            Log.debug(type: .sora, message: "failed to decode build info: \(e.localizedDescription)")
+            Logger.debug(type: .sora, message: "failed to decode build info: \(e.localizedDescription)")
             return nil
         }
     }

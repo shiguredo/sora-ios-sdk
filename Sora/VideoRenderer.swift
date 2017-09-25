@@ -14,7 +14,7 @@ public class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     
     public func setSize(_ size: CGSize) {
         if let renderer = videoRenderer {
-            Log.debug(type: .videoRenderer,
+            Logger.debug(type: .videoRenderer,
                       message: "set size \(size) for \(renderer)")
             DispatchQueue.main.async {
                 renderer.onChangedSize(size)

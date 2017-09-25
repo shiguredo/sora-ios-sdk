@@ -90,7 +90,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         numberOfStreams = 0
         clearLog()
         
-        Log.shared.onOutputHandler = { log in
+        Logger.shared.onOutputHandler = { log in
             DispatchQueue.main.async {
                 self.logTextView.text.append(log.description)
                 self.logTextView.text.append("\n")

@@ -8,7 +8,7 @@ public class NativePeerChannelFactory {
     var nativeFactory: RTCPeerConnectionFactory
     
     init() {
-        Log.debug(type: .peerChannel, message: "create native peer channel factory")
+        Logger.debug(type: .peerChannel, message: "create native peer channel factory")
         nativeFactory = RTCPeerConnectionFactory()
     }
     

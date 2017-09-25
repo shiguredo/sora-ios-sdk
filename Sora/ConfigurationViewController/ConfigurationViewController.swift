@@ -32,7 +32,7 @@ public class ConfigurationViewController: UIViewController {
                                 signalingPath != nil ? signalingPath! : defaultSignalingPath)
             let url = URL(string: urlStr)
             if url == nil {
-                Log.debug(type: .configurationViewController,
+                Logger.debug(type: .configurationViewController,
                           message: "Invalid URL string: \(urlStr)")
             }
             return url

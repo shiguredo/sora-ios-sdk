@@ -30,9 +30,9 @@ public final class AliveMonitor {
     }
     
     public func run(timeInterval: TimeInterval) {
-        Log.debug(type: .aliveMonitor, message: "run")
+        Logger.debug(type: .aliveMonitor, message: "run")
         timer = Timer(timeInterval: timeInterval, repeats: true) { timer in
-            Log.trace(type: .aliveMonitor,
+            Logger.trace(type: .aliveMonitor,
                       message: "validate available state")
             self.onObserveHandler?(self.objects)
 
@@ -43,7 +43,7 @@ public final class AliveMonitor {
                 case .available, .connecting:
                     break
                 case .unavailable:
-                    Log.debug(type: .aliveMonitor,
+                    Logger.debug(type: .aliveMonitor,
                               message: "found unavailable state \(object)")
                     changed.append(object)
                 }
@@ -56,7 +56,7 @@ public final class AliveMonitor {
     }
     
     public func stop() {
-        Log.debug(type: .aliveMonitor, message: "stop")
+        Logger.debug(type: .aliveMonitor, message: "stop")
         timer!.invalidate()
         timer = nil
     }

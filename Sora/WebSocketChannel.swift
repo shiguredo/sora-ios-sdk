@@ -148,7 +148,7 @@ public class BasicWebSocketChannel: WebSocketChannel {
     }
     
     public func send(message: WebSocketMessage) {
-        Log.debug(type: .webSocketChannel, message: "send message")
+        Logger.debug(type: .webSocketChannel, message: "send message")
         context.send(message: message)
     }
 
@@ -161,7 +161,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
     
     var state: WebSocketChannelState = .disconnected {
         didSet {
-            Log.trace(type: .webSocketChannel,
+            Logger.trace(type: .webSocketChannel,
                       message: "changed state from \(oldValue) to \(state)")
         }
     }
@@ -189,7 +189,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
-        Log.debug(type: .webSocketChannel, message: "try connecting")
+        Logger.debug(type: .webSocketChannel, message: "try connecting")
         state = .connecting
         onConnectHandler = handler
         nativeChannel.open()
@@ -201,17 +201,17 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
             break
             
         default:
-            Log.debug(type: .webSocketChannel, message: "try disconnecting")
+            Logger.debug(type: .webSocketChannel, message: "try disconnecting")
             state = .disconnecting
             nativeChannel.close()
             state = .disconnected
             if let error = error {
-                Log.debug(type: .webSocketChannel, message: "failure \(error)")
+                Logger.debug(type: .webSocketChannel, message: "failure \(error)")
                 channel.handlers.onFailureHandler?(error)
             }
             onConnectHandler?(error)
             onConnectHandler = nil
-            Log.debug(type: .webSocketChannel, message: "did disconnect")
+            Logger.debug(type: .webSocketChannel, message: "did disconnect")
         }
     }
     
@@ -219,17 +219,17 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
         var nativeMsg: Any!
         switch message {
         case .text(let text):
-            Log.debug(type: .webSocketChannel, message: text)
+            Logger.debug(type: .webSocketChannel, message: text)
             nativeMsg = text
         case .binary(let data):
-            Log.debug(type: .webSocketChannel, message: "\(data)")
+            Logger.debug(type: .webSocketChannel, message: "\(data)")
             nativeMsg = data
         }
         nativeChannel.send(nativeMsg)
     }
     
     func webSocketDidOpen(_ webSocket: SRWebSocket!) {
-        Log.debug(type: .webSocketChannel, message: "connected")
+        Logger.debug(type: .webSocketChannel, message: "connected")
         state = .connected
         onConnectHandler?(nil)
         onConnectHandler = nil
@@ -239,7 +239,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
                    didCloseWithCode code: Int,
                    reason: String?,
                    wasClean: Bool) {
-        Log.debug(type: .webSocketChannel,
+        Logger.debug(type: .webSocketChannel,
                   message: "closed with code \(code) \(reason ?? "")")
         if code != SRStatusCodeNormal.rawValue {
             let statusCode = WebSocketStatusCode(rawValue: code)
@@ -251,13 +251,13 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
     }
     
     func webSocket(_ webSocket: SRWebSocket!, didFailWithError error: Error!) {
-        Log.debug(type: .webSocketChannel, message: "failed")
+        Logger.debug(type: .webSocketChannel, message: "failed")
         disconnect(error: error)
     }
     
     func webSocket(_ webSocket: SRWebSocket!, didReceiveMessage message: Any!) {
-        Log.debug(type: .webSocketChannel, message: "receive message")
-        Log.debug(type: .webSocketChannel, message: "\(message)")
+        Logger.debug(type: .webSocketChannel, message: "receive message")
+        Logger.debug(type: .webSocketChannel, message: "\(message)")
         var newMessage: WebSocketMessage?
         if let text = message as? String {
             newMessage = .text(text)
@@ -267,15 +267,15 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
         if let message = newMessage {
             channel.handlers.onMessageHandler?(message)
         } else {
-            Log.debug(type: .webSocketChannel,
+            Logger.debug(type: .webSocketChannel,
                       message: "received message is not string or binary (discarded)")
             // discard
         }
     }
     
     func webSocket(_ webSocket: SRWebSocket!, didReceivePong pongPayload: Data!) {
-        Log.debug(type: .webSocketChannel, message: "receive poing payload")
-        Log.debug(type: .webSocketChannel, message: "\(pongPayload)")
+        Logger.debug(type: .webSocketChannel, message: "receive poing payload")
+        Logger.debug(type: .webSocketChannel, message: "\(pongPayload)")
         channel.handlers.onPongHandler?(pongPayload)
     }
     
