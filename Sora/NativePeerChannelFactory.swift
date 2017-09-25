@@ -1,7 +1,7 @@
 import Foundation
 import WebRTC
 
-public class NativePeerChannelFactory {
+class NativePeerChannelFactory {
     
     static var `default`: NativePeerChannelFactory = NativePeerChannelFactory()
     
