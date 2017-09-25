@@ -35,6 +35,12 @@ public enum SignalingEventType: String {
     
 }
 
+public struct SignalingUpdateOfferMessage {
+    
+    public let sdp: String
+    
+}
+
 public struct SignalingNotifyMessage {
     
     public var eventType: SignalingEventType
@@ -48,17 +54,23 @@ public struct SignalingNotifyMessage {
 
 public struct SignalingPongMessage {}
 
+// MARK: -
+
 public enum SignalingMessage {
     
     case connect(request: SignalingConnectRequest)
     case offer(request: SignalingOfferRequest)
     case answer(sdp: String)
     case candidate(ICECandidate)
+    case update(sdp: String)
     case notify(message: SignalingNotifyMessage)
     case ping
     case pong
     
 }
+
+// MARK: -
+// MARK: Codable
 
 extension SignalingRole: Codable {
 
@@ -86,6 +98,7 @@ extension SignalingConnectRequest: Codable {
         case channelId = "channel_id"
         case metadata
         case multistream
+        case plan_b
         case video
         case audio
     }
@@ -107,11 +120,14 @@ extension SignalingConnectRequest: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channelId)
+        
         if let metadata = metadata {
             try container.encode(metadata, forKey: .metadata)
         }
+        
         if multistreamEnabled {
             try container.encode(true, forKey: .multistream)
+            try container.encode(true, forKey: .plan_b)
         }
      
         if videoEnabled {
@@ -190,6 +206,23 @@ extension SignalingOfferRequest: Codable {
     
 }
 
+extension SignalingUpdateOfferMessage: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case sdp
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sdp = try container.decode(String.self, forKey: .sdp)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        fatalError("not supported")
+    }
+    
+}
+
 extension SignalingNotifyMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -225,6 +258,7 @@ extension SignalingMessage: Codable {
         case connect
         case offer
         case answer
+        case update
         case candidate
         case notify
         case ping
@@ -243,6 +277,9 @@ extension SignalingMessage: Codable {
         switch type {
         case "offer":
             self = .offer(request: try SignalingOfferRequest(from: decoder))
+        case "update":
+            let update = try SignalingUpdateOfferMessage(from: decoder)
+            self = .update(sdp: update.sdp)
         case "notify":
             self = .notify(message: try SignalingNotifyMessage(from: decoder))
         case "ping":
@@ -267,6 +304,9 @@ extension SignalingMessage: Codable {
         case .candidate(let candidate):
             try container.encode(MessageType.candidate.rawValue, forKey: .type)
             try container.encode(candidate.sdp, forKey: .candidate)
+        case .update(sdp: let sdp):
+            try container.encode(MessageType.update.rawValue, forKey: .type)
+            try container.encode(sdp, forKey: .sdp)
         case .notify(message: _):
             fatalError("not supported encoding 'notify'")
         case .ping:

@@ -116,6 +116,7 @@ public class PeerChannelHandlers {
     public var onFailureHandler: ((Error) -> Void)?
     public var onAddStreamHandler: ((MediaStream) -> Void)?
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
+    public var onUpdateHandler: ((String) -> Void)?
     public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
     public var onPingHandler: (() -> Void)?
 
@@ -228,6 +229,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         case connecting
         case waitingOffer
         case waitingComplete
+        case waitingUpdateComplete
         case connected
         case disconnecting
         case disconnected
@@ -410,6 +412,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             
         case .connected:
             switch message {
+            case .update(sdp: let sdp):
+                guard configuration.role == .group else { return }
+                Log.debug(type: .peerChannel, message: "receive update")
+                createAndSendUpdateAnswer(forOffer: sdp)
+                
             case .notify(message: let message):
                 Log.debug(type: .peerChannel, message: "receive notify")
                 channel.handlers.onNotifyHandler?(message)
@@ -427,6 +434,27 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         default:
             // discard
             break
+        }
+    }
+    
+    func createAndSendUpdateAnswer(forOffer offer: String) {
+        state = .waitingUpdateComplete
+        nativeChannel.createAnswer(forOffer: offer,
+                                   constraints: configuration.nativeConstraints)
+        { answer, error in
+            guard error == nil else {
+                self.disconnect(error: error)
+                return
+            }
+            
+            let message = SignalingMessage.update(sdp: answer!)
+            self.signalingChannel.send(message: message)
+            
+            // Answer 送信後に RTCPeerConnection の状態に変化はないため、
+            // Answer を送信したら更新完了とする
+            self.state = .connected
+            
+            self.channel.handlers.onUpdateHandler?(answer!)
         }
     }
     
