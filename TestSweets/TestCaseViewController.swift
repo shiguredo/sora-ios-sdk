@@ -82,6 +82,14 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         configurationViewController.navigationItem.title = "Configuration"
         configurationViewController.configuration = testCase.configuration
         numberOfStreams = 0
+        clearLog()
+        
+        Log.shared.onOutputHandler = { log in
+            DispatchQueue.main.async {
+                self.logTextView.text.append(log.description)
+                self.logTextView.text.append("\n")
+            }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
