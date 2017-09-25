@@ -88,12 +88,20 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         configurationViewController.navigationItem.title = "Configuration"
         configurationViewController.configuration = testCase.configuration
         numberOfStreams = 0
+        
+        logTextView.font = UIFont(name: "Courier", size: 18)
         clearLog()
         
         Logger.shared.onOutputHandler = { log in
             DispatchQueue.main.async {
-                self.logTextView.text.append(log.description)
-                self.logTextView.text.append("\n")
+                let textView = self.logTextView!
+                textView.isScrollEnabled = false
+                textView.text.append(log.description)
+                textView.text.append("\n")
+                textView.isScrollEnabled = true
+                let scrollY = textView.contentSize.height - textView.bounds.height
+                let scrollPoint = CGPoint(x: 0, y: scrollY > 0 ? scrollY : 0)
+                textView.setContentOffset(scrollPoint, animated: false)
             }
         }
     }
