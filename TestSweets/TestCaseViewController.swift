@@ -51,7 +51,9 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                 switch self.state {
                 case .connecting:
                     print("state changed: connecting")
-                    self.connectLabel.text = "Connecting"
+                    self.connectLabel.text = "Connecting..."
+                    self.configurationLabel.setTextOn(false)
+                    self.configurationCell.isUserInteractionEnabled = false
                     
                 case .connected:
                     print("state changed: connected")
@@ -65,6 +67,8 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                 case .disconnected:
                     print("state changed: disconnected")
                     self.testCaseController.mediaChannel = nil
+                    self.configurationLabel.setTextOn(true)
+                    self.configurationCell.isUserInteractionEnabled = true
                     self.connectLabel.text = "Connect"
                     self.numberOfStreamsCell.isUserInteractionEnabled = false
                     self.numberOfStreamsLabel.setTextOn(false)
