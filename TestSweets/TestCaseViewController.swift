@@ -41,7 +41,9 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
 
     var numberOfStreams: Int = 0 {
         didSet {
-            numberOfStreamsValueLabel.text = String(numberOfStreams)
+            DispatchQueue.main.async {
+                self.numberOfStreamsValueLabel.text = String(self.numberOfStreams)
+            }
         }
     }
     
