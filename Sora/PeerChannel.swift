@@ -354,7 +354,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         channel.addStream(stream)
     }
     
-    func sendAnswerMessage(offer: SignalingOfferMessage) {
+    func createAndSendAnswerMessage(offer: SignalingOfferMessage) {
         Logger.debug(type: .peerChannel, message: "try sending answer")
         state = .waitingComplete
         
@@ -365,50 +365,44 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
         }
         
-        Logger.debug(type: .peerChannel, message: "try setting remote description")
-        let nativeOffer = RTCSessionDescription(type: .offer, sdp: offer.sdp)
-        nativeChannel.setRemoteDescription(nativeOffer) { error in
+        nativeChannel.createAnswer(forOffer: offer.sdp,
+                                   constraints: webRTCConfiguration.nativeConstraints)
+        { sdp, error in
             guard error == nil else {
                 Logger.debug(type: .peerChannel,
-                          message: "failed setting remote description")
+                             message: "failed create answer")
                 self.disconnect(error: error)
                 return
             }
             
-            Logger.debug(type: .peerChannel, message: "did set remote description")
-            Logger.debug(type: .peerChannel, message: "\(nativeOffer.sdpDescription)")
-            Logger.debug(type: .peerChannel, message: "try creating native answer")
-            self.nativeChannel.answer(for: self.webRTCConfiguration.nativeConstraints,
-                                      completionHandler: self.setLocalDescription)
+            let answer = SignalingMessage.answer(sdp: sdp!)
+            self.signalingChannel.send(message: answer)
+            Logger.debug(type: .peerChannel, message: "did send answer")
         }
     }
     
-    func setLocalDescription(sdp: RTCSessionDescription?,
-                             error: Error?) {
-        guard error == nil else {
-            Logger.debug(type: .peerChannel,
-                      message: "failed creating native answer")
-            self.disconnect(error: error)
-            return
-        }
-        Logger.debug(type: .peerChannel, message: "did create native answer")
-        
-        Logger.debug(type: .peerChannel, message: "try setting local description")
-        nativeChannel.setLocalDescription(sdp!) { error in
+    
+    func createAndSendUpdateAnswerMessage(forOffer offer: String) {
+        state = .waitingUpdateComplete
+        nativeChannel.createAnswer(forOffer: offer,
+                                   constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
             guard error == nil else {
-                Logger.debug(type: .peerChannel,
-                          message: "failed setting local description")
                 self.disconnect(error: error)
                 return
             }
-            Logger.debug(type: .peerChannel, message: "did set local description")
-            Logger.debug(type: .peerChannel, message: "\(sdp!.sdpDescription)")
-            Logger.debug(type: .peerChannel, message: "did send answer")
-            let answer = SignalingMessage.answer(sdp: sdp!.sdp)
-            self.signalingChannel.send(message: answer)
+            
+            let message = SignalingMessage.update(sdp: answer!)
+            self.signalingChannel.send(message: message)
+            
+            // Answer 送信後に RTCPeerConnection の状態に変化はないため、
+            // Answer を送信したら更新完了とする
+            self.state = .connected
+            
+            self.channel.handlers.onUpdateHandler?(answer!)
         }
     }
-
+    
     func handleMessage(_ message: SignalingMessage) {
         Logger.debug(type: .mediaStream, message: "handle message")
         switch state {
@@ -416,7 +410,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             switch message {
             case .offer(let offer):
                 Logger.debug(type: .peerChannel, message: "receive offer")
-                sendAnswerMessage(offer: offer)
+                createAndSendAnswerMessage(offer: offer)
                 
             default:
                 // discard
@@ -428,7 +422,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             case .update(sdp: let sdp):
                 guard configuration.role == .group else { return }
                 Logger.debug(type: .peerChannel, message: "receive update")
-                createAndSendUpdateAnswer(forOffer: sdp)
+                createAndSendUpdateAnswerMessage(forOffer: sdp)
                 
             case .notify(message: let message):
                 Logger.debug(type: .peerChannel, message: "receive notify")
@@ -447,27 +441,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         default:
             // discard
             break
-        }
-    }
-    
-    func createAndSendUpdateAnswer(forOffer offer: String) {
-        state = .waitingUpdateComplete
-        nativeChannel.createAnswer(forOffer: offer,
-                                   constraints: webRTCConfiguration.nativeConstraints)
-        { answer, error in
-            guard error == nil else {
-                self.disconnect(error: error)
-                return
-            }
-            
-            let message = SignalingMessage.update(sdp: answer!)
-            self.signalingChannel.send(message: message)
-            
-            // Answer 送信後に RTCPeerConnection の状態に変化はないため、
-            // Answer を送信したら更新完了とする
-            self.state = .connected
-            
-            self.channel.handlers.onUpdateHandler?(answer!)
         }
     }
     
