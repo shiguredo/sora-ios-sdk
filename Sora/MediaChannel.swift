@@ -2,6 +2,8 @@ import Foundation
 
 public class MediaChannelHandlers {
     
+    public var onConnectHandler: ((Error?) -> Void)?
+    public var onDisconnectHandler: ((Error?) -> Void)?
     public var onFailureHandler: ((Error) -> Void)?
     public var onMessageHandler: ((SignalingMessage) -> Void)?
     public var onAddStreamHandler: ((MediaStream) -> Void)?
@@ -105,12 +107,14 @@ public class MediaChannel {
             if let error = error {
                 Logger.debug(type: .mediaChannel, message: "failed connecting")
                 self.disconnect(error: error)
+                self.handlers.onConnectHandler?(error)
                 return
             }
             Logger.debug(type: .mediaChannel, message: "did connect")
             self.state = .connected
             self.onConnectHandler?(error)
             self.onConnectHandler = nil
+            self.handlers.onConnectHandler?(nil)
         }
     }
     
@@ -131,6 +135,7 @@ public class MediaChannel {
             Logger.debug(type: .mediaChannel, message: "did disconnect")
             state = .disconnected
             
+            handlers.onDisconnectHandler?(error)
             if let error = error {
                 handlers.onFailureHandler?(error)
             }
