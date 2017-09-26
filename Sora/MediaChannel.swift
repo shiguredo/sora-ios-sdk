@@ -77,6 +77,16 @@ public class MediaChannel {
     public func connect(webRTCConfiguration: WebRTCConfiguration,
                         timeout: Int = Configuration.defaultConnectionTimeout,
                         handler: @escaping (Error?) -> Void) {
+        DispatchQueue.global().async {
+            self.basicConnect(webRTCConfiguration: webRTCConfiguration,
+                              timeout: timeout,
+                              handler: handler)
+        }
+    }
+    
+    private func basicConnect(webRTCConfiguration: WebRTCConfiguration,
+                              timeout: Int,
+                              handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
         onConnectHandler = handler
