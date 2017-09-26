@@ -28,6 +28,8 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
 
     @IBOutlet weak var tapGestureRecognizer: UITapGestureRecognizer!
 
+    weak var mainViewController: MainViewController!
+    
     weak var testCaseController: TestCaseController! {
         didSet {
             configurationViewController?.configuration = testCase.configuration
@@ -223,18 +225,27 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                         return
                     }
                     
-                    chan!.handlers.onAddStreamHandler = { stream in
-                        self.numberOfStreams += 1
+                    chan!.handlers.onConnectHandler = { error in
+                        self.mainViewController.update()
                     }
-                    
-                    chan!.handlers.onRemoveStreamHandler = { stream in
-                        self.numberOfStreams -= 1
+
+                    chan!.handlers.onDisconnectHandler = { error in
+                        self.mainViewController.update()
                     }
                     
                     chan!.handlers.onFailureHandler = { error in
                         self.state = .disconnected
                         self.showAlert(title: "Connection Failure",
                                        message: error.localizedDescription)
+                        self.mainViewController.update()
+                    }
+                    
+                    chan!.handlers.onAddStreamHandler = { stream in
+                        self.numberOfStreams += 1
+                    }
+                    
+                    chan!.handlers.onRemoveStreamHandler = { stream in
+                        self.numberOfStreams -= 1
                     }
                     
                     self.state = .connected

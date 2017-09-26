@@ -50,8 +50,19 @@ class MainViewController: UITableViewController {
                             cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "testCaseName",
                                                  for: indexPath)
-        cell.accessoryType = .disclosureIndicator
-        let title = testCaseControllers[indexPath.row].testCase.title
+        let testCaseCtrl = testCaseControllers[indexPath.row]
+        
+        cell.accessoryType = .none
+        if let chan = testCaseCtrl.mediaChannel {
+            switch chan.state {
+            case .disconnecting, .disconnected:
+                break
+            default:
+                cell.accessoryType = .checkmark
+            }
+        }
+        
+        let title = testCaseCtrl.testCase.title
         if title.isEmpty {
             cell.textLabel?.textColor = UIColor.lightGray
             cell.textLabel?.text = "No Name"
@@ -138,10 +149,19 @@ class MainViewController: UITableViewController {
     
     // MARK: アクション
     
+    func update() {
+        DispatchQueue.main.async {
+            if self.view.window?.isKeyWindow ?? false {
+                self.tableView.reloadData()
+            }
+        }
+    }
+    
     func createTestCaseViewController(testCaseController: TestCaseController) -> TestCaseViewController {
         let vc = storyboard!
             .instantiateViewController(withIdentifier: "TestCaseViewController")
             as! TestCaseViewController
+        vc.mainViewController = self
         vc.testCaseController = testCaseController
         return vc
     }
