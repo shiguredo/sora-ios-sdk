@@ -44,6 +44,10 @@ public class MediaChannel {
         }
     }
     
+    public var isAvailable: Bool {
+        get { return state == .connected }
+    }
+    
     private let aliveMonitor: AliveMonitor = AliveMonitor()
     private var connectionTimer: ConnectionTimer?
     private var onConnectHandler: ((Error?) -> Void)?
