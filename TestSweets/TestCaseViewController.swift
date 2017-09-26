@@ -40,6 +40,12 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     
     var configurationViewController: ConfigurationViewController!
 
+    var keepsConnection: Bool {
+        get {
+            return keepConnectionSwitch.isOn
+        }
+    }
+    
     var numberOfStreams: Int = 0 {
         didSet {
             DispatchQueue.main.async {
