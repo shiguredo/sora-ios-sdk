@@ -174,6 +174,10 @@ class ConfigurationMainViewController: UITableViewController,
     
     @IBAction func handleTap(_ sender: UITapGestureRecognizer) {
         if sender.state == .ended {
+            hostTextFieldEditingDidEndOnExit(sender)
+            portTextFieldEditingDidEndOnExit(sender)
+            signalingPathTextFieldEditingDidEndOnExit(sender)
+            channelIdTextFieldEditingDidEndOnExit(sender)
             view.endEditing(true)
         }
     }
