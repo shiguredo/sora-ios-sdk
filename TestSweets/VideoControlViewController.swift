@@ -96,7 +96,6 @@ class VideoControlViewController: UITableViewController,
     }
 
     @IBAction func numberOfColumnsTextFieldDidEndOnExit(_ sender: AnyObject) {
-        print("numberOfColumnsTextFieldDidEndOnExit")
         if let text = numberOfColumnsTextField.text {
             numberOfColumns = Int(text)!
         } else {
