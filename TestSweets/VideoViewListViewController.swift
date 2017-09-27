@@ -3,8 +3,9 @@ import Sora
 
 private let reuseIdentifier = "Cell"
 
-class VideoViewListViewController:
-    UICollectionViewController, TestCaseControllable {
+class VideoViewListViewController: UICollectionViewController,
+    UICollectionViewDelegateFlowLayout,
+    TestCaseControllable {
     
     weak var testCaseController: TestCaseController!
 
@@ -29,6 +30,11 @@ class VideoViewListViewController:
         navigationItem.title = "Videos"
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        collectionView?.reloadData()
+        super.viewWillAppear(animated)
+    }
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -69,7 +75,8 @@ class VideoViewListViewController:
         }
     }
 
-    override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+    override func collectionView(_ collectionView: UICollectionView,
+                                 numberOfItemsInSection section: Int) -> Int {
         if let chan = testCaseController.mediaChannel {
             let items = testCaseController.testCase
                 .numberOfItemsInVideoViewSection
@@ -130,5 +137,14 @@ class VideoViewListViewController:
 
     // MARK: UICollectionViewDelegateFlowLayout
     
+    func collectionView(_ collectionView: UICollectionView,
+                        layout collectionViewLayout: UICollectionViewLayout,
+                        sizeForItemAt indexPath: IndexPath) -> CGSize {
+        let testCase = testCaseController.testCase!
+        let width = view.frame.size.width /
+            CGFloat(testCase.numberOfItemsInVideoViewSection)
+        let ratio = testCaseController.testCase.videoViewAspectRatio
+        return ratio.size(forWidth: width)
+    }
     
 }

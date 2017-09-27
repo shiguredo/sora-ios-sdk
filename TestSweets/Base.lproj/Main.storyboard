@@ -385,7 +385,6 @@
                 <tapGestureRecognizer cancelsTouchesInView="NO" id="50U-0W-io9">
                     <connections>
                         <action selector="handleTap:" destination="93K-Qn-sF6" id="q6p-b4-00K"/>
-                        <outlet property="delegate" destination="93K-Qn-sF6" id="2Ac-xb-viX"/>
                     </connections>
                 </tapGestureRecognizer>
             </objects>
@@ -398,7 +397,7 @@
                     <collectionView key="view" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" pagingEnabled="YES" dataMode="prototypes" id="YYX-qW-CAS">
                         <rect key="frame" x="0.0" y="0.0" width="320" height="568"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                        <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
+                        <color key="backgroundColor" white="0.33333333333333331" alpha="1" colorSpace="calibratedWhite"/>
                         <collectionViewFlowLayout key="collectionViewLayout" minimumLineSpacing="10" minimumInteritemSpacing="0.0" id="aPa-71-sBE">
                             <size key="itemSize" width="295" height="142"/>
                             <size key="headerReferenceSize" width="0.0" height="0.0"/>
@@ -537,9 +536,9 @@
                                                     <nil key="highlightedColor"/>
                                                 </label>
                                                 <textField opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="center" placeholder="1" textAlignment="right" adjustsFontForContentSizeCategory="YES" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="uZ7-P8-N7H">
-                                                    <rect key="frame" x="264" y="11.5" width="40" height="21"/>
+                                                    <rect key="frame" x="213" y="11.5" width="99" height="21"/>
                                                     <constraints>
-                                                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="32" id="ho4-IR-dbV"/>
+                                                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="99" id="PqQ-De-HWw"/>
                                                     </constraints>
                                                     <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
                                                     <textInputTraits key="textInputTraits" keyboardType="numberPad" enablesReturnKeyAutomatically="YES"/>
@@ -549,11 +548,11 @@
                                                 </textField>
                                             </subviews>
                                             <constraints>
-                                                <constraint firstItem="uZ7-P8-N7H" firstAttribute="leading" relation="lessThanOrEqual" secondItem="p7d-Qp-pkg" secondAttribute="trailing" constant="102.5" id="7qs-TL-QQB"/>
+                                                <constraint firstItem="uZ7-P8-N7H" firstAttribute="trailing" secondItem="Hus-h5-fjb" secondAttribute="trailingMargin" id="7I9-83-TbS"/>
                                                 <constraint firstItem="p7d-Qp-pkg" firstAttribute="centerY" secondItem="Hus-h5-fjb" secondAttribute="centerY" id="8S7-wU-crL"/>
+                                                <constraint firstItem="uZ7-P8-N7H" firstAttribute="leading" relation="lessThanOrEqual" secondItem="p7d-Qp-pkg" secondAttribute="trailing" constant="51.5" id="Ipf-4G-uk6"/>
                                                 <constraint firstItem="p7d-Qp-pkg" firstAttribute="leading" secondItem="Hus-h5-fjb" secondAttribute="leadingMargin" id="N6f-MQ-NuH"/>
                                                 <constraint firstItem="uZ7-P8-N7H" firstAttribute="centerY" secondItem="Hus-h5-fjb" secondAttribute="centerY" id="O4w-SW-wt0"/>
-                                                <constraint firstItem="uZ7-P8-N7H" firstAttribute="trailing" secondItem="Hus-h5-fjb" secondAttribute="trailingMargin" constant="-8" id="SlG-E8-kXn"/>
                                             </constraints>
                                         </tableViewCellContentView>
                                     </tableViewCell>
@@ -625,10 +624,11 @@
                         <connections>
                             <outlet property="dataSource" destination="9IR-3N-7O6" id="Dl7-ep-wYJ"/>
                             <outlet property="delegate" destination="9IR-3N-7O6" id="6Xz-RY-U5C"/>
-                            <outletCollection property="gestureRecognizers" destination="K5g-jQ-ojo" appends="YES" id="Jmi-SR-dbE"/>
+                            <outletCollection property="gestureRecognizers" destination="K5g-jQ-ojo" appends="YES" id="eri-3P-UN1"/>
                         </connections>
                     </tableView>
                     <connections>
+                        <outlet property="aspectRatioCell" destination="WRk-Qs-Kfs" id="aiB-jH-jnO"/>
                         <outlet property="aspectRatioValueLabel" destination="meK-gN-lbS" id="nUR-sh-MR1"/>
                         <outlet property="cameraAutofocusSwitch" destination="Nnp-7i-miw" id="8Yq-aK-7Ps"/>
                         <outlet property="disconnectCell" destination="bnO-5y-nbO" id="zYc-cA-pTB"/>
@@ -639,11 +639,12 @@
                 <placeholder placeholderIdentifier="IBFirstResponder" id="CqJ-NL-SxS" userLabel="First Responder" sceneMemberID="firstResponder"/>
                 <tapGestureRecognizer id="K5g-jQ-ojo">
                     <connections>
-                        <action selector="handleTap:" destination="9IR-3N-7O6" id="Nzf-6C-k7E"/>
+                        <action selector="handleTap:" destination="9IR-3N-7O6" id="lxz-T3-ktU"/>
+                        <outlet property="delegate" destination="9IR-3N-7O6" id="z1L-Gn-v6d"/>
                     </connections>
                 </tapGestureRecognizer>
             </objects>
-            <point key="canvasLocation" x="2694" y="37"/>
+            <point key="canvasLocation" x="2692.5" y="36.971830985915496"/>
         </scene>
         <!--Aspect Ratio-->
         <scene sceneID="sgy-fw-XF8">
