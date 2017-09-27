@@ -287,6 +287,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     
     @IBAction func handleTap(_ sender: UITapGestureRecognizer) {
         if sender.state == .ended {
+            titleTextFieldEditingDidEndOnExit(sender)
             view.endEditing(true)
         }
     }
