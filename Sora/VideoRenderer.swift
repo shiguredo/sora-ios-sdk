@@ -8,7 +8,7 @@ public protocol VideoRenderer: class {
     
 }
 
-public class VideoRendererAdapter: NSObject, RTCVideoRenderer {
+class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     
     public weak var videoRenderer: VideoRenderer?
     
