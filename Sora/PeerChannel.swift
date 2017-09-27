@@ -119,7 +119,7 @@ public class PeerChannelHandlers {
     public var onUpdateHandler: ((String) -> Void)?
     public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
     public var onPingHandler: (() -> Void)?
-
+    
 }
 
 public enum PeerChannelState {
@@ -155,7 +155,7 @@ public protocol PeerChannel: AliveMonitorable {
 // MARK: -
 
 public class BasicPeerChannel: PeerChannel {
-
+    
     public let handlers: PeerChannelHandlers = PeerChannelHandlers()
     public let configuration: Configuration
     
@@ -182,7 +182,7 @@ public class BasicPeerChannel: PeerChannel {
     }
     
     var context: BasicPeerChannelContext!
-
+    
     public required init(configuration: Configuration) {
         self.configuration = configuration
         context = BasicPeerChannelContext(channel: self)
@@ -212,7 +212,7 @@ public class BasicPeerChannel: PeerChannel {
     public func removeICECandidate(_ candidate: ICECandidate) {
         iceCandidates = iceCandidates.filter { each in each == candidate }
     }
-
+    
     public func connect(webRTCConfiguration: WebRTCConfiguration,
                         handler: @escaping (Error?) -> Void) {
         context.connect(webRTCConfiguration: webRTCConfiguration,
@@ -222,13 +222,13 @@ public class BasicPeerChannel: PeerChannel {
     public func disconnect(error: Error?) {
         context.disconnect(error: error)
     }
-
+    
 }
 
 // MARK: -
 
 class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitorable {
-
+    
     enum State {
         case connecting
         case waitingOffer
@@ -273,7 +273,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         
         signalingChannel.handlers.onMessageHandler = handleMessage
     }
-
+    
     func connect(webRTCConfiguration: WebRTCConfiguration,
                  handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .peerChannel, message: "try connecting")
@@ -301,13 +301,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     func sendConnectMessage(error: Error?) {
         if error != nil {
             Logger.debug(type: .peerChannel,
-                      message: "failed connecting to signaling channel")
+                         message: "failed connecting to signaling channel")
             disconnect(error: error)
             return
         }
         
         Logger.debug(type: .peerChannel,
-                  message: "did connect to signaling channel")
+                     message: "did connect to signaling channel")
         
         state = .waitingOffer
         var role: SignalingRole!
@@ -432,7 +432,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                 Logger.debug(type: .peerChannel, message: "receive ping")
                 signalingChannel.send(message: .pong)
                 channel.handlers.onPingHandler?()
-
+                
             default:
                 // discard
                 break
@@ -447,7 +447,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     func finishConnecting() {
         Logger.debug(type: .peerChannel, message: "did connect")
         Logger.debug(type: .peerChannel,
-                  message: "media streams = \(channel.streams.count)")
+                     message: "media streams = \(channel.streams.count)")
         state = .connected
         onConnectHandler?(nil)
         onConnectHandler = nil
@@ -474,14 +474,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                         didChange stateChanged: RTCSignalingState) {
         let newState = PeerChannelSignalingState(nativeValue: stateChanged)
         Logger.debug(type: .peerChannel,
-                  message: "changed signaling state to \(newState)")
+                     message: "changed signaling state to \(newState)")
         internalState.signalingState = newState
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didAdd stream: RTCMediaStream) {
         Logger.debug(type: .peerChannel,
-                  message: "added a media stream (\(stream.streamId))")
+                     message: "added a media stream (id: \(stream.streamId))")
         let stream = BasicMediaStream(nativeStream: stream)
         channel.addStream(stream)
     }
@@ -489,7 +489,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didRemove stream: RTCMediaStream) {
         Logger.debug(type: .peerChannel,
-                  message: "removed a media stream (\(stream.streamId))")
+                     message: "removed a media stream (id: \(stream.streamId))")
         channel.removeStream(id: stream.streamId)
     }
     
@@ -501,7 +501,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                         didChange newState: RTCIceConnectionState) {
         let newState = ICEConnectionState(nativeValue: newState)
         Logger.debug(type: .peerChannel,
-                  message: "changed ICE connection state to \(newState)")
+                     message: "changed ICE connection state to \(newState)")
         internalState.iceConnectionState = newState
     }
     
@@ -509,14 +509,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                         didChange newState: RTCIceGatheringState) {
         let newState = ICEGatheringState(nativeValue: newState)
         Logger.debug(type: .peerChannel,
-                  message: "changed ICE gathering state to \(newState)")
+                     message: "changed ICE gathering state to \(newState)")
         internalState.iceGatheringState = newState
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didGenerate candidate: RTCIceCandidate) {
         Logger.debug(type: .peerChannel,
-                  message: "generated ICE candidate \(candidate)")
+                     message: "generated ICE candidate \(candidate)")
         let candidate = ICECandidate(nativeICECandidate: candidate)
         channel.addICECandidate(candidate)
         let message = SignalingMessage.candidate(candidate)
@@ -526,7 +526,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didRemove candidates: [RTCIceCandidate]) {
         Logger.debug(type: .peerChannel,
-                  message: "removed ICE candidate \(candidates)")
+                     message: "removed ICE candidate \(candidates)")
         let candidates = channel.iceCandidates.filter {
             old in
             for candidate in candidates {
