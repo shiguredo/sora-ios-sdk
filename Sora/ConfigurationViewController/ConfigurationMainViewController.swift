@@ -160,6 +160,7 @@ class ConfigurationMainViewController: UITableViewController,
             if let port = Int(text) {
                 configurationViewController?.port = port
             } else {
+                configurationViewController?.port = nil
                 portTextField.text = nil
             }
         }
