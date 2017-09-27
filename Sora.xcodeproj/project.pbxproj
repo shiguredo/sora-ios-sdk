@@ -48,6 +48,7 @@
 		9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9145A58F1F0CB093002D6EC6 /* Utilities.swift */; };
 		91554F431F179CFD00403C39 /* WebSocketChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91554F421F179CFD00403C39 /* WebSocketChannel.swift */; };
 		9160866E1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */; };
+		916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* AspectRatio.swift */; };
 		9161BB401F2B31C200569748 /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
 		9163401B1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */; };
 		91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */; };
@@ -57,7 +58,6 @@
 		916C44841F724ADC000E9F4E /* TestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916C44831F724ADC000E9F4E /* TestCase.swift */; };
 		91705B801DED66D300D79306 /* WebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201901D58668E00178E2B /* WebRTC.framework */; };
 		9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9173595D1F2CCEBF00806F8B /* Configuration.swift */; };
-		9174A88F1F7395CA00D586C4 /* CGSize+VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */; };
 		9174A8911F73F89400D586C4 /* Role.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8901F73F89400D586C4 /* Role.swift */; };
 		9174A8931F73F8CF00D586C4 /* VideoCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8921F73F8CF00D586C4 /* VideoCodec.swift */; };
 		9174A8951F73F90B00D586C4 /* AudioCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8941F73F90B00D586C4 /* AudioCodec.swift */; };
@@ -174,7 +174,7 @@
 		916BBF711F19EF5800846166 /* ICECandidate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICECandidate.swift; sourceTree = "<group>"; };
 		916C44831F724ADC000E9F4E /* TestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCase.swift; sourceTree = "<group>"; };
 		9173595D1F2CCEBF00806F8B /* Configuration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
-		9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CGSize+VideoView.swift"; sourceTree = "<group>"; };
+		9174A88E1F7395CA00D586C4 /* AspectRatio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AspectRatio.swift; sourceTree = "<group>"; };
 		9174A8901F73F89400D586C4 /* Role.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Role.swift; sourceTree = "<group>"; };
 		9174A8921F73F8CF00D586C4 /* VideoCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCodec.swift; sourceTree = "<group>"; };
 		9174A8941F73F90B00D586C4 /* AudioCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCodec.swift; sourceTree = "<group>"; };
@@ -305,7 +305,6 @@
 		91BDC1D31F6285D10084DC3A /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
-				9174A88E1F7395CA00D586C4 /* CGSize+VideoView.swift */,
 				91FD95741DCA06F700047BA9 /* RTC+Description.swift */,
 				9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */,
 				91BDC1D81F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift */,
@@ -360,6 +359,7 @@
 				91C7B08C1D54636A006F5FA2 /* Sora.h */,
 				91C7B08E1D54636A006F5FA2 /* Info.plist */,
 				91A9AC271F400EE500B4A1A3 /* AliveMonitor.swift */,
+				9174A88E1F7395CA00D586C4 /* AspectRatio.swift */,
 				9174A8941F73F90B00D586C4 /* AudioCodec.swift */,
 				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,
@@ -650,6 +650,7 @@
 				9163401B1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift in Sources */,
 				91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */,
 				9174A89B1F73F9EE00D586C4 /* CameraPosition.swift in Sources */,
+				916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */,
 				913D5E1E1F57E8F300A82DEA /* ConfigurationViewController.swift in Sources */,
 				9174A8951F73F90B00D586C4 /* AudioCodec.swift in Sources */,
 				91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */,
@@ -666,7 +667,6 @@
 				913D5E221F57E8F300A82DEA /* VideoCodecViewController.swift in Sources */,
 				91CD2A4A1F288A6A00D039D1 /* Sora.swift in Sources */,
 				9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */,
-				9174A88F1F7395CA00D586C4 /* CGSize+VideoView.swift in Sources */,
 				913D5E1C1F57E8F300A82DEA /* AudioCodecViewController.swift in Sources */,
 				913D5E211F57E8F300A82DEA /* RoleViewController.swift in Sources */,
 				9174A8931F73F8CF00D586C4 /* VideoCodec.swift in Sources */,
