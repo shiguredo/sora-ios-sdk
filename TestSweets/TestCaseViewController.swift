@@ -27,6 +27,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     @IBOutlet weak var duplicateCell: UITableViewCell!
 
     weak var mainViewController: MainViewController!
+    weak var videoViewListViewController: VideoViewListViewController?
     
     weak var testCaseController: TestCaseController! {
         didSet {
@@ -129,6 +130,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if let vc = segue.destination as? VideoViewListViewController {
             vc.testCaseController = testCaseController
+            videoViewListViewController = vc
         }
     }
     
@@ -240,10 +242,12 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                     
                     chan!.handlers.onAddStreamHandler = { stream in
                         self.numberOfStreams += 1
+                        self.videoViewListViewController?.reloadData()
                     }
                     
                     chan!.handlers.onRemoveStreamHandler = { stream in
                         self.numberOfStreams -= 1
+                        self.videoViewListViewController?.reloadData()
                     }
                     
                     self.state = .connected

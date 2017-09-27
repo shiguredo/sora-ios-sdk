@@ -31,7 +31,7 @@ class VideoViewListViewController: UICollectionViewController,
     }
 
     override func viewWillAppear(_ animated: Bool) {
-        collectionView?.reloadData()
+        reloadData()
         super.viewWillAppear(animated)
     }
     
@@ -50,6 +50,14 @@ class VideoViewListViewController: UICollectionViewController,
         videoControlViewController.testCaseController = testCaseController
         videoControlViewController.navigationItem.title = "Video Control"
         navigationController?.pushViewController(videoControlViewController, animated: true)
+    }
+    
+    func reloadData() {
+        DispatchQueue.main.async {
+            if self.collectionView?.window?.isKeyWindow ?? false {
+                self.collectionView?.reloadData()
+            }
+        }
     }
     
     /*
