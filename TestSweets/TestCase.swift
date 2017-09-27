@@ -49,6 +49,8 @@ extension TestCase: Codable {
         case id
         case title
         case configuration
+        case numberOfItemsInVideoViewSection
+        case videoViewAspectRatio
     }
     
     public convenience init(from decoder: Decoder) throws {
@@ -57,6 +59,10 @@ extension TestCase: Codable {
         let title = try container.decode(String.self, forKey: .title)
         let configuration = try container.decode(Configuration.self, forKey: .configuration)
         self.init(id: id, title: title, configuration: configuration)
+        numberOfItemsInVideoViewSection = try container
+            .decode(Int.self, forKey: .numberOfItemsInVideoViewSection)
+        videoViewAspectRatio = try container
+            .decode(AspectRatio.self, forKey: .videoViewAspectRatio)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -64,6 +70,9 @@ extension TestCase: Codable {
         try encoder.encode(id, forKey: .id)
         try encoder.encode(title, forKey: .title)
         try encoder.encode(configuration, forKey: .configuration)
+        try encoder.encode(numberOfItemsInVideoViewSection,
+                           forKey: .numberOfItemsInVideoViewSection)
+        try encoder.encode(videoViewAspectRatio, forKey: .videoViewAspectRatio)
     }
     
 }
