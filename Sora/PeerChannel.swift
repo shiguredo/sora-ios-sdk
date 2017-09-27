@@ -135,6 +135,7 @@ public protocol PeerChannel: AliveMonitorable {
     
     var configuration: Configuration { get }
     var handlers: PeerChannelHandlers { get }
+    var clientId: String? { get }
     var streams: [MediaStream] { get }
     var iceCandidates: [ICECandidate] { get }
     var state: PeerChannelState { get }
@@ -162,6 +163,10 @@ public class BasicPeerChannel: PeerChannel {
     public private(set) var streams: [MediaStream] = []
     public private(set) var iceCandidates: [ICECandidate] = [] // TODO: remove?
     
+    public var clientId: String? {
+        get { return context.clientId }
+    }
+
     public var state: PeerChannelState {
         get {
             switch context.state {
@@ -245,6 +250,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     var internalState: PeerChannelInternalState!
     var signalingChannel: SignalingChannel
     var webRTCConfiguration: WebRTCConfiguration!
+    var clientId: String?
     
     var configuration: Configuration {
         get { return channel.configuration }
@@ -352,6 +358,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             stream.videoCapturer = CameraVideoCapturer.shared
         }
         channel.addStream(stream)
+        Logger.debug(type: .peerChannel,
+                     message: "create publisher stream (id: \(pubConfig.streamId))")
     }
     
     func createAndSendAnswerMessage(offer: SignalingOfferMessage) {
@@ -410,6 +418,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             switch message {
             case .offer(let offer):
                 Logger.debug(type: .peerChannel, message: "receive offer")
+                clientId = offer.clientId
                 createAndSendAnswerMessage(offer: offer)
                 
             default:
@@ -480,6 +489,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didAdd stream: RTCMediaStream) {
+        guard stream.streamId != clientId else { return }
+        
         Logger.debug(type: .peerChannel,
                      message: "added a media stream (id: \(stream.streamId))")
         let stream = BasicMediaStream(nativeStream: stream)
