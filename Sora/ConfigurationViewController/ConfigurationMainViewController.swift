@@ -35,8 +35,6 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var webRTCVersionValueLabel: UILabel!
     @IBOutlet weak var webRTCRevisionValueLabel: UILabel!
     
-    @IBOutlet weak var tapGestureRecognizer: UITapGestureRecognizer!
-
     weak var configurationViewController: ConfigurationViewController? {
         didSet {
             updateControls()

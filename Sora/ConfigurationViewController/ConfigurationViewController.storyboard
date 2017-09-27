@@ -540,7 +540,6 @@
                         <outlet property="roleLabel" destination="wpG-aY-EmM" id="n1h-ie-AhZ"/>
                         <outlet property="roleValueLabel" destination="guX-OM-hXg" id="mMN-2Y-VpB"/>
                         <outlet property="signalingPathTextField" destination="KVI-j8-aal" id="RCS-Jr-ei1"/>
-                        <outlet property="tapGestureRecognizer" destination="bY2-NN-yoP" id="Keb-Hf-duL"/>
                         <outlet property="videoCodecCell" destination="xM0-cG-P5x" id="Nn6-k9-RUr"/>
                         <outlet property="videoCodecLabel" destination="jct-MC-Ao5" id="elj-R5-isQ"/>
                         <outlet property="videoCodecValueLabel" destination="xFX-aC-d6I" id="Hgz-KV-STe"/>
