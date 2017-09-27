@@ -26,8 +26,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     @IBOutlet weak var clearLogCell: UITableViewCell!
     @IBOutlet weak var duplicateCell: UITableViewCell!
 
-    @IBOutlet weak var tapGestureRecognizer: UITapGestureRecognizer!
-
     weak var mainViewController: MainViewController!
     
     weak var testCaseController: TestCaseController! {
