@@ -1,4 +1,5 @@
 import UIKit
+import Sora
 
 class VideoViewAspectRatioViewController: UITableViewController, TestCaseControllable {
 
@@ -22,11 +23,8 @@ class VideoViewAspectRatioViewController: UITableViewController, TestCaseControl
         didSet {
             clearCheckmarks()
             testCase.videoViewAspectRatio = selectedRatio
-            switch selectedRatio {
-            case .standard:
-                standardCell.accessoryType = .checkmark
-            case .wide:
-                wideCell.accessoryType = .checkmark
+            DispatchQueue.main.async {
+                self.reloadData()
             }
         }
     }
