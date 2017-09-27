@@ -45,8 +45,8 @@ extension VideoView: VideoRenderer {
         contentView.onVideoFrameSizeUpdated(size)
     }
     
-    public func renderFrame(_ frame: VideoFrame?) {
-        contentView.render(videoFrame: frame)
+    public func render(videoFrame: VideoFrame?) {
+        contentView.render(videoFrame: videoFrame)
     }
     
 }

@@ -4,7 +4,7 @@ import WebRTC
 public protocol VideoRenderer: class {
     
     func onChangedSize(_ size: CGSize)
-    func renderFrame(_ frame: VideoFrame?)
+    func render(videoFrame: VideoFrame?)
     
 }
 
@@ -27,9 +27,9 @@ public class VideoRendererAdapter: NSObject, RTCVideoRenderer {
             if let renderer = self.videoRenderer {
                 if let frame = frame {
                     let frame = VideoFrame.native(capturer: nil, frame: frame)
-                    renderer.renderFrame(frame)
+                    renderer.render(videoFrame: frame)
                 } else {
-                    renderer.renderFrame(nil)
+                    renderer.render(videoFrame: nil)
                 }
             }
         }
