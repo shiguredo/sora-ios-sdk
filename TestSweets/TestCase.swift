@@ -1,11 +1,6 @@
 import Foundation
 import Sora
 
-enum AspectRatio {
-    case standard // 4:3
-    case wide // 16:9
-}
-
 protocol TestCaseControllable {
 
     weak var testCaseController: TestCaseController! { get set }
