@@ -17,11 +17,13 @@ final class TestSuite {
             self.init(testCases: suite.testCases)
         } catch let e {
             print("failed to load test suite (\(e.localizedDescription))")
-            do {
-                print("remove file")
-                try FileManager.default.removeItem(at: url)
-            } catch let e {
-                print("failed to remove file (\(e.localizedDescription))")
+            if FileManager.default.fileExists(atPath: url.absoluteString) {
+                do {
+                    print("remove file")
+                    try FileManager.default.removeItem(at: url)
+                } catch let e {
+                    print("failed to remove file (\(e.localizedDescription))")
+                }
             }
             return nil
         }
