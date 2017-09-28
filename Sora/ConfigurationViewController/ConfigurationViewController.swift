@@ -13,8 +13,23 @@ public class ConfigurationViewController: UIViewController {
     public var webSocketSSLEnabled: Bool = true
     public var host: String?
     public var port: Int?
-    public var signalingPath: String?
-    public var channelId: String?
+    
+    public var signalingPath: String? {
+        didSet {
+            if signalingPath == "" {
+                signalingPath = nil
+            }
+        }
+    }
+    
+    public var channelId: String? {
+        didSet {
+            if channelId == "" {
+                channelId = nil
+            }
+        }
+    }
+    
     public var role: Role = .publisher
     public var snapshotEnabled: Bool = false
     public var videoEnabled: Bool = true
