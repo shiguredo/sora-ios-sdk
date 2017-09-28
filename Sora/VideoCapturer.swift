@@ -79,7 +79,7 @@ public class CameraVideoCapturer: VideoCapturer {
     private var backCameraDevice: AVCaptureDevice?
     private var nativeDelegate: CameraVideoCapturerDelegate!
     
-    private var currentCameraDevice: AVCaptureDevice? {
+    public var currentCameraDevice: AVCaptureDevice? {
         get {
             switch position {
             case .front:
