@@ -69,7 +69,7 @@ class ConfigurationMainViewController: UITableViewController,
             case .subscriber:
                 roleValueLabel.text = "Subscriber"
             case .group:
-                roleValueLabel.text = "Group"
+                roleValueLabel.text = "Group (Multistream)"
             }
         }
         
