@@ -10,6 +10,9 @@ public protocol MediaStream: class {
     var videoRenderer: VideoRenderer? { get set }
     // var audioCapturer: AudioCapturer? { get set }
  
+    // VideoCapturer から呼ばれる
+    func render(videoFrame: VideoFrame?)
+    
 }
 
 public class BasicMediaStream: MediaStream {
@@ -20,9 +23,10 @@ public class BasicMediaStream: MediaStream {
     public var creationTime: Date
     
     public var videoCapturer: VideoCapturer? {
-        didSet {
-            oldValue?.handlers.onCaptureHandler = nil
-            videoCapturer?.handlers.onCaptureHandler = handleFrame
+        willSet {
+            videoCapturer?.stream = nil
+            var newValue = newValue
+            newValue?.stream = self
         }
     }
     
@@ -53,29 +57,23 @@ public class BasicMediaStream: MediaStream {
         nativeVideoTrack?.add(videoRendererAdapter)
     }
     
-    public func handleFrame(_ frame: VideoFrame) {
-        switch frame {
-        case .native(capturer: let capturer, frame: let frame):
+    public func render(videoFrame: VideoFrame?) {
+        if let frame = videoFrame {
             // フィルターを通す
-            var frame = frame
-            if let filter = videoFilter {
-                var newFrame = VideoFrame.native(capturer: capturer, frame: frame)
-                newFrame = filter.filterFrame(newFrame)
-                switch newFrame {
-                case .native(capturer: _, frame: let filtered):
-                    frame = filtered
-                default:
-                    break
-                }
+            let frame = videoFilter?.filter(videoFrame: frame) ?? frame
+            switch frame {
+            case .native(capturer: let capturer, frame: let nativeFrame):
+                // RTCVideoSource.capturer(_:didCapture:) の最初の引数は
+                // 現在使われてないのでダミーでも可？
+                nativeVideoSource?.capturer(capturer ??
+                    CameraVideoCapturer.shared.nativeCameraVideoCapturer!,
+                                            didCapture: nativeFrame)
+                
+            default:
+                break
             }
+        } else {
             
-            // RTCVideoSource.capturer(_:didCapture:) の最初の引数は
-            // 現在使われてないのでダミーでも可
-            let shared = CameraVideoCapturer.shared.nativeCapturer
-            nativeVideoSource?.capturer(capturer ?? shared!, didCapture: frame)
-            
-        default:
-            break
         }
     }
     

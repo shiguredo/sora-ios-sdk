@@ -7,9 +7,13 @@ public class VideoCapturerHandlers {
     
 }
 
+// - MediaStream.videoCapturer に VideoCapturer をセットする
+//   - VideoCapturer.stream に MediaStream がセットされる
+// - MediaStream.render(videoFrame:) にフレームを渡すと描画される
+//   - フレームは描画前に VideoFilter によって変換される
 public protocol VideoCapturer {
     
-    var nativeCapturer: RTCVideoCapturer? { get }
+    weak var stream: MediaStream? { get set }
     var handlers: VideoCapturerHandlers { get }
     
     func start()
@@ -19,7 +23,7 @@ public protocol VideoCapturer {
 
 public protocol VideoFilter {
     
-    func filterFrame(_ frame: VideoFrame) -> VideoFrame
+    func filter(videoFrame: VideoFrame) -> VideoFrame
     
 }
 
@@ -55,9 +59,7 @@ public class CameraVideoCapturer: VideoCapturer {
             }.map { return Int($0.maxFrameRate) }
     }
     
-    public var nativeCapturer: RTCVideoCapturer? {
-        get { return nativeCameraVideoCapturer }
-    }
+    public var stream: MediaStream?
     
     private var _isRunning: Bool = false
     public var isRunning: Bool { get { return _isRunning } }
@@ -80,7 +82,7 @@ public class CameraVideoCapturer: VideoCapturer {
     
     public var handlers: VideoCapturerHandlers = VideoCapturerHandlers()
 
-    private var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
+    var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
     private var frontCameraDevice: AVCaptureDevice?
     private var backCameraDevice: AVCaptureDevice?
     private var nativeDelegate: CameraVideoCapturerDelegate!
@@ -141,8 +143,9 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
         self.cameraVideoCapturer = cameraVideoCapturer
     }
     
-    func capturer(_ capturer: RTCVideoCapturer, didCapture frame: RTCVideoFrame) {
-        let frame = VideoFrame.native(capturer: capturer, frame: frame)
+    func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
+        let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
+        cameraVideoCapturer.stream?.render(videoFrame: frame)
         cameraVideoCapturer.handlers.onCaptureHandler?(frame)
     }
     
