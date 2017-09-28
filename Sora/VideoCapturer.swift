@@ -61,21 +61,13 @@ public class CameraVideoCapturer: VideoCapturer {
     
     public var stream: MediaStream?
     
-    private var _isRunning: Bool = false
-    public var isRunning: Bool { get { return _isRunning } }
+    public private(set) var isRunning: Bool = false
     
-    private var _position: CameraPosition = .front
-    
-    public var position: CameraPosition {
-        get { return _position }
-        
-        set {
-            if _isRunning {
+    public private(set) var position: CameraPosition = .front {
+        didSet {
+            if isRunning {
                 stopCurrentCameraDevice()
-                _position = newValue
                 startCurrentCameraDevice()
-            } else {
-                _position = newValue
             }
         }
     }
@@ -117,20 +109,20 @@ public class CameraVideoCapturer: VideoCapturer {
     }
     
     public func start() {
-        if _isRunning {
+        if isRunning {
             return
         }
         Logger.debug(type: .sora, message: "start camera video capture")
         startCurrentCameraDevice()
-        _isRunning = true
+        isRunning = true
     }
     
     public func stop() {
-        if _isRunning {
+        if isRunning {
             Logger.debug(type: .sora, message: "stop camera video capture")
             stopCurrentCameraDevice()
         }
-        _isRunning = false
+        isRunning = false
     }
     
 }
