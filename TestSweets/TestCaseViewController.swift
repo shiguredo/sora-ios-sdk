@@ -40,7 +40,8 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     }
     
     var configurationViewController: ConfigurationViewController!
-
+    var configuration: Configuration?
+    
     var keepsConnection: Bool {
         get {
             return keepConnectionSwitch.isOn
@@ -204,6 +205,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                 }
                 
                 self.state = .connecting
+                self.configuration = config
                 Sora.shared.connect(configuration: config!) { chan, error in
                     if let error = error {
                         self.state = .disconnected
