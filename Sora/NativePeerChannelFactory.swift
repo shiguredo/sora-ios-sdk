@@ -48,9 +48,13 @@ class NativePeerChannelFactory {
                                      videoTrackId: String?,
                                      audioTrackId: String?,
                                      constraints: MediaConstraints) -> RTCMediaStream {
+        Logger.debug(type: .nativePeerChannel,
+                     message: "create native publisher stream (\(streamId))")
         let nativeStream = createNativeStream(streamId: streamId)
         
         if let trackId = videoTrackId {
+            Logger.debug(type: .nativePeerChannel,
+                         message: "create native video track (\(trackId))")
             let videoSource = createNativeVideoSource()
             let videoTrack = createNativeVideoTrack(videoSource: videoSource,
                                                     trackId: trackId)
@@ -58,6 +62,8 @@ class NativePeerChannelFactory {
         }
         
         if let trackId = audioTrackId {
+            Logger.debug(type: .nativePeerChannel,
+                         message: "create native audio track (\(trackId))")
             let audioTrack = createNativeAudioTrack(trackId: trackId,
                                                     constraints: constraints.nativeValue)
             nativeStream.addAudioTrack(audioTrack)
