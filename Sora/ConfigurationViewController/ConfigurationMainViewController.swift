@@ -9,8 +9,14 @@ class ConfigurationMainViewController: UITableViewController,
         case disconnected
     }
     
+    @IBOutlet weak var enableWebSocketSSLLabel: UILabel!
+    @IBOutlet weak var hostLabel: UILabel!
+    @IBOutlet weak var portLabel: UILabel!
+    @IBOutlet weak var signalingPathLabel: UILabel!
+    @IBOutlet weak var channelIdLabel: UILabel!
     @IBOutlet weak var roleCell: UITableViewCell!
     @IBOutlet weak var roleLabel: UILabel!
+    @IBOutlet weak var enableSnapshotLabel: UILabel!
     @IBOutlet weak var enableVideoLabel: UILabel!
     @IBOutlet weak var videoCodecLabel: UILabel!
     @IBOutlet weak var videoCodecCell: UITableViewCell!
@@ -38,9 +44,23 @@ class ConfigurationMainViewController: UITableViewController,
     weak var configurationViewController: ConfigurationViewController? {
         didSet {
             updateControls()
+            
+            configurationViewController?.onLockHandler = onLockOrUnlock
+            configurationViewController?.onUnlockHandler = onLockOrUnlock
         }
     }
 
+    func onLockOrUnlock() {
+        self.updateControls()
+        for vc in self.relationalViewControllers {
+            Logger.debug(type: .configurationViewController,
+                         message: "update controls: \(vc)")
+            vc.viewDidLoad()
+            vc.viewWillAppear(true)
+            vc.viewDidAppear(true)
+        }
+    }
+    
     // MARK: View Controller
     
     override func viewDidLoad() {
@@ -57,6 +77,14 @@ class ConfigurationMainViewController: UITableViewController,
     }
     
     func updateControls() {
+        Logger.debug(type: .configurationViewController,
+                     message: "\(self) update controls")
+        
+        // unlock configuration
+        if !(configurationViewController?.isLocked ?? true) {
+            lockControls(false)
+        }
+        
         hostTextField.text = configurationViewController?.host
         portTextField.text = configurationViewController?.port?.description
         signalingPathTextField.text = configurationViewController?.signalingPath
@@ -113,6 +141,46 @@ class ConfigurationMainViewController: UITableViewController,
         // build info
         webRTCVersionValueLabel.text = Sora.shared.webRTCInfo?.version ?? "Unknown"
         webRTCRevisionValueLabel.text = Sora.shared.webRTCInfo?.shortRevision ?? "Unknown"
+        
+        // lock configuration
+        if configurationViewController?.isLocked ?? false {
+            lockControls(true)
+        }
+    }
+    
+    func lockControls(_ flag: Bool) {
+        if flag {
+            Logger.debug(type: .configurationViewController,
+                         message: "\(self) lock controls")
+        } else {
+            Logger.debug(type: .configurationViewController,
+                         message: "\(self) unlock controls")
+        }
+        
+        enableWebSocketSSLLabel.setTextOn(!flag)
+        enableWebSocketSSLSwitch.isUserInteractionEnabled = !flag
+        hostLabel.setTextOn(!flag)
+        hostTextField.isUserInteractionEnabled = !flag
+        portLabel.setTextOn(!flag)
+        portTextField.isUserInteractionEnabled = !flag
+        signalingPathLabel.setTextOn(!flag)
+        signalingPathTextField.isUserInteractionEnabled = !flag
+        channelIdLabel.setTextOn(!flag)
+        channelIdTextField.isUserInteractionEnabled = !flag
+        roleLabel.setTextOn(!flag)
+        roleCell.isUserInteractionEnabled = !flag
+        enableVideoLabel.setTextOn(!flag)
+        enableVideoSwitch.isUserInteractionEnabled = !flag
+        videoCodecLabel.setTextOn(!flag)
+        videoCodecCell.isUserInteractionEnabled = !flag
+        bitRateLabel.setTextOn(!flag)
+        bitRateCell.isUserInteractionEnabled = !flag
+        enableSnapshotLabel.setTextOn(!flag)
+        enableSnapshotSwitch.isUserInteractionEnabled = !flag
+        enableAudioLabel.setTextOn(!flag)
+        enableAudioSwitch.isUserInteractionEnabled = !flag
+        audioCodecLabel.setTextOn(!flag)
+        audioCodecCell.isUserInteractionEnabled = !flag
     }
     
     func applicationDidEnterBackground(_ notification: Notification) {
@@ -127,8 +195,15 @@ class ConfigurationMainViewController: UITableViewController,
         super.viewWillDisappear(animated)
     }
     
+    var relationalViewControllers: [UIViewController] = []
+    
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         configurationViewController?.set(for: segue)
+        if !relationalViewControllers.contains(segue.destination) {
+            Logger.debug(type: .configurationViewController,
+                         message: "add \(segue.destination) for lock")
+            relationalViewControllers.append(segue.destination)
+        }
     }
     
     override func didReceiveMemoryWarning() {

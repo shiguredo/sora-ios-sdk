@@ -10,33 +10,109 @@ let defaultSignalingPath = "signaling"
 
 public class ConfigurationViewController: UIViewController {
 
-    public var webSocketSSLEnabled: Bool = true
-    public var host: String?
-    public var port: Int?
+    public var webSocketSSLEnabled: Bool = true {
+        didSet {
+            if isLocked {
+                webSocketSSLEnabled = oldValue
+            }
+        }
+    }
+    
+    public var host: String? {
+        didSet {
+            if isLocked {
+                host = oldValue
+            }
+        }
+    }
+    
+    public var port: Int? {
+        didSet {
+            if isLocked {
+                port = oldValue
+            }
+        }
+    }
     
     public var signalingPath: String? {
         didSet {
-            if signalingPath == "" {
-                signalingPath = nil
+            if isLocked {
+                signalingPath = oldValue
+            } else {
+                if signalingPath == "" {
+                    signalingPath = nil
+                }
             }
         }
     }
     
     public var channelId: String? {
         didSet {
-            if channelId == "" {
-                channelId = nil
+            if isLocked {
+                signalingPath = oldValue
+            } else {
+                if channelId == "" {
+                    channelId = nil
+                }
             }
         }
     }
     
-    public var role: Role = .publisher
-    public var snapshotEnabled: Bool = false
-    public var videoEnabled: Bool = true
-    public var videoCodec: VideoCodec = .default
-    public var videoBitRate: Int? = 800
-    public var audioEnabled: Bool = true
-    public var audioCodec: AudioCodec = .default
+    public var role: Role = .publisher {
+        didSet {
+            if isLocked {
+                role = oldValue
+            }
+        }
+    }
+    
+    public var snapshotEnabled: Bool = false {
+        didSet {
+            if isLocked {
+                snapshotEnabled = oldValue
+            }
+        }
+    }
+    
+    public var videoEnabled: Bool = true {
+        didSet {
+            if isLocked {
+                videoEnabled = oldValue
+            }
+        }
+    }
+    
+    public var videoCodec: VideoCodec = .default {
+        didSet {
+            if isLocked {
+                videoCodec = oldValue
+            }
+        }
+    }
+    
+    public var videoBitRate: Int? = 800 {
+        didSet {
+            if isLocked {
+                videoBitRate = oldValue
+            }
+        }
+    }
+    
+    public var audioEnabled: Bool = true {
+        didSet {
+            if isLocked {
+                audioEnabled = oldValue
+            }
+        }
+    }
+    
+    public var audioCodec: AudioCodec = .default {
+        didSet {
+            if isLocked {
+                audioCodec = oldValue
+            }
+        }
+    }
     
     public var url: URL? {
         get {
@@ -70,6 +146,8 @@ public class ConfigurationViewController: UIViewController {
         }
         
         set {
+            guard !isLocked else { return }
+            
             let url = newValue.url
             webSocketSSLEnabled = url.scheme == "wss"
             host = url.host
@@ -93,9 +171,13 @@ public class ConfigurationViewController: UIViewController {
         
     }
     
+    public private(set) var isLocked: Bool = false
+
     var configurationViewControllerStoryboard: UIStoryboard?
     var configurationNavigationController: ConfigurationNavigationController!
-    
+    var onLockHandler: (() -> Void)?
+    var onUnlockHandler: (() -> Void)?
+
     public func validate(handler: (Configuration?, String?) -> ()) {
         guard host != nil && channelId != nil else {
             handler(nil, "Host and channel ID must not be empty")
@@ -151,5 +233,25 @@ public class ConfigurationViewController: UIViewController {
         }
     }
     
+    // MARK: ロック
+    
+    // 設定変更不可にする
+    public func lock() {
+        guard !isLocked else { return }
+        
+        Logger.debug(type: .configurationViewController,
+                     message: "lock configuration")
+        isLocked = true
+        onLockHandler?()
+    }
+    
+    public func unlock() {
+        guard isLocked else { return }
+        
+        Logger.debug(type: .configurationViewController,
+                     message: "unlock configuration")
+        isLocked = false
+        onUnlockHandler?()
+    }
 }
 

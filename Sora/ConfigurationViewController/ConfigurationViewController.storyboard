@@ -527,18 +527,24 @@
                         <outlet property="bitRateCell" destination="YUH-oD-8dq" id="UPw-lN-YEn"/>
                         <outlet property="bitRateLabel" destination="NJp-kn-ZgP" id="i94-6F-63v"/>
                         <outlet property="bitRateValueLabel" destination="OFf-49-jOE" id="MWz-Ao-MH2"/>
+                        <outlet property="channelIdLabel" destination="fHR-0B-Ble" id="1bq-ve-kr3"/>
                         <outlet property="channelIdTextField" destination="5kr-T1-UcY" id="b49-id-P1u"/>
                         <outlet property="enableAudioLabel" destination="fTZ-94-gpb" id="yar-3o-2UT"/>
                         <outlet property="enableAudioSwitch" destination="pZk-ji-7yJ" id="bSy-Vp-DZk"/>
+                        <outlet property="enableSnapshotLabel" destination="HQW-Xf-qwH" id="aWF-yt-lR9"/>
                         <outlet property="enableSnapshotSwitch" destination="NSY-tg-o8w" id="YQ0-ec-KPo"/>
                         <outlet property="enableVideoLabel" destination="dL5-RL-3Ec" id="Krh-w8-9JJ"/>
                         <outlet property="enableVideoSwitch" destination="if8-Ug-MaX" id="sda-fd-33g"/>
+                        <outlet property="enableWebSocketSSLLabel" destination="EXc-lo-yz9" id="yEA-DN-hTp"/>
                         <outlet property="enableWebSocketSSLSwitch" destination="9Ar-iE-akB" id="68e-F2-Wgy"/>
+                        <outlet property="hostLabel" destination="sCU-Iw-t8I" id="UtW-53-gCP"/>
                         <outlet property="hostTextField" destination="Vgb-Ih-7zK" id="cf9-Lz-6ua"/>
+                        <outlet property="portLabel" destination="tac-eu-RGm" id="0vq-Sl-UBz"/>
                         <outlet property="portTextField" destination="8sT-9K-evb" id="4iw-fS-BIo"/>
                         <outlet property="roleCell" destination="ARI-yf-RV5" id="IYv-iE-rFB"/>
                         <outlet property="roleLabel" destination="wpG-aY-EmM" id="n1h-ie-AhZ"/>
                         <outlet property="roleValueLabel" destination="guX-OM-hXg" id="mMN-2Y-VpB"/>
+                        <outlet property="signalingPathLabel" destination="lTd-zh-VBf" id="ffe-uv-HHN"/>
                         <outlet property="signalingPathTextField" destination="KVI-j8-aal" id="RCS-Jr-ei1"/>
                         <outlet property="videoCodecCell" destination="xM0-cG-P5x" id="Nn6-k9-RUr"/>
                         <outlet property="videoCodecLabel" destination="jct-MC-Ao5" id="elj-R5-isQ"/>
