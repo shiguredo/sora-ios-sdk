@@ -1,4 +1,5 @@
 import UIKit
+import Sora
 
 class VideoControlViewController: UITableViewController,
     UIGestureRecognizerDelegate,
@@ -14,6 +15,39 @@ class VideoControlViewController: UITableViewController,
 
     weak var testCaseController: TestCaseController!
     
+    var autofocusEnabled: Bool = false {
+        didSet {
+            if let device = CameraVideoCapturer.shared.currentCameraDevice {
+                guard device.isFocusModeSupported(.autoFocus) &&
+                    device.isFocusModeSupported(.locked) else
+                {
+                    Logger.debug(type: logType,
+                                 message: "\(device) does not support autofocus mode")
+                    autofocusEnabled = false
+                    showTemporaryAlert(title: "The device does not support autofocus mode", delay: 2)
+                    return
+                }
+                
+                do {
+                    try device.lockForConfiguration()
+                    if autofocusEnabled {
+                        Logger.debug(type: logType, message: "autofocus enabled")
+                        device.focusMode = .autoFocus
+                    } else {
+                        Logger.debug(type: logType, message: "autofocus disabled")
+                        device.focusMode = .locked
+                    }
+                    device.unlockForConfiguration()
+                } catch let e {
+                    Logger.debug(type: logType,
+                                 message: "failed to lock device \(e.localizedDescription)")
+                    autofocusEnabled = false
+                    showTemporaryAlert(title: "Failed to enable autofocus", delay: 2)
+                }
+            }
+        }
+    }
+    
     var numberOfColumns: Int? {
         get {
             return testCaseController.testCase.numberOfItemsInVideoViewSection
@@ -25,12 +59,7 @@ class VideoControlViewController: UITableViewController,
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        // Uncomment the following line to preserve selection between presentations
-        // self.clearsSelectionOnViewWillAppear = false
-
-        // Uncomment the following line to display an Edit button in the navigation bar for this view controller.
-        // self.navigationItem.rightBarButtonItem = self.editButtonItem
+        reloadData()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -43,6 +72,7 @@ class VideoControlViewController: UITableViewController,
             return
         }
         
+        cameraAutofocusSwitch.setOn(autofocusEnabled, animated: true)
         numberOfColumns = cont.testCase.numberOfItemsInVideoViewSection
         numberOfColumnsTextField.text = numberOfColumns?.description
         
@@ -88,7 +118,8 @@ class VideoControlViewController: UITableViewController,
     }
 
     @IBAction func switchCameraAutofocus(_ sender: Any) {
-        
+        autofocusEnabled = cameraAutofocusSwitch.isOn
+        reloadData()
     }
     
     @IBAction func switchMuteMicrophone(_ sender: Any) {
