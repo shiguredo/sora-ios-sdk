@@ -103,6 +103,9 @@ extension Configuration: Codable {
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)
+        if let bitRate = self.videoBitRate {
+            try container.encode(bitRate, forKey: .videoBitRate)
+        }
         try container.encode(videoCapturerOption, forKey: .videoCapturerOption)
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
