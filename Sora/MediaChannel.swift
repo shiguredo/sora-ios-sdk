@@ -52,7 +52,6 @@ public class MediaChannel {
     
     private let aliveMonitor: AliveMonitor = AliveMonitor()
     private var connectionTimer: ConnectionTimer?
-    private var onConnectHandler: ((Error?) -> Void)?
     
     public init(configuration: Configuration) {
         Logger.debug(type: .mediaChannel,
@@ -89,7 +88,6 @@ public class MediaChannel {
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
-        onConnectHandler = handler
         
         let timer = ConnectionTimer(target: self, timeout: configuration.connectionTimeout)
         timer.run {
@@ -117,13 +115,13 @@ public class MediaChannel {
             if let error = error {
                 Logger.debug(type: .mediaChannel, message: "failed connecting")
                 self.disconnect(error: error)
+                handler(error)
                 self.handlers.onConnectHandler?(error)
                 return
             }
             Logger.debug(type: .mediaChannel, message: "did connect")
             self.state = .connected
-            self.onConnectHandler?(error)
-            self.onConnectHandler = nil
+            handler(nil)
             self.handlers.onConnectHandler?(nil)
         }
     }
@@ -140,17 +138,15 @@ public class MediaChannel {
         default:
             Logger.debug(type: .mediaChannel, message: "try disconnecting")
             state = .disconnecting
+            connectionTimer?.stop()
+            connectionTimer = nil
             peerChannel.disconnect(error: error)
-            
             Logger.debug(type: .mediaChannel, message: "did disconnect")
             state = .disconnected
-            
             handlers.onDisconnectHandler?(error)
             if let error = error {
                 handlers.onFailureHandler?(error)
             }
-            onConnectHandler?(error)
-            onConnectHandler = nil
         }
     }
     

@@ -12,8 +12,8 @@ public struct MediaStreamConfiguration {
                                  videoTrackId: defaultPublisherVideoTrackId,
                                  audioTrackId: defaultPublisherAudioTrackId)
     
-    public var streamId: String
-    public var videoTrackId: String
-    public var audioTrackId: String
+    public let streamId: String
+    public let videoTrackId: String
+    public let audioTrackId: String
     
 }

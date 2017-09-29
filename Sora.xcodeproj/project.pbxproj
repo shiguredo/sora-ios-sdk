@@ -87,6 +87,7 @@
 		91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */; };
 		91FAB3EC1F29130700EDF53C /* SignalingMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FAB3EB1F29130700EDF53C /* SignalingMessage.swift */; };
 		91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FD95741DCA06F700047BA9 /* RTC+Description.swift */; };
+		C5D3C7421F7CEB18004660F5 /* VideoCapturerOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D3C7411F7CEB18004660F5 /* VideoCapturerOption.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -213,6 +214,7 @@
 		91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoFrame.swift; sourceTree = "<group>"; };
 		91FAB3EB1F29130700EDF53C /* SignalingMessage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SignalingMessage.swift; sourceTree = "<group>"; };
 		91FD95741DCA06F700047BA9 /* RTC+Description.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "RTC+Description.swift"; sourceTree = "<group>"; };
+		C5D3C7411F7CEB18004660F5 /* VideoCapturerOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCapturerOption.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -385,6 +387,7 @@
 				9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
 				9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */,
+				C5D3C7411F7CEB18004660F5 /* VideoCapturerOption.swift */,
 				9174A8921F73F8CF00D586C4 /* VideoCodec.swift */,
 				91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */,
 				91B1D6451D75E11F00112A4E /* VideoRenderer.swift */,
@@ -688,6 +691,7 @@
 				9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */,
 				9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */,
 				9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */,
+				C5D3C7421F7CEB18004660F5 /* VideoCapturerOption.swift in Sources */,
 				913D5E1D1F57E8F300A82DEA /* BitRateViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

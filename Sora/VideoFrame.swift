@@ -12,6 +12,16 @@ public protocol VideoFrameType {
 
 public enum VideoFrame {
     
+    public init?(from sampleBuffer: CMSampleBuffer) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            return nil
+        }
+        let timeStamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        let timeStampNs = Int64(timeStamp * 1_000_000_000)
+        let frame = RTCVideoFrame(pixelBuffer: pixelBuffer, rotation: RTCVideoRotation._0, timeStampNs: timeStampNs)
+        self = .native(capturer: nil, frame: frame)
+    }
+    
     case native(capturer: RTCVideoCapturer?, frame: RTCVideoFrame)
     case snapshot(Snapshot)
     case other(VideoFrameType)
@@ -46,7 +56,7 @@ public enum VideoFrame {
         get {
             switch self {
             case .native(capturer: _, frame: let frame):
-                return CMTimeMake(frame.timeStampNs, 1000000000)
+                return CMTimeMake(frame.timeStampNs, 1_000_000_000)
             case .snapshot(_):
                 return nil // TODO
             case .other(let frame):

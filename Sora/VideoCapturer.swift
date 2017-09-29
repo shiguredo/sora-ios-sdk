@@ -74,7 +74,7 @@ public class CameraVideoCapturer: VideoCapturer {
     
     public var handlers: VideoCapturerHandlers = VideoCapturerHandlers()
 
-    var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
+    private var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
     private var frontCameraDevice: AVCaptureDevice?
     private var backCameraDevice: AVCaptureDevice?
     private var nativeDelegate: CameraVideoCapturerDelegate!

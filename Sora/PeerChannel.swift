@@ -186,7 +186,7 @@ public class BasicPeerChannel: PeerChannel {
         get { return context.aliveState }
     }
     
-    var context: BasicPeerChannelContext!
+    private var context: BasicPeerChannelContext!
     
     public required init(configuration: Configuration) {
         self.configuration = configuration
@@ -226,6 +226,12 @@ public class BasicPeerChannel: PeerChannel {
     
     public func disconnect(error: Error?) {
         context.disconnect(error: error)
+    }
+    
+    fileprivate func terminateAllStreams() {
+        streams.removeAll()
+        // Do not call `handlers.onRemoveStreamHandler` here
+        // This method is meant to be called only when disconnection cleanup
     }
     
 }
@@ -354,12 +360,36 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                                          constraints: webRTCConfiguration.constraints)
         let stream = BasicMediaStream(nativeStream: nativeStream)
         if configuration.videoEnabled {
-            CameraVideoCapturer.shared.start()
-            stream.videoCapturer = CameraVideoCapturer.shared
+            switch configuration.videoCapturerOption {
+            case .camera:
+                // カメラが指定されている場合は、接続処理と同時にデフォルトのCameraVideoCapturerを使用してキャプチャを開始する
+                CameraVideoCapturer.shared.start()
+                stream.videoCapturer = CameraVideoCapturer.shared
+            case .custom:
+                // カスタムが指定されている場合は、接続処理時には何もしない
+                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
+                break
+            }
         }
         channel.addStream(stream)
         Logger.debug(type: .peerChannel,
                      message: "create publisher stream (id: \(pubConfig.streamId))")
+    }
+    
+    /** `initializePublisherStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
+    func terminatePublisherStream() {
+        if configuration.videoEnabled {
+            switch configuration.videoCapturerOption {
+            case .camera:
+                // カメラが指定されている場合は
+                // 接続時に自動的に開始したキャプチャを、切断時に自動的に停止する必要がある
+                CameraVideoCapturer.shared.stop()
+            case .custom:
+                // カスタムが指定されている場合は、切断処理時には何もしない
+                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
+                break
+            }
+        }
     }
     
     func createAndSendAnswerMessage(offer: SignalingOfferMessage) {
@@ -470,14 +500,24 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         default:
             Logger.debug(type: .peerChannel, message: "try disconnecting")
             state = .disconnecting
+            
+            switch configuration.role {
+            case .publisher: terminatePublisherStream()
+            case .subscriber: break
+            case .group: terminatePublisherStream()
+            }
+            channel.terminateAllStreams()
             nativeChannel.close()
             signalingChannel.disconnect(error: error)
             state = .disconnected
+            
             onConnectHandler?(error)
             onConnectHandler = nil
             Logger.debug(type: .peerChannel, message: "did disconnect")
         }
     }
+    
+    // MARK: - RTCPeerConnectionDelegate
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didChange stateChanged: RTCSignalingState) {

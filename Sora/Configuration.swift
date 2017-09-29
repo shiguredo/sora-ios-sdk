@@ -13,6 +13,7 @@ public struct Configuration {
     public var connectionTimeout: Int = 30
     public var videoCodec: VideoCodec = .default
     public var videoBitRate: Int?
+    public var videoCapturerOption: VideoCapturerOption = .camera
     public var audioCodec: AudioCodec = .default
     public var videoEnabled: Bool = true
     public var audioEnabled: Bool = true
