@@ -351,12 +351,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     }
     
     func initializePublisherStream() {
-        let pubConfig = configuration.publisherConfiguration
         let nativeStream = NativePeerChannelFactory.default
-            .createNativePublisherStream(streamId: pubConfig.streamId,
+            .createNativePublisherStream(streamId: configuration.publisherStreamId,
                                          videoTrackId:
-                configuration.videoEnabled ? pubConfig.videoTrackId: nil,
-                                         audioTrackId: configuration.audioEnabled ? pubConfig.audioTrackId : nil,
+                configuration.videoEnabled ? configuration.publisherVideoTrackId: nil,
+                                         audioTrackId:
+                configuration.audioEnabled ? configuration.publisherAudioTrackId : nil,
                                          constraints: webRTCConfiguration.constraints)
         let stream = BasicMediaStream(nativeStream: nativeStream)
         if configuration.videoEnabled {
@@ -373,7 +373,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         }
         channel.addStream(stream)
         Logger.debug(type: .peerChannel,
-                     message: "create publisher stream (id: \(pubConfig.streamId))")
+                     message: "create publisher stream (id: \(configuration.publisherStreamId))")
     }
     
     /** `initializePublisherStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */

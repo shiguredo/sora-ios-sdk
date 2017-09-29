@@ -1,6 +1,10 @@
 import Foundation
 import WebRTC
 
+public let defaultPublisherStreamId: String = "mainStream"
+public let defaultPublisherVideoTrackId: String = "mainVideo"
+public let defaultPublisherAudioTrackId: String = "mainAudio"
+
 public struct Configuration {
     
     public static let maxVideoVideoBitRate = 5000
@@ -25,8 +29,9 @@ public struct Configuration {
     public var webSocketChannelType: WebSocketChannel.Type = BasicWebSocketChannel.self
     public var peerChannelType: PeerChannel.Type = BasicPeerChannel.self
     
-    public var publisherConfiguration: MediaStreamConfiguration =
-    MediaStreamConfiguration.defaultPublisher
+    public var publisherStreamId: String = defaultPublisherStreamId
+    public var publisherVideoTrackId: String = defaultPublisherVideoTrackId
+    public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
     
     public init(url: URL, channelId: String, role: Role) {
         self.url = url
