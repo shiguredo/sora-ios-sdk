@@ -33,3 +33,21 @@ public enum VideoCapturerOption {
     case custom
     
 }
+
+private var videoCapturerOptionTable: PairTable<String, VideoCapturerOption> =
+    PairTable(pairs: [("camera", .camera),
+                      ("custom", .custom)])
+
+extension VideoCapturerOption: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self = videoCapturerOptionTable.right(other: try container.decode(String.self))!
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(videoCapturerOptionTable.left(other: self)!)
+    }
+    
+}
