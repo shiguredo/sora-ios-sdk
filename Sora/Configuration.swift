@@ -71,7 +71,8 @@ extension Configuration: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
-        self.init(url: url, channelId: channelId, role: .group)
+        let role = try container.decode(Role.self, forKey: .role)
+        self.init(url: url, channelId: channelId, role: role)
         if container.contains(.metadata) {
             metadata = try container.decode(String.self, forKey: .metadata)
         }
