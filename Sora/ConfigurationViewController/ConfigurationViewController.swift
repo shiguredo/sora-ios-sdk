@@ -39,7 +39,7 @@ public class ConfigurationViewController: UIViewController {
             if isLocked {
                 signalingPath = oldValue
             } else {
-                if signalingPath == "" {
+                if signalingPath?.isEmpty ?? true {
                     signalingPath = nil
                 }
             }
@@ -51,7 +51,7 @@ public class ConfigurationViewController: UIViewController {
             if isLocked {
                 signalingPath = oldValue
             } else {
-                if channelId == "" {
+                if channelId?.isEmpty ?? true {
                     channelId = nil
                 }
             }
