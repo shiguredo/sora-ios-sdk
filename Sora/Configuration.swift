@@ -51,6 +51,7 @@ extension Configuration: Codable {
         case connectionTimeout
         case videoCodec
         case videoBitRate
+        case videoCapturerOption
         case audioCodec
         case videoEnabled
         case audioEnabled
@@ -78,12 +79,14 @@ extension Configuration: Codable {
         }
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
+        videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
         videoCodec = try container.decode(VideoCodec.self, forKey: .videoCodec)
+        videoCapturerOption = try container
+            .decode(VideoCapturerOption.self, forKey: .videoCapturerOption)
         if container.contains(.videoBitRate) {
             videoBitRate = try container.decode(Int.self, forKey: .videoBitRate)
         }
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
-        videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
         snapshotEnabled = try container.decode(Bool.self, forKey: .snapshotEnabled)
         // TODO: others
@@ -98,11 +101,13 @@ extension Configuration: Codable {
             try container.encode(metadata, forKey: .metadata)
         }
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
-        try container.encode(videoCodec, forKey: .videoCodec)
-        try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(videoEnabled, forKey: .videoEnabled)
+        try container.encode(videoCodec, forKey: .videoCodec)
+        try container.encode(videoCapturerOption, forKey: .videoCapturerOption)
+        try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encode(snapshotEnabled, forKey: .snapshotEnabled)
+
         // TODO: others
         
     }
