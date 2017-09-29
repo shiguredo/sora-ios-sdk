@@ -17,13 +17,10 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     @IBOutlet weak var connectionTimeValueLabel: UILabel!
     @IBOutlet weak var numberOfStreamsLabel: UILabel!
     @IBOutlet weak var numberOfStreamsValueLabel: UILabel!
-    @IBOutlet weak var logTextView: UITextView!
     
     @IBOutlet weak var configurationCell: UITableViewCell!
     @IBOutlet weak var connectCell: UITableViewCell!
     @IBOutlet weak var numberOfStreamsCell: UITableViewCell!
-    @IBOutlet weak var copyLogCell: UITableViewCell!
-    @IBOutlet weak var clearLogCell: UITableViewCell!
     @IBOutlet weak var duplicateCell: UITableViewCell!
 
     weak var mainViewController: MainViewController!
@@ -95,22 +92,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         configurationViewController.navigationItem.title = "Configuration"
         configurationViewController.configuration = testCase.configuration
         numberOfStreams = 0
-        
-        logTextView.font = UIFont(name: "Courier", size: 18)
-        clearLog()
-        
-        Logger.shared.onOutputHandler = { log in
-            DispatchQueue.main.async {
-                let textView = self.logTextView!
-                textView.isScrollEnabled = false
-                textView.text.append(log.description)
-                textView.text.append("\n")
-                textView.isScrollEnabled = true
-                let scrollY = textView.contentSize.height - textView.bounds.height
-                let scrollPoint = CGPoint(x: 0, y: scrollY > 0 ? scrollY : 0)
-                textView.setContentOffset(scrollPoint, animated: false)
-            }
-        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -145,10 +126,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                 present(configurationViewController, animated: true)
             } else if cell == connectCell {
                 connectOrDisconnect()
-            } else if cell == copyLogCell {
-                copyLog()
-            } else if cell == clearLogCell {
-                clearLog()
             } else if cell == duplicateCell {
                 print("duplicate")
                 duplicateTestCase()
@@ -263,17 +240,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         alert.addAction(UIAlertAction(title: "OK",
                                       style: .cancel))
         present(alert, animated: true)
-    }
-    
-    func copyLog() {
-        if let log = logTextView.text {
-            UIPasteboard.general.setValue(log, forPasteboardType: "TestSweets")
-            showTemporaryAlert(title: "Copied")
-        }
-    }
-    
-    func clearLog() {
-        logTextView.text = ""
     }
     
     func duplicateTestCase() {

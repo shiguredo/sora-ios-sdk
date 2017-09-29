@@ -27,8 +27,25 @@ class TestSuiteManager {
         set { testSuite.testCases = newValue }
     }
 
+    var logText: String = ""
+    weak var logViewController: LogViewController?
+    
     var onAddHandler: ((TestCase) -> Void)?
 
+    init() {
+        Logger.shared.onOutputHandler = { log in
+            DispatchQueue.main.async {
+                self.logText.append(log.description)
+                self.logText.append("\n")
+                self.logViewController?.reloadData()
+            }
+        }
+    }
+    
+    func clearLogText() {
+        logText = ""
+    }
+    
     func load() {
         if let path = saveFilePath {
             print("load save file \(path)")

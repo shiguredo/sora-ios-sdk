@@ -71,6 +71,7 @@
 		9191E7E51F599D1B004589C0 /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
 		9191E7E61F599D1B004589C0 /* SocketRocket.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201911D58668E00178E2B /* SocketRocket.framework */; };
 		9191E7E81F599D1B004589C0 /* WebRTC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201901D58668E00178E2B /* WebRTC.framework */; };
+		919B2E151F7EC04B00DF54BB /* LogViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 919B2E141F7EC04B00DF54BB /* LogViewController.swift */; };
 		919BECC71F7CB857005FB51D /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 919BECC61F7CB857005FB51D /* Utilities.swift */; };
 		91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B891F19366000A76852 /* SignalingChannel.swift */; };
 		91A19B8C1F19366B00A76852 /* PeerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8B1F19366B00A76852 /* PeerChannel.swift */; };
@@ -186,6 +187,7 @@
 		918201901D58668E00178E2B /* WebRTC.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebRTC.framework; path = Carthage/Build/iOS/WebRTC.framework; sourceTree = "<group>"; };
 		918201911D58668E00178E2B /* SocketRocket.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SocketRocket.framework; path = Carthage/Build/iOS/SocketRocket.framework; sourceTree = "<group>"; };
 		918A38F71F30F49500D047BA /* ICEServerInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICEServerInfo.swift; sourceTree = "<group>"; };
+		919B2E141F7EC04B00DF54BB /* LogViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewController.swift; sourceTree = "<group>"; };
 		919BECC61F7CB857005FB51D /* Utilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
 		91A19B891F19366000A76852 /* SignalingChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SignalingChannel.swift; sourceTree = "<group>"; };
 		91A19B8B1F19366B00A76852 /* PeerChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeerChannel.swift; sourceTree = "<group>"; };
@@ -267,6 +269,7 @@
 			children = (
 				91332B061F6C120500A3128F /* Info.plist */,
 				91332AFA1F6C120500A3128F /* AppDelegate.swift */,
+				919B2E141F7EC04B00DF54BB /* LogViewController.swift */,
 				91332B191F6C13F000A3128F /* MainNavigationViewController.swift */,
 				91332B1D1F6C13F000A3128F /* MainViewController.swift */,
 				916C44831F724ADC000E9F4E /* TestCase.swift */,
@@ -623,6 +626,7 @@
 				916C44841F724ADC000E9F4E /* TestCase.swift in Sources */,
 				91332B231F6C13F000A3128F /* VideoViewCollectionViewCell.swift in Sources */,
 				919BECC71F7CB857005FB51D /* Utilities.swift in Sources */,
+				919B2E151F7EC04B00DF54BB /* LogViewController.swift in Sources */,
 				91332B211F6C13F000A3128F /* MainNavigationViewController.swift in Sources */,
 				91332B241F6C13F000A3128F /* TestSuite.swift in Sources */,
 				91332AFD1F6C120500A3128F /* ViewController.swift in Sources */,
