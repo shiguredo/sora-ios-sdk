@@ -10,6 +10,7 @@ public enum LogType {
     case mediaChannel
     case mediaStream
     case snapshot
+    case cameraVideoCapturer
     case videoRenderer
     case videoView
     case user(String)
@@ -38,6 +39,8 @@ extension LogType: CustomStringConvertible {
             return "MediaStream"
         case .snapshot:
             return "Snapshot"
+        case .cameraVideoCapturer:
+            return "CameraVideoCapturer"
         case .videoRenderer:
             return "VideoRenderer"
         case .videoView:
