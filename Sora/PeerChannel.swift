@@ -105,8 +105,26 @@ public class PeerChannelInternalState {
     
     private func validate() {
         if isCompleted {
+            Logger.debug(type: .peerChannel,
+                         message: "peer channel state: completed")
+            Logger.debug(type: .peerChannel,
+                         message: "    signaling state: \(signalingState)")
+            Logger.debug(type: .peerChannel,
+                         message: "    ICE connection state: \(iceConnectionState)")
+            Logger.debug(type: .peerChannel,
+                         message: "    ICE gathering state: \(iceGatheringState)")
+            
             onCompleteHandler?()
             onCompleteHandler = nil
+        } else {
+            Logger.debug(type: .peerChannel,
+                         message: "peer channel state: not completed")
+            Logger.debug(type: .peerChannel,
+                         message: "    signaling state: \(signalingState)")
+            Logger.debug(type: .peerChannel,
+                         message: "    ICE connection state: \(iceConnectionState)")
+            Logger.debug(type: .peerChannel,
+                         message: "    ICE gathering state: \(iceGatheringState)")
         }
     }
 }
