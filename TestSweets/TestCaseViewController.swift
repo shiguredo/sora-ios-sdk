@@ -58,11 +58,9 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
             DispatchQueue.main.async {
                 switch self.state {
                 case .connecting:
-                    print("state changed: connecting")
                     self.connectLabel.text = "Connecting..."
                     
                 case .connected:
-                    print("state changed: connected")
                     self.connectLabel.text = "Disconnect"
                     self.numberOfStreamsCell.isUserInteractionEnabled = true
                     self.numberOfStreamsLabel.setTextOn(true)
@@ -72,7 +70,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                     self.configurationViewController.lock()
                     
                 case .disconnected:
-                    print("state changed: disconnected")
                     self.testCaseController.mediaChannel = nil
                     self.connectLabel.text = "Connect"
                     self.numberOfStreamsCell.isUserInteractionEnabled = false
