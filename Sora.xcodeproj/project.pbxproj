@@ -47,6 +47,7 @@
 		9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */; };
 		9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9145A58F1F0CB093002D6EC6 /* Utilities.swift */; };
 		91554F431F179CFD00403C39 /* WebSocketChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91554F421F179CFD00403C39 /* WebSocketChannel.swift */; };
+		915CEC901F821A90006E45E2 /* CameraVideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */; };
 		9160866E1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */; };
 		916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* AspectRatio.swift */; };
 		9161BB401F2B31C200569748 /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
@@ -167,6 +168,7 @@
 		9145A58F1F0CB093002D6EC6 /* Utilities.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
 		91545C0A1EA7AAA900523AAE /* BitRateViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BitRateViewController.swift; sourceTree = "<group>"; };
 		91554F421F179CFD00403C39 /* WebSocketChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebSocketChannel.swift; sourceTree = "<group>"; };
+		915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraVideoCapturer.swift; sourceTree = "<group>"; };
 		9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoViewAspectRatioViewController.swift; sourceTree = "<group>"; };
 		9161BB3F1F2B31C200569748 /* SDWebImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SDWebImage.framework; path = Carthage/Build/iOS/SDWebImage.framework; sourceTree = "<group>"; };
 		9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RTCPeerConnection+SessionDescription.swift"; sourceTree = "<group>"; };
@@ -368,6 +370,7 @@
 				9174A88E1F7395CA00D586C4 /* AspectRatio.swift */,
 				9174A8941F73F90B00D586C4 /* AudioCodec.swift */,
 				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
+				915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,
 				9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */,
 				910D444E1F4D7ACC00D35917 /* Event.swift */,
@@ -656,6 +659,7 @@
 				91FAB3EC1F29130700EDF53C /* SignalingMessage.swift in Sources */,
 				91BDC1D71F62C8A50084DC3A /* UILabel+ConfigurationViewController.swift in Sources */,
 				9163401B1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift in Sources */,
+				915CEC901F821A90006E45E2 /* CameraVideoCapturer.swift in Sources */,
 				91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */,
 				9174A89B1F73F9EE00D586C4 /* CameraPosition.swift in Sources */,
 				916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */,
