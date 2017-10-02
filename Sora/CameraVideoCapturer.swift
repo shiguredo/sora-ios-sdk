@@ -34,15 +34,9 @@ public class CameraVideoCapturer: VideoCapturer {
     }
     
     public var stream: MediaStream?
-    
     public private(set) var isRunning: Bool = false
     public private(set) var position: CameraPosition = .front
     public var handlers: VideoCapturerHandlers = VideoCapturerHandlers()
-    
-    private var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
-    private var frontCameraDevice: AVCaptureDevice?
-    private var backCameraDevice: AVCaptureDevice?
-    private var nativeDelegate: CameraVideoCapturerDelegate!
     
     public var currentCameraDevice: AVCaptureDevice? {
         get {
@@ -54,6 +48,11 @@ public class CameraVideoCapturer: VideoCapturer {
             }
         }
     }
+    
+    private var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
+    private var frontCameraDevice: AVCaptureDevice?
+    private var backCameraDevice: AVCaptureDevice?
+    private var nativeDelegate: CameraVideoCapturerDelegate!
     
     init() {
         nativeDelegate = CameraVideoCapturerDelegate(cameraVideoCapturer: self)
