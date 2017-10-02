@@ -124,7 +124,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
             } else if cell == connectCell {
                 connectOrDisconnect()
             } else if cell == duplicateCell {
-                print("duplicate")
                 duplicateTestCase()
                 navigationController?.popViewController(animated: true)
             }
