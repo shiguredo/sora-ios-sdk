@@ -389,6 +389,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                 break
             }
         }
+        
+        nativeChannel.add(nativeStream)
         channel.addStream(stream)
         Logger.debug(type: .peerChannel,
                      message: "create publisher stream (id: \(configuration.publisherStreamId))")
