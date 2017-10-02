@@ -155,7 +155,6 @@ public protocol PeerChannel: AliveMonitorable {
     var handlers: PeerChannelHandlers { get }
     var clientId: String? { get }
     var streams: [MediaStream] { get }
-    var iceCandidates: [ICECandidate] { get }
     var state: PeerChannelState { get }
     
     init(configuration: Configuration)
@@ -163,11 +162,6 @@ public protocol PeerChannel: AliveMonitorable {
     func connect(webRTCConfiguration: WebRTCConfiguration,
                  handler: @escaping (Error?) -> Void)
     func disconnect(error: Error?)
-    
-    func addStream(_ stream: MediaStream)
-    func removeStream(_ stream: MediaStream)
-    func addICECandidate(_ candidate: ICECandidate)
-    func removeICECandidate(_ candidate: ICECandidate)
     
 }
 
@@ -179,7 +173,7 @@ public class BasicPeerChannel: PeerChannel {
     public let configuration: Configuration
     
     public private(set) var streams: [MediaStream] = []
-    public private(set) var iceCandidates: [ICECandidate] = [] // TODO: remove?
+    public private(set) var iceCandidates: [ICECandidate] = []
     
     public var clientId: String? {
         get { return context.clientId }
@@ -211,29 +205,29 @@ public class BasicPeerChannel: PeerChannel {
         context = BasicPeerChannelContext(channel: self)
     }
     
-    public func addStream(_ stream: MediaStream) {
+    public func add(stream: MediaStream) {
         streams.append(stream)
         handlers.onAddStreamHandler?(stream)
     }
     
-    public func removeStream(id: String) {
-        let stream = streams.first { stream in stream.streamId == id }
+    public func remove(streamId: String) {
+        let stream = streams.first { stream in stream.streamId == streamId }
         if let stream = stream {
-            removeStream(stream)
+            remove(stream: stream)
         }
     }
     
-    public func removeStream(_ stream: MediaStream) {
+    public func remove(stream: MediaStream) {
         streams = streams.filter { each in each.streamId != stream.streamId }
         handlers.onRemoveStreamHandler?(stream)
     }
     
-    public func addICECandidate(_ candidate: ICECandidate) {
-        iceCandidates.append(candidate)
+    public func add(iceCandidate: ICECandidate) {
+        iceCandidates.append(iceCandidate)
     }
     
-    public func removeICECandidate(_ candidate: ICECandidate) {
-        iceCandidates = iceCandidates.filter { each in each == candidate }
+    public func remove(iceCandidate: ICECandidate) {
+        iceCandidates = iceCandidates.filter { each in each == iceCandidate }
     }
     
     public func connect(webRTCConfiguration: WebRTCConfiguration,
@@ -391,7 +385,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         }
         
         nativeChannel.add(nativeStream)
-        channel.addStream(stream)
+        channel.add(stream: stream)
         Logger.debug(type: .peerChannel,
                      message: "create publisher stream (id: \(configuration.publisherStreamId))")
     }
@@ -554,14 +548,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         Logger.debug(type: .peerChannel,
                      message: "added a media stream (id: \(stream.streamId))")
         let stream = BasicMediaStream(nativeStream: stream)
-        channel.addStream(stream)
+        channel.add(stream: stream)
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didRemove stream: RTCMediaStream) {
         Logger.debug(type: .peerChannel,
                      message: "removed a media stream (id: \(stream.streamId))")
-        channel.removeStream(id: stream.streamId)
+        channel.remove(streamId: stream.streamId)
     }
     
     func peerConnectionShouldNegotiate(_ nativePeerConnection: RTCPeerConnection) {
@@ -589,7 +583,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
         Logger.debug(type: .peerChannel,
                      message: "generated ICE candidate \(candidate)")
         let candidate = ICECandidate(nativeICECandidate: candidate)
-        channel.addICECandidate(candidate)
+        channel.add(iceCandidate: candidate)
         let message = SignalingMessage.candidate(candidate)
         signalingChannel.send(message: message)
     }
@@ -609,7 +603,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             return false
         }
         for candidate in candidates {
-            channel.removeICECandidate(candidate)
+            channel.remove(iceCandidate: candidate)
         }
     }
     
