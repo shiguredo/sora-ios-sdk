@@ -36,16 +36,7 @@ public class CameraVideoCapturer: VideoCapturer {
     public var stream: MediaStream?
     
     public private(set) var isRunning: Bool = false
-    
-    public private(set) var position: CameraPosition = .front {
-        didSet {
-            if isRunning {
-                stopCurrentCameraDevice()
-                startCurrentCameraDevice()
-            }
-        }
-    }
-    
+    public private(set) var position: CameraPosition = .front
     public var handlers: VideoCapturerHandlers = VideoCapturerHandlers()
     
     private var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
@@ -71,30 +62,37 @@ public class CameraVideoCapturer: VideoCapturer {
         backCameraDevice = CameraVideoCapturer.captureDevice(for: .back)
     }
     
-    func startCurrentCameraDevice() {
-        guard let device = currentCameraDevice else { return }
-        guard let format = CameraVideoCapturer.suitableFormat(for: device) else { return }
-        guard let fps = CameraVideoCapturer.suitableFrameRate(for: format) else { return }
-        nativeCameraVideoCapturer.startCapture(with: device, format: format, fps: fps)
-    }
-    
-    func stopCurrentCameraDevice() {
-        nativeCameraVideoCapturer.stopCapture()
-    }
-    
     public func start() {
         if isRunning {
             return
         }
-        Logger.debug(type: .sora, message: "start camera video capture")
-        startCurrentCameraDevice()
+        
+        Logger.debug(type: .cameraVideoCapturer, message: "try start all devices")
+        for device in RTCCameraVideoCapturer.captureDevices() {
+            Logger.debug(type: .cameraVideoCapturer, message: "try start \(device)")
+            guard let format = CameraVideoCapturer.suitableFormat(for: device) else {
+                Logger.debug(type: .cameraVideoCapturer,
+                             message: "    suitable format is not found")
+                break
+            }
+            guard let fps = CameraVideoCapturer.suitableFrameRate(for: format) else {
+                Logger.debug(type: .cameraVideoCapturer,
+                             message: "    suitable frame rate is not found")
+                break
+            }
+
+            nativeCameraVideoCapturer.startCapture(with: device, format: format, fps: fps)
+            Logger.debug(type: .cameraVideoCapturer, message: "did start \(device)")
+        }
+        Logger.debug(type: .cameraVideoCapturer, message: "did start all devices")
+
         isRunning = true
     }
     
     public func stop() {
         if isRunning {
-            Logger.debug(type: .sora, message: "stop camera video capture")
-            stopCurrentCameraDevice()
+            Logger.debug(type: .cameraVideoCapturer, message: "stop")
+            nativeCameraVideoCapturer.stopCapture()
         }
         isRunning = false
     }
