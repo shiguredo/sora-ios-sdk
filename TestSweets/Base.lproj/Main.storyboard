@@ -614,38 +614,24 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" indicatorStyle="white" editable="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dQ1-ts-PVV">
-                                <rect key="frame" x="0.0" y="76" width="320" height="492"/>
+                                <rect key="frame" x="0.0" y="20" width="320" height="548"/>
                                 <color key="backgroundColor" cocoaTouchSystemColor="darkTextColor"/>
                                 <accessibility key="accessibilityConfiguration">
                                     <accessibilityTraits key="traits" notEnabled="YES"/>
                                 </accessibility>
                                 <gestureRecognizers/>
-                                <string key="text">Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda.</string>
+                                <mutableString key="text">Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda.</mutableString>
                                 <color key="textColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                                 <fontDescription key="fontDescription" name="Menlo-Regular" family="Menlo" pointSize="17"/>
                                 <textInputTraits key="textInputTraits" autocorrectionType="no" spellCheckingType="no" smartDashesType="no" smartInsertDeleteType="no" smartQuotesType="no"/>
                             </textView>
-                            <searchBar contentMode="redraw" showsCancelButton="YES" translucent="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5yM-6E-Fv0">
-                                <rect key="frame" x="0.0" y="20" width="320" height="56"/>
-                                <textInputTraits key="textInputTraits"/>
-                                <scopeButtonTitles>
-                                    <string>Title</string>
-                                    <string>Title</string>
-                                </scopeButtonTitles>
-                                <connections>
-                                    <outlet property="delegate" destination="6ml-An-LcM" id="3Zd-fD-7Hf"/>
-                                </connections>
-                            </searchBar>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                         <constraints>
                             <constraint firstItem="dQ1-ts-PVV" firstAttribute="leading" secondItem="I1g-nR-8SM" secondAttribute="leading" id="6CX-uV-axT"/>
-                            <constraint firstItem="5yM-6E-Fv0" firstAttribute="trailing" secondItem="I1g-nR-8SM" secondAttribute="trailing" id="IgD-Lg-bm6"/>
                             <constraint firstItem="I1g-nR-8SM" firstAttribute="bottom" secondItem="dQ1-ts-PVV" secondAttribute="bottom" id="LD2-yI-d6A"/>
                             <constraint firstItem="dQ1-ts-PVV" firstAttribute="trailing" secondItem="I1g-nR-8SM" secondAttribute="trailing" id="RMH-6I-ggf"/>
-                            <constraint firstItem="5yM-6E-Fv0" firstAttribute="leading" secondItem="I1g-nR-8SM" secondAttribute="leading" id="kad-ul-UjT"/>
-                            <constraint firstItem="5yM-6E-Fv0" firstAttribute="top" secondItem="I1g-nR-8SM" secondAttribute="top" id="xsE-kz-Oa2"/>
-                            <constraint firstItem="dQ1-ts-PVV" firstAttribute="top" secondItem="5yM-6E-Fv0" secondAttribute="bottom" id="zNT-9A-xDv"/>
+                            <constraint firstItem="dQ1-ts-PVV" firstAttribute="top" secondItem="I1g-nR-8SM" secondAttribute="top" id="XU0-gG-luL"/>
                         </constraints>
                         <viewLayoutGuide key="safeArea" id="I1g-nR-8SM"/>
                     </view>
