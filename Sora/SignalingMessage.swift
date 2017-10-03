@@ -9,6 +9,7 @@ public struct SignalingConnectMessage {
     public var videoEnabled: Bool
     public var videoCodec: VideoCodec
     public var videoBitRate: Int?
+    public var snapshotEnabled: Bool
     public var audioEnabled: Bool
     public var audioCodec: AudioCodec
 
@@ -41,6 +42,13 @@ public struct SignalingUpdateOfferMessage {
     
 }
 
+public struct SignalingSnapshotMessage {
+    
+    public let channelId: String
+    public let webP: String
+    
+}
+
 public struct SignalingNotifyMessage {
     
     public var eventType: SignalingEventType
@@ -63,6 +71,7 @@ public enum SignalingMessage {
     case answer(sdp: String)
     case candidate(ICECandidate)
     case update(sdp: String)
+    case snapshot(SignalingSnapshotMessage)
     case notify(message: SignalingNotifyMessage)
     case ping
     case pong
@@ -106,6 +115,7 @@ extension SignalingConnectMessage: Codable {
     enum VideoCodingKeys: String, CodingKey {
         case codecType = "codec_type"
         case bitRate = "bit_rate"
+        case snapshot
     }
     
     enum AudioCodingKeys: String, CodingKey {
@@ -131,15 +141,19 @@ extension SignalingConnectMessage: Codable {
         }
      
         if videoEnabled {
-            switch (videoCodec, videoBitRate) {
-            case (.default, nil):
-                break
-            case (let codec, let rate):
+            if videoCodec != .default || videoBitRate != nil || snapshotEnabled {
                 var videoContainer = container
                     .nestedContainer(keyedBy: VideoCodingKeys.self,
                                      forKey: .video)
-                try videoContainer.encode(codec, forKey: .codecType)
-                try videoContainer.encode(rate, forKey: .bitRate)
+                if videoCodec != .default {
+                    try videoContainer.encode(videoCodec, forKey: .codecType)
+                }
+                if let bitRate = videoBitRate {
+                    try videoContainer.encode(bitRate, forKey: .bitRate)
+                }
+                if snapshotEnabled {
+                    try videoContainer.encode(true, forKey: .snapshot)
+                }
             }
         } else {
             try container.encode(false, forKey: .video)
@@ -223,6 +237,26 @@ extension SignalingUpdateOfferMessage: Codable {
     
 }
 
+
+extension SignalingSnapshotMessage: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case channelId = "channel_id"
+        case webP = "base64ed_webp"
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        channelId = try container.decode(String.self, forKey: .channelId)
+        webP = try container.decode(String.self, forKey: .webP)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        fatalError("not supported")
+    }
+    
+}
+
 extension SignalingNotifyMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -259,6 +293,7 @@ extension SignalingMessage: Codable {
         case offer
         case answer
         case update
+        case snapshot
         case candidate
         case notify
         case ping
@@ -280,6 +315,8 @@ extension SignalingMessage: Codable {
         case "update":
             let update = try SignalingUpdateOfferMessage(from: decoder)
             self = .update(sdp: update.sdp)
+        case "snapshot":
+            self = .snapshot(try SignalingSnapshotMessage(from: decoder))
         case "notify":
             self = .notify(message: try SignalingNotifyMessage(from: decoder))
         case "ping":
@@ -307,6 +344,8 @@ extension SignalingMessage: Codable {
         case .update(sdp: let sdp):
             try container.encode(MessageType.update.rawValue, forKey: .type)
             try container.encode(sdp, forKey: .sdp)
+        case .snapshot(let snapshot):
+            fatalError("not supported encoding 'snapshot'")
         case .notify(message: _):
             fatalError("not supported encoding 'notify'")
         case .ping:

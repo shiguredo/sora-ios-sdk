@@ -111,6 +111,13 @@ public class MediaChannel {
             self.handlers.onEventHandler?(Event(message: message))
         }
         
+        peerChannel.handlers.onSnapshotHandler = { snapshot in
+            Logger.debug(type: .mediaStream, message: "receive snapshot")
+            if let stream = self.mainStream {
+                stream.render(videoFrame: VideoFrame.snapshot(snapshot))
+            }
+        }
+        
         peerChannel.connect(webRTCConfiguration: webRTCConfiguration) { error in
             if let error = error {
                 Logger.debug(type: .mediaChannel, message: "failed connecting")

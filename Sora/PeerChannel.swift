@@ -135,6 +135,7 @@ public class PeerChannelHandlers {
     public var onAddStreamHandler: ((MediaStream) -> Void)?
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     public var onUpdateHandler: ((String) -> Void)?
+    public var onSnapshotHandler: ((Snapshot) -> Void)?
     public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
     public var onPingHandler: (() -> Void)?
     
@@ -347,16 +348,28 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
             multistream = true
             initializePublisherStream()
         }
+        
+        // スナップショットの制限
+        var config = configuration
+        if config.snapshotEnabled {
+            Logger.debug(type: .peerChannel,
+                         message: "limits configuration to snapshot")
+            config.videoEnabled = true
+            config.videoCodec = .vp8
+            config.audioEnabled = true
+        }
+        
         let connect =
             SignalingConnectMessage(role: role,
-                                    channelId: configuration.channelId,
-                                    metadata: configuration.metadata,
+                                    channelId: config.channelId,
+                                    metadata: config.metadata,
                                     multistreamEnabled: multistream,
-                                    videoEnabled: configuration.videoEnabled,
-                                    videoCodec: configuration.videoCodec,
-                                    videoBitRate: configuration.videoBitRate,
-                                    audioEnabled: configuration.audioEnabled,
-                                    audioCodec: configuration.audioCodec)
+                                    videoEnabled: config.videoEnabled,
+                                    videoCodec: config.videoCodec,
+                                    videoBitRate: config.videoBitRate,
+                                    snapshotEnabled: config.snapshotEnabled,
+                                    audioEnabled: config.audioEnabled,
+                                    audioCodec: config.audioCodec)
         let message = SignalingMessage.connect(message: connect)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: message)
@@ -476,6 +489,33 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
                 guard configuration.role == .group else { return }
                 Logger.debug(type: .peerChannel, message: "receive update")
                 createAndSendUpdateAnswerMessage(forOffer: sdp)
+                
+            case .snapshot(let snapshot):
+                guard configuration.snapshotEnabled &&
+                    configuration.channelId == snapshot.channelId else {
+                        return
+                }
+                Logger.debug(type: .peerChannel, message: "receive snapshot")
+                
+                if let handler = channel.handlers.onSnapshotHandler {
+                    guard let data = Data(base64Encoded: snapshot.webP) else {
+                        Logger.debug(type: .peerChannel,
+                                     message: "snapshot: invalid Base64 format")
+                        return
+                    }
+                    guard let image = UIImage.sd_image(with: data) else {
+                        Logger.debug(type: .peerChannel,
+                                     message: "snapshot: invalid WebP format")
+                        return
+                    }
+                    guard let cgImage = image.cgImage else {
+                        Logger.debug(type: .peerChannel,
+                                     message: "snapshot: failed to convert UIImage to CGImage")
+                        return
+                    }
+                    let snapshot = Snapshot(image: cgImage, timestamp: Date())
+                    handler(snapshot)
+                }
                 
             case .notify(message: let message):
                 Logger.debug(type: .peerChannel, message: "receive notify")
