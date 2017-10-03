@@ -9,26 +9,6 @@
 - FIX
     - バグ修正
 
-## 1.2.5
-
-### FIX
-
-- CircleCI でのビルドエラーを修正した
-
-## 1.2.4
-
-### CHANGE
-
-- armv7 に対応した
-
-- API: MediaOption を struct に変更した
-
-- API: ConnectionController: ロールとストリーム種別の選択制限を削除した
-
-### FIX
-
-- API: マルチストリーム時、配信者のストリームが二重に生成されてしまう現象を修正した
-
 ## 1.2.3
 
 ### CHANGE

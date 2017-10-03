@@ -1,6 +1,6 @@
 machine:
   xcode:
-    version: 8.3.3
+    version: 9.0
 
 dependencies:
   pre:
@@ -23,8 +23,8 @@ test:
       xcpretty --color --report junit --output $CIRCLE_TEST_REPORTS/xcode/results.xml
 
 
-# experimental:
-#   notify:
-#     branches:
-#       ignore:
-#         - master
+experimental:
+  notify:
+    branches:
+      ignore:
+        - feature/2.0

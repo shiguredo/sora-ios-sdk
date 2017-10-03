@@ -2,68 +2,67 @@ import Foundation
 import CoreMedia
 import WebRTC
 
-public enum VideoFrameHandle {
-    case WebRTC(RTCVideoFrame)
-    case snapshot(Snapshot)
-}
-
-public protocol VideoFrame {
-
-    var videoFrameHandle: VideoFrameHandle? { get }
+public protocol VideoFrameType {
+    
     var width: Int { get }
     var height: Int { get }
     var timestamp: CMTime? { get }
-
-}
-
-class RemoteVideoFrame: VideoFrame {
-    
-    var nativeVideoFrame: RTCVideoFrame
-    
-    var videoFrameHandle: VideoFrameHandle? {
-        get { return VideoFrameHandle.WebRTC(nativeVideoFrame) }
-    }
-
-    var width: Int {
-        get { return Int(nativeVideoFrame.width) }
-    }
-    
-    var height: Int {
-        get { return Int(nativeVideoFrame.height) }
-    }
-    
-    var timestamp: CMTime? {
-        get { return CMTimeMake(nativeVideoFrame.timeStampNs, 1000000000) }
-    }
-    
-    init(nativeVideoFrame: RTCVideoFrame) {
-        self.nativeVideoFrame = nativeVideoFrame
-    }
     
 }
 
-class SnapshotVideoFrame: VideoFrame {
+public enum VideoFrame {
     
-    var snapshot: Snapshot
-    
-    init(snapshot: Snapshot) {
-        self.snapshot = snapshot
+    public init?(from sampleBuffer: CMSampleBuffer) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            return nil
+        }
+        let timeStamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        let timeStampNs = Int64(timeStamp * 1_000_000_000)
+        let frame = RTCVideoFrame(pixelBuffer: pixelBuffer, rotation: RTCVideoRotation._0, timeStampNs: timeStampNs)
+        self = .native(capturer: nil, frame: frame)
     }
     
-    public var videoFrameHandle: VideoFrameHandle? {
-        get { return VideoFrameHandle.snapshot(snapshot) }
-    }
+    case native(capturer: RTCVideoCapturer?, frame: RTCVideoFrame)
+    case snapshot(Snapshot)
+    case other(VideoFrameType)
     
     public var width: Int {
-        get { return snapshot.image.width }
+        get {
+            switch self {
+            case .native(capturer: _, frame: let frame):
+                return Int(frame.width)
+            case .snapshot(let snapshot):
+                return snapshot.image.width
+            case .other(let frame):
+                return frame.width
+            }
+        }
     }
     
     public var height: Int {
-        get { return snapshot.image.height }
+        get {
+            switch self {
+            case .native(capturer: _, frame: let frame):
+                return Int(frame.height)
+            case .snapshot(let snapshot):
+                return snapshot.image.height
+            case .other(let frame):
+                return frame.height
+            }
+        }
     }
-    
+
     public var timestamp: CMTime? {
-        get { return nil }
+        get {
+            switch self {
+            case .native(capturer: _, frame: let frame):
+                return CMTimeMake(frame.timeStampNs, 1_000_000_000)
+            case .snapshot(_):
+                return nil // TODO
+            case .other(let frame):
+                return frame.timestamp
+            }
+        }
     }
 
 }

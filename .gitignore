@@ -16,12 +16,16 @@ DerivedData
 *.perspectivev3
 !default.perspectivev3
 xcuserdata
+project.xcworkspace
 
 ## Other
+.DS_Store
 *.xccheckout
 *.moved-aside
 *.xcuserstate
 *.xcscmblueprint
+*.swp
+doc
 
 ## Obj-C/Swift specific
 *.hmap
@@ -65,6 +69,3 @@ examples/SoraApp/Carthage/Checkouts
 fastlane/report.xml
 fastlane/screenshots
 
-*.swp
-doc
-project.xcworkspace

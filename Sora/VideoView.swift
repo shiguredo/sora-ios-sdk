@@ -40,7 +40,7 @@ public class VideoView: UIView {
 }
 
 extension VideoView: VideoRenderer {
-    
+
     public func onChangedSize(_ size: CGSize) {
         contentView.onVideoFrameSizeUpdated(size)
     }
@@ -115,21 +115,21 @@ class VideoViewContentView: UIView {
         updateSizeIfNeeded()
         
         if let frame = videoFrame {
-            if let handle = frame.videoFrameHandle {
-                switch handle {
-                case let .WebRTC(frame):
-                    snapshotView.isHidden = true
-                    nativeVideoView.isHidden = false
-                    nativeVideoView.renderFrame(frame)
-                case let .snapshot(snapshot):
-                    // snapshot は WebRTC.framework の仕組みを使用しないで描画しており、
-                    // snapshotView のレイアウトも AutoLayoutによって実施されている。
-                    // ここでは描画モードの指定を忘れず行う。
-                    snapshotView.isHidden = false
-                    nativeVideoView.isHidden = true
-                    snapshotView.contentMode = renderingContentMode
-                    snapshotView.image = UIImage(cgImage: snapshot.image)
-                }
+            switch frame {
+            case .native(capturer: _, frame: let frame):
+                snapshotView.isHidden = true
+                nativeVideoView.isHidden = false
+                nativeVideoView.renderFrame(frame)
+            case .snapshot(let snapshot):
+                // snapshot は WebRTC.framework の仕組みを使用しないで描画しており、
+                // snapshotView のレイアウトも AutoLayoutによって実施されている。
+                // ここでは描画モードの指定を忘れず行う。
+                snapshotView.isHidden = false
+                nativeVideoView.isHidden = true
+                snapshotView.contentMode = renderingContentMode
+                snapshotView.image = UIImage(cgImage: snapshot.image)
+            case .other:
+                nativeVideoView.renderFrame(nil)
             }
         } else {
             nativeVideoView.renderFrame(nil)
