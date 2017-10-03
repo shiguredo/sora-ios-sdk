@@ -9,9 +9,9 @@ public enum AudioCodec {
 }
 
 private var audioCodecTable: PairTable<String, AudioCodec> =
-    PairTable(pairs: [("default", .default),
-                      ("opus", .opus),
-                      ("pcmu", .pcmu)])
+    PairTable(pairs: [("Default", .default),
+                      ("OPUS", .opus),
+                      ("PCMU", .pcmu)])
 
 extension AudioCodec: Codable {
     
