@@ -35,9 +35,46 @@ public class CameraVideoCapturer: VideoCapturer {
     
     public var stream: MediaStream?
     public private(set) var isRunning: Bool = false
-    public private(set) var position: CameraPosition = .front
     public var handlers: VideoCapturerHandlers = VideoCapturerHandlers()
     
+    public var position: CameraPosition = .front {
+        didSet {
+            guard isRunning else { return }
+            guard let current = currentCameraDevice else { return }
+            
+            Logger.debug(type: .cameraVideoCapturer,
+                         message: "try change camera position")
+            let session = nativeCameraVideoCapturer.captureSession
+            let oldInputs = session.inputs
+            for input in session.inputs {
+                session.removeInput(input)
+            }
+            do {
+                let newInput = try AVCaptureDeviceInput(device: current)
+                if session.canAddInput(newInput) {
+                    session.addInput(newInput)
+                    Logger.debug(type: .cameraVideoCapturer,
+                                 message: "did change camera position")
+                    return
+                }
+            } catch let e {
+                Logger.debug(type: .cameraVideoCapturer,
+                             message: "failed change camera pasition (\(e.localizedDescription))")
+            }
+
+            Logger.debug(type: .cameraVideoCapturer,
+                         message: "cannot add input device")
+            for input in oldInputs {
+                if session.canAddInput(input) {
+                    session.addInput(input)
+                } else {
+                    Logger.debug(type: .cameraVideoCapturer,
+                                 message: "failed revert input device \(input)")
+                }
+            }
+        }
+    }
+
     public var currentCameraDevice: AVCaptureDevice? {
         get {
             switch position {
@@ -94,6 +131,10 @@ public class CameraVideoCapturer: VideoCapturer {
             nativeCameraVideoCapturer.stopCapture()
         }
         isRunning = false
+    }
+    
+    public func flip() {
+        position = position.flip()
     }
     
 }
