@@ -344,7 +344,7 @@ extension SignalingMessage: Codable {
         case .update(sdp: let sdp):
             try container.encode(MessageType.update.rawValue, forKey: .type)
             try container.encode(sdp, forKey: .sdp)
-        case .snapshot(let snapshot):
+        case .snapshot(_):
             fatalError("not supported encoding 'snapshot'")
         case .notify(message: _):
             fatalError("not supported encoding 'notify'")
