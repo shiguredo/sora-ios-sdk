@@ -10,19 +10,26 @@ public protocol VideoRenderer: class {
 
 class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     
-    public weak var videoRenderer: VideoRenderer?
+    private(set) weak var videoRenderer: VideoRenderer?
     
-    public func setSize(_ size: CGSize) {
+    init(videoRenderer: VideoRenderer) {
+        self.videoRenderer = videoRenderer
+    }
+    
+    func setSize(_ size: CGSize) {
         if let renderer = videoRenderer {
             Logger.debug(type: .videoRenderer,
-                      message: "set size \(size) for \(renderer)")
+                         message: "set size \(size) for \(renderer)")
             DispatchQueue.main.async {
                 renderer.onChangedSize(size)
             }
+        } else {
+            Logger.debug(type: .videoRenderer,
+                         message: "set size \(size) IGNORED, no renderer set")
         }
     }
     
-    public func renderFrame(_ frame: RTCVideoFrame?) {
+    func renderFrame(_ frame: RTCVideoFrame?) {
         DispatchQueue.main.async {
             if let renderer = self.videoRenderer {
                 if let frame = frame {
