@@ -37,11 +37,34 @@ public class BasicMediaStream: MediaStream {
     
     public var videoFilter: VideoFilter?
     
-    private let videoRendererAdapter: VideoRendererAdapter
-    
     public var videoRenderer: VideoRenderer? {
-        get { return videoRendererAdapter.videoRenderer }
-        set { videoRendererAdapter.videoRenderer = newValue }
+        get {
+            return videoRendererAdapter?.videoRenderer
+        }
+        set {
+            if let value = newValue {
+                videoRendererAdapter = VideoRendererAdapter(videoRenderer: value)
+            } else {
+                videoRendererAdapter = nil
+            }
+        }
+    }
+    
+    private var videoRendererAdapter: VideoRendererAdapter? {
+        willSet {
+            guard let videoTrack = nativeVideoTrack else { return }
+            guard let adapter = videoRendererAdapter else { return }
+            Logger.debug(type: .videoRenderer,
+                         message: "remove old video renderer \(adapter) from nativeVideoTrack")
+            videoTrack.remove(adapter)
+        }
+        didSet {
+            guard let videoTrack = nativeVideoTrack else { return }
+            guard let adapter = videoRendererAdapter else { return }
+            Logger.debug(type: .videoRenderer,
+                         message: "add new video renderer \(adapter) to nativeVideoTrack")
+            videoTrack.add(adapter)
+        }
     }
     
     public var nativeStream: RTCMediaStream
@@ -58,8 +81,6 @@ public class BasicMediaStream: MediaStream {
         self.nativeStream = nativeStream
         streamId = nativeStream.streamId
         creationTime = Date()
-        videoRendererAdapter = VideoRendererAdapter()
-        nativeVideoTrack?.add(videoRendererAdapter)
     }
     
     private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()
