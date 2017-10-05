@@ -10,10 +10,10 @@ public enum VideoCodec {
 }
 
 private var videoCodecTable: PairTable<String, VideoCodec> =
-    PairTable(pairs: [("Default", .default),
-                      ("VP8", .vp8),
-                      ("VP9", .vp9),
-                      ("H264", .h264)])
+    PairTable(pairs: [("default", .default),
+                      ("vp8", .vp8),
+                      ("vp9", .vp9),
+                      ("h264", .h264)])
 
 extension VideoCodec: Codable {
     
