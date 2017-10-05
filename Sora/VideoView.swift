@@ -1,6 +1,23 @@
 import UIKit
 import WebRTC
 
+/**
+ VideoRenderer プロトコルのデフォルト実装となる UIView です。
+ 
+ MediaStream.videoRenderer にセットすることで、その MediaStream
+ に流れている動画をそのまま画面に表示する事ができます。
+ 
+ ## contentModeの設定
+ 
+ VideoView は contentMode の設定に対応しており、 contentMode
+ プロパティに任意の値を設定することで動画のレンダリングのされ方を変更することができます。
+ 
+ - コード上からプログラム的に VideoView を生成した場合、デフォルト値は
+ `scaleAspectFit` になります。
+ - Storyboard や Interface Builder 経由で VideoView を生成した場合、
+ Storyboard や Interface Builder 上で設定した Content Mode の値が使用されます。
+ 
+ */
 public class VideoView: UIView {
     
     // キーウィンドウ外で RTCEAGLVideoView を生成すると次のエラーが発生するため、
@@ -9,7 +26,7 @@ public class VideoView: UIView {
     // ただし、このエラーは無視しても以降の描画に問題はなく、クラッシュもしない
     // また、遅延プロパティでもキーウィンドウ外で初期化すれば
     // エラーが発生するため、根本的な解決策ではないので注意
-    fileprivate lazy var contentView: VideoViewContentView = {
+    private lazy var contentView: VideoViewContentView = {
         guard let topLevel = Bundle(for: VideoView.self)
             .loadNibNamed("VideoView", owner: self, options: nil) else
         {
@@ -24,12 +41,16 @@ public class VideoView: UIView {
     
     override public init(frame: CGRect) {
         super.init(frame: frame)
+        // init() ないし init(frame:) 経由でコードからVideoViewが生成された場合は、
+        // 過去との互換性のため、contentModeの初期値を設定する必要がある
         contentMode = .scaleAspectFit
     }
     
     required public init?(coder: NSCoder) {
         super.init(coder: coder)
-        contentMode = .scaleAspectFit
+        // init?(coder:) 経由でVideoViewが生成された場合は、
+        // Storyboard/Interface Builder経由でViewが生成されているので、
+        // 設定をそのまま反映させる必要があるため、contentModeの初期値を設定しない
     }
     
     override public func layoutSubviews() {
@@ -37,10 +58,36 @@ public class VideoView: UIView {
         contentView.frame = self.bounds
     }
     
+    // MARK: - Methods
+    
+    /**
+     現在 VideoView が表示している動画の元々のフレームサイズを返します。
+     
+     まだ VideoView が動画のフレームを一度も表示していない場合は `nil` を返します。
+     
+     VideoView はこの動画のフレームサイズを元にして、自身の contentMode
+     に従ってフレームを変形させ、動画を画面に表示します。
+     
+     - 例えば currentVideoFrameSize が VideoView.frame よりも小さく、
+     contentMode に `scaleAspectFit` が指定されている場合は、
+     contentMode の指定に従って元動画は引き伸ばされて、拡大表示される事になります。
+     
+     このプロパティを使用することで、例えば元動画が横長の場合は横長なUIにし、
+     縦長の場合は縦長なUIにする、といった調整を行うことができます。
+     
+     注意点として、このプロパティは直前の動画のフレームサイズを返すため、
+     既に動画は表示されていない場合でも、最後に表示していた動画フレームをサイズを返します。
+     */
+    public var currentVideoFrameSize: CGSize? {
+        return contentView.currentVideoFrameSize
+    }
+    
 }
 
-extension VideoView: VideoRenderer {
+// MARK: - VideoRenderer
 
+extension VideoView: VideoRenderer {
+    
     public func onChangedSize(_ size: CGSize) {
         contentView.onVideoFrameSizeUpdated(size)
     }
@@ -51,12 +98,14 @@ extension VideoView: VideoRenderer {
     
 }
 
+// MARK: -
+
 class VideoViewContentView: UIView {
     
     @IBOutlet private weak var nativeVideoView: RTCEAGLVideoView!
     @IBOutlet private weak var snapshotView: UIImageView!
     
-    private var currentVideoFrameSize: CGSize?
+    fileprivate var currentVideoFrameSize: CGSize?
     private var videoFrameSizeToChange: CGSize?
     
     // MARK: - Init/deinit
@@ -92,14 +141,6 @@ class VideoViewContentView: UIView {
     }
     
     // MARK: - Methods
-    
-    fileprivate var allowsRender: Bool {
-        get {
-            // 前述のエラーはキーウィンドウ外での描画でも発生するので、
-            // ビューがキーウィンドウに表示されている場合のみ描画を許可する
-            return !(isHidden || window == nil || !window!.isKeyWindow)
-        }
-    }
     
     fileprivate func onVideoFrameSizeUpdated(_ videoFrameSize: CGSize) {
         // ここも前述のエラーと同様の理由で処理を後回しにする
@@ -137,6 +178,14 @@ class VideoViewContentView: UIView {
     }
     
     // MARK: - Private Methods
+    
+    private var allowsRender: Bool {
+        get {
+            // 前述のエラーはキーウィンドウ外での描画でも発生するので、
+            // ビューがキーウィンドウに表示されている場合のみ描画を許可する
+            return !(isHidden || window == nil || !window!.isKeyWindow)
+        }
+    }
     
     private var renderingContentMode: UIViewContentMode {
         // superView に指定されている contentMode を優先的に使用する。
