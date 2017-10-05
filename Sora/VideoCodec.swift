@@ -1,5 +1,11 @@
 import Foundation
 
+private var descriptionTable: PairTable<String, VideoCodec> =
+    PairTable(pairs: [("default", .default),
+                      ("vp8", .vp8),
+                      ("vp9", .vp9),
+                      ("h264", .h264)])
+
 public enum VideoCodec {
     
     case `default`
@@ -9,18 +15,20 @@ public enum VideoCodec {
     
 }
 
-private var videoCodecTable: PairTable<String, VideoCodec> =
-    PairTable(pairs: [("default", .default),
-                      ("vp8", .vp8),
-                      ("vp9", .vp9),
-                      ("h264", .h264)])
+extension VideoCodec: CustomStringConvertible {
+    
+    public var description: String {
+        return descriptionTable.left(other: self)!
+    }
+    
+}
 
 extension VideoCodec: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let key = try container.decode(String.self)
-        self = try videoCodecTable.right(other: key).unwrap {
+        self = try descriptionTable.right(other: key).unwrap {
             throw DecodingError.dataCorruptedError(in: container,
                                                    debugDescription: "invalid codec type")
         }
@@ -28,7 +36,7 @@ extension VideoCodec: Codable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(videoCodecTable.left(other: self)!)
+        try container.encode(descriptionTable.left(other: self)!)
     }
     
 }
