@@ -21,6 +21,9 @@ extension AudioCodec: CustomStringConvertible {
     
 }
 
+/**
+ :nodoc:
+ */
 extension AudioCodec: Codable {
     
     public init(from decoder: Decoder) throws {

@@ -38,6 +38,9 @@ private var videoCapturerOptionTable: PairTable<String, VideoCapturerOption> =
     PairTable(pairs: [("camera", .camera),
                       ("custom", .custom)])
 
+/**
+ :nodoc:
+ */
 extension VideoCapturerOption: Codable {
     
     public init(from decoder: Decoder) throws {

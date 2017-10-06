@@ -29,6 +29,9 @@ public final class ICEServerInfo {
     
 }
 
+/**
+ :nodoc:
+ */
 extension ICEServerInfo: Codable {
     
     enum CodingKeys: String, CodingKey {

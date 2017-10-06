@@ -30,6 +30,9 @@ public struct WebRTCInfo {
     
 }
 
+/**
+ :nodoc:
+ */
 extension WebRTCInfo: Decodable {
     
     enum CodingKeys: String, CodingKey {

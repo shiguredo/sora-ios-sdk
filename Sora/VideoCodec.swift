@@ -23,6 +23,9 @@ extension VideoCodec: CustomStringConvertible {
     
 }
 
+/**
+ :nodoc:
+ */
 extension VideoCodec: Codable {
     
     public init(from decoder: Decoder) throws {

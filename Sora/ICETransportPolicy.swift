@@ -22,6 +22,9 @@ public enum ICETransportPolicy {
     
 }
 
+/**
+ :nodoc:
+ */
 extension ICETransportPolicy: Codable {
     
     public init(from decoder: Decoder) throws {

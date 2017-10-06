@@ -41,6 +41,9 @@ public struct Configuration {
     
 }
 
+/**
+ :nodoc:
+ */
 extension Configuration: Codable {
     
     enum CodingKeys: String, CodingKey {
