@@ -2,12 +2,12 @@ import Foundation
 
 public struct MediaChannelStatistics {
     
-    public var connectionTime: Int
-    public var connectionCount: Int
-    public var publisherCount: Int
-    public var subscriberCount: Int
+    public let connectionTime: Int
+    public let connectionCount: Int
+    public let publisherCount: Int
+    public let subscriberCount: Int
     
-    public init(message: SignalingNotifyMessage) {
+    init(message: SignalingNotifyMessage) {
         connectionTime = message.connectionTime
         connectionCount = message.connectionCount
         publisherCount = message.publisherCount
@@ -22,7 +22,7 @@ public enum Event {
     case connectionUpdated(statistics: MediaChannelStatistics)
     case connectionDestroyed(statistics: MediaChannelStatistics)
     
-    public init(message: SignalingNotifyMessage) {
+    init(message: SignalingNotifyMessage) {
         switch message.eventType {
         case .connectionCreated:
             let stats = MediaChannelStatistics(message: message)

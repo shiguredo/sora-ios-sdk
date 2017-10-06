@@ -15,7 +15,7 @@ public final class ICECandidate: Equatable {
         self.sdp = sdp
     }
 
-    public init(nativeICECandidate: RTCIceCandidate) {
+    init(nativeICECandidate: RTCIceCandidate) {
         if let urlStr = nativeICECandidate.serverUrl {
             self.url = URL(string: urlStr)
         }
