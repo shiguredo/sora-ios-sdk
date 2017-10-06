@@ -103,7 +103,7 @@ public class WebSocketChannelHandlers {
     
 }
 
-public protocol WebSocketChannel: AliveMonitorable {
+public protocol WebSocketChannel {
     
     var url: URL { get }
     var state: WebSocketChannelState { get }
@@ -127,11 +127,7 @@ class BasicWebSocketChannel: WebSocketChannel {
     var state: WebSocketChannelState {
         get { return context.state }
     }
-    
-    var aliveState: AliveState {
-        get { return context.aliveState }
-    }
-    
+
     var context: BasicWebSocketChannelContext!
     
     required init(url: URL) {
@@ -154,7 +150,7 @@ class BasicWebSocketChannel: WebSocketChannel {
 
 }
 
-class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitorable {
+class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     
     weak var channel: BasicWebSocketChannel!
     var nativeChannel: SRWebSocket
@@ -163,19 +159,6 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate, AliveMonitora
         didSet {
             Logger.trace(type: .webSocketChannel,
                       message: "changed state from \(oldValue) to \(state)")
-        }
-    }
-    
-    var aliveState: AliveState {
-        get {
-            switch state {
-            case .connected:
-                return .available
-            case .connecting:
-                return .connecting
-            case .disconnecting, .disconnected:
-                return .unavailable
-            }
         }
     }
     

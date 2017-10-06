@@ -2,14 +2,14 @@ import Foundation
 
 class ConnectionTimer {
     
-    public weak var target: AliveMonitorable?
+    public var target: AliveMonitored?
     public var timeout: Int
     public var isRunning: Bool = false
     
     private var timer: Timer?
     private var onTimeoutHandler: (() -> Void)?
     
-    public init(target: AliveMonitorable? = nil, timeout: Int) {
+    public init(target: AliveMonitored? = nil, timeout: Int) {
         self.target = target
         self.timeout = timeout
     }

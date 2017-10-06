@@ -89,7 +89,8 @@ public class MediaChannel {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
         
-        let timer = ConnectionTimer(target: self, timeout: configuration.connectionTimeout)
+        let timer = ConnectionTimer(target: AliveMonitored.mediaChannel(self),
+                                    timeout: configuration.connectionTimeout)
         timer.run {
             Logger.debug(type: .mediaChannel, message: "connection timeout")
             self.disconnect(error: SoraError.connectionTimeout)
@@ -132,11 +133,7 @@ public class MediaChannel {
             self.handlers.onConnectHandler?(nil)
         }
     }
-    
-    public func handleChannelStateChanges(objects: [AliveMonitorable]) {
-        // TODO
-    }
-    
+
     public func disconnect(error: Error?) {
         switch state {
         case .disconnecting, .disconnected:
@@ -154,23 +151,6 @@ public class MediaChannel {
             if let error = error {
                 handlers.onFailureHandler?(error)
             }
-        }
-    }
-    
-}
-
-// MARK: - AliveMonitorable
-
-extension MediaChannel: AliveMonitorable {
-    
-    public var aliveState: AliveState {
-        switch state {
-        case .connected:
-            return .available
-        case .disconnecting, .disconnected:
-            return .unavailable
-        default:
-            return .connecting
         }
     }
     

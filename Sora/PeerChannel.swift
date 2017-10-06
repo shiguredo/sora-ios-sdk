@@ -150,7 +150,7 @@ public enum PeerChannelState {
 
 // MARK: -
 
-public protocol PeerChannel: AliveMonitorable {
+public protocol PeerChannel {
     
     var configuration: Configuration { get }
     var handlers: PeerChannelHandlers { get }
@@ -193,10 +193,6 @@ class BasicPeerChannel: PeerChannel {
                 return .connecting
             }
         }
-    }
-    
-    var aliveState: AliveState {
-        get { return context.aliveState }
     }
     
     private var context: BasicPeerChannelContext!
@@ -251,7 +247,7 @@ class BasicPeerChannel: PeerChannel {
 
 // MARK: -
 
-class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitorable {
+class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     enum State {
         case connecting
@@ -273,19 +269,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, AliveMonitor
     
     var configuration: Configuration {
         get { return channel.configuration }
-    }
-    
-    var aliveState: AliveState {
-        get {
-            switch state {
-            case .connected:
-                return .available
-            case .connecting:
-                return .connecting
-            default:
-                return .unavailable
-            }
-        }
     }
     
     var onConnectHandler: ((Error?) -> Void)?

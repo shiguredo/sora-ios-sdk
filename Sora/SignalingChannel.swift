@@ -19,7 +19,7 @@ public class SignalingChannelHandlers {
     
 }
 
-public protocol SignalingChannel: AliveMonitorable {
+public protocol SignalingChannel {
 
     var configuration: Configuration { get }
     var webSocketChannel: WebSocketChannel? { get }
@@ -51,19 +51,6 @@ class BasicSignalingChannel: SignalingChannel {
     
     var webSocketChannel: WebSocketChannel?
 
-    var aliveState: AliveState {
-        get {
-            switch state {
-            case .connected:
-                return .available
-            case .connecting:
-                return .connecting
-            case .disconnecting, .disconnected:
-                return .unavailable
-            }
-        }
-    }
-    
     private var connectionTimer: ConnectionTimer?
     private var onConnectHandler: ((Error?) -> Void)?
     
@@ -81,7 +68,7 @@ class BasicSignalingChannel: SignalingChannel {
         onConnectHandler = handler
         state = .connecting
         
-        connectionTimer = ConnectionTimer(target: self,
+        connectionTimer = ConnectionTimer(target: AliveMonitored.signalingChannel(self),
                                           timeout: configuration.connectionTimeout)
         connectionTimer!.run {
             Logger.debug(type: .signalingChannel, message: "connection timeout")
