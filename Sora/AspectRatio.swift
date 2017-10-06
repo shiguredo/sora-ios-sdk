@@ -1,5 +1,8 @@
 import Foundation
 
+/**
+ :nodoc:
+ */
 public enum AspectRatio {
     
     case standard // 4:3
