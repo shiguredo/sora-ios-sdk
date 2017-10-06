@@ -3,12 +3,15 @@ import WebRTC
 
 public protocol MediaStream: class {
     
+    // MARK: - プロパティ
     var streamId: String { get }
     var creationTime: Date { get }
     var videoCapturer: VideoCapturer? { get set }
     var videoFilter: VideoFilter? { get set }
     var videoRenderer: VideoRenderer? { get set }
     // var audioCapturer: AudioCapturer? { get set }
+    
+    // MARK: 映像フレームの描画
     
     // VideoCapturer から呼ばれる
     func render(videoFrame: VideoFrame?)

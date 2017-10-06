@@ -21,15 +21,23 @@ public class SignalingChannelHandlers {
 
 public protocol SignalingChannel {
 
+    // MARK: - プロパティ
+    
     var configuration: Configuration { get }
     var webSocketChannel: WebSocketChannel? { get }
     var state: SignalingChannelState { get }
     var handlers: SignalingChannelHandlers { get }
     
+    // MARK: - 初期化
+    
     init(configuration: Configuration)
 
+    // MARK: - 接続
+    
     func connect(handler: @escaping (Error?) -> Void)
     func disconnect(error: Error?)
+    
+    // MARK: メッセージの送信
     
     func send(message: SignalingMessage)
     

@@ -43,6 +43,11 @@ public class Sora {
         if !initialized { fatalError() }
     }
     
+    /**
+     - parameter configuration:
+     - parameter webRTCConfiguration:
+     - parameter handler:
+     */
     public func connect(configuration: Configuration,
                         webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
                         handler: @escaping (MediaChannel?, Error?) -> Void) {

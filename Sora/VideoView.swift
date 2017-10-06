@@ -39,6 +39,8 @@ public class VideoView: UIView {
         return view
     }()
     
+    // MARK: - 初期化
+    
     override public init(frame: CGRect) {
         super.init(frame: frame)
         // init() ないし init(frame:) 経由でコードからVideoViewが生成された場合は、
@@ -53,12 +55,14 @@ public class VideoView: UIView {
         // 設定をそのまま反映させる必要があるため、contentModeの初期値を設定しない
     }
     
+    // MARK: - レイアウト
+    
     override public func layoutSubviews() {
         super.layoutSubviews()
         contentView.frame = self.bounds
     }
     
-    // MARK: - Methods
+    // MARK: - 映像フレーム
     
     /**
      現在 VideoView が表示している動画の元々のフレームサイズを返します。

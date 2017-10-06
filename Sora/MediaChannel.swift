@@ -25,6 +25,8 @@ public class MediaChannel {
         case waitingPeer
     }
     
+    // MARK: - プロパティ
+    
     public let handlers: MediaChannelHandlers = MediaChannelHandlers()
     
     public let configuration: Configuration
@@ -53,6 +55,8 @@ public class MediaChannel {
     private let aliveMonitor: AliveMonitor = AliveMonitor()
     private var connectionTimer: ConnectionTimer?
     
+    // MARK: - 初期化
+    
     public init(configuration: Configuration) {
         Logger.debug(type: .mediaChannel,
                   message: "create signaling channel (\(configuration.signalingChannelType))")
@@ -72,6 +76,8 @@ public class MediaChannel {
          aliveMonitor.onChange(handler: self.handleChannelStateChanges)
          */
     }
+    
+    // MARK: - 接続
     
     public func connect(webRTCConfiguration: WebRTCConfiguration,
                         timeout: Int = Configuration.defaultConnectionTimeout,

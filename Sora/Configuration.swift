@@ -7,9 +7,16 @@ private let defaultPublisherAudioTrackId: String = "mainAudio"
 
 public struct Configuration {
     
+    // MARK: デフォルト値
+    
+    /// 映像の最大ビットレート
     public static let maxVideoVideoBitRate = 5000
+    
+    /// デフォルトの接続タイムアウト時間 (秒)
     public static let defaultConnectionTimeout = 10
 
+    // MARK: - 接続に関する設定
+    
     public var url: URL
     public var channelId: String
     public var role: Role
@@ -23,15 +30,23 @@ public struct Configuration {
     public var audioEnabled: Bool = true
     public var snapshotEnabled: Bool = false
     
+    // MARK: WebRTC に関する設定
+    
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
+    
+    // MARK: - 接続チャネルに関する設定
     
     public var signalingChannelType: SignalingChannel.Type = BasicSignalingChannel.self
     public var webSocketChannelType: WebSocketChannel.Type = BasicWebSocketChannel.self
     public var peerChannelType: PeerChannel.Type = BasicPeerChannel.self
     
+    // MARK: パブリッシャーに関する設定
+    
     public var publisherStreamId: String = defaultPublisherStreamId
     public var publisherVideoTrackId: String = defaultPublisherVideoTrackId
     public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
+    
+    // MARK: - 初期化
     
     public init(url: URL, channelId: String, role: Role) {
         self.url = url

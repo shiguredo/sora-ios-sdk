@@ -152,13 +152,19 @@ public enum PeerChannelState {
 
 public protocol PeerChannel {
     
+    // MARK: - プロパティ
+    
     var configuration: Configuration { get }
     var handlers: PeerChannelHandlers { get }
     var clientId: String? { get }
     var streams: [MediaStream] { get }
     var state: PeerChannelState { get }
     
+    // MARK: - 初期化
+    
     init(configuration: Configuration)
+    
+    // MARK: - 接続
     
     func connect(webRTCConfiguration: WebRTCConfiguration,
                  handler: @escaping (Error?) -> Void)

@@ -5,10 +5,21 @@ private var descriptionTable: PairTable<String, AudioCodec> =
                       ("opus", .opus),
                       ("pcmu", .pcmu)])
 
+/**
+ 音声コーデックを表します。
+ */
 public enum AudioCodec {
     
+    /**
+     Sora サーバーが指定するデフォルトのコーデック。
+     現在のデフォルトのコーデックは Opus です。
+     */
     case `default`
+    
+    /// Opus
     case opus
+    
+    /// PCMU
     case pcmu
     
 }

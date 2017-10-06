@@ -36,6 +36,8 @@ public enum WebSocketStatusCode {
         (.tlsHandshake, 1015)
     ]
     
+    // MARK: - 初期化
+    
     public init(rawValue: Int) {
         for pair in WebSocketStatusCode.table {
             if pair.1 == rawValue {
@@ -45,6 +47,8 @@ public enum WebSocketStatusCode {
         }
         self = .other(rawValue)
     }
+    
+    // MARK: 変換
     
     public func intValue() -> Int {
         switch self {
@@ -105,14 +109,22 @@ public class WebSocketChannelHandlers {
 
 public protocol WebSocketChannel {
     
+    // MARK: - プロパティ
+    
     var url: URL { get }
     var state: WebSocketChannelState { get }
     var handlers: WebSocketChannelHandlers { get }
     
+    // MARK: - 初期化
+    
     init(url: URL)
+    
+    // MARK: - 接続
     
     func connect(handler: @escaping (Error?) -> Void)
     func disconnect(error: Error?)
+    
+    // MARK: メッセージの送信
     
     func send(message: WebSocketMessage)
     

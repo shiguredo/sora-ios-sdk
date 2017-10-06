@@ -17,10 +17,17 @@ public struct MediaConstraints {
 
 public struct WebRTCConfiguration {
     
+    // MARK: メディア制約に関する設定
+    
     public var constraints: MediaConstraints = MediaConstraints()
+    
+    // MARK: ICE サーバーに関する設定
+    
     public var iceServerInfos: [ICEServerInfo]
     public var iceTransportPolicy: ICETransportPolicy = .none
 
+    // MARK: - 初期化
+    
     public init() {
         iceServerInfos = [
             ICEServerInfo(urls: [URL(string: "stun:stun.l.google.com:19302")!],

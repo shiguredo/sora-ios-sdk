@@ -6,11 +6,24 @@ private var descriptionTable: PairTable<String, VideoCodec> =
                       ("vp9", .vp9),
                       ("h264", .h264)])
 
+/**
+ 映像コーデックを表します。
+ */
 public enum VideoCodec {
     
+    /**
+     Sora サーバーが指定するデフォルトのコーデック。
+     現在のデフォルトのコーデックは VP9 です。
+     */
     case `default`
+    
+    /// VP8
     case vp8
+    
+    /// VP9
     case vp9
+    
+    /// H.264
     case h264
     
 }
