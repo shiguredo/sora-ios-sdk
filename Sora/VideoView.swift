@@ -169,8 +169,6 @@ class VideoViewContentView: UIView {
                 nativeVideoView.isHidden = true
                 snapshotView.contentMode = renderingContentMode
                 snapshotView.image = UIImage(cgImage: snapshot.image)
-            case .other:
-                nativeVideoView.renderFrame(nil)
             }
         } else {
             nativeVideoView.renderFrame(nil)
