@@ -1,6 +1,9 @@
 import Foundation
 import WebRTC
 
+/**
+ :nodoc:
+ */
 extension RTCSignalingState: CustomStringConvertible {
     
     public var description: String {
@@ -18,6 +21,9 @@ extension RTCSignalingState: CustomStringConvertible {
     
 }
 
+/**
+ :nodoc:
+ */
 extension RTCIceConnectionState: CustomStringConvertible {
     
     public var description: String {
@@ -37,6 +43,9 @@ extension RTCIceConnectionState: CustomStringConvertible {
     
 }
 
+/**
+ :nodoc:
+ */
 extension RTCIceGatheringState: CustomStringConvertible {
     
     public var description: String {
@@ -51,6 +60,9 @@ extension RTCIceGatheringState: CustomStringConvertible {
     
 }
 
+/**
+ :nodoc:
+ */
 extension RTCSessionDescription {
     
     public var sdpDescription: String {

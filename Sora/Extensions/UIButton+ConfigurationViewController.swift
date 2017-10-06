@@ -1,5 +1,8 @@
 import Foundation
 
+/**
+ :nodoc:
+ */
 extension UIButton {
     
     public func setTitleOn(_ isOn: Bool,
