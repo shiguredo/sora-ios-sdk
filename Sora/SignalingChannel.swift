@@ -35,23 +35,23 @@ public protocol SignalingChannel: AliveMonitorable {
     
 }
 
-public class BasicSignalingChannel: SignalingChannel {
+class BasicSignalingChannel: SignalingChannel {
 
-    public var handlers: SignalingChannelHandlers = SignalingChannelHandlers()
-    public var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
+    var handlers: SignalingChannelHandlers = SignalingChannelHandlers()
+    var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
     
-    public var configuration: Configuration
+    var configuration: Configuration
     
-    public var state: SignalingChannelState = .disconnected {
+    var state: SignalingChannelState = .disconnected {
         didSet {
             Logger.trace(type: .signalingChannel,
                       message: "changed state from \(oldValue) to \(state)")
         }
     }
     
-    public var webSocketChannel: WebSocketChannel?
+    var webSocketChannel: WebSocketChannel?
 
-    public var aliveState: AliveState {
+    var aliveState: AliveState {
         get {
             switch state {
             case .connected:
@@ -67,7 +67,7 @@ public class BasicSignalingChannel: SignalingChannel {
     private var connectionTimer: ConnectionTimer?
     private var onConnectHandler: ((Error?) -> Void)?
     
-    public required init(configuration: Configuration) {
+    required init(configuration: Configuration) {
         self.configuration = configuration
         self.webSocketChannel = configuration
             .webSocketChannelType.init(url: configuration.url)
@@ -76,7 +76,7 @@ public class BasicSignalingChannel: SignalingChannel {
         webSocketChannel!.handlers.onMessageHandler = handleMessage
     }
     
-    public func connect(handler: @escaping (Error?) -> Void) {
+    func connect(handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .signalingChannel, message: "try connecting")
         onConnectHandler = handler
         state = .connecting
@@ -101,7 +101,7 @@ public class BasicSignalingChannel: SignalingChannel {
         }
     }
     
-    public func disconnect(error: Error?) {
+    func disconnect(error: Error?) {
         switch state {
         case .disconnecting, .disconnected:
             break
@@ -121,7 +121,7 @@ public class BasicSignalingChannel: SignalingChannel {
         }
     }
     
-    public func send(message: SignalingMessage) {
+    func send(message: SignalingMessage) {
         Logger.debug(type: .signalingChannel, message: "send message")
         let encoder = JSONEncoder()
         do {
