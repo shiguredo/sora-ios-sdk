@@ -24,7 +24,7 @@ private let iceGatheringStateTable: PairTable<ICEGatheringState, RTCIceGathering
                       (.gathering, .gathering),
                       (.complete, .complete)])
 
-public enum PeerChannelSignalingState {
+enum PeerChannelSignalingState {
     
     case stable
     case haveLocalOffer
@@ -33,13 +33,13 @@ public enum PeerChannelSignalingState {
     case haveRemotePrAnswer
     case closed
     
-    public init(nativeValue: RTCSignalingState) {
+    init(nativeValue: RTCSignalingState) {
         self = peerChannelSignalingStateTable.left(other: nativeValue)!
     }
     
 }
 
-public enum ICEConnectionState {
+enum ICEConnectionState {
     
     case new
     case checking
@@ -50,35 +50,35 @@ public enum ICEConnectionState {
     case closed
     case count
     
-    public init(nativeValue: RTCIceConnectionState) {
+    init(nativeValue: RTCIceConnectionState) {
         self = iceConnectionStateTable.left(other: nativeValue)!
     }
     
 }
 
-public enum ICEGatheringState {
+enum ICEGatheringState {
     
     case new
     case gathering
     case complete
     
-    public init(nativeValue: RTCIceGatheringState) {
+    init(nativeValue: RTCIceGatheringState) {
         self = iceGatheringStateTable.left(other: nativeValue)!
     }
     
 }
 
-public class PeerChannelInternalState {
+class PeerChannelInternalState {
     
-    public var signalingState: PeerChannelSignalingState {
+    var signalingState: PeerChannelSignalingState {
         didSet { validate() }
     }
     
-    public var iceConnectionState: ICEConnectionState {
+    var iceConnectionState: ICEConnectionState {
         didSet { validate() }
     }
     
-    public var iceGatheringState: ICEGatheringState {
+    var iceGatheringState: ICEGatheringState {
         didSet { validate() }
     }
     
@@ -95,7 +95,7 @@ public class PeerChannelInternalState {
     
     var onCompleteHandler: (() -> Void)?
     
-    public init(signalingState: PeerChannelSignalingState,
+    init(signalingState: PeerChannelSignalingState,
                 iceConnectionState: ICEConnectionState,
                 iceGatheringState: ICEGatheringState) {
         self.signalingState = signalingState
@@ -168,19 +168,19 @@ public protocol PeerChannel: AliveMonitorable {
 
 // MARK: -
 
-public class BasicPeerChannel: PeerChannel {
+class BasicPeerChannel: PeerChannel {
     
-    public let handlers: PeerChannelHandlers = PeerChannelHandlers()
-    public let configuration: Configuration
+    let handlers: PeerChannelHandlers = PeerChannelHandlers()
+    let configuration: Configuration
     
-    public private(set) var streams: [MediaStream] = []
-    public private(set) var iceCandidates: [ICECandidate] = []
+    private(set) var streams: [MediaStream] = []
+    private(set) var iceCandidates: [ICECandidate] = []
     
-    public var clientId: String? {
+    var clientId: String? {
         get { return context.clientId }
     }
 
-    public var state: PeerChannelState {
+    var state: PeerChannelState {
         get {
             switch context.state {
             case .disconnecting:
@@ -195,49 +195,49 @@ public class BasicPeerChannel: PeerChannel {
         }
     }
     
-    public var aliveState: AliveState {
+    var aliveState: AliveState {
         get { return context.aliveState }
     }
     
     private var context: BasicPeerChannelContext!
     
-    public required init(configuration: Configuration) {
+    required init(configuration: Configuration) {
         self.configuration = configuration
         context = BasicPeerChannelContext(channel: self)
     }
     
-    public func add(stream: MediaStream) {
+    func add(stream: MediaStream) {
         streams.append(stream)
         handlers.onAddStreamHandler?(stream)
     }
     
-    public func remove(streamId: String) {
+    func remove(streamId: String) {
         let stream = streams.first { stream in stream.streamId == streamId }
         if let stream = stream {
             remove(stream: stream)
         }
     }
     
-    public func remove(stream: MediaStream) {
+    func remove(stream: MediaStream) {
         streams = streams.filter { each in each.streamId != stream.streamId }
         handlers.onRemoveStreamHandler?(stream)
     }
     
-    public func add(iceCandidate: ICECandidate) {
+    func add(iceCandidate: ICECandidate) {
         iceCandidates.append(iceCandidate)
     }
     
-    public func remove(iceCandidate: ICECandidate) {
+    func remove(iceCandidate: ICECandidate) {
         iceCandidates = iceCandidates.filter { each in each == iceCandidate }
     }
     
-    public func connect(webRTCConfiguration: WebRTCConfiguration,
+    func connect(webRTCConfiguration: WebRTCConfiguration,
                         handler: @escaping (Error?) -> Void) {
         context.connect(webRTCConfiguration: webRTCConfiguration,
                         handler: handler)
     }
     
-    public func disconnect(error: Error?) {
+    func disconnect(error: Error?) {
         context.disconnect(error: error)
     }
     
