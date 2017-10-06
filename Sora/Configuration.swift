@@ -1,9 +1,9 @@
 import Foundation
 import WebRTC
 
-public let defaultPublisherStreamId: String = "mainStream"
-public let defaultPublisherVideoTrackId: String = "mainVideo"
-public let defaultPublisherAudioTrackId: String = "mainAudio"
+let defaultPublisherStreamId: String = "mainStream"
+let defaultPublisherVideoTrackId: String = "mainVideo"
+let defaultPublisherAudioTrackId: String = "mainAudio"
 
 public struct Configuration {
     

@@ -12,7 +12,7 @@ public protocol AliveMonitorable: class {
     
 }
 
-public final class AliveMonitor {
+final class AliveMonitor {
     
     public var isRunning: Bool {
         get { return !(timer != nil && timer!.isValid) }

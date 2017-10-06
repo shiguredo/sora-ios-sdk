@@ -1,6 +1,6 @@
 import Foundation
 
-public class ConnectionTimer {
+class ConnectionTimer {
     
     public weak var target: AliveMonitorable?
     public var timeout: Int
