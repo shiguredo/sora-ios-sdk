@@ -118,36 +118,36 @@ public protocol WebSocketChannel: AliveMonitorable {
     
 }
 
-public class BasicWebSocketChannel: WebSocketChannel {
+class BasicWebSocketChannel: WebSocketChannel {
 
-    public var url: URL
-    public var sslEnabled: Bool = true
-    public var handlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
+    var url: URL
+    var sslEnabled: Bool = true
+    var handlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
 
-    public var state: WebSocketChannelState {
+    var state: WebSocketChannelState {
         get { return context.state }
     }
     
-    public var aliveState: AliveState {
+    var aliveState: AliveState {
         get { return context.aliveState }
     }
     
     var context: BasicWebSocketChannelContext!
     
-    public required init(url: URL) {
+    required init(url: URL) {
         self.url = url
         context = BasicWebSocketChannelContext(channel: self)
     }
     
-    public func connect(handler: @escaping (Error?) -> Void) {
+    func connect(handler: @escaping (Error?) -> Void) {
         context.connect(handler: handler)
     }
     
-    public func disconnect(error: Error?) {
+    func disconnect(error: Error?) {
         context.disconnect(error: error)
     }
     
-    public func send(message: WebSocketMessage) {
+    func send(message: WebSocketMessage) {
         Logger.debug(type: .webSocketChannel, message: "send message")
         context.send(message: message)
     }
