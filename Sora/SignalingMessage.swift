@@ -18,13 +18,13 @@ public struct SignalingConnectMessage {
 public struct SignalingOfferMessage {
     
     public struct Configuration {
-        var iceServerInfos: [ICEServerInfo]
-        var iceTransportPolicy: ICETransportPolicy
+        public let iceServerInfos: [ICEServerInfo]
+        public let iceTransportPolicy: ICETransportPolicy
     }
     
-    public var clientId: String
-    public var sdp: String
-    public var configuration: Configuration?
+    public let clientId: String
+    public let sdp: String
+    public let configuration: Configuration?
     
 }
 
@@ -51,12 +51,12 @@ public struct SignalingSnapshotMessage {
 
 public struct SignalingNotifyMessage {
     
-    public var eventType: SignalingEventType
-    public var role: SignalingRole
-    public var connectionTime: Int
-    public var connectionCount: Int
-    public var publisherCount: Int
-    public var subscriberCount: Int
+    public let eventType: SignalingEventType
+    public let role: SignalingRole
+    public let connectionTime: Int
+    public let connectionCount: Int
+    public let publisherCount: Int
+    public let subscriberCount: Int
     
 }
 
@@ -223,6 +223,8 @@ extension SignalingOfferMessage: Codable {
         if container.contains(.configuration) {
             configuration = try container.decode(Configuration.self,
                                                  forKey: .configuration)
+        } else {
+            configuration = nil
         }
     }
     
