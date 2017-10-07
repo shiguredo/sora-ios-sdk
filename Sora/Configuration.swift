@@ -5,6 +5,9 @@ private let defaultPublisherStreamId: String = "mainStream"
 private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
 
+/**
+ クライアントに関する設定です。
+ */
 public struct Configuration {
     
     // MARK: デフォルト値
@@ -17,21 +20,49 @@ public struct Configuration {
 
     // MARK: - 接続に関する設定
     
+    /// Sora サーバーの URL
     public var url: URL
+    
+    /// チャネル ID
     public var channelId: String
+    
+    /// ロール
     public var role: Role
+    
+    /// メタデータ。 `connect` シグナリングメッセージにセットされます。
     public var metadata: String?
+    
+    /**
+     接続試行中のタイムアウト (秒) 。
+     指定した時間内に接続が成立しなければ接続試行を中止します。
+     */
     public var connectionTimeout: Int = 30
+    
+    /// 映像コーデック。デフォルトは `.default` です。
     public var videoCodec: VideoCodec = .default
+    
+    /// 映像ビットレート。デフォルトは無指定です。
     public var videoBitRate: Int?
+    
+    /// 映像キャプチャーの種別。デフォルトは `.camera` です。
     public var videoCapturerOption: VideoCapturerOption = .camera
+    
+    /// 音声コーデック。デフォルトは `.default` です。
     public var audioCodec: AudioCodec = .default
+    
+    /// 映像の可否。 `true` であれば映像を送受信します。
+    /// デフォルトは `true` です。
     public var videoEnabled: Bool = true
+    
+    /// 音声の可否。 `true` であれば音声を送受信します。
+    /// デフォルトは `true` です。
     public var audioEnabled: Bool = true
+    
+    /// スナップショットの可否。 `true` であればスナップショットが有効になります。
+    /// デフォルトは `false` です。
     public var snapshotEnabled: Bool = false
     
-    // MARK: WebRTC に関する設定
-    
+    /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
     
     // MARK: - 接続チャネルに関する設定
@@ -42,12 +73,27 @@ public struct Configuration {
     
     // MARK: パブリッシャーに関する設定
     
+    /// パブリッシャーのストリームの ID です。
+    /// 通常、指定する必要はありません。
     public var publisherStreamId: String = defaultPublisherStreamId
+    
+    /// パブリッシャーの映像トラックの ID です。
+    /// 通常、指定する必要はありません。
     public var publisherVideoTrackId: String = defaultPublisherVideoTrackId
+    
+    /// パブリッシャーの音声トラックの ID です。
+    /// 通常、指定する必要はありません。
     public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
     
     // MARK: - 初期化
     
+    /**
+     初期化します。
+     
+     - parameter url: Sora サーバーの URL
+     - parameter channelId: チャネル ID
+     - parameter role: ロール
+     */
     public init(url: URL, channelId: String, role: Role) {
         self.url = url
         self.channelId = channelId

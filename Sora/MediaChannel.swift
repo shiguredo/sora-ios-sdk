@@ -16,11 +16,23 @@ public class MediaChannelHandlers {
 
 public class MediaChannel {
     
+    /**
+     `MediaChannel` の接続状態を表します。
+     */
     public enum State {
+        
+        /// 接続試行中
         case connecting
+        
+        /// 接続済み
         case connected
+        
+        /// 接続解除試行中
         case disconnecting
+        
+        /// 接続解除済み
         case disconnected
+
     }
     
     // MARK: - プロパティ
@@ -28,7 +40,12 @@ public class MediaChannel {
     public let handlers: MediaChannelHandlers = MediaChannelHandlers()
     
     public let configuration: Configuration
+    
+    /**
+     クライアント ID 。接続後にセットされます。
+     */
     public private(set) var clientId: String?
+    
     public let peerChannel: PeerChannel
     
     public var streams: [MediaStream] {

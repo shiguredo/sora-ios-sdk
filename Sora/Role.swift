@@ -1,8 +1,17 @@
 import Foundation
 
+/**
+ 接続するクライアントのロールを表します。
+ */
 public enum Role {
+    
+    /// パブリッシャー
     case publisher
+    
+    /// サブスクライバー
     case subscriber
+    
+    /// グループ (マルチストリーム)
     case group
 }
 
