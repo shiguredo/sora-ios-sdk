@@ -21,8 +21,6 @@ public class MediaChannel {
         case connected
         case disconnecting
         case disconnected
-        case waitingOffer
-        case waitingPeer
     }
     
     // MARK: - プロパティ
