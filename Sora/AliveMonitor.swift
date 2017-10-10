@@ -72,7 +72,7 @@ final class AliveMonitor {
     
     private var timer: Timer?
     
-    public func addObject(_ object: AliveMonitored) {
+    public func add(_ object: AliveMonitored) {
         objects.append(object)
     }
     

@@ -83,11 +83,11 @@ public class MediaChannel {
             .init(configuration: configuration)
         
         /*
-         aliveMonitor.addObject(signalingChannel)
+         aliveMonitor.add(signalingChannel)
          if let channel = signalingChannel.webSocketChannel {
-         aliveMonitor.addObject(channel)
+         aliveMonitor.add(channel)
          }
-         aliveMonitor.addObject(peerChannel)
+         aliveMonitor.add(peerChannel)
          aliveMonitor.onChange(handler: self.handleChannelStateChanges)
          */
     }
