@@ -17,16 +17,28 @@ public class VideoCapturerHandlers {
 //   - フレームは描画前に VideoFilter によって変換される
 public protocol VideoCapturer {
     
+    /// ストリーム
     weak var stream: MediaStream? { get set }
+    
+    /// イベントハンドラ
     var handlers: VideoCapturerHandlers { get }
     
+    /// 映像キャプチャーを起動します。
     func start()
+    
+    /// 映像キャプチャーを停止します。
     func stop()
     
 }
 
 public protocol VideoFilter {
     
+    /**
+     映像フレームを加工します。
+     
+     - parameter videoFrame: 加工前の映像フレーム
+     - returns: 加工後の映像フレーム
+     */
     func filter(videoFrame: VideoFrame) -> VideoFrame
     
 }

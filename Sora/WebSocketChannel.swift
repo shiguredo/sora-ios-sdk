@@ -1,22 +1,54 @@
 import Foundation
 import SocketRocket
 
+/**
+ WebSocket のステータスコードを表します。
+ */
 public enum WebSocketStatusCode {
     
-    case normal // 1000
-    case goingAway // 1001
-    case protocolError // 1002
-    case unhandledType // 1003
-    case noStatusReceived // 1005
-    case abnormal // 1006
-    case invalidUTF8 // 1007
-    case policyViolated // 1008
-    case messageTooBig // 1009
-    case missingExtension // 1010
-    case internalError // 1011
-    case serviceRestart // 1012
-    case tryAgainLater // 1013
-    case tlsHandshake // 1015
+    /// 1000
+    case normal
+    
+    /// 1001
+    case goingAway
+    
+    /// 1002
+    case protocolError
+    
+    /// 1003
+    case unhandledType
+    
+    /// 1005
+    case noStatusReceived
+    
+    /// 1006
+    case abnormal
+    
+    /// 1007
+    case invalidUTF8
+    
+    /// 1008
+    case policyViolated
+    
+    /// 1009
+    case messageTooBig
+    
+    /// 1010
+    case missingExtension
+    
+    /// 1011
+    case internalError
+    
+    /// 1012
+    case serviceRestart
+    
+    /// 1013
+    case tryAgainLater
+    
+    /// 1015
+    case tlsHandshake
+    
+    /// その他のコード
     case other(Int)
     
     static let table: [(WebSocketStatusCode, Int)] = [
@@ -38,6 +70,11 @@ public enum WebSocketStatusCode {
     
     // MARK: - 初期化
     
+    /**
+     初期化します。
+     
+     - parameter rawValue: ステータスコード
+     */
     public init(rawValue: Int) {
         for pair in WebSocketStatusCode.table {
             if pair.1 == rawValue {
@@ -50,6 +87,11 @@ public enum WebSocketStatusCode {
     
     // MARK: 変換
     
+    /**
+     整数で表されるステータスコードを返します。
+     
+     - returns: ステータスコード
+     */
     public func intValue() -> Int {
         switch self {
         case .normal:
@@ -87,22 +129,50 @@ public enum WebSocketStatusCode {
     
 }
 
+/**
+ WebSocket チャネルの接続状態を表します。
+ */
 public enum WebSocketChannelState {
+    
+    /// 接続試行中
     case connecting
+    
+    /// 接続済み
     case connected
+    
+    /// 接続解除試行中
     case disconnecting
+    
+    /// 接続解除済み
     case disconnected
+    
 }
 
+/**
+ WebSocket の通信で送受信されるメッセージを表します。
+ */
 public enum WebSocketMessage {
+    
+    /// テキスト
     case text(String)
+    
+    /// バイナリ
     case binary(Data)
+    
 }
 
+/**
+ WebSocket チャネルのイベントハンドラです。
+ */
 public class WebSocketChannelHandlers {
     
+    /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
+    
+    /// pong の送信時に呼ばれるブロック
     public var onPongHandler: ((Data) -> Void)?
+    
+    /// メッセージ受信時に呼ばれるブロック
     public var onMessageHandler: ((WebSocketMessage) ->Void)?
     
 }
@@ -111,21 +181,48 @@ public protocol WebSocketChannel {
     
     // MARK: - プロパティ
     
+    /// サーバーの URL
     var url: URL { get }
+    
+    /// 接続状態
     var state: WebSocketChannelState { get }
+    
+    /// イベントハンドラ
     var handlers: WebSocketChannelHandlers { get }
     
     // MARK: - 初期化
     
+    /**
+     初期化します。
+     
+     - parameter url: サーバーの URL
+     */
     init(url: URL)
     
     // MARK: - 接続
     
-    func connect(handler: @escaping (Error?) -> Void)
+    /**
+     サーバーに接続します。
+     
+     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter error: (接続失敗時のみ) エラー
+     */
+    func connect(handler: @escaping (_ error: Error?) -> Void)
+    
+    /**
+     接続を解除します。
+     
+     - parameter error: 接続解除の原因となったエラー
+     */
     func disconnect(error: Error?)
     
     // MARK: メッセージの送信
     
+    /**
+     メッセージを送信します。
+     
+     - parameter message: 送信するメッセージ
+     */
     func send(message: WebSocketMessage)
     
 }

@@ -67,8 +67,22 @@ public struct Configuration {
     
     // MARK: - 接続チャネルに関する設定
     
+    /**
+     生成されるシグナリングチャネルの型。
+     何も指定しなければデフォルトのシグナリングチャネルが生成されます。
+     */
     public var signalingChannelType: SignalingChannel.Type?
+    
+    /**
+     生成される WebSocket チャネルの型。
+     何も指定しなければデフォルトの WebSocket チャネルが生成されます。
+     */
     public var webSocketChannelType: WebSocketChannel.Type?
+    
+    /**
+     生成されるピアチャネルの型。
+     何も指定しなければデフォルトのピアチャネルが生成されます。
+     */
     public var peerChannelType: PeerChannel.Type?
     
     var _signalingChannelType: SignalingChannel.Type {

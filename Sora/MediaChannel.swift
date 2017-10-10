@@ -93,6 +93,11 @@ public class MediaChannel {
     
     // MARK: - 初期化
     
+    /**
+     初期化します。
+     
+     - parameter configuration: クライアントの設定
+     */
     public init(configuration: Configuration) {
         Logger.debug(type: .mediaChannel,
                   message: "create signaling channel (\(configuration._signalingChannelType))")
@@ -115,9 +120,17 @@ public class MediaChannel {
     
     // MARK: - 接続
     
+    /**
+     Sora サーバーに接続します。
+     
+     - parameter webRTCConfiguration: WebRTC の設定
+     - parameter timeout: タイムアウトまでの秒数
+     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter error: (接続失敗時) エラー
+     */
     public func connect(webRTCConfiguration: WebRTCConfiguration,
                         timeout: Int = Configuration.defaultConnectionTimeout,
-                        handler: @escaping (Error?) -> Void) {
+                        handler: @escaping (_ error: Error?) -> Void) {
         DispatchQueue.global().async {
             self.basicConnect(webRTCConfiguration: webRTCConfiguration,
                               timeout: timeout,
@@ -176,6 +189,11 @@ public class MediaChannel {
         }
     }
 
+    /**
+     接続を解除します。
+     
+     - parameter error: 接続解除の原因となったエラー
+     */
     public func disconnect(error: Error?) {
         switch state {
         case .disconnecting, .disconnected:

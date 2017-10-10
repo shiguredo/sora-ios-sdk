@@ -1,9 +1,15 @@
 import Foundation
 import WebRTC
 
+/**
+ メディア制約を表します。
+ */
 public struct MediaConstraints {
     
+    /// 必須の制約
     public var mandatory: [String: String] = [:]
+    
+    /// オプションの制約
     public var optional: [String: String] = [:]
     
     var nativeValue: RTCMediaConstraints {
@@ -19,15 +25,22 @@ public struct WebRTCConfiguration {
     
     // MARK: メディア制約に関する設定
     
+    /// メディア制約
     public var constraints: MediaConstraints = MediaConstraints()
     
     // MARK: ICE サーバーに関する設定
     
+    /// ICE サーバー情報のリスト
     public var iceServerInfos: [ICEServerInfo]
+    
+    /// ICE 通信ポリシー
     public var iceTransportPolicy: ICETransportPolicy = .relay
 
     // MARK: - 初期化
     
+    /**
+     初期化します。
+     */
     public init() {
         iceServerInfos = [
             ICEServerInfo(urls: [URL(string: "stun:stun.l.google.com:19302")!],

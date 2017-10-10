@@ -31,7 +31,8 @@ public class Sora {
     
     // MARK: - プロパティ
     
-    // TODO: This is most likely can be non-optional value: `load()` only returns `nil` when the bundle is severly broken
+    // リンクしている WebRTC フレームワークの情報。
+    // Sora iOS SDK が指定するバイナリでなければ ``nil`` 。
     public let webRTCInfo: WebRTCInfo? = WebRTCInfo.load()
     
     /**
@@ -52,13 +53,18 @@ public class Sora {
     }
     
     /**
-     - parameter configuration:
-     - parameter webRTCConfiguration:
-     - parameter handler:
+     Sora サーバーに接続します。
+     
+     - parameter configuration: クライアントの設定
+     - parameter webRTCConfiguration: WebRTC の設定
+     - parameter handler: 接続試行後に呼ばれるブロック。
+     - parameter mediaChannel: (接続成功時のみ) メディアチャネル
+     - parameter error: (接続失敗時のみ) エラー
      */
     public func connect(configuration: Configuration,
                         webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
-                        handler: @escaping (MediaChannel?, Error?) -> Void) {
+                        handler: @escaping (_ mediaChannel: MediaChannel?,
+        _ error: Error?) -> Void) {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(configuration: configuration)
         mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
