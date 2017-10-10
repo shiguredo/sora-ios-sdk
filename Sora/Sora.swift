@@ -24,11 +24,19 @@ public class Sora {
         RTCCleanupSSL()
     }
     
+    // MARK: - インスタンスの取得
+    
+    /// シングルトンインスタンス
     public static let shared: Sora = Sora()
+    
+    // MARK: - プロパティ
     
     // TODO: This is most likely can be non-optional value: `load()` only returns `nil` when the bundle is severly broken
     public let webRTCInfo: WebRTCInfo? = WebRTCInfo.load()
     
+    /**
+     初期化します。
+     */
     public init() {
         // This will guarantee that `Sora.initialize()` is called only once.
         // - It works even if user initialized `Sora` directly

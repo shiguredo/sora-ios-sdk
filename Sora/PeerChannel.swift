@@ -129,22 +129,50 @@ class PeerChannelInternalState {
     }
 }
 
+/**
+ ピアチャネルのイベントハンドラです。
+ */
 public class PeerChannelHandlers {
     
+    /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
+    
+    /// ストリームの追加時に呼ばれるブロック
     public var onAddStreamHandler: ((MediaStream) -> Void)?
+    
+    /// ストリームの除去時に呼ばれるブロック
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
+    
+    /// マルチストリームの状態の更新に呼ばれるブロック。
+    /// 更新により、ストリームの追加または除去が行われます。
     public var onUpdateHandler: ((String) -> Void)?
+    
+    /// スナップショットの受信時に呼ばれるブロック
     public var onSnapshotHandler: ((Snapshot) -> Void)?
+    
+    /// イベント通知のに呼ばれるブロック
     public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
+    
+    /// ping の受信時に呼ばれるブロック
     public var onPingHandler: (() -> Void)?
     
 }
 
+/**
+ ピアチャネルの接続状態を表します。
+ */
 public enum PeerChannelState {
+    
+    /// 接続試行中
     case connecting
+    
+    /// 接続成功済み
     case connected
+    
+    /// 接続解除試行中
     case disconnecting
+    
+    /// 接続解除済み
     case disconnected
 }
 

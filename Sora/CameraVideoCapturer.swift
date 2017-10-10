@@ -3,12 +3,17 @@ import WebRTC
 
 public class CameraVideoCapturer: VideoCapturer {
     
+    // MARK: インスタンスの取得
+    
+    /// シングルトンインスタンス
     public static var shared: CameraVideoCapturer = CameraVideoCapturer()
     
+    /// :nodoc:
     public static var captureDevices: [AVCaptureDevice] {
         get { return RTCCameraVideoCapturer.captureDevices() }
     }
     
+    /// :nodoc:
     public static func captureDevice(for position: CameraPosition) -> AVCaptureDevice? {
         for device in CameraVideoCapturer.captureDevices {
             switch (device.position, position) {
@@ -21,22 +26,32 @@ public class CameraVideoCapturer: VideoCapturer {
         return nil
     }
     
+    /// :nodoc:
     public static func suitableFormat(for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
         // TODO
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
         return formats[0]
     }
     
+    /// :nodoc:
     public static func suitableFrameRate(for format: AVCaptureDevice.Format) -> Int? {
         return format.videoSupportedFrameRateRanges.max { a, b in
             return a.maxFrameRate < b.maxFrameRate
             }.map { return Int($0.maxFrameRate) }
     }
     
+    // MARK: プロパティ
+    
+    /// 出力先のストリーム
     public var stream: MediaStream?
+    
+    /// カメラが起動中であれば ``true``
     public private(set) var isRunning: Bool = false
+    
+    /// イベントハンドラ
     public var handlers: VideoCapturerHandlers = VideoCapturerHandlers()
     
+    /// カメラの位置
     public var position: CameraPosition = .front {
         didSet {
             guard isRunning else { return }
@@ -75,6 +90,7 @@ public class CameraVideoCapturer: VideoCapturer {
         }
     }
 
+    /// 使用中のカメラの位置に対応するデバイス
     public var currentCameraDevice: AVCaptureDevice? {
         get {
             switch position {
@@ -98,6 +114,9 @@ public class CameraVideoCapturer: VideoCapturer {
         backCameraDevice = CameraVideoCapturer.captureDevice(for: .back)
     }
     
+    // MARK: カメラの操作
+    
+    /// カメラを起動します。
     public func start() {
         if isRunning {
             return
@@ -125,6 +144,7 @@ public class CameraVideoCapturer: VideoCapturer {
         isRunning = true
     }
     
+    /// カメラを停止します。
     public func stop() {
         if isRunning {
             Logger.debug(type: .cameraVideoCapturer, message: "stop")
@@ -133,6 +153,7 @@ public class CameraVideoCapturer: VideoCapturer {
         isRunning = false
     }
     
+    /// カメラの位置を反転します。
     public func flip() {
         position = position.flip()
     }

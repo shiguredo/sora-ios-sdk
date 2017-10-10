@@ -12,9 +12,15 @@ public enum SignalingChannelState {
     case disconnected
 }
 
+/**
+ シグナリングチャネルのイベントハンドラです。
+ */
 public class SignalingChannelHandlers {
     
+    /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
+    
+    /// メッセージ受信時に呼ばれるブロック
     public var onMessageHandler: ((SignalingMessage) -> Void)?
     
 }

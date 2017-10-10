@@ -1,13 +1,27 @@
 import Foundation
 
+/// メディアチャネルのイベントハンドラです。
 public class MediaChannelHandlers {
     
+    /// 接続成功時に呼ばれるブロック
     public var onConnectHandler: ((Error?) -> Void)?
+    
+    /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
+    
+    /// 接続中にエラーが発生したときに呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
+    
+    /// シグナリングメッセージの受信時に呼ばれるブロック
     public var onMessageHandler: ((SignalingMessage) -> Void)?
+    
+    /// ストリームが追加されたときに呼ばれるブロック
     public var onAddStreamHandler: ((MediaStream) -> Void)?
+    
+    /// ストリームが除去されたときに呼ばれるブロック
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
+    
+    /// Sora サーバーからのイベント通知の受信時に呼ばれるハンドラ
     public var onEventHandler: ((Event) -> Void)?
     
 }
@@ -37,8 +51,10 @@ public class MediaChannel {
     
     // MARK: - プロパティ
     
+    /// イベントハンドラ
     public let handlers: MediaChannelHandlers = MediaChannelHandlers()
     
+    /// クライアントの設定
     public let configuration: Configuration
     
     /**
@@ -46,16 +62,20 @@ public class MediaChannel {
      */
     public private(set) var clientId: String?
     
+    /// ピアチャネル
     public let peerChannel: PeerChannel
     
+    /// ストリームのリスト
     public var streams: [MediaStream] {
         return peerChannel.streams
     }
     
+    /// 先頭のストリーム
     public var mainStream: MediaStream? {
         return streams.first
     }
     
+    /// 接続状態
     public private(set) var state: State = .disconnected {
         didSet {
             Logger.trace(type: .mediaChannel,
@@ -63,6 +83,7 @@ public class MediaChannel {
         }
     }
     
+    /// 接続中であれば ``true``
     public var isAvailable: Bool {
         get { return state == .connected }
     }
