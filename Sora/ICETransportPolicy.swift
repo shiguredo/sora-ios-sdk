@@ -4,9 +4,15 @@ import WebRTC
 private var iceTransportPolicyTable: [ICETransportPolicy: RTCIceTransportPolicy] =
     [.relay: .relay, .all: .all]
 
+/**
+ ICE 通信ポリシーを表します。
+ */
 public enum ICETransportPolicy {
     
+    /// TURN サーバーを経由するメディアリレー候補のみを使用します。
     case relay
+
+    /// すべての候補を使用します。
     case all
     
     var nativeValue: RTCIceTransportPolicy {

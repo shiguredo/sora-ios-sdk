@@ -24,7 +24,7 @@ public struct WebRTCConfiguration {
     // MARK: ICE サーバーに関する設定
     
     public var iceServerInfos: [ICEServerInfo]
-    public var iceTransportPolicy: ICETransportPolicy = .none
+    public var iceTransportPolicy: ICETransportPolicy = .relay
 
     // MARK: - 初期化
     

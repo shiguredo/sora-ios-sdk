@@ -1,11 +1,23 @@
 import Foundation
 import WebRTC
 
+/**
+ ICE サーバーの情報を表します。
+ */
 public final class ICEServerInfo {
     
+    // MARK: プロパティ
+    
+    /// URL のリスト
     public var urls: [URL] = []
+    
+    /// ユーザー名
     public var userName: String?
+    
+    /// クレデンシャル
     public var credential: String?
+    
+    /// TLS のセキュリティポリシー
     public var tlsSecurityPolicy: TLSSecurityPolicy = .secure
 
     var nativeValue: RTCIceServer {
@@ -17,6 +29,9 @@ public final class ICEServerInfo {
         }
     }
     
+    // MARK: 初期化
+    
+    /// 初期化します。
     public init(urls: [URL],
                 userName: String?,
                 credential: String?,

@@ -1,6 +1,9 @@
 import Foundation
 import WebRTC
 
+/**
+ WebRTC フレームワークの情報を表します。
+ */
 public struct WebRTCInfo {
     
     static func load() -> WebRTCInfo? {
@@ -21,9 +24,13 @@ public struct WebRTCInfo {
         }
     }
     
+    /// WebRTC フレームワークのバージョン
     public let version: String
+    
+    /// WebRTC フレームワークのソースコードのリビジョン
     public let revision: String
     
+    /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
     public var shortRevision: String {
         return String(revision[revision.index(revision.startIndex, offsetBy: 7)])
     }
