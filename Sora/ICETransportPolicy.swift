@@ -2,16 +2,11 @@ import Foundation
 import WebRTC
 
 private var iceTransportPolicyTable: [ICETransportPolicy: RTCIceTransportPolicy] =
-    [.none: .none,
-     .relay: .relay,
-     .noHost: .noHost,
-     .all: .all]
+    [.relay: .relay, .all: .all]
 
 public enum ICETransportPolicy {
     
-    case none
     case relay
-    case noHost
     case all
     
     var nativeValue: RTCIceTransportPolicy {
