@@ -374,7 +374,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                          constraints: webRTCConfiguration.constraints)
         let stream = BasicMediaStream(nativeStream: nativeStream)
         if configuration.videoEnabled {
-            switch configuration.videoCapturerOption {
+            switch configuration.videoCapturerDevice {
             case .camera:
                 // カメラが指定されている場合は、接続処理と同時にデフォルトのCameraVideoCapturerを使用してキャプチャを開始する
                 CameraVideoCapturer.shared.start()
@@ -395,7 +395,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     /** `initializePublisherStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
     func terminatePublisherStream() {
         if configuration.videoEnabled {
-            switch configuration.videoCapturerOption {
+            switch configuration.videoCapturerDevice {
             case .camera:
                 // カメラが指定されている場合は
                 // 接続時に自動的に開始したキャプチャを、切断時に自動的に停止する必要がある

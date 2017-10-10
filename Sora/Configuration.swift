@@ -45,7 +45,7 @@ public struct Configuration {
     public var videoBitRate: Int?
     
     /// 映像キャプチャーの種別。デフォルトは `.camera` です。
-    public var videoCapturerOption: VideoCapturerOption = .camera
+    public var videoCapturerDevice: VideoCapturerDevice = .camera
     
     /// 音声コーデック。デフォルトは `.default` です。
     public var audioCodec: AudioCodec = .default
@@ -115,7 +115,7 @@ extension Configuration: Codable {
         case connectionTimeout
         case videoCodec
         case videoBitRate
-        case videoCapturerOption
+        case videoCapturerDevice
         case audioCodec
         case videoEnabled
         case audioEnabled
@@ -145,8 +145,8 @@ extension Configuration: Codable {
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
         videoCodec = try container.decode(VideoCodec.self, forKey: .videoCodec)
-        videoCapturerOption = try container
-            .decode(VideoCapturerOption.self, forKey: .videoCapturerOption)
+        videoCapturerDevice = try container
+            .decode(VideoCapturerDevice.self, forKey: .videoCapturerDevice)
         if container.contains(.videoBitRate) {
             videoBitRate = try container.decode(Int.self, forKey: .videoBitRate)
         }
@@ -170,7 +170,7 @@ extension Configuration: Codable {
         if let bitRate = self.videoBitRate {
             try container.encode(bitRate, forKey: .videoBitRate)
         }
-        try container.encode(videoCapturerOption, forKey: .videoCapturerOption)
+        try container.encode(videoCapturerDevice, forKey: .videoCapturerDevice)
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encode(snapshotEnabled, forKey: .snapshotEnabled)

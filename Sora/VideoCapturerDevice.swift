@@ -5,7 +5,7 @@ import Foundation
  
  `Configuration` 内で `videoEnabled` が有効になっている際に、初期値としてどの `VideoCapturer` が使用されるかを指定するオプションです。
  */
-public enum VideoCapturerOption {
+public enum VideoCapturerDevice {
     
     /**
      `CameraVideoCapturer` を `VideoCapturer` として使用します。
@@ -34,23 +34,23 @@ public enum VideoCapturerOption {
     
 }
 
-private var videoCapturerOptionTable: PairTable<String, VideoCapturerOption> =
+private var videoCapturerDeviceTable: PairTable<String, VideoCapturerDevice> =
     PairTable(pairs: [("camera", .camera),
                       ("custom", .custom)])
 
 /**
  :nodoc:
  */
-extension VideoCapturerOption: Codable {
+extension VideoCapturerDevice: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        self = videoCapturerOptionTable.right(other: try container.decode(String.self))!
+        self = videoCapturerDeviceTable.right(other: try container.decode(String.self))!
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(videoCapturerOptionTable.left(other: self)!)
+        try container.encode(videoCapturerDeviceTable.left(other: self)!)
     }
     
 }
