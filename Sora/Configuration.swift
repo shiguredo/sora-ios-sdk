@@ -67,9 +67,27 @@ public struct Configuration {
     
     // MARK: - 接続チャネルに関する設定
     
-    public var signalingChannelType: SignalingChannel.Type = BasicSignalingChannel.self
-    public var webSocketChannelType: WebSocketChannel.Type = BasicWebSocketChannel.self
-    public var peerChannelType: PeerChannel.Type = BasicPeerChannel.self
+    public var signalingChannelType: SignalingChannel.Type?
+    public var webSocketChannelType: WebSocketChannel.Type?
+    public var peerChannelType: PeerChannel.Type?
+    
+    var _signalingChannelType: SignalingChannel.Type {
+        get {
+            return signalingChannelType ?? BasicSignalingChannel.self
+        }
+    }
+    
+    var _webSocketChannelType: WebSocketChannel.Type {
+        get {
+            return webSocketChannelType ?? BasicWebSocketChannel.self
+        }
+    }
+    
+    var _peerChannelType: PeerChannel.Type {
+        get {
+            return peerChannelType ?? BasicPeerChannel.self
+        }
+    }
     
     // MARK: パブリッシャーに関する設定
     

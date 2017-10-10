@@ -281,7 +281,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     init(channel: BasicPeerChannel) {
         self.channel = channel
-        signalingChannel = channel.configuration.signalingChannelType
+        signalingChannel = channel.configuration._signalingChannelType
             .init(configuration: channel.configuration)
         super.init()
         

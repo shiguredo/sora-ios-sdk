@@ -74,12 +74,12 @@ public class MediaChannel {
     
     public init(configuration: Configuration) {
         Logger.debug(type: .mediaChannel,
-                  message: "create signaling channel (\(configuration.signalingChannelType))")
+                  message: "create signaling channel (\(configuration._signalingChannelType))")
         Logger.debug(type: .mediaChannel,
-                  message: "create peer channel (\(configuration.peerChannelType))")
+                  message: "create peer channel (\(configuration._peerChannelType))")
         
         self.configuration = configuration
-        self.peerChannel = configuration.peerChannelType
+        self.peerChannel = configuration._peerChannelType
             .init(configuration: configuration)
         
         /*

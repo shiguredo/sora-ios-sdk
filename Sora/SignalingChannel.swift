@@ -65,7 +65,7 @@ class BasicSignalingChannel: SignalingChannel {
     required init(configuration: Configuration) {
         self.configuration = configuration
         self.webSocketChannel = configuration
-            .webSocketChannelType.init(url: configuration.url)
+            ._webSocketChannelType.init(url: configuration.url)
         
         webSocketChannel!.handlers.onFailureHandler = handleFailure
         webSocketChannel!.handlers.onMessageHandler = handleMessage
