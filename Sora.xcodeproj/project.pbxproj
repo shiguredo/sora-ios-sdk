@@ -51,6 +51,7 @@
 		9160866E1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */; };
 		916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* AspectRatio.swift */; };
 		9161BB401F2B31C200569748 /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
+		91629BF21F8E5099001193D0 /* Array+Base.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91629BF11F8E5098001193D0 /* Array+Base.swift */; };
 		9163401B1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */; };
 		91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */; };
 		91672C7D1F796E81002300E7 /* UIViewController+Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C7C1F796E81002300E7 /* UIViewController+Alert.swift */; };
@@ -171,6 +172,7 @@
 		915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraVideoCapturer.swift; sourceTree = "<group>"; };
 		9160866D1F715BD100FC52A7 /* VideoViewAspectRatioViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoViewAspectRatioViewController.swift; sourceTree = "<group>"; };
 		9161BB3F1F2B31C200569748 /* SDWebImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SDWebImage.framework; path = Carthage/Build/iOS/SDWebImage.framework; sourceTree = "<group>"; };
+		91629BF11F8E5098001193D0 /* Array+Base.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "Array+Base.swift"; sourceTree = "<group>"; };
 		9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RTCPeerConnection+SessionDescription.swift"; sourceTree = "<group>"; };
 		91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCConfigration.swift; sourceTree = "<group>"; };
 		91672C7C1F796E81002300E7 /* UIViewController+Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIViewController+Alert.swift"; sourceTree = "<group>"; };
@@ -313,6 +315,7 @@
 		91BDC1D31F6285D10084DC3A /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
+				91629BF11F8E5098001193D0 /* Array+Base.swift */,
 				91FD95741DCA06F700047BA9 /* RTC+Description.swift */,
 				9163401A1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift */,
 				91BDC1D81F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift */,
@@ -685,6 +688,7 @@
 				910D444F1F4D7ACC00D35917 /* Event.swift in Sources */,
 				910090501E58B5450099E00E /* VideoView.swift in Sources */,
 				91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */,
+				91629BF21F8E5099001193D0 /* Array+Base.swift in Sources */,
 				9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */,
 				91A19B8C1F19366B00A76852 /* PeerChannel.swift in Sources */,
 				913D5E201F57E8F300A82DEA /* ConfigurationMainViewController.swift in Sources */,
