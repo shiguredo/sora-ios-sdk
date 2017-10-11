@@ -68,6 +68,9 @@ public class MediaChannel {
      */
     public private(set) var clientId: String?
     
+    /// シグナリングチャネル
+    public let signalingChannel: SignalingChannel
+    
     /// ピアチャネル
     public let peerChannel: PeerChannel
     
@@ -111,8 +114,11 @@ public class MediaChannel {
                   message: "create peer channel (\(configuration._peerChannelType))")
         
         self.configuration = configuration
-        self.peerChannel = configuration._peerChannelType
+        self.signalingChannel = configuration._signalingChannelType
             .init(configuration: configuration)
+        self.peerChannel = configuration._peerChannelType
+            .init(configuration: configuration,
+                  signalingChannel: signalingChannel)
         
         /*
          aliveMonitor.add(signalingChannel)

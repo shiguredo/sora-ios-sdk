@@ -183,6 +183,10 @@ public protocol PeerChannel {
     // MARK: - プロパティ
     
     var configuration: Configuration { get }
+    
+    /// シグナリングチャネル
+    var signalingChannel: SignalingChannel { get }
+    
     var handlers: PeerChannelHandlers { get }
     
     /**
@@ -197,7 +201,7 @@ public protocol PeerChannel {
     
     // MARK: - 初期化
     
-    init(configuration: Configuration)
+    init(configuration: Configuration, signalingChannel: SignalingChannel)
     
     // MARK: - 接続
     
@@ -214,6 +218,7 @@ class BasicPeerChannel: PeerChannel {
     let handlers: PeerChannelHandlers = PeerChannelHandlers()
     let internalHandlers: PeerChannelHandlers = PeerChannelHandlers()
     let configuration: Configuration
+    let signalingChannel: SignalingChannel
     
     private(set) var streams: [MediaStream] = []
     private(set) var iceCandidates: [ICECandidate] = []
@@ -239,8 +244,9 @@ class BasicPeerChannel: PeerChannel {
     
     private var context: BasicPeerChannelContext!
     
-    required init(configuration: Configuration) {
+    required init(configuration: Configuration, signalingChannel: SignalingChannel) {
         self.configuration = configuration
+        self.signalingChannel = signalingChannel
         context = BasicPeerChannelContext(channel: self)
     }
     
@@ -307,7 +313,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     var state: State = .disconnected
     var nativeChannel: RTCPeerConnection!
     var internalState: PeerChannelInternalState!
-    var signalingChannel: SignalingChannel
+    
+    var signalingChannel: SignalingChannel {
+        get { return channel.signalingChannel }
+    }
+    
     var webRTCConfiguration: WebRTCConfiguration!
     var clientId: String?
     
@@ -319,8 +329,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     init(channel: BasicPeerChannel) {
         self.channel = channel
-        signalingChannel = channel.configuration._signalingChannelType
-            .init(configuration: channel.configuration)
         super.init()
         
         signalingChannel.internalHandlers.onMessageHandler = handleMessage
