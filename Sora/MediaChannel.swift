@@ -54,6 +54,10 @@ public class MediaChannel {
     /// イベントハンドラ
     public let handlers: MediaChannelHandlers = MediaChannelHandlers()
     
+    /**
+     内部処理で使われるイベントハンドラ。
+     このハンドラをカスタマイズに使うべきではありません。
+     */
     private let internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
     /// クライアントの設定
