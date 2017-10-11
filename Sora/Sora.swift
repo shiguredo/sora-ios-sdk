@@ -21,6 +21,7 @@ public class Sora {
     }
     
     public static func finish() {
+        RTCShutdownInternalTracer()
         RTCCleanupSSL()
     }
     
