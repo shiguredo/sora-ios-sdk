@@ -66,7 +66,11 @@ public final class MediaChannel {
     /**
      クライアント ID 。接続後にセットされます。
      */
-    public private(set) var clientId: String?
+    public var clientId: String? {
+        get {
+            return peerChannel.clientId
+        }
+    }
     
     /// シグナリングチャネル
     public let signalingChannel: SignalingChannel
