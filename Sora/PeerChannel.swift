@@ -96,8 +96,8 @@ class PeerChannelInternalState {
     var onCompleteHandler: (() -> Void)?
     
     init(signalingState: PeerChannelSignalingState,
-                iceConnectionState: ICEConnectionState,
-                iceGatheringState: ICEGatheringState) {
+         iceConnectionState: ICEConnectionState,
+         iceGatheringState: ICEGatheringState) {
         self.signalingState = signalingState
         self.iceConnectionState = iceConnectionState
         self.iceGatheringState = iceGatheringState
@@ -190,7 +190,7 @@ public protocol PeerChannel {
      このハンドラをカスタマイズに使うべきではありません。
      */
     var internalHandlers: PeerChannelHandlers { get }
-
+    
     var clientId: String? { get }
     var streams: [MediaStream] { get }
     var state: PeerChannelState { get }
@@ -221,7 +221,7 @@ class BasicPeerChannel: PeerChannel {
     var clientId: String? {
         get { return context.clientId }
     }
-
+    
     var state: PeerChannelState {
         get {
             switch context.state {
@@ -272,7 +272,7 @@ class BasicPeerChannel: PeerChannel {
     }
     
     func connect(webRTCConfiguration: WebRTCConfiguration,
-                        handler: @escaping (Error?) -> Void) {
+                 handler: @escaping (Error?) -> Void) {
         context.connect(webRTCConfiguration: webRTCConfiguration,
                         handler: handler)
     }
@@ -549,13 +549,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 Logger.debug(type: .peerChannel, message: "receive notify")
                 channel.internalHandlers.onNotifyHandler?(message)
                 channel.handlers.onNotifyHandler?(message)
-
+                
             case .ping:
                 Logger.debug(type: .peerChannel, message: "receive ping")
                 signalingChannel.send(message: .pong)
                 channel.internalHandlers.onPingHandler?()
                 channel.handlers.onPingHandler?()
-
+                
             default:
                 // discard
                 break
