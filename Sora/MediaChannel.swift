@@ -54,11 +54,8 @@ public final class MediaChannel {
     /// イベントハンドラ
     public let handlers: MediaChannelHandlers = MediaChannelHandlers()
     
-    /**
-     内部処理で使われるイベントハンドラ。
-     このハンドラをカスタマイズに使うべきではありません。
-     */
-    private let internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
+    /// 内部処理で使われるイベントハンドラ
+    let internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
     /// クライアントの設定
     public let configuration: Configuration
@@ -103,20 +100,23 @@ public final class MediaChannel {
     
     private let aliveMonitor: AliveMonitor = AliveMonitor()
     private var connectionTimer: ConnectionTimer?
+    private let manager: Sora
     
     // MARK: - インスタンスの生成
     
     /**
      初期化します。
      
+     - parameter manager: `Sora` オブジェクト
      - parameter configuration: クライアントの設定
      */
-    public init(configuration: Configuration) {
+    init(manager: Sora, configuration: Configuration) {
         Logger.debug(type: .mediaChannel,
                   message: "create signaling channel (\(configuration._signalingChannelType))")
         Logger.debug(type: .mediaChannel,
                   message: "create peer channel (\(configuration._peerChannelType))")
         
+        self.manager = manager
         self.configuration = configuration
         self.signalingChannel = configuration._signalingChannelType
             .init(configuration: configuration)
@@ -246,6 +246,15 @@ extension MediaChannel: CustomStringConvertible {
         get {
             return "MediaChannel(clientId: \(clientId ?? "-"), role: \(configuration.role))"
         }
+    }
+    
+}
+
+// :nodoc:
+extension MediaChannel: Equatable {
+    
+    public static func ==(lhs: MediaChannel, rhs: MediaChannel) -> Bool {
+        return ObjectIdentifier(lhs) == ObjectIdentifier(rhs)
     }
     
 }

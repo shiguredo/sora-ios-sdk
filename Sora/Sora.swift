@@ -1,11 +1,40 @@
 import Foundation
 import WebRTC
 
+/**
+ SDK に関するエラーを表します。
+ */
 public enum SoraError: Error {
+    
+    /// WebSocket に関するエラー
     case webSocketError(error: Error?,
         statusCode: WebSocketStatusCode?,
         reason: String?)
+    
+    /// 接続タイムアウト。
+    /// 接続試行開始から一定時間内に接続できなかったことを示します。
     case connectionTimeout
+    
+}
+
+/// `Sora` オブジェクトのイベントハンドラです。
+public final class SoraHandlers {
+    
+    /// 接続成功時に呼ばれるブロック
+    public var onConnectHandler: ((MediaChannel?, Error?) -> Void)?
+    
+    /// 接続解除時に呼ばれるブロック
+    public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)?
+    
+    /// 接続中にエラーが発生したときに呼ばれるブロック
+    public var onFailureHandler: ((MediaChannel, Error) -> Void)?
+    
+    /// メディアチャネルが追加されたときに呼ばれるブロック
+    public var onAddMediaChannelHandler: ((MediaChannel) -> Void)?
+    
+    /// メディアチャネルが除去されたときに呼ばれるブロック
+    public var onRemoveMediaChannelHandler: ((MediaChannel) -> Void)?
+
 }
 
 public final class Sora {
@@ -34,18 +63,22 @@ public final class Sora {
         RTCCleanupSSL()
     }
     
-    // MARK: - インスタンスの取得
+    // MARK: - プロパティ
+    
+    /// リンクしている WebRTC フレームワークの情報。
+    /// Sora iOS SDK が指定するバイナリでなければ ``nil`` 。
+    public let webRTCInfo: WebRTCInfo? = WebRTCInfo.load()
+
+    /// 接続中のメディアチャネルのリスト
+    public private(set) var mediaChannels: [MediaChannel] = []
+    
+    /// イベントハンドラ
+    public let handlers: SoraHandlers = SoraHandlers()
+    
+    // MARK: - インスタンスの生成と取得
     
     /// シングルトンインスタンス
     public static let shared: Sora = Sora()
-    
-    // MARK: - プロパティ
-    
-    // リンクしている WebRTC フレームワークの情報。
-    // Sora iOS SDK が指定するバイナリでなければ ``nil`` 。
-    public let webRTCInfo: WebRTCInfo? = WebRTCInfo.load()
-    
-    // MARK: - インスタンスの生成
     
     /**
      初期化します。
@@ -64,6 +97,26 @@ public final class Sora {
         if !initialized { fatalError() }
     }
     
+    // MARK: - メディアチャネルの管理
+    
+    func add(mediaChannel: MediaChannel) {
+        if !mediaChannels.contains(mediaChannel) {
+            Logger.debug(type: .sora, message: "add media channel")
+            mediaChannels.append(mediaChannel)
+            handlers.onAddMediaChannelHandler?(mediaChannel)
+        }
+    }
+    
+    func remove(mediaChannel: MediaChannel) {
+        if mediaChannels.contains(mediaChannel) {
+            Logger.debug(type: .sora, message: "remove media channel")
+            mediaChannels.remove(mediaChannel)
+            handlers.onAddMediaChannelHandler?(mediaChannel)
+        }
+    }
+    
+    // MARK: - 接続
+    
     /**
      Sora サーバーに接続します。
      
@@ -78,13 +131,26 @@ public final class Sora {
                         handler: @escaping (_ mediaChannel: MediaChannel?,
         _ error: Error?) -> Void) {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
-        let mediaChan = MediaChannel(configuration: configuration)
+        let mediaChan = MediaChannel(manager: self, configuration: configuration)
         mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
             if let error = error {
                 handler(nil, error)
-            } else {
-                handler(mediaChan, nil)
+                self.handlers.onConnectHandler?(nil, error)
+                return
             }
+            
+            mediaChan.internalHandlers.onDisconnectHandler = { error in
+                self.remove(mediaChannel: mediaChan)
+                self.handlers.onDisconnectHandler?(mediaChan, error)
+            }
+            mediaChan.internalHandlers.onFailureHandler = { error in
+                self.remove(mediaChannel: mediaChan)
+                self.handlers.onFailureHandler?(mediaChan, error)
+            }
+            
+            self.add(mediaChannel: mediaChan)
+            handler(mediaChan, nil)
+            self.handlers.onConnectHandler?(mediaChan, nil)
         }
     }
     
