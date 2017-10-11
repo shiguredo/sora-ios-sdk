@@ -3,6 +3,8 @@ import WebRTC
 
 /**
  WebRTC フレームワークの情報を表します。
+ これらの情報は Sora iOS SDK 指定の WebRTC フレームワークのバイナリの使用時にのみ取得可能です。
+ 他でビルドされた WebRTC フレームワークのバイナリでは取得できません。
  */
 public struct WebRTCInfo {
     
