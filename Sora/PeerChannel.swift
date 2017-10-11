@@ -324,7 +324,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         super.init()
         
         signalingChannel.internalHandlers.onMessageHandler = handleMessage
-        signalingChannel.handlers.onMessageHandler = handleMessage
     }
     
     func connect(webRTCConfiguration: WebRTCConfiguration,
