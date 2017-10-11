@@ -239,3 +239,13 @@ public final class MediaChannel {
     }
     
 }
+
+extension MediaChannel: CustomStringConvertible {
+    
+    public var description: String {
+        get {
+            return "MediaChannel(clientId: \(clientId ?? "-"), role: \(configuration.role))"
+        }
+    }
+    
+}

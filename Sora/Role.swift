@@ -36,3 +36,13 @@ extension Role: Codable {
     }
     
 }
+
+extension Role: CustomStringConvertible {
+    
+    public var description: String {
+        get {
+            return roleTable.left(other: self)!
+        }
+    }
+    
+}
