@@ -29,9 +29,18 @@ public protocol SignalingChannel {
 
     // MARK: - プロパティ
     
+    /// クライアントの設定
     var configuration: Configuration { get }
+    
+    /// WebSocket チャネル
     var webSocketChannel: WebSocketChannel? { get }
+    
+    /// 接続状態
     var state: SignalingChannelState { get }
+    
+    // MARK: - イベントハンドラ
+    
+    /// イベントハンドラ
     var handlers: SignalingChannelHandlers { get }
     
     /**
@@ -42,15 +51,37 @@ public protocol SignalingChannel {
 
     // MARK: - 初期化
     
+    /**
+     初期化します。
+     
+     - parameter configuration: クライアントの設定
+     */
     init(configuration: Configuration)
 
     // MARK: - 接続
     
-    func connect(handler: @escaping (Error?) -> Void)
+    /**
+     サーバーに接続します。
+     
+     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter error: (接続失敗時のみ) エラー
+     */
+    func connect(handler: @escaping (_ error: Error?) -> Void)
+    
+    /**
+     接続を解除します。
+ 
+     - parameter error: 接続解除の原因となったエラー
+     */
     func disconnect(error: Error?)
     
     // MARK: メッセージの送信
     
+    /**
+     サーバーにシグナリングメッセージを送信します。
+     
+     - parameter message: シグナリングメッセージ
+     */
     func send(message: SignalingMessage)
     
 }
