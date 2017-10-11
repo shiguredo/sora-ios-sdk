@@ -49,7 +49,7 @@ public protocol SignalingChannel {
      */
     var internalHandlers: SignalingChannelHandlers { get }
 
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     /**
      初期化します。

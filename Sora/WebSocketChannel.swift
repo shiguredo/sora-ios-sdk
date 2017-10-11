@@ -68,7 +68,7 @@ public enum WebSocketStatusCode {
         (.tlsHandshake, 1015)
     ]
     
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     /**
      初期化します。
@@ -196,7 +196,7 @@ public protocol WebSocketChannel {
      */
     var internalHandlers: WebSocketChannelHandlers { get }
 
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     /**
      初期化します。

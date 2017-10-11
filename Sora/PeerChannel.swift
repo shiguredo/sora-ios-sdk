@@ -199,7 +199,7 @@ public protocol PeerChannel {
     var streams: [MediaStream] { get }
     var state: PeerChannelState { get }
     
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     init(configuration: Configuration, signalingChannel: SignalingChannel)
     

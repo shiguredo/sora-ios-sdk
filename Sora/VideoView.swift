@@ -39,7 +39,7 @@ public class VideoView: UIView {
         return view
     }()
     
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     override public init(frame: CGRect) {
         super.init(frame: frame)

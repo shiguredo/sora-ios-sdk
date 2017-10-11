@@ -36,7 +36,7 @@ public struct WebRTCConfiguration {
     /// ICE 通信ポリシー
     public var iceTransportPolicy: ICETransportPolicy = .relay
 
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     /**
      初期化します。

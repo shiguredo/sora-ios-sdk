@@ -100,7 +100,7 @@ public class MediaChannel {
     private let aliveMonitor: AliveMonitor = AliveMonitor()
     private var connectionTimer: ConnectionTimer?
     
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     /**
      初期化します。

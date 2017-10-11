@@ -10,6 +10,8 @@ public enum SoraError: Error {
 
 public class Sora {
     
+    // MARK: - SDK の操作
+    
     private static let isInitialized: Bool = {
         initialize()
         return true
@@ -21,6 +23,11 @@ public class Sora {
         RTCEnableMetrics()
     }
     
+    /**
+     SDK の終了処理を行います。
+     アプリケーションの終了と同時に SDK の使用を終了する場合、
+     この関数を呼ぶ必要はありません。
+     */
     public static func finish() {
         Logger.debug(type: .sora, message: "finish SDK")
         RTCShutdownInternalTracer()
@@ -37,6 +44,8 @@ public class Sora {
     // リンクしている WebRTC フレームワークの情報。
     // Sora iOS SDK が指定するバイナリでなければ ``nil`` 。
     public let webRTCInfo: WebRTCInfo? = WebRTCInfo.load()
+    
+    // MARK: - インスタンスの生成
     
     /**
      初期化します。

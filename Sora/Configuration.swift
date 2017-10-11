@@ -117,7 +117,7 @@ public struct Configuration {
     /// 通常、指定する必要はありません。
     public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
     
-    // MARK: - 初期化
+    // MARK: - インスタンスの生成
     
     /**
      初期化します。
