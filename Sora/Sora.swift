@@ -16,11 +16,13 @@ public class Sora {
     }()
     
     private static func initialize() {
+        Logger.debug(type: .sora, message: "initialize SDK")
         RTCInitializeSSL()
         RTCEnableMetrics()
     }
     
     public static func finish() {
+        Logger.debug(type: .sora, message: "finish SDK")
         RTCShutdownInternalTracer()
         RTCCleanupSSL()
     }
