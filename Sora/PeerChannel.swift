@@ -184,6 +184,13 @@ public protocol PeerChannel {
     
     var configuration: Configuration { get }
     var handlers: PeerChannelHandlers { get }
+    
+    /**
+     内部処理で使われるイベントハンドラ。
+     このハンドラをカスタマイズに使うべきではありません。
+     */
+    var internalHandlers: PeerChannelHandlers { get }
+
     var clientId: String? { get }
     var streams: [MediaStream] { get }
     var state: PeerChannelState { get }
@@ -205,6 +212,7 @@ public protocol PeerChannel {
 class BasicPeerChannel: PeerChannel {
     
     let handlers: PeerChannelHandlers = PeerChannelHandlers()
+    let internalHandlers: PeerChannelHandlers = PeerChannelHandlers()
     let configuration: Configuration
     
     private(set) var streams: [MediaStream] = []
@@ -238,6 +246,7 @@ class BasicPeerChannel: PeerChannel {
     
     func add(stream: MediaStream) {
         streams.append(stream)
+        internalHandlers.onAddStreamHandler?(stream)
         handlers.onAddStreamHandler?(stream)
     }
     
@@ -250,6 +259,7 @@ class BasicPeerChannel: PeerChannel {
     
     func remove(stream: MediaStream) {
         streams = streams.filter { each in each.streamId != stream.streamId }
+        internalHandlers.onRemoveStreamHandler?(stream)
         handlers.onRemoveStreamHandler?(stream)
     }
     
@@ -313,6 +323,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             .init(configuration: channel.configuration)
         super.init()
         
+        signalingChannel.internalHandlers.onMessageHandler = handleMessage
         signalingChannel.handlers.onMessageHandler = handleMessage
     }
     
@@ -481,6 +492,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             // Answer を送信したら更新完了とする
             self.state = .connected
             
+            self.channel.internalHandlers.onUpdateHandler?(answer!)
             self.channel.handlers.onUpdateHandler?(answer!)
         }
     }
@@ -514,35 +526,36 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 }
                 Logger.debug(type: .peerChannel, message: "receive snapshot")
                 
-                if let handler = channel.handlers.onSnapshotHandler {
-                    guard let data = Data(base64Encoded: snapshot.webP) else {
-                        Logger.debug(type: .peerChannel,
-                                     message: "snapshot: invalid Base64 format")
-                        return
-                    }
-                    guard let image = UIImage.sd_image(with: data) else {
-                        Logger.debug(type: .peerChannel,
-                                     message: "snapshot: invalid WebP format")
-                        return
-                    }
-                    guard let cgImage = image.cgImage else {
-                        Logger.debug(type: .peerChannel,
-                                     message: "snapshot: failed to convert UIImage to CGImage")
-                        return
-                    }
-                    let snapshot = Snapshot(image: cgImage, timestamp: Date())
-                    handler(snapshot)
+                guard let data = Data(base64Encoded: snapshot.webP) else {
+                    Logger.debug(type: .peerChannel,
+                                 message: "snapshot: invalid Base64 format")
+                    return
                 }
+                guard let image = UIImage.sd_image(with: data) else {
+                    Logger.debug(type: .peerChannel,
+                                 message: "snapshot: invalid WebP format")
+                    return
+                }
+                guard let cgImage = image.cgImage else {
+                    Logger.debug(type: .peerChannel,
+                                 message: "snapshot: failed to convert UIImage to CGImage")
+                    return
+                }
+                let snapshot = Snapshot(image: cgImage, timestamp: Date())
+                channel.internalHandlers.onSnapshotHandler?(snapshot)
+                channel.handlers.onSnapshotHandler?(snapshot)
                 
             case .notify(message: let message):
                 Logger.debug(type: .peerChannel, message: "receive notify")
+                channel.internalHandlers.onNotifyHandler?(message)
                 channel.handlers.onNotifyHandler?(message)
-                
+
             case .ping:
                 Logger.debug(type: .peerChannel, message: "receive ping")
                 signalingChannel.send(message: .pong)
+                channel.internalHandlers.onPingHandler?()
                 channel.handlers.onPingHandler?()
-                
+
             default:
                 // discard
                 break

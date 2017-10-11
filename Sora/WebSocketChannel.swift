@@ -190,6 +190,12 @@ public protocol WebSocketChannel {
     /// イベントハンドラ
     var handlers: WebSocketChannelHandlers { get }
     
+    /**
+     内部処理で使われるイベントハンドラ。
+     このハンドラをカスタマイズに使うべきではありません。
+     */
+    var internalHandlers: WebSocketChannelHandlers { get }
+
     // MARK: - 初期化
     
     /**
@@ -232,6 +238,7 @@ class BasicWebSocketChannel: WebSocketChannel {
     var url: URL
     var sslEnabled: Bool = true
     var handlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
+    var internalHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
 
     var state: WebSocketChannelState {
         get { return context.state }
@@ -299,6 +306,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             state = .disconnected
             if let error = error {
                 Logger.debug(type: .webSocketChannel, message: "failure \(error)")
+                channel.internalHandlers.onFailureHandler?(error)
                 channel.handlers.onFailureHandler?(error)
             }
             onConnectHandler?(error)
@@ -357,6 +365,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             newMessage = .binary(data)
         }
         if let message = newMessage {
+            channel.internalHandlers.onMessageHandler?(message)
             channel.handlers.onMessageHandler?(message)
         } else {
             Logger.debug(type: .webSocketChannel,
@@ -368,6 +377,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     func webSocket(_ webSocket: SRWebSocket!, didReceivePong pongPayload: Data!) {
         Logger.debug(type: .webSocketChannel, message: "receive poing payload")
         Logger.debug(type: .webSocketChannel, message: "\(pongPayload)")
+        channel.internalHandlers.onPongHandler?(pongPayload)
         channel.handlers.onPongHandler?(pongPayload)
     }
     

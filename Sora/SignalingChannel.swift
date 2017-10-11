@@ -34,6 +34,12 @@ public protocol SignalingChannel {
     var state: SignalingChannelState { get }
     var handlers: SignalingChannelHandlers { get }
     
+    /**
+     内部処理で使われるイベントハンドラ。
+     このハンドラをカスタマイズに使うべきではありません。
+     */
+    var internalHandlers: SignalingChannelHandlers { get }
+
     // MARK: - 初期化
     
     init(configuration: Configuration)
@@ -52,6 +58,7 @@ public protocol SignalingChannel {
 class BasicSignalingChannel: SignalingChannel {
 
     var handlers: SignalingChannelHandlers = SignalingChannelHandlers()
+    var internalHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
     var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
     
     var configuration: Configuration
@@ -73,8 +80,8 @@ class BasicSignalingChannel: SignalingChannel {
         self.webSocketChannel = configuration
             ._webSocketChannelType.init(url: configuration.url)
         
-        webSocketChannel!.handlers.onFailureHandler = handleFailure
-        webSocketChannel!.handlers.onMessageHandler = handleMessage
+        webSocketChannel!.internalHandlers.onFailureHandler = handleFailure
+        webSocketChannel!.internalHandlers.onMessageHandler = handleMessage
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -114,6 +121,7 @@ class BasicSignalingChannel: SignalingChannel {
             state = .disconnected
             if let error = error {
                 Logger.debug(type: .signalingChannel, message: "error = \(error)")
+                internalHandlers.onFailureHandler?(error)
                 handlers.onFailureHandler?(error)
             }
             onConnectHandler?(error)
@@ -163,6 +171,7 @@ class BasicSignalingChannel: SignalingChannel {
             let decoder = JSONDecoder()
             do {
                 let sigMessage = try decoder.decode(SignalingMessage.self, from: data)
+                internalHandlers.onMessageHandler?(sigMessage)
                 handlers.onMessageHandler?(sigMessage)
             } catch let error {
                 Logger.debug(type: .signalingChannel,
