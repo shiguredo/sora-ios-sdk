@@ -9,6 +9,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        
+        Sora.shared.handlers.onConnectHandler = { chan, error in
+            print("Sora.onConnect(\(String(describing: chan)), \(String(describing: error)))")
+        }
+        
+        Sora.shared.handlers.onDisconnectHandler = { chan, error in
+            print("Sora.onDisconnect(\(String(describing: chan)), \(String(describing: error)))")
+        }
+        
+        Sora.shared.handlers.onFailureHandler = { chan, error in
+            print("Sora.onFailure(\(String(describing: chan)), \(String(describing: error)))")
+        }
+        
+        Sora.shared.handlers.onAddMediaChannelHandler = { chan in
+            print("Sora.onAddMediaChannel(\(String(describing: chan)))")
+        }
+        
+        Sora.shared.handlers.onRemoveMediaChannelHandler = { chan in
+            print("Sora.onRemoveMediaChannel(\(String(describing: chan)))")
+        }
+        
         return true
     }
 
