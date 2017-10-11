@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension UILabel {
     
     public func setTextOn(_ flag: Bool) {

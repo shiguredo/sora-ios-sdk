@@ -1,8 +1,6 @@
 import UIKit
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public protocol ConfigurationViewControllable: class {
 
     weak var configurationViewController: ConfigurationViewController? { get set }
@@ -11,9 +9,7 @@ public protocol ConfigurationViewControllable: class {
 
 let defaultSignalingPath = "signaling"
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public final class ConfigurationViewController: UIViewController {
 
     public var webSocketSSLEnabled: Bool = true {

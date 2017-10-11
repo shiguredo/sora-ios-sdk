@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public enum LogType {
     case sora
     case webSocketChannel
@@ -20,9 +18,7 @@ public enum LogType {
     case configurationViewController
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension LogType: CustomStringConvertible {
     
     public var description: String {
@@ -62,9 +58,7 @@ extension LogType: CustomStringConvertible {
 
 // MARK: -
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public enum LogLevel: Int {
     case fatal
     case error
@@ -74,9 +68,7 @@ public enum LogLevel: Int {
     case trace
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension LogLevel: CustomStringConvertible {
     
     public var description: String {
@@ -100,9 +92,7 @@ extension LogLevel: CustomStringConvertible {
 
 // MARK: -
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public struct Log {
     
     public let level: LogLevel
@@ -119,9 +109,7 @@ public struct Log {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension Log: CustomStringConvertible {
     
     private static let formatter: DateFormatter = {
@@ -142,9 +130,7 @@ extension Log: CustomStringConvertible {
 
 // MARK: -
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public final class Logger {
     
     public static var shared: Logger = Logger()

@@ -1,9 +1,7 @@
 import Foundation
 import WebRTC
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension RTCPeerConnection {
     
     func createAnswer(forOffer offer: String,

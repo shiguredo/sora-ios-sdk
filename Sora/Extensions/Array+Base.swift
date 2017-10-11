@@ -1,6 +1,6 @@
 import Foundation
 
-// :nodoc:
+/// :nodoc:
 extension Array {
     
     public mutating func remove(_ element: Element,
@@ -12,7 +12,7 @@ extension Array {
     
 }
 
-// :nodoc:
+/// :nodoc:
 extension Array where Element: Equatable {
     
     public mutating func remove(_ element: Element) {

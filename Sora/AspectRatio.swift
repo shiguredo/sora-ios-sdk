@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public enum AspectRatio {
     
     case standard // 4:3
@@ -31,9 +29,7 @@ private var aspectRatioTable: PairTable<String, AspectRatio> =
     PairTable(pairs: [("standard", .standard),
                       ("wide", .wide)])
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension AspectRatio: Codable {
     
     public init(from decoder: Decoder) throws {

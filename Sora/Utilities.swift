@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- :nodoc:
- */
+/// :nodoc:
 public struct Utilities {
     
     fileprivate static let randomBaseString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -73,9 +71,7 @@ final class PairTable<T: Equatable, U: Equatable> {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension Optional {
     
     public func unwrap(ifNone: () throws -> Wrapped) rethrows -> Wrapped {

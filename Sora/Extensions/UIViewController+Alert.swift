@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension UIViewController {
     
     public func showTemporaryAlert(title: String? = nil,

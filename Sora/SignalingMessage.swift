@@ -81,9 +81,7 @@ public enum SignalingMessage {
 // MARK: -
 // MARK: Codable
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingRole: Codable {
 
     public init(from decoder: Decoder) throws {
@@ -103,9 +101,7 @@ extension SignalingRole: Codable {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingConnectMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -181,9 +177,7 @@ extension SignalingConnectMessage: Codable {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingOfferMessage.Configuration: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -205,9 +199,7 @@ extension SignalingOfferMessage.Configuration: Codable {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingOfferMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -234,9 +226,7 @@ extension SignalingOfferMessage: Codable {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingUpdateOfferMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -254,9 +244,7 @@ extension SignalingUpdateOfferMessage: Codable {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingSnapshotMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -276,9 +264,7 @@ extension SignalingSnapshotMessage: Codable {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingNotifyMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -308,9 +294,7 @@ extension SignalingNotifyMessage: Codable {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension SignalingMessage: Codable {
     
     enum MessageType: String {

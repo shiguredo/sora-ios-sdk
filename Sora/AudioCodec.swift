@@ -32,9 +32,7 @@ extension AudioCodec: CustomStringConvertible {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension AudioCodec: Codable {
     
     public init(from decoder: Decoder) throws {

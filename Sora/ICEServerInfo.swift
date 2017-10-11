@@ -44,9 +44,7 @@ public final class ICEServerInfo {
     
 }
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension ICEServerInfo: Codable {
     
     enum CodingKeys: String, CodingKey {
