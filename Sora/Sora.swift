@@ -82,6 +82,11 @@ public final class Sora {
     
     /**
      初期化します。
+     大抵の用途ではシングルトンインスタンスで問題なく、
+     インスタンスを生成する必要はないでしょう。
+     メディアチャネルのリストをグループに分けたい、
+     または複数のイベントハンドラを使いたいなどの場合に
+     インスタンスを生成してください。
      */
     public init() {
         // This will guarantee that `Sora.initialize()` is called only once.
