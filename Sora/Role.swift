@@ -20,9 +20,7 @@ private var roleTable: PairTable<String, Role> =
                       ("subscriber", .subscriber),
                       ("group", .group)])
 
-/**
- :nodoc:
- */
+/// :nodoc:
 extension Role: Codable {
     
     public init(from decoder: Decoder) throws {
