@@ -19,7 +19,7 @@ public struct Utilities {
         return chars.joined()
     }
     
-    public class Stopwatch {
+    public final class Stopwatch {
         
         private var timer: Timer!
         private var seconds: Int

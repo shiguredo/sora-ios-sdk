@@ -1,7 +1,7 @@
 import Foundation
 
 /// メディアチャネルのイベントハンドラです。
-public class MediaChannelHandlers {
+public final class MediaChannelHandlers {
     
     /// 接続成功時に呼ばれるブロック
     public var onConnectHandler: ((Error?) -> Void)?
@@ -28,7 +28,7 @@ public class MediaChannelHandlers {
 
 // MARK: -
 
-public class MediaChannel {
+public final class MediaChannel {
     
     /**
      `MediaChannel` の接続状態を表します。

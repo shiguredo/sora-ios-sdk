@@ -145,7 +145,7 @@ extension Log: CustomStringConvertible {
 /**
  :nodoc:
  */
-public class Logger {
+public final class Logger {
     
     public static var shared: Logger = Logger()
     

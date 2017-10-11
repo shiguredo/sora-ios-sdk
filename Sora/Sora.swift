@@ -8,7 +8,7 @@ public enum SoraError: Error {
     case connectionTimeout
 }
 
-public class Sora {
+public final class Sora {
     
     // MARK: - SDK の操作
     

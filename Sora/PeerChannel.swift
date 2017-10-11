@@ -132,7 +132,7 @@ class PeerChannelInternalState {
 /**
  ピアチャネルのイベントハンドラです。
  */
-public class PeerChannelHandlers {
+public final class PeerChannelHandlers {
     
     /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?

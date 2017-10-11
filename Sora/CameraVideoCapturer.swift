@@ -1,7 +1,7 @@
 import Foundation
 import WebRTC
 
-public class CameraVideoCapturer: VideoCapturer {
+public final class CameraVideoCapturer: VideoCapturer {
     
     // MARK: インスタンスの取得
     

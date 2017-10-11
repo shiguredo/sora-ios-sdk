@@ -164,7 +164,7 @@ public enum WebSocketMessage {
 /**
  WebSocket チャネルのイベントハンドラです。
  */
-public class WebSocketChannelHandlers {
+public final class WebSocketChannelHandlers {
     
     /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?

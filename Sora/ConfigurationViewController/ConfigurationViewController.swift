@@ -14,7 +14,7 @@ let defaultSignalingPath = "signaling"
 /**
  :nodoc:
  */
-public class ConfigurationViewController: UIViewController {
+public final class ConfigurationViewController: UIViewController {
 
     public var webSocketSSLEnabled: Bool = true {
         didSet {

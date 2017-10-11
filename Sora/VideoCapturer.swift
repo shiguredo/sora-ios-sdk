@@ -4,7 +4,7 @@ import WebRTC
 /**
  映像キャプチャーのイベントハンドラです。
  */
-public class VideoCapturerHandlers {
+public final class VideoCapturerHandlers {
     
     /// 映像フレームの生成時に呼ばれるブロック
     public var onCaptureHandler: ((VideoFrame) -> Void)?

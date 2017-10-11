@@ -15,7 +15,7 @@ public enum SignalingChannelState {
 /**
  シグナリングチャネルのイベントハンドラです。
  */
-public class SignalingChannelHandlers {
+public final class SignalingChannelHandlers {
     
     /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
