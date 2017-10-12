@@ -1,9 +1,9 @@
 import Foundation
 
-private var descriptionTable: PairTable<String, AudioCodec> =
+private let descriptionTable: PairTable<String, AudioCodec> =
     PairTable(pairs: [("default", .default),
-                      ("opus", .opus),
-                      ("pcmu", .pcmu)])
+                      ("OPUS", .opus),
+                      ("PCMU", .pcmu)])
 
 /**
  音声コーデックを表します。
