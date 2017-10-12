@@ -177,7 +177,7 @@ public final class WebSocketChannelHandlers {
     
 }
 
-public protocol WebSocketChannel {
+public protocol WebSocketChannel: class {
     
     // MARK: - プロパティ
     

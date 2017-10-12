@@ -25,7 +25,7 @@ public final class SignalingChannelHandlers {
     
 }
 
-public protocol SignalingChannel {
+public protocol SignalingChannel: class {
 
     // MARK: - プロパティ
     

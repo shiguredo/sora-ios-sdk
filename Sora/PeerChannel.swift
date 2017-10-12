@@ -178,7 +178,7 @@ public enum PeerChannelState {
 
 // MARK: -
 
-public protocol PeerChannel {
+public protocol PeerChannel: class {
     
     // MARK: - プロパティ
     

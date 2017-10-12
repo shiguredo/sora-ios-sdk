@@ -15,7 +15,7 @@ public final class VideoCapturerHandlers {
 //   - VideoCapturer.stream に MediaStream がセットされる
 // - MediaStream.render(videoFrame:) にフレームを渡すと描画される
 //   - フレームは描画前に VideoFilter によって変換される
-public protocol VideoCapturer {
+public protocol VideoCapturer: class {
     
     /// ストリーム
     weak var stream: MediaStream? { get set }
@@ -31,7 +31,7 @@ public protocol VideoCapturer {
     
 }
 
-public protocol VideoFilter {
+public protocol VideoFilter: class {
     
     /**
      映像フレームを加工します。
