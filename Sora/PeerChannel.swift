@@ -504,8 +504,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
-    func handleMessage(_ message: SignalingMessage) {
+    func handleMessage(_ message: SignalingMessage?, _ text: String) {
         Logger.debug(type: .mediaStream, message: "handle message")
+        guard let message = message else {
+            return
+        }
         switch state {
         case .waitingOffer:
             switch message {

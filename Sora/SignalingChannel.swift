@@ -20,8 +20,12 @@ public final class SignalingChannelHandlers {
     /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
     
-    /// メッセージ受信時に呼ばれるブロック
-    public var onMessageHandler: ((SignalingMessage) -> Void)?
+    /**
+     メッセージ受信時に呼ばれるブロック。
+     受信したメッセージをシグナリングメッセージとして解析できれば、
+     `message` にシグナリングメッセージが指定されます。
+     */
+    public var onMessageHandler: ((_ message: SignalingMessage?, _ text: String) -> Void)?
     
 }
 
@@ -83,6 +87,13 @@ public protocol SignalingChannel: class {
      - parameter message: シグナリングメッセージ
      */
     func send(message: SignalingMessage)
+    
+    /**
+     サーバーに任意のメッセージを送信します。
+     
+     - parameter text: メッセージ
+     */
+    func send(text: String)
     
 }
 
@@ -176,6 +187,10 @@ class BasicSignalingChannel: SignalingChannel {
         }
     }
     
+    func send(text: String) {
+        webSocketChannel!.send(message: .text(text))
+    }
+    
     func handleFailure(error: Error) {
         switch state {
         case .connected:
@@ -197,17 +212,20 @@ class BasicSignalingChannel: SignalingChannel {
         case .text(let text):
             guard let data = text.data(using: .utf8) else {
                 Logger.debug(type: .signalingChannel, message: "invalid encoding")
+                internalHandlers.onMessageHandler?(nil, text)
+                handlers.onMessageHandler?(nil, text)
                 return
             }
             let decoder = JSONDecoder()
+            var sigMessage: SignalingMessage?
             do {
-                let sigMessage = try decoder.decode(SignalingMessage.self, from: data)
-                internalHandlers.onMessageHandler?(sigMessage)
-                handlers.onMessageHandler?(sigMessage)
+                sigMessage = try decoder.decode(SignalingMessage.self, from: data)
             } catch let error {
                 Logger.debug(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription))")
             }
+            internalHandlers.onMessageHandler?(sigMessage, text)
+            handlers.onMessageHandler?(sigMessage, text)
         }
     }
     
