@@ -1,10 +1,10 @@
 import Foundation
 
-private var descriptionTable: PairTable<String, VideoCodec> =
+private let descriptionTable: PairTable<String, VideoCodec> =
     PairTable(pairs: [("default", .default),
-                      ("vp8", .vp8),
-                      ("vp9", .vp9),
-                      ("h264", .h264)])
+                      ("VP8", .vp8),
+                      ("VP9", .vp9),
+                      ("H264", .h264)])
 
 /**
  映像コーデックを表します。
