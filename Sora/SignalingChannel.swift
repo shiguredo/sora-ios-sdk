@@ -1,15 +1,36 @@
 import Foundation
 
+/**
+ ストリームの方向を表します。
+ シグナリングメッセージで使われます。
+ */
 public enum SignalingRole: String {
+    
+    /// アップストリーム (パブリッシャー)
     case upstream
+    
+    /// ダウンストリーム (サブスクライバー)
     case downstream
+    
 }
 
+/**
+ `SignalingChannel` の接続状態を表します。
+ */
 public enum SignalingChannelState {
+    
+    /// 接続試行中
     case connecting
+    
+    /// 接続済み
     case connected
+    
+    /// 接続解除試行中
     case disconnecting
+    
+    /// 接続解除済み
     case disconnected
+    
 }
 
 /**
@@ -29,6 +50,9 @@ public final class SignalingChannelHandlers {
     
 }
 
+/**
+ シグナリングチャネルの機能を定義したプロトコルです。
+ */
 public protocol SignalingChannel: class {
 
     // MARK: - プロパティ
@@ -36,7 +60,11 @@ public protocol SignalingChannel: class {
     /// クライアントの設定
     var configuration: Configuration { get }
     
-    /// WebSocket チャネル
+    /**
+     WebSocket チャネル。
+     Sora はシグナリングの通信手段に WebSocket を使用しています。
+     プロトコルの実装が WebSocket を使用しない場合は `nil` を返します。
+     */
     var webSocketChannel: WebSocketChannel? { get }
     
     /// 接続状態

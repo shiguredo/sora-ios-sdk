@@ -150,7 +150,7 @@ public final class PeerChannelHandlers {
     /// スナップショットの受信時に呼ばれるブロック
     public var onSnapshotHandler: ((Snapshot) -> Void)?
     
-    /// イベント通知のに呼ばれるブロック
+    /// イベント通知の受信時に呼ばれるブロック
     public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
     
     /// ping の受信時に呼ばれるブロック
