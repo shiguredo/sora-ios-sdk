@@ -12,7 +12,7 @@ private let descriptionTable: PairTable<String, VideoCodec> =
 public enum VideoCodec {
     
     /**
-     Sora サーバーが指定するデフォルトのコーデック。
+     サーバーが指定するデフォルトのコーデック。
      現在のデフォルトのコーデックは VP9 です。
      */
     case `default`

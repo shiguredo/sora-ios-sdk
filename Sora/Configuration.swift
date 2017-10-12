@@ -20,7 +20,7 @@ public struct Configuration {
 
     // MARK: - 接続に関する設定
     
-    /// Sora サーバーの URL
+    /// サーバーの URL
     public var url: URL
     
     /// チャネル ID
@@ -122,7 +122,7 @@ public struct Configuration {
     /**
      初期化します。
      
-     - parameter url: Sora サーバーの URL
+     - parameter url: サーバーの URL
      - parameter channelId: チャネル ID
      - parameter role: ロール
      */

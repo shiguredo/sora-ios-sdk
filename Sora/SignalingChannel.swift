@@ -52,6 +52,14 @@ public final class SignalingChannelHandlers {
 
 /**
  シグナリングチャネルの機能を定義したプロトコルです。
+ 
+ シグナリングチャネルとピアチャネル `PeerChannel` はそれぞれ独立してサーバーに接続され、両者は協調してメディアチャネル `MediaChannel` の接続を確立します。
+ シグナリングチャネルの接続はメディアチャネルの接続後も維持され、
+ メディアチャネルが接続を解除されるとシグナリングチャネルの接続も解除されます。
+ また、メディアチャネルの接続中にシグナリングチャネルの接続が解除されると、
+ メディアチャネルの接続も解除されます。
+ 
+ シグナリングメッセージは WebSocket チャネル `WebSocketChannel` を使用してサーバーに送信されます。
  */
 public protocol SignalingChannel: class {
 
@@ -114,6 +122,8 @@ public protocol SignalingChannel: class {
     
     /**
      サーバーに任意のメッセージを送信します。
+     Sora は仕様にないメッセージを受信すると WebSocket の接続を解除します。
+     任意のメッセージを送信する際は注意してください。
      
      - parameter text: メッセージ
      */

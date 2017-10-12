@@ -21,7 +21,7 @@ public final class MediaChannelHandlers {
     /// ストリームが除去されたときに呼ばれるブロック
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     
-    /// Sora サーバーからのイベント通知の受信時に呼ばれるハンドラ
+    /// サーバーからのイベント通知の受信時に呼ばれるハンドラ
     public var onEventHandler: ((Event) -> Void)?
     
 }
@@ -137,7 +137,7 @@ public final class MediaChannel {
     // MARK: - 接続
     
     /**
-     Sora サーバーに接続します。
+     サーバーに接続します。
      
      - parameter webRTCConfiguration: WebRTC の設定
      - parameter timeout: タイムアウトまでの秒数

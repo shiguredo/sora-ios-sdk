@@ -11,7 +11,7 @@ private let descriptionTable: PairTable<String, AudioCodec> =
 public enum AudioCodec {
     
     /**
-     Sora サーバーが指定するデフォルトのコーデック。
+     サーバーが指定するデフォルトのコーデック。
      現在のデフォルトのコーデックは Opus です。
      */
     case `default`

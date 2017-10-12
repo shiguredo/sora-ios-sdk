@@ -37,6 +37,10 @@ public final class SoraHandlers {
 
 }
 
+/**
+ サーバーへのインターフェースです。
+ `Sora` オブジェクトを使用してサーバーへの接続を行います。
+ */
 public final class Sora {
     
     // MARK: - SDK の操作
@@ -123,7 +127,7 @@ public final class Sora {
     // MARK: - 接続
     
     /**
-     Sora サーバーに接続します。
+     サーバーに接続します。
      
      - parameter configuration: クライアントの設定
      - parameter webRTCConfiguration: WebRTC の設定
