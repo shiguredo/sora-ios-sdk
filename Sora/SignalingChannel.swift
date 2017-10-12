@@ -60,12 +60,8 @@ public protocol SignalingChannel: class {
     /// クライアントの設定
     var configuration: Configuration { get }
     
-    /**
-     WebSocket チャネル。
-     Sora はシグナリングの通信手段に WebSocket を使用しています。
-     プロトコルの実装が WebSocket を使用しない場合は `nil` を返します。
-     */
-    var webSocketChannel: WebSocketChannel? { get }
+    /// WebSocket チャネル
+    var webSocketChannel: WebSocketChannel { get }
     
     /// 接続状態
     var state: SignalingChannelState { get }
@@ -140,7 +136,7 @@ class BasicSignalingChannel: SignalingChannel {
         }
     }
     
-    var webSocketChannel: WebSocketChannel?
+    var webSocketChannel: WebSocketChannel
 
     private var connectionTimer: ConnectionTimer?
     private var onConnectHandler: ((Error?) -> Void)?
@@ -150,8 +146,8 @@ class BasicSignalingChannel: SignalingChannel {
         self.webSocketChannel = configuration
             ._webSocketChannelType.init(url: configuration.url)
         
-        webSocketChannel!.internalHandlers.onFailureHandler = handleFailure
-        webSocketChannel!.internalHandlers.onMessageHandler = handleMessage
+        webSocketChannel.internalHandlers.onFailureHandler = handleFailure
+        webSocketChannel.internalHandlers.onMessageHandler = handleMessage
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -166,7 +162,7 @@ class BasicSignalingChannel: SignalingChannel {
             self.disconnect(error: SoraError.connectionTimeout)
         }
         
-        webSocketChannel!.connect { error in
+        webSocketChannel.connect { error in
             self.onConnectHandler?(error)
             if let error = error {
                 Logger.debug(type: .signalingChannel,
@@ -187,7 +183,7 @@ class BasicSignalingChannel: SignalingChannel {
         default:
             Logger.debug(type: .signalingChannel, message: "try disconnecting")
             state = .disconnecting
-            webSocketChannel?.disconnect(error: error)
+            webSocketChannel.disconnect(error: error)
             state = .disconnected
             if let error = error {
                 Logger.debug(type: .signalingChannel, message: "error = \(error)")
@@ -207,7 +203,7 @@ class BasicSignalingChannel: SignalingChannel {
             let data = try encoder.encode(message)
             let str = String(data: data, encoding: .utf8)!
             Logger.debug(type: .signalingChannel, message: str)
-            webSocketChannel!.send(message: .text(str))
+            webSocketChannel.send(message: .text(str))
         } catch {
             Logger.debug(type: .signalingChannel,
                       message: "JSON encoding failed")
@@ -216,7 +212,7 @@ class BasicSignalingChannel: SignalingChannel {
     }
     
     func send(text: String) {
-        webSocketChannel!.send(message: .text(text))
+        webSocketChannel.send(message: .text(text))
     }
     
     func handleFailure(error: Error) {
