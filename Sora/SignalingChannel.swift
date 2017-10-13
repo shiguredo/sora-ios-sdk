@@ -15,25 +15,6 @@ public enum SignalingRole: String {
 }
 
 /**
- `SignalingChannel` の接続状態を表します。
- */
-public enum SignalingChannelState {
-    
-    /// 接続試行中
-    case connecting
-    
-    /// 接続済み
-    case connected
-    
-    /// 接続解除試行中
-    case disconnecting
-    
-    /// 接続解除済み
-    case disconnected
-    
-}
-
-/**
  シグナリングチャネルのイベントハンドラです。
  */
 public final class SignalingChannelHandlers {
@@ -72,7 +53,7 @@ public protocol SignalingChannel: class {
     var webSocketChannel: WebSocketChannel { get }
     
     /// 接続状態
-    var state: SignalingChannelState { get }
+    var state: ConnectionState { get }
     
     // MARK: - イベントハンドラ
     
@@ -139,7 +120,7 @@ class BasicSignalingChannel: SignalingChannel {
     
     var configuration: Configuration
     
-    var state: SignalingChannelState = .disconnected {
+    var state: ConnectionState = .disconnected {
         didSet {
             Logger.trace(type: .signalingChannel,
                       message: "changed state from \(oldValue) to \(state)")
@@ -148,7 +129,6 @@ class BasicSignalingChannel: SignalingChannel {
     
     var webSocketChannel: WebSocketChannel
 
-    private var connectionTimer: ConnectionTimer?
     private var onConnectHandler: ((Error?) -> Void)?
     
     required init(configuration: Configuration) {
@@ -164,14 +144,7 @@ class BasicSignalingChannel: SignalingChannel {
         Logger.debug(type: .signalingChannel, message: "try connecting")
         onConnectHandler = handler
         state = .connecting
-        
-        connectionTimer = ConnectionTimer(target: AliveMonitored.signalingChannel(self),
-                                          timeout: configuration.connectionTimeout)
-        connectionTimer!.run {
-            Logger.debug(type: .signalingChannel, message: "connection timeout")
-            self.disconnect(error: SoraError.connectionTimeout)
-        }
-        
+
         webSocketChannel.connect { error in
             self.onConnectHandler?(error)
             if let error = error {

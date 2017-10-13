@@ -130,25 +130,6 @@ public enum WebSocketStatusCode {
 }
 
 /**
- WebSocket チャネルの接続状態を表します。
- */
-public enum WebSocketChannelState {
-    
-    /// 接続試行中
-    case connecting
-    
-    /// 接続済み
-    case connected
-    
-    /// 接続解除試行中
-    case disconnecting
-    
-    /// 接続解除済み
-    case disconnected
-    
-}
-
-/**
  WebSocket の通信で送受信されるメッセージを表します。
  */
 public enum WebSocketMessage {
@@ -185,7 +166,7 @@ public protocol WebSocketChannel: class {
     var url: URL { get }
     
     /// 接続状態
-    var state: WebSocketChannelState { get }
+    var state: ConnectionState { get }
     
     /// イベントハンドラ
     var handlers: WebSocketChannelHandlers { get }
@@ -240,7 +221,7 @@ class BasicWebSocketChannel: WebSocketChannel {
     var handlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
     var internalHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
 
-    var state: WebSocketChannelState {
+    var state: ConnectionState {
         get { return context.state }
     }
 
@@ -271,7 +252,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     weak var channel: BasicWebSocketChannel!
     var nativeChannel: SRWebSocket
     
-    var state: WebSocketChannelState = .disconnected {
+    var state: ConnectionState = .disconnected {
         didSet {
             Logger.trace(type: .webSocketChannel,
                       message: "changed state from \(oldValue) to \(state)")

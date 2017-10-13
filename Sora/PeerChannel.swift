@@ -158,24 +158,6 @@ public final class PeerChannelHandlers {
     
 }
 
-/**
- ピアチャネルの接続状態を表します。
- */
-public enum PeerChannelState {
-    
-    /// 接続試行中
-    case connecting
-    
-    /// 接続成功済み
-    case connected
-    
-    /// 接続解除試行中
-    case disconnecting
-    
-    /// 接続解除済み
-    case disconnected
-}
-
 // MARK: -
 
 public protocol PeerChannel: class {
@@ -197,7 +179,7 @@ public protocol PeerChannel: class {
     
     var clientId: String? { get }
     var streams: [MediaStream] { get }
-    var state: PeerChannelState { get }
+    var state: ConnectionState { get }
     
     // MARK: - インスタンスの生成
     
@@ -227,7 +209,7 @@ class BasicPeerChannel: PeerChannel {
         get { return context.clientId }
     }
     
-    var state: PeerChannelState {
+    var state: ConnectionState {
         get {
             switch context.state {
             case .disconnecting:
@@ -339,7 +321,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "try connecting")
         Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
         
-        state = .connecting
         onConnectHandler = handler
         self.webRTCConfiguration = webRTCConfiguration
         nativeChannel = NativePeerChannelFactory.default
@@ -356,6 +337,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         internalState.onCompleteHandler = finishConnecting
         
         signalingChannel.connect(handler: sendConnectMessage)
+        state = .connecting
     }
     
     func sendConnectMessage(error: Error?) {

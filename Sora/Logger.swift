@@ -7,7 +7,7 @@ public enum LogType {
     case signalingChannel
     case peerChannel
     case nativePeerChannel
-    case aliveMonitor
+    case connectionTimer
     case mediaChannel
     case mediaStream
     case snapshot
@@ -33,8 +33,8 @@ extension LogType: CustomStringConvertible {
             return "PeerChannel"
         case .nativePeerChannel:
             return "NativePeerChannel"
-        case .aliveMonitor:
-            return "AliveMonitor"
+        case .connectionTimer:
+            return "ConnectionTimer"
         case .mediaChannel:
             return "MediaChannel"
         case .mediaStream:

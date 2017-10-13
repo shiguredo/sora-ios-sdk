@@ -30,25 +30,6 @@ public final class MediaChannelHandlers {
 
 public final class MediaChannel {
     
-    /**
-     `MediaChannel` の接続状態を表します。
-     */
-    public enum State {
-        
-        /// 接続試行中
-        case connecting
-        
-        /// 接続済み
-        case connected
-        
-        /// 接続解除試行中
-        case disconnecting
-        
-        /// 接続解除済み
-        case disconnected
-
-    }
-    
     // MARK: - プロパティ
     
     /// イベントハンドラ
@@ -86,7 +67,7 @@ public final class MediaChannel {
     }
     
     /// 接続状態
-    public private(set) var state: State = .disconnected {
+    public private(set) var state: ConnectionState = .disconnected {
         didSet {
             Logger.trace(type: .mediaChannel,
                       message: "changed state from \(oldValue) to \(state)")
@@ -98,8 +79,7 @@ public final class MediaChannel {
         get { return state == .connected }
     }
     
-    private let aliveMonitor: AliveMonitor = AliveMonitor()
-    private var connectionTimer: ConnectionTimer?
+    private var connectionTimer: ConnectionTimer
     private let manager: Sora
     
     // MARK: - インスタンスの生成
@@ -118,20 +98,17 @@ public final class MediaChannel {
         
         self.manager = manager
         self.configuration = configuration
-        self.signalingChannel = configuration._signalingChannelType
+        signalingChannel = configuration._signalingChannelType
             .init(configuration: configuration)
-        self.peerChannel = configuration._peerChannelType
+        peerChannel = configuration._peerChannelType
             .init(configuration: configuration,
                   signalingChannel: signalingChannel)
         
-        /*
-         aliveMonitor.add(signalingChannel)
-         if let channel = signalingChannel.webSocketChannel {
-         aliveMonitor.add(channel)
-         }
-         aliveMonitor.add(peerChannel)
-         aliveMonitor.onChange(handler: self.handleChannelStateChanges)
-         */
+        connectionTimer = ConnectionTimer(monitors: [
+            .webSocketChannel(signalingChannel.webSocketChannel),
+            .signalingChannel(signalingChannel),
+            .peerChannel(peerChannel)],
+                                          timeout: configuration.connectionTimeout)
     }
     
     // MARK: - 接続
@@ -159,15 +136,7 @@ public final class MediaChannel {
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
-        
-        let timer = ConnectionTimer(target: AliveMonitored.mediaChannel(self),
-                                    timeout: configuration.connectionTimeout)
-        timer.run {
-            Logger.debug(type: .mediaChannel, message: "connection timeout")
-            self.disconnect(error: SoraError.connectionTimeout)
-        }
-        connectionTimer = timer
-        
+
         peerChannel.internalHandlers.onAddStreamHandler = { stream in
             Logger.debug(type: .mediaChannel, message: "added a stream")
             self.internalHandlers.onAddStreamHandler?(stream)
@@ -195,6 +164,8 @@ public final class MediaChannel {
         }
         
         peerChannel.connect(webRTCConfiguration: webRTCConfiguration) { error in
+            self.connectionTimer.stop()
+
             if let error = error {
                 Logger.debug(type: .mediaChannel, message: "failed connecting")
                 self.disconnect(error: error)
@@ -208,6 +179,11 @@ public final class MediaChannel {
             handler(nil)
             self.internalHandlers.onConnectHandler?(nil)
             self.handlers.onConnectHandler?(nil)
+        }
+        
+        connectionTimer.run {
+            Logger.debug(type: .mediaChannel, message: "connection timeout")
+            self.disconnect(error: SoraError.connectionTimeout)
         }
     }
 
@@ -224,8 +200,7 @@ public final class MediaChannel {
         default:
             Logger.debug(type: .mediaChannel, message: "try disconnecting")
             state = .disconnecting
-            connectionTimer?.stop()
-            connectionTimer = nil
+            connectionTimer.stop()
             peerChannel.disconnect(error: error)
             Logger.debug(type: .mediaChannel, message: "did disconnect")
             state = .disconnected
