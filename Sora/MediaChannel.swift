@@ -139,9 +139,9 @@ public final class MediaChannel {
      - parameter handler: 接続試行後に呼ばれるブロック
      - parameter error: (接続失敗時) エラー
      */
-    public func connect(webRTCConfiguration: WebRTCConfiguration,
-                        timeout: Int = Configuration.defaultConnectionTimeout,
-                        handler: @escaping (_ error: Error?) -> Void) {
+    func connect(webRTCConfiguration: WebRTCConfiguration,
+                 timeout: Int = Configuration.defaultConnectionTimeout,
+                 handler: @escaping (_ error: Error?) -> Void) {
         DispatchQueue.global().async {
             self.basicConnect(webRTCConfiguration: webRTCConfiguration,
                               timeout: timeout,
