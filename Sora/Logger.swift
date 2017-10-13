@@ -58,14 +58,67 @@ extension LogType: CustomStringConvertible {
 
 // MARK: -
 
-/// :nodoc:
-public enum LogLevel: Int {
+/**
+ ログレベルです。
+ 上から下に向かってログの重要度が下がり、詳細度が上がります。
+ `off` はログを出力しません。
+ 
+ 6. `fatal`
+ 5. `error`
+ 4. `warn`
+ 3. `info`
+ 2. `debug`
+ 1. `trace`
+ 0. `off`
+ 
+ */
+public enum LogLevel {
+    
+    /// 致命的なエラー情報
     case fatal
+    
+    /// エラー情報
     case error
+    
+    /// 警告
     case warn
+    
+    /// 一般的な情報
     case info
+    
+    /// デバッグ情報
     case debug
+    
+    /// 最も詳細なデバッグ情報
     case trace
+    
+    /// ログを出力しない
+    case off
+    
+}
+
+/// :nodoc:
+extension LogLevel {
+    
+    var value: Int {
+        switch self {
+        case .fatal:
+            return 6
+        case .error:
+            return 5
+        case .warn:
+            return 4
+        case .info:
+            return 3
+        case .debug:
+            return 2
+        case .trace:
+            return 1
+        case .off:
+            return 0
+        }
+    }
+    
 }
 
 /// :nodoc:
@@ -85,6 +138,8 @@ extension LogLevel: CustomStringConvertible {
             return "DEBUG"
         case .trace:
             return "TRACE"
+        case .off:
+            return "OFF"
         }
     }
     
@@ -173,9 +228,13 @@ public final class Logger {
                                       message: message))
     }
     
+    public var level: LogLevel = .info
+    
     func output(log: Log) {
-        onOutputHandler?(log)
-        print(log.description)
+        if 0 < level.value && level.value <= log.level.value {
+            onOutputHandler?(log)
+            print(log.description)
+        }
     }
     
 }

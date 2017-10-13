@@ -67,6 +67,19 @@ public final class Sora {
         RTCCleanupSSL()
     }
     
+    /**
+     ログレベル。指定したレベルより高いログは出力されません。
+     デフォルトは `info` です。
+     */
+    public static var logLevel: LogLevel {
+        get {
+            return Logger.shared.level
+        }
+        set {
+            Logger.shared.level = newValue
+        }
+    }
+    
     // MARK: - プロパティ
     
     /// リンクしている WebRTC フレームワークの情報。
