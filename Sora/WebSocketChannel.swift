@@ -158,6 +158,12 @@ public final class WebSocketChannelHandlers {
     
 }
 
+/**
+ WebSocket チャネルは WebSocket による通信を行います。
+ デフォルトの実装は非公開 (`internal`) であり、
+ 通信処理のカスタマイズはイベントハンドラでのみ可能です。
+ ソースコードは公開していますので、実装の詳細はそちらを参照してください。
+ */
 public protocol WebSocketChannel: class {
     
     // MARK: - プロパティ

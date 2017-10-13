@@ -160,6 +160,11 @@ public final class PeerChannelHandlers {
 
 // MARK: -
 
+/**
+ ピアチャネルの機能を定義したプロトコルです。
+ デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
+ ソースコードは公開していますので、実装の詳細はそちらを参照してください。
+ */
 public protocol PeerChannel: class {
     
     // MARK: - プロパティ
