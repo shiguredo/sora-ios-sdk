@@ -15,7 +15,7 @@ public enum VideoCapturerDevice {
      
      SDKが自動的にカメラのハンドリングを行うため、複雑な用途が必要なく、すぐに使いたい場合に便利なオプションです。
      */
-    case camera
+    case camera(settings: CameraVideoCapturer.Settings)
     
     /**
      カスタムの実装を `VideoCapturer` として使用します。
@@ -34,21 +34,28 @@ public enum VideoCapturerDevice {
     
 }
 
-private var videoCapturerDeviceTable: PairTable<String, VideoCapturerDevice> =
-    PairTable(pairs: [("camera", .camera),
-                      ("custom", .custom)])
-
 /// :nodoc:
 extension VideoCapturerDevice: Codable {
     
     public init(from decoder: Decoder) throws {
+        // TODO: .camera が保有している CameraVideoCapturer.Settings がencode/decode 時に失われてしまっているので、 Codableに対応させる
         let container = try decoder.singleValueContainer()
-        self = videoCapturerDeviceTable.right(other: try container.decode(String.self))!
+        let value = try container.decode(String.self)
+        switch value {
+        case "camera": self = .camera(settings: .default)
+        case "custom": self = .custom
+        default: throw DecodingError.dataCorruptedError(in: container,
+                                                        debugDescription: "invalid VideoCapturerDevice value: \(value)")
+        }
     }
     
     public func encode(to encoder: Encoder) throws {
+        // TODO: .camera が保有している CameraVideoCapturer.Settings がencode/decode 時に失われてしまっているので、 Codableに対応させる
         var container = encoder.singleValueContainer()
-        try container.encode(videoCapturerDeviceTable.left(other: self)!)
+        switch self {
+        case .camera: try container.encode("camera")
+        case .custom: try container.encode("custom")
+        }
     }
     
 }
