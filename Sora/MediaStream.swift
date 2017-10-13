@@ -27,11 +27,11 @@ class BasicMediaStream: MediaStream {
     
     var videoCapturer: VideoCapturer? {
         willSet {
-            if var oldValue = videoCapturer {
+            if let oldValue = videoCapturer {
                 // Do not autostop here, let others manage videoCapturer's life cycle
                 oldValue.stream = nil
             }
-            if var newValue = newValue {
+            if let newValue = newValue {
                 newValue.stream = self
                 // Do not autostart here, let others manage videoCapturer's life cycle
             }
