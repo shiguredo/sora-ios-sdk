@@ -37,24 +37,43 @@ public enum VideoCapturerDevice {
 /// :nodoc:
 extension VideoCapturerDevice: Codable {
     
+    enum CodingKeys: String, CodingKey {
+        case type
+        case camera
+    }
+    
     public init(from decoder: Decoder) throws {
-        // TODO: .camera が保有している CameraVideoCapturer.Settings がencode/decode 時に失われてしまっているので、 Codableに対応させる
-        let container = try decoder.singleValueContainer()
-        let value = try container.decode(String.self)
-        switch value {
-        case "camera": self = .camera(settings: .default)
-        case "custom": self = .custom
-        default: throw DecodingError.dataCorruptedError(in: container,
-                                                        debugDescription: "invalid VideoCapturerDevice value: \(value)")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "camera":
+            guard container.contains(.camera) else {
+                throw DecodingError
+                    .dataCorruptedError(forKey: .camera,
+                                        in: container,
+                                        debugDescription: "no camera settings")
+            }
+            let settings = try container
+                .decode(CameraVideoCapturer.Settings.self, forKey: .camera)
+            self = .camera(settings: settings)
+        case "custom":
+            self = .custom
+        default:
+            throw DecodingError
+                .dataCorruptedError(forKey: .type,
+                                    in: container,
+                                    debugDescription: "invalid VideoCapturerDevice value: \(type)")
         }
     }
     
     public func encode(to encoder: Encoder) throws {
-        // TODO: .camera が保有している CameraVideoCapturer.Settings がencode/decode 時に失われてしまっているので、 Codableに対応させる
-        var container = encoder.singleValueContainer()
+        var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .camera: try container.encode("camera")
-        case .custom: try container.encode("custom")
+        case .camera(let settings):
+            try container.encode("camera", forKey: .type)
+            try container.encode(settings, forKey: .camera)
+        case .custom:
+            try container.encode("custom", forKey: .type)
         }
     }
     

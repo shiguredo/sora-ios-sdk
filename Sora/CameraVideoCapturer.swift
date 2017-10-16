@@ -288,3 +288,52 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     }
     
 }
+
+// MARK: -
+
+/// :nodoc:
+extension CameraVideoCapturer.Settings: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case resolution
+        case frameRate
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        resolution = try container.decode(Resolution.self, forKey: .resolution)
+        frameRate = try container.decode(Int.self, forKey: .frameRate)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(resolution, forKey: .resolution)
+        try container.encode(frameRate, forKey: .frameRate)
+    }
+    
+}
+
+private var resolutionTable: PairTable<String, CameraVideoCapturer.Settings.Resolution> =
+    PairTable(pairs: [("qvga240p", .qvga240p),
+                      ("vga480p", .vga480p),
+                      ("hd720p", .hd720p),
+                      ("hd1080p", .hd1080p)])
+
+/// :nodoc:
+extension CameraVideoCapturer.Settings.Resolution: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let key = try container.decode(String.self)
+        self = try resolutionTable.right(other: key).unwrap {
+            throw DecodingError.dataCorruptedError(in: container,
+                                                   debugDescription: "invalid value")
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(resolutionTable.left(other: self)!)
+    }
+    
+}
