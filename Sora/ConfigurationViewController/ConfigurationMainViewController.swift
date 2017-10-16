@@ -22,6 +22,10 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var videoCodecCell: UITableViewCell!
     @IBOutlet weak var bitRateLabel: UILabel!
     @IBOutlet weak var bitRateCell: UITableViewCell!
+    @IBOutlet weak var cameraResolutionLabel: UILabel!
+    @IBOutlet weak var cameraResolutionCell: UITableViewCell!
+    @IBOutlet weak var cameraFrameRateLabel: UILabel!
+    @IBOutlet weak var cameraFrameRateCell: UITableViewCell!
     @IBOutlet weak var enableAudioLabel: UILabel!
     @IBOutlet weak var audioCodecLabel: UILabel!
     @IBOutlet weak var audioCodecCell: UITableViewCell!
@@ -36,6 +40,8 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var enableVideoSwitch: UISwitch!
     @IBOutlet weak var videoCodecValueLabel: UILabel!
     @IBOutlet weak var bitRateValueLabel: UILabel!
+    @IBOutlet weak var cameraResolutionValueLabel: UILabel!
+    @IBOutlet weak var cameraFrameRateValueLabel: UILabel!
     @IBOutlet weak var enableAudioSwitch: UISwitch!
     @IBOutlet weak var audioCodecValueLabel: UILabel!
     @IBOutlet weak var webRTCVersionValueLabel: UILabel!

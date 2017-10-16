@@ -70,6 +70,8 @@
 		9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */; };
 		917EF3461F160B9E00756DF2 /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917EF3451F160B9E00756DF2 /* Snapshot.swift */; };
 		917FDCC41F5F14700006BCAA /* ConfigurationViewController.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 91C109201E4A3198009F11F7 /* ConfigurationViewController.storyboard */; };
+		9180DD781F94F535009E9B34 /* CameraResolutionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9180DD761F94F516009E9B34 /* CameraResolutionViewController.swift */; };
+		9180DD7A1F94F809009E9B34 /* CameraFrameRateTableViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9180DD791F94F809009E9B34 /* CameraFrameRateTableViewController.swift */; };
 		918201941D58668E00178E2B /* SocketRocket.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 918201911D58668E00178E2B /* SocketRocket.framework */; };
 		918A38F81F30F49500D047BA /* ICEServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918A38F71F30F49500D047BA /* ICEServerInfo.swift */; };
 		9191E7E51F599D1B004589C0 /* SDWebImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9161BB3F1F2B31C200569748 /* SDWebImage.framework */; };
@@ -189,6 +191,8 @@
 		91756E201F90A87500B70C53 /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
 		9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoCapturer.swift; sourceTree = "<group>"; };
 		917EF3451F160B9E00756DF2 /* Snapshot.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
+		9180DD761F94F516009E9B34 /* CameraResolutionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraResolutionViewController.swift; sourceTree = "<group>"; };
+		9180DD791F94F809009E9B34 /* CameraFrameRateTableViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraFrameRateTableViewController.swift; sourceTree = "<group>"; };
 		918201901D58668E00178E2B /* WebRTC.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebRTC.framework; path = Carthage/Build/iOS/WebRTC.framework; sourceTree = "<group>"; };
 		918201911D58668E00178E2B /* SocketRocket.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SocketRocket.framework; path = Carthage/Build/iOS/SocketRocket.framework; sourceTree = "<group>"; };
 		918A38F71F30F49500D047BA /* ICEServerInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICEServerInfo.swift; sourceTree = "<group>"; };
@@ -331,6 +335,8 @@
 				91C109201E4A3198009F11F7 /* ConfigurationViewController.storyboard */,
 				91C109211E4A3199009F11F7 /* AudioCodecViewController.swift */,
 				91545C0A1EA7AAA900523AAE /* BitRateViewController.swift */,
+				9180DD791F94F809009E9B34 /* CameraFrameRateTableViewController.swift */,
+				9180DD761F94F516009E9B34 /* CameraResolutionViewController.swift */,
 				91C109221E4A3199009F11F7 /* ConfigurationMainViewController.swift */,
 				91C109261E4A3199009F11F7 /* ConfigurationNavigationController.swift */,
 				91C109231E4A3199009F11F7 /* ConfigurationViewController.swift */,
@@ -697,10 +703,12 @@
 				91BDC1D91F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift in Sources */,
 				9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */,
 				9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */,
+				9180DD7A1F94F809009E9B34 /* CameraFrameRateTableViewController.swift in Sources */,
 				9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */,
 				9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */,
 				C5D3C7421F7CEB18004660F5 /* VideoCapturerDevice.swift in Sources */,
 				913D5E1D1F57E8F300A82DEA /* BitRateViewController.swift in Sources */,
+				9180DD781F94F535009E9B34 /* CameraResolutionViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
