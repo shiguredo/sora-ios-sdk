@@ -24,13 +24,11 @@ private var roleTable: PairTable<String, Role> =
 extension Role: Codable {
     
     public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        self = roleTable.right(other: try container.decode(String.self))!
+        self = try roleTable.decode(from: decoder)
     }
     
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(roleTable.left(other: self)!)
+        try roleTable.encode(self, to: encoder)
     }
     
 }

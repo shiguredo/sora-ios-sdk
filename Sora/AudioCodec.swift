@@ -36,19 +36,11 @@ extension AudioCodec: CustomStringConvertible {
 extension AudioCodec: Codable {
     
     public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let key = try container.decode(String.self)
-        self = try descriptionTable.right(other: key).unwrap {
-            throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "invalid codec type")
-        }
+        self = try descriptionTable.decode(from: decoder)
     }
     
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        if let value = descriptionTable.left(other: self) {
-            try container.encode(value)
-        }
+        try descriptionTable.encode(self, to: encoder)
     }
     
 }

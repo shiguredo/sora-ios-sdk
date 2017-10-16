@@ -323,17 +323,11 @@ private var resolutionTable: PairTable<String, CameraVideoCapturer.Settings.Reso
 extension CameraVideoCapturer.Settings.Resolution: Codable {
     
     public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let key = try container.decode(String.self)
-        self = try resolutionTable.right(other: key).unwrap {
-            throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "invalid value")
-        }
+        self = try resolutionTable.decode(from: decoder)
     }
     
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(resolutionTable.left(other: self)!)
+        try resolutionTable.encode(self, to: encoder)
     }
     
 }

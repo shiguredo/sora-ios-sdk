@@ -33,17 +33,11 @@ private var aspectRatioTable: PairTable<String, AspectRatio> =
 extension AspectRatio: Codable {
     
     public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let key = try container.decode(String.self)
-        self = try aspectRatioTable.right(other: key).unwrap {
-            throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "invalid value")
-        }
+        self = try aspectRatioTable.decode(from: decoder)
     }
     
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(aspectRatioTable.left(other: self)!)
+        try aspectRatioTable.encode(self, to: encoder)
     }
     
 }

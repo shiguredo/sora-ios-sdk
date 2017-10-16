@@ -71,6 +71,26 @@ final class PairTable<T: Equatable, U: Equatable> {
     
 }
 
+extension PairTable where T == String {
+    
+    func decode(from decoder: Decoder) throws -> U {
+        let container = try decoder.singleValueContainer()
+        let key = try container.decode(String.self)
+        return try right(other: key).unwrap {
+            throw DecodingError.dataCorruptedError(in: container,
+                                                   debugDescription: "invalid value")
+        }
+    }
+    
+    func encode(_ value: U, to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let key = left(other: value) {
+            try container.encode(key)
+        }
+    }
+    
+}
+
 /// :nodoc:
 extension Optional {
     
