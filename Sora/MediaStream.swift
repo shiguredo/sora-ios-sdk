@@ -13,8 +13,7 @@ public protocol MediaStream: class {
     
     // MARK: 映像フレームの描画
     
-    // VideoCapturer から呼ばれる
-    func render(videoFrame: VideoFrame?)
+    func send(videoFrame: VideoFrame?)
     
 }
 
@@ -87,7 +86,7 @@ class BasicMediaStream: MediaStream {
     }
     
     private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()
-    func render(videoFrame: VideoFrame?) {
+    func send(videoFrame: VideoFrame?) {
         if let frame = videoFrame {
             // フィルターを通す
             let frame = videoFilter?.filter(videoFrame: frame) ?? frame

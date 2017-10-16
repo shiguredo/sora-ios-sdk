@@ -170,7 +170,7 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     
     func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
         let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
-        cameraVideoCapturer.stream?.render(videoFrame: frame)
+        cameraVideoCapturer.stream?.send(videoFrame: frame)
         cameraVideoCapturer.handlers.onCaptureHandler?(frame)
     }
     

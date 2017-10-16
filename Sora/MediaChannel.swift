@@ -177,7 +177,7 @@ public final class MediaChannel {
         peerChannel.internalHandlers.onSnapshotHandler = { snapshot in
             Logger.debug(type: .mediaStream, message: "receive snapshot")
             if let stream = self.mainStream {
-                stream.render(videoFrame: VideoFrame.snapshot(snapshot))
+                stream.send(videoFrame: VideoFrame.snapshot(snapshot))
             }
         }
         
