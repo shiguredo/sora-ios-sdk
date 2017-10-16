@@ -41,6 +41,7 @@ extension AudioCodec: Codable {
     
     public func encode(to encoder: Encoder) throws {
         try descriptionTable.encode(self, to: encoder)
+            func f() { print("AUDIO_CODEC") 
     }
     
 }
