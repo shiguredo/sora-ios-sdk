@@ -436,8 +436,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let stream = BasicMediaStream(nativeStream: nativeStream)
         if configuration.videoEnabled {
             switch configuration.videoCapturerDevice {
-            case .camera:
+            case .camera(let settings):
                 // カメラが指定されている場合は、接続処理と同時にデフォルトのCameraVideoCapturerを使用してキャプチャを開始する
+                CameraVideoCapturer.shared.settings = settings
                 CameraVideoCapturer.shared.start()
                 stream.videoCapturer = CameraVideoCapturer.shared
             case .custom:

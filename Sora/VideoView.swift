@@ -5,12 +5,12 @@ import WebRTC
  VideoRenderer プロトコルのデフォルト実装となる UIView です。
  
  MediaStream.videoRenderer にセットすることで、その MediaStream
- に流れている動画をそのまま画面に表示する事ができます。
+ に流れている映像をそのまま画面に表示する事ができます。
  
  ## contentModeの設定
  
  VideoView は contentMode の設定に対応しており、 contentMode
- プロパティに任意の値を設定することで動画のレンダリングのされ方を変更することができます。
+ プロパティに任意の値を設定することで映像のレンダリングのされ方を変更することができます。
  
  - コード上からプログラム的に VideoView を生成した場合、デフォルト値は
  `scaleAspectFit` になります。
@@ -65,22 +65,22 @@ public class VideoView: UIView {
     // MARK: - 映像フレーム
     
     /**
-     現在 VideoView が表示している動画の元々のフレームサイズを返します。
+     現在 VideoView が表示している映像の元々のフレームサイズを返します。
      
-     まだ VideoView が動画のフレームを一度も表示していない場合は `nil` を返します。
+     まだ VideoView が映像のフレームを一度も表示していない場合は `nil` を返します。
      
-     VideoView はこの動画のフレームサイズを元にして、自身の contentMode
-     に従ってフレームを変形させ、動画を画面に表示します。
+     VideoView はこの映像のフレームサイズを元にして、自身の contentMode
+     に従ってフレームを変形させ、映像を画面に表示します。
      
      - 例えば currentVideoFrameSize が VideoView.frame よりも小さく、
      contentMode に `scaleAspectFit` が指定されている場合は、
-     contentMode の指定に従って元動画は引き伸ばされて、拡大表示される事になります。
+     contentMode の指定に従って元映像は引き伸ばされて、拡大表示される事になります。
      
-     このプロパティを使用することで、例えば元動画が横長の場合は横長なUIにし、
+     このプロパティを使用することで、例えば元映像が横長の場合は横長なUIにし、
      縦長の場合は縦長なUIにする、といった調整を行うことができます。
      
-     注意点として、このプロパティは直前の動画のフレームサイズを返すため、
-     既に動画は表示されていない場合でも、最後に表示していた動画フレームをサイズを返します。
+     注意点として、このプロパティは直前の映像のフレームサイズを返すため、
+     既に映像は表示されていない場合でも、最後に表示していた映像フレームをサイズを返します。
      */
     public var currentVideoFrameSize: CGSize? {
         return contentView.currentVideoFrameSize
@@ -206,7 +206,7 @@ class VideoViewContentView: UIView {
     
     private func updateNativeVideoViewSize(_ videoFrameSize: CGSize) {
         // 指定された映像のサイズ・現在の自分自身の描画領域のサイズ・描画モードの指定に合わせて、
-        // RTCEAGLVideoView のサイズと位置を変更し、うまい具合に動画が描画されるようにする。
+        // RTCEAGLVideoView のサイズと位置を変更し、うまい具合に映像が描画されるようにする。
         let adjustSize = viewSize(for: videoFrameSize,
                                   containerSize: bounds.size,
                                   mode: renderingContentMode)
@@ -217,7 +217,7 @@ class VideoViewContentView: UIView {
         // その実装は RTCEAGLVideoView.m に存在し、実際には delegate に対して通知を行っているだけである。
         // https://chromium.googlesource.com/external/webrtc/+/master/webrtc/sdk/objc/Framework/Classes/UI/RTCEAGLVideoView.m#263
         // 名前からして setSize(_:) を呼び出すことで nativeVideoView の描画フレームや内部状態が綺麗に設定されるものだと期待してしまうが、
-        // そのような挙動は一切なく、 nativeVideoView は自分自身の frame 一杯に合わせて単に動画フレームを描画する処理しか行ってくれない。
+        // そのような挙動は一切なく、 nativeVideoView は自分自身の frame 一杯に合わせて単に映像フレームを描画する処理しか行ってくれない。
         // 正直なところ、この WebRTC.framework 側の実装に大いに疑問があるが・・・
         // したがって setSize(_:) は自分で nativeVideoView.frame を適切にセットした後に、手動で呼び出してやらないとならない。
         // nativeVideoView.frame のセットより先に setSize(_:) を呼び出すと、まだ自分自身のサイズが更新されていないにも関わらず delegate に対する通知が発生して挙動がおかしくなる
