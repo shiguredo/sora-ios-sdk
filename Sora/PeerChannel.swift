@@ -192,8 +192,8 @@ public protocol PeerChannel: class {
     
     // MARK: - 接続
     
-    func connect(webRTCConfiguration: WebRTCConfiguration,
-                 handler: @escaping (Error?) -> Void)
+    func connect(handler: @escaping (_ error: Error?) -> Void)
+    
     func disconnect(error: Error?)
     
 }
@@ -264,10 +264,8 @@ class BasicPeerChannel: PeerChannel {
         iceCandidates = iceCandidates.filter { each in each == iceCandidate }
     }
     
-    func connect(webRTCConfiguration: WebRTCConfiguration,
-                 handler: @escaping (Error?) -> Void) {
-        context.connect(webRTCConfiguration: webRTCConfiguration,
-                        handler: handler)
+    func connect(handler: @escaping (Error?) -> Void) {
+        context.connect(handler: handler)
     }
     
     func disconnect(error: Error?) {
@@ -321,13 +319,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         signalingChannel.internalHandlers.onMessageHandler = handleMessage
     }
     
-    func connect(webRTCConfiguration: WebRTCConfiguration,
-                 handler: @escaping (Error?) -> Void) {
+    func connect(handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .peerChannel, message: "try connecting")
         Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
         
         onConnectHandler = handler
-        self.webRTCConfiguration = webRTCConfiguration
+        self.webRTCConfiguration = channel.configuration.webRTCConfiguration
         nativeChannel = NativePeerChannelFactory.default
             .createNativePeerChannel(configuration: webRTCConfiguration,
                                      constraints: webRTCConfiguration.constraints,

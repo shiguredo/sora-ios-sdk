@@ -181,7 +181,7 @@ public final class MediaChannel {
             }
         }
         
-        peerChannel.connect(webRTCConfiguration: webRTCConfiguration) { error in
+        peerChannel.connect() { error in
             self.connectionTimer.stop()
 
             if let error = error {
