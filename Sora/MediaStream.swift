@@ -1,18 +1,44 @@
 import Foundation
 import WebRTC
 
+/**
+ メディアストリームの機能を定義したプロトコルです。
+ デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
+ ソースコードは公開していますので、実装の詳細はそちらを参照してください。
+ 
+ メディアストリームは映像と音声の送受信を行います。
+ メディアストリーム 1 つにつき、 1 つの映像と 1 つの音声を送受信可能です。
+ */
 public protocol MediaStream: class {
     
-    // MARK: - プロパティ
+    // MARK: - 接続情報
+    
+    /// ストリーム ID
     var streamId: String { get }
+    
+    /// 接続開始時刻
     var creationTime: Date { get }
+
+    // MARK: 映像フレームの送信
+
+    /// 映像キャプチャー
     var videoCapturer: VideoCapturer? { get set }
+    
+    /// 映像フィルター
     var videoFilter: VideoFilter? { get set }
+    
+    /// 映像レンダラー。
     var videoRenderer: VideoRenderer? { get set }
-    // var audioCapturer: AudioCapturer? { get set }
     
-    // MARK: 映像フレームの描画
-    
+    /**
+     映像フレームをサーバーに送信します。
+     送信される映像フレームは映像フィルターを通して加工されます。
+     映像レンダラーがセットされていれば、加工後の映像フレームが
+     映像レンダラーによって描画されます。
+     
+     - parameter videoFrame: 描画する映像フレーム。
+                             `nil` を指定すると空の映像フレームを送信します。
+     */
     func send(videoFrame: VideoFrame?)
     
 }

@@ -159,10 +159,12 @@ public final class WebSocketChannelHandlers {
 }
 
 /**
- WebSocket チャネルは WebSocket による通信を行います。
+ WebSocket による通信を行うチャネルの機能を定義したプロトコルです。
  デフォルトの実装は非公開 (`internal`) であり、
  通信処理のカスタマイズはイベントハンドラでのみ可能です。
  ソースコードは公開していますので、実装の詳細はそちらを参照してください。
+ 
+ WebSocket チャネルはシグナリングチャネル `SignalingChannel` により使用されます。
  */
 public protocol WebSocketChannel: class {
     

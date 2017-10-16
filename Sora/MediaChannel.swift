@@ -47,8 +47,8 @@ public final class MediaChannelHandlers {
  
  */
 public final class MediaChannel {
-    
-    // MARK: - プロパティ
+        
+    // MARK: - イベントハンドラ
     
     /// イベントハンドラ
     public let handlers: MediaChannelHandlers = MediaChannelHandlers()
@@ -56,6 +56,8 @@ public final class MediaChannel {
     /// 内部処理で使われるイベントハンドラ
     let internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
+    // MARK: - 接続情報
+    
     /// クライアントの設定
     public let configuration: Configuration
     
@@ -68,11 +70,18 @@ public final class MediaChannel {
         }
     }
     
-    /// シグナリングチャネル
-    public let signalingChannel: SignalingChannel
+    /// 接続状態
+    public private(set) var state: ConnectionState = .disconnected {
+        didSet {
+            Logger.trace(type: .mediaChannel,
+                      message: "changed state from \(oldValue) to \(state)")
+        }
+    }
     
-    /// ピアチャネル
-    public let peerChannel: PeerChannel
+    /// 接続中 (`state == .connected`) であれば ``true``
+    public var isAvailable: Bool {
+        get { return state == .connected }
+    }
     
     /// ストリームのリスト
     public var streams: [MediaStream] {
@@ -83,19 +92,14 @@ public final class MediaChannel {
     public var mainStream: MediaStream? {
         return streams.first
     }
+
+    // MARK: 接続チャネル
     
-    /// 接続状態
-    public private(set) var state: ConnectionState = .disconnected {
-        didSet {
-            Logger.trace(type: .mediaChannel,
-                      message: "changed state from \(oldValue) to \(state)")
-        }
-    }
+    /// シグナリングチャネル
+    public let signalingChannel: SignalingChannel
     
-    /// 接続中であれば ``true``
-    public var isAvailable: Bool {
-        get { return state == .connected }
-    }
+    /// ピアチャネル
+    public let peerChannel: PeerChannel
     
     private var connectionTimer: ConnectionTimer
     private let manager: Sora

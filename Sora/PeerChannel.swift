@@ -164,16 +164,17 @@ public final class PeerChannelHandlers {
  ピアチャネルの機能を定義したプロトコルです。
  デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
  ソースコードは公開していますので、実装の詳細はそちらを参照してください。
+ 
+ ピアチャネルは映像と音声を送受信するための接続を行います。
+ サーバーへの接続を確立すると、メディアストリーム `MediaStream` を通して
+ 映像と音声の送受信が可能になります。
+ メディアストリームはシングルストリームでは 1 つ、マルチストリームでは複数用意されます。
  */
 public protocol PeerChannel: class {
     
-    // MARK: - プロパティ
+    // MARK: - イベントハンドラ
     
-    var configuration: Configuration { get }
-    
-    /// シグナリングチャネル
-    var signalingChannel: SignalingChannel { get }
-    
+    /// イベントハンドラ
     var handlers: PeerChannelHandlers { get }
     
     /**
@@ -182,18 +183,48 @@ public protocol PeerChannel: class {
      */
     var internalHandlers: PeerChannelHandlers { get }
     
+    // MARK: - 接続情報
+    
+    /// クライアントの設定
+    var configuration: Configuration { get }
+    
+    /// クライアント ID 。接続成立後にセットされます。
     var clientId: String? { get }
+    
+    /// メディアストリームのリスト。シングルストリームでは 1 つです。
     var streams: [MediaStream] { get }
+    
+    /// 接続状態
     var state: ConnectionState { get }
+    
+    /// シグナリングチャネル
+    var signalingChannel: SignalingChannel { get }
     
     // MARK: - インスタンスの生成
     
+    /**
+     初期化します。
+     
+     - parameter configuration: クライアントの設定
+     - parameter signalingChannel: 使用するシグナリングチャネル
+     */
     init(configuration: Configuration, signalingChannel: SignalingChannel)
     
     // MARK: - 接続
     
+    /**
+     サーバーに接続します。
+     
+     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter error: (接続失敗時のみ) エラー
+     */
     func connect(handler: @escaping (_ error: Error?) -> Void)
     
+    /**
+     接続を解除します。
+     
+     - parameter error: 接続解除の原因となったエラー
+     */
     func disconnect(error: Error?)
     
 }
