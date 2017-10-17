@@ -166,6 +166,9 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         switch state {
         case .connecting, .connected:
             disconnect()
+            if CameraVideoCapturer.shared.isRunning {
+                CameraVideoCapturer.shared.stop()
+            }
             
         case .disconnected:
             configurationViewController.validate { config, error in
@@ -173,6 +176,10 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                     self.state = .disconnected
                     showAlert(title: "Invalid Configuration", message: error)
                     return
+                }
+                
+                if config!.role != .subscriber && CameraVideoCapturer.shared.isRunning {
+                    CameraVideoCapturer.shared.stop()
                 }
                 
                 self.state = .connecting
