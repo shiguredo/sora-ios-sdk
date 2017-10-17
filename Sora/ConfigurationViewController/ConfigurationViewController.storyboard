@@ -873,6 +873,12 @@
                         </connections>
                     </tableView>
                     <navigationItem key="navigationItem" title="Camera Resolution" id="g52-GQ-Lx3"/>
+                    <connections>
+                        <outlet property="fullHDCell" destination="TO9-Jo-fcd" id="PfT-1f-Zqz"/>
+                        <outlet property="hdCell" destination="VaQ-qz-qr9" id="b7T-rH-wWE"/>
+                        <outlet property="qvgaCell" destination="jEc-Pe-cqq" id="hWL-Gy-yDr"/>
+                        <outlet property="vgaCell" destination="3vD-Ie-eYj" id="IaB-7y-FVq"/>
+                    </connections>
                 </tableViewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="oPT-91-sl3" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>

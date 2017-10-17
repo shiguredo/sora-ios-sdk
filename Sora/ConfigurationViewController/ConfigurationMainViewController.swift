@@ -198,6 +198,11 @@ class ConfigurationMainViewController: UITableViewController,
         videoCodecCell.isUserInteractionEnabled = !flag
         bitRateLabel.setTextOn(!flag)
         bitRateCell.isUserInteractionEnabled = !flag
+        cameraResolutionLabel.setTextOn(!flag)
+        cameraResolutionCell.isUserInteractionEnabled = !flag
+        cameraFrameRateLabel.setTextOn(!flag)
+        cameraFrameRateTextField.isUserInteractionEnabled = !flag
+        cameraFrameRateCell.isUserInteractionEnabled = !flag
         enableSnapshotLabel.setTextOn(!flag)
         enableSnapshotSwitch.isUserInteractionEnabled = !flag
         enableAudioLabel.setTextOn(!flag)

@@ -159,9 +159,11 @@ public final class ConfigurationViewController: UIViewController {
             config.videoEnabled = videoEnabled
             config.videoCodec = videoCodec
             config.videoBitRate = videoBitRate
-            config.videoCapturerDevice = .camera(settings:
-                CameraVideoCapturer.Settings(resolution:
-                cameraResolution, frameRate: cameraFrameRate ?? 30))
+            config.videoCapturerDevice =
+                .camera(settings: CameraVideoCapturer
+                    .Settings(resolution: cameraResolution,
+                              frameRate: cameraFrameRate ??
+                                CameraVideoCapturer.Settings.default.frameRate))
             config.audioEnabled = audioEnabled
             config.audioCodec = audioCodec
             return config
