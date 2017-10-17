@@ -262,11 +262,7 @@ public extension CameraVideoCapturer {
         public var description: String {
             return "\(resolution), \(frameRate)fps"
         }
-        
-        // TODO: CameraVideoCapturer.Settings はまだ Coding protocolに対応していません。
-        // したがって Configuration をエンコードして保存する場合などに、設定が無視されてしまいます。
-        // 将来的に対応が必要です。
-        
+
     }
     
 }
