@@ -41,7 +41,7 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var videoCodecValueLabel: UILabel!
     @IBOutlet weak var bitRateValueLabel: UILabel!
     @IBOutlet weak var cameraResolutionValueLabel: UILabel!
-    @IBOutlet weak var cameraFrameRateValueLabel: UILabel!
+    @IBOutlet weak var cameraFrameRateTextField: UITextField!
     @IBOutlet weak var enableAudioSwitch: UISwitch!
     @IBOutlet weak var audioCodecValueLabel: UILabel!
     @IBOutlet weak var webRTCVersionValueLabel: UILabel!
@@ -134,6 +134,23 @@ class ConfigurationMainViewController: UITableViewController,
         
         bitRateValueLabel.text = configurationViewController?
             .videoBitRate?.description ?? "Default"
+        
+        cameraResolutionValueLabel.text = "320x240"
+        if let resolution = configurationViewController?.cameraResolution {
+            switch resolution {
+            case .qvga240p:
+                cameraResolutionValueLabel.text = "320x240"
+            case .vga480p:
+                cameraResolutionValueLabel.text = "640x480"
+            case .hd720p:
+                cameraResolutionValueLabel.text = "1280x720"
+            case .hd1080p:
+                cameraResolutionValueLabel.text = "1920x1080"
+            }
+        }
+        
+        cameraFrameRateTextField.text =
+            configurationViewController?.cameraFrameRate?.description
         
         switch configurationViewController?.audioCodec {
         case .default?, nil:
@@ -253,12 +270,23 @@ class ConfigurationMainViewController: UITableViewController,
         configurationViewController?.channelId = channelIdTextField.text
     }
     
+    @IBAction func cameraFrameRateTextFieldEditingDidEndOnExit(_ sender: AnyObject) {
+        if let text = cameraFrameRateTextField.text {
+            if let value = Int(text) {
+                configurationViewController?.cameraFrameRate = value
+            } else {
+                cameraFrameRateTextField.text = nil
+            }
+        }
+    }
+    
     @IBAction func handleTap(_ sender: UITapGestureRecognizer) {
         if sender.state == .ended {
             hostTextFieldEditingDidEndOnExit(sender)
             portTextFieldEditingDidEndOnExit(sender)
             signalingPathTextFieldEditingDidEndOnExit(sender)
             channelIdTextFieldEditingDidEndOnExit(sender)
+            cameraFrameRateTextFieldEditingDidEndOnExit(sender)
             view.endEditing(true)
         }
     }

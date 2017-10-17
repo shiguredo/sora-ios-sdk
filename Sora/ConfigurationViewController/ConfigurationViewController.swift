@@ -100,6 +100,23 @@ public final class ConfigurationViewController: UIViewController {
         }
     }
     
+    public var cameraResolution: CameraVideoCapturer.Settings.Resolution =
+        CameraVideoCapturer.Settings.default.resolution {
+        didSet {
+            if isLocked {
+                cameraResolution = oldValue
+            }
+        }
+    }
+    
+    public var cameraFrameRate: Int? {
+        didSet {
+            if isLocked {
+                cameraFrameRate = oldValue
+            }
+        }
+    }
+    
     public var audioEnabled: Bool = true {
         didSet {
             if isLocked {
@@ -142,6 +159,9 @@ public final class ConfigurationViewController: UIViewController {
             config.videoEnabled = videoEnabled
             config.videoCodec = videoCodec
             config.videoBitRate = videoBitRate
+            config.videoCapturerDevice = .camera(settings:
+                CameraVideoCapturer.Settings(resolution:
+                cameraResolution, frameRate: cameraFrameRate ?? 30))
             config.audioEnabled = audioEnabled
             config.audioCodec = audioCodec
             return config
@@ -167,6 +187,13 @@ public final class ConfigurationViewController: UIViewController {
             videoEnabled = newValue.videoEnabled
             videoCodec = newValue.videoCodec
             videoBitRate = newValue.videoBitRate
+            switch newValue.videoCapturerDevice {
+            case .camera(settings: let settings):
+                cameraResolution = settings.resolution
+                cameraFrameRate = settings.frameRate
+            default:
+                break
+            }
             audioEnabled = newValue.audioEnabled
             audioCodec = newValue.audioCodec
         }
