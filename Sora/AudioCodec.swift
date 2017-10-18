@@ -26,6 +26,7 @@ public enum AudioCodec {
 
 extension AudioCodec: CustomStringConvertible {
     
+    /// 文字列表現を返します。
     public var description: String {
         return descriptionTable.left(other: self)!
     }

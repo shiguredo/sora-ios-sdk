@@ -11,13 +11,18 @@ public final class VideoCapturerHandlers {
     
 }
 
-// - MediaStream.videoCapturer に VideoCapturer をセットする
-//   - VideoCapturer.stream に MediaStream がセットされる
-// - MediaStream.render(videoFrame:) にフレームを渡すと描画される
-//   - フレームは描画前に VideoFilter によって変換される
+/**
+ 映像キャプチャーの機能を定義したプロトコルです。
+ 生成した映像フレームを引数として `MediaStream.send(videoFrame:)` に与えると、
+ 映像フレームが (フィルターがセットされていれば加工されて) サーバーに送信されます。
+ 
+ 映像キャプチャーとデータの送受信は別であることに注意してください。
+ 映像キャプチャーが映像フレームを生成しても、
+ メディアストリームなしではサーバーに映像が送信されません。
+ */
 public protocol VideoCapturer: class {
     
-    /// ストリーム
+    /// 映像フレームを渡すストリーム
     weak var stream: MediaStream? { get set }
     
     /// イベントハンドラ

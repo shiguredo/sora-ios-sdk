@@ -44,7 +44,8 @@ public struct Configuration {
     /// 映像ビットレート。デフォルトは無指定です。
     public var videoBitRate: Int?
     
-    /// 映像キャプチャーの種別。デフォルトは `.camera(settings: .default)` です。
+    /// 映像キャプチャーの種別。
+    /// デフォルトは `.camera(settings: CameraVideoCapturer.Settings.default)` です。
     public var videoCapturerDevice: VideoCapturerDevice = .camera(settings: .default)
     
     /// 音声コーデック。デフォルトは `.default` です。

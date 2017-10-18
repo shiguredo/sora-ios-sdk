@@ -35,6 +35,7 @@ extension Role: Codable {
 
 extension Role: CustomStringConvertible {
     
+    /// 文字列表現を返します。
     public var description: String {
         get {
             return roleTable.left(other: self)!

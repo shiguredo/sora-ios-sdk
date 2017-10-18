@@ -239,6 +239,7 @@ public final class MediaChannel {
 
 extension MediaChannel: CustomStringConvertible {
     
+    /// :nodoc:
     public var description: String {
         get {
             return "MediaChannel(clientId: \(clientId ?? "-"), role: \(configuration.role))"
@@ -247,7 +248,7 @@ extension MediaChannel: CustomStringConvertible {
     
 }
 
-// :nodoc:
+/// :nodoc:
 extension MediaChannel: Equatable {
     
     public static func ==(lhs: MediaChannel, rhs: MediaChannel) -> Bool {

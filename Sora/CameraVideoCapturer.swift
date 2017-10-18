@@ -3,6 +3,16 @@ import WebRTC
 
 /**
  デバイスのカメラを利用した `VideoCapturer` のデフォルト実装です。
+ `Configuration` の `videoCapturerDevice` に `.camera(settings:)` を
+ 指定すると、この実装が映像キャプチャーとして使用されます。
+ 
+ カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
+ 接続解除時は、 `Settings.canStop` が `true` であればカメラが停止されます。
+ 
+ カメラの解像度とフレームレートは `CameraVideoCapturer.Settings` で指定可能です。
+ ただし、カメラの起動中は設定を変更できません。
+ カメラの設定を変更したい場合は、一旦カメラを停止 `stop()` してから
+ `settings` プロパティに新しい設定をセットし、カメラを再起動 `start()` します。
  */
 public final class CameraVideoCapturer: VideoCapturer {
     
@@ -259,11 +269,27 @@ public extension CameraVideoCapturer {
          */
         public let frameRate: Int
         
-        /// :nodoc:
+        /// `true` であれば接続解除時にカメラを停止します。
+        public let canStop: Bool
+        
+        /// 文字列表現を返します。
         public var description: String {
             return "\(resolution), \(frameRate)fps"
         }
 
+        /**
+         初期化します。
+         
+         - parameter resolution: 解像度
+         - parameter frameRate: フレームレート
+         - parameter canStop: `true` であれば接続解除時にカメラを停止する
+         */
+        public init(resolution: Resolution, frameRate: Int, canStop: Bool) {
+            self.resolution = resolution
+            self.frameRate = frameRate
+            self.canStop = canStop
+        }
+        
     }
     
 }
