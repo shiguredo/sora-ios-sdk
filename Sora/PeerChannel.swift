@@ -461,10 +461,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     func terminatePublisherStream() {
         if configuration.videoEnabled {
             switch configuration.videoCapturerDevice {
-            case .camera:
+            case .camera(settings: let settings):
                 // カメラが指定されている場合は
                 // 接続時に自動的に開始したキャプチャを、切断時に自動的に停止する必要がある
-                CameraVideoCapturer.shared.stop()
+                print("camera stop? \(settings.canStop)")
+                if settings.canStop {
+                    CameraVideoCapturer.shared.stop()
+                }
             case .custom:
                 // カスタムが指定されている場合は、切断処理時には何もしない
                 // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる

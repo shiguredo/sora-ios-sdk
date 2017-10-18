@@ -198,7 +198,8 @@ public extension CameraVideoCapturer {
         /** デフォルトの設定。 */
         public static let `default` = Settings(
             resolution: .hd720p,
-            frameRate: 30
+            frameRate: 30,
+            canStop: true
         )
         
         /**
@@ -293,18 +294,21 @@ extension CameraVideoCapturer.Settings: Codable {
     enum CodingKeys: String, CodingKey {
         case resolution
         case frameRate
+        case canStop
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         resolution = try container.decode(Resolution.self, forKey: .resolution)
         frameRate = try container.decode(Int.self, forKey: .frameRate)
+        canStop = try container.decode(Bool.self, forKey: .canStop)
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(resolution, forKey: .resolution)
         try container.encode(frameRate, forKey: .frameRate)
+        try container.encode(canStop, forKey: .canStop)
     }
     
 }
