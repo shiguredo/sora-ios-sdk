@@ -166,9 +166,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         switch state {
         case .connecting, .connected:
             disconnect()
-            if CameraVideoCapturer.shared.isRunning {
-                CameraVideoCapturer.shared.stop()
-            }
             
         case .disconnected:
             configurationViewController.validate { config, error in
