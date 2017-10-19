@@ -1,9 +1,23 @@
 import Foundation
 import WebRTC
 
+/**
+ 映像の描画に必要な機能を定義したプロトコルです。
+ */
 public protocol VideoRenderer: class {
     
+    /**
+     映像のサイズが変更されたときに呼ばれます。
+     
+     - parameter size: 変更後のサイズ
+     */
     func onChangedSize(_ size: CGSize)
+    
+    /**
+     映像フレームを描画します。
+     
+     - parameter videoFrame: 描画する映像フレーム
+     */
     func render(videoFrame: VideoFrame?)
     
 }

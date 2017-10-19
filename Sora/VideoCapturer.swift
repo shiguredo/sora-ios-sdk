@@ -36,6 +36,11 @@ public protocol VideoCapturer: class {
     
 }
 
+/**
+ 映像フィルターの機能を定義したプロトコルです。
+ `MediaStream.videoFilter` にセットすると、
+ 生成された映像フレームはこのプロトコルの実装によって加工されます。
+ */
 public protocol VideoFilter: class {
     
     /**

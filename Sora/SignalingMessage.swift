@@ -1,79 +1,184 @@
 import Foundation
 
+/**
+ "connect" シグナリングメッセージを表します。
+ このメッセージはシグナリング接続の確立後、最初に送信されます。
+ */
 public struct SignalingConnectMessage {
     
+    /// ロール
     public var role: SignalingRole
+    
+    /// チャネル ID
     public var channelId: String
+    
+    /// メタデータ
     public var metadata: String?
+    
+    /// マルチストリームの可否
     public var multistreamEnabled: Bool
+    
+    /// 映像の可否
     public var videoEnabled: Bool
+    
+    /// 映像コーデック
     public var videoCodec: VideoCodec
+    
+    /// 映像ビットレート
     public var videoBitRate: Int?
+    
+    /// スナップショットの可否
     public var snapshotEnabled: Bool
+    
+    /// 音声の可否
     public var audioEnabled: Bool
+    
+    /// 音声コーデック
     public var audioCodec: AudioCodec
 
 }
 
+/**
+ "offer" シグナリングメッセージを表します。
+ このメッセージは SDK が "connect" を送信した後に、サーバーから送信されます。
+ */
 public struct SignalingOfferMessage {
     
+    /**
+     クライアントが更新すべき設定を表します。
+     */
     public struct Configuration {
+        
+        /// ICE サーバーの情報のリスト
         public let iceServerInfos: [ICEServerInfo]
+        
+        /// ICE 通信ポリシー
         public let iceTransportPolicy: ICETransportPolicy
     }
     
+    /// クライアント ID
     public let clientId: String
+    
+    /// SDP メッセージ
     public let sdp: String
+    
+    /// クライアントが更新すべき設定
     public let configuration: Configuration?
     
 }
 
+/**
+ "notify" シグナリングメッセージで通知されるイベントの種別です。
+ 詳細は Sora のドキュメントを参照してください。
+ */
 public enum SignalingEventType: String {
     
+    /// "connection.created"
     case connectionCreated = "connection.created"
+    
+    /// "connection.updated"
     case connectionUpdated = "connection.updated"
+    
+    /// "connection.destroyed"
     case connectionDestroyed = "connection.destroyed"
     
 }
 
+/**
+ "update" シグナリングメッセージを表します。
+ このメッセージは送受信の両方で使用されます。
+ 
+ マルチストリーム時にストリームの数が増減するとサーバーから送信されます。
+ 受信したメッセージの SDP から Answer としての "update" メッセージを生成してサーバーに送信します。
+ */
 public struct SignalingUpdateOfferMessage {
     
+    /// SDP メッセージ
     public let sdp: String
     
 }
 
+/**
+ "snapshot" シグナリングメッセージを表します。
+ スナップショットの画像データを含みます。
+ */
 public struct SignalingSnapshotMessage {
     
+    /// チャネル ID
     public let channelId: String
+    
+    /// スナップショットの画像データ (WebP 画像を Base64 でエンコードした文字列)
     public let webP: String
     
 }
 
+/**
+ "notify" シグナリングメッセージを表します。
+ このメッセージはピア接続の確立後にサーバーから送信されます。
+ */
 public struct SignalingNotifyMessage {
     
+    /// イベントの種別
     public let eventType: SignalingEventType
+    
+    /// ロール
     public let role: SignalingRole
+    
+    /// 接続時間
     public let connectionTime: Int
+    
+    /// 接続中のクライアントの数
     public let connectionCount: Int
+    
+    /// 接続中のパブリッシャーの数
     public let publisherCount: Int
+    
+    /// 接続中のサブスクライバーの数
     public let subscriberCount: Int
     
 }
 
+/**
+ "pong" シグナリングメッセージを表します。
+ このメッセージはサーバーから "ping" シグナリングメッセージを受信すると
+ サーバーに送信されます。
+ "ping" 受信後、一定時間内にこのメッセージを返さなければ、
+ サーバーとの接続が解除されます。
+ */
 public struct SignalingPongMessage {}
 
 // MARK: -
 
+/**
+ シグナリングメッセージの種別です。
+ */
 public enum SignalingMessage {
     
+    /// "connect" シグナリングメッセージ
     case connect(message: SignalingConnectMessage)
+    
+    /// "offer" シグナリングメッセージ
     case offer(message: SignalingOfferMessage)
+    
+    /// "answer" シグナリングメッセージ
     case answer(sdp: String)
+    
+    /// "candidate" シグナリングメッセージ
     case candidate(ICECandidate)
+    
+    /// "update" シグナリングメッセージ
     case update(sdp: String)
+    
+    /// "snapshot" シグナリングメッセージ
     case snapshot(SignalingSnapshotMessage)
+    
+    /// "notify" シグナリングメッセージ
     case notify(message: SignalingNotifyMessage)
+    
+    /// "ping" シグナリングメッセージ
     case ping
+    
+    /// "pong" シグナリングメッセージ
     case pong
     
 }

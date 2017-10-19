@@ -41,6 +41,11 @@ public class VideoView: UIView {
     
     // MARK: - インスタンスの生成
     
+    /**
+     初期化します。
+     
+     - parameter frame: ビューのサイズ
+     */
     override public init(frame: CGRect) {
         super.init(frame: frame)
         // init() ないし init(frame:) 経由でコードからVideoViewが生成された場合は、
@@ -48,6 +53,11 @@ public class VideoView: UIView {
         contentMode = .scaleAspectFit
     }
     
+    /**
+     コーダーを使用して初期化します。
+     
+     - parameter coder: コーダー
+     */
     required public init?(coder: NSCoder) {
         super.init(coder: coder)
         // init?(coder:) 経由でVideoViewが生成された場合は、
@@ -57,6 +67,9 @@ public class VideoView: UIView {
     
     // MARK: - レイアウト
     
+    /**
+     レイアウトを調整します。
+     */
     override public func layoutSubviews() {
         super.layoutSubviews()
         contentView.frame = self.bounds
@@ -90,12 +103,15 @@ public class VideoView: UIView {
 
 // MARK: - VideoRenderer
 
+/// :nodoc:
 extension VideoView: VideoRenderer {
     
+    /// :nodoc:
     public func onChangedSize(_ size: CGSize) {
         contentView.onVideoFrameSizeUpdated(size)
     }
     
+    /// :nodoc:
     public func render(videoFrame: VideoFrame?) {
         contentView.render(videoFrame: videoFrame)
     }

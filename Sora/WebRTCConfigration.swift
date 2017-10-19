@@ -12,6 +12,8 @@ public struct MediaConstraints {
     /// オプションの制約
     public var optional: [String: String] = [:]
     
+    // MARK: - ネイティブ
+    
     var nativeValue: RTCMediaConstraints {
         get {
             return RTCMediaConstraints(mandatoryConstraints: mandatory,
@@ -21,6 +23,9 @@ public struct MediaConstraints {
     
 }
 
+/**
+ WebRTC に関する設定です。
+ */
 public struct WebRTCConfiguration {
     
     // MARK: メディア制約に関する設定
@@ -48,6 +53,8 @@ public struct WebRTCConfiguration {
                           credential: nil,
                           tlsSecurityPolicy: .secure)]
     }
+    
+    // MARK: - ネイティブ
     
     var nativeValue: RTCConfiguration {
         get {

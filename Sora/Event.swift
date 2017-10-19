@@ -1,10 +1,21 @@
 import Foundation
 
+/**
+ 接続中のチャネルの統計情報です。
+ サーバーによって通知されます。
+ */
 public struct MediaChannelStatistics {
     
+    /// 接続時間
     public let connectionTime: Int
+    
+    /// チャネルに接続中のクライアントの数
     public let connectionCount: Int
+    
+    /// チャネルに接続中のクライアントのうち、パブリッシャーの数
     public let publisherCount: Int
+    
+    /// チャネルに接続中のクライアントの数のうち、サブスクライバーの数
     public let subscriberCount: Int
     
     init(message: SignalingNotifyMessage) {
@@ -16,10 +27,19 @@ public struct MediaChannelStatistics {
     
 }
 
+/**
+ サーバーから通知されたイベントです。
+ 詳細は Sora のドキュメントを参照してください。
+ */
 public enum Event {
     
+    /// 接続中のチャネルに新しい接続が追加されたことを示します。
     case connectionCreated(statistics: MediaChannelStatistics)
+    
+    /// 1 分ごとに通知されます。
     case connectionUpdated(statistics: MediaChannelStatistics)
+    
+    /// 接続中のチャネルのいずれかの接続が解除されたことを示します。
     case connectionDestroyed(statistics: MediaChannelStatistics)
     
     init(message: SignalingNotifyMessage) {
