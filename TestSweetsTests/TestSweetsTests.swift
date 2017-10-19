@@ -1,11 +1,3 @@
-//
-//  TestSweetsTests.swift
-//  TestSweetsTests
-//
-//  Created by 鈴木鉄也 on 2017/09/15.
-//  Copyright © 2017年 Shiguredo Inc. All rights reserved.
-//
-
 import XCTest
 @testable import TestSweets
 
