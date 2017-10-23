@@ -103,11 +103,8 @@ class VideoViewListViewController: UICollectionViewController,
 
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "VideoViewCell", for: indexPath)
-        print("reuse: \(reuseIdentifier) cellForItemAt \(indexPath) for \(cell)")
         if let cell = cell as? VideoViewCollectionViewCell {
             cell.stream = testCaseController.mediaChannel?.streams[indexPath.row]
-            print("stream \(cell.stream)")
-            print("video view = \(cell.videoView)")
         }
         return cell
     }
