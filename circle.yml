@@ -22,9 +22,8 @@ test:
       tee $CIRCLE_ARTIFACTS/xcode_raw.log |
       xcpretty --color --report junit --output $CIRCLE_TEST_REPORTS/xcode/results.xml
 
-
-experimental:
-  notify:
-    branches:
-      ignore:
-        - feature/2.0
+#experimental:
+#  notify:
+#    branches:
+#      ignore:
+#        - feature/2.0
