@@ -10,7 +10,7 @@
 		9100904E1E58B4470099E00E /* VideoView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 9100904D1E58B4470099E00E /* VideoView.xib */; };
 		910090501E58B5450099E00E /* VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9100904F1E58B5450099E00E /* VideoView.swift */; };
 		9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9106C27D1F31A3470019E3C7 /* Logger.swift */; };
-		910D444F1F4D7ACC00D35917 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910D444E1F4D7ACC00D35917 /* Event.swift */; };
+		910D444F1F4D7ACC00D35917 /* NotificationEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910D444E1F4D7ACC00D35917 /* NotificationEvent.swift */; };
 		910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */; };
 		9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */; };
 		91332AFB1F6C120500A3128F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91332AFA1F6C120500A3128F /* AppDelegate.swift */; };
@@ -144,7 +144,7 @@
 		9100904D1E58B4470099E00E /* VideoView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = VideoView.xib; sourceTree = "<group>"; };
 		9100904F1E58B5450099E00E /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		9106C27D1F31A3470019E3C7 /* Logger.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
-		910D444E1F4D7ACC00D35917 /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
+		910D444E1F4D7ACC00D35917 /* NotificationEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationEvent.swift; sourceTree = "<group>"; };
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
 		9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaStream.swift; sourceTree = "<group>"; };
 		91332AF81F6C120500A3128F /* TestSweets.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TestSweets.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -377,8 +377,8 @@
 				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
 				915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,
+				91756E201F90A87500B70C53 /* ConnectionState.swift */,
 				9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */,
-				910D444E1F4D7ACC00D35917 /* Event.swift */,
 				916BBF711F19EF5800846166 /* ICECandidate.swift */,
 				918A38F71F30F49500D047BA /* ICEServerInfo.swift */,
 				9174A8961F73F93B00D586C4 /* ICETransportPolicy.swift */,
@@ -386,6 +386,7 @@
 				91A19B8D1F19367700A76852 /* MediaChannel.swift */,
 				9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */,
 				910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */,
+				910D444E1F4D7ACC00D35917 /* NotificationEvent.swift */,
 				91A19B8B1F19366B00A76852 /* PeerChannel.swift */,
 				9174A8901F73F89400D586C4 /* Role.swift */,
 				91A19B891F19366000A76852 /* SignalingChannel.swift */,
@@ -406,7 +407,6 @@
 				9100904D1E58B4470099E00E /* VideoView.xib */,
 				91C1091F1E4A3036009F11F7 /* ConfigurationViewController */,
 				91BDC1D31F6285D10084DC3A /* Extensions */,
-				91756E201F90A87500B70C53 /* ConnectionState.swift */,
 			);
 			path = Sora;
 			sourceTree = "<group>";
@@ -689,7 +689,7 @@
 				913D5E211F57E8F300A82DEA /* RoleViewController.swift in Sources */,
 				9174A8931F73F8CF00D586C4 /* VideoCodec.swift in Sources */,
 				910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */,
-				910D444F1F4D7ACC00D35917 /* Event.swift in Sources */,
+				910D444F1F4D7ACC00D35917 /* NotificationEvent.swift in Sources */,
 				910090501E58B5450099E00E /* VideoView.swift in Sources */,
 				91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */,
 				91629BF21F8E5099001193D0 /* Array+Base.swift in Sources */,

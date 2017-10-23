@@ -31,7 +31,7 @@ public struct MediaChannelStatistics {
  サーバーから通知されたイベントです。
  詳細は Sora のドキュメントを参照してください。
  */
-public enum Event {
+public enum NotificationEvent {
     
     /// 接続中のチャネルに新しい接続が追加されたことを示します。
     case connectionCreated(statistics: MediaChannelStatistics)

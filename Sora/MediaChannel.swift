@@ -22,7 +22,7 @@ public final class MediaChannelHandlers {
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     
     /// サーバーからのイベント通知の受信時に呼ばれるハンドラ
-    public var onEventHandler: ((Event) -> Void)?
+    public var onNotificationEventHandler: ((NotificationEvent) -> Void)?
     
 }
 
@@ -173,9 +173,9 @@ public final class MediaChannel {
         
         peerChannel.internalHandlers.onNotifyHandler = { message in
             Logger.debug(type: .mediaChannel, message: "receive event notification")
-            let event = Event(message: message)
-            self.internalHandlers.onEventHandler?(event)
-            self.handlers.onEventHandler?(event)
+            let event = NotificationEvent(message: message)
+            self.internalHandlers.onNotificationEventHandler?(event)
+            self.handlers.onNotificationEventHandler?(event)
         }
         
         peerChannel.internalHandlers.onSnapshotHandler = { snapshot in

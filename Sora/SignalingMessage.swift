@@ -71,7 +71,7 @@ public struct SignalingOfferMessage {
  "notify" シグナリングメッセージで通知されるイベントの種別です。
  詳細は Sora のドキュメントを参照してください。
  */
-public enum SignalingEventType: String {
+public enum SignalingNotificationEventType: String {
     
     /// "connection.created"
     case connectionCreated = "connection.created"
@@ -119,7 +119,7 @@ public struct SignalingSnapshotMessage {
 public struct SignalingNotifyMessage {
     
     /// イベントの種別
-    public let eventType: SignalingEventType
+    public let eventType: SignalingNotificationEventType
     
     /// ロール
     public let role: SignalingRole
@@ -383,7 +383,7 @@ extension SignalingNotifyMessage: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        eventType = SignalingEventType(rawValue:
+        eventType = SignalingNotificationEventType(rawValue:
             try container.decode(String.self, forKey: .eventType))!
         role = SignalingRole(rawValue:
             try container.decode(String.self, forKey: .role))!
