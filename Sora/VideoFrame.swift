@@ -76,7 +76,9 @@ public enum VideoFrame {
         }
         let timeStamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
         let timeStampNs = Int64(timeStamp * 1_000_000_000)
-        let frame = RTCVideoFrame(pixelBuffer: pixelBuffer, rotation: RTCVideoRotation._0, timeStampNs: timeStampNs)
+        let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer),
+                                  rotation: RTCVideoRotation._0,
+                                  timeStampNs: timeStampNs)
         self = .native(capturer: nil, frame: frame)
     }
     
