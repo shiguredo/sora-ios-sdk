@@ -9,6 +9,166 @@
 - FIX
     - バグ修正
 
+## 2.0.0
+
+設計と API を大きく見直した。
+
+### CHANGE
+
+- WebRTC M62 に対応した
+
+- アーキテクチャ armv7 に対応した
+
+- iOS 11 に対応した
+
+- Xcode 9 に対応した
+
+- Swift 4 に対応した
+
+- 依存するフレームワークから Unbox.framework を削除した
+
+- WebRTC のネイティブ API (主にクラスやプロトコル名の接頭辞が ``RTC`` の API) を非公開にした
+
+- クライアントの設定を ``Configuration`` にまとめた
+
+- ロールについて、 "パブリッシャー (Publisher)" と "サブスクライバー (Subscriber)" に加えて、マルチストリームで通信を行う "グループ (Group)" を追加した。
+
+- 通信を行うオブジェクト (WebSocket 接続、シグナリング接続、ピア接続、メディアストリーム) をプロトコルに変更した (デフォルトの実装は ``private``)
+
+- 内部で使用する WebSocket の API (SRWebSocket.framework の API) を非公開にした
+
+- 任意の映像キャプチャーの使用を可能にした
+
+- ``CMSampleBuffer`` を映像フレームとして使用可能にした
+
+- 映像フレームの編集を可能にした
+
+### CHANGE (API)
+
+- 次のクラス、構造体、列挙体、プロトコルを削除した
+
+  - ``Attendee``: 同等の機能を ``MediaChannel`` に実装した
+  - ``BuildInfo``: 同等の機能を ``WebRTCInfo`` に実装した
+  - ``Connection``: パブリッシャーとサブスクライバーをそれぞれ独立させたため削除した。
+  - ``ConnectionController``: 同等の機能を削除した
+  - ``ConnectionController.Request``
+  - ``ConnectionController.Role``
+  - ``ConnectionController.StreamType``
+  - ``ConnectionError``: 同等の機能を ``SoraError`` に実装した
+  - ``Event``: 各イベントをイベントハンドラのみで扱うようにした
+  - ``Event.EventType``
+  - ``EventLog``: ロギング機能を削除した
+  - ``MediaConnection``: 同等の機能を ``MediaChannel`` に実装した
+  - ``MediaPublisher``: パブリッシャーを ``MediaChannel`` で扱うようにしたため削除した
+  - ``MediaSubscriber``: サブスクライバーを ``MediaChannel`` で扱うようにしたため削除した
+  - ``MediaOption``: 同等の機能を ``Configuration`` に実装した
+  - ``Message``: 同等の機能を ``SignalingMessage`` に実装した
+  - ``Message.MessageType``
+  - ``Messagable``
+  - ``PeerConnection``: 同等の機能を ``PeerChannel`` に定義した
+  - ``PeerConnectionEventHandlers``: 同等の機能を ``PeerChannelHandlers`` に実装した
+  - ``SignalingEventHandlers``: 同等の機能を ``SignalingChannelHandlers`` に実装した
+  - ``SignalingNotify``: 同等の機能を ``SignalingNotifyMessage`` に実装した
+  - ``SignalingSnapshot``: 同等の機能を ``SignalingSnapshotMessage`` に実装した
+  - ``VideoFrameHandle``: 同等の機能を ``VideoFrame`` に実装した
+  - ``WebSocketEventHandlers``: 同等の機能を ``WebSocketChannelHandlers`` に実装した
+
+- 次のクラスを追加した
+
+  - ``CameraVideoCapturer``
+  - ``CameraVideoCapturer.Settings``
+  - ``ICECandidate``
+  - ``ICEServerInfo``
+  - ``MediaChannel``
+  - ``MediaChannelHandlers``
+  - ``PeerChannelHandlers``
+  - ``SignalingChannelHandlers``
+  - ``Sora``
+  - ``SoraHandlers``
+  - ``VideoCapturerHandlers``
+  - ``WebSocketChannelHandlers``
+
+- 次の構造体を追加した
+
+  - ``Configuration``
+  - ``MediaConstraints``
+  - ``SignalingConnectMessage``
+  - ``SignalingNotifyMessage``
+  - ``SignalingOfferMessage``
+  - ``SignalingOfferMessage.Configuration``
+  - ``SignalingPongMessage``
+  - ``SignalingSnapshotMessage``
+  - ``SignalingUpdateOfferMessage``
+  - ``Snapshot``
+  - ``WebRTCConfiuration``
+  - ``WebRTCInfo``
+
+- 次の列挙体を追加した
+
+  - ``ConnectionState``
+  - ``ICETransportPolicy``
+  - ``LogLevel``
+  - ``NotificationEvent``
+  - ``SignalingNotificationEventType``
+  - ``SignalingMessage``
+  - ``SignalingRole``
+  - ``SoraError``
+  - ``TLSSecurityPolicy``
+  - ``VideoCapturerDecive``
+  - ``VideoFrame``
+  - ``WebSocketMessage``
+  - ``WebSocketMessageStatusCode``
+
+- 次のプロトコルを追加した
+
+  - ``MediaStream``
+  - ``PeerChannel``
+  - ``SignalingChannel``
+  - ``VideoCapturer``
+  - ``ViderFilter``
+  - ``WebSocketChannel``
+
+- ``Notification`` の使用を中止し、次の関連する構造体と列挙体を削除した
+
+  - ``Connection.NotificationKey``
+  - ``Connection.NotificationKey.UserInfo``
+  - ``MediaConnection.NotificationKey``
+  - ``MediaConnection.NotificationKey.UserInfo``
+  - ``MediaStream.NotificationKey``
+  - ``MediaStream.NotificationKey.UserInfo``
+
+- ``AudioCodec``
+
+  - ``.Opus`` を ``.opus`` に変更した
+
+  - ``.PCMU`` を ``.pcmu`` に変更した
+
+- ``MediaStream``
+
+  - クラスからプロトコルに変更し、 API を一新した
+
+- ``Role``
+
+  - ``.group`` を追加した
+
+- ``VideoCodec``
+
+  - ``.VP8`` を ``.vp8`` に変更した
+
+  - ``.VP9`` を ``.vp9`` に変更した
+
+  - ``.H264`` を ``.h264`` に変更した
+
+- ``VideoFrame``
+
+  - プロトコルから列挙体に変更し、 API を一新した
+
+- ``VideoRenderer``
+
+  - ``onChangedSize(_:)`` を ``onChange(size:)`` に変更した
+
+  - ``renderVideoFrame(_:)`` を ``render(videoFrame:)`` に変更した
+
 ## 1.2.5
 
 ### FIX
