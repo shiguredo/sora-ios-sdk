@@ -171,7 +171,8 @@ class BasicSignalingChannel: SignalingChannel {
             webSocketChannel.disconnect(error: error)
             state = .disconnected
             if let error = error {
-                Logger.debug(type: .signalingChannel, message: "error = \(error)")
+                Logger.error(type: .signalingChannel,
+                             message: "disconnect error (\(error.localizedDescription))")
                 internalHandlers.onFailureHandler?(error)
                 handlers.onFailureHandler?(error)
             }
@@ -203,7 +204,6 @@ class BasicSignalingChannel: SignalingChannel {
     func handleFailure(error: Error) {
         switch state {
         case .connected:
-            Logger.debug(type: .signalingChannel, message: "WebSocket failure")
             disconnect(error: error)
 
         default:
@@ -220,9 +220,13 @@ class BasicSignalingChannel: SignalingChannel {
             
         case .text(let text):
             guard let data = text.data(using: .utf8) else {
-                Logger.debug(type: .signalingChannel, message: "invalid encoding")
+                Logger.error(type: .signalingChannel, message: "invalid encoding")
                 internalHandlers.onMessageHandler?(nil, text)
                 handlers.onMessageHandler?(nil, text)
+                
+                let soraError = SoraError.invalidSignalingMessage(text: text)
+                internalHandlers.onFailureHandler?(soraError)
+                handlers.onFailureHandler?(soraError)
                 return
             }
             let decoder = JSONDecoder()
@@ -230,8 +234,11 @@ class BasicSignalingChannel: SignalingChannel {
             do {
                 sigMessage = try decoder.decode(SignalingMessage.self, from: data)
             } catch let error {
-                Logger.debug(type: .signalingChannel,
+                Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription))")
+                let soraError = SoraError.invalidSignalingMessage(text: text)
+                internalHandlers.onFailureHandler?(soraError)
+                handlers.onFailureHandler?(soraError)
             }
             internalHandlers.onMessageHandler?(sigMessage, text)
             handlers.onMessageHandler?(sigMessage, text)

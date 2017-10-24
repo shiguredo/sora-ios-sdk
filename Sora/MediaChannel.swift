@@ -231,7 +231,7 @@ public final class MediaChannel {
             self.connectionTimer.stop()
 
             if let error = error {
-                Logger.debug(type: .mediaChannel, message: "failed connecting")
+                Logger.error(type: .mediaChannel, message: "failed to connect")
                 self.disconnect(error: error)
                 handler(error)
                 self.internalHandlers.onConnectHandler?(error)
@@ -245,8 +245,9 @@ public final class MediaChannel {
             self.handlers.onConnectHandler?(nil)
         }
         
+        self.connectionStartTime = Date()
         connectionTimer.run {
-            Logger.debug(type: .mediaChannel, message: "connection timeout")
+            Logger.error(type: .mediaChannel, message: "connection timeout")
             self.disconnect(error: SoraError.connectionTimeout)
         }
     }

@@ -6,14 +6,21 @@ import WebRTC
  */
 public enum SoraError: Error {
     
-    /// WebSocket に関するエラー
-    case webSocketError(error: Error?,
-        statusCode: WebSocketStatusCode?,
-        reason: String?)
-    
     /// 接続タイムアウト。
     /// 接続試行開始から一定時間内に接続できなかったことを示します。
     case connectionTimeout
+    
+    /// ``WebSocketChannel`` で発生したエラー
+    case webSocketError(statusCode: WebSocketStatusCode?, reason: String?)
+    
+    /// ``SignalingChannel`` で発生したエラー
+    case signalingChannelError(reason: String)
+    
+    /// シグナリングメッセージのフォーマットが無効
+    case invalidSignalingMessage(text: String)
+    
+    /// ``PeerChannel`` で発生したエラー
+    case peerChannelError(reason: String)
     
 }
 

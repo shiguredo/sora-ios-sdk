@@ -375,9 +375,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func sendConnectMessage(error: Error?) {
         if error != nil {
-            Logger.debug(type: .peerChannel,
-                         message: "failed connecting to signaling channel")
-            disconnect(error: error)
+            Logger.error(type: .peerChannel,
+                         message: "failed connecting to signaling channel (\(error!.localizedDescription))")
+            disconnect(error: SoraError.peerChannelError(
+                reason: "failed connecting to signaling channel"))
             return
         }
         
@@ -491,9 +492,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                    constraints: webRTCConfiguration.nativeConstraints)
         { sdp, error in
             guard error == nil else {
-                Logger.debug(type: .peerChannel,
-                             message: "failed create answer")
-                self.disconnect(error: error)
+                Logger.error(type: .peerChannel,
+                             message: "failed to create answer (\(error!.localizedDescription))")
+                self.disconnect(error: SoraError
+                    .peerChannelError(reason: "failed to create answer"))
                 return
             }
             
@@ -510,7 +512,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                    constraints: webRTCConfiguration.nativeConstraints)
         { answer, error in
             guard error == nil else {
-                self.disconnect(error: error)
+                Logger.error(type: .peerChannel,
+                             message: "failed to create update-answer (\(error!.localizedDescription)")
+                self.disconnect(error: SoraError
+                    .peerChannelError(reason: "failed to create update-answer"))
                 return
             }
             
@@ -631,6 +636,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             onConnectHandler?(error)
             onConnectHandler = nil
+            if let error = error {
+                Logger.error(type: .peerChannel,
+                             message: "disconnect error (\(error.localizedDescription))")
+                channel.internalHandlers.onFailureHandler?(error)
+                channel.handlers.onFailureHandler?(error)
+            }
             Logger.debug(type: .peerChannel, message: "did disconnect")
         }
     }
