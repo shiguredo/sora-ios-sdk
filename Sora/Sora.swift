@@ -10,6 +10,9 @@ public enum SoraError: Error {
     /// 接続試行開始から一定時間内に接続できなかったことを示します。
     case connectionTimeout
     
+    /// 何らかの処理の実行中で、指定された処理を実行できないことを示します。
+    case connectionBusy(reason: String)
+    
     /// ``WebSocketChannel`` で発生したエラー
     case webSocketError(statusCode: WebSocketStatusCode?, reason: String?)
     

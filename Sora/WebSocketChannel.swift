@@ -277,6 +277,12 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
+        if channel.state.isConnecting {
+            handler(SoraError.connectionBusy(reason:
+                "WebSocketChannel is already connected"))
+            return
+        }
+        
         Logger.debug(type: .webSocketChannel, message: "try connecting")
         state = .connecting
         onConnectHandler = handler

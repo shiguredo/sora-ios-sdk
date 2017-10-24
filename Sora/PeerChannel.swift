@@ -351,6 +351,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
+        if channel.state.isConnecting {
+            handler(SoraError.connectionBusy(reason:
+                "PeerChannel is already connected"))
+            return
+        }
+        
         Logger.debug(type: .peerChannel, message: "try connecting")
         Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
         

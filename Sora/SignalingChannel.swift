@@ -143,6 +143,12 @@ class BasicSignalingChannel: SignalingChannel {
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
+        if channel.state.isConnecting {
+            handler(SoraError.connectionBusy(reason:
+                "SignalingChannel is already connected"))
+            return
+        }
+        
         Logger.debug(type: .signalingChannel, message: "try connecting")
         onConnectHandler = handler
         state = .connecting
