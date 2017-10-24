@@ -48,7 +48,7 @@ public enum VideoFrame {
         }
     }
 
-    /// 映像フレームの生成日時
+    /// 映像フレームの生成時刻
     public var timestamp: CMTime? {
         get {
             switch self {
