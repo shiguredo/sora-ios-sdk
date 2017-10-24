@@ -11,7 +11,7 @@ public protocol VideoRenderer: class {
      
      - parameter size: 変更後のサイズ
      */
-    func onChangedSize(_ size: CGSize)
+    func onChange(size: CGSize)
     
     /**
      映像フレームを描画します。
@@ -35,7 +35,7 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
             Logger.debug(type: .videoRenderer,
                          message: "set size \(size) for \(renderer)")
             DispatchQueue.main.async {
-                renderer.onChangedSize(size)
+                renderer.onChange(size: size)
             }
         } else {
             Logger.debug(type: .videoRenderer,

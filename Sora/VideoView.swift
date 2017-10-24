@@ -107,7 +107,7 @@ public class VideoView: UIView {
 extension VideoView: VideoRenderer {
     
     /// :nodoc:
-    public func onChangedSize(_ size: CGSize) {
+    public func onChange(size: CGSize) {
         contentView.onVideoFrameSizeUpdated(size)
     }
     
