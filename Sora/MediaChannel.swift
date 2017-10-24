@@ -83,6 +83,45 @@ public final class MediaChannel {
         get { return state == .connected }
     }
     
+    /// 接続開始時刻。
+    /// 接続中にのみ取得可能です。
+    public private(set) var connectionStartTime: Date?
+    
+    /// 接続時間 (秒) 。
+    /// 接続中にのみ取得可能です。
+    public var connectionTime: Int? {
+        get {
+            if let start = connectionStartTime {
+                return Int(Date().timeIntervalSince(start))
+            } else {
+                return nil
+            }
+        }
+    }
+    
+    // MARK: 接続中のチャネルの情報
+    
+    /// 同チャネルに接続中のクライアントの数。
+    /// サーバーから通知を受信可能であり、かつ接続中にのみ取得可能です。
+    public var connectionCount: Int? {
+        get {
+            switch (publisherCount, subscriberCount) {
+            case (.some(let pub), .some(let sub)):
+                return pub + sub
+            default:
+                return nil
+            }
+        }
+    }
+    
+    /// 同チャネルに接続中のクライアントのうち、パブリッシャーの数。
+    /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
+    public private(set) var publisherCount: Int?
+    
+    /// 同チャネルに接続中のクライアントの数のうち、サブスクライバーの数。
+    /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
+    public private(set) var subscriberCount: Int?
+    
     // MARK: 接続チャネル
     
     /// シグナリングチャネル
@@ -158,6 +197,7 @@ public final class MediaChannel {
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
+        connectionStartTime = nil
 
         peerChannel.internalHandlers.onAddStreamHandler = { stream in
             Logger.debug(type: .mediaChannel, message: "added a stream")
@@ -173,6 +213,8 @@ public final class MediaChannel {
         
         peerChannel.internalHandlers.onNotifyHandler = { message in
             Logger.debug(type: .mediaChannel, message: "receive event notification")
+            self.publisherCount = message.publisherCount
+            self.subscriberCount = message.subscriberCount
             let event = NotificationEvent(message: message)
             self.internalHandlers.onNotificationEventHandler?(event)
             self.handlers.onNotificationEventHandler?(event)
