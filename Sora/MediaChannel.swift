@@ -83,6 +83,14 @@ public final class MediaChannel {
         get { return state == .connected }
     }
     
+    // MARK: 接続チャネル
+    
+    /// シグナリングチャネル
+    public let signalingChannel: SignalingChannel
+    
+    /// ピアチャネル
+    public let peerChannel: PeerChannel
+        
     /// ストリームのリスト
     public var streams: [MediaStream] {
         return peerChannel.streams
@@ -93,14 +101,6 @@ public final class MediaChannel {
         return streams.first
     }
 
-    // MARK: 接続チャネル
-    
-    /// シグナリングチャネル
-    public let signalingChannel: SignalingChannel
-    
-    /// ピアチャネル
-    public let peerChannel: PeerChannel
-    
     private var connectionTimer: ConnectionTimer
     private let manager: Sora
     
