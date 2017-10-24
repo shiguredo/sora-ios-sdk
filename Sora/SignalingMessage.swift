@@ -114,7 +114,7 @@ public struct SignalingSnapshotMessage {
 
 /**
  "notify" シグナリングメッセージを表します。
- このメッセージはピア接続の確立後にサーバーから送信されます。
+ このメッセージはピア接続の確立後、定期的にサーバーから送信されます。
  */
 public struct SignalingNotifyMessage {
     

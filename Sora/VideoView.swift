@@ -144,7 +144,7 @@ class VideoViewContentView: UIView {
     
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        // onChangedSize が呼ばれて RTCEAGLVideoView にサイズの変更がある場合、
+        // onChange(size:) が呼ばれて RTCEAGLVideoView にサイズの変更がある場合、
         // このビューがウィンドウに表示されたタイミングでサイズの変更を行う
         // これも前述のエラーを回避するため
         if window != nil {
