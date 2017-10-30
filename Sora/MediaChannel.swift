@@ -185,7 +185,7 @@ public final class MediaChannel {
     func connect(webRTCConfiguration: WebRTCConfiguration,
                  timeout: Int = Configuration.defaultConnectionTimeout,
                  handler: @escaping (_ error: Error?) -> Void) {
-        if channel.state.isConnecting {
+        if state.isConnecting {
             handler(SoraError.connectionBusy(reason:
                 "MediaChannel is already connected"))
             return
