@@ -197,6 +197,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                     self.testCaseController.mediaChannel = chan
                     guard !chan!.streams.isEmpty else {
                         self.state = .disconnected
+                        chan!.disconnect(error: nil)
                         self.showAlert(title: "Connection Failure",
                                        message: "Media streams are none")
                         return
