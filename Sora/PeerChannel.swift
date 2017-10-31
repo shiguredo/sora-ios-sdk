@@ -664,10 +664,23 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didAdd stream: RTCMediaStream) {
-        guard stream.streamId != clientId else { return }
-        
         Logger.debug(type: .peerChannel,
-                     message: "added a media stream (id: \(stream.streamId))")
+                     message: "try add a stream (id: \(stream.streamId))")
+        for cur in channel.streams {
+            if cur.streamId == stream.streamId {
+                Logger.debug(type: .peerChannel,
+                             message: "stream already exists")
+                return
+            }
+        }
+        
+        if channel.configuration.role == .group && stream.streamId == clientId {
+            Logger.debug(type: .peerChannel,
+                         message: "stream already exists in multistream")
+            return
+        }
+        
+        Logger.debug(type: .peerChannel, message: "add a stream")
         let stream = BasicMediaStream(nativeStream: stream)
         channel.add(stream: stream)
     }
