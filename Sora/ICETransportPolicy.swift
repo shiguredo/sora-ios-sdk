@@ -1,8 +1,8 @@
 import Foundation
 import WebRTC
 
-private var iceTransportPolicyTable: [ICETransportPolicy: RTCIceTransportPolicy] =
-    [.relay: .relay, .all: .all]
+private var iceTransportPolicyTable: PairTable<ICETransportPolicy, RTCIceTransportPolicy> =
+    PairTable(pairs: [(.relay, .relay), (.all, .all)])
 
 /**
  ICE 通信ポリシーを表します。
@@ -17,8 +17,19 @@ public enum ICETransportPolicy {
     
     var nativeValue: RTCIceTransportPolicy {
         get {
-            return iceTransportPolicyTable[self]!
+            return iceTransportPolicyTable.right(other: self)!
         }
+    }
+    
+}
+
+/// :nodoc:
+extension ICETransportPolicy: CustomStringConvertible {
+
+    public var description: String {
+        let encoder = JSONEncoder()
+        let data = try! encoder.encode(self)
+        return String(data: data, encoding: .utf8)!
     }
     
 }
@@ -39,7 +50,13 @@ extension ICETransportPolicy: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .relay:
+            try container.encode("relay")
+        case .all:
+            try container.encode("all")
+        }
     }
     
 }

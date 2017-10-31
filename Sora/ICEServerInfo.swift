@@ -45,6 +45,17 @@ public final class ICEServerInfo {
 }
 
 /// :nodoc:
+extension ICEServerInfo: CustomStringConvertible {
+
+    public var description: String {
+        let encoder = JSONEncoder()
+        let data = try! encoder.encode(self)
+        return String(data: data, encoding: .utf8)!
+    }
+    
+}
+
+/// :nodoc:
 extension ICEServerInfo: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -65,6 +76,13 @@ extension ICEServerInfo: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(urls, forKey: .urls)
+        if let userName = userName {
+            try container.encode(userName, forKey: .userName)
+        }
+        if let credential = credential {
+            try container.encode(credential, forKey: .credential)
+        }
     }
 }

@@ -299,7 +299,9 @@ extension SignalingOfferMessage.Configuration: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(iceServerInfos, forKey: .iceServerInfos)
+        try container.encode(iceTransportPolicy, forKey: .iceTransportPolicy)
     }
     
 }
@@ -467,6 +469,18 @@ extension SignalingMessage: Codable {
         case .pong:
             try container.encode(MessageType.pong.rawValue, forKey: .type)
         }
+    }
+    
+}
+
+// MARK: - CustomStringConvertible
+
+extension SignalingOfferMessage.Configuration: CustomStringConvertible {
+    
+    public var description: String {
+        let encoder = JSONEncoder()
+        let data = try! encoder.encode(self)
+        return String(data: data, encoding: .utf8)!
     }
     
 }

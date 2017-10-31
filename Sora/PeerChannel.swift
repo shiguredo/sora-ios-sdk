@@ -489,6 +489,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         if let config = offer.configuration {
             Logger.debug(type: .peerChannel, message: "update configuration")
+            Logger.debug(type: .peerChannel, message: config.description)
             webRTCConfiguration.iceServerInfos = config.iceServerInfos
             webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
             nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
