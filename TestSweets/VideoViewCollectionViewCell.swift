@@ -7,6 +7,7 @@ class VideoViewCollectionViewCell: UICollectionViewCell {
     
     var stream: MediaStream? {
         didSet {
+            oldValue?.videoRenderer = nil
             stream?.videoRenderer = videoView
         }
     }
