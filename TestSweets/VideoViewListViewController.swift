@@ -104,7 +104,9 @@ class VideoViewListViewController: UICollectionViewController,
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "VideoViewCell", for: indexPath)
         if let cell = cell as? VideoViewCollectionViewCell {
-            cell.stream = testCaseController.mediaChannel?.streams[indexPath.row]
+            let index = indexPath.section * testCaseController.testCase.numberOfItemsInVideoViewSection
+                + indexPath.item
+            cell.stream = testCaseController.mediaChannel?.streams[index]
         }
         return cell
     }
