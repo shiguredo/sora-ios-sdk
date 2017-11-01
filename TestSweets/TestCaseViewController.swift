@@ -24,7 +24,7 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     @IBOutlet weak var duplicateCell: UITableViewCell!
 
     weak var mainViewController: MainViewController!
-    weak var videoViewListViewController: VideoViewListViewController?
+    var videoViewListViewController: VideoViewListViewController!
     
     weak var testCaseController: TestCaseController! {
         didSet {
@@ -89,6 +89,8 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
         configurationViewController.navigationItem.title = "Configuration"
         configurationViewController.configuration = testCase.configuration
         numberOfStreams = 0
+        videoViewListViewController = storyboard?.instantiateViewController(withIdentifier: "VideoViewListViewController") as? VideoViewListViewController
+        assert(videoViewListViewController != nil, "fail")
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -104,12 +106,10 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
     
     // MARK: Navigation
     
+    /*
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if let vc = segue.destination as? VideoViewListViewController {
-            vc.testCaseController = testCaseController
-            videoViewListViewController = vc
-        }
     }
+     */
     
     // MARK: Table View Delegate
     
@@ -123,6 +123,9 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                 present(configurationViewController, animated: true)
             } else if cell == connectCell {
                 connectOrDisconnect()
+            } else if cell == numberOfStreamsCell {
+                navigationController?.pushViewController(
+                    videoViewListViewController, animated: true)
             } else if cell == duplicateCell {
                 duplicateTestCase()
                 navigationController?.popViewController(animated: true)
@@ -229,6 +232,12 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                     }
                     
                     self.state = .connected
+                    self.videoViewListViewController
+                        .testCaseController = self.testCaseController
+                    DispatchQueue.main.async {
+                        self.navigationController!
+                            .pushViewController(self.videoViewListViewController, animated: true)
+                    }
                 }
             }
         }
