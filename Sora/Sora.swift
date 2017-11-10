@@ -186,4 +186,92 @@ public final class Sora {
         }
     }
     
+    // MARK: - 音声ユニットの操作
+    
+    /**
+     * 音声ユニットの手動による初期化の可否。
+     * ``false`` をセットした場合、音声トラックの生成時に音声ユニットが自動的に初期化されます。
+     * (音声ユニットを使用するには ``audioEnabled`` に ``true`` をセットして初期化する必要があります)
+     * ``true`` をセットした場合、音声ユニットは自動的に初期化されません。
+     * デフォルトは ``false`` です。
+     */
+    public var usesManualAudio: Bool {
+        get {
+            return RTCAudioSession.sharedInstance().useManualAudio
+        }
+        set {
+            RTCAudioSession.sharedInstance().useManualAudio = newValue
+        }
+    }
+    
+    /**
+     * 音声ユニットの使用の可否。
+     * このプロパティは ``usesManualAudio`` が ``true`` の場合のみ有効です。
+     * デフォルトは ``false`` です。
+     *
+     * ``true`` をセットした場合、音声ユニットは必要に応じて初期化されます。
+     * ``false`` をセットした場合、すでに音声ユニットが初期化済みで起動されていれば、
+     * 音声ユニットを停止します。
+     *
+     * このプロパティを使用すると、音声ユニットの初期化によって
+     * AVPlayer などによる再生中の音声が中断されてしまうことを防げます。
+     */
+    public var audioEnabled: Bool {
+        get {
+            return RTCAudioSession.sharedInstance().isAudioEnabled
+        }
+        set {
+            RTCAudioSession.sharedInstance().isAudioEnabled = newValue
+        }
+    }
+    
+    /**
+     * ``AVAudioSession`` の設定を変更する際に使います。
+     * WebRTC で使用中のスレッドをロックします。
+     * このメソッドは次のプロパティとメソッドの使用時に使ってください。
+     *
+     * - ``category``
+     * - ``categoryOptions``
+     * - ``mode``
+     * - ``secondaryAudioShouldBeSilencedHint``
+     * - ``currentRoute``
+     * - ``maximumInputNumberOfChannels``
+     * - ``maximumOutputNumberOfChannels``
+     * - ``inputGain``
+     * - ``inputGainSettable``
+     * - ``inputAvailable``
+     * - ``inputDataSources``
+     * - ``inputDataSource``
+     * - ``outputDataSources``
+     * - ``outputDataSource``
+     * - ``sampleRate``
+     * - ``preferredSampleRate``
+     * - ``inputNumberOfChannels``
+     * - ``outputNumberOfChannels``
+     * - ``outputVolume``
+     * - ``inputLatency``
+     * - ``outputLatency``
+     * - ``ioBufferDuration``
+     * - ``preferredIOBufferDuration``
+     * - ``setCategory(_:withOptions:)``
+     * - ``setMode(_:)``
+     * - ``setInputGain(_:)``
+     * - ``setPreferredSampleRate(_:)``
+     * - ``setPreferredIOBufferDuration(_:)``
+     * - ``setPreferredInputNumberOfChannels(_:)``
+     * - ``setPreferredOutputNumberOfChannels(_:)``
+     * - ``overrideOutputAudioPort(_:)``
+     * - ``setPreferredInput(_:)``
+     * - ``setInputDataSource(_:)``
+     * - ``setOutputDataSource(_:)``
+     *
+     * - parameter block: ロック中に実行されるブロック
+     */
+    public func configureAudioSession(block: () -> Void) {
+        let session = RTCAudioSession.sharedInstance()
+        session.lockForConfiguration()
+        block()
+        session.unlockForConfiguration()
+    }
+    
 }
