@@ -5,7 +5,7 @@ public struct Utilities {
     
     fileprivate static let randomBaseString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     fileprivate static let randomBaseChars =
-        randomBaseString.characters.map { c in String(c) }
+        randomBaseString.map { c in String(c) }
     
     public static func randomString(length: Int = 8) -> String {
         var chars: [String] = []
