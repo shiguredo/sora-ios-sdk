@@ -6,19 +6,11 @@ Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライ�
 
 使い方は [Sora iOS SDK ドキュメント](https://sora.shiguredo.jp/ios-sdk-doc/) を参照してください。
 
-## システム条件
+## About Support
 
-- iOS 10.0 以降 (シミュレーターは非対応)
-- アーキテクチャ arm64, armv7
-- Mac OS X 10.12.5 以降
-- Xcode 8.3.3 以降
-- Swift 3.1
-- Carthage 0.23.0 以降
-- WebRTC SFU Sora 17.06 以降
-
-## サンプル
-
-- [クイックスタート](https://github.com/shiguredo/sora-ios-sdk-quickstart)
+Support for Sora iOS SDK by Shiguredo Inc. are limited
+**ONLY in JAPANESE** through GitHub issues and there is no guarantee such
+as response time or resolution.
 
 ## サポートについて
 
@@ -26,6 +18,21 @@ Sora iOS SDK に関する質問・要望・バグなどの報告は Issues の�
 ただし、 Sora のライセンス契約の有無に関わらず、 Issue への応答時間と問題の解決を保証しませんのでご了承ください。
 
 Sora iOS SDK に対する有償のサポートについては現在提供しておりません。
+
+## システム条件
+
+- iOS 10.0 以降
+- アーキテクチャ arm64, armv7 (シミュレーターは非対応)
+- Mac OS X 10.12.6 以降
+- Xcode 9.0 以降
+- Swift 4.0
+- Carthage 0.26.2 以降
+- WebRTC SFU Sora 17.08 以降
+
+## サンプル
+
+- [クイックスタート](https://github.com/shiguredo/sora-ios-sdk-quickstart)
+- [サンプル集](https://github.com/shiguredo/sora-ios-sdk-samples)
 
 ## Issues について
 
@@ -39,13 +46,6 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 - iOS
 - Carthage
 
-## ロードマップ
+# Copyright
 
-### 2.0
-
-**2017 年 9 月末リリース予定**
-
-- スクリーンシェア機能
-- パブリッシャーに渡す映像の編集と加工に対応する
-- パブリッシャーに任意の映像を渡せるようにする
-
+Copyright 2017, Shiguredo Inc. and Masashi Ono (akisute)

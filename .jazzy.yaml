@@ -1,0 +1,17 @@
+clean: true
+author: Shiguredo Inc. and Masashi Ono (akisute)
+author_url: https://sora.shiguredo.jp/
+github_url: https://github.com/shiguredo/sora-ios-sdk/
+github_file_prefix: https://github.com/shiguredo/sora-ios-sdk/develop/
+root_url: https://sora.shiguredo.jp/ios-sdk-doc/
+theme: apple
+download_badge: false
+min_acl: public
+sdk: iphoneos
+module: Sora
+module_version: 2.0.0
+swift_version: 4.0
+xcodebuild_arguments:
+    - -parallelizeTargets
+    - -scheme
+    - Sora

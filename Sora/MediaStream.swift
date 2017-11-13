@@ -1,53 +1,74 @@
 import Foundation
 import WebRTC
 
-public class MediaStream {
+/**
+ メディアストリームの機能を定義したプロトコルです。
+ デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
+ ソースコードは公開していますので、実装の詳細はそちらを参照してください。
+ 
+ メディアストリームは映像と音声の送受信を行います。
+ メディアストリーム 1 つにつき、 1 つの映像と 1 つの音声を送受信可能です。
+ */
+public protocol MediaStream: class {
     
-    public struct NotificationKey {
-        
-        public enum UserInfo: String {
-            case seconds = "Sora.MediaStream.UserInfo.seconds"
-        }
-        
-        public static var onCountUp =
-            Notification.Name("Sora.MediaStream.Notification.onCountUp")
-        
-    }
+    // MARK: - 接続情報
     
-    static let defaultStreamId: String = "mainStream"
-    static let defaultVideoTrackId: String = "mainVideo"
-    static let defaultAudioTrackId: String = "mainAudio"
+    /// ストリーム ID
+    var streamId: String { get }
     
-    public weak var peerConnection: PeerConnection?
-    public var nativeMediaStream: RTCMediaStream
-    public var creationTime: Date
+    /// 接続開始時刻
+    var creationTime: Date { get }
 
-    var eventLog: EventLog? {
-        get { return peerConnection?.eventLog }
+    // MARK: 映像フレームの送信
+
+    /// 映像キャプチャー
+    var videoCapturer: VideoCapturer? { get set }
+    
+    /// 映像フィルター
+    var videoFilter: VideoFilter? { get set }
+    
+    /// 映像レンダラー。
+    var videoRenderer: VideoRenderer? { get set }
+    
+    /**
+     映像フレームをサーバーに送信します。
+     送信される映像フレームは映像フィルターを通して加工されます。
+     映像レンダラーがセットされていれば、加工後の映像フレームが
+     映像レンダラーによって描画されます。
+     
+     - parameter videoFrame: 描画する映像フレーム。
+                             `nil` を指定すると空の映像フレームを送信します。
+     */
+    func send(videoFrame: VideoFrame?)
+    
+}
+
+class BasicMediaStream: MediaStream {
+    
+    var streamId: String = ""
+    var videoTrackId: String = ""
+    var audioTrackId: String = ""
+    var creationTime: Date
+    
+    var videoCapturer: VideoCapturer? {
+        willSet {
+            if let oldValue = videoCapturer {
+                // Do not autostop here, let others manage videoCapturer's life cycle
+                oldValue.stream = nil
+            }
+            if let newValue = newValue {
+                newValue.stream = self
+                // Do not autostart here, let others manage videoCapturer's life cycle
+            }
+        }
     }
     
-    public var isAvailable: Bool {
-        get { return peerConnection?.isAvailable ?? false }
-    }
+    var videoFilter: VideoFilter?
     
-    public var mediaStreamId: String {
-        get { return nativeMediaStream.streamId }
-    }
-    
-    public var nativeVideoTrack: RTCVideoTrack? {
-        get { return nativeMediaStream.videoTracks.first }
-    }
-    
-    public var nativeAudioTrack: RTCAudioTrack? {
-        get { return nativeMediaStream.audioTracks.first }
-    }
-    
-    public var videoRenderer: VideoRenderer? {
-        
+    var videoRenderer: VideoRenderer? {
         get {
             return videoRendererAdapter?.videoRenderer
         }
-        
         set {
             if let value = newValue {
                 videoRendererAdapter = VideoRendererAdapter(videoRenderer: value)
@@ -55,103 +76,59 @@ public class MediaStream {
                 videoRendererAdapter = nil
             }
         }
-        
     }
     
-    var videoRendererAdapter: VideoRendererAdapter? {
-        
+    private var videoRendererAdapter: VideoRendererAdapter? {
         willSet {
             guard let videoTrack = nativeVideoTrack else { return }
             guard let adapter = videoRendererAdapter else { return }
-            eventLog?.markFormat(type: .VideoRenderer,
-                                 format: "remove old video renderer %@",
-                                 arguments: adapter.videoRenderer as! CVarArg)
+            Logger.debug(type: .videoRenderer,
+                         message: "remove old video renderer \(adapter) from nativeVideoTrack")
             videoTrack.remove(adapter)
         }
-        
         didSet {
             guard let videoTrack = nativeVideoTrack else { return }
             guard let adapter = videoRendererAdapter else { return }
-            eventLog?.markFormat(type: .VideoRenderer,
-                                 format: "set video renderer %@",
-                                 arguments: adapter.videoRenderer as! CVarArg)
+            Logger.debug(type: .videoRenderer,
+                         message: "add new video renderer \(adapter) to nativeVideoTrack")
             videoTrack.add(adapter)
         }
-    
     }
-
-    init(peerConnection: PeerConnection, nativeMediaStream: RTCMediaStream) {
-        self.peerConnection = peerConnection
-        self.nativeMediaStream = nativeMediaStream
+    
+    var nativeStream: RTCMediaStream
+    
+    var nativeVideoTrack: RTCVideoTrack? {
+        get { return nativeStream.videoTracks.first }
+    }
+    
+    var nativeVideoSource: RTCVideoSource? {
+        get { return nativeVideoTrack?.source }
+    }
+    
+    init(nativeStream: RTCMediaStream) {
+        self.nativeStream = nativeStream
+        streamId = nativeStream.streamId
         creationTime = Date()
     }
     
-    func terminate() {
-        stopConnectionTimer()
-        videoRendererAdapter = nil
-    }
-    
-    // MARK: タイマー
-    
-    var connectionTimer: Timer?
-    var connectionTimerHandler: ((Int?) -> Void)?
-    var connectionTimerForNotification: Timer?
-    
-    public func startConnectionTimer(timeInterval: TimeInterval,
-                                     handler: @escaping ((Int?) -> Void)) {
-        eventLog?.markFormat(type: .MediaStream,
-                             format: "start timer (interval %f)",
-                             arguments: timeInterval)
-        connectionTimerHandler = handler
-        
-        connectionTimer?.invalidate()
-        connectionTimer = Timer(timeInterval: timeInterval, repeats: true) {
-            timer in
-            self.updateConnectionTime(timer)
-        }
-        updateConnectionTime(connectionTimer!)
-        RunLoop.main.add(connectionTimer!, forMode: .commonModes)
-        
-        connectionTimerForNotification?.invalidate()
-        connectionTimerForNotification = Timer(timeInterval: 1.0, repeats: true) {
-            timer in
-            self.updateConnectionTimeForNotification(
-                self.connectionTimerForNotification!)
-        }
-        updateConnectionTime(connectionTimerForNotification!)
-        RunLoop.main.add(connectionTimerForNotification!, forMode: .commonModes)
-    }
-    
-    func updateConnectionTime(_ timer: Timer) {
-        if isAvailable {
-            let diff = Date(timeIntervalSinceNow: 0)
-                .timeIntervalSince(self.creationTime)
-            connectionTimerHandler?(Int(diff))
+    private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()
+    func send(videoFrame: VideoFrame?) {
+        if let frame = videoFrame {
+            // フィルターを通す
+            let frame = videoFilter?.filter(videoFrame: frame) ?? frame
+            switch frame {
+            case .native(capturer: let capturer, frame: let nativeFrame):
+                // RTCVideoSource.capturer(_:didCapture:) の最初の引数は
+                // 現在使われてないのでダミーでも可？ -> ダミーにしました
+                nativeVideoSource?.capturer(capturer ?? BasicMediaStream.dummyCapturer,
+                                            didCapture: nativeFrame)
+                
+            default:
+                break
+            }
         } else {
-            connectionTimerHandler?(nil)
+            
         }
-    }
-    
-    func updateConnectionTimeForNotification(_ timer: Timer) {
-        var seconds: Int?
-        if isAvailable {
-            let diff = Date(timeIntervalSinceNow: 0)
-                .timeIntervalSince(self.creationTime)
-            seconds = Int(diff)
-        }
-        NotificationCenter
-            .default
-            .post(name: MediaStream.NotificationKey.onCountUp,
-                  object: self,
-                  userInfo:
-                [MediaStream.NotificationKey.UserInfo.seconds: seconds as Any])
-    }
-    
-    public func stopConnectionTimer() {
-        eventLog?.markFormat(type: .MediaStream, format: "stop timer")
-        connectionTimer?.invalidate()
-        connectionTimer = nil
-        connectionTimerHandler = nil
     }
     
 }
