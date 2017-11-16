@@ -1,10 +1,13 @@
 import Foundation
 import WebRTC
 
+/// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
     
+    /// 映像トラックが有効または無効にセットされたときに呼ばれるブロック
     public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)?
     
+    /// 音声トラックが有効または無効にセットされたときに呼ばれるブロック
     public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)?
 
 }
