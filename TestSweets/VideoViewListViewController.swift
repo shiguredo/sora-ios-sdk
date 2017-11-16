@@ -120,12 +120,32 @@ class VideoViewListViewController: UICollectionViewController,
     }
     */
 
-    /*
-    // Uncomment this method to specify if the specified item should be selected
     override func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        collectionView.deselectItem(at: indexPath, animated: true)
+        let index = indexPath.section * self.testCaseController.testCase.numberOfItemsInVideoViewSection
+            + indexPath.item
+        let stream = self.testCaseController.mediaChannel?.streams[index]
+        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        
+        alert.addAction(UIAlertAction(title: "Video On/Off", style: .default) { _ in
+            if let stream = stream {
+                stream.videoEnabled = !stream.videoEnabled
+            }
+        })
+        
+        alert.addAction(UIAlertAction(title: "Audio On/Off", style: .default) { _ in
+            if let stream = stream {
+                stream.audioEnabled = !stream.audioEnabled
+            }
+        })
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+            self.dismiss(animated: true)
+        })
+        
+        present(alert, animated: true)
         return true
     }
-    */
 
     /*
     // Uncomment these methods to specify if an action menu should be displayed for the specified item, and react to actions performed on the item
