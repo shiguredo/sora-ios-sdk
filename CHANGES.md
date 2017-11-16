@@ -9,6 +9,14 @@
 - FIX
     - バグ修正
 
+## 2.0.1
+
+### CHANGE
+
+- API: MediaStream: 接続中に映像と音声の送受信を停止・再開するプロパティを追加した
+
+- API: MediaStreamHandler: 追加した
+
 ## 2.0.0
 
 設計と API を大きく見直した。
