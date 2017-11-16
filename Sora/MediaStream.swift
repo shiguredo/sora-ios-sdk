@@ -1,6 +1,14 @@
 import Foundation
 import WebRTC
 
+public final class MediaStreamHandlers {
+    
+    public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)?
+    
+    public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)?
+
+}
+
 /**
  メディアストリームの機能を定義したプロトコルです。
  デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
@@ -11,6 +19,11 @@ import WebRTC
  */
 public protocol MediaStream: class {
     
+    // MARK: - イベントハンドラ
+    
+    /// イベントハンドラ
+    var handlers: MediaStreamHandlers { get }
+    
     // MARK: - 接続情報
     
     /// ストリーム ID
@@ -18,6 +31,26 @@ public protocol MediaStream: class {
     
     /// 接続開始時刻
     var creationTime: Date { get }
+
+    // MARK: - 映像と音声の可否
+    
+    /**
+     映像の可否。
+     ``false`` をセットすると、サーバーへの映像の送受信を停止します。
+     ``true`` をセットすると送受信を再開します。
+     */
+    var videoEnabled: Bool { get set }
+    
+    /**
+     音声の可否。
+     ``false`` をセットすると、サーバーへの音声の送受信を停止します。
+     ``true`` をセットすると送受信を再開します。
+     
+     サーバーへの送受信を停止しても、マイクはミュートされません。
+     マイクをミュートするには ``Sora`` の ``microphoneEnabled`` に
+     ``true`` をセットします。
+     */
+    var audioEnabled: Bool { get set }
 
     // MARK: 映像フレームの送信
 
@@ -44,6 +77,8 @@ public protocol MediaStream: class {
 }
 
 class BasicMediaStream: MediaStream {
+    
+    let handlers: MediaStreamHandlers = MediaStreamHandlers()
     
     var streamId: String = ""
     var videoTrackId: String = ""
@@ -98,17 +133,91 @@ class BasicMediaStream: MediaStream {
     var nativeStream: RTCMediaStream
     
     var nativeVideoTrack: RTCVideoTrack? {
-        get { return nativeStream.videoTracks.first }
+        get {
+            return nativeStream.videoTracks.first
+        }
+        set {
+            if let track = newValue {
+                if !nativeStream.videoTracks.contains(track) {
+                    nativeStream.addVideoTrack(track)
+                }
+                assert(nativeStream.videoTracks.count == 1)
+            } else {
+                let tracks = nativeStream.videoTracks
+                for track in tracks {
+                    nativeStream.removeVideoTrack(track)
+                }
+                assert(nativeStream.videoTracks.count == 0)
+            }
+        }
     }
     
     var nativeVideoSource: RTCVideoSource? {
         get { return nativeVideoTrack?.source }
     }
     
+    var nativeAudioTrack: RTCAudioTrack? {
+        get {
+            return nativeStream.audioTracks.first }
+        set {
+            if let track = newValue {
+                if !nativeStream.audioTracks.contains(track) {
+                    nativeStream.addAudioTrack(track)
+                }
+                assert(nativeStream.audioTracks.count == 1)
+            } else {
+                let tracks = nativeStream.audioTracks
+                for track in tracks {
+                    nativeStream.removeAudioTrack(track)
+                }
+                assert(nativeStream.audioTracks.count == 0)
+            }
+        }
+    }
+    
+    var cachedNativeVideoTrack: RTCVideoTrack?
+    var cachedNativeAudioTrack: RTCAudioTrack?
+
+    var videoEnabled: Bool {
+        get {
+            return nativeVideoTrack != nil
+        }
+        set {
+            guard videoEnabled != newValue else {
+                return
+            }
+            if newValue {
+                nativeVideoTrack = cachedNativeVideoTrack
+            } else {
+                nativeVideoTrack = nil
+            }
+            handlers.onSwitchVideoHandler?(newValue)
+        }
+    }
+    
+    var audioEnabled: Bool {
+        get {
+            return nativeAudioTrack != nil
+        }
+        set {
+            guard audioEnabled != newValue else {
+                return
+            }
+            if newValue {
+                nativeAudioTrack = cachedNativeAudioTrack
+            } else {
+                nativeAudioTrack = nil
+            }
+            handlers.onSwitchAudioHandler?(newValue)
+        }
+    }
+    
     init(nativeStream: RTCMediaStream) {
         self.nativeStream = nativeStream
         streamId = nativeStream.streamId
         creationTime = Date()
+        cachedNativeVideoTrack = nativeStream.videoTracks.first
+        cachedNativeAudioTrack = nativeStream.audioTracks.first
     }
     
     private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()
