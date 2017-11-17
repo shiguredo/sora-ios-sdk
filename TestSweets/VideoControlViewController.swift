@@ -60,6 +60,7 @@ class VideoControlViewController: UITableViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
         reloadData()
+        muteMicrophoneSwitch.setOn(false, animated: true)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -123,7 +124,9 @@ class VideoControlViewController: UITableViewController,
     }
     
     @IBAction func switchMuteMicrophone(_ sender: Any) {
-        
+        // TODO
+        testCaseController.mediaChannel?.mainStream?
+            .audioEnabled = !muteMicrophoneSwitch.isOn
     }
 
     @IBAction func numberOfColumnsTextFieldDidEndOnExit(_ sender: AnyObject) {

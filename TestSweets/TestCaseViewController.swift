@@ -231,6 +231,16 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                         self.videoViewListViewController?.reloadData()
                     }
                     
+                    if let stream = chan!.mainStream {
+                        // handler test
+                        stream.handlers.onSwitchVideoHandler = { flag in
+                            print("switch video \(flag)")
+                        }
+                        stream.handlers.onSwitchAudioHandler = { flag in
+                            print("switch audio \(flag)")
+                        }
+                    }
+                    
                     self.state = .connected
                     self.videoViewListViewController
                         .testCaseController = self.testCaseController
