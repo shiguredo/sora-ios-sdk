@@ -380,6 +380,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func sendConnectMessage(error: Error?) {
+        ConnectSDPGenerator().generate() {
+            sdp, error in
+            self.sendConnectMessage(with: sdp, error: error)
+        }
+    }
+    
+    func sendConnectMessage(with sdp: String?, error: Error?) {
         if error != nil {
             Logger.error(type: .peerChannel,
                          message: "failed connecting to signaling channel (\(error!.localizedDescription))")
@@ -415,11 +422,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             config.videoCodec = .vp8
             config.audioEnabled = true
         }
-        
+
         let connect =
             SignalingConnectMessage(role: role,
                                     channelId: config.channelId,
                                     metadata: config.metadata,
+                                    sdp: sdp,
                                     multistreamEnabled: multistream,
                                     videoEnabled: config.videoEnabled,
                                     videoCodec: config.videoCodec,
@@ -746,6 +754,29 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                         didOpen dataChannel: RTCDataChannel) {
         Logger.debug(type: .peerChannel, message: "opened data channel (ignored)")
         // 何もしない
+    }
+    
+}
+
+class ConnectSDPGenerator {
+    
+    var peerConn: RTCPeerConnection?
+    
+    func generate(handler: @escaping (String?, Error?) -> Void) {
+        let constraints = RTCMediaConstraints(
+            mandatoryConstraints: nil,
+            optionalConstraints: nil)
+        peerConn = NativePeerChannelFactory.default.nativeFactory
+            .peerConnection(with: RTCConfiguration(),
+                            constraints: constraints,
+                            delegate: nil)
+        peerConn!.offer(for: constraints) { sdp, error in
+            if let error = error {
+                handler(nil, error)
+            } else if let sdp = sdp {
+                handler(sdp.sdp, nil)
+            }
+        }
     }
     
 }
