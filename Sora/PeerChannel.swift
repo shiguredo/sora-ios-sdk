@@ -380,9 +380,19 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func sendConnectMessage(error: Error?) {
-        ConnectSDPGenerator().generate() {
-            sdp, error in
-            self.sendConnectMessage(with: sdp, error: error)
+        Logger.debug(type: .peerChannel, message: "try creating offer SDP")
+        NativePeerChannelFactory.default
+            .createClientOfferSDP(configuration: webRTCConfiguration,
+                                  constraints: webRTCConfiguration.constraints)
+            { sdp, sdpError in
+                if let error = sdpError {
+                    Logger.debug(type: .peerChannel,
+                                 message: "failed to create offer SDP (\(error.localizedDescription))")
+                } else {
+                    Logger.debug(type: .peerChannel,
+                                 message: "did create offer SDP")
+                }
+                self.sendConnectMessage(with: sdp, error: error)
         }
     }
     
@@ -754,29 +764,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                         didOpen dataChannel: RTCDataChannel) {
         Logger.debug(type: .peerChannel, message: "opened data channel (ignored)")
         // 何もしない
-    }
-    
-}
-
-class ConnectSDPGenerator {
-    
-    var peerConn: RTCPeerConnection?
-    
-    func generate(handler: @escaping (String?, Error?) -> Void) {
-        let constraints = RTCMediaConstraints(
-            mandatoryConstraints: nil,
-            optionalConstraints: nil)
-        peerConn = NativePeerChannelFactory.default.nativeFactory
-            .peerConnection(with: RTCConfiguration(),
-                            constraints: constraints,
-                            delegate: nil)
-        peerConn!.offer(for: constraints) { sdp, error in
-            if let error = error {
-                handler(nil, error)
-            } else if let sdp = sdp {
-                handler(sdp.sdp, nil)
-            }
-        }
     }
     
 }
