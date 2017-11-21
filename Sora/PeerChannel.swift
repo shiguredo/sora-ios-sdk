@@ -380,6 +380,23 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func sendConnectMessage(error: Error?) {
+        Logger.debug(type: .peerChannel, message: "try creating offer SDP")
+        NativePeerChannelFactory.default
+            .createClientOfferSDP(configuration: webRTCConfiguration,
+                                  constraints: webRTCConfiguration.constraints)
+            { sdp, sdpError in
+                if let error = sdpError {
+                    Logger.debug(type: .peerChannel,
+                                 message: "failed to create offer SDP (\(error.localizedDescription))")
+                } else {
+                    Logger.debug(type: .peerChannel,
+                                 message: "did create offer SDP")
+                }
+                self.sendConnectMessage(with: sdp, error: error)
+        }
+    }
+    
+    func sendConnectMessage(with sdp: String?, error: Error?) {
         if error != nil {
             Logger.error(type: .peerChannel,
                          message: "failed connecting to signaling channel (\(error!.localizedDescription))")
@@ -415,11 +432,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             config.videoCodec = .vp8
             config.audioEnabled = true
         }
-        
+
         let connect =
             SignalingConnectMessage(role: role,
                                     channelId: config.channelId,
                                     metadata: config.metadata,
+                                    sdp: sdp,
                                     multistreamEnabled: multistream,
                                     videoEnabled: config.videoEnabled,
                                     videoCodec: config.videoCodec,
