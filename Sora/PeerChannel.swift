@@ -699,6 +699,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         Logger.debug(type: .peerChannel, message: "add a stream")
+        stream.audioTracks.first?.source.volume = MediaStreamAudioVolume.max
         let stream = BasicMediaStream(nativeStream: stream)
         channel.add(stream: stream)
     }

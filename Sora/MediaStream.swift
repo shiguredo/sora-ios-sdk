@@ -1,6 +1,19 @@
 import Foundation
 import WebRTC
 
+/**
+ ストリームの音声のボリュームの定数のリストです。
+ */
+public enum MediaStreamAudioVolume {
+   
+    /// 最大値
+    public static let min: Double = 0
+    
+    /// 最小値
+    public static let max: Double = 10
+    
+}
+
 /// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
     
@@ -55,6 +68,11 @@ public protocol MediaStream: class {
      */
     var audioEnabled: Bool { get set }
 
+    /**
+     音声のボリューム。 0 から 10 (含む) までの値をセットします。
+     */
+    var audioVolume: Double? { get set }
+    
     // MARK: 映像フレームの送信
 
     /// 映像キャプチャー
@@ -212,6 +230,31 @@ class BasicMediaStream: MediaStream {
                 nativeAudioTrack = nil
             }
             handlers.onSwitchAudioHandler?(newValue)
+        }
+    }
+    
+    var audioVolume: Double? {
+        get {
+            if let track = cachedNativeAudioTrack {
+                return track.source.volume
+            } else {
+                return nil
+            }
+        }
+        set {
+            if let volume = newValue {
+                if let track = cachedNativeAudioTrack {
+                    var volume = volume
+                    if volume < 0 {
+                        volume = 0
+                    } else if volume > 10 {
+                        volume = 10
+                    }
+                    track.source.volume = volume
+                    Logger.debug(type: .mediaStream,
+                                 message: "set audio volume \(volume)")
+                }
+            }
         }
     }
     
