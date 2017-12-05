@@ -222,6 +222,8 @@ class BasicMediaStream: MediaStream {
         }
     }
     
+    var origAudioVolume: Double?
+    
     var audioEnabled: Bool {
         get {
             return nativeAudioTrack != nil
@@ -232,7 +234,10 @@ class BasicMediaStream: MediaStream {
             }
             if newValue {
                 nativeAudioTrack = cachedNativeAudioTrack
+                audioVolume = origAudioVolume
             } else {
+                origAudioVolume = audioVolume
+                audioVolume = 0
                 nativeAudioTrack = nil
             }
             handlers.onSwitchAudioHandler?(newValue)
