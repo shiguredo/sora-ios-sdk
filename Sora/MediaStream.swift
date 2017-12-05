@@ -160,12 +160,18 @@ class BasicMediaStream: MediaStream {
         set {
             if let track = newValue {
                 if !nativeStream.videoTracks.contains(track) {
+                    if let adapter = videoRendererAdapter {
+                        track.add(adapter)
+                    }
                     nativeStream.addVideoTrack(track)
                 }
                 assert(nativeStream.videoTracks.count == 1)
             } else {
                 let tracks = nativeStream.videoTracks
                 for track in tracks {
+                    if let adapter = videoRendererAdapter {
+                        track.remove(adapter)
+                    }
                     nativeStream.removeVideoTrack(track)
                 }
                 assert(nativeStream.videoTracks.count == 0)
