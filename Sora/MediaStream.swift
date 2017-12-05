@@ -70,6 +70,7 @@ public protocol MediaStream: class {
 
     /**
      音声のボリューム。 0 から 10 (含む) までの値をセットします。
+     このプロパティはロールがサブスクライバーの場合のみ有効です。
      */
     var audioVolume: Double? { get set }
     
