@@ -62,9 +62,7 @@ public protocol MediaStream: class {
      ``false`` をセットすると、サーバーへの音声の送受信を停止します。
      ``true`` をセットすると送受信を再開します。
      
-     サーバーへの送受信を停止しても、マイクはミュートされません。
-     マイクをミュートするには ``Sora`` の ``microphoneEnabled`` に
-     ``true`` をセットします。
+     サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
      */
     var audioEnabled: Bool { get set }
 
