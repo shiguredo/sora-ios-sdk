@@ -124,20 +124,39 @@ class VideoViewListViewController: UICollectionViewController,
         collectionView.deselectItem(at: indexPath, animated: true)
         let index = indexPath.section * self.testCaseController.testCase.numberOfItemsInVideoViewSection
             + indexPath.item
-        let stream = self.testCaseController.mediaChannel?.streams[index]
+        guard let stream = self.testCaseController.mediaChannel?.streams[index] else {
+                return true
+        }
+        
         let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         
         alert.addAction(UIAlertAction(title: "Video On/Off", style: .default) { _ in
-            if let stream = stream {
-                stream.videoEnabled = !stream.videoEnabled
-            }
+            stream.videoEnabled = !stream.videoEnabled
         })
         
         alert.addAction(UIAlertAction(title: "Audio On/Off", style: .default) { _ in
-            if let stream = stream {
-                stream.audioEnabled = !stream.audioEnabled
-            }
+            stream.audioEnabled = !stream.audioEnabled
         })
+        
+        if stream.audioEnabled {
+            if let volume = stream.audioVolume {
+                print("current volume \(volume)")
+                
+                if volume < MediaStreamAudioVolume.max {
+                    alert.addAction(UIAlertAction(title: "Increase Volume", style: .default) { _ in
+                        stream.audioVolume = volume + 2
+                        print("increase volume \(stream.audioVolume!)")
+                    })
+                }
+                
+                if MediaStreamAudioVolume.min < volume {
+                    alert.addAction(UIAlertAction(title: "Decrease Volume", style: .default) { _ in
+                        stream.audioVolume = volume - 2
+                        print("decrease volume \(stream.audioVolume!)")
+                    })
+                }
+            }
+        }
         
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
             self.dismiss(animated: true)

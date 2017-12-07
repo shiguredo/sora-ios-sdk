@@ -14,7 +14,7 @@ class NativePeerChannelFactory {
     
     func createNativePeerChannel(configuration: WebRTCConfiguration,
                                  constraints: MediaConstraints,
-                                 delegate: RTCPeerConnectionDelegate) -> RTCPeerConnection {
+                                 delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection {
         return nativeFactory
             .peerConnection(with: configuration.nativeValue,
                             constraints: constraints.nativeValue,
@@ -70,6 +70,26 @@ class NativePeerChannelFactory {
         }
         
         return nativeStream
+    }
+    
+    // クライアント情報としての Offer SDP を生成する
+    func createClientOfferSDP(configuration: WebRTCConfiguration,
+                              constraints: MediaConstraints,
+                              handler: @escaping (String?, Error?) -> Void) {
+        let peer = createNativePeerChannel(configuration: configuration, constraints: constraints, delegate: nil)
+        let stream = createNativePublisherStream(streamId: "offer",
+                                                 videoTrackId: "video",
+                                                 audioTrackId: "audio",
+                                                 constraints: constraints)
+        peer.add(stream)
+        peer.offer(for: constraints.nativeValue) { sdp, error in
+            if let error = error {
+                handler(nil, error)
+            } else if let sdp = sdp {
+                handler(sdp.sdp, nil)
+            }
+            peer.close()
+        }
     }
     
 }

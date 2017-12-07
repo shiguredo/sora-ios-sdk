@@ -9,6 +9,22 @@
 - FIX
     - バグ修正
 
+## 2.0.2
+
+### CHANGE
+
+- connect シグナリングメッセージに Offer SDP を含めるようにした
+
+- API: MediaStreamAudioVolume: 追加した
+
+- API: MediaStream: audioVolume プロパティを追加した
+
+### FIX
+
+- API: MediaStream: videoEnabled: 映像をオフにしても VideoView に反映されない現象を修正した
+
+- API: MediaStream: audioEnabled: 音声の可否がサブスクライバーに反映されない現象を修正した
+
 ## 2.0.1
 
 ### CHANGE

@@ -15,6 +15,9 @@ public struct SignalingConnectMessage {
     /// メタデータ
     public var metadata: String?
     
+    /// SDP 。クライアントの判別に使われます。
+    public var sdp: String?
+    
     /// マルチストリームの可否
     public var multistreamEnabled: Bool
     
@@ -213,6 +216,7 @@ extension SignalingConnectMessage: Codable {
         case role
         case channelId = "channel_id"
         case metadata
+        case sdp
         case multistream
         case plan_b
         case video
@@ -237,6 +241,10 @@ extension SignalingConnectMessage: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channelId)
+        
+        if let sdp = sdp {
+            try container.encode(sdp, forKey: .sdp)
+        }
         
         if let metadata = metadata {
             try container.encode(metadata, forKey: .metadata)

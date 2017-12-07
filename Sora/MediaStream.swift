@@ -1,6 +1,19 @@
 import Foundation
 import WebRTC
 
+/**
+ ストリームの音声のボリュームの定数のリストです。
+ */
+public enum MediaStreamAudioVolume {
+   
+    /// 最大値
+    public static let min: Double = 0
+    
+    /// 最小値
+    public static let max: Double = 10
+    
+}
+
 /// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
     
@@ -49,12 +62,16 @@ public protocol MediaStream: class {
      ``false`` をセットすると、サーバーへの音声の送受信を停止します。
      ``true`` をセットすると送受信を再開します。
      
-     サーバーへの送受信を停止しても、マイクはミュートされません。
-     マイクをミュートするには ``Sora`` の ``microphoneEnabled`` に
-     ``true`` をセットします。
+     サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
      */
     var audioEnabled: Bool { get set }
 
+    /**
+     音声のボリューム。 0 から 10 (含む) までの値をセットします。
+     このプロパティはロールがサブスクライバーの場合のみ有効です。
+     */
+    var audioVolume: Double? { get set }
+    
     // MARK: 映像フレームの送信
 
     /// 映像キャプチャー
@@ -142,12 +159,18 @@ class BasicMediaStream: MediaStream {
         set {
             if let track = newValue {
                 if !nativeStream.videoTracks.contains(track) {
+                    if let adapter = videoRendererAdapter {
+                        track.add(adapter)
+                    }
                     nativeStream.addVideoTrack(track)
                 }
                 assert(nativeStream.videoTracks.count == 1)
             } else {
                 let tracks = nativeStream.videoTracks
                 for track in tracks {
+                    if let adapter = videoRendererAdapter {
+                        track.remove(adapter)
+                    }
                     nativeStream.removeVideoTrack(track)
                 }
                 assert(nativeStream.videoTracks.count == 0)
@@ -198,6 +221,8 @@ class BasicMediaStream: MediaStream {
         }
     }
     
+    var origAudioVolume: Double?
+    
     var audioEnabled: Bool {
         get {
             return nativeAudioTrack != nil
@@ -208,10 +233,38 @@ class BasicMediaStream: MediaStream {
             }
             if newValue {
                 nativeAudioTrack = cachedNativeAudioTrack
+                audioVolume = origAudioVolume
             } else {
+                origAudioVolume = audioVolume
+                audioVolume = 0
                 nativeAudioTrack = nil
             }
             handlers.onSwitchAudioHandler?(newValue)
+        }
+    }
+    
+    var audioVolume: Double? {
+        get {
+            if let track = cachedNativeAudioTrack {
+                return track.source.volume
+            } else {
+                return nil
+            }
+        }
+        set {
+            if let volume = newValue {
+                if let track = cachedNativeAudioTrack {
+                    var volume = volume
+                    if volume < 0 {
+                        volume = 0
+                    } else if volume > 10 {
+                        volume = 10
+                    }
+                    track.source.volume = volume
+                    Logger.debug(type: .mediaStream,
+                                 message: "set audio volume \(volume)")
+                }
+            }
         }
     }
     

@@ -1,6 +1,7 @@
 # Sora iOS SDK
 
-[![CircleCI](https://circleci.com/gh/shiguredo/sora-ios-sdk/tree/develop.svg?style=svg)](https://circleci.com/gh/shiguredo/sora-ios-sdk/tree/develop)
+[![CircleCI branch](https://img.shields.io/circleci/project/github/shiguredo/sora-ios-sdk/develop.svg)](https://github.com/shiguredo/sora-ios-sdk) 
+[![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 
 Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライアントアプリケーションを開発するためのライブラリです。
 
