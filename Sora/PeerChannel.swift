@@ -82,6 +82,8 @@ class PeerChannelInternalState {
         didSet { validate() }
     }
     
+    private var isConnected: Bool = false
+    
     private var isCompleted: Bool {
         get {
             switch (signalingState, iceConnectionState, iceGatheringState) {
@@ -94,7 +96,8 @@ class PeerChannelInternalState {
     }
     
     var onCompleteHandler: (() -> Void)?
-    
+    var onDisconnectHandler: (() -> Void)?
+
     init(signalingState: PeerChannelSignalingState,
          iceConnectionState: ICEConnectionState,
          iceGatheringState: ICEGatheringState) {
@@ -114,8 +117,25 @@ class PeerChannelInternalState {
             Logger.debug(type: .peerChannel,
                          message: "    ICE gathering state: \(iceGatheringState)")
             
+            isConnected = true
             onCompleteHandler?()
             onCompleteHandler = nil
+        } else if isConnected {
+            if signalingState == .closed
+                || iceConnectionState == .failed
+                || iceConnectionState == .disconnected
+                || iceConnectionState == .closed {
+                Logger.debug(type: .peerChannel,
+                             message: "peer channel state: disconnected")
+                Logger.debug(type: .peerChannel,
+                             message: "    signaling state: \(signalingState)")
+                Logger.debug(type: .peerChannel,
+                             message: "    ICE connection state: \(iceConnectionState)")
+                Logger.debug(type: .peerChannel,
+                             message: "    ICE gathering state: \(iceGatheringState)")
+                isConnected = false
+                onDisconnectHandler?()
+            }
         } else {
             Logger.debug(type: .peerChannel,
                          message: "peer channel state: not completed")
@@ -133,6 +153,9 @@ class PeerChannelInternalState {
  ピアチャネルのイベントハンドラです。
  */
 public final class PeerChannelHandlers {
+    
+    /// 接続解除時に呼ばれるブロック
+    public var onDisconnectHandler: ((Error?) -> Void)?
     
     /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
@@ -376,6 +399,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             iceGatheringState: ICEGatheringState(
                 nativeValue: nativeChannel.iceGatheringState))
         internalState.onCompleteHandler = finishConnecting
+        
+        internalState.onDisconnectHandler = {
+            self.disconnect(error: nil)
+        }
         
         signalingChannel.connect(handler: sendConnectMessage)
         state = .connecting
@@ -669,6 +696,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             signalingChannel.disconnect(error: error)
             state = .disconnected
             
+            Logger.debug(type: .peerChannel, message: "call onDisconnectHandler")
+            channel.internalHandlers.onDisconnectHandler?(error)
+            channel.handlers.onDisconnectHandler?(error)
+
             if onConnectHandler != nil {
                 Logger.debug(type: .peerChannel, message: "call connect(handler:) handler")
                 onConnectHandler!(error)
