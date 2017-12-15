@@ -19,6 +19,9 @@ public enum SignalingRole: String {
  */
 public final class SignalingChannelHandlers {
     
+    /// 接続解除時に呼ばれるブロック
+    public var onDisconnectHandler: ((Error?) -> Void)?
+    
     /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
     
@@ -188,6 +191,10 @@ class BasicSignalingChannel: SignalingChannel {
                 internalHandlers.onFailureHandler?(error)
                 handlers.onFailureHandler?(error)
             }
+            
+            Logger.debug(type: .signalingChannel, message: "call onDisconnectHandler")
+            self.internalHandlers.onDisconnectHandler?(error)
+            self.handlers.onDisconnectHandler?(error)
             
             if self.onConnectHandler != nil {
                 Logger.debug(type: .signalingChannel, message: "call connect(handler:) handler")
