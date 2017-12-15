@@ -305,14 +305,20 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             if let error = error {
                 Logger.error(type: .webSocketChannel,
                              message: "disconnect error (\(error.localizedDescription))")
+                Logger.debug(type: .webSocketChannel, message: "call onFailureHandler")
                 channel.internalHandlers.onFailureHandler?(error)
                 channel.handlers.onFailureHandler?(error)
             }
-            onConnectHandler?(error)
-            onConnectHandler = nil
+            
             Logger.debug(type: .webSocketChannel, message: "call onDisconnectHandler")
             channel.internalHandlers.onDisconnectHandler?(error)
             channel.handlers.onDisconnectHandler?(error)
+            
+            if onConnectHandler != nil {
+                Logger.debug(type: .webSocketChannel, message: "call connect(handler:) handler")
+                onConnectHandler!(error)
+                onConnectHandler = nil
+            }
             
             Logger.debug(type: .webSocketChannel, message: "did disconnect")
         }
@@ -334,8 +340,11 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     func webSocketDidOpen(_ webSocket: SRWebSocket!) {
         Logger.debug(type: .webSocketChannel, message: "connected")
         state = .connected
-        onConnectHandler?(nil)
-        onConnectHandler = nil
+        if onConnectHandler != nil {
+            Logger.debug(type: .webSocketChannel, message: "call connect(handler:) handler")
+            onConnectHandler!(nil)
+            onConnectHandler = nil
+        }
     }
     
     func webSocket(_ webSocket: SRWebSocket!,
@@ -369,6 +378,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             newMessage = .binary(data)
         }
         if let message = newMessage {
+            Logger.debug(type: .webSocketChannel, message: "call onMessageHandler")
             channel.internalHandlers.onMessageHandler?(message)
             channel.handlers.onMessageHandler?(message)
         } else {
@@ -381,6 +391,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     func webSocket(_ webSocket: SRWebSocket!, didReceivePong pongPayload: Data!) {
         Logger.debug(type: .webSocketChannel, message: "receive poing payload")
         Logger.debug(type: .webSocketChannel, message: "\(pongPayload)")
+        Logger.debug(type: .webSocketChannel, message: "call onPongHandler")
         channel.internalHandlers.onPongHandler?(pongPayload)
         channel.handlers.onPongHandler?(pongPayload)
     }
