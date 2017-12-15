@@ -207,12 +207,14 @@ public final class MediaChannel {
 
         peerChannel.internalHandlers.onAddStreamHandler = { stream in
             Logger.debug(type: .mediaChannel, message: "added a stream")
+            Logger.debug(type: .mediaChannel, message: "call onAddStreamHandler")
             self.internalHandlers.onAddStreamHandler?(stream)
             self.handlers.onAddStreamHandler?(stream)
         }
         
         peerChannel.internalHandlers.onRemoveStreamHandler = { stream in
             Logger.debug(type: .mediaChannel, message: "removed a stream")
+            Logger.debug(type: .mediaChannel, message: "call onRemoveStreamHandler")
             self.internalHandlers.onRemoveStreamHandler?(stream)
             self.handlers.onRemoveStreamHandler?(stream)
         }
@@ -221,6 +223,8 @@ public final class MediaChannel {
             Logger.debug(type: .mediaChannel, message: "receive event notification")
             self.publisherCount = message.publisherCount
             self.subscriberCount = message.subscriberCount
+            
+            Logger.debug(type: .mediaChannel, message: "call onNotificationEventHandler")
             let event = NotificationEvent(message: message)
             self.internalHandlers.onNotificationEventHandler?(event)
             self.handlers.onNotificationEventHandler?(event)
@@ -240,6 +244,8 @@ public final class MediaChannel {
                 Logger.error(type: .mediaChannel, message: "failed to connect")
                 self.disconnect(error: error)
                 handler(error)
+                
+                Logger.error(type: .mediaChannel, message: "call onConnectHandler")
                 self.internalHandlers.onConnectHandler?(error)
                 self.handlers.onConnectHandler?(error)
                 return
@@ -247,6 +253,7 @@ public final class MediaChannel {
             Logger.debug(type: .mediaChannel, message: "did connect")
             self.state = .connected
             handler(nil)
+            Logger.error(type: .mediaChannel, message: "call onConnectHandler")
             self.internalHandlers.onConnectHandler?(nil)
             self.handlers.onConnectHandler?(nil)
         }
@@ -275,9 +282,13 @@ public final class MediaChannel {
             peerChannel.disconnect(error: error)
             Logger.debug(type: .mediaChannel, message: "did disconnect")
             state = .disconnected
+            
+            Logger.debug(type: .mediaChannel, message: "call onDisconnectHandler")
             internalHandlers.onDisconnectHandler?(error)
             handlers.onDisconnectHandler?(error)
+            
             if let error = error {
+                Logger.debug(type: .mediaChannel, message: "call onFailureHandler")
                 internalHandlers.onFailureHandler?(error)
                 handlers.onFailureHandler?(error)
             }
