@@ -154,7 +154,12 @@ class BasicSignalingChannel: SignalingChannel {
         state = .connecting
 
         webSocketChannel.connect { error in
-            self.onConnectHandler?(error)
+            if self.onConnectHandler != nil {
+                Logger.debug(type: .signalingChannel, message: "call connect(handler:) handler")
+                self.onConnectHandler!(error)
+                self.onConnectHandler = nil
+            }
+            
             if let error = error {
                 Logger.debug(type: .signalingChannel,
                           message: "connecting failed (\(error))")
@@ -179,11 +184,17 @@ class BasicSignalingChannel: SignalingChannel {
             if let error = error {
                 Logger.error(type: .signalingChannel,
                              message: "disconnect error (\(error.localizedDescription))")
+                Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
                 internalHandlers.onFailureHandler?(error)
                 handlers.onFailureHandler?(error)
             }
-            onConnectHandler?(error)
-            onConnectHandler = nil
+            
+            if self.onConnectHandler != nil {
+                Logger.debug(type: .signalingChannel, message: "call connect(handler:) handler")
+                self.onConnectHandler!(error)
+                self.onConnectHandler = nil
+            }
+
             Logger.debug(type: .signalingChannel, message: "did disconnect")
         }
     }
@@ -227,10 +238,13 @@ class BasicSignalingChannel: SignalingChannel {
         case .text(let text):
             guard let data = text.data(using: .utf8) else {
                 Logger.error(type: .signalingChannel, message: "invalid encoding")
+                
+                Logger.error(type: .signalingChannel, message: "call onMessageHandler")
                 internalHandlers.onMessageHandler?(nil, text)
                 handlers.onMessageHandler?(nil, text)
                 
                 let soraError = SoraError.invalidSignalingMessage(text: text)
+                Logger.error(type: .signalingChannel, message: "call onFailureHandler")
                 internalHandlers.onFailureHandler?(soraError)
                 handlers.onFailureHandler?(soraError)
                 return
@@ -243,9 +257,12 @@ class BasicSignalingChannel: SignalingChannel {
                 Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription))")
                 let soraError = SoraError.invalidSignalingMessage(text: text)
+                Logger.error(type: .signalingChannel, message: "call onFailureHandler")
                 internalHandlers.onFailureHandler?(soraError)
                 handlers.onFailureHandler?(soraError)
             }
+            
+            Logger.error(type: .signalingChannel, message: "call onMessageHandler")
             internalHandlers.onMessageHandler?(sigMessage, text)
             handlers.onMessageHandler?(sigMessage, text)
         }
