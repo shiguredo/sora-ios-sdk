@@ -147,6 +147,9 @@ public enum WebSocketMessage {
  */
 public final class WebSocketChannelHandlers {
     
+    /// 接続解除時に呼ばれるブロック
+    public var onDisconnectHandler: ((Error?) -> Void)?
+    
     /// 接続中のエラー発生時に呼ばれるブロック
     public var onFailureHandler: ((Error) -> Void)?
     
@@ -307,6 +310,10 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             }
             onConnectHandler?(error)
             onConnectHandler = nil
+            Logger.debug(type: .webSocketChannel, message: "call onDisconnectHandler")
+            channel.internalHandlers.onDisconnectHandler?(error)
+            channel.handlers.onDisconnectHandler?(error)
+            
             Logger.debug(type: .webSocketChannel, message: "did disconnect")
         }
     }
