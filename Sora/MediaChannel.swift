@@ -205,6 +205,12 @@ public final class MediaChannel {
         state = .connecting
         connectionStartTime = nil
 
+        peerChannel.internalHandlers.onDisconnectHandler = { error in
+            if self.state == .connecting || self.state == .connected {
+                self.disconnect(error: error)
+            }
+        }
+        
         peerChannel.internalHandlers.onAddStreamHandler = { stream in
             Logger.debug(type: .mediaChannel, message: "added a stream")
             Logger.debug(type: .mediaChannel, message: "call onAddStreamHandler")
