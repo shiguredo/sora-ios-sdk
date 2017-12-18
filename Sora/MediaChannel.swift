@@ -251,7 +251,7 @@ public final class MediaChannel {
                 self.disconnect(error: error)
                 handler(error)
                 
-                Logger.error(type: .mediaChannel, message: "call onConnectHandler")
+                Logger.debug(type: .mediaChannel, message: "call onConnectHandler")
                 self.internalHandlers.onConnectHandler?(error)
                 self.handlers.onConnectHandler?(error)
                 return
@@ -259,7 +259,7 @@ public final class MediaChannel {
             Logger.debug(type: .mediaChannel, message: "did connect")
             self.state = .connected
             handler(nil)
-            Logger.error(type: .mediaChannel, message: "call onConnectHandler")
+            Logger.debug(type: .mediaChannel, message: "call onConnectHandler")
             self.internalHandlers.onConnectHandler?(nil)
             self.handlers.onConnectHandler?(nil)
         }

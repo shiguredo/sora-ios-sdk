@@ -246,12 +246,12 @@ class BasicSignalingChannel: SignalingChannel {
             guard let data = text.data(using: .utf8) else {
                 Logger.error(type: .signalingChannel, message: "invalid encoding")
                 
-                Logger.error(type: .signalingChannel, message: "call onMessageHandler")
+                Logger.debug(type: .signalingChannel, message: "call onMessageHandler")
                 internalHandlers.onMessageHandler?(nil, text)
                 handlers.onMessageHandler?(nil, text)
                 
                 let soraError = SoraError.invalidSignalingMessage(text: text)
-                Logger.error(type: .signalingChannel, message: "call onFailureHandler")
+                Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
                 internalHandlers.onFailureHandler?(soraError)
                 handlers.onFailureHandler?(soraError)
                 return
@@ -264,12 +264,12 @@ class BasicSignalingChannel: SignalingChannel {
                 Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription))")
                 let soraError = SoraError.invalidSignalingMessage(text: text)
-                Logger.error(type: .signalingChannel, message: "call onFailureHandler")
+                Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
                 internalHandlers.onFailureHandler?(soraError)
                 handlers.onFailureHandler?(soraError)
             }
             
-            Logger.error(type: .signalingChannel, message: "call onMessageHandler")
+            Logger.debug(type: .signalingChannel, message: "call onMessageHandler")
             internalHandlers.onMessageHandler?(sigMessage, text)
             handlers.onMessageHandler?(sigMessage, text)
         }
