@@ -685,6 +685,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
         default:
             Logger.debug(type: .peerChannel, message: "try disconnecting")
+            if let error = error {
+                Logger.error(type: .peerChannel,
+                             message: "error: \(error.localizedDescription)")
+            }
+            
             state = .disconnecting
             
             switch configuration.role {

@@ -181,13 +181,14 @@ class BasicSignalingChannel: SignalingChannel {
             
         default:
             Logger.debug(type: .signalingChannel, message: "try disconnecting")
+            if let error = error {
+                Logger.error(type: .signalingChannel,
+                             message: "error: \(error.localizedDescription)")
+            }
+            
             state = .disconnecting
             webSocketChannel.disconnect(error: error)
             state = .disconnected
-            if let error = error {
-                Logger.error(type: .signalingChannel,
-                             message: "disconnect error (\(error.localizedDescription))")
-            }
             
             Logger.debug(type: .signalingChannel, message: "call onDisconnectHandler")
             self.internalHandlers.onDisconnectHandler?(error)

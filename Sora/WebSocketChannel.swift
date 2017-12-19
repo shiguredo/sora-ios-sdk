@@ -296,6 +296,11 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             
         default:
             Logger.debug(type: .webSocketChannel, message: "try disconnecting")
+            if error != nil {
+                Logger.debug(type: .webSocketChannel,
+                             message: "error: \(error!.localizedDescription)")
+            }
+            
             state = .disconnecting
             nativeChannel.close()
             state = .disconnected

@@ -280,6 +280,11 @@ public final class MediaChannel {
             
         default:
             Logger.debug(type: .mediaChannel, message: "try disconnecting")
+            if let error = error {
+                Logger.error(type: .mediaChannel,
+                             message: "error: \(error.localizedDescription)")
+            }
+            
             state = .disconnecting
             connectionTimer.stop()
             peerChannel.disconnect(error: error)
