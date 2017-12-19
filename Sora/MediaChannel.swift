@@ -211,6 +211,12 @@ public final class MediaChannel {
             }
         }
         
+        peerChannel.internalHandlers.onFailureHandler = { error in
+            Logger.debug(type: .mediaChannel, message: "call onFailureHandler")
+            self.internalHandlers.onFailureHandler?(error)
+            self.handlers.onFailureHandler?(error)
+        }
+        
         peerChannel.internalHandlers.onAddStreamHandler = { stream in
             Logger.debug(type: .mediaChannel, message: "added a stream")
             Logger.debug(type: .mediaChannel, message: "call onAddStreamHandler")
