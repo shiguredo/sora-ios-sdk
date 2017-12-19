@@ -141,7 +141,16 @@ class BasicSignalingChannel: SignalingChannel {
         self.webSocketChannel = configuration
             ._webSocketChannelType.init(url: configuration.url)
         
-        webSocketChannel.internalHandlers.onFailureHandler = handleFailure
+        webSocketChannel.internalHandlers.onDisconnectHandler = { error in
+            self.disconnect(error: error)
+        }
+        
+        webSocketChannel.internalHandlers.onFailureHandler = { error in
+            Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
+            self.internalHandlers.onFailureHandler?(error)
+            self.handlers.onFailureHandler?(error)
+        }
+        
         webSocketChannel.internalHandlers.onMessageHandler = handleMessage
     }
     
@@ -223,16 +232,6 @@ class BasicSignalingChannel: SignalingChannel {
     
     func send(text: String) {
         webSocketChannel.send(message: .text(text))
-    }
-    
-    func handleFailure(error: Error) {
-        switch state {
-        case .connected:
-            disconnect(error: error)
-
-        default:
-            break
-        }
     }
     
     func handleMessage(_ message: WebSocketMessage) {

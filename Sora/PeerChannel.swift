@@ -372,6 +372,16 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         self.channel = channel
         super.init()
         
+        signalingChannel.internalHandlers.onDisconnectHandler = { error in
+            self.disconnect(error: error)
+        }
+        
+        signalingChannel.internalHandlers.onFailureHandler = { error in
+            Logger.debug(type: .peerChannel, message: "call onFailureHandler")
+            channel.internalHandlers.onFailureHandler?(error)
+            channel.handlers.onFailureHandler?(error)
+        }
+        
         signalingChannel.internalHandlers.onMessageHandler = handleMessage
     }
     
