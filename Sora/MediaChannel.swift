@@ -9,9 +9,6 @@ public final class MediaChannelHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// 接続中にエラーが発生したときに呼ばれるブロック
-    public var onFailureHandler: ((Error) -> Void)?
-    
     /// シグナリングメッセージの受信時に呼ばれるブロック
     public var onMessageHandler: ((SignalingMessage) -> Void)?
     
@@ -209,12 +206,6 @@ public final class MediaChannel {
             if self.state == .connecting || self.state == .connected {
                 self.disconnect(error: error)
             }
-        }
-        
-        peerChannel.internalHandlers.onFailureHandler = { error in
-            Logger.debug(type: .mediaChannel, message: "call onFailureHandler")
-            self.internalHandlers.onFailureHandler?(error)
-            self.handlers.onFailureHandler?(error)
         }
         
         peerChannel.internalHandlers.onAddStreamHandler = { stream in

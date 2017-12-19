@@ -36,9 +36,6 @@ public final class SoraHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)?
     
-    /// 接続中にエラーが発生したときに呼ばれるブロック
-    public var onFailureHandler: ((MediaChannel, Error) -> Void)?
-    
     /// メディアチャネルが追加されたときに呼ばれるブロック
     public var onAddMediaChannelHandler: ((MediaChannel) -> Void)?
     
@@ -174,10 +171,6 @@ public final class Sora {
             mediaChan.internalHandlers.onDisconnectHandler = { error in
                 self.remove(mediaChannel: mediaChan)
                 self.handlers.onDisconnectHandler?(mediaChan, error)
-            }
-            mediaChan.internalHandlers.onFailureHandler = { error in
-                self.remove(mediaChannel: mediaChan)
-                self.handlers.onFailureHandler?(mediaChan, error)
             }
             
             self.add(mediaChannel: mediaChan)

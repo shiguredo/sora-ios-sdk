@@ -150,9 +150,6 @@ public final class WebSocketChannelHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// 接続中のエラー発生時に呼ばれるブロック
-    public var onFailureHandler: ((Error) -> Void)?
-    
     /// pong の送信時に呼ばれるブロック
     public var onPongHandler: ((Data) -> Void)?
     

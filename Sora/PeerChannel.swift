@@ -157,9 +157,6 @@ public final class PeerChannelHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// 接続中のエラー発生時に呼ばれるブロック
-    public var onFailureHandler: ((Error) -> Void)?
-    
     /// ストリームの追加時に呼ばれるブロック
     public var onAddStreamHandler: ((MediaStream) -> Void)?
     
@@ -374,12 +371,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         signalingChannel.internalHandlers.onDisconnectHandler = { error in
             self.disconnect(error: error)
-        }
-        
-        signalingChannel.internalHandlers.onFailureHandler = { error in
-            Logger.debug(type: .peerChannel, message: "call onFailureHandler")
-            channel.internalHandlers.onFailureHandler?(error)
-            channel.handlers.onFailureHandler?(error)
         }
         
         signalingChannel.internalHandlers.onMessageHandler = handleMessage

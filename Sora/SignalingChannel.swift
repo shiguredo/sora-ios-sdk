@@ -22,9 +22,6 @@ public final class SignalingChannelHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// 接続中のエラー発生時に呼ばれるブロック
-    public var onFailureHandler: ((Error) -> Void)?
-    
     /**
      メッセージ受信時に呼ばれるブロック。
      受信したメッセージをシグナリングメッセージとして解析できれば、
@@ -145,12 +142,6 @@ class BasicSignalingChannel: SignalingChannel {
             self.disconnect(error: error)
         }
         
-        webSocketChannel.internalHandlers.onFailureHandler = { error in
-            Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
-            self.internalHandlers.onFailureHandler?(error)
-            self.handlers.onFailureHandler?(error)
-        }
-        
         webSocketChannel.internalHandlers.onMessageHandler = handleMessage
     }
     
@@ -245,13 +236,9 @@ class BasicSignalingChannel: SignalingChannel {
                 Logger.debug(type: .signalingChannel, message: "call onMessageHandler")
                 internalHandlers.onMessageHandler?(nil, text)
                 handlers.onMessageHandler?(nil, text)
-                
-                let soraError = SoraError.invalidSignalingMessage(text: text)
-                Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
-                internalHandlers.onFailureHandler?(soraError)
-                handlers.onFailureHandler?(soraError)
                 return
             }
+            
             let decoder = JSONDecoder()
             var sigMessage: SignalingMessage?
             do {
@@ -259,10 +246,6 @@ class BasicSignalingChannel: SignalingChannel {
             } catch let error {
                 Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription))")
-                let soraError = SoraError.invalidSignalingMessage(text: text)
-                Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
-                internalHandlers.onFailureHandler?(soraError)
-                handlers.onFailureHandler?(soraError)
             }
             
             Logger.debug(type: .signalingChannel, message: "call onMessageHandler")
