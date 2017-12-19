@@ -196,9 +196,6 @@ class BasicSignalingChannel: SignalingChannel {
             if let error = error {
                 Logger.error(type: .signalingChannel,
                              message: "disconnect error (\(error.localizedDescription))")
-                Logger.debug(type: .signalingChannel, message: "call onFailureHandler")
-                internalHandlers.onFailureHandler?(error)
-                handlers.onFailureHandler?(error)
             }
             
             Logger.debug(type: .signalingChannel, message: "call onDisconnectHandler")

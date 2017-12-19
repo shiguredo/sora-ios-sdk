@@ -715,14 +715,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 onConnectHandler!(error)
                 onConnectHandler = nil
             }
-            
-            if let error = error {
-                Logger.error(type: .peerChannel,
-                             message: "disconnect error (\(error.localizedDescription))")
-                Logger.debug(type: .peerChannel, message: "call onFailureHandler")
-                channel.internalHandlers.onFailureHandler?(error)
-                channel.handlers.onFailureHandler?(error)
-            }
+
             Logger.debug(type: .peerChannel, message: "did disconnect")
         }
     }

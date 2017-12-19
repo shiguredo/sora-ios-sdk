@@ -292,12 +292,6 @@ public final class MediaChannel {
             Logger.debug(type: .mediaChannel, message: "call onDisconnectHandler")
             internalHandlers.onDisconnectHandler?(error)
             handlers.onDisconnectHandler?(error)
-            
-            if let error = error {
-                Logger.debug(type: .mediaChannel, message: "call onFailureHandler")
-                internalHandlers.onFailureHandler?(error)
-                handlers.onFailureHandler?(error)
-            }
         }
     }
     

@@ -302,13 +302,6 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             state = .disconnecting
             nativeChannel.close()
             state = .disconnected
-            if let error = error {
-                Logger.error(type: .webSocketChannel,
-                             message: "disconnect error (\(error.localizedDescription))")
-                Logger.debug(type: .webSocketChannel, message: "call onFailureHandler")
-                channel.internalHandlers.onFailureHandler?(error)
-                channel.handlers.onFailureHandler?(error)
-            }
             
             Logger.debug(type: .webSocketChannel, message: "call onDisconnectHandler")
             channel.internalHandlers.onDisconnectHandler?(error)
