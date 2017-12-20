@@ -17,11 +17,25 @@
 
 - SDWebImage 4.2.2 に対応した
 
-- API: WebSocketChannelHandlers: onDisconnectHandler を追加した
+- API: ``WebSocketChannelHandlers``: ``onDisconnectHandler`` を追加した
 
-- API: SignalingChannelHandlers: onDisconnectHandler を追加した
+- API: ``WebSocketChannelHandlers``: ``onFailureHandler`` を削除した
 
-- API: PeerChannelHandlers: onDisconnectHandler を追加した
+- API: ``SignalingChannelHandlers``: ``onDisconnectHandler`` を追加した
+
+- API: ``SignalingChannelHandlers``: ``onFailureHandler`` を削除した
+
+- API: ``SoraError``: WebSocket に関するエラーを次の二つに分割した
+
+  - ``webSocketClosed(statusCode:reason:)``
+    
+  - ``webSocketError()``
+
+- API: ``PeerChannelHandlers``: ``onDisconnectHandler`` を追加した
+
+- API: ``PeerChannelHandlers``: ``onFailureHandler`` を削除した
+
+- API: ``MediaChannelHandlers``: ``onFailureHandler`` を削除した
 
 ### FIX
 
