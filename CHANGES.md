@@ -39,7 +39,7 @@
 
 ### FIX
 
-- API: MediaChannel: PeerChannel の接続解除時に MediaChannel の状態が接続解除にならない現象を修正した
+- API: ``MediaChannel``: ``PeerChannel`` の接続解除時に ``MediaChannel`` の状態が接続解除にならない現象を修正した
 
 ## 2.0.2
 
