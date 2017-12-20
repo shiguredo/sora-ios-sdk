@@ -350,17 +350,16 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
                   message: "closed with code \(code) \(reason ?? "")")
         if code != SRStatusCodeNormal.rawValue {
             let statusCode = WebSocketStatusCode(rawValue: code)
-            let error = SoraError.webSocketError(statusCode: statusCode,
-                                                 reason: reason)
+            let error = SoraError.webSocketClosed(statusCode: statusCode,
+                                                  reason: reason)
             disconnect(error: error)
         }
     }
     
     func webSocket(_ webSocket: SRWebSocket!, didFailWithError error: Error!) {
-        let reason = "failed (\(error.localizedDescription))"
-        Logger.error(type: .webSocketChannel, message: reason)
-        disconnect(error: SoraError.webSocketError(statusCode: nil,
-                                                   reason: reason))
+        Logger.error(type: .webSocketChannel,
+                     message: "failed (\(error.localizedDescription))")
+        disconnect(error: SoraError.webSocketError(error))
     }
     
     func webSocket(_ webSocket: SRWebSocket!, didReceiveMessage message: Any!) {

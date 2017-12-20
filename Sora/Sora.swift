@@ -1,32 +1,6 @@
 import Foundation
 import WebRTC
 
-/**
- SDK に関するエラーを表します。
- */
-public enum SoraError: Error {
-    
-    /// 接続タイムアウト。
-    /// 接続試行開始から一定時間内に接続できなかったことを示します。
-    case connectionTimeout
-    
-    /// 何らかの処理の実行中で、指定された処理を実行できないことを示します。
-    case connectionBusy(reason: String)
-    
-    /// ``WebSocketChannel`` で発生したエラー
-    case webSocketError(statusCode: WebSocketStatusCode?, reason: String?)
-    
-    /// ``SignalingChannel`` で発生したエラー
-    case signalingChannelError(reason: String)
-    
-    /// シグナリングメッセージのフォーマットが無効
-    case invalidSignalingMessage(text: String)
-    
-    /// ``PeerChannel`` で発生したエラー
-    case peerChannelError(reason: String)
-    
-}
-
 /// `Sora` オブジェクトのイベントハンドラです。
 public final class SoraHandlers {
     
