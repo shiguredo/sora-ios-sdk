@@ -82,6 +82,8 @@ class PeerChannelInternalState {
         didSet { validate() }
     }
     
+    private var isConnected: Bool = false
+    
     private var isCompleted: Bool {
         get {
             switch (signalingState, iceConnectionState, iceGatheringState) {
@@ -94,7 +96,8 @@ class PeerChannelInternalState {
     }
     
     var onCompleteHandler: (() -> Void)?
-    
+    var onDisconnectHandler: (() -> Void)?
+
     init(signalingState: PeerChannelSignalingState,
          iceConnectionState: ICEConnectionState,
          iceGatheringState: ICEGatheringState) {
@@ -114,8 +117,25 @@ class PeerChannelInternalState {
             Logger.debug(type: .peerChannel,
                          message: "    ICE gathering state: \(iceGatheringState)")
             
+            isConnected = true
             onCompleteHandler?()
             onCompleteHandler = nil
+        } else if isConnected {
+            if signalingState == .closed
+                || iceConnectionState == .failed
+                || iceConnectionState == .disconnected
+                || iceConnectionState == .closed {
+                Logger.debug(type: .peerChannel,
+                             message: "peer channel state: disconnected")
+                Logger.debug(type: .peerChannel,
+                             message: "    signaling state: \(signalingState)")
+                Logger.debug(type: .peerChannel,
+                             message: "    ICE connection state: \(iceConnectionState)")
+                Logger.debug(type: .peerChannel,
+                             message: "    ICE gathering state: \(iceGatheringState)")
+                isConnected = false
+                onDisconnectHandler?()
+            }
         } else {
             Logger.debug(type: .peerChannel,
                          message: "peer channel state: not completed")
@@ -134,8 +154,8 @@ class PeerChannelInternalState {
  */
 public final class PeerChannelHandlers {
     
-    /// 接続中のエラー発生時に呼ばれるブロック
-    public var onFailureHandler: ((Error) -> Void)?
+    /// 接続解除時に呼ばれるブロック
+    public var onDisconnectHandler: ((Error?) -> Void)?
     
     /// ストリームの追加時に呼ばれるブロック
     public var onAddStreamHandler: ((MediaStream) -> Void)?
@@ -270,6 +290,7 @@ class BasicPeerChannel: PeerChannel {
     
     func add(stream: MediaStream) {
         streams.append(stream)
+        Logger.debug(type: .peerChannel, message: "call onAddStreamHandler")
         internalHandlers.onAddStreamHandler?(stream)
         handlers.onAddStreamHandler?(stream)
     }
@@ -283,6 +304,7 @@ class BasicPeerChannel: PeerChannel {
     
     func remove(stream: MediaStream) {
         streams = streams.filter { each in each.streamId != stream.streamId }
+        Logger.debug(type: .peerChannel, message: "call onRemoveStreamHandler")
         internalHandlers.onRemoveStreamHandler?(stream)
         handlers.onRemoveStreamHandler?(stream)
     }
@@ -347,6 +369,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         self.channel = channel
         super.init()
         
+        signalingChannel.internalHandlers.onDisconnectHandler = { error in
+            self.disconnect(error: error)
+        }
+        
         signalingChannel.internalHandlers.onMessageHandler = handleMessage
     }
     
@@ -374,6 +400,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             iceGatheringState: ICEGatheringState(
                 nativeValue: nativeChannel.iceGatheringState))
         internalState.onCompleteHandler = finishConnecting
+        
+        internalState.onDisconnectHandler = {
+            self.disconnect(error: nil)
+        }
         
         signalingChannel.connect(handler: sendConnectMessage)
         state = .connecting
@@ -550,6 +580,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             // Answer を送信したら更新完了とする
             self.state = .connected
             
+            Logger.debug(type: .peerChannel, message: "call onUpdateHandler")
             self.channel.internalHandlers.onUpdateHandler?(answer!)
             self.channel.handlers.onUpdateHandler?(answer!)
         }
@@ -602,18 +633,22 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                  message: "snapshot: failed to convert UIImage to CGImage")
                     return
                 }
+                
+                Logger.debug(type: .peerChannel, message: "call onSnapshotHandler")
                 let snapshot = Snapshot(image: cgImage, timestamp: Date())
                 channel.internalHandlers.onSnapshotHandler?(snapshot)
                 channel.handlers.onSnapshotHandler?(snapshot)
                 
             case .notify(message: let message):
                 Logger.debug(type: .peerChannel, message: "receive notify")
+                Logger.debug(type: .peerChannel, message: "call onNotifyHandler")
                 channel.internalHandlers.onNotifyHandler?(message)
                 channel.handlers.onNotifyHandler?(message)
                 
             case .ping:
                 Logger.debug(type: .peerChannel, message: "receive ping")
                 signalingChannel.send(message: .pong)
+                Logger.debug(type: .peerChannel, message: "call onPingHandler")
                 channel.internalHandlers.onPingHandler?()
                 channel.handlers.onPingHandler?()
                 
@@ -635,8 +670,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "native media streams = \(nativeChannel.localStreams.count)")
         state = .connected
-        onConnectHandler?(nil)
-        onConnectHandler = nil
+        
+        if onConnectHandler != nil {
+            Logger.debug(type: .peerChannel, message: "call connect(handler:) handler")
+            onConnectHandler!(nil)
+            onConnectHandler = nil
+        }
     }
     
     func disconnect(error: Error?) {
@@ -646,6 +685,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
         default:
             Logger.debug(type: .peerChannel, message: "try disconnecting")
+            if let error = error {
+                Logger.error(type: .peerChannel,
+                             message: "error: \(error.localizedDescription)")
+            }
+            
             state = .disconnecting
             
             switch configuration.role {
@@ -658,14 +702,16 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             signalingChannel.disconnect(error: error)
             state = .disconnected
             
-            onConnectHandler?(error)
-            onConnectHandler = nil
-            if let error = error {
-                Logger.error(type: .peerChannel,
-                             message: "disconnect error (\(error.localizedDescription))")
-                channel.internalHandlers.onFailureHandler?(error)
-                channel.handlers.onFailureHandler?(error)
+            Logger.debug(type: .peerChannel, message: "call onDisconnectHandler")
+            channel.internalHandlers.onDisconnectHandler?(error)
+            channel.handlers.onDisconnectHandler?(error)
+
+            if onConnectHandler != nil {
+                Logger.debug(type: .peerChannel, message: "call connect(handler:) handler")
+                onConnectHandler!(error)
+                onConnectHandler = nil
             }
+
             Logger.debug(type: .peerChannel, message: "did disconnect")
         }
     }

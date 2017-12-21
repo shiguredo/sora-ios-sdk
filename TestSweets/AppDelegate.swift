@@ -20,10 +20,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             print("Sora.onDisconnect(\(String(describing: chan)), \(String(describing: error)))")
         }
         
-        Sora.shared.handlers.onFailureHandler = { chan, error in
-            print("Sora.onFailure(\(String(describing: chan)), \(String(describing: error)))")
-        }
-        
         Sora.shared.handlers.onAddMediaChannelHandler = { chan in
             print("Sora.onAddMediaChannel(\(String(describing: chan)))")
         }

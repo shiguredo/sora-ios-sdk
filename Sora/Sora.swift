@@ -1,32 +1,6 @@
 import Foundation
 import WebRTC
 
-/**
- SDK に関するエラーを表します。
- */
-public enum SoraError: Error {
-    
-    /// 接続タイムアウト。
-    /// 接続試行開始から一定時間内に接続できなかったことを示します。
-    case connectionTimeout
-    
-    /// 何らかの処理の実行中で、指定された処理を実行できないことを示します。
-    case connectionBusy(reason: String)
-    
-    /// ``WebSocketChannel`` で発生したエラー
-    case webSocketError(statusCode: WebSocketStatusCode?, reason: String?)
-    
-    /// ``SignalingChannel`` で発生したエラー
-    case signalingChannelError(reason: String)
-    
-    /// シグナリングメッセージのフォーマットが無効
-    case invalidSignalingMessage(text: String)
-    
-    /// ``PeerChannel`` で発生したエラー
-    case peerChannelError(reason: String)
-    
-}
-
 /// `Sora` オブジェクトのイベントハンドラです。
 public final class SoraHandlers {
     
@@ -35,9 +9,6 @@ public final class SoraHandlers {
     
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)?
-    
-    /// 接続中にエラーが発生したときに呼ばれるブロック
-    public var onFailureHandler: ((MediaChannel, Error) -> Void)?
     
     /// メディアチャネルが追加されたときに呼ばれるブロック
     public var onAddMediaChannelHandler: ((MediaChannel) -> Void)?
@@ -174,10 +145,6 @@ public final class Sora {
             mediaChan.internalHandlers.onDisconnectHandler = { error in
                 self.remove(mediaChannel: mediaChan)
                 self.handlers.onDisconnectHandler?(mediaChan, error)
-            }
-            mediaChan.internalHandlers.onFailureHandler = { error in
-                self.remove(mediaChannel: mediaChan)
-                self.handlers.onFailureHandler?(mediaChan, error)
             }
             
             self.add(mediaChannel: mediaChan)

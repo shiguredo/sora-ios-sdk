@@ -9,6 +9,38 @@
 - FIX
     - バグ修正
 
+## 2.0.3
+
+### CHANGE
+
+- WebRTC M63 に対応した
+
+- SDWebImage 4.2.2 に対応した
+
+- API: ``WebSocketChannelHandlers``: ``onDisconnectHandler`` を追加した
+
+- API: ``WebSocketChannelHandlers``: ``onFailureHandler`` を削除した
+
+- API: ``SignalingChannelHandlers``: ``onDisconnectHandler`` を追加した
+
+- API: ``SignalingChannelHandlers``: ``onFailureHandler`` を削除した
+
+- API: ``SoraError``: WebSocket に関するエラーを次の二つに分割した
+
+  - ``webSocketClosed(statusCode:reason:)``
+    
+  - ``webSocketError()``
+
+- API: ``PeerChannelHandlers``: ``onDisconnectHandler`` を追加した
+
+- API: ``PeerChannelHandlers``: ``onFailureHandler`` を削除した
+
+- API: ``MediaChannelHandlers``: ``onFailureHandler`` を削除した
+
+### FIX
+
+- API: ``MediaChannel``: ``PeerChannel`` の接続解除時に ``MediaChannel`` の状態が接続解除にならない現象を修正した
+
 ## 2.0.2
 
 ### CHANGE

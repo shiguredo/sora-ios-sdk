@@ -214,13 +214,6 @@ class TestCaseViewController: UITableViewController, TestCaseControllable {
                         self.mainViewController.update()
                     }
                     
-                    chan!.handlers.onFailureHandler = { error in
-                        self.state = .disconnected
-                        self.showAlert(title: "Connection Failure",
-                                       message: error.localizedDescription)
-                        self.mainViewController.update()
-                    }
-                    
                     chan!.handlers.onAddStreamHandler = { stream in
                         self.numberOfStreams += 1
                         self.videoViewListViewController?.reloadData()
