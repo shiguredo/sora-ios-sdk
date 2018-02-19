@@ -5,6 +5,7 @@ class RoleViewController: UITableViewController, ConfigurationViewControllable {
     @IBOutlet weak var publisherCell: UITableViewCell!
     @IBOutlet weak var subscriberCell: UITableViewCell!
     @IBOutlet weak var groupCell: UITableViewCell!
+    @IBOutlet weak var groupSubCell: UITableViewCell!
 
     weak var configurationViewController: ConfigurationViewController?
     
@@ -22,6 +23,8 @@ class RoleViewController: UITableViewController, ConfigurationViewControllable {
                     subscriberCell.accessoryType = .checkmark
                 case .group:
                     groupCell.accessoryType = .checkmark
+                case .groupSub:
+                    groupSubCell.accessoryType = .checkmark
                 }
             } else {
                 publisherCell.accessoryType = .checkmark
@@ -43,6 +46,8 @@ class RoleViewController: UITableViewController, ConfigurationViewControllable {
             selectedRole = .subscriber
         case 2:
             selectedRole = .group
+        case 3:
+            selectedRole = .groupSub
         default:
             selectedRole = .publisher
         }
