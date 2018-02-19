@@ -11,14 +11,18 @@ public enum Role {
     /// サブスクライバー
     case subscriber
     
-    /// グループ (マルチストリーム)
+    /// グループ (マルチストリーム、配信)
     case group
+    
+    /// グループ (マルチストリーム、視聴のみ)
+    case groupSub
 }
 
 private var roleTable: PairTable<String, Role> =
     PairTable(pairs: [("publisher", .publisher),
                       ("subscriber", .subscriber),
-                      ("group", .group)])
+                      ("group", .group),
+                      ("groupSub", .groupSub)])
 
 /// :nodoc:
 extension Role: Codable {

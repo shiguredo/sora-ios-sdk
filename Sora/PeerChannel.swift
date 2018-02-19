@@ -451,6 +451,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             role = .upstream
             multistream = true
             initializePublisherStream()
+        case .groupSub:
+            role = .downstream
+            multistream = true
         }
         
         // スナップショットの制限
@@ -607,7 +610,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .connected:
             switch message {
             case .update(sdp: let sdp):
-                guard configuration.role == .group else { return }
+                guard configuration.role == .group ||
+                    configuration.role == .groupSub else { return }
                 Logger.debug(type: .peerChannel, message: "receive update")
                 createAndSendUpdateAnswerMessage(forOffer: sdp)
                 
@@ -694,7 +698,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             switch configuration.role {
             case .publisher: terminatePublisherStream()
-            case .subscriber: break
+            case .subscriber, .groupSub: break
             case .group: terminatePublisherStream()
             }
             channel.terminateAllStreams()
@@ -738,7 +742,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         }
         
-        if channel.configuration.role == .group && stream.streamId == clientId {
+        if (channel.configuration.role == .group ||
+            channel.configuration.role == .groupSub) && stream.streamId == clientId {
             Logger.debug(type: .peerChannel,
                          message: "stream already exists in multistream")
             return

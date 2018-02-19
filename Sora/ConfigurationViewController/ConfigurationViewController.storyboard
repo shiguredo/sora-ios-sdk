@@ -1206,7 +1206,7 @@
                                             <rect key="frame" x="0.0" y="0.0" width="375" height="51.5"/>
                                             <autoresizingMask key="autoresizingMask"/>
                                             <subviews>
-                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Group (Multistream)" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="jmJ-FA-bT5">
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Group (Multistream, Publisher)" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="jmJ-FA-bT5">
                                                     <rect key="frame" x="16" y="11" width="343" height="30"/>
                                                     <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
                                                     <nil key="textColor"/>
@@ -1222,6 +1222,29 @@
                                             </constraints>
                                         </tableViewCellContentView>
                                     </tableViewCell>
+                                    <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" selectionStyle="default" indentationWidth="10" id="e1E-63-N3W" userLabel="GroupSub Cell">
+                                        <rect key="frame" x="0.0" y="191" width="375" height="52"/>
+                                        <autoresizingMask key="autoresizingMask"/>
+                                        <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="e1E-63-N3W" id="Kb7-JM-v61">
+                                            <rect key="frame" x="0.0" y="0.0" width="375" height="51.5"/>
+                                            <autoresizingMask key="autoresizingMask"/>
+                                            <subviews>
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Group (Multistream, Subscriber)" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontForContentSizeCategory="YES" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="kds-Gy-BZ0">
+                                                    <rect key="frame" x="16" y="11" width="343" height="30"/>
+                                                    <fontDescription key="fontDescription" style="UICTFontTextStyleBody"/>
+                                                    <nil key="textColor"/>
+                                                    <nil key="highlightedColor"/>
+                                                </label>
+                                            </subviews>
+                                            <constraints>
+                                                <constraint firstAttribute="bottomMargin" secondItem="kds-Gy-BZ0" secondAttribute="bottom" id="8St-bF-TGF"/>
+                                                <constraint firstItem="kds-Gy-BZ0" firstAttribute="top" secondItem="Kb7-JM-v61" secondAttribute="topMargin" id="LdO-KZ-5Ip"/>
+                                                <constraint firstItem="kds-Gy-BZ0" firstAttribute="leading" secondItem="Kb7-JM-v61" secondAttribute="leadingMargin" id="W5H-Ge-6rr"/>
+                                                <constraint firstAttribute="trailingMargin" secondItem="kds-Gy-BZ0" secondAttribute="trailing" id="b1A-7O-Zyx"/>
+                                                <constraint firstItem="kds-Gy-BZ0" firstAttribute="centerY" secondItem="Kb7-JM-v61" secondAttribute="centerY" id="bDB-1Y-gEc"/>
+                                            </constraints>
+                                        </tableViewCellContentView>
+                                    </tableViewCell>
                                 </cells>
                             </tableViewSection>
                         </sections>
@@ -1233,6 +1256,7 @@
                     <navigationItem key="navigationItem" title="Role" id="ocJ-5A-ymq"/>
                     <connections>
                         <outlet property="groupCell" destination="ZYA-kf-qPD" id="7dn-N1-kOG"/>
+                        <outlet property="groupSubCell" destination="e1E-63-N3W" id="VwZ-E0-rbz"/>
                         <outlet property="publisherCell" destination="7Ws-Ch-wsx" id="V7g-ta-sjr"/>
                         <outlet property="subscriberCell" destination="ZMb-tg-kFF" id="AGp-1L-DYD"/>
                     </connections>
