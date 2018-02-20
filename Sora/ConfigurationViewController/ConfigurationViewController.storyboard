@@ -39,6 +39,9 @@
                                                 </label>
                                                 <switch opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" on="YES" translatesAutoresizingMaskIntoConstraints="NO" id="9Ar-iE-akB">
                                                     <rect key="frame" x="306" y="10" width="51" height="31"/>
+                                                    <connections>
+                                                        <action selector="webSocketSSLEnabledValueChanged:" destination="1nR-he-y4W" eventType="valueChanged" id="Efg-Gz-HPA"/>
+                                                    </connections>
                                                 </switch>
                                             </subviews>
                                             <constraints>
@@ -258,6 +261,9 @@
                                                 </label>
                                                 <switch opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" on="YES" translatesAutoresizingMaskIntoConstraints="NO" id="if8-Ug-MaX">
                                                     <rect key="frame" x="306" y="10" width="51" height="31"/>
+                                                    <connections>
+                                                        <action selector="videoEnabledValueChanged:" destination="1nR-he-y4W" eventType="valueChanged" id="hNy-yT-1t8"/>
+                                                    </connections>
                                                 </switch>
                                             </subviews>
                                             <constraints>
@@ -466,6 +472,9 @@
                                                 </label>
                                                 <switch opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" on="YES" translatesAutoresizingMaskIntoConstraints="NO" id="pZk-ji-7yJ">
                                                     <rect key="frame" x="306" y="11" width="51" height="31"/>
+                                                    <connections>
+                                                        <action selector="audioEnabledValueChanged:" destination="1nR-he-y4W" eventType="valueChanged" id="AKU-VJ-0GU"/>
+                                                    </connections>
                                                 </switch>
                                             </subviews>
                                             <constraints>

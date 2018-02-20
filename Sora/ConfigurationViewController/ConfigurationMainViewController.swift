@@ -91,6 +91,8 @@ class ConfigurationMainViewController: UITableViewController,
             lockControls(false)
         }
         
+        enableWebSocketSSLSwitch.setOn(configurationViewController?.webSocketSSLEnabled ?? true,
+                                       animated: true)
         hostTextField.text = configurationViewController?.host
         portTextField.text = configurationViewController?.port?.description
         signalingPathTextField.text = configurationViewController?.signalingPath
@@ -108,6 +110,11 @@ class ConfigurationMainViewController: UITableViewController,
                 roleValueLabel.text = "Group (Sub)"
             }
         }
+        
+        enableVideoSwitch.setOn(configurationViewController?.videoEnabled ?? true,
+                                animated: true)
+        enableAudioSwitch.setOn(configurationViewController?.audioEnabled ?? true,
+                                animated: true)
         
         // snapshot
         let snapshotEnabled = configurationViewController?.snapshotEnabled ?? false
@@ -245,6 +252,21 @@ class ConfigurationMainViewController: UITableViewController,
 
     @IBAction func back(_ sender: AnyObject) {
         dismiss(animated: true)
+    }
+    
+    @IBAction func webSocketSSLEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.webSocketSSLEnabled = enableWebSocketSSLSwitch.isOn
+        updateControls()
+    }
+    
+    @IBAction func videoEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.videoEnabled = enableVideoSwitch.isOn
+        updateControls()
+    }
+    
+    @IBAction func audioEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.audioEnabled = enableAudioSwitch.isOn
+        updateControls()
     }
     
     @IBAction func snapshotEnabledValueChanged(_ sender: AnyObject) {
