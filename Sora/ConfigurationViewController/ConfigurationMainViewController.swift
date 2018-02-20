@@ -71,8 +71,32 @@ class ConfigurationMainViewController: UITableViewController,
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        let copy = UIBarButtonItem(title: "Copy",
+                                   style: .plain,
+                                   target: self,
+                                   action: #selector(copyConfiguration))
+        //navigationItem.title = "Log"
+        navigationItem.rightBarButtonItems = [copy]
     }
 
+    @objc func copyConfiguration() {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        let data = try! encoder.encode(configurationViewController!.configuration)
+        let repr = String(data: data, encoding: .utf8)!
+        UIPasteboard.general.setValue(repr, forPasteboardType: "public.text")
+        
+        let alert = UIAlertController(title: "Copied",
+                                      message: nil,
+                                      preferredStyle: .alert)
+        self.present(alert, animated: true) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                alert.dismiss(animated: true)
+            }
+        }
+    }
+    
     func enable(label: UILabel, isEnabled: Bool) {
         label.isEnabled = isEnabled
         if isEnabled {

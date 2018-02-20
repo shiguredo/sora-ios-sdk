@@ -151,10 +151,7 @@ extension Configuration: Codable {
         case videoEnabled
         case audioEnabled
         case snapshotEnabled
-        case mandatoryConstraints
-        case optionalConstraints
-        case iceServerInfos
-        case iceTransportPolicy
+        case webRTCConfiguration
         case signalingChannelType
         case webSocketChannelType
         case peerChannelType
@@ -205,9 +202,19 @@ extension Configuration: Codable {
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encode(snapshotEnabled, forKey: .snapshotEnabled)
-
-        // TODO: others
-        
+        try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
+        try container.encode(publisherStreamId, forKey: .publisherStreamId)
+        try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
+        try container.encode(publisherAudioTrackId, forKey: .publisherAudioTrackId)
+        try container.encode(String(describing: type(of: _peerChannelType))
+            ,
+                             forKey: .peerChannelType)
+        try container.encode(String(describing: type(of: _signalingChannelType))
+            ,
+                             forKey: .signalingChannelType)
+        try container.encode(String(describing: type(of: _webSocketChannelType))
+            ,
+                             forKey: .webSocketChannelType)
     }
     
 }
