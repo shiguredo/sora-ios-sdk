@@ -14,6 +14,7 @@ class RoleViewController: UITableViewController, ConfigurationViewControllable {
             publisherCell.accessoryType = .none
             subscriberCell.accessoryType = .none
             groupCell.accessoryType = .none
+            groupSubCell.accessoryType = .none
             if let role = selectedRole {
                 configurationViewController?.role = role
                 switch role {
