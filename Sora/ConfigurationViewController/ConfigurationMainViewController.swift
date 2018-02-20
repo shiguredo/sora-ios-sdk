@@ -103,7 +103,7 @@ class ConfigurationMainViewController: UITableViewController,
             case .subscriber:
                 roleValueLabel.text = "Subscriber"
             case .group:
-                roleValueLabel.text = "Group (Pub)"
+                roleValueLabel.text = "Group (PubSub)"
             case .groupSub:
                 roleValueLabel.text = "Group (Sub)"
             }
