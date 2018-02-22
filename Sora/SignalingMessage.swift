@@ -39,6 +39,9 @@ public struct SignalingConnectMessage {
     /// 音声コーデック
     public var audioCodec: AudioCodec
 
+    /// 最大話者数
+    public var maxNumberOfSpeakers: Int?
+    
 }
 
 /**
@@ -221,6 +224,7 @@ extension SignalingConnectMessage: Codable {
         case plan_b
         case video
         case audio
+        case vad
     }
     
     enum VideoCodingKeys: String, CodingKey {
@@ -285,6 +289,10 @@ extension SignalingConnectMessage: Codable {
             }
         } else {
             try container.encode(false, forKey: .audio)
+        }
+        
+        if let num = maxNumberOfSpeakers {
+            try container.encode(num, forKey: .vad)
         }
     }
     

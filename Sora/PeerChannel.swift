@@ -477,7 +477,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                     videoBitRate: config.videoBitRate,
                                     snapshotEnabled: config.snapshotEnabled,
                                     audioEnabled: config.audioEnabled,
-                                    audioCodec: config.audioCodec)
+                                    audioCodec: config.audioCodec,
+                                    maxNumberOfSpeakers: config.maxNumberOfSpeakers)
         let message = SignalingMessage.connect(message: connect)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: message)
