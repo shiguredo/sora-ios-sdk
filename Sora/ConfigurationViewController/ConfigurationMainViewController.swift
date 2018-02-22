@@ -16,6 +16,7 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var channelIdLabel: UILabel!
     @IBOutlet weak var roleCell: UITableViewCell!
     @IBOutlet weak var roleLabel: UILabel!
+    @IBOutlet weak var maxNumberOfSpeakersLabel: UILabel!
     @IBOutlet weak var enableSnapshotLabel: UILabel!
     @IBOutlet weak var enableVideoLabel: UILabel!
     @IBOutlet weak var videoCodecLabel: UILabel!
@@ -36,6 +37,7 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var signalingPathTextField: UITextField!
     @IBOutlet weak var channelIdTextField: UITextField!
     @IBOutlet weak var roleValueLabel: UILabel!
+    @IBOutlet weak var maxNumberOfSpeakersTextField: UITextField!
     @IBOutlet weak var enableSnapshotSwitch: UISwitch!
     @IBOutlet weak var enableVideoSwitch: UISwitch!
     @IBOutlet weak var videoCodecValueLabel: UILabel!
@@ -121,6 +123,8 @@ class ConfigurationMainViewController: UITableViewController,
         portTextField.text = configurationViewController?.port?.description
         signalingPathTextField.text = configurationViewController?.signalingPath
         channelIdTextField.text = configurationViewController?.channelId
+        maxNumberOfSpeakersTextField.text = configurationViewController?
+            .maxNumberOfSpeakers?.description
         
         if let role = configurationViewController?.role {
             switch role {
@@ -225,6 +229,8 @@ class ConfigurationMainViewController: UITableViewController,
         channelIdTextField.isUserInteractionEnabled = !flag
         roleLabel.setTextOn(!flag)
         roleCell.isUserInteractionEnabled = !flag
+        maxNumberOfSpeakersLabel.setTextOn(!flag)
+        maxNumberOfSpeakersTextField.isUserInteractionEnabled = !flag
         enableVideoLabel.setTextOn(!flag)
         enableVideoSwitch.isUserInteractionEnabled = !flag
         videoCodecLabel.setTextOn(!flag)
@@ -323,6 +329,17 @@ class ConfigurationMainViewController: UITableViewController,
         configurationViewController?.channelId = channelIdTextField.text
     }
     
+    @IBAction func maxNumberOfSpeakersTextFieldEditingDidEndOnExit(_ sender: AnyObject) {
+        if let text = maxNumberOfSpeakersTextField.text {
+            if let num = Int(text) {
+                configurationViewController?.maxNumberOfSpeakers = num
+            } else {
+                configurationViewController?.maxNumberOfSpeakers = nil
+                maxNumberOfSpeakersTextField.text = nil
+            }
+        }
+    }
+    
     @IBAction func cameraFrameRateTextFieldEditingDidEndOnExit(_ sender: AnyObject) {
         if let text = cameraFrameRateTextField.text {
             if let value = Int(text) {
@@ -339,6 +356,7 @@ class ConfigurationMainViewController: UITableViewController,
             portTextFieldEditingDidEndOnExit(sender)
             signalingPathTextFieldEditingDidEndOnExit(sender)
             channelIdTextFieldEditingDidEndOnExit(sender)
+            maxNumberOfSpeakersTextFieldEditingDidEndOnExit(sender)
             cameraFrameRateTextFieldEditingDidEndOnExit(sender)
             view.endEditing(true)
         }
