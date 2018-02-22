@@ -82,13 +82,17 @@ class ConfigurationMainViewController: UITableViewController,
         navigationItem.rightBarButtonItems = [copy]
     }
 
-    @objc func copyConfiguration() {
+    func encodeAndCopyConfiguration(format: JSONEncoder.OutputFormatting?) {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        let data = try! encoder.encode(configurationViewController!.configuration)
+        if let format = format {
+            encoder.outputFormatting = format
+        }
+        let data = try! encoder.encode(self.configurationViewController!.configuration)
         let repr = String(data: data, encoding: .utf8)!
         UIPasteboard.general.setValue(repr, forPasteboardType: "public.text")
-        
+    }
+    
+    func showCopiedAlert() {
         let alert = UIAlertController(title: "Copied",
                                       message: nil,
                                       preferredStyle: .alert)
@@ -97,6 +101,37 @@ class ConfigurationMainViewController: UITableViewController,
                 alert.dismiss(animated: true)
             }
         }
+    }
+    
+    @objc func copyConfiguration() {
+        let sheet = UIAlertController(title: nil,
+                                      message: nil,
+                                      preferredStyle: .actionSheet)
+        
+        sheet.addAction(UIAlertAction(title: "Default format",
+                                      style: .default)
+        { action in
+            self.encodeAndCopyConfiguration(format: nil)
+            self.showCopiedAlert()
+        })
+        
+        sheet.addAction(UIAlertAction(title: "Pretty printed",
+                                      style: .default)
+        { action in
+            self.encodeAndCopyConfiguration(format: .prettyPrinted)
+            self.showCopiedAlert()
+        })
+        
+        if #available(iOS 11.0, *) {
+            sheet.addAction(UIAlertAction(title: "Sorted keys",
+                                          style: .default)
+            { action in
+                self.encodeAndCopyConfiguration(format: .sortedKeys)
+                self.showCopiedAlert()
+            })
+        }
+        
+        self.present(sheet, animated: true)
     }
     
     func enable(label: UILabel, isEnabled: Bool) {
