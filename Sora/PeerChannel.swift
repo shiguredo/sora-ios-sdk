@@ -476,7 +476,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                     videoCodec: config.videoCodec,
                                     videoBitRate: config.videoBitRate,
                                     snapshotEnabled: config.snapshotEnabled,
-                                    audioEnabled: config.audioEnabled,
+                                    // WARN: video only では answer 生成に失敗するため、
+                                    // 音声トラックを使用しない方法で回避する
+                                    // audioEnabled: config.audioEnabled,
+                                    audioEnabled: true,
                                     audioCodec: config.audioCodec,
                                     maxNumberOfSpeakers: config.maxNumberOfSpeakers)
         let message = SignalingMessage.connect(message: connect)
@@ -752,6 +755,18 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         Logger.debug(type: .peerChannel, message: "add a stream")
         stream.audioTracks.first?.source.volume = MediaStreamAudioVolume.max
+        
+        // WARN: connect シグナリングで audio=false とすると answer の生成に失敗するため、
+        // 音声トラックを使用しない方法で回避する
+        if !configuration.audioEnabled {
+            Logger.debug(type: .peerChannel, message: "disable audio tracks")
+            let tracks = stream.audioTracks
+            for track in tracks {
+                track.source.volume = 0
+                stream.removeAudioTrack(track)
+            }
+        }
+        
         let stream = BasicMediaStream(nativeStream: stream)
         channel.add(stream: stream)
     }
