@@ -15,7 +15,13 @@
 
 - 視聴のみのマルチストリームに対応した
 
+- VAD 機能に対応した
+
 - API: ``Role``: ``.groupSub`` を追加した
+
+- API: ``Configuration``: ``maxNumberOfSpeakers`` プロパティを追加した
+
+- API: ``SignalingConnectMessage``: ``maxNumberOfSpeakers`` プロパティを追加した
 
 ## 2.0.4
 
