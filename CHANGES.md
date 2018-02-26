@@ -9,6 +9,20 @@
 - FIX
     - バグ修正
 
+## 2.1.0
+
+### CHANGE
+
+- 視聴のみのマルチストリームに対応した
+
+- 音声検出による映像の動的切替に対応した
+
+- API: ``Role``: ``.groupSub`` を追加した
+
+- API: ``Configuration``: ``maxNumberOfSpeakers`` プロパティを追加した
+
+- API: ``SignalingConnectMessage``: ``maxNumberOfSpeakers`` プロパティを追加した
+
 ## 2.0.4
 
 ### CHANGE

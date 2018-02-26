@@ -188,9 +188,20 @@ extension Log: CustomStringConvertible {
 /// :nodoc:
 public final class Logger {
     
+    public enum Group {
+        case channels
+        case connectionTimer
+        case videoCapturer
+        case videoRenderer
+        case configurationViewController
+        case user
+    }
+    
     public static var shared: Logger = Logger()
     
     public var onOutputHandler: ((Log) -> Void)?
+    
+    public var groups: [Group] = [.channels, .user]
     
     public static func fatal(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .fatal,
@@ -231,6 +242,62 @@ public final class Logger {
     public var level: LogLevel = .info
     
     func output(log: Log) {
+        var out = false
+        for group in groups {
+            switch group {
+            case .channels:
+                switch log.type {
+                case .sora,
+                     .webSocketChannel,
+                     .signalingChannel,
+                     .peerChannel,
+                     .nativePeerChannel,
+                     .mediaChannel,
+                     .mediaStream,
+                     .snapshot:
+                    out = true
+                default:
+                    break
+                }
+            case .connectionTimer:
+                switch log.type {
+                case .connectionTimer:
+                    out = true
+                default:
+                    break
+                }
+            case .videoCapturer:
+                switch log.type {
+                case .cameraVideoCapturer:
+                    out = true
+                default:
+                    break
+                }
+            case .videoRenderer:
+                switch log.type {
+                case .videoRenderer, .videoView:
+                    out = true
+                default:
+                    break
+                }
+            case .user:
+                switch log.type {
+                case .user(_):
+                    out = true
+                default:
+                    break
+                }
+            case .configurationViewController:
+                switch log.type {
+                case .configurationViewController:
+                    out = true
+                default:
+                    break
+                }
+            }
+        }
+        if !out { return }
+
         if 0 < level.value && level.value <= log.level.value {
             onOutputHandler?(log)
             print(log.description)

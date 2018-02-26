@@ -49,4 +49,4 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 
 # Copyright
 
-Copyright 2017, Shiguredo Inc. and Masashi Ono (akisute)
+Copyright 2017-2018, Shiguredo Inc. and Masashi Ono (akisute)

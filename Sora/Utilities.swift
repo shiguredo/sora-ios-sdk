@@ -3,7 +3,7 @@ import Foundation
 /// :nodoc:
 public struct Utilities {
     
-    fileprivate static let randomBaseString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    fileprivate static let randomBaseString = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ0123456789"
     fileprivate static let randomBaseChars =
         randomBaseString.map { c in String(c) }
     

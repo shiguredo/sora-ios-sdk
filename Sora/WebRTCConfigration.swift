@@ -72,3 +72,49 @@ public struct WebRTCConfiguration {
     }
     
 }
+
+
+/// :nodoc:
+extension MediaConstraints: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case mandatory
+        case optional
+    }
+    
+    public init(from decoder: Decoder) throws {
+        // TODO
+        assertionFailure("not yet implemented")
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mandatory, forKey: .mandatory)
+        try container.encode(optional, forKey: .optional)
+    }
+    
+}
+
+/// :nodoc:
+extension WebRTCConfiguration: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+         case constraints
+         case iceServerInfos
+         case iceTransportPolicy
+    }
+    
+    public init(from decoder: Decoder) throws {
+        // TODO
+        assertionFailure("not yet implemented")
+        self.init()
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(constraints, forKey: .constraints)
+        try container.encode(iceServerInfos, forKey: .iceServerInfos)
+        try container.encode(iceTransportPolicy, forKey: .iceTransportPolicy)
+    }
+    
+}

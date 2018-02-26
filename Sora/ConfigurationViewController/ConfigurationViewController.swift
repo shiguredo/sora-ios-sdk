@@ -68,6 +68,14 @@ public final class ConfigurationViewController: UIViewController {
         }
     }
     
+    public var maxNumberOfSpeakers: Int? {
+        didSet {
+            if isLocked {
+                maxNumberOfSpeakers = oldValue
+            }
+        }
+    }
+    
     public var snapshotEnabled: Bool = false {
         didSet {
             if isLocked {
@@ -155,6 +163,7 @@ public final class ConfigurationViewController: UIViewController {
             var config = Configuration(url: url ?? URL(string: "wss://")!,
                                        channelId: channelId ?? "",
                                        role: role)
+            config.maxNumberOfSpeakers = maxNumberOfSpeakers
             config.snapshotEnabled = snapshotEnabled
             config.videoEnabled = videoEnabled
             config.videoCodec = videoCodec
@@ -186,6 +195,7 @@ public final class ConfigurationViewController: UIViewController {
             }
             channelId = newValue.channelId
             role = newValue.role
+            maxNumberOfSpeakers = newValue.maxNumberOfSpeakers
             snapshotEnabled = newValue.snapshotEnabled
             videoEnabled = newValue.videoEnabled
             videoCodec = newValue.videoCodec

@@ -63,6 +63,15 @@ public struct Configuration {
     /// デフォルトは `false` です。
     public var snapshotEnabled: Bool = false
     
+    /**
+     最大話者数。マルチストリーム時のみ有効です。
+     
+     このプロパティをセットすると、直近に発言した話者の映像のみを参加者に配信できます。
+     映像の配信者数を制限できるため、参加者の端末やサーバーの負荷を減らすことが可能です。
+     詳しくは Sora の音声検出 (VAD) 機能を参照してください。
+    */
+    public var maxNumberOfSpeakers: Int?
+
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
     
@@ -151,10 +160,8 @@ extension Configuration: Codable {
         case videoEnabled
         case audioEnabled
         case snapshotEnabled
-        case mandatoryConstraints
-        case optionalConstraints
-        case iceServerInfos
-        case iceTransportPolicy
+        case maxNumberOfSpeakers
+        case webRTCConfiguration
         case signalingChannelType
         case webSocketChannelType
         case peerChannelType
@@ -184,6 +191,10 @@ extension Configuration: Codable {
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
         snapshotEnabled = try container.decode(Bool.self, forKey: .snapshotEnabled)
+        if container.contains(.maxNumberOfSpeakers) {
+            maxNumberOfSpeakers = try container.decode(Int.self,
+                                                       forKey: .maxNumberOfSpeakers)
+        }
         // TODO: others
     }
     
@@ -205,9 +216,22 @@ extension Configuration: Codable {
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encode(snapshotEnabled, forKey: .snapshotEnabled)
-
-        // TODO: others
-        
+        if let num = self.maxNumberOfSpeakers {
+            try container.encode(num, forKey: .maxNumberOfSpeakers)
+        }
+        try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
+        try container.encode(publisherStreamId, forKey: .publisherStreamId)
+        try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
+        try container.encode(publisherAudioTrackId, forKey: .publisherAudioTrackId)
+        try container.encode(String(describing: type(of: _peerChannelType))
+            ,
+                             forKey: .peerChannelType)
+        try container.encode(String(describing: type(of: _signalingChannelType))
+            ,
+                             forKey: .signalingChannelType)
+        try container.encode(String(describing: type(of: _webSocketChannelType))
+            ,
+                             forKey: .webSocketChannelType)
     }
     
 }

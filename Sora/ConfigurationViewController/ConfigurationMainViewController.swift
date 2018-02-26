@@ -16,6 +16,7 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var channelIdLabel: UILabel!
     @IBOutlet weak var roleCell: UITableViewCell!
     @IBOutlet weak var roleLabel: UILabel!
+    @IBOutlet weak var maxNumberOfSpeakersLabel: UILabel!
     @IBOutlet weak var enableSnapshotLabel: UILabel!
     @IBOutlet weak var enableVideoLabel: UILabel!
     @IBOutlet weak var videoCodecLabel: UILabel!
@@ -36,6 +37,7 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var signalingPathTextField: UITextField!
     @IBOutlet weak var channelIdTextField: UITextField!
     @IBOutlet weak var roleValueLabel: UILabel!
+    @IBOutlet weak var maxNumberOfSpeakersTextField: UITextField!
     @IBOutlet weak var enableSnapshotSwitch: UISwitch!
     @IBOutlet weak var enableVideoSwitch: UISwitch!
     @IBOutlet weak var videoCodecValueLabel: UILabel!
@@ -71,8 +73,67 @@ class ConfigurationMainViewController: UITableViewController,
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        let copy = UIBarButtonItem(title: "Copy",
+                                   style: .plain,
+                                   target: self,
+                                   action: #selector(copyConfiguration))
+        //navigationItem.title = "Log"
+        navigationItem.rightBarButtonItems = [copy]
     }
 
+    func encodeAndCopyConfiguration(format: JSONEncoder.OutputFormatting?) {
+        let encoder = JSONEncoder()
+        if let format = format {
+            encoder.outputFormatting = format
+        }
+        let data = try! encoder.encode(self.configurationViewController!.configuration)
+        let repr = String(data: data, encoding: .utf8)!
+        UIPasteboard.general.setValue(repr, forPasteboardType: "public.text")
+    }
+    
+    func showCopiedAlert() {
+        let alert = UIAlertController(title: "Copied",
+                                      message: nil,
+                                      preferredStyle: .alert)
+        self.present(alert, animated: true) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                alert.dismiss(animated: true)
+            }
+        }
+    }
+    
+    @objc func copyConfiguration() {
+        let sheet = UIAlertController(title: nil,
+                                      message: nil,
+                                      preferredStyle: .actionSheet)
+        
+        sheet.addAction(UIAlertAction(title: "Default format",
+                                      style: .default)
+        { action in
+            self.encodeAndCopyConfiguration(format: nil)
+            self.showCopiedAlert()
+        })
+        
+        sheet.addAction(UIAlertAction(title: "Pretty printed",
+                                      style: .default)
+        { action in
+            self.encodeAndCopyConfiguration(format: .prettyPrinted)
+            self.showCopiedAlert()
+        })
+        
+        if #available(iOS 11.0, *) {
+            sheet.addAction(UIAlertAction(title: "Sorted keys",
+                                          style: .default)
+            { action in
+                self.encodeAndCopyConfiguration(format: .sortedKeys)
+                self.showCopiedAlert()
+            })
+        }
+        
+        self.present(sheet, animated: true)
+    }
+    
     func enable(label: UILabel, isEnabled: Bool) {
         label.isEnabled = isEnabled
         if isEnabled {
@@ -91,10 +152,14 @@ class ConfigurationMainViewController: UITableViewController,
             lockControls(false)
         }
         
+        enableWebSocketSSLSwitch.setOn(configurationViewController?.webSocketSSLEnabled ?? true,
+                                       animated: true)
         hostTextField.text = configurationViewController?.host
         portTextField.text = configurationViewController?.port?.description
         signalingPathTextField.text = configurationViewController?.signalingPath
         channelIdTextField.text = configurationViewController?.channelId
+        maxNumberOfSpeakersTextField.text = configurationViewController?
+            .maxNumberOfSpeakers?.description
         
         if let role = configurationViewController?.role {
             switch role {
@@ -103,9 +168,16 @@ class ConfigurationMainViewController: UITableViewController,
             case .subscriber:
                 roleValueLabel.text = "Subscriber"
             case .group:
-                roleValueLabel.text = "Group (Multistream)"
+                roleValueLabel.text = "Group (PubSub)"
+            case .groupSub:
+                roleValueLabel.text = "Group (Sub)"
             }
         }
+        
+        enableVideoSwitch.setOn(configurationViewController?.videoEnabled ?? true,
+                                animated: true)
+        enableAudioSwitch.setOn(configurationViewController?.audioEnabled ?? true,
+                                animated: true)
         
         // snapshot
         let snapshotEnabled = configurationViewController?.snapshotEnabled ?? false
@@ -192,6 +264,8 @@ class ConfigurationMainViewController: UITableViewController,
         channelIdTextField.isUserInteractionEnabled = !flag
         roleLabel.setTextOn(!flag)
         roleCell.isUserInteractionEnabled = !flag
+        maxNumberOfSpeakersLabel.setTextOn(!flag)
+        maxNumberOfSpeakersTextField.isUserInteractionEnabled = !flag
         enableVideoLabel.setTextOn(!flag)
         enableVideoSwitch.isUserInteractionEnabled = !flag
         videoCodecLabel.setTextOn(!flag)
@@ -245,6 +319,21 @@ class ConfigurationMainViewController: UITableViewController,
         dismiss(animated: true)
     }
     
+    @IBAction func webSocketSSLEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.webSocketSSLEnabled = enableWebSocketSSLSwitch.isOn
+        updateControls()
+    }
+    
+    @IBAction func videoEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.videoEnabled = enableVideoSwitch.isOn
+        updateControls()
+    }
+    
+    @IBAction func audioEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.audioEnabled = enableAudioSwitch.isOn
+        updateControls()
+    }
+    
     @IBAction func snapshotEnabledValueChanged(_ sender: AnyObject) {
         configurationViewController?.snapshotEnabled = enableSnapshotSwitch.isOn
         updateControls()
@@ -275,6 +364,17 @@ class ConfigurationMainViewController: UITableViewController,
         configurationViewController?.channelId = channelIdTextField.text
     }
     
+    @IBAction func maxNumberOfSpeakersTextFieldEditingDidEndOnExit(_ sender: AnyObject) {
+        if let text = maxNumberOfSpeakersTextField.text {
+            if let num = Int(text) {
+                configurationViewController?.maxNumberOfSpeakers = num
+            } else {
+                configurationViewController?.maxNumberOfSpeakers = nil
+                maxNumberOfSpeakersTextField.text = nil
+            }
+        }
+    }
+    
     @IBAction func cameraFrameRateTextFieldEditingDidEndOnExit(_ sender: AnyObject) {
         if let text = cameraFrameRateTextField.text {
             if let value = Int(text) {
@@ -291,6 +391,7 @@ class ConfigurationMainViewController: UITableViewController,
             portTextFieldEditingDidEndOnExit(sender)
             signalingPathTextFieldEditingDidEndOnExit(sender)
             channelIdTextFieldEditingDidEndOnExit(sender)
+            maxNumberOfSpeakersTextFieldEditingDidEndOnExit(sender)
             cameraFrameRateTextFieldEditingDidEndOnExit(sender)
             view.endEditing(true)
         }

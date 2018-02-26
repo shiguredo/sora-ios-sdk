@@ -451,6 +451,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             role = .upstream
             multistream = true
             initializePublisherStream()
+        case .groupSub:
+            role = .downstream
+            multistream = true
         }
         
         // スナップショットの制限
@@ -473,8 +476,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                     videoCodec: config.videoCodec,
                                     videoBitRate: config.videoBitRate,
                                     snapshotEnabled: config.snapshotEnabled,
-                                    audioEnabled: config.audioEnabled,
-                                    audioCodec: config.audioCodec)
+                                    // WARN: video only では answer 生成に失敗するため、
+                                    // 音声トラックを使用しない方法で回避する
+                                    // audioEnabled: config.audioEnabled,
+                                    audioEnabled: true,
+                                    audioCodec: config.audioCodec,
+                                    maxNumberOfSpeakers: config.maxNumberOfSpeakers)
         let message = SignalingMessage.connect(message: connect)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: message)
@@ -607,7 +614,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .connected:
             switch message {
             case .update(sdp: let sdp):
-                guard configuration.role == .group else { return }
+                guard configuration.role == .group ||
+                    configuration.role == .groupSub else { return }
                 Logger.debug(type: .peerChannel, message: "receive update")
                 createAndSendUpdateAnswerMessage(forOffer: sdp)
                 
@@ -694,7 +702,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             switch configuration.role {
             case .publisher: terminatePublisherStream()
-            case .subscriber: break
+            case .subscriber, .groupSub: break
             case .group: terminatePublisherStream()
             }
             channel.terminateAllStreams()
@@ -738,7 +746,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         }
         
-        if channel.configuration.role == .group && stream.streamId == clientId {
+        if (channel.configuration.role == .group ||
+            channel.configuration.role == .groupSub) && stream.streamId == clientId {
             Logger.debug(type: .peerChannel,
                          message: "stream already exists in multistream")
             return
@@ -746,6 +755,18 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         Logger.debug(type: .peerChannel, message: "add a stream")
         stream.audioTracks.first?.source.volume = MediaStreamAudioVolume.max
+        
+        // WARN: connect シグナリングで audio=false とすると answer の生成に失敗するため、
+        // 音声トラックを使用しない方法で回避する
+        if !configuration.audioEnabled {
+            Logger.debug(type: .peerChannel, message: "disable audio tracks")
+            let tracks = stream.audioTracks
+            for track in tracks {
+                track.source.volume = 0
+                stream.removeAudioTrack(track)
+            }
+        }
+        
         let stream = BasicMediaStream(nativeStream: stream)
         channel.add(stream: stream)
     }
