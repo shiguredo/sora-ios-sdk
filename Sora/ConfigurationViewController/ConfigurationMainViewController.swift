@@ -93,7 +93,7 @@ class ConfigurationMainViewController: UITableViewController,
     }
     
     func showCopiedAlert() {
-        let alert = UIAlertController(title: "Copied",
+        let alert = UIAlertController(title: "コピーしました",
                                       message: nil,
                                       preferredStyle: .alert)
         self.present(alert, animated: true) {
@@ -108,7 +108,7 @@ class ConfigurationMainViewController: UITableViewController,
                                       message: nil,
                                       preferredStyle: .actionSheet)
         
-        sheet.addAction(UIAlertAction(title: "Default format",
+        sheet.addAction(UIAlertAction(title: "デフォルトのフォーマット",
                                       style: .default)
         { action in
             self.encodeAndCopyConfiguration(format: nil)
@@ -123,7 +123,7 @@ class ConfigurationMainViewController: UITableViewController,
         })
         
         if #available(iOS 11.0, *) {
-            sheet.addAction(UIAlertAction(title: "Sorted keys",
+            sheet.addAction(UIAlertAction(title: "キーをソートする",
                                           style: .default)
             { action in
                 self.encodeAndCopyConfiguration(format: .sortedKeys)
@@ -164,13 +164,13 @@ class ConfigurationMainViewController: UITableViewController,
         if let role = configurationViewController?.role {
             switch role {
             case .publisher:
-                roleValueLabel.text = "Publisher"
+                roleValueLabel.text = "パブリッシャー"
             case .subscriber:
-                roleValueLabel.text = "Subscriber"
+                roleValueLabel.text = "サブスクライバー"
             case .group:
-                roleValueLabel.text = "Group (PubSub)"
+                roleValueLabel.text = "グループ (送受信)"
             case .groupSub:
-                roleValueLabel.text = "Group (Sub)"
+                roleValueLabel.text = "グループ (受信のみ)"
             }
         }
         
@@ -195,7 +195,7 @@ class ConfigurationMainViewController: UITableViewController,
 
         switch configurationViewController?.videoCodec {
         case .default?, nil:
-            videoCodecValueLabel.text = "Default"
+            videoCodecValueLabel.text = "未設定"
         case .vp8?:
             videoCodecValueLabel.text = "VP8"
         case .vp9?:
@@ -205,7 +205,7 @@ class ConfigurationMainViewController: UITableViewController,
         }
         
         bitRateValueLabel.text = configurationViewController?
-            .videoBitRate?.description ?? "Default"
+            .videoBitRate?.description ?? "未設定"
         
         cameraResolutionValueLabel.text = "320x240"
         if let resolution = configurationViewController?.cameraResolution {
@@ -226,7 +226,7 @@ class ConfigurationMainViewController: UITableViewController,
         
         switch configurationViewController?.audioCodec {
         case .default?, nil:
-            audioCodecValueLabel.text = "Default"
+            audioCodecValueLabel.text = "未設定"
         case .opus?:
             audioCodecValueLabel.text = "Opus"
         case .pcmu?:
@@ -234,8 +234,8 @@ class ConfigurationMainViewController: UITableViewController,
         }
         
         // build info
-        webRTCVersionValueLabel.text = Sora.shared.webRTCInfo?.version ?? "Unknown"
-        webRTCRevisionValueLabel.text = Sora.shared.webRTCInfo?.shortRevision ?? "Unknown"
+        webRTCVersionValueLabel.text = Sora.shared.webRTCInfo?.version ?? "不明"
+        webRTCRevisionValueLabel.text = Sora.shared.webRTCInfo?.shortRevision ?? "不明"
         
         // lock configuration
         if configurationViewController?.isLocked ?? false {
