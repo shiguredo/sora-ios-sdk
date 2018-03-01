@@ -12,6 +12,10 @@ let defaultSignalingPath = "signaling"
 /// :nodoc:
 public final class ConfigurationViewController: UIViewController {
 
+    public static var globalConfiguration: Configuration?
+    
+    public var globalConfigurationEnabled: Bool = false
+    
     public var webSocketSSLEnabled: Bool = true {
         didSet {
             if isLocked {
@@ -160,9 +164,20 @@ public final class ConfigurationViewController: UIViewController {
     public var configuration: Configuration {
         
         get {
-            var config = Configuration(url: url ?? URL(string: "wss://")!,
-                                       channelId: channelId ?? "",
+            var url1 = url
+            var channelId1 = channelId
+            var config: Configuration!
+            if globalConfigurationEnabled {
+                if let global = ConfigurationViewController.globalConfiguration {
+                    url1 = global.url
+                    channelId1 = global.channelId
+                }
+            }
+            if config == nil {
+                config = Configuration(url: url1 ?? URL(string: "wss://")!,
+                                       channelId: channelId1 ?? "",
                                        role: role)
+            }
             config.maxNumberOfSpeakers = maxNumberOfSpeakers
             config.snapshotEnabled = snapshotEnabled
             config.videoEnabled = videoEnabled

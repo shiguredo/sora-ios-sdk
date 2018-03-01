@@ -9,6 +9,7 @@ class ConfigurationMainViewController: UITableViewController,
         case disconnected
     }
     
+    @IBOutlet weak var enableGlobalConfigurationLabel: UILabel!
     @IBOutlet weak var enableWebSocketSSLLabel: UILabel!
     @IBOutlet weak var hostLabel: UILabel!
     @IBOutlet weak var portLabel: UILabel!
@@ -31,6 +32,7 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var audioCodecLabel: UILabel!
     @IBOutlet weak var audioCodecCell: UITableViewCell!
     
+    @IBOutlet weak var enableGlobalConfigurationSwitch: UISwitch!
     @IBOutlet weak var enableWebSocketSSLSwitch: UISwitch!
     @IBOutlet weak var hostTextField: UITextField!
     @IBOutlet weak var portTextField: UITextField!
@@ -74,7 +76,7 @@ class ConfigurationMainViewController: UITableViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let copy = UIBarButtonItem(title: "Copy",
+        let copy = UIBarButtonItem(title: "コピー",
                                    style: .plain,
                                    target: self,
                                    action: #selector(copyConfiguration))
@@ -143,6 +145,15 @@ class ConfigurationMainViewController: UITableViewController,
         }
     }
     
+    func enable(textField: UITextField, isEnabled: Bool) {
+        textField.isEnabled = isEnabled
+        if isEnabled {
+            textField.textColor = UIColor.black
+        } else {
+            textField.textColor = UIColor.lightGray
+        }
+    }
+    
     func updateControls() {
         Logger.debug(type: .configurationViewController,
                      message: "\(self) update controls")
@@ -152,7 +163,8 @@ class ConfigurationMainViewController: UITableViewController,
             lockControls(false)
         }
         
-        enableWebSocketSSLSwitch.setOn(configurationViewController?.webSocketSSLEnabled ?? true,
+        enableWebSocketSSLSwitch.setOn(
+            configurationViewController?.webSocketSSLEnabled ?? true,
                                        animated: true)
         hostTextField.text = configurationViewController?.host
         portTextField.text = configurationViewController?.port?.description
@@ -160,6 +172,18 @@ class ConfigurationMainViewController: UITableViewController,
         channelIdTextField.text = configurationViewController?.channelId
         maxNumberOfSpeakersTextField.text = configurationViewController?
             .maxNumberOfSpeakers?.description
+        
+        let globalConfig = enableGlobalConfigurationSwitch.isOn
+        enableWebSocketSSLLabel.setTextOn(!globalConfig)
+        enableWebSocketSSLSwitch.isEnabled = !globalConfig
+        hostLabel.setTextOn(!globalConfig)
+        portLabel.setTextOn(!globalConfig)
+        signalingPathLabel.setTextOn(!globalConfig)
+        channelIdLabel.setTextOn(!globalConfig)
+        hostTextField.setTextOn(!globalConfig)
+        portTextField.setTextOn(!globalConfig)
+        signalingPathTextField.setTextOn(!globalConfig)
+        channelIdTextField.setTextOn(!globalConfig)
         
         if let role = configurationViewController?.role {
             switch role {
@@ -252,6 +276,7 @@ class ConfigurationMainViewController: UITableViewController,
                          message: "\(self) unlock controls")
         }
         
+        enableGlobalConfigurationLabel.setTextOn(!flag)
         enableWebSocketSSLLabel.setTextOn(!flag)
         enableWebSocketSSLSwitch.isUserInteractionEnabled = !flag
         hostLabel.setTextOn(!flag)
@@ -317,6 +342,12 @@ class ConfigurationMainViewController: UITableViewController,
 
     @IBAction func back(_ sender: AnyObject) {
         dismiss(animated: true)
+    }
+    
+    @IBAction func globalConfigurationEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.globalConfigurationEnabled =
+            enableGlobalConfigurationSwitch.isOn
+        updateControls()
     }
     
     @IBAction func webSocketSSLEnabledValueChanged(_ sender: AnyObject) {
