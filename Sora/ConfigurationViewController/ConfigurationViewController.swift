@@ -234,20 +234,20 @@ public final class ConfigurationViewController: UIViewController {
     var configurationNavigationController: ConfigurationNavigationController!
     var onLockHandler: (() -> Void)?
     var onUnlockHandler: (() -> Void)?
-
+    
     public func validate(handler: (Configuration?, String?) -> ()) {
-        guard host != nil && channelId != nil else {
-            handler(nil, "Host and channel ID must not be empty")
-            return
-        }
-
-        guard url != nil else {
-            handler(nil, "Invalid URL format")
-            return
+        if !globalConfigurationEnabled {
+            guard host != nil && channelId != nil else {
+                handler(nil, "Host and channel ID must not be empty")
+                return
+            }
+            guard url != nil else {
+                handler(nil, "Invalid URL format")
+                return
+            }
         }
         
-        let config = configuration
-        handler(config, nil)
+        handler(configuration, nil)
     }
 
     // MARK: Initialization

@@ -82,6 +82,8 @@ class ConfigurationMainViewController: UITableViewController,
                                    action: #selector(copyConfiguration))
         //navigationItem.title = "Log"
         navigationItem.rightBarButtonItems = [copy]
+        
+        updateControls()
     }
 
     func encodeAndCopyConfiguration(format: JSONEncoder.OutputFormatting?) {
@@ -173,7 +175,8 @@ class ConfigurationMainViewController: UITableViewController,
         maxNumberOfSpeakersTextField.text = configurationViewController?
             .maxNumberOfSpeakers?.description
         
-        let globalConfig = enableGlobalConfigurationSwitch.isOn
+        let globalConfig = configurationViewController?.globalConfigurationEnabled ?? false
+        enableGlobalConfigurationSwitch.setOn(globalConfig, animated: true)
         enableWebSocketSSLLabel.setTextOn(!globalConfig)
         enableWebSocketSSLSwitch.isEnabled = !globalConfig
         hostLabel.setTextOn(!globalConfig)
