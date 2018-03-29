@@ -164,18 +164,17 @@ public final class ConfigurationViewController: UIViewController {
     public var configuration: Configuration {
         
         get {
-            var url1 = url
-            var channelId1 = channelId
             var config: Configuration!
             if globalConfigurationEnabled {
                 if let global = ConfigurationViewController.globalConfiguration {
-                    url1 = global.url
-                    channelId1 = global.channelId
+                    config = Configuration(url: global.url,
+                                           channelId: global.channelId,
+                                           role: role)
                 }
             }
             if config == nil {
-                config = Configuration(url: url1 ?? URL(string: "wss://")!,
-                                       channelId: channelId1 ?? "",
+                config = Configuration(url: url ?? URL(string: "wss://")!,
+                                       channelId: channelId ?? "",
                                        role: role)
             }
             config.maxNumberOfSpeakers = maxNumberOfSpeakers
