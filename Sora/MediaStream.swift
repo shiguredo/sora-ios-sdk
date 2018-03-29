@@ -67,10 +67,10 @@ public protocol MediaStream: class {
     var audioEnabled: Bool { get set }
 
     /**
-     音声のボリューム。 0 から 10 (含む) までの値をセットします。
+     受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
      このプロパティはロールがサブスクライバーの場合のみ有効です。
      */
-    var audioVolume: Double? { get set }
+    var remoteAudioVolume: Double? { get set }
     
     // MARK: 映像フレームの送信
 
@@ -153,117 +153,65 @@ class BasicMediaStream: MediaStream {
     var nativeStream: RTCMediaStream
     
     var nativeVideoTrack: RTCVideoTrack? {
-        get {
-            return nativeStream.videoTracks.first
-        }
-        set {
-            if let track = newValue {
-                if !nativeStream.videoTracks.contains(track) {
-                    if let adapter = videoRendererAdapter {
-                        track.add(adapter)
-                    }
-                    nativeStream.addVideoTrack(track)
-                }
-                assert(nativeStream.videoTracks.count == 1)
-            } else {
-                let tracks = nativeStream.videoTracks
-                for track in tracks {
-                    if let adapter = videoRendererAdapter {
-                        track.remove(adapter)
-                    }
-                    nativeStream.removeVideoTrack(track)
-                }
-                assert(nativeStream.videoTracks.count == 0)
-            }
-        }
+        return nativeStream.videoTracks.first
     }
     
     var nativeVideoSource: RTCVideoSource? {
-        get { return nativeVideoTrack?.source }
+        return nativeVideoTrack?.source
     }
     
     var nativeAudioTrack: RTCAudioTrack? {
-        get {
-            return nativeStream.audioTracks.first }
-        set {
-            if let track = newValue {
-                if !nativeStream.audioTracks.contains(track) {
-                    nativeStream.addAudioTrack(track)
-                }
-                assert(nativeStream.audioTracks.count == 1)
-            } else {
-                let tracks = nativeStream.audioTracks
-                for track in tracks {
-                    nativeStream.removeAudioTrack(track)
-                }
-                assert(nativeStream.audioTracks.count == 0)
-            }
-        }
+        return nativeStream.audioTracks.first
     }
     
-    var cachedNativeVideoTrack: RTCVideoTrack?
-    var cachedNativeAudioTrack: RTCAudioTrack?
-
     var videoEnabled: Bool {
         get {
-            return nativeVideoTrack != nil
+            return nativeVideoTrack != nil ? nativeVideoTrack!.isEnabled : false
         }
         set {
             guard videoEnabled != newValue else {
                 return
             }
-            if newValue {
-                nativeVideoTrack = cachedNativeVideoTrack
-            } else {
-                nativeVideoTrack = nil
+            if let track = nativeVideoTrack {
+                track.isEnabled = newValue
+                handlers.onSwitchVideoHandler?(newValue)
             }
-            handlers.onSwitchVideoHandler?(newValue)
         }
     }
     
-    var origAudioVolume: Double?
-    
     var audioEnabled: Bool {
         get {
-            return nativeAudioTrack != nil
+            return nativeAudioTrack != nil ? nativeAudioTrack!.isEnabled : false
         }
         set {
             guard audioEnabled != newValue else {
                 return
             }
-            if newValue {
-                nativeAudioTrack = cachedNativeAudioTrack
-                audioVolume = origAudioVolume
-            } else {
-                origAudioVolume = audioVolume
-                audioVolume = 0
-                nativeAudioTrack = nil
+            if let track = nativeAudioTrack {
+                track.isEnabled = newValue
+                handlers.onSwitchAudioHandler?(newValue)
             }
-            handlers.onSwitchAudioHandler?(newValue)
         }
     }
     
-    var audioVolume: Double? {
+    var remoteAudioVolume: Double? {
         get {
-            if let track = cachedNativeAudioTrack {
-                return track.source.volume
-            } else {
-                return nil
-            }
+            return nativeAudioTrack?.source.volume
         }
         set {
-            if let volume = newValue {
-                if let track = cachedNativeAudioTrack {
-                    var volume = volume
-                    if volume < 0 {
-                        volume = 0
-                    } else if volume > 10 {
-                        volume = 10
-                    }
-                    track.source.volume = volume
-                    Logger.debug(type: .mediaStream,
-                                 message: "set audio volume \(volume)")
+            guard let newValue = newValue else {
+                return
+            }
+            if let track = nativeAudioTrack {
+                var volume = newValue
+                if volume < MediaStreamAudioVolume.min {
+                    volume = MediaStreamAudioVolume.min
+                } else if volume > MediaStreamAudioVolume.max {
+                    volume = MediaStreamAudioVolume.max
                 }
+                track.source.volume = volume
+                Logger.debug(type: .mediaStream,
+                             message: "set audio volume \(volume)")
             }
         }
     }
@@ -272,8 +220,6 @@ class BasicMediaStream: MediaStream {
         self.nativeStream = nativeStream
         streamId = nativeStream.streamId
         creationTime = Date()
-        cachedNativeVideoTrack = nativeStream.videoTracks.first
-        cachedNativeAudioTrack = nativeStream.audioTracks.first
     }
     
     private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()
