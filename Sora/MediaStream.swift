@@ -166,7 +166,7 @@ class BasicMediaStream: MediaStream {
     
     var videoEnabled: Bool {
         get {
-            return nativeVideoTrack != nil ? nativeVideoTrack!.isEnabled : false
+            return nativeVideoTrack?.isEnabled ?? false
         }
         set {
             guard videoEnabled != newValue else {
@@ -181,7 +181,7 @@ class BasicMediaStream: MediaStream {
     
     var audioEnabled: Bool {
         get {
-            return nativeAudioTrack != nil ? nativeAudioTrack!.isEnabled : false
+            return nativeAudioTrack?.isEnabled ?? false
         }
         set {
             guard audioEnabled != newValue else {
