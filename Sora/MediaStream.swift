@@ -69,7 +69,8 @@ public protocol MediaStream: class {
     /**
      このプロパティは ``remoteAudioVolume`` に置き換えられました。
      */
-    @available(*, deprecated: 2.1.1, renamed: "remoteAudioVolume")
+    @available(*, deprecated, renamed: "remoteAudioVolume",
+        message: "このプロパティは remoteAudioVolume に置き換えられました。")
     var audioVolume: Double? { get set }
 
     /**
