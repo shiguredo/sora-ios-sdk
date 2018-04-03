@@ -67,6 +67,13 @@ public protocol MediaStream: class {
     var audioEnabled: Bool { get set }
 
     /**
+     このプロパティは ``remoteAudioVolume`` に置き換えられました。
+     */
+    @available(*, deprecated, renamed: "remoteAudioVolume",
+        message: "このプロパティは remoteAudioVolume に置き換えられました。")
+    var audioVolume: Double? { get set }
+
+    /**
      受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
      このプロパティはロールがサブスクライバーの場合のみ有効です。
      */
@@ -166,7 +173,7 @@ class BasicMediaStream: MediaStream {
     
     var videoEnabled: Bool {
         get {
-            return nativeVideoTrack != nil ? nativeVideoTrack!.isEnabled : false
+            return nativeVideoTrack?.isEnabled ?? false
         }
         set {
             guard videoEnabled != newValue else {
@@ -181,7 +188,7 @@ class BasicMediaStream: MediaStream {
     
     var audioEnabled: Bool {
         get {
-            return nativeAudioTrack != nil ? nativeAudioTrack!.isEnabled : false
+            return nativeAudioTrack?.isEnabled ?? false
         }
         set {
             guard audioEnabled != newValue else {
@@ -191,6 +198,15 @@ class BasicMediaStream: MediaStream {
                 track.isEnabled = newValue
                 handlers.onSwitchAudioHandler?(newValue)
             }
+        }
+    }
+    
+    var audioVolume: Double? {
+        get {
+            return remoteAudioVolume
+        }
+        set {
+            remoteAudioVolume = newValue
         }
     }
     
