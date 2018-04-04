@@ -9,6 +9,32 @@
 - FIX
     - バグ修正
 
+## 2.1.1
+
+### CHANGE
+
+- システム条件を更新した
+
+  - macOS 10.13.2 以降
+
+  - Xcode 9.3
+
+  - Swift 4.1
+
+  - Carthage 0.29.0 以降、または CocoaPods 1.4.0 以降
+
+  - WebRTC SFU Sora 18.02 以降
+
+- API: ``MediaStream``: ``audioVolume`` プロパティを非推奨にした
+
+- API: ``MediaStream``: ``remoteAudioVolume`` プロパティを追加した
+
+### FIX
+
+- API: ``MediaStream``: 配信中に ``videoEnabled`` プロパティまたは ``audioEnabled`` プロパティで映像か音声を無効にすると、有効に戻しても他のクライアントに配信が再開されない現象を修正した
+
+- API: ``WebRTCInfo``: ``shortRevision``: 戻り値の文字列が 7 桁でない現象を修正した
+
 ## 2.1.0
 
 ### CHANGE
