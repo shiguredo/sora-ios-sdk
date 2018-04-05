@@ -9,6 +9,7 @@ class ConfigurationMainViewController: UITableViewController,
         case disconnected
     }
     
+    @IBOutlet weak var enableGlobalConfigurationLabel: UILabel!
     @IBOutlet weak var enableWebSocketSSLLabel: UILabel!
     @IBOutlet weak var hostLabel: UILabel!
     @IBOutlet weak var portLabel: UILabel!
@@ -31,6 +32,7 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var audioCodecLabel: UILabel!
     @IBOutlet weak var audioCodecCell: UITableViewCell!
     
+    @IBOutlet weak var enableGlobalConfigurationSwitch: UISwitch!
     @IBOutlet weak var enableWebSocketSSLSwitch: UISwitch!
     @IBOutlet weak var hostTextField: UITextField!
     @IBOutlet weak var portTextField: UITextField!
@@ -74,12 +76,14 @@ class ConfigurationMainViewController: UITableViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let copy = UIBarButtonItem(title: "Copy",
+        let copy = UIBarButtonItem(title: "コピー",
                                    style: .plain,
                                    target: self,
                                    action: #selector(copyConfiguration))
         //navigationItem.title = "Log"
         navigationItem.rightBarButtonItems = [copy]
+        
+        updateControls()
     }
 
     func encodeAndCopyConfiguration(format: JSONEncoder.OutputFormatting?) {
@@ -93,7 +97,7 @@ class ConfigurationMainViewController: UITableViewController,
     }
     
     func showCopiedAlert() {
-        let alert = UIAlertController(title: "Copied",
+        let alert = UIAlertController(title: "コピーしました",
                                       message: nil,
                                       preferredStyle: .alert)
         self.present(alert, animated: true) {
@@ -108,7 +112,7 @@ class ConfigurationMainViewController: UITableViewController,
                                       message: nil,
                                       preferredStyle: .actionSheet)
         
-        sheet.addAction(UIAlertAction(title: "Default format",
+        sheet.addAction(UIAlertAction(title: "デフォルトのフォーマット",
                                       style: .default)
         { action in
             self.encodeAndCopyConfiguration(format: nil)
@@ -123,7 +127,7 @@ class ConfigurationMainViewController: UITableViewController,
         })
         
         if #available(iOS 11.0, *) {
-            sheet.addAction(UIAlertAction(title: "Sorted keys",
+            sheet.addAction(UIAlertAction(title: "キーをソートする",
                                           style: .default)
             { action in
                 self.encodeAndCopyConfiguration(format: .sortedKeys)
@@ -143,6 +147,15 @@ class ConfigurationMainViewController: UITableViewController,
         }
     }
     
+    func enable(textField: UITextField, isEnabled: Bool) {
+        textField.isEnabled = isEnabled
+        if isEnabled {
+            textField.textColor = UIColor.black
+        } else {
+            textField.textColor = UIColor.lightGray
+        }
+    }
+    
     func updateControls() {
         Logger.debug(type: .configurationViewController,
                      message: "\(self) update controls")
@@ -152,7 +165,8 @@ class ConfigurationMainViewController: UITableViewController,
             lockControls(false)
         }
         
-        enableWebSocketSSLSwitch.setOn(configurationViewController?.webSocketSSLEnabled ?? true,
+        enableWebSocketSSLSwitch.setOn(
+            configurationViewController?.webSocketSSLEnabled ?? true,
                                        animated: true)
         hostTextField.text = configurationViewController?.host
         portTextField.text = configurationViewController?.port?.description
@@ -161,16 +175,29 @@ class ConfigurationMainViewController: UITableViewController,
         maxNumberOfSpeakersTextField.text = configurationViewController?
             .maxNumberOfSpeakers?.description
         
+        let globalConfig = configurationViewController?.globalConfigurationEnabled ?? false
+        enableGlobalConfigurationSwitch.setOn(globalConfig, animated: true)
+        enableWebSocketSSLLabel.setTextOn(!globalConfig)
+        enableWebSocketSSLSwitch.isEnabled = !globalConfig
+        hostLabel.setTextOn(!globalConfig)
+        portLabel.setTextOn(!globalConfig)
+        signalingPathLabel.setTextOn(!globalConfig)
+        channelIdLabel.setTextOn(!globalConfig)
+        hostTextField.setTextOn(!globalConfig)
+        portTextField.setTextOn(!globalConfig)
+        signalingPathTextField.setTextOn(!globalConfig)
+        channelIdTextField.setTextOn(!globalConfig)
+        
         if let role = configurationViewController?.role {
             switch role {
             case .publisher:
-                roleValueLabel.text = "Publisher"
+                roleValueLabel.text = "パブリッシャー"
             case .subscriber:
-                roleValueLabel.text = "Subscriber"
+                roleValueLabel.text = "サブスクライバー"
             case .group:
-                roleValueLabel.text = "Group (PubSub)"
+                roleValueLabel.text = "グループ (送受信)"
             case .groupSub:
-                roleValueLabel.text = "Group (Sub)"
+                roleValueLabel.text = "グループ (受信のみ)"
             }
         }
         
@@ -195,7 +222,7 @@ class ConfigurationMainViewController: UITableViewController,
 
         switch configurationViewController?.videoCodec {
         case .default?, nil:
-            videoCodecValueLabel.text = "Default"
+            videoCodecValueLabel.text = "未設定"
         case .vp8?:
             videoCodecValueLabel.text = "VP8"
         case .vp9?:
@@ -205,7 +232,7 @@ class ConfigurationMainViewController: UITableViewController,
         }
         
         bitRateValueLabel.text = configurationViewController?
-            .videoBitRate?.description ?? "Default"
+            .videoBitRate?.description ?? "未設定"
         
         cameraResolutionValueLabel.text = "320x240"
         if let resolution = configurationViewController?.cameraResolution {
@@ -226,7 +253,7 @@ class ConfigurationMainViewController: UITableViewController,
         
         switch configurationViewController?.audioCodec {
         case .default?, nil:
-            audioCodecValueLabel.text = "Default"
+            audioCodecValueLabel.text = "未設定"
         case .opus?:
             audioCodecValueLabel.text = "Opus"
         case .pcmu?:
@@ -234,8 +261,8 @@ class ConfigurationMainViewController: UITableViewController,
         }
         
         // build info
-        webRTCVersionValueLabel.text = Sora.shared.webRTCInfo?.version ?? "Unknown"
-        webRTCRevisionValueLabel.text = Sora.shared.webRTCInfo?.shortRevision ?? "Unknown"
+        webRTCVersionValueLabel.text = Sora.shared.webRTCInfo?.version ?? "不明"
+        webRTCRevisionValueLabel.text = Sora.shared.webRTCInfo?.shortRevision ?? "不明"
         
         // lock configuration
         if configurationViewController?.isLocked ?? false {
@@ -252,6 +279,7 @@ class ConfigurationMainViewController: UITableViewController,
                          message: "\(self) unlock controls")
         }
         
+        enableGlobalConfigurationLabel.setTextOn(!flag)
         enableWebSocketSSLLabel.setTextOn(!flag)
         enableWebSocketSSLSwitch.isUserInteractionEnabled = !flag
         hostLabel.setTextOn(!flag)
@@ -317,6 +345,12 @@ class ConfigurationMainViewController: UITableViewController,
 
     @IBAction func back(_ sender: AnyObject) {
         dismiss(animated: true)
+    }
+    
+    @IBAction func globalConfigurationEnabledValueChanged(_ sender: AnyObject) {
+        configurationViewController?.globalConfigurationEnabled =
+            enableGlobalConfigurationSwitch.isOn
+        updateControls()
     }
     
     @IBAction func webSocketSSLEnabledValueChanged(_ sender: AnyObject) {

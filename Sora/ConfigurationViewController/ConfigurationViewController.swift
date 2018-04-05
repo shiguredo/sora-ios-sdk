@@ -12,6 +12,10 @@ let defaultSignalingPath = "signaling"
 /// :nodoc:
 public final class ConfigurationViewController: UIViewController {
 
+    public static var globalConfiguration: Configuration?
+    
+    public var globalConfigurationEnabled: Bool = false
+    
     public var webSocketSSLEnabled: Bool = true {
         didSet {
             if isLocked {
@@ -160,9 +164,19 @@ public final class ConfigurationViewController: UIViewController {
     public var configuration: Configuration {
         
         get {
-            var config = Configuration(url: url ?? URL(string: "wss://")!,
+            var config: Configuration!
+            if globalConfigurationEnabled {
+                if let global = ConfigurationViewController.globalConfiguration {
+                    config = Configuration(url: global.url,
+                                           channelId: global.channelId,
+                                           role: role)
+                }
+            }
+            if config == nil {
+                config = Configuration(url: url ?? URL(string: "wss://")!,
                                        channelId: channelId ?? "",
                                        role: role)
+            }
             config.maxNumberOfSpeakers = maxNumberOfSpeakers
             config.snapshotEnabled = snapshotEnabled
             config.videoEnabled = videoEnabled
@@ -219,20 +233,20 @@ public final class ConfigurationViewController: UIViewController {
     var configurationNavigationController: ConfigurationNavigationController!
     var onLockHandler: (() -> Void)?
     var onUnlockHandler: (() -> Void)?
-
+    
     public func validate(handler: (Configuration?, String?) -> ()) {
-        guard host != nil && channelId != nil else {
-            handler(nil, "Host and channel ID must not be empty")
-            return
-        }
-
-        guard url != nil else {
-            handler(nil, "Invalid URL format")
-            return
+        if !globalConfigurationEnabled {
+            guard host != nil && channelId != nil else {
+                handler(nil, "Host and channel ID must not be empty")
+                return
+            }
+            guard url != nil else {
+                handler(nil, "Invalid URL format")
+                return
+            }
         }
         
-        let config = configuration
-        handler(config, nil)
+        handler(configuration, nil)
     }
 
     // MARK: Initialization

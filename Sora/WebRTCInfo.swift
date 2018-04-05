@@ -34,7 +34,8 @@ public struct WebRTCInfo {
     
     /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
     public var shortRevision: String {
-        return String(revision[revision.index(revision.startIndex, offsetBy: 7)])
+        return String(revision[revision.startIndex..<revision.index(
+            revision.startIndex, offsetBy: 7)])
     }
     
 }

@@ -82,8 +82,11 @@
 		91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B891F19366000A76852 /* SignalingChannel.swift */; };
 		91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8D1F19367700A76852 /* MediaChannel.swift */; };
 		91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91B1D6451D75E11F00112A4E /* VideoRenderer.swift */; };
+		91BD94832045323E006ED524 /* info.json in Resources */ = {isa = PBXBuildFile; fileRef = 91BD94822045323E006ED524 /* info.json */; };
+		91BD9489204536D9006ED524 /* SDKInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BD9488204536D9006ED524 /* SDKInfo.swift */; };
 		91BDC1D71F62C8A50084DC3A /* UILabel+ConfigurationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BDC1D61F62C8A40084DC3A /* UILabel+ConfigurationViewController.swift */; };
 		91BDC1D91F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BDC1D81F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift */; };
+		91BEC0602047004A007D31EC /* UITextField+ConfigurationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BEC05F2047004A007D31EC /* UITextField+ConfigurationViewController.swift */; };
 		91C7B08D1D54636A006F5FA2 /* Sora.h in Headers */ = {isa = PBXBuildFile; fileRef = 91C7B08C1D54636A006F5FA2 /* Sora.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		91C7B0941D54636A006F5FA2 /* Sora.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91C7B0891D54636A006F5FA2 /* Sora.framework */; };
 		91C7B0991D54636A006F5FA2 /* SoraTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C7B0981D54636A006F5FA2 /* SoraTests.swift */; };
@@ -202,8 +205,12 @@
 		91A19B8B1F19366B00A76852 /* PeerChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeerChannel.swift; sourceTree = "<group>"; };
 		91A19B8D1F19367700A76852 /* MediaChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaChannel.swift; sourceTree = "<group>"; };
 		91B1D6451D75E11F00112A4E /* VideoRenderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoRenderer.swift; sourceTree = "<group>"; };
+		91BD94822045323E006ED524 /* info.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; name = info.json; path = Sora/info.json; sourceTree = "<group>"; };
+		91BD94862045331C006ED524 /* info.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; name = info.sh; path = Sora/info.sh; sourceTree = "<group>"; };
+		91BD9488204536D9006ED524 /* SDKInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDKInfo.swift; sourceTree = "<group>"; };
 		91BDC1D61F62C8A40084DC3A /* UILabel+ConfigurationViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "UILabel+ConfigurationViewController.swift"; sourceTree = "<group>"; };
 		91BDC1D81F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIButton+ConfigurationViewController.swift"; sourceTree = "<group>"; };
+		91BEC05F2047004A007D31EC /* UITextField+ConfigurationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITextField+ConfigurationViewController.swift"; sourceTree = "<group>"; };
 		91C109201E4A3198009F11F7 /* ConfigurationViewController.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = ConfigurationViewController.storyboard; sourceTree = "<group>"; };
 		91C109211E4A3199009F11F7 /* AudioCodecViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AudioCodecViewController.swift; sourceTree = "<group>"; };
 		91C109221E4A3199009F11F7 /* ConfigurationMainViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConfigurationMainViewController.swift; sourceTree = "<group>"; };
@@ -325,6 +332,7 @@
 				91BDC1D81F62C8F30084DC3A /* UIButton+ConfigurationViewController.swift */,
 				91BDC1D61F62C8A40084DC3A /* UILabel+ConfigurationViewController.swift */,
 				91672C7C1F796E81002300E7 /* UIViewController+Alert.swift */,
+				91BEC05F2047004A007D31EC /* UITextField+ConfigurationViewController.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -391,6 +399,7 @@
 				910D444E1F4D7ACC00D35917 /* NotificationEvent.swift */,
 				91A19B8B1F19366B00A76852 /* PeerChannel.swift */,
 				9174A8901F73F89400D586C4 /* Role.swift */,
+				91BD9488204536D9006ED524 /* SDKInfo.swift */,
 				91A19B891F19366000A76852 /* SignalingChannel.swift */,
 				91FAB3EB1F29130700EDF53C /* SignalingMessage.swift */,
 				917EF3451F160B9E00756DF2 /* Snapshot.swift */,
@@ -427,6 +436,8 @@
 			isa = PBXGroup;
 			children = (
 				91C7B0A81D5463EA006F5FA2 /* Cartfile */,
+				91BD94822045323E006ED524 /* info.json */,
+				91BD94862045331C006ED524 /* info.sh */,
 			);
 			name = Misc;
 			sourceTree = "<group>";
@@ -487,6 +498,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 91C7B09D1D54636A006F5FA2 /* Build configuration list for PBXNativeTarget "Sora" */;
 			buildPhases = (
+				91BD9485204532E9006ED524 /* ShellScript */,
 				91C7B0841D54636A006F5FA2 /* Sources */,
 				91C7B0851D54636A006F5FA2 /* Frameworks */,
 				91C7B0861D54636A006F5FA2 /* Headers */,
@@ -599,6 +611,7 @@
 			files = (
 				917FDCC41F5F14700006BCAA /* ConfigurationViewController.storyboard in Resources */,
 				9100904E1E58B4470099E00E /* VideoView.xib in Resources */,
+				91BD94832045323E006ED524 /* info.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -627,6 +640,19 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/usr/local/bin/carthage copy-frameworks";
+		};
+		91BD9485204532E9006ED524 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "sh $SRCROOT/Sora/info.sh > $SRCROOT/Sora/info.json";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -686,6 +712,7 @@
 				91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */,
 				9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */,
 				91672C7D1F796E81002300E7 /* UIViewController+Alert.swift in Sources */,
+				91BD9489204536D9006ED524 /* SDKInfo.swift in Sources */,
 				91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */,
 				913D5E221F57E8F300A82DEA /* VideoCodecViewController.swift in Sources */,
 				91CD2A4A1F288A6A00D039D1 /* Sora.swift in Sources */,
@@ -694,6 +721,7 @@
 				913D5E211F57E8F300A82DEA /* RoleViewController.swift in Sources */,
 				9174A8931F73F8CF00D586C4 /* VideoCodec.swift in Sources */,
 				910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */,
+				91BEC0602047004A007D31EC /* UITextField+ConfigurationViewController.swift in Sources */,
 				910D444F1F4D7ACC00D35917 /* NotificationEvent.swift in Sources */,
 				910090501E58B5450099E00E /* VideoView.swift in Sources */,
 				91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */,
