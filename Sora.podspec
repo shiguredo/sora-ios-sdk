@@ -13,7 +13,7 @@ Pod::Spec.new do |s|
   s.source_files  = "Carthage/Build/iOS/Sora.framework/Headers/*.h"
   s.frameworks = "SocketRocket", "SDWebImage"
   s.vendored_frameworks = "Carthage/Build/iOS/Sora.framework"
-  s.dependency "WebRTC", "64.6.0"
+  s.dependency "WebRTC", "66.8.0"
   s.dependency "SocketRocket", "0.5.1"
   s.dependency "SDWebImage", "4.2.2"
 end
