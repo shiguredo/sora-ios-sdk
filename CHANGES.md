@@ -9,6 +9,14 @@
 - FIX
     - バグ修正
 
+## 2.1.2
+
+### CHANGE
+
+- WebRTC SFU Sora 18.04 以降に対応した
+
+- WebRTC M66 に対応した
+
 ## 2.1.1
 
 ### CHANGE
