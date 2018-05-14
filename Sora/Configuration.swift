@@ -61,6 +61,7 @@ public struct Configuration {
     
     /// スナップショットの可否。 `true` であればスナップショットが有効になります。
     /// デフォルトは `false` です。
+    @available(*, deprecated, message: "スナップショット機能は Sora 18.07 で廃止される予定です。")
     public var snapshotEnabled: Bool = false
     
     /**
