@@ -3,7 +3,7 @@ import UIKit
 /// :nodoc:
 public protocol ConfigurationViewControllable: class {
 
-    weak var configurationViewController: ConfigurationViewController? { get set }
+    var configurationViewController: ConfigurationViewController? { get set }
     
 }
 
