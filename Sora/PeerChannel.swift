@@ -326,6 +326,9 @@ class BasicPeerChannel: PeerChannel {
     }
     
     fileprivate func terminateAllStreams() {
+        for stream in streams {
+            stream.terminate()
+        }
         streams.removeAll()
         // Do not call `handlers.onRemoveStreamHandler` here
         // This method is meant to be called only when disconnection cleanup
@@ -495,7 +498,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                          audioTrackId:
                 configuration.audioEnabled ? configuration.publisherAudioTrackId : nil,
                                          constraints: webRTCConfiguration.constraints)
-        let stream = BasicMediaStream(nativeStream: nativeStream)
+        let stream = BasicMediaStream(peerChannel: channel,
+                                      nativeStream: nativeStream)
         if configuration.videoEnabled {
             switch configuration.videoCapturerDevice {
             case .camera(let settings):
@@ -767,7 +771,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         }
         
-        let stream = BasicMediaStream(nativeStream: stream)
+        let stream = BasicMediaStream(peerChannel: self.channel,
+                                      nativeStream: stream)
         channel.add(stream: stream)
     }
     

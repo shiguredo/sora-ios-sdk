@@ -42,6 +42,9 @@ public protocol MediaStream: class {
     
     // MARK: - 接続情報
     
+    /// ピアチャネル
+    var peerChannel: PeerChannel { get }
+    
     /// ストリーム ID
     var streamId: String { get }
     
@@ -101,11 +104,15 @@ public protocol MediaStream: class {
      */
     func send(videoFrame: VideoFrame?)
     
+    func terminate()
+    
 }
 
 class BasicMediaStream: MediaStream {
     
     let handlers: MediaStreamHandlers = MediaStreamHandlers()
+    
+    var peerChannel: PeerChannel
     
     var streamId: String = ""
     var videoTrackId: String = ""
@@ -133,8 +140,12 @@ class BasicMediaStream: MediaStream {
         }
         set {
             if let value = newValue {
-                videoRendererAdapter = VideoRendererAdapter(videoRenderer: value)
+                videoRendererAdapter =
+                    VideoRendererAdapter(videoRenderer: value)
+                value.onAdded(from: self)
             } else {
+                videoRendererAdapter?.videoRenderer?
+                    .onRemoved(from: self)
                 videoRendererAdapter = nil
             }
         }
@@ -182,6 +193,7 @@ class BasicMediaStream: MediaStream {
             if let track = nativeVideoTrack {
                 track.isEnabled = newValue
                 handlers.onSwitchVideoHandler?(newValue)
+                videoRenderer?.onSwitch(video: newValue)
             }
         }
     }
@@ -197,6 +209,7 @@ class BasicMediaStream: MediaStream {
             if let track = nativeAudioTrack {
                 track.isEnabled = newValue
                 handlers.onSwitchAudioHandler?(newValue)
+                videoRenderer?.onSwitch(audio: newValue)
             }
         }
     }
@@ -232,10 +245,15 @@ class BasicMediaStream: MediaStream {
         }
     }
     
-    init(nativeStream: RTCMediaStream) {
+    init(peerChannel: PeerChannel, nativeStream: RTCMediaStream) {
+        self.peerChannel = peerChannel
         self.nativeStream = nativeStream
         streamId = nativeStream.streamId
         creationTime = Date()
+    }
+    
+    func terminate() {
+        videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel)
     }
     
     private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()
