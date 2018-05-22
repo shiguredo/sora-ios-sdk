@@ -104,6 +104,11 @@ public protocol MediaStream: class {
      */
     func send(videoFrame: VideoFrame?)
     
+    // MARK: 終了処理
+    
+    /**
+     ストリームの終了処理を行います。
+     */
     func terminate()
     
 }
