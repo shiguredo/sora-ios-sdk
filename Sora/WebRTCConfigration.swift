@@ -24,6 +24,37 @@ public struct MediaConstraints {
 }
 
 /**
+ SDP でのマルチストリームの記述方式です。
+ */
+public enum SDPSemantics {
+    
+    /// デフォルト
+    case `default`
+    
+    /// Plan B
+    case planB
+    
+    /// Unified Plan
+    case unifiedPlan
+    
+    // MARK: - ネイティブ
+    
+    var nativeValue: RTCSdpSemantics {
+        get {
+            switch self {
+            case .default:
+                return RTCSdpSemantics.default
+            case .planB:
+                return RTCSdpSemantics.planB
+            case .unifiedPlan:
+                return RTCSdpSemantics.unifiedPlan
+            }
+        }
+    }
+    
+}
+
+/**
  WebRTC に関する設定です。
  */
 public struct WebRTCConfiguration {
@@ -41,6 +72,11 @@ public struct WebRTCConfiguration {
     /// ICE 通信ポリシー
     public var iceTransportPolicy: ICETransportPolicy = .relay
 
+    // MARK: SDP に関する設定
+    
+    /// SDP でのマルチストリームの記述方式
+    public var sdpSemantics: SDPSemantics = .default
+    
     // MARK: - インスタンスの生成
     
     /**
@@ -63,6 +99,7 @@ public struct WebRTCConfiguration {
                 return info.nativeValue
             }
             config.iceTransportPolicy = iceTransportPolicy.nativeValue
+            config.sdpSemantics = sdpSemantics.nativeValue
             return config
         }
     }
