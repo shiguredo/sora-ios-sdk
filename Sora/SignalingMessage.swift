@@ -392,7 +392,7 @@ extension SignalingNotifyMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
         case eventType = "event_type"
-        case role
+        case role = "role"
         case connectionTime = "minutes"
         case connectionCount = "channel_connections"
         case publisherCount = "channel_upstream_connections"
