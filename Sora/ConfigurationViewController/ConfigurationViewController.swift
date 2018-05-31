@@ -80,14 +80,6 @@ public final class ConfigurationViewController: UIViewController {
         }
     }
     
-    public var snapshotEnabled: Bool = false {
-        didSet {
-            if isLocked {
-                snapshotEnabled = oldValue
-            }
-        }
-    }
-    
     public var videoEnabled: Bool = true {
         didSet {
             if isLocked {
@@ -178,7 +170,6 @@ public final class ConfigurationViewController: UIViewController {
                                        role: role)
             }
             config.maxNumberOfSpeakers = maxNumberOfSpeakers
-            config.snapshotEnabled = snapshotEnabled
             config.videoEnabled = videoEnabled
             config.videoCodec = videoCodec
             config.videoBitRate = videoBitRate
@@ -210,7 +201,6 @@ public final class ConfigurationViewController: UIViewController {
             channelId = newValue.channelId
             role = newValue.role
             maxNumberOfSpeakers = newValue.maxNumberOfSpeakers
-            snapshotEnabled = newValue.snapshotEnabled
             videoEnabled = newValue.videoEnabled
             videoCodec = newValue.videoCodec
             videoBitRate = newValue.videoBitRate

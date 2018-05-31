@@ -59,11 +59,6 @@ public struct Configuration {
     /// デフォルトは `true` です。
     public var audioEnabled: Bool = true
     
-    /// スナップショットの可否。 `true` であればスナップショットが有効になります。
-    /// デフォルトは `false` です。
-    @available(*, deprecated, message: "スナップショット機能は Sora 18.07 で廃止される予定です。")
-    public var snapshotEnabled: Bool = false
-    
     /**
      最大話者数。マルチストリーム時のみ有効です。
      
@@ -160,7 +155,6 @@ extension Configuration: Codable {
         case audioCodec
         case videoEnabled
         case audioEnabled
-        case snapshotEnabled
         case maxNumberOfSpeakers
         case webRTCConfiguration
         case signalingChannelType
@@ -191,7 +185,6 @@ extension Configuration: Codable {
         }
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
-        snapshotEnabled = try container.decode(Bool.self, forKey: .snapshotEnabled)
         if container.contains(.maxNumberOfSpeakers) {
             maxNumberOfSpeakers = try container.decode(Int.self,
                                                        forKey: .maxNumberOfSpeakers)
@@ -216,7 +209,6 @@ extension Configuration: Codable {
         try container.encode(videoCapturerDevice, forKey: .videoCapturerDevice)
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
-        try container.encode(snapshotEnabled, forKey: .snapshotEnabled)
         if let num = self.maxNumberOfSpeakers {
             try container.encode(num, forKey: .maxNumberOfSpeakers)
         }

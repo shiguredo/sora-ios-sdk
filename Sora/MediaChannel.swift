@@ -232,13 +232,6 @@ public final class MediaChannel {
             self.handlers.onNotifyHandler?(message)
         }
         
-        peerChannel.internalHandlers.onSnapshotHandler = { snapshot in
-            Logger.debug(type: .mediaStream, message: "receive snapshot")
-            if let stream = self.mainStream {
-                stream.send(videoFrame: VideoFrame.snapshot(snapshot))
-            }
-        }
-        
         peerChannel.connect() { error in
             self.connectionTimer.stop()
 

@@ -249,9 +249,6 @@ class BasicMediaStream: MediaStream {
                 // 現在使われてないのでダミーでも可？ -> ダミーにしました
                 nativeVideoSource?.capturer(capturer ?? BasicMediaStream.dummyCapturer,
                                             didCapture: nativeFrame)
-                
-            default:
-                break
             }
         } else {
             

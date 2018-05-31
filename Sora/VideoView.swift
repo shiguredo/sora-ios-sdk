@@ -123,7 +123,6 @@ extension VideoView: VideoRenderer {
 class VideoViewContentView: UIView {
     
     @IBOutlet private weak var nativeVideoView: RTCEAGLVideoView!
-    @IBOutlet private weak var snapshotView: UIImageView!
     
     fileprivate var currentVideoFrameSize: CGSize?
     private var videoFrameSizeToChange: CGSize?
@@ -178,17 +177,8 @@ class VideoViewContentView: UIView {
         if let frame = videoFrame {
             switch frame {
             case .native(capturer: _, frame: let frame):
-                snapshotView.isHidden = true
                 nativeVideoView.isHidden = false
                 nativeVideoView.renderFrame(frame)
-            case .snapshot(let snapshot):
-                // snapshot は WebRTC.framework の仕組みを使用しないで描画しており、
-                // snapshotView のレイアウトも AutoLayoutによって実施されている。
-                // ここでは描画モードの指定を忘れず行う。
-                snapshotView.isHidden = false
-                nativeVideoView.isHidden = true
-                snapshotView.contentMode = renderingContentMode
-                snapshotView.image = UIImage(cgImage: snapshot.image)
             }
         } else {
             nativeVideoView.renderFrame(nil)
