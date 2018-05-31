@@ -20,6 +20,41 @@ public protocol VideoRenderer: class {
      */
     func render(videoFrame: VideoFrame?)
     
+    /**
+     接続解除時に呼ばれます。
+     
+     - parameter from: 接続解除するピアチャネル
+     */
+    func onDisconnect(from: PeerChannel)
+    
+    /**
+     ストリームへの追加時に呼ばれます。
+     
+     - parameter from: 追加されるストリーム
+     */
+    func onAdded(from: MediaStream)
+    
+    /**
+     ストリームからの除去時に呼ばれます。
+     
+     - parameter from: 除去されるストリーム
+     */
+    func onRemoved(from: MediaStream)
+    
+    /**
+     映像の可否の設定の変更時に呼ばれます。
+     
+     - parameter video: 映像の可否
+     */
+    func onSwitch(video: Bool)
+    
+    /**
+     音声の可否の設定の変更時に呼ばれます。
+     
+     - parameter audio: 音声の可否
+     */
+    func onSwitch(audio: Bool)
+    
 }
 
 class VideoRendererAdapter: NSObject, RTCVideoRenderer {
