@@ -10,7 +10,6 @@ public enum LogType {
     case connectionTimer
     case mediaChannel
     case mediaStream
-    case snapshot
     case cameraVideoCapturer
     case videoRenderer
     case videoView
@@ -39,8 +38,6 @@ extension LogType: CustomStringConvertible {
             return "MediaChannel"
         case .mediaStream:
             return "MediaStream"
-        case .snapshot:
-            return "Snapshot"
         case .cameraVideoCapturer:
             return "CameraVideoCapturer"
         case .videoRenderer:
@@ -253,8 +250,7 @@ public final class Logger {
                      .peerChannel,
                      .nativePeerChannel,
                      .mediaChannel,
-                     .mediaStream,
-                     .snapshot:
+                     .mediaStream:
                     out = true
                 default:
                     break

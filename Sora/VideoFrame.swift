@@ -7,7 +7,6 @@ import WebRTC
  現在の実装では次の映像フレームに対応しています。
  
  - ネイティブの映像フレーム (`RTCVideoFrame`)
- - スナップショット (`Snapshot`)
  - `CMSampleBuffer` (`RTCVideoFrame` に変換されます)
  
  */
@@ -19,9 +18,6 @@ public enum VideoFrame {
     /// `CMSampleBuffer` から生成した映像フレームは、ネイティブの映像フレームに変換されます。
     case native(capturer: RTCVideoCapturer?, frame: RTCVideoFrame)
     
-    /// スナップショット
-    case snapshot(Snapshot)
-    
     // MARK: - プロパティ
     
     /// 映像フレームの幅
@@ -30,8 +26,6 @@ public enum VideoFrame {
             switch self {
             case .native(capturer: _, frame: let frame):
                 return Int(frame.width)
-            case .snapshot(let snapshot):
-                return snapshot.image.width
             }
         }
     }
@@ -42,8 +36,6 @@ public enum VideoFrame {
             switch self {
             case .native(capturer: _, frame: let frame):
                 return Int(frame.height)
-            case .snapshot(let snapshot):
-                return snapshot.image.height
             }
         }
     }
@@ -54,8 +46,6 @@ public enum VideoFrame {
             switch self {
             case .native(capturer: _, frame: let frame):
                 return CMTimeMake(frame.timeStampNs, 1_000_000_000)
-            case .snapshot(_):
-                return nil // TODO
             }
         }
     }

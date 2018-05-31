@@ -18,7 +18,6 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var roleCell: UITableViewCell!
     @IBOutlet weak var roleLabel: UILabel!
     @IBOutlet weak var maxNumberOfSpeakersLabel: UILabel!
-    @IBOutlet weak var enableSnapshotLabel: UILabel!
     @IBOutlet weak var enableVideoLabel: UILabel!
     @IBOutlet weak var videoCodecLabel: UILabel!
     @IBOutlet weak var videoCodecCell: UITableViewCell!
@@ -40,7 +39,6 @@ class ConfigurationMainViewController: UITableViewController,
     @IBOutlet weak var channelIdTextField: UITextField!
     @IBOutlet weak var roleValueLabel: UILabel!
     @IBOutlet weak var maxNumberOfSpeakersTextField: UITextField!
-    @IBOutlet weak var enableSnapshotSwitch: UISwitch!
     @IBOutlet weak var enableVideoSwitch: UISwitch!
     @IBOutlet weak var videoCodecValueLabel: UILabel!
     @IBOutlet weak var bitRateValueLabel: UILabel!
@@ -206,20 +204,6 @@ class ConfigurationMainViewController: UITableViewController,
         enableAudioSwitch.setOn(configurationViewController?.audioEnabled ?? true,
                                 animated: true)
         
-        // snapshot
-        let snapshotEnabled = configurationViewController?.snapshotEnabled ?? false
-        enableSnapshotSwitch.setOn(snapshotEnabled, animated: true)
-        enableVideoLabel.setTextOn(!snapshotEnabled)
-        enableVideoSwitch.isEnabled = !snapshotEnabled
-        videoCodecLabel.setTextOn(!snapshotEnabled)
-        videoCodecCell.isUserInteractionEnabled = !snapshotEnabled
-        bitRateLabel.setTextOn(!snapshotEnabled)
-        bitRateCell.isUserInteractionEnabled = !snapshotEnabled
-        enableAudioLabel.setTextOn(!snapshotEnabled)
-        enableAudioSwitch.isEnabled = !snapshotEnabled
-        audioCodecLabel.setTextOn(!snapshotEnabled)
-        audioCodecCell.isUserInteractionEnabled = !snapshotEnabled
-
         switch configurationViewController?.videoCodec {
         case .default?, nil:
             videoCodecValueLabel.text = "未設定"
@@ -305,8 +289,6 @@ class ConfigurationMainViewController: UITableViewController,
         cameraFrameRateLabel.setTextOn(!flag)
         cameraFrameRateTextField.isUserInteractionEnabled = !flag
         cameraFrameRateCell.isUserInteractionEnabled = !flag
-        enableSnapshotLabel.setTextOn(!flag)
-        enableSnapshotSwitch.isUserInteractionEnabled = !flag
         enableAudioLabel.setTextOn(!flag)
         enableAudioSwitch.isUserInteractionEnabled = !flag
         audioCodecLabel.setTextOn(!flag)
@@ -365,11 +347,6 @@ class ConfigurationMainViewController: UITableViewController,
     
     @IBAction func audioEnabledValueChanged(_ sender: AnyObject) {
         configurationViewController?.audioEnabled = enableAudioSwitch.isOn
-        updateControls()
-    }
-    
-    @IBAction func snapshotEnabledValueChanged(_ sender: AnyObject) {
-        configurationViewController?.snapshotEnabled = enableSnapshotSwitch.isOn
         updateControls()
     }
     

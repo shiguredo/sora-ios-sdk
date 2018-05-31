@@ -30,9 +30,6 @@ public struct SignalingConnectMessage {
     /// 映像ビットレート
     public var videoBitRate: Int?
     
-    /// スナップショットの可否
-    public var snapshotEnabled: Bool
-    
     /// 音声の可否
     public var audioEnabled: Bool
     
@@ -101,20 +98,6 @@ public struct SignalingUpdateOfferMessage {
     
     /// SDP メッセージ
     public let sdp: String
-    
-}
-
-/**
- "snapshot" シグナリングメッセージを表します。
- スナップショットの画像データを含みます。
- */
-public struct SignalingSnapshotMessage {
-    
-    /// チャネル ID
-    public let channelId: String
-    
-    /// スナップショットの画像データ (WebP 画像を Base64 でエンコードした文字列)
-    public let webP: String
     
 }
 
@@ -206,9 +189,6 @@ public enum SignalingMessage {
     /// "update" シグナリングメッセージ
     case update(sdp: String)
     
-    /// "snapshot" シグナリングメッセージ
-    case snapshot(SignalingSnapshotMessage)
-    
     /// "notify" シグナリングメッセージ
     case notify(message: SignalingNotifyMessage)
     
@@ -273,7 +253,6 @@ extension SignalingConnectMessage: Codable {
     enum VideoCodingKeys: String, CodingKey {
         case codecType = "codec_type"
         case bitRate = "bit_rate"
-        case snapshot
     }
     
     enum AudioCodingKeys: String, CodingKey {
@@ -303,7 +282,7 @@ extension SignalingConnectMessage: Codable {
         }
      
         if videoEnabled {
-            if videoCodec != .default || videoBitRate != nil || snapshotEnabled {
+            if videoCodec != .default || videoBitRate != nil {
                 var videoContainer = container
                     .nestedContainer(keyedBy: VideoCodingKeys.self,
                                      forKey: .video)
@@ -312,9 +291,6 @@ extension SignalingConnectMessage: Codable {
                 }
                 if let bitRate = videoBitRate {
                     try videoContainer.encode(bitRate, forKey: .bitRate)
-                }
-                if snapshotEnabled {
-                    try videoContainer.encode(true, forKey: .snapshot)
                 }
             }
         } else {
@@ -411,26 +387,6 @@ extension SignalingUpdateOfferMessage: Codable {
 }
 
 /// :nodoc:
-extension SignalingSnapshotMessage: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case channelId = "channel_id"
-        case webP = "base64ed_webp"
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        channelId = try container.decode(String.self, forKey: .channelId)
-        webP = try container.decode(String.self, forKey: .webP)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
-    }
-    
-}
-
-/// :nodoc:
 extension SignalingNotifyMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -506,7 +462,6 @@ extension SignalingMessage: Codable {
         case offer
         case answer
         case update
-        case snapshot
         case candidate
         case notify
         case ping
@@ -528,8 +483,6 @@ extension SignalingMessage: Codable {
         case "update":
             let update = try SignalingUpdateOfferMessage(from: decoder)
             self = .update(sdp: update.sdp)
-        case "snapshot":
-            self = .snapshot(try SignalingSnapshotMessage(from: decoder))
         case "notify":
             self = .notify(message: try SignalingNotifyMessage(from: decoder))
         case "ping":
@@ -557,8 +510,6 @@ extension SignalingMessage: Codable {
         case .update(sdp: let sdp):
             try container.encode(MessageType.update.rawValue, forKey: .type)
             try container.encode(sdp, forKey: .sdp)
-        case .snapshot(_):
-            fatalError("not supported encoding 'snapshot'")
         case .notify(message: _):
             fatalError("not supported encoding 'notify'")
         case .ping:

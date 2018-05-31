@@ -167,9 +167,6 @@ public final class PeerChannelHandlers {
     /// 更新により、ストリームの追加または除去が行われます。
     public var onUpdateHandler: ((String) -> Void)?
     
-    /// スナップショットの受信時に呼ばれるブロック
-    public var onSnapshotHandler: ((Snapshot) -> Void)?
-    
     /// イベント通知の受信時に呼ばれるブロック
     public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
     
@@ -456,32 +453,21 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             multistream = true
         }
         
-        // スナップショットの制限
-        var config = configuration
-        if config.snapshotEnabled {
-            Logger.debug(type: .peerChannel,
-                         message: "limits configuration to snapshot")
-            config.videoEnabled = true
-            config.videoCodec = .vp8
-            config.audioEnabled = true
-        }
-
         let connect =
             SignalingConnectMessage(role: role,
-                                    channelId: config.channelId,
-                                    metadata: config.metadata,
+                                    channelId: configuration.channelId,
+                                    metadata: configuration.metadata,
                                     sdp: sdp,
                                     multistreamEnabled: multistream,
-                                    videoEnabled: config.videoEnabled,
-                                    videoCodec: config.videoCodec,
-                                    videoBitRate: config.videoBitRate,
-                                    snapshotEnabled: config.snapshotEnabled,
+                                    videoEnabled: configuration.videoEnabled,
+                                    videoCodec: configuration.videoCodec,
+                                    videoBitRate: configuration.videoBitRate,
                                     // WARN: video only では answer 生成に失敗するため、
                                     // 音声トラックを使用しない方法で回避する
                                     // audioEnabled: config.audioEnabled,
                                     audioEnabled: true,
-                                    audioCodec: config.audioCodec,
-                                    maxNumberOfSpeakers: config.maxNumberOfSpeakers)
+                                    audioCodec: configuration.audioCodec,
+                                    maxNumberOfSpeakers: configuration.maxNumberOfSpeakers)
         let message = SignalingMessage.connect(message: connect)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: message)
@@ -621,35 +607,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     configuration.role == .groupSub else { return }
                 Logger.debug(type: .peerChannel, message: "receive update")
                 createAndSendUpdateAnswerMessage(forOffer: sdp)
-                
-            case .snapshot(let snapshot):
-                guard configuration.snapshotEnabled &&
-                    configuration.channelId == snapshot.channelId else {
-                        return
-                }
-                Logger.debug(type: .peerChannel, message: "receive snapshot")
-                
-                guard let data = Data(base64Encoded: snapshot.webP) else {
-                    Logger.debug(type: .peerChannel,
-                                 message: "snapshot: invalid Base64 format")
-                    return
-                }
-                guard let image = UIImage.sd_image(with: data) else {
-                    Logger.debug(type: .peerChannel,
-                                 message: "snapshot: invalid WebP format")
-                    return
-                }
-                guard let cgImage = image.cgImage else {
-                    Logger.debug(type: .peerChannel,
-                                 message: "snapshot: failed to convert UIImage to CGImage")
-                    return
-                }
-                
-                Logger.debug(type: .peerChannel, message: "call onSnapshotHandler")
-                let snapshot = Snapshot(image: cgImage, timestamp: Date())
-                channel.internalHandlers.onSnapshotHandler?(snapshot)
-                channel.handlers.onSnapshotHandler?(snapshot)
-                
+
             case .notify(message: let message):
                 Logger.debug(type: .peerChannel, message: "receive notify")
                 Logger.debug(type: .peerChannel, message: "call onNotifyHandler")
