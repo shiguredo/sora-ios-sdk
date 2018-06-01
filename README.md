@@ -24,11 +24,11 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 
 - iOS 10.0 以降
 - アーキテクチャ arm64, armv7 (シミュレーターは非対応)
-- macOS 10.13.2 以降
-- Xcode 9.3
+- macOS 10.13.4 以降
+- Xcode 9.4
 - Swift 4.1
-- Carthage 0.29.0 以降、または CocoaPods 1.4.0 以降
-- WebRTC SFU Sora 18.04 以降
+- Carthage 0.29.0 以降、または CocoaPods 1.5.2 以降
+- WebRTC SFU Sora 18.04.2 以降
 
 Xcode と Swift のバージョンによっては、 Carthage と CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
