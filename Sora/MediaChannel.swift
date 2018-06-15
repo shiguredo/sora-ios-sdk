@@ -181,31 +181,38 @@ public final class MediaChannel {
      */
     func connect(webRTCConfiguration: WebRTCConfiguration,
                  timeout: Int = Configuration.defaultConnectionTimeout,
-                 handler: @escaping (_ error: Error?) -> Void) {
+                 handler: @escaping (_ error: Error?) -> Void) -> ConnectionTask {
+        let task = ConnectionTask()
         if state.isConnecting {
             handler(SoraError.connectionBusy(reason:
                 "MediaChannel is already connected"))
-            return
+            task.complete()
+            return task
         }
         
         DispatchQueue.global().async {
-            self.basicConnect(webRTCConfiguration: webRTCConfiguration,
+            self.basicConnect(connectionTask: task,
+                              webRTCConfiguration: webRTCConfiguration,
                               timeout: timeout,
                               handler: handler)
         }
+        return task
     }
     
-    private func basicConnect(webRTCConfiguration: WebRTCConfiguration,
+    private func basicConnect(connectionTask: ConnectionTask,
+                              webRTCConfiguration: WebRTCConfiguration,
                               timeout: Int,
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
         connectionStartTime = nil
+        connectionTask.peerChannel = peerChannel
 
         peerChannel.internalHandlers.onDisconnectHandler = { error in
             if self.state == .connecting || self.state == .connected {
                 self.disconnect(error: error)
             }
+            connectionTask.complete()
         }
         
         peerChannel.internalHandlers.onAddStreamHandler = { stream in
@@ -234,7 +241,8 @@ public final class MediaChannel {
         
         peerChannel.connect() { error in
             self.connectionTimer.stop()
-
+            connectionTask.complete()
+            
             if let error = error {
                 Logger.error(type: .mediaChannel, message: "failed to connect")
                 self.disconnect(error: error)
