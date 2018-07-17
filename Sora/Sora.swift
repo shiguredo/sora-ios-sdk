@@ -103,18 +103,22 @@ public final class Sora {
     // MARK: - メディアチャネルの管理
     
     func add(mediaChannel: MediaChannel) {
-        if !mediaChannels.contains(mediaChannel) {
-            Logger.debug(type: .sora, message: "add media channel")
-            mediaChannels.append(mediaChannel)
-            handlers.onAddMediaChannelHandler?(mediaChannel)
+        DispatchQueue.global().sync {
+            if !mediaChannels.contains(mediaChannel) {
+                Logger.debug(type: .sora, message: "add media channel")
+                mediaChannels.append(mediaChannel)
+                handlers.onAddMediaChannelHandler?(mediaChannel)
+            }
         }
     }
     
     func remove(mediaChannel: MediaChannel) {
-        if mediaChannels.contains(mediaChannel) {
-            Logger.debug(type: .sora, message: "remove media channel")
-            mediaChannels.remove(mediaChannel)
-            handlers.onAddMediaChannelHandler?(mediaChannel)
+        DispatchQueue.global().sync {
+            if mediaChannels.contains(mediaChannel) {
+                Logger.debug(type: .sora, message: "remove media channel")
+                mediaChannels.remove(mediaChannel)
+                handlers.onAddMediaChannelHandler?(mediaChannel)
+            }
         }
     }
     
