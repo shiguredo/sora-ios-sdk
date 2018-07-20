@@ -672,7 +672,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
             channel.terminateAllStreams()
             nativeChannel.close()
+            
+            signalingChannel.send(message: SignalingMessage.disconnect)
             signalingChannel.disconnect(error: error)
+            
             state = .disconnected
             
             Logger.debug(type: .peerChannel, message: "call onDisconnectHandler")

@@ -24,7 +24,7 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 
 - iOS 10.0 以降
 - アーキテクチャ arm64, armv7 (シミュレーターは非対応)
-- macOS 10.13.4 以降
+- macOS 10.13.6 以降
 - Xcode 9.4
 - Swift 4.1
 - Carthage 0.29.0 以降、または CocoaPods 1.5.2 以降
