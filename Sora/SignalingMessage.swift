@@ -187,6 +187,14 @@ public enum SignalingMessage {
     /// "pong" シグナリングメッセージ
     case pong
     
+    
+    /**
+     "disconnect" シグナリングメッセージ。
+     このメッセージは接続を解除する際にサーバーに送信されます。
+     このメッセージの送信後は、サーバーからの応答はありません。
+     */
+    case disconnect
+    
 }
 
 // MARK: -
@@ -430,6 +438,7 @@ extension SignalingMessage: Codable {
         case notify
         case ping
         case pong
+        case disconnect
     }
     
     enum CodingKeys: String, CodingKey {
@@ -484,6 +493,8 @@ extension SignalingMessage: Codable {
             fatalError("not supported encoding 'ping'")
         case .pong:
             try container.encode(MessageType.pong.rawValue, forKey: .type)
+        case .disconnect:
+            try container.encode(MessageType.disconnect.rawValue, forKey: .type)
         }
     }
     
