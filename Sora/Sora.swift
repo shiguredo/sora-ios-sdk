@@ -136,10 +136,10 @@ public final class Sora {
     public func connect(configuration: Configuration,
                         webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
                         handler: @escaping (_ mediaChannel: MediaChannel?,
-        _ error: Error?) -> Void) {
+        _ error: Error?) -> Void) -> ConnectionTask {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
-        mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
+        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
             if let error = error {
                 handler(nil, error)
                 self.handlers.onConnectHandler?(nil, error)
@@ -243,6 +243,38 @@ public final class Sora {
         session.lockForConfiguration()
         block()
         session.unlockForConfiguration()
+    }
+    
+}
+
+public final class ConnectionTask {
+    
+    public enum State {
+        case connecting
+        case completed
+    }
+    
+    weak var peerChannel: PeerChannel?
+    
+    public private(set) var state: State
+    
+    init() {
+        state = .connecting
+    }
+    
+    public func cancel() {
+        if state == .connecting {
+            Logger.debug(type: .mediaChannel, message: "connection task cancelled")
+            peerChannel?.disconnect(error: nil)
+            state = .completed
+        }
+    }
+    
+    func complete() {
+        if state != .completed {
+            Logger.debug(type: .mediaChannel, message: "connection task completed")
+            state = .completed
+        }
     }
     
 }
