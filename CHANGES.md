@@ -9,6 +9,18 @@
 - FIX
     - バグ修正
 
+## 2.2.0
+
+### CHANGE
+
+- Xcode 10.0 に対応した
+
+- Swift 4.2 に対応した
+
+- API: ``ConnectionTask``: 追加した
+
+- API: ``Sora``: ``connect(configuration:webRTCConfiguration:handler:)``: 実行中に接続の試行をキャンセル可能にした
+
 ## 2.1.3
 
 ### CHANGE
