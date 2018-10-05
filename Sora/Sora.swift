@@ -252,6 +252,7 @@ public final class ConnectionTask {
     public enum State {
         case connecting
         case completed
+        case canceled
     }
     
     weak var peerChannel: PeerChannel?
@@ -265,8 +266,8 @@ public final class ConnectionTask {
     public func cancel() {
         if state == .connecting {
             Logger.debug(type: .mediaChannel, message: "connection task cancelled")
-            peerChannel?.disconnect(error: nil)
-            state = .completed
+            peerChannel?.disconnect(error: SoraError.connectionCancelled)
+            state = .canceled
         }
     }
     
