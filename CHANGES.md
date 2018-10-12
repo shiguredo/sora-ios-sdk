@@ -13,9 +13,13 @@
 
 ### CHANGE
 
-- Xcode 10.0 に対応した
+- システム条件を更新した
 
-- Swift 4.2 に対応した
+  - iOS 12.0
+
+  - Xcode 10.0
+
+  - Swift 4.2
 
 - API: ``ConnectionTask``: 追加した
 
