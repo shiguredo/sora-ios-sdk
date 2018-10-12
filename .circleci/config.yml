@@ -1,0 +1,33 @@
+version: 2
+jobs:
+  build:
+    macos:
+      xcode: "10.0"
+    steps:
+      - checkout
+      - run:
+          name: Install Carthage
+          command: carthage update --platform iOS
+
+      - run:
+          name: Build
+          command: |
+            set -o pipefail && \
+            xcodebuild \
+              -project 'Sora.xcodeproj' \
+              -scheme 'Sora' \
+              clean build \
+              -sdk iphoneos \
+              -destination 'generic/platform=iOS' \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY= \
+              PROVISIONING_PROFILE= | \
+            tee $CIRCLE_ARTIFACTS/xcode_raw.log | \
+            xcpretty --color --report junit --output $CIRCLE_TEST_REPORTS/xcode/results.xml
+
+workflows:
+  version: 2
+  build-and-test:
+    jobs:
+      - build
+
