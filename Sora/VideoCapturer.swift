@@ -23,7 +23,7 @@ public final class VideoCapturerHandlers {
 public protocol VideoCapturer: class {
     
     /// 映像フレームを渡すストリーム
-    weak var stream: MediaStream? { get set }
+    var stream: MediaStream? { get set }
     
     /// イベントハンドラ
     var handlers: VideoCapturerHandlers { get }

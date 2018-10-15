@@ -132,14 +132,15 @@ public final class Sora {
      - parameter handler: 接続試行後に呼ばれるブロック。
      - parameter mediaChannel: (接続成功時のみ) メディアチャネル
      - parameter error: (接続失敗時のみ) エラー
+     - returns: 接続試行中の状態
      */
     public func connect(configuration: Configuration,
                         webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
                         handler: @escaping (_ mediaChannel: MediaChannel?,
-        _ error: Error?) -> Void) {
+        _ error: Error?) -> Void) -> ConnectionTask {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
-        mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
+        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
             if let error = error {
                 handler(nil, error)
                 self.handlers.onConnectHandler?(nil, error)
@@ -243,6 +244,57 @@ public final class Sora {
         session.lockForConfiguration()
         block()
         session.unlockForConfiguration()
+    }
+    
+}
+
+/**
+ サーバーへの接続試行中の状態を表します。
+ `cancel()` で接続をキャンセル可能です。
+ */
+public final class ConnectionTask {
+    
+    /**
+     接続状態を表します。
+     */
+    public enum State {
+        
+        /// 接続試行中
+        case connecting
+        
+        /// 接続済み
+        case completed
+        
+        /// キャンセル済み
+        case canceled
+    }
+    
+    weak var peerChannel: PeerChannel?
+    
+    /// 接続状態
+    public private(set) var state: State
+    
+    init() {
+        state = .connecting
+    }
+    
+    /**
+     * 接続試行をキャンセルします。
+     * すでに接続済みであれば何もしません。
+     */
+    public func cancel() {
+        if state == .connecting {
+            Logger.debug(type: .mediaChannel, message: "connection task cancelled")
+            peerChannel?.disconnect(error: SoraError.connectionCancelled)
+            state = .canceled
+        }
+    }
+    
+    func complete() {
+        if state != .completed {
+            Logger.debug(type: .mediaChannel, message: "connection task completed")
+            state = .completed
+        }
     }
     
 }

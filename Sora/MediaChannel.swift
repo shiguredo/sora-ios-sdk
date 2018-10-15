@@ -19,7 +19,7 @@ public final class MediaChannelHandlers {
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     
     /// サーバーからのイベント通知の受信時に呼ばれるハンドラ
-    public var onNotificationEventHandler: ((NotificationEvent) -> Void)?
+    public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
     
 }
 
@@ -181,31 +181,38 @@ public final class MediaChannel {
      */
     func connect(webRTCConfiguration: WebRTCConfiguration,
                  timeout: Int = Configuration.defaultConnectionTimeout,
-                 handler: @escaping (_ error: Error?) -> Void) {
+                 handler: @escaping (_ error: Error?) -> Void) -> ConnectionTask {
+        let task = ConnectionTask()
         if state.isConnecting {
             handler(SoraError.connectionBusy(reason:
                 "MediaChannel is already connected"))
-            return
+            task.complete()
+            return task
         }
         
         DispatchQueue.global().async {
-            self.basicConnect(webRTCConfiguration: webRTCConfiguration,
+            self.basicConnect(connectionTask: task,
+                              webRTCConfiguration: webRTCConfiguration,
                               timeout: timeout,
                               handler: handler)
         }
+        return task
     }
     
-    private func basicConnect(webRTCConfiguration: WebRTCConfiguration,
+    private func basicConnect(connectionTask: ConnectionTask,
+                              webRTCConfiguration: WebRTCConfiguration,
                               timeout: Int,
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         state = .connecting
         connectionStartTime = nil
+        connectionTask.peerChannel = peerChannel
 
         peerChannel.internalHandlers.onDisconnectHandler = { error in
             if self.state == .connecting || self.state == .connected {
                 self.disconnect(error: error)
             }
+            connectionTask.complete()
         }
         
         peerChannel.internalHandlers.onAddStreamHandler = { stream in
@@ -227,22 +234,15 @@ public final class MediaChannel {
             self.publisherCount = message.publisherCount
             self.subscriberCount = message.subscriberCount
             
-            Logger.debug(type: .mediaChannel, message: "call onNotificationEventHandler")
-            let event = NotificationEvent(message: message)
-            self.internalHandlers.onNotificationEventHandler?(event)
-            self.handlers.onNotificationEventHandler?(event)
-        }
-        
-        peerChannel.internalHandlers.onSnapshotHandler = { snapshot in
-            Logger.debug(type: .mediaStream, message: "receive snapshot")
-            if let stream = self.mainStream {
-                stream.send(videoFrame: VideoFrame.snapshot(snapshot))
-            }
+            Logger.debug(type: .mediaChannel, message: "call onNotifyHandler")
+            self.internalHandlers.onNotifyHandler?(message)
+            self.handlers.onNotifyHandler?(message)
         }
         
         peerChannel.connect() { error in
             self.connectionTimer.stop()
-
+            connectionTask.complete()
+            
             if let error = error {
                 Logger.error(type: .mediaChannel, message: "failed to connect")
                 self.disconnect(error: error)

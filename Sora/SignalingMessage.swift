@@ -30,9 +30,6 @@ public struct SignalingConnectMessage {
     /// 映像ビットレート
     public var videoBitRate: Int?
     
-    /// スナップショットの可否
-    public var snapshotEnabled: Bool
-    
     /// 音声の可否
     public var audioEnabled: Bool
     
@@ -105,42 +102,59 @@ public struct SignalingUpdateOfferMessage {
 }
 
 /**
- "snapshot" シグナリングメッセージを表します。
- スナップショットの画像データを含みます。
- */
-public struct SignalingSnapshotMessage {
-    
-    /// チャネル ID
-    public let channelId: String
-    
-    /// スナップショットの画像データ (WebP 画像を Base64 でエンコードした文字列)
-    public let webP: String
-    
-}
-
-/**
  "notify" シグナリングメッセージを表します。
  このメッセージはピア接続の確立後、定期的にサーバーから送信されます。
  */
 public struct SignalingNotifyMessage {
     
+    // MARK: イベント情報
+    
     /// イベントの種別
     public let eventType: SignalingNotificationEventType
     
+    // MARK: 接続情報
+    
     /// ロール
-    public let role: SignalingRole
+    public let role: SignalingRole?
+    
+    /// チャネル ID
+    public let channelId: String?
+    
+    /// クライアント ID
+    public let clientId: String?
+    
+    /// 音声の可否
+    public let audioEnabled: Bool?
+    
+    /// 映像の可否
+    public let videoEnabled: Bool?
+    
+    // MARK: 統計情報
     
     /// 接続時間
-    public let connectionTime: Int
+    public let connectionTime: Int?
     
     /// 接続中のクライアントの数
-    public let connectionCount: Int
+    public let connectionCount: Int?
     
     /// 接続中のパブリッシャーの数
-    public let publisherCount: Int
+    public let publisherCount: Int?
     
     /// 接続中のサブスクライバーの数
-    public let subscriberCount: Int
+    public let subscriberCount: Int?
+    
+    // MARK: スポットライト機能
+    
+    /// スポットライト ID
+    public let spotlightId: String?
+    
+    /// 固定の有無
+    public let isFixed: Bool?
+    
+    // MARK: メタデータ
+    
+    /// メタデータ
+    public private(set) var metadata: [Any]?
     
 }
 
@@ -175,9 +189,6 @@ public enum SignalingMessage {
     /// "update" シグナリングメッセージ
     case update(sdp: String)
     
-    /// "snapshot" シグナリングメッセージ
-    case snapshot(SignalingSnapshotMessage)
-    
     /// "notify" シグナリングメッセージ
     case notify(message: SignalingNotifyMessage)
     
@@ -187,13 +198,24 @@ public enum SignalingMessage {
     /// "pong" シグナリングメッセージ
     case pong
     
-    
     /**
      "disconnect" シグナリングメッセージ。
      このメッセージは接続を解除する際にサーバーに送信されます。
      このメッセージの送信後は、サーバーからの応答はありません。
      */
     case disconnect
+    
+    static func decode(from data: Data) throws -> SignalingMessage {
+        let decoder = JSONDecoder()
+        let msg = try decoder.decode(SignalingMessage.self, from: data)
+        switch msg {
+        case .notify(message: var notify):
+            notify.parseMetadata(from: data)
+        default:
+            break
+        }
+        return msg
+    }
     
 }
 
@@ -238,7 +260,6 @@ extension SignalingConnectMessage: Codable {
     enum VideoCodingKeys: String, CodingKey {
         case codecType = "codec_type"
         case bitRate = "bit_rate"
-        case snapshot
     }
     
     enum AudioCodingKeys: String, CodingKey {
@@ -268,7 +289,7 @@ extension SignalingConnectMessage: Codable {
         }
      
         if videoEnabled {
-            if videoCodec != .default || videoBitRate != nil || snapshotEnabled {
+            if videoCodec != .default || videoBitRate != nil {
                 var videoContainer = container
                     .nestedContainer(keyedBy: VideoCodingKeys.self,
                                      forKey: .video)
@@ -277,9 +298,6 @@ extension SignalingConnectMessage: Codable {
                 }
                 if let bitRate = videoBitRate {
                     try videoContainer.encode(bitRate, forKey: .bitRate)
-                }
-                if snapshotEnabled {
-                    try videoContainer.encode(true, forKey: .snapshot)
                 }
             }
         } else {
@@ -376,47 +394,65 @@ extension SignalingUpdateOfferMessage: Codable {
 }
 
 /// :nodoc:
-extension SignalingSnapshotMessage: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case channelId = "channel_id"
-        case webP = "base64ed_webp"
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        channelId = try container.decode(String.self, forKey: .channelId)
-        webP = try container.decode(String.self, forKey: .webP)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
-    }
-    
-}
-
-/// :nodoc:
 extension SignalingNotifyMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
         case eventType = "event_type"
-        case role
+        case role = "role"
         case connectionTime = "minutes"
         case connectionCount = "channel_connections"
         case publisherCount = "channel_upstream_connections"
         case subscriberCount = "channel_downstream_connections"
+        case channelId = "channel_id"
+        case clientId = "client_id"
+        case spotlightId = "spotlight_id"
+        case audio = "audio"
+        case video = "video"
+        case fixed = "fixed"
+        case metadata = "metadata"
+        case metadataList = "metadata_list"
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         eventType = SignalingNotificationEventType(rawValue:
             try container.decode(String.self, forKey: .eventType))!
-        role = SignalingRole(rawValue:
-            try container.decode(String.self, forKey: .role))!
-        connectionTime = try container.decode(Int.self, forKey: .connectionTime)
-        connectionCount = try container.decode(Int.self, forKey: .connectionCount)
-        publisherCount = try container.decode(Int.self, forKey: .publisherCount)
-        subscriberCount = try container.decode(Int.self, forKey: .subscriberCount)
+        
+        if let raw = try container.decodeIfPresent(String.self, forKey: .role) {
+            role = SignalingRole(rawValue: raw)
+        } else {
+            role = nil
+        }
+        
+        connectionTime = try container.decodeIfPresent(Int.self, forKey: .connectionTime)
+        connectionCount = try container.decodeIfPresent(Int.self, forKey: .connectionCount)
+        publisherCount = try container.decodeIfPresent(Int.self, forKey: .publisherCount)
+        subscriberCount = try container.decodeIfPresent(Int.self, forKey: .subscriberCount)
+        channelId = try container.decodeIfPresent(String.self, forKey: .channelId)
+        clientId = try container.decodeIfPresent(String.self, forKey: .clientId)
+        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
+        videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
+        spotlightId = try container.decodeIfPresent(String.self, forKey: .spotlightId)
+        isFixed = try container.decodeIfPresent(Bool.self, forKey: .fixed)
+        
+        // metadata には任意のデータが入るため、 Decoder ではデコードできない
+    }
+    
+    mutating func parseMetadata(from data: Data) {
+        do {
+            let json = try JSONSerialization.jsonObject(with: data, options: [])
+            if let msg = json as? [String: Any] {
+                if let metadata =
+                    msg[SignalingNotifyMessage.CodingKeys.metadata.rawValue] {
+                    self.metadata = [metadata]
+                } else if let metadataList =
+                    msg[SignalingNotifyMessage.CodingKeys.metadataList.rawValue] {
+                    self.metadata = metadataList as? [Any]
+                }
+            }
+        } catch {
+            // 何もしない
+        }
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -433,7 +469,6 @@ extension SignalingMessage: Codable {
         case offer
         case answer
         case update
-        case snapshot
         case candidate
         case notify
         case ping
@@ -456,8 +491,6 @@ extension SignalingMessage: Codable {
         case "update":
             let update = try SignalingUpdateOfferMessage(from: decoder)
             self = .update(sdp: update.sdp)
-        case "snapshot":
-            self = .snapshot(try SignalingSnapshotMessage(from: decoder))
         case "notify":
             self = .notify(message: try SignalingNotifyMessage(from: decoder))
         case "ping":
@@ -485,8 +518,6 @@ extension SignalingMessage: Codable {
         case .update(sdp: let sdp):
             try container.encode(MessageType.update.rawValue, forKey: .type)
             try container.encode(sdp, forKey: .sdp)
-        case .snapshot(_):
-            fatalError("not supported encoding 'snapshot'")
         case .notify(message: _):
             fatalError("not supported encoding 'notify'")
         case .ping:

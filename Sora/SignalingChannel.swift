@@ -240,10 +240,9 @@ class BasicSignalingChannel: SignalingChannel {
                 return
             }
             
-            let decoder = JSONDecoder()
-            var sigMessage: SignalingMessage?
+            var sigMessage: SignalingMessage!
             do {
-                sigMessage = try decoder.decode(SignalingMessage.self, from: data)
+                sigMessage = try SignalingMessage.decode(from: data)
             } catch let error {
                 Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription))")

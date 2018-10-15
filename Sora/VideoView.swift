@@ -2,6 +2,22 @@ import UIKit
 import WebRTC
 
 /**
+ VideoView における、映像ソースの停止時の処理を表します。
+ */
+public enum VideoViewConnectionMode {
+    
+    /// サーバー及びストリームとの接続解除時に描画処理を停止します。
+    case auto
+    
+    /// サーバー及びストリームとの接続解除時に描画処理を停止し、 ``clear()`` を実行します。
+    case autoClear
+    
+    /// サーバー及びストリームと接続が解除されても描画処理を停止しません。
+    case manual
+    
+}
+
+/**
  VideoRenderer プロトコルのデフォルト実装となる UIView です。
  
  MediaStream.videoRenderer にセットすることで、その MediaStream
@@ -75,7 +91,37 @@ public class VideoView: UIView {
         contentView.frame = self.bounds
     }
     
-    // MARK: - 映像フレーム
+    // MARK: - 映像の描画
+    
+    /// 映像ソース停止時の処理
+    public var connectionMode: VideoViewConnectionMode = .autoClear
+    
+    /// 描画処理の実行中であれば ``true``
+    public private(set) var isRendering: Bool = false
+    
+    /// 描画停止時に ``clear()`` を実行すると表示されるビュー
+    public var backgroundView: UIView? {
+        didSet {
+            if let view = oldValue {
+                view.removeFromSuperview()
+            }
+            if let view = backgroundView {
+                addSubview(view)
+            }
+        }
+    }
+    
+    // backgroundView の未設定時、 clear() を実行すると表示される黒画面のビュー
+    private lazy var defaultBackgroundView: UIView = {
+        let view = UIView(frame: CGRect(x: 0,
+                                        y: 0,
+                                        width: self.frame.width,
+                                        height: self.frame.height))
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.backgroundColor = UIColor.black
+        self.addSubview(view)
+        return view
+    }()
     
     /**
      現在 VideoView が表示している映像の元々のフレームサイズを返します。
@@ -99,13 +145,50 @@ public class VideoView: UIView {
         return contentView.currentVideoFrameSize
     }
     
+    /**
+     画面を ``backgroundView`` のビューに切り替えます。
+     ``backgroundView`` が指定されていなければ画面を黒で塗り潰します。
+     このメソッドは描画停止時のみ有効です。
+     */
+    public func clear() {
+        if !isRendering {
+            DispatchQueue.main.async {
+                if let bgView = self.backgroundView {
+                    self.bringSubview(toFront: bgView)
+                } else {
+                    self.bringSubview(toFront: self.defaultBackgroundView)
+                }
+            }
+        }
+    }
+    
+    /**
+     映像フレームの描画を開始します。
+     */
+    public func start() {
+        if !isRendering {
+            DispatchQueue.main.async {
+                self.bringSubview(toFront: self.contentView)
+                self.isRendering = true
+            }
+        }
+    }
+    
+    /**
+     映像フレームの描画を停止します。
+     描画の停止中は ``render(videoFrame:)`` が実行されません。
+     */
+    public func stop() {
+        self.isRendering = false
+    }
+    
 }
 
 // MARK: - VideoRenderer
 
 /// :nodoc:
 extension VideoView: VideoRenderer {
-    
+
     /// :nodoc:
     public func onChange(size: CGSize) {
         contentView.onVideoFrameSizeUpdated(size)
@@ -113,7 +196,46 @@ extension VideoView: VideoRenderer {
     
     /// :nodoc:
     public func render(videoFrame: VideoFrame?) {
-        contentView.render(videoFrame: videoFrame)
+        if isRendering {
+            contentView.render(videoFrame: videoFrame)
+        }
+    }
+    
+    private func autoStop() {
+        switch connectionMode {
+        case .auto:
+            stop()
+        case .autoClear:
+            stop()
+            clear()
+        case .manual:
+            break
+        }
+    }
+    
+    public func onDisconnect(from: PeerChannel) {
+        autoStop()
+    }
+    
+    public func onAdded(from: MediaStream) {
+        switch connectionMode {
+        case .auto, .autoClear:
+            start()
+        case .manual:
+            break
+        }
+    }
+    
+    public func onRemoved(from: MediaStream) {
+        autoStop()
+    }
+    
+    public func onSwitch(video: Bool) {
+        autoStop()
+    }
+    
+    public func onSwitch(audio: Bool) {
+        // 何もしない
     }
     
 }
@@ -123,7 +245,6 @@ extension VideoView: VideoRenderer {
 class VideoViewContentView: UIView {
     
     @IBOutlet private weak var nativeVideoView: RTCEAGLVideoView!
-    @IBOutlet private weak var snapshotView: UIImageView!
     
     fileprivate var currentVideoFrameSize: CGSize?
     private var videoFrameSizeToChange: CGSize?
@@ -178,17 +299,8 @@ class VideoViewContentView: UIView {
         if let frame = videoFrame {
             switch frame {
             case .native(capturer: _, frame: let frame):
-                snapshotView.isHidden = true
                 nativeVideoView.isHidden = false
                 nativeVideoView.renderFrame(frame)
-            case .snapshot(let snapshot):
-                // snapshot は WebRTC.framework の仕組みを使用しないで描画しており、
-                // snapshotView のレイアウトも AutoLayoutによって実施されている。
-                // ここでは描画モードの指定を忘れず行う。
-                snapshotView.isHidden = false
-                nativeVideoView.isHidden = true
-                snapshotView.contentMode = renderingContentMode
-                snapshotView.image = UIImage(cgImage: snapshot.image)
             }
         } else {
             nativeVideoView.renderFrame(nil)

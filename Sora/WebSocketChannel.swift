@@ -364,7 +364,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     
     func webSocket(_ webSocket: SRWebSocket!, didReceiveMessage message: Any!) {
         Logger.debug(type: .webSocketChannel, message: "receive message")
-        Logger.debug(type: .webSocketChannel, message: "\(message)")
+        Logger.debug(type: .webSocketChannel, message: "\(message!)")
         var newMessage: WebSocketMessage?
         if let text = message as? String {
             newMessage = .text(text)
@@ -384,7 +384,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     
     func webSocket(_ webSocket: SRWebSocket!, didReceivePong pongPayload: Data!) {
         Logger.debug(type: .webSocketChannel, message: "receive poing payload")
-        Logger.debug(type: .webSocketChannel, message: "\(pongPayload)")
+        Logger.debug(type: .webSocketChannel, message: "\(pongPayload!)")
         Logger.debug(type: .webSocketChannel, message: "call onPongHandler")
         channel.internalHandlers.onPongHandler?(pongPayload)
         channel.handlers.onPongHandler?(pongPayload)

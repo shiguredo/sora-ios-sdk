@@ -5,6 +5,9 @@ import Foundation
  */
 public enum SoraError: Error {
     
+    /// 接続試行中に処理がキャンセルされたことを示します。
+    case connectionCancelled
+    
     /// 接続タイムアウト。
     /// 接続試行開始から一定時間内に接続できなかったことを示します。
     case connectionTimeout
@@ -35,6 +38,8 @@ extension SoraError: LocalizedError {
     public var errorDescription: String? {
         get {
             switch self {
+            case .connectionCancelled:
+                return "Connection is cancelled"
             case .connectionTimeout:
                 return "Connection is timeout"
             case .connectionBusy(reason: let reason):
