@@ -3,6 +3,7 @@ jobs:
   build:
     macos:
       xcode: "10.0.0"
+    working_directory: ~/sora-ios-sdk
     steps:
       - checkout
       - run:
