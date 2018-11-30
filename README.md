@@ -28,7 +28,7 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 - Xcode 10.0
 - Swift 4.2
 - Carthage 0.29.0 以降、または CocoaPods 1.5.2 以降
-- WebRTC SFU Sora 18.04.2 以降
+- WebRTC SFU Sora 18.10.0 以降
 
 Xcode と Swift のバージョンによっては、 Carthage と CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
