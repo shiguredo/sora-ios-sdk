@@ -226,6 +226,7 @@ public enum SignalingMessage {
         switch msg {
         case .notify(message: var notify):
             notify.parseMetadata(from: data)
+            msg = .notify(message: notify)
         case .push(message: var push):
             push.parseData(from: data)
             msg = .push(message: push)
