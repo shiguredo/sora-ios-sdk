@@ -17,6 +17,8 @@
 
   - macOS 10.14 以降
 
+  - iOS 10.0
+
   - Xcode 10.1
 
   - Swift 4.2.1
