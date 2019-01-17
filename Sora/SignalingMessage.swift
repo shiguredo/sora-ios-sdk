@@ -167,6 +167,18 @@ public struct SignalingNotifyMessage {
  */
 public struct SignalingPongMessage {}
 
+/**
+ "push" シグナリングメッセージを表します。
+ このメッセージは Sora のプッシュ API を使用して送信されたデータです。
+ */
+public struct SignalingPushMessage {
+    
+    /// プッシュ通知で送信される JSON データ。
+    /// 無効な JSON データであれば nil になります。
+    public private(set) var data: Any?
+
+}
+
 // MARK: -
 
 /**
@@ -205,12 +217,18 @@ public enum SignalingMessage {
      */
     case disconnect
     
+    /// "push" シグナリングメッセージ
+    case push(message: SignalingPushMessage)
+    
     static func decode(from data: Data) throws -> SignalingMessage {
         let decoder = JSONDecoder()
-        let msg = try decoder.decode(SignalingMessage.self, from: data)
+        var msg = try decoder.decode(SignalingMessage.self, from: data)
         switch msg {
         case .notify(message: var notify):
             notify.parseMetadata(from: data)
+        case .push(message: var push):
+            push.parseData(from: data)
+            msg = .push(message: push)
         default:
             break
         }
@@ -461,6 +479,36 @@ extension SignalingNotifyMessage: Codable {
     
 }
 
+
+/// :nodoc:
+extension SignalingPushMessage: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case data = "data"
+    }
+    
+    public init(from decoder: Decoder) throws {
+        // 解析すべきプロパティがないので何もしない
+    }
+    
+    mutating func parseData(from data: Data) {
+        self.data = nil
+        do {
+            let json = try JSONSerialization.jsonObject(with: data, options: [])
+            if let msg = json as? [String: Any] {
+                self.data = msg[SignalingPushMessage.CodingKeys.data.rawValue]
+            }
+        } catch {
+            // 何もしない
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        fatalError("not supported")
+    }
+    
+}
+
 /// :nodoc:
 extension SignalingMessage: Codable {
     
@@ -474,12 +522,14 @@ extension SignalingMessage: Codable {
         case ping
         case pong
         case disconnect
+        case push
     }
     
     enum CodingKeys: String, CodingKey {
         case type
         case sdp
         case candidate
+        case data
     }
     
     public init(from decoder: Decoder) throws {
@@ -495,6 +545,8 @@ extension SignalingMessage: Codable {
             self = .notify(message: try SignalingNotifyMessage(from: decoder))
         case "ping":
             self = .ping
+        case "push":
+            self = .push(message: try SignalingPushMessage(from: decoder))
         default:
             fatalError("not supported decoding '\(type)'")
         }
@@ -526,6 +578,8 @@ extension SignalingMessage: Codable {
             try container.encode(MessageType.pong.rawValue, forKey: .type)
         case .disconnect:
             try container.encode(MessageType.disconnect.rawValue, forKey: .type)
+        case .push:
+            fatalError("not supported encoding 'push'")
         }
     }
     
