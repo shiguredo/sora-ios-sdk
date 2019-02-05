@@ -286,7 +286,7 @@ extension SignalingConnectMessage: Codable {
     }
     
     public init(from decoder: Decoder) throws {
-        fatalError("not supported")
+        throw SoraError.invalidSignalingMessage
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -389,7 +389,7 @@ extension SignalingOfferMessage: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
+        throw SoraError.invalidSignalingMessage
     }
     
 }
@@ -407,7 +407,7 @@ extension SignalingUpdateOfferMessage: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
+        throw SoraError.invalidSignalingMessage
     }
     
 }
@@ -475,7 +475,7 @@ extension SignalingNotifyMessage: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
+        throw SoraError.invalidSignalingMessage
     }
     
 }
@@ -505,7 +505,7 @@ extension SignalingPushMessage: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        fatalError("not supported")
+        throw SoraError.invalidSignalingMessage
     }
     
 }
@@ -549,7 +549,7 @@ extension SignalingMessage: Codable {
         case "push":
             self = .push(message: try SignalingPushMessage(from: decoder))
         default:
-            fatalError("not supported decoding '\(type)'")
+            throw SoraError.unknownSignalingMessageType(type: type)
         }
     }
     
@@ -571,16 +571,12 @@ extension SignalingMessage: Codable {
         case .update(sdp: let sdp):
             try container.encode(MessageType.update.rawValue, forKey: .type)
             try container.encode(sdp, forKey: .sdp)
-        case .notify(message: _):
-            fatalError("not supported encoding 'notify'")
-        case .ping:
-            fatalError("not supported encoding 'ping'")
         case .pong:
             try container.encode(MessageType.pong.rawValue, forKey: .type)
         case .disconnect:
             try container.encode(MessageType.disconnect.rawValue, forKey: .type)
-        case .push:
-            fatalError("not supported encoding 'push'")
+        default:
+            throw SoraError.invalidSignalingMessage
         }
     }
     

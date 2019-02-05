@@ -215,7 +215,6 @@ class BasicSignalingChannel: SignalingChannel {
         } catch {
             Logger.debug(type: .signalingChannel,
                       message: "JSON encoding failed")
-            fatalError()
         }
     }
     
@@ -245,7 +244,7 @@ class BasicSignalingChannel: SignalingChannel {
                 sigMessage = try SignalingMessage.decode(from: data)
             } catch let error {
                 Logger.error(type: .signalingChannel,
-                          message: "decode failed (\(error.localizedDescription))")
+                          message: "decode failed (\(error.localizedDescription)) => \(text)")
             }
             
             Logger.debug(type: .signalingChannel, message: "call onMessageHandler")
