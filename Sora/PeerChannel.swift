@@ -504,9 +504,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         nativeChannel.add(stream.nativeVideoTrack!,
-                          streamLabels: [stream.nativeStream.streamId])
+                          streamIds: [stream.nativeStream.streamId])
         nativeChannel.add(stream.nativeAudioTrack!,
-                          streamLabels: [stream.nativeStream.streamId])
+                          streamIds: [stream.nativeStream.streamId])
         channel.add(stream: stream)
         Logger.debug(type: .peerChannel,
                      message: "create publisher stream (id: \(configuration.publisherStreamId))")

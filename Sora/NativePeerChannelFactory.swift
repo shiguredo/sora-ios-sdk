@@ -81,8 +81,8 @@ class NativePeerChannelFactory {
                                                  videoTrackId: "video",
                                                  audioTrackId: "audio",
                                                  constraints: constraints)
-        peer.add(stream.videoTracks[0], streamLabels: [stream.streamId])
-        peer.add(stream.audioTracks[0], streamLabels: [stream.streamId])
+        peer.add(stream.videoTracks[0], streamIds: [stream.streamId])
+        peer.add(stream.audioTracks[0], streamIds: [stream.streamId])
         peer.offer(for: constraints.nativeValue) { sdp, error in
             if let error = error {
                 handler(nil, error)
