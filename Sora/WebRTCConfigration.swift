@@ -105,6 +105,22 @@ public struct WebRTCConfiguration {
     
 }
 
+private var sdpSemanticsTable: PairTable<String, SDPSemantics> =
+    PairTable(pairs: [("planB", .planB),
+                      ("unifiedPlan", .unifiedPlan)])
+
+/// :nodoc:
+extension SDPSemantics: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        self = try sdpSemanticsTable.decode(from: decoder)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        try sdpSemanticsTable.encode(self, to: encoder)
+    }
+    
+}
 
 /// :nodoc:
 extension MediaConstraints: Codable {
@@ -115,8 +131,11 @@ extension MediaConstraints: Codable {
     }
     
     public init(from decoder: Decoder) throws {
-        // TODO
-        assertionFailure("not yet implemented")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mandatory = try container.decode([String: String].self,
+                                         forKey: .mandatory)
+        optional = try container.decode([String: String].self,
+                                        forKey: .optional)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -131,15 +150,23 @@ extension MediaConstraints: Codable {
 extension WebRTCConfiguration: Codable {
     
     enum CodingKeys: String, CodingKey {
-         case constraints
-         case iceServerInfos
-         case iceTransportPolicy
+        case constraints
+        case iceServerInfos
+        case iceTransportPolicy
+        case sdpSemantics
     }
     
     public init(from decoder: Decoder) throws {
-        // TODO
-        assertionFailure("not yet implemented")
         self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        constraints = try container.decode(MediaConstraints.self,
+                                           forKey: .constraints)
+        iceServerInfos = try container.decode([ICEServerInfo].self,
+                                              forKey: .iceServerInfos)
+        iceTransportPolicy = try container.decode(ICETransportPolicy.self,
+                                                  forKey: .iceTransportPolicy)
+        sdpSemantics = try container.decode(SDPSemantics.self,
+                                            forKey: .sdpSemantics)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -147,6 +174,7 @@ extension WebRTCConfiguration: Codable {
         try container.encode(constraints, forKey: .constraints)
         try container.encode(iceServerInfos, forKey: .iceServerInfos)
         try container.encode(iceTransportPolicy, forKey: .iceTransportPolicy)
+        try container.encode(sdpSemantics, forKey: .sdpSemantics)
     }
     
 }
