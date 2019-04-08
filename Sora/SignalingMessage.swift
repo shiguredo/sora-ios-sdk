@@ -87,6 +87,10 @@ public enum SignalingNotificationEventType: String {
     
     /// "spotlight.changed"
     case spotlightChanged = "spotlight.changed"
+    
+    /// "network.status"
+    case networkStatus = "network.status"
+    
 }
 
 /**
@@ -131,7 +135,7 @@ public struct SignalingNotifyMessage {
     /// 映像の可否
     public let videoEnabled: Bool?
     
-    // MARK: 統計情報
+    // MARK: 接続状態
     
     /// 接続時間
     public let connectionTime: Int?
@@ -144,6 +148,9 @@ public struct SignalingNotifyMessage {
     
     /// 接続中のサブスクライバーの数
     public let subscriberCount: Int?
+    
+    /// ネットワークの不安定度
+    public let unstableLevel: Int?
     
     // MARK: スポットライト機能
     
@@ -308,7 +315,8 @@ extension SignalingConnectMessage: Codable {
             try container.encode(true, forKey: .multistream)
             try container.encode(true, forKey: .plan_b)
         }
-     
+        try container.encode(true, forKey: .plan_b)
+
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
                 var videoContainer = container
@@ -430,6 +438,7 @@ extension SignalingNotifyMessage: Codable {
         case audio = "audio"
         case video = "video"
         case fixed = "fixed"
+        case unstableLevel = "unstable_level"
         case metadata = "metadata"
         case metadataList = "metadata_list"
     }
@@ -455,7 +464,8 @@ extension SignalingNotifyMessage: Codable {
         videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
         spotlightId = try container.decodeIfPresent(String.self, forKey: .spotlightId)
         isFixed = try container.decodeIfPresent(Bool.self, forKey: .fixed)
-        
+        unstableLevel = try container.decodeIfPresent(Int.self, forKey: .unstableLevel)
+
         // metadata には任意のデータが入るため、 Decoder ではデコードできない
     }
     
