@@ -85,6 +85,8 @@ public enum SignalingNotificationEventType: String {
     /// "connection.destroyed"
     case connectionDestroyed = "connection.destroyed"
     
+    /// "spotlight.changed"
+    case spotlightChanged = "spotlight.changed"
 }
 
 /**
