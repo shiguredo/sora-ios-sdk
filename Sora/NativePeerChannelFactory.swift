@@ -9,7 +9,23 @@ class NativePeerChannelFactory {
     
     init() {
         Logger.debug(type: .peerChannel, message: "create native peer channel factory")
-        nativeFactory = RTCPeerConnectionFactory()
+        
+        // 映像コーデックのエンコーダーとデコーダーを用意する
+        // Sora iOS SDK では VP8, VP9, H.264 が有効
+        let encoder = RTCDefaultVideoEncoderFactory()
+        let decoder = RTCDefaultVideoDecoderFactory()
+        nativeFactory =
+            RTCPeerConnectionFactory(encoderFactory: encoder,
+                                     decoderFactory: decoder)
+        
+        for info in encoder.supportedCodecs() {
+            Logger.debug(type: .peerChannel,
+                         message: "supported video encoder: \(info.name) \(info.parameters)")
+        }
+        for info in decoder.supportedCodecs() {
+            Logger.debug(type: .peerChannel,
+                         message: "supported video decoder: \(info.name) \(info.parameters)")
+        }
     }
     
     func createNativePeerChannel(configuration: WebRTCConfiguration,
