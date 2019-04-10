@@ -72,7 +72,7 @@ class ConnectionTimer {
             }
             Logger.debug(type: .connectionTimer, message: "all OK")
         }
-        RunLoop.main.add(timer!, forMode: .commonModes)
+        RunLoop.main.add(timer!, forMode: RunLoop.Mode.common)
         isRunning = true
     }
     
