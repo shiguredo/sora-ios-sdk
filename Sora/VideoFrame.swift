@@ -45,7 +45,7 @@ public enum VideoFrame {
         get {
             switch self {
             case .native(capturer: _, frame: let frame):
-                return CMTimeMake(frame.timeStampNs, 1_000_000_000)
+                return CMTimeMake(value: frame.timeStampNs, timescale: 1_000_000_000)
             }
         }
     }

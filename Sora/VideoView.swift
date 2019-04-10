@@ -154,9 +154,9 @@ public class VideoView: UIView {
         if !isRendering {
             DispatchQueue.main.async {
                 if let bgView = self.backgroundView {
-                    self.bringSubview(toFront: bgView)
+                    self.bringSubviewToFront(bgView)
                 } else {
-                    self.bringSubview(toFront: self.defaultBackgroundView)
+                    self.bringSubviewToFront(self.defaultBackgroundView)
                 }
             }
         }
@@ -168,7 +168,7 @@ public class VideoView: UIView {
     public func start() {
         if !isRendering {
             DispatchQueue.main.async {
-                self.bringSubview(toFront: self.contentView)
+                self.bringSubviewToFront(self.contentView)
                 self.isRendering = true
             }
         }
@@ -317,7 +317,7 @@ class VideoViewContentView: UIView {
         }
     }
     
-    private var renderingContentMode: UIViewContentMode {
+    private var renderingContentMode: UIView.ContentMode {
         // superView に指定されている contentMode を優先的に使用する。
         // 万一指定がない場合はデフォルトの aspect fit を使用する。
         return self.superview?.contentMode ?? .scaleAspectFit
@@ -361,7 +361,7 @@ class VideoViewContentView: UIView {
     
 }
 
-private func viewSize(for videoFrameSize: CGSize, containerSize: CGSize, mode: UIViewContentMode) -> CGSize {
+private func viewSize(for videoFrameSize: CGSize, containerSize: CGSize, mode: UIView.ContentMode) -> CGSize {
     switch mode {
     case .scaleToFill:
         // scale to fill モードの場合はアスペクト比を尊重する必要が無いので、

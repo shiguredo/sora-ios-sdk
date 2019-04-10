@@ -67,8 +67,8 @@ extension ICEServerInfo: Codable {
     public convenience init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let urls = try container.decode([URL].self, forKey: .urls)
-        let userName = try container.decode(String.self, forKey: .userName)
-        let credential = try container.decode(String.self, forKey: .credential)
+        let userName = try container.decodeIfPresent(String.self, forKey: .userName)
+        let credential = try container.decodeIfPresent(String.self, forKey: .credential)
         self.init(urls: urls,
                   userName: userName,
                   credential: credential,

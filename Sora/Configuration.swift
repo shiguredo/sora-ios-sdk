@@ -189,7 +189,15 @@ extension Configuration: Codable {
             maxNumberOfSpeakers = try container.decode(Int.self,
                                                        forKey: .maxNumberOfSpeakers)
         }
-        // TODO: others
+        webRTCConfiguration = try container.decode(WebRTCConfiguration.self,
+                                                   forKey: .webRTCConfiguration)
+        publisherStreamId = try container.decode(String.self,
+                                                 forKey: .publisherStreamId)
+        publisherVideoTrackId = try container.decode(String.self,
+                                                     forKey: .publisherVideoTrackId)
+        publisherAudioTrackId = try container.decode(String.self,
+                                                     forKey: .publisherAudioTrackId)
+        // TODO: channel types
     }
     
     public func encode(to encoder: Encoder) throws {
