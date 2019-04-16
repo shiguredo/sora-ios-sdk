@@ -51,4 +51,4 @@ Xcode と Swift のバージョンによっては、 Carthage と CocoaPods で�
 
 # Copyright
 
-Copyright 2017-2018, Shiguredo Inc. and Masashi Ono (akisute)
+Copyright 2017-2019, Shiguredo Inc. and Masashi Ono (akisute)
