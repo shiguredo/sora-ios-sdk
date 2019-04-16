@@ -38,7 +38,7 @@ public struct Utilities {
         
         public func run() {
             seconds = 0
-            RunLoop.main.add(timer, forMode: .commonModes)
+            RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
             timer.fire()
         }
         

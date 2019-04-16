@@ -203,7 +203,7 @@ public extension CameraVideoCapturer {
     /**
      `CameraVideoCapturer` の設定を表すオブジェクトです。
      */
-    public struct Settings: CustomStringConvertible {
+    struct Settings: CustomStringConvertible {
         
         /** デフォルトの設定。 */
         public static let `default` = Settings(

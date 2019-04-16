@@ -25,8 +25,11 @@ public enum SoraError: Error {
     case signalingChannelError(reason: String)
     
     /// シグナリングメッセージのフォーマットが無効
-    case invalidSignalingMessage(text: String)
+    case invalidSignalingMessage
     
+    /// 非対応のシグナリングメッセージ種別
+    case unknownSignalingMessageType(type: String)
+
     /// ``PeerChannel`` で発生したエラー
     case peerChannelError(reason: String)
     
@@ -57,8 +60,10 @@ extension SoraError: LocalizedError {
                 return "WebSocket error (\(error.localizedDescription))"
             case .signalingChannelError(reason: let reason):
                 return "SignalingChannel error (\(reason))"
-            case .invalidSignalingMessage(text: let text):
-                return "Invalid signaling message format (\"\(text)\")"
+            case .invalidSignalingMessage:
+                return "Invalid signaling message format"
+            case .unknownSignalingMessageType(type: let type):
+                return "Unknown signaling message type \(type)"
             case .peerChannelError(reason: let reason):
                 return "PeerChannel error (\(reason))"
             }
