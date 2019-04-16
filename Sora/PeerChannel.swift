@@ -462,6 +462,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                     metadata: configuration.metadata,
                                     sdp: sdp,
                                     multistreamEnabled: multistream,
+                                    planBEnabled: webRTCConfiguration.sdpSemantics == .planB,
                                     videoEnabled: configuration.videoEnabled,
                                     videoCodec: configuration.videoCodec,
                                     videoBitRate: configuration.videoBitRate,
