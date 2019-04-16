@@ -21,6 +21,9 @@ public struct SignalingConnectMessage {
     /// マルチストリームの可否
     public var multistreamEnabled: Bool
     
+    /// Plan B の可否
+    public var planBEnabled: Bool
+    
     /// 映像の可否
     public var videoEnabled: Bool
     
@@ -313,9 +316,11 @@ extension SignalingConnectMessage: Codable {
         
         if multistreamEnabled {
             try container.encode(true, forKey: .multistream)
-            try container.encode(true, forKey: .plan_b)
         }
-        try container.encode(true, forKey: .plan_b)
+        
+        if planBEnabled {
+            try container.encode(planBEnabled, forKey: .plan_b)
+        }
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
