@@ -89,6 +89,9 @@ extension PairTable where T == String {
         var container = encoder.singleValueContainer()
         if let key = left(other: value) {
             try container.encode(key)
+        } else {
+            throw EncodingError.invalidValue(value,
+                                             EncodingError.Context(codingPath: [], debugDescription: "\(self.name) cannot encode \(value)"))
         }
     }
     
