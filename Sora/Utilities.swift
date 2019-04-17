@@ -53,9 +53,12 @@ public struct Utilities {
 
 final class PairTable<T: Equatable, U: Equatable> {
     
+    var name: String
+    
     private var pairs: [(T, U)]
     
-    init(pairs: [(T, U)]) {
+    init(name: String, pairs: [(T, U)]) {
+        self.name = name
         self.pairs = pairs
     }
     
