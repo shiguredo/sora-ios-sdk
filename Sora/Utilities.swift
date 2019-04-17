@@ -81,7 +81,7 @@ extension PairTable where T == String {
         let key = try container.decode(String.self)
         return try right(other: key).unwrap {
             throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "invalid value")
+                                                   debugDescription: "\(self.name) cannot decode '\(key)'")
         }
     }
     
