@@ -253,22 +253,20 @@ public enum SignalingMessage {
 // MARK: -
 // MARK: Codable
 
+private var roleTable: PairTable<String, SignalingRole> =
+    PairTable(name: "SignalingRole",
+              pairs: [("upstream", .upstream),
+                      ("downstream", .downstream)])
+
 /// :nodoc:
 extension SignalingRole: Codable {
 
     public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let roleStr = try container.decode(String.self)
-        guard let role = SignalingRole(rawValue: roleStr) else {
-            throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "invalid 'role' value")
-        }
-        self = role
+        self = try roleTable.decode(from: decoder)
     }
     
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
+        try roleTable.encode(self, to: encoder)
     }
     
 }
