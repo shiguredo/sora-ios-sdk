@@ -1,7 +1,8 @@
 import Foundation
 
 private var descriptionTable: PairTable<String, CameraPosition> =
-    PairTable(pairs: [("front", .front),
+    PairTable(name: "CameraPosition",
+              pairs: [("front", .front),
                       ("back", .back)])
 
 /**

@@ -19,7 +19,8 @@ public enum Role {
 }
 
 private var roleTable: PairTable<String, Role> =
-    PairTable(pairs: [("publisher", .publisher),
+    PairTable(name: "Role",
+              pairs: [("publisher", .publisher),
                       ("subscriber", .subscriber),
                       ("group", .group),
                       ("groupSub", .groupSub)])

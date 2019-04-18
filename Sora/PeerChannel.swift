@@ -2,7 +2,8 @@ import Foundation
 import WebRTC
 
 private let peerChannelSignalingStateTable: PairTable<PeerChannelSignalingState, RTCSignalingState> =
-    PairTable(pairs: [(.stable, .stable),
+    PairTable(name: "PeerChannelSignalingState",
+              pairs: [(.stable, .stable),
                       (.haveLocalOffer, .haveLocalOffer),
                       (.haveLocalPrAnswer, .haveLocalPrAnswer),
                       (.haveRemoteOffer, .haveRemoteOffer),
@@ -10,7 +11,8 @@ private let peerChannelSignalingStateTable: PairTable<PeerChannelSignalingState,
                       (.closed, .closed)])
 
 private let iceConnectionStateTable: PairTable<ICEConnectionState, RTCIceConnectionState> =
-    PairTable(pairs: [(.new, .new),
+    PairTable(name: "ICEConnectionState",
+              pairs: [(.new, .new),
                       (.checking, .checking),
                       (.connected, .connected),
                       (.completed, .completed),
@@ -20,7 +22,8 @@ private let iceConnectionStateTable: PairTable<ICEConnectionState, RTCIceConnect
                       (.count, .count)])
 
 private let iceGatheringStateTable: PairTable<ICEGatheringState, RTCIceGatheringState> =
-    PairTable(pairs: [(.new, .new),
+    PairTable(name: "ICEGatheringState",
+              pairs: [(.new, .new),
                       (.gathering, .gathering),
                       (.complete, .complete)])
 

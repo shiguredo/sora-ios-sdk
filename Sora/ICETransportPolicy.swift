@@ -2,7 +2,8 @@ import Foundation
 import WebRTC
 
 private var iceTransportPolicyTable: PairTable<ICETransportPolicy, RTCIceTransportPolicy> =
-    PairTable(pairs: [(.relay, .relay), (.all, .all)])
+    PairTable(name: "ICETransportPolicy",
+              pairs: [(.relay, .relay), (.all, .all)])
 
 /**
  ICE 通信ポリシーを表します。

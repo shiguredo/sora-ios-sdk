@@ -80,19 +80,19 @@ public struct SignalingOfferMessage {
 public enum SignalingNotificationEventType: String {
     
     /// "connection.created"
-    case connectionCreated = "connection.created"
+    case connectionCreated
     
     /// "connection.updated"
-    case connectionUpdated = "connection.updated"
+    case connectionUpdated
     
     /// "connection.destroyed"
-    case connectionDestroyed = "connection.destroyed"
+    case connectionDestroyed
     
     /// "spotlight.changed"
-    case spotlightChanged = "spotlight.changed"
+    case spotlightChanged
     
     /// "network.status"
-    case networkStatus = "network.status"
+    case networkStatus
     
 }
 
@@ -253,22 +253,20 @@ public enum SignalingMessage {
 // MARK: -
 // MARK: Codable
 
+private var roleTable: PairTable<String, SignalingRole> =
+    PairTable(name: "SignalingRole",
+              pairs: [("upstream", .upstream),
+                      ("downstream", .downstream)])
+
 /// :nodoc:
 extension SignalingRole: Codable {
 
     public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let roleStr = try container.decode(String.self)
-        guard let role = SignalingRole(rawValue: roleStr) else {
-            throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "invalid 'role' value")
-        }
-        self = role
+        self = try roleTable.decode(from: decoder)
     }
     
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
+        try roleTable.encode(self, to: encoder)
     }
     
 }
@@ -427,6 +425,27 @@ extension SignalingUpdateOfferMessage: Codable {
     
 }
 
+private var eventTypeTable: PairTable<String, SignalingNotificationEventType> =
+    PairTable(name: "SignalingNotificationEventType",
+              pairs: [("connection.created", .connectionCreated),
+                      ("connection.updated", .connectionUpdated),
+                      ("connection.destroyed", .connectionDestroyed),
+                      ("spotlight.changed", .spotlightChanged),
+                      ("network.status", .networkStatus)])
+
+/// :nodoc:
+extension SignalingNotificationEventType: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        self = try eventTypeTable.decode(from: decoder)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        try eventTypeTable.encode(self, to: encoder)
+    }
+    
+}
+
 /// :nodoc:
 extension SignalingNotifyMessage: Codable {
     
@@ -450,15 +469,9 @@ extension SignalingNotifyMessage: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        eventType = SignalingNotificationEventType(rawValue:
-            try container.decode(String.self, forKey: .eventType))!
-        
-        if let raw = try container.decodeIfPresent(String.self, forKey: .role) {
-            role = SignalingRole(rawValue: raw)
-        } else {
-            role = nil
-        }
-        
+        eventType =  try container.decode(SignalingNotificationEventType.self,
+                                          forKey: .eventType)
+        role = try container.decodeIfPresent(SignalingRole.self, forKey: .role)
         connectionTime = try container.decodeIfPresent(Int.self, forKey: .connectionTime)
         connectionCount = try container.decodeIfPresent(Int.self, forKey: .connectionCount)
         publisherCount = try container.decodeIfPresent(Int.self, forKey: .publisherCount)

@@ -53,9 +53,12 @@ public struct Utilities {
 
 final class PairTable<T: Equatable, U: Equatable> {
     
+    var name: String
+    
     private var pairs: [(T, U)]
     
-    init(pairs: [(T, U)]) {
+    init(name: String, pairs: [(T, U)]) {
+        self.name = name
         self.pairs = pairs
     }
     
@@ -78,7 +81,7 @@ extension PairTable where T == String {
         let key = try container.decode(String.self)
         return try right(other: key).unwrap {
             throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "invalid value")
+                                                   debugDescription: "\(self.name) cannot decode '\(key)'")
         }
     }
     
@@ -86,6 +89,9 @@ extension PairTable where T == String {
         var container = encoder.singleValueContainer()
         if let key = left(other: value) {
             try container.encode(key)
+        } else {
+            throw EncodingError.invalidValue(value,
+                                             EncodingError.Context(codingPath: [], debugDescription: "\(self.name) cannot encode \(value)"))
         }
     }
     

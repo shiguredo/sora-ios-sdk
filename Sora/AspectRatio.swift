@@ -26,7 +26,8 @@ public enum AspectRatio {
 }
 
 private var aspectRatioTable: PairTable<String, AspectRatio> =
-    PairTable(pairs: [("standard", .standard),
+    PairTable(name: "AspectRatio",
+              pairs: [("standard", .standard),
                       ("wide", .wide)])
 
 /// :nodoc:

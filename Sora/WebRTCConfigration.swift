@@ -106,7 +106,8 @@ public struct WebRTCConfiguration {
 }
 
 private var sdpSemanticsTable: PairTable<String, SDPSemantics> =
-    PairTable(pairs: [("planB", .planB),
+    PairTable(name: "SDPSemantics",
+              pairs: [("planB", .planB),
                       ("unifiedPlan", .unifiedPlan)])
 
 /// :nodoc:
