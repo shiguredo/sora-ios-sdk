@@ -281,7 +281,7 @@ class BasicPeerChannel: PeerChannel {
     }
     
     private var context: BasicPeerChannelContext!
-    
+ 
     required init(configuration: Configuration, signalingChannel: SignalingChannel) {
         self.configuration = configuration
         self.signalingChannel = signalingChannel
@@ -350,6 +350,49 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case disconnected
     }
     
+    final class Lock {
+        
+        weak var context: BasicPeerChannelContext?
+        var count: Int = 0
+        var shouldDisconnect: (Bool, Error?) = (false, nil)
+
+        func waitDisconnect(error: Error?) {
+            if count == 0 {
+                context?.basicDisconnect(error: error)
+            } else {
+                shouldDisconnect = (true, error)
+            }
+        }
+        
+        func lock() {
+            count += 1
+        }
+        
+        func unlock() {
+            if count <= 0 {
+                fatalError("count is already 0")
+            }
+            count -= 1
+            if count == 0 {
+                disconnect()
+            }
+        }
+        
+        func disconnect() {
+            switch shouldDisconnect {
+            case (true, let error):
+                shouldDisconnect = (false, nil)
+                if let context = context {
+                    if context.state != .disconnecting && context.state != .disconnected {
+                        context.basicDisconnect(error: error)
+                    }
+                }
+            default:
+                break
+            }
+        }
+    }
+    
     weak var channel: BasicPeerChannel!
     var state: State = .disconnected
     var nativeChannel: RTCPeerConnection!
@@ -368,10 +411,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     var onConnectHandler: ((Error?) -> Void)?
     
+    private var lock: Lock
+    
     init(channel: BasicPeerChannel) {
         self.channel = channel
+        lock = Lock()
         super.init()
-        
+        lock.context = self
+
         signalingChannel.internalHandlers.onDisconnectHandler = { error in
             self.disconnect(error: error)
         }
@@ -389,7 +436,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "try connecting")
         Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
         
+        // このロックは finishConnecting() で解除される
+        lock.lock()
         onConnectHandler = handler
+        
         self.webRTCConfiguration = channel.configuration.webRTCConfiguration
         nativeChannel = NativePeerChannelFactory.default
             .createNativePeerChannel(configuration: webRTCConfiguration,
@@ -550,12 +600,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
         }
         
+        lock.lock()
         nativeChannel.createAnswer(forOffer: offer.sdp,
                                    constraints: webRTCConfiguration.nativeConstraints)
         { sdp, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create answer (\(error!.localizedDescription))")
+                self.lock.unlock()
                 self.disconnect(error: SoraError
                     .peerChannelError(reason: "failed to create answer"))
                 return
@@ -563,12 +615,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             let answer = SignalingMessage.answer(sdp: sdp!)
             self.signalingChannel.send(message: answer)
+            self.lock.unlock()
             Logger.debug(type: .peerChannel, message: "did send answer")
         }
     }
     
     
     func createAndSendUpdateAnswerMessage(forOffer offer: String) {
+        lock.lock()
         state = .waitingUpdateComplete
         nativeChannel.createAnswer(forOffer: offer,
                                    constraints: webRTCConfiguration.nativeConstraints)
@@ -576,6 +630,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create update-answer (\(error!.localizedDescription)")
+                self.lock.unlock()
                 self.disconnect(error: SoraError
                     .peerChannelError(reason: "failed to create update-answer"))
                 return
@@ -591,6 +646,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "call onUpdateHandler")
             self.channel.internalHandlers.onUpdateHandler?(answer!)
             self.channel.handlers.onUpdateHandler?(answer!)
+            
+            self.lock.unlock()
         }
     }
     
@@ -657,47 +714,52 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             onConnectHandler!(nil)
             onConnectHandler = nil
         }
+        lock.unlock()
     }
     
     func disconnect(error: Error?) {
         switch state {
         case .disconnecting, .disconnected:
             break
-            
         default:
-            Logger.debug(type: .peerChannel, message: "try disconnecting")
-            if let error = error {
-                Logger.error(type: .peerChannel,
-                             message: "error: \(error.localizedDescription)")
-            }
-            
-            state = .disconnecting
-            
-            switch configuration.role {
-            case .publisher: terminatePublisherStream()
-            case .subscriber, .groupSub: break
-            case .group: terminatePublisherStream()
-            }
-            channel.terminateAllStreams()
-            nativeChannel.close()
-            
-            signalingChannel.send(message: SignalingMessage.disconnect)
-            signalingChannel.disconnect(error: error)
-            
-            state = .disconnected
-            
-            Logger.debug(type: .peerChannel, message: "call onDisconnectHandler")
-            channel.internalHandlers.onDisconnectHandler?(error)
-            channel.handlers.onDisconnectHandler?(error)
-
-            if onConnectHandler != nil {
-                Logger.debug(type: .peerChannel, message: "call connect(handler:) handler")
-                onConnectHandler!(error)
-                onConnectHandler = nil
-            }
-
-            Logger.debug(type: .peerChannel, message: "did disconnect")
+            Logger.debug(type: .peerChannel, message: "wait to disconnect")
+            lock.waitDisconnect(error: error)
         }
+    }
+
+    func basicDisconnect(error: Error?) {
+        Logger.debug(type: .peerChannel, message: "try disconnecting")
+        if let error = error {
+            Logger.error(type: .peerChannel,
+                         message: "error: \(error.localizedDescription)")
+        }
+        
+        state = .disconnecting
+        
+        switch configuration.role {
+        case .publisher: terminatePublisherStream()
+        case .subscriber, .groupSub: break
+        case .group: terminatePublisherStream()
+        }
+        channel.terminateAllStreams()
+        nativeChannel.close()
+        
+        signalingChannel.send(message: SignalingMessage.disconnect)
+        signalingChannel.disconnect(error: error)
+        
+        state = .disconnected
+        
+        Logger.debug(type: .peerChannel, message: "call onDisconnectHandler")
+        channel.internalHandlers.onDisconnectHandler?(error)
+        channel.handlers.onDisconnectHandler?(error)
+        
+        if onConnectHandler != nil {
+            Logger.debug(type: .peerChannel, message: "call connect(handler:) handler")
+            onConnectHandler!(error)
+            onConnectHandler = nil
+        }
+        
+        Logger.debug(type: .peerChannel, message: "did disconnect")
     }
     
     // MARK: - RTCPeerConnectionDelegate
