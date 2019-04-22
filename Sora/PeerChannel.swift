@@ -124,10 +124,7 @@ class PeerChannelInternalState {
             onCompleteHandler?()
             onCompleteHandler = nil
         } else if isConnected {
-            if signalingState == .closed
-                || iceConnectionState == .failed
-                || iceConnectionState == .disconnected
-                || iceConnectionState == .closed {
+            if signalingState == .closed {
                 Logger.debug(type: .peerChannel,
                              message: "peer channel state: disconnected")
                 Logger.debug(type: .peerChannel,
