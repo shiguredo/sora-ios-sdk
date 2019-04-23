@@ -2,8 +2,8 @@ import Foundation
 
 public protocol Signaling {
     associatedtype Connect: Encodable
-    /*
     associatedtype Offer: Decodable
+    /*
     associatedtype Answer: Encodable
     associatedtype Candidate: Encodable
     associatedtype UpdateToServer: Encodable
@@ -69,6 +69,41 @@ public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encod
     
     /// 最大話者数
     public var maxNumberOfSpeakers: Int?
+    
+}
+
+/**
+ "offer" シグナリングメッセージを表します。
+ このメッセージは SDK が "connect" を送信した後に、サーバーから送信されます。
+ */
+public struct SignalingOffer<Metadata: Decodable> {
+    
+    /**
+     クライアントが更新すべき設定を表します。
+     */
+    public struct Configuration {
+        
+        /// ICE サーバーの情報のリスト
+        public let iceServerInfos: [ICEServerInfo]
+        
+        /// ICE 通信ポリシー
+        public let iceTransportPolicy: ICETransportPolicy
+    }
+    
+    /// クライアント ID
+    public let clientId: String
+    
+    /// 接続 ID
+    public let connectionId: String
+    
+    /// SDP メッセージ
+    public let sdp: String
+    
+    /// クライアントが更新すべき設定
+    public let configuration: Configuration?
+    
+    /// メタデータ
+    public let metadata: Metadata?
     
 }
 
@@ -173,6 +208,55 @@ extension SignalingConnect: Encodable {
         
         if let num = maxNumberOfSpeakers {
             try container.encode(num, forKey: .vad)
+        }
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingOffer.Configuration: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case iceServers
+        case iceTransportPolicy
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        iceServerInfos = try container.decode([ICEServerInfo].self,
+                                              forKey: .iceServers)
+        iceTransportPolicy = try container.decode(ICETransportPolicy.self,
+                                                  forKey: .iceTransportPolicy)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingOffer: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case client_id
+        case connection_id
+        case sdp
+        case config
+        case metadata
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        clientId = try container.decode(String.self, forKey: .client_id)
+        connectionId = try container.decode(String.self, forKey: .connection_id)
+        sdp = try container.decode(String.self, forKey: .sdp)
+        if container.contains(.config) {
+            configuration = try container.decode(Configuration.self,
+                                                 forKey: .config)
+        } else {
+            configuration = nil
+        }
+        if container.contains(.metadata) {
+            metadata = try container.decode(Metadata.self, forKey: .metadata)
+        } else {
+            metadata = nil
         }
     }
     
