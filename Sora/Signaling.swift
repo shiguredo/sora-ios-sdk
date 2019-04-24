@@ -13,6 +13,19 @@ public protocol Signaling {
      */
 }
 
+enum SignalingType: String {
+    case connect
+    case offer
+    case answer
+    case update
+    case candidate
+    case notify
+    case ping
+    case pong
+    case disconnect
+    case push
+}
+
 public enum SignalingSimulcast {
     case low
     case middle
@@ -129,6 +142,7 @@ extension SignalingSimulcast: Encodable {
 extension SignalingConnect: Encodable {
     
     enum CodingKeys: String, CodingKey {
+        case type
         case role
         case channel_id
         case metadata
@@ -154,6 +168,7 @@ extension SignalingConnect: Encodable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(SignalingType.connect.rawValue, forKey: .type)
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channel_id)
         
