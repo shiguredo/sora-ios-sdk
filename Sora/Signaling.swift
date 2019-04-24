@@ -3,8 +3,8 @@ import Foundation
 public protocol Signaling {
     associatedtype Connect: Encodable
     associatedtype Offer: Decodable
-    /*
     associatedtype Answer: Encodable
+    /*
     associatedtype Candidate: Encodable
     associatedtype UpdateToServer: Encodable
     associatedtype UpdateToClient: Decodable
@@ -118,6 +118,13 @@ public struct SignalingOffer<Metadata: Decodable> {
     /// メタデータ
     public let metadata: Metadata?
     
+}
+
+public struct SignalingAnswer {
+    
+    /// SDP メッセージ
+    public let sdp: String
+
 }
 
 // MARK: -
@@ -273,6 +280,22 @@ extension SignalingOffer: Decodable {
         } else {
             metadata = nil
         }
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingAnswer: Encodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case type
+        case sdp
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(SignalingType.answer.rawValue, forKey: .type)
+        try container.encode(sdp, forKey: .sdp)
     }
     
 }
