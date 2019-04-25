@@ -4,13 +4,12 @@ public protocol Signaling {
     associatedtype Connect: Encodable
     associatedtype Offer: Decodable
     associatedtype Answer: Encodable
-    /*
     associatedtype Candidate: Encodable
     associatedtype UpdateToServer: Encodable
     associatedtype UpdateToClient: Decodable
     associatedtype Push: Decodable
     associatedtype Notify: Decodable
-     */
+    associatedtype Pong: Encodable
 }
 
 enum SignalingType: String {
@@ -126,6 +125,39 @@ public struct SignalingAnswer {
     public let sdp: String
 
 }
+
+public struct SignalingCandidate {
+    
+    public let candidate: String
+    
+}
+
+public struct SignalingUpdate {
+    
+    /// SDP メッセージ
+    public let sdp: String
+    
+}
+
+/**
+ "push" シグナリングメッセージを表します。
+ このメッセージは Sora のプッシュ API を使用して送信されたデータです。
+ */
+public struct SignalingPush<PushData: Decodable> {
+    
+    /// プッシュ通知で送信される JSON データ
+    public let data: PushData
+    
+}
+
+/**
+ "pong" シグナリングメッセージを表します。
+ このメッセージはサーバーから "ping" シグナリングメッセージを受信すると
+ サーバーに送信されます。
+ "ping" 受信後、一定時間内にこのメッセージを返さなければ、
+ サーバーとの接続が解除されます。
+ */
+public struct SignalingPong {}
 
 // MARK: -
 // MARK: Codable
@@ -296,6 +328,71 @@ extension SignalingAnswer: Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(SignalingType.answer.rawValue, forKey: .type)
         try container.encode(sdp, forKey: .sdp)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingCandidate: Encodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case type
+        case candidate
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(SignalingType.candidate.rawValue, forKey: .type)
+        try container.encode(candidate, forKey: .candidate)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingUpdate: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case type
+        case sdp
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sdp = try container.decode(String.self, forKey: .sdp)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(SignalingType.update.rawValue, forKey: .type)
+        try container.encode(sdp, forKey: .sdp)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingPush: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case data
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        data = try container.decode(PushData.self, forKey: .data)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingPong: Encodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case type
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(SignalingType.pong.rawValue, forKey: .type)
     }
     
 }
