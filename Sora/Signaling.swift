@@ -57,10 +57,10 @@ public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encod
     public var sdp: String?
     
     /// マルチストリームの可否
-    public var multistreamEnabled: Bool
+    public var multistreamEnabled: Bool?
     
     /// Plan B の可否
-    public var planBEnabled: Bool
+    public var planBEnabled: Bool?
     
     /// スポットライト数
     public var spotlight: Int?
@@ -239,26 +239,13 @@ extension SignalingConnect: Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channel_id)
-        
-        if let sdp = sdp {
-            try container.encode(sdp, forKey: .sdp)
-        }
-        
-        if let metadata = metadata {
-            try container.encode(metadata, forKey: .metadata)
-        }
-        
-        if let notifyMetadata = notifyMetadata {
-            try container.encode(notifyMetadata, forKey: .signaling_notify_metadata)
-        }
-        
-        if multistreamEnabled {
-            try container.encode(true, forKey: .multistream)
-        }
-        
-        if planBEnabled {
-            try container.encode(planBEnabled, forKey: .plan_b)
-        }
+        try container.encodeIfPresent(sdp, forKey: .sdp)
+        try container.encodeIfPresent(metadata, forKey: .metadata)
+        try container.encodeIfPresent(notifyMetadata,
+                                      forKey: .signaling_notify_metadata)
+        try container.encodeIfPresent(multistreamEnabled,
+                                      forKey: .multistream)
+        try container.encodeIfPresent(planBEnabled, forKey: .plan_b)
         
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
@@ -268,9 +255,8 @@ extension SignalingConnect: Encodable {
                 if videoCodec != .default {
                     try videoContainer.encode(videoCodec, forKey: .codec_type)
                 }
-                if let bitRate = videoBitRate {
-                    try videoContainer.encode(bitRate, forKey: .bit_rate)
-                }
+                try videoContainer.encodeIfPresent(videoBitRate,
+                                                   forKey: .bit_rate)
             }
         } else {
             try container.encode(false, forKey: .video)
@@ -289,9 +275,7 @@ extension SignalingConnect: Encodable {
             try container.encode(false, forKey: .audio)
         }
         
-        if let num = maxNumberOfSpeakers {
-            try container.encode(num, forKey: .vad)
-        }
+        try container.encodeIfPresent(maxNumberOfSpeakers, forKey: .vad)
     }
     
 }
@@ -330,17 +314,12 @@ extension SignalingOffer: Decodable {
         clientId = try container.decode(String.self, forKey: .client_id)
         connectionId = try container.decode(String.self, forKey: .connection_id)
         sdp = try container.decode(String.self, forKey: .sdp)
-        if container.contains(.config) {
-            configuration = try container.decode(Configuration.self,
-                                                 forKey: .config)
-        } else {
-            configuration = nil
-        }
-        if container.contains(.metadata) {
-            metadata = try container.decode(Metadata.self, forKey: .metadata)
-        } else {
-            metadata = nil
-        }
+        configuration =
+            try container.decodeIfPresent(Configuration.self,
+                                          forKey: .config)
+        metadata =
+            try container.decodeIfPresent(Metadata.self,
+                                          forKey: .metadata)
     }
     
 }
