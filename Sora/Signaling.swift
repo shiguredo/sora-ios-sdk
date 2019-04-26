@@ -8,7 +8,11 @@ public protocol Signaling {
     associatedtype UpdateToServer: Encodable
     associatedtype UpdateToClient: Decodable
     associatedtype Push: Decodable
-    associatedtype Notify: Decodable
+    associatedtype ConnectionCreated: Decodable
+    associatedtype ConnectionUpdated: Decodable
+    associatedtype ConnectionDestroyed: Decodable
+    associatedtype SpotlightChanged: Decodable
+    associatedtype NetworkStatus: Decodable
     associatedtype Pong: Encodable
 }
 
@@ -150,6 +154,33 @@ public struct SignalingPush<PushData: Decodable> {
     
 }
 
+public struct SignalingNotifyConnection<Metadata: Decodable, MetadataElement: Decodable> {
+    var role: Role
+    var clientId: String?
+    var connectionId: String?
+    var audio: Bool?
+    var video: Bool?
+    var metadata: Metadata?
+    var metadataList: [MetadataElement]
+    var minutes: Int
+    var channelConnections: Int
+    var channelUpstreamConnections: Int
+    var channelDownstreamConnections: Int
+}
+
+public struct SignalingNotifySpotlightChanged {
+    var clientId: String?
+    var connectionId: String?
+    var spotlightId: String
+    var fixed: Bool?
+    var audio: Bool?
+    var video: Bool?
+}
+
+public struct SignalingNotifyNetworkStatus {
+    var unstableLevel: Int
+}
+
 /**
  "pong" シグナリングメッセージを表します。
  このメッセージはサーバーから "ping" シグナリングメッセージを受信すると
@@ -181,7 +212,6 @@ extension SignalingSimulcast: Encodable {
 extension SignalingConnect: Encodable {
     
     enum CodingKeys: String, CodingKey {
-        case type
         case role
         case channel_id
         case metadata
@@ -207,7 +237,6 @@ extension SignalingConnect: Encodable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(SignalingType.connect.rawValue, forKey: .type)
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channel_id)
         
@@ -320,13 +349,11 @@ extension SignalingOffer: Decodable {
 extension SignalingAnswer: Encodable {
     
     enum CodingKeys: String, CodingKey {
-        case type
         case sdp
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(SignalingType.answer.rawValue, forKey: .type)
         try container.encode(sdp, forKey: .sdp)
     }
     
@@ -336,13 +363,11 @@ extension SignalingAnswer: Encodable {
 extension SignalingCandidate: Encodable {
     
     enum CodingKeys: String, CodingKey {
-        case type
         case candidate
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(SignalingType.candidate.rawValue, forKey: .type)
         try container.encode(candidate, forKey: .candidate)
     }
     
@@ -352,7 +377,6 @@ extension SignalingCandidate: Encodable {
 extension SignalingUpdate: Codable {
     
     enum CodingKeys: String, CodingKey {
-        case type
         case sdp
     }
     
@@ -363,7 +387,6 @@ extension SignalingUpdate: Codable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(SignalingType.update.rawValue, forKey: .type)
         try container.encode(sdp, forKey: .sdp)
     }
     
@@ -384,15 +407,87 @@ extension SignalingPush: Decodable {
 }
 
 /// :nodoc:
-extension SignalingPong: Encodable {
+extension SignalingNotifyConnection: Decodable {
     
     enum CodingKeys: String, CodingKey {
-        case type
+        case role
+        case client_id
+        case connection_id
+        case audio
+        case video
+        case metadata
+        case metadata_list
+        case minutes
+        case channel_connections
+        case channel_upstream_connections
+        case channel_downstream_connections
     }
     
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(Role.self, forKey: .role)
+        clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
+        connectionId = try container.decodeIfPresent(String.self, forKey: .connection_id)
+        audio = try container.decodeIfPresent(Bool.self, forKey: .connection_id)
+        video = try container.decodeIfPresent(Bool.self, forKey: .video)
+        metadata = try container.decodeIfPresent(Metadata.self, forKey: .metadata)
+        metadataList =
+            try container.decode([MetadataElement].self,
+                                 forKey: .metadata_list)
+        minutes = try container.decode(Int.self, forKey: .minutes)
+        channelConnections =
+            try container.decode(Int.self, forKey: .channel_connections)
+        channelUpstreamConnections =
+            try container.decode(Int.self, forKey: .channel_upstream_connections)
+        channelDownstreamConnections =
+            try container.decode(Int.self, forKey: .channel_downstream_connections)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingNotifySpotlightChanged: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case client_id
+        case connection_id
+        case spotlight_id
+        case fixed
+        case audio
+        case video
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        clientId = try container.decode(String?.self, forKey: .client_id)
+        connectionId = try container.decode(String?.self, forKey: .connection_id)
+        spotlightId = try container.decode(String.self, forKey: .spotlight_id)
+        fixed = try container.decodeIfPresent(Bool.self, forKey: .fixed)
+        audio = try container.decodeIfPresent(Bool.self, forKey: .audio)
+        video = try container.decodeIfPresent(Bool.self, forKey: .video)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingNotifyNetworkStatus: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case unstable_level
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        unstableLevel = try container.decode(Int.self, forKey: .unstable_level)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingPong: Encodable {
+    
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(SignalingType.pong.rawValue, forKey: .type)
+        // エンコードするプロパティはない
     }
     
 }
