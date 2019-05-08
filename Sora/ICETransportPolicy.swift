@@ -28,9 +28,12 @@ public enum ICETransportPolicy {
 extension ICETransportPolicy: CustomStringConvertible {
 
     public var description: String {
-        let encoder = JSONEncoder()
-        let data = try! encoder.encode(self)
-        return String(data: data, encoding: .utf8)!
+        switch self {
+        case .relay:
+            return "relay"
+        case .all:
+            return "all"
+        }
     }
     
 }
