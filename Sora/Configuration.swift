@@ -1,6 +1,8 @@
 import Foundation
 import WebRTC
 
+// MARK: デフォルト値
+
 private let defaultPublisherStreamId: String = "mainStream"
 private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
