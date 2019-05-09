@@ -23,9 +23,6 @@ public struct Configuration {
     /// ロール
     public var role: Role
     
-    /// メタデータ。 `connect` シグナリングメッセージにセットされます。
-    public var metadata: String?
-    
     /**
      接続試行中のタイムアウト (秒) 。
      指定した時間内に接続が成立しなければ接続試行を中止します。
@@ -64,6 +61,10 @@ public struct Configuration {
 
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
+
+    public var signalingConnectMetadata: SignalingMetadata?
+    
+    public var signalingConnectNotifyMetadata: SignalingMetadata?
     
     // MARK: - 接続チャネルに関する設定
     
@@ -151,6 +152,8 @@ extension Configuration: Codable {
         case audioEnabled
         case maxNumberOfSpeakers
         case webRTCConfiguration
+        case signalingConnectMetadata
+        case signalingConnectNotifyMetadata
         case signalingChannelType
         case webSocketChannelType
         case peerChannelType
@@ -165,9 +168,12 @@ extension Configuration: Codable {
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
         self.init(url: url, channelId: channelId, role: role)
-        if container.contains(.metadata) {
-            metadata = try container.decode(String.self, forKey: .metadata)
-        }
+        signalingConnectMetadata =
+            try container.decodeIfPresent(SignalingMetadata.self,
+                                          forKey: .signalingConnectMetadata)
+        signalingConnectNotifyMetadata =
+            try container.decodeIfPresent(SignalingMetadata.self,
+                                          forKey: .signalingConnectNotifyMetadata)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
@@ -199,9 +205,10 @@ extension Configuration: Codable {
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
         try container.encode(role, forKey: .role)
-        if let metadata = self.metadata {
-            try container.encode(metadata, forKey: .metadata)
-        }
+        try container.encodeIfPresent(signalingConnectMetadata,
+                                      forKey: .signalingConnectMetadata)
+        try container.encodeIfPresent(signalingConnectNotifyMetadata,
+                                      forKey: .signalingConnectNotifyMetadata)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)

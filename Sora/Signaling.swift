@@ -35,6 +35,16 @@ public enum SignalingSimulcast {
     case high
 }
 
+public struct SignalingMetadata {
+    public var data: Encodable?
+    public var decoder: Decoder?
+    
+    public init(data: Encodable) {
+        self.data = data
+    }
+    
+}
+
 /**
  "connect" シグナリングメッセージを表します。
  このメッセージはシグナリング接続の確立後、最初に送信されます。
