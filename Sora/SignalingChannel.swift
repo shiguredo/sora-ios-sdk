@@ -22,13 +22,9 @@ public final class SignalingChannelHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /**
-     メッセージ受信時に呼ばれるブロック。
-     受信したメッセージをシグナリングメッセージとして解析できれば、
-     `message` にシグナリングメッセージが指定されます。
-     */
-    public var onMessageHandler: ((_ message: SignalingMessage?, _ text: String) -> Void)?
-    
+    /// シグナリング受信時に呼ばれるブロック
+    public var onReceiveSignalingHandler: ((Signaling) -> Void)?
+
 }
 
 /**
@@ -101,7 +97,7 @@ public protocol SignalingChannel: class {
      
      - parameter message: シグナリングメッセージ
      */
-    func send(message: SignalingMessage)
+    func send(message: Signaling)
     
     /**
      サーバーに任意のメッセージを送信します。
@@ -142,7 +138,7 @@ class BasicSignalingChannel: SignalingChannel {
             self.disconnect(error: error)
         }
         
-        webSocketChannel.internalHandlers.onMessageHandler = handleMessage
+        webSocketChannel.internalHandlers.onMessageHandler = handle
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -204,7 +200,7 @@ class BasicSignalingChannel: SignalingChannel {
         }
     }
     
-    func send(message: SignalingMessage) {
+    func send(message: Signaling) {
         Logger.debug(type: .signalingChannel, message: "send message")
         let encoder = JSONEncoder()
         do {
@@ -222,7 +218,7 @@ class BasicSignalingChannel: SignalingChannel {
         webSocketChannel.send(message: .text(text))
     }
     
-    func handleMessage(_ message: WebSocketMessage) {
+    func handle(message: WebSocketMessage) {
         Logger.debug(type: .signalingChannel, message: "receive message")
         switch message {
         case .binary(_):
@@ -232,24 +228,22 @@ class BasicSignalingChannel: SignalingChannel {
         case .text(let text):
             guard let data = text.data(using: .utf8) else {
                 Logger.error(type: .signalingChannel, message: "invalid encoding")
-                
-                Logger.debug(type: .signalingChannel, message: "call onMessageHandler")
-                internalHandlers.onMessageHandler?(nil, text)
-                handlers.onMessageHandler?(nil, text)
                 return
             }
             
-            var sigMessage: SignalingMessage!
+            var signaling: Signaling!
             do {
-                sigMessage = try SignalingMessage.decode(from: data)
+                let decoder = JSONDecoder()
+                signaling = try decoder.decode(Signaling.self, from: data)
             } catch let error {
                 Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription)) => \(text)")
+                return
             }
             
-            Logger.debug(type: .signalingChannel, message: "call onMessageHandler")
-            internalHandlers.onMessageHandler?(sigMessage, text)
-            handlers.onMessageHandler?(sigMessage, text)
+            Logger.debug(type: .signalingChannel, message: "call onReceiveSignalingHandler")
+            internalHandlers.onReceiveSignalingHandler?(signaling)
+            handlers.onReceiveSignalingHandler?(signaling)
         }
     }
     

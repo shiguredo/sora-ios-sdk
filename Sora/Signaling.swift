@@ -1,32 +1,48 @@
 import Foundation
 
-public protocol Signaling {
-    associatedtype Connect: Encodable
-    associatedtype Offer: Decodable
-    associatedtype Answer: Encodable
-    associatedtype Candidate: Encodable
-    associatedtype UpdateToServer: Encodable
-    associatedtype UpdateToClient: Decodable
-    associatedtype Push: Decodable
-    associatedtype ConnectionCreated: Decodable
-    associatedtype ConnectionUpdated: Decodable
-    associatedtype ConnectionDestroyed: Decodable
-    associatedtype SpotlightChanged: Decodable
-    associatedtype NetworkStatus: Decodable
-    associatedtype Pong: Encodable
-}
-
-enum SignalingType: String {
-    case connect
-    case offer
-    case answer
-    case update
-    case candidate
-    case notify
+public enum Signaling {
+    case connect(SignalingConnect)
+    case offer(SignalingOffer)
+    case answer(SignalingAnswer)
+    case update(SignalingUpdate)
+    case candidate(SignalingCandidate)
+    case notifyConnection(SignalingNotifyConnection)
+    case notifySpotlightChanged(SignalingNotifySpotlightChanged)
+    case notifyNetworkStatus(SignalingNotifyNetworkStatus)
     case ping
-    case pong
+    case pong(SignalingPong)
     case disconnect
-    case push
+    case push(SignalingPush)
+    
+    public func typeName() -> String {
+        switch self {
+        case .connect(_):
+            return "connect"
+        case .offer(_):
+            return "offer"
+        case .answer(_):
+            return "answer"
+        case .update(_):
+            return "update"
+        case .candidate(_):
+            return "candidate"
+        case .notifyConnection(let notify):
+            return "notify(\(notify.eventType))"
+        case .notifySpotlightChanged(_):
+            return "notify(spotlight.changed)"
+        case .notifyNetworkStatus(_):
+            return "notify(network.status)"
+        case .ping:
+            return "ping"
+        case .pong(_):
+            return "pong"
+        case .disconnect:
+            return "disconnect"
+        case .push(_):
+            return "push"
+        }
+    }
+    
 }
 
 public enum Simulcast {
@@ -49,7 +65,7 @@ public struct SignalingMetadata {
  "connect" シグナリングメッセージを表します。
  このメッセージはシグナリング接続の確立後、最初に送信されます。
  */
-public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encodable> {
+public struct SignalingConnect {
     
     /// ロール
     public var role: SignalingRole
@@ -58,10 +74,10 @@ public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encod
     public var channelId: String
     
     /// メタデータ
-    public var metadata: ConnectMetadata?
+    public var metadata: SignalingMetadata?
     
     /// notify メタデータ
-    public var notifyMetadata: NotifyMetadata?
+    public var notifyMetadata: SignalingMetadata?
     
     /// SDP 。クライアントの判別に使われます。
     public var sdp: String?
@@ -71,9 +87,6 @@ public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encod
     
     /// Plan B の可否
     public var planBEnabled: Bool?
-    
-    /// スポットライト数
-    public var spotlight: Int?
     
     /// 映像の可否
     public var videoEnabled: Bool
@@ -102,7 +115,7 @@ public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encod
  "offer" シグナリングメッセージを表します。
  このメッセージは SDK が "connect" を送信した後に、サーバーから送信されます。
  */
-public struct SignalingOffer<Metadata: Decodable> {
+public struct SignalingOffer {
     
     /**
      クライアントが更新すべき設定を表します。
@@ -129,7 +142,7 @@ public struct SignalingOffer<Metadata: Decodable> {
     public let configuration: Configuration?
     
     /// メタデータ
-    public let metadata: Metadata?
+    public let metadata: SignalingMetadata?
     
 }
 
@@ -142,7 +155,7 @@ public struct SignalingAnswer {
 
 public struct SignalingCandidate {
     
-    public let candidate: String
+    public let candidate: ICECandidate
     
 }
 
@@ -157,25 +170,35 @@ public struct SignalingUpdate {
  "push" シグナリングメッセージを表します。
  このメッセージは Sora のプッシュ API を使用して送信されたデータです。
  */
-public struct SignalingPush<PushData: Decodable> {
+public struct SignalingPush {
     
     /// プッシュ通知で送信される JSON データ
-    public let data: PushData
+    public let data: SignalingMetadata
     
 }
 
-public struct SignalingNotifyConnection<Metadata: Decodable, MetadataElement: Decodable> {
+public enum SignalingNotifyEventType {
+    case connectionCreated
+    case connectionUpdated
+    case connectionDestroyed
+    case spotlightChanged
+    case networkStatus
+}
+
+public struct SignalingNotifyConnection {
+
+    var eventType: SignalingNotifyEventType
     var role: Role
     var clientId: String?
     var connectionId: String?
     var audio: Bool?
     var video: Bool?
-    var metadata: Metadata?
-    var metadataList: [MetadataElement]
+    var metadata: SignalingMetadata?
+    var metadataList: [SignalingMetadata]
     var minutes: Int
-    var channelConnections: Int
-    var channelUpstreamConnections: Int
-    var channelDownstreamConnections: Int
+    var connectionCount: Int
+    var upstreamConnectionCount: Int
+    var downstreamConnectionCount: Int
 }
 
 public struct SignalingNotifySpotlightChanged {
@@ -203,6 +226,91 @@ public struct SignalingPong {}
 // MARK: -
 // MARK: Codable
 
+/// :nodoc:
+extension Signaling: Codable {
+    
+    enum MessageType: String {
+        case connect
+        case offer
+        case answer
+        case update
+        case candidate
+        case notify
+        case ping
+        case pong
+        case disconnect
+        case push
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case type
+        case event_type
+        case sdp
+        case candidate
+        case data
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "offer":
+            self = .offer(try SignalingOffer(from: decoder))
+        case "update":
+            self = .update(try SignalingUpdate(from: decoder))
+        case "notify":
+            let eventType = try container.decode(SignalingNotifyEventType.self,
+                                                 forKey: .event_type)
+            switch eventType {
+            case .connectionCreated,
+                 .connectionUpdated,
+                 .connectionDestroyed:
+                self = .notifyConnection(try SignalingNotifyConnection(from: decoder))
+            case .spotlightChanged:
+                self = .notifySpotlightChanged(
+                    try SignalingNotifySpotlightChanged(from: decoder))
+            case .networkStatus:
+                self = .notifyNetworkStatus(
+                    try SignalingNotifyNetworkStatus(from: decoder))
+            }
+        case "ping":
+            self = .ping
+        case "push":
+            self = .push(try SignalingPush(from: decoder))
+        default:
+            throw SoraError.unknownSignalingMessageType(type: type)
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .connect(let message):
+            try container.encode(MessageType.connect.rawValue, forKey: .type)
+            try message.encode(to: encoder)
+        case .offer(let message):
+            try container.encode(MessageType.offer.rawValue, forKey: .type)
+            try message.encode(to: encoder)
+        case .answer(let message):
+            try container.encode(MessageType.answer.rawValue, forKey: .type)
+            try message.encode(to: encoder)
+        case .candidate(let message):
+            try container.encode(MessageType.candidate.rawValue, forKey: .type)
+            try message.encode(to: encoder)
+        case .update(let message):
+            try container.encode(MessageType.update.rawValue, forKey: .type)
+            try message.encode(to: encoder)
+        case .pong:
+            try container.encode(MessageType.pong.rawValue, forKey: .type)
+        case .disconnect:
+            try container.encode(MessageType.disconnect.rawValue, forKey: .type)
+        default:
+            throw SoraError.invalidSignalingMessage
+        }
+    }
+    
+}
+
 private var simulcastTable: PairTable<String, Simulcast> =
     PairTable(name: "Simulcast",
               pairs: [("low", .low),
@@ -223,7 +331,22 @@ extension Simulcast: Codable {
 }
 
 /// :nodoc:
-extension SignalingConnect: Encodable {
+extension SignalingMetadata: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        self.decoder = decoder
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        if let data = self.data {
+            try data.encode(to: encoder)
+        }
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingConnect: Codable {
     
     enum CodingKeys: String, CodingKey {
         case role
@@ -247,6 +370,10 @@ extension SignalingConnect: Encodable {
     
     enum AudioCodingKeys: String, CodingKey {
         case codec_type
+    }
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -290,12 +417,13 @@ extension SignalingConnect: Encodable {
         }
         
         try container.encodeIfPresent(maxNumberOfSpeakers, forKey: .vad)
+        try container.encodeIfPresent(simulcast, forKey: .simulcast)
     }
     
 }
 
 /// :nodoc:
-extension SignalingOffer.Configuration: Decodable {
+extension SignalingOffer.Configuration: Codable {
     
     enum CodingKeys: String, CodingKey {
         case iceServers
@@ -310,10 +438,14 @@ extension SignalingOffer.Configuration: Decodable {
                                                   forKey: .iceTransportPolicy)
     }
     
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
 }
 
 /// :nodoc:
-extension SignalingOffer: Decodable {
+extension SignalingOffer: Codable {
     
     enum CodingKeys: String, CodingKey {
         case client_id
@@ -332,17 +464,25 @@ extension SignalingOffer: Decodable {
             try container.decodeIfPresent(Configuration.self,
                                           forKey: .config)
         metadata =
-            try container.decodeIfPresent(Metadata.self,
+            try container.decodeIfPresent(SignalingMetadata.self,
                                           forKey: .metadata)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
     }
     
 }
 
 /// :nodoc:
-extension SignalingAnswer: Encodable {
+extension SignalingAnswer: Codable {
     
     enum CodingKeys: String, CodingKey {
         case sdp
+    }
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -353,10 +493,14 @@ extension SignalingAnswer: Encodable {
 }
 
 /// :nodoc:
-extension SignalingCandidate: Encodable {
+extension SignalingCandidate: Codable {
     
     enum CodingKeys: String, CodingKey {
         case candidate
+    }
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -386,7 +530,7 @@ extension SignalingUpdate: Codable {
 }
 
 /// :nodoc:
-extension SignalingPush: Decodable {
+extension SignalingPush: Codable {
     
     enum CodingKeys: String, CodingKey {
         case data
@@ -394,15 +538,20 @@ extension SignalingPush: Decodable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        data = try container.decode(PushData.self, forKey: .data)
+        data = try container.decode(SignalingMetadata.self, forKey: .data)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
     }
     
 }
 
 /// :nodoc:
-extension SignalingNotifyConnection: Decodable {
+extension SignalingNotifyConnection: Codable {
     
     enum CodingKeys: String, CodingKey {
+        case event_type
         case role
         case client_id
         case connection_id
@@ -418,28 +567,57 @@ extension SignalingNotifyConnection: Decodable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        eventType = try container.decode(SignalingNotifyEventType.self,
+                                         forKey: .event_type)
         role = try container.decode(Role.self, forKey: .role)
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
-        connectionId = try container.decodeIfPresent(String.self, forKey: .connection_id)
+        connectionId = try container.decodeIfPresent(String.self,
+                                                     forKey: .connection_id)
         audio = try container.decodeIfPresent(Bool.self, forKey: .connection_id)
         video = try container.decodeIfPresent(Bool.self, forKey: .video)
-        metadata = try container.decodeIfPresent(Metadata.self, forKey: .metadata)
+        metadata = try container.decodeIfPresent(SignalingMetadata.self,
+                                                 forKey: .metadata)
         metadataList =
-            try container.decode([MetadataElement].self,
+            try container.decode([SignalingMetadata].self,
                                  forKey: .metadata_list)
         minutes = try container.decode(Int.self, forKey: .minutes)
-        channelConnections =
+        connectionCount =
             try container.decode(Int.self, forKey: .channel_connections)
-        channelUpstreamConnections =
+        upstreamConnectionCount =
             try container.decode(Int.self, forKey: .channel_upstream_connections)
-        channelDownstreamConnections =
+        downstreamConnectionCount =
             try container.decode(Int.self, forKey: .channel_downstream_connections)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
+}
+
+private var signalingNotifyEventType: PairTable<String, SignalingNotifyEventType> =
+    PairTable(name: "SignalingNotifyEventType",
+              pairs: [("connection.created", .connectionCreated),
+                      ("connection.updated", .connectionUpdated),
+                      ("connection.destroyed", .connectionDestroyed),
+                      ("spotlight.changed", .spotlightChanged),
+                      ("newtork.status", .networkStatus)])
+
+/// :nodoc:
+extension SignalingNotifyEventType: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        self = try signalingNotifyEventType.decode(from: decoder)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        try signalingNotifyEventType.encode(self, to: encoder)
     }
     
 }
 
 /// :nodoc:
-extension SignalingNotifySpotlightChanged: Decodable {
+extension SignalingNotifySpotlightChanged: Codable {
     
     enum CodingKeys: String, CodingKey {
         case client_id
@@ -460,10 +638,14 @@ extension SignalingNotifySpotlightChanged: Decodable {
         video = try container.decodeIfPresent(Bool.self, forKey: .video)
     }
     
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
 }
 
 /// :nodoc:
-extension SignalingNotifyNetworkStatus: Decodable {
+extension SignalingNotifyNetworkStatus: Codable {
     
     enum CodingKeys: String, CodingKey {
         case unstable_level
@@ -474,10 +656,18 @@ extension SignalingNotifyNetworkStatus: Decodable {
         unstableLevel = try container.decode(Int.self, forKey: .unstable_level)
     }
     
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
 }
 
 /// :nodoc:
-extension SignalingPong: Encodable {
+extension SignalingPong: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
     
     public func encode(to encoder: Encoder) throws {
         // エンコードするプロパティはない

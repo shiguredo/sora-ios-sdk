@@ -9,18 +9,15 @@ public final class MediaChannelHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// シグナリングメッセージの受信時に呼ばれるブロック
-    public var onMessageHandler: ((SignalingMessage) -> Void)?
-    
     /// ストリームが追加されたときに呼ばれるブロック
     public var onAddStreamHandler: ((MediaStream) -> Void)?
     
     /// ストリームが除去されたときに呼ばれるブロック
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     
-    /// サーバーからのイベント通知の受信時に呼ばれるハンドラ
-    public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
-    
+    /// シグナリング受信時に呼ばれるブロック
+    public var onReceiveSignalingHandler: ((Signaling) -> Void)?
+
 }
 
 // MARK: -
@@ -229,14 +226,19 @@ public final class MediaChannel {
             self.handlers.onRemoveStreamHandler?(stream)
         }
         
-        peerChannel.internalHandlers.onNotifyHandler = { message in
-            Logger.debug(type: .mediaChannel, message: "receive event notification")
-            self.publisherCount = message.publisherCount
-            self.subscriberCount = message.subscriberCount
+        peerChannel.internalHandlers.onReceiveSignalingHandler = { message in
+            Logger.debug(type: .mediaChannel, message: "receive signaling")
+            switch message {
+            case .notifyConnection(let message):
+                self.publisherCount = message.upstreamConnectionCount
+                self.subscriberCount = message.downstreamConnectionCount
+            default:
+                break
+            }
             
-            Logger.debug(type: .mediaChannel, message: "call onNotifyHandler")
-            self.internalHandlers.onNotifyHandler?(message)
-            self.handlers.onNotifyHandler?(message)
+            Logger.debug(type: .mediaChannel, message: "call onReceiveSignalingHandler")
+            self.internalHandlers.onReceiveSignalingHandler?(message)
+            self.handlers.onReceiveSignalingHandler?(message)
         }
         
         peerChannel.connect() { error in
