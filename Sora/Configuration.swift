@@ -50,6 +50,9 @@ public struct Configuration {
     /// デフォルトは `true` です。
     public var audioEnabled: Bool = true
     
+    /// サイマルキャスト
+    public var simulcast: Simulcast?
+    
     /**
      最大話者数。マルチストリーム時のみ有効です。
      
@@ -150,6 +153,7 @@ extension Configuration: Codable {
         case audioCodec
         case videoEnabled
         case audioEnabled
+        case simulcast
         case maxNumberOfSpeakers
         case webRTCConfiguration
         case signalingConnectMetadata
@@ -174,6 +178,7 @@ extension Configuration: Codable {
         signalingConnectNotifyMetadata =
             try container.decodeIfPresent(SignalingMetadata.self,
                                           forKey: .signalingConnectNotifyMetadata)
+        simulcast = try container.decodeIfPresent(Simulcast.self, forKey: .simulcast)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
@@ -209,6 +214,7 @@ extension Configuration: Codable {
                                       forKey: .signalingConnectMetadata)
         try container.encodeIfPresent(signalingConnectNotifyMetadata,
                                       forKey: .signalingConnectNotifyMetadata)
+        try container.encodeIfPresent(simulcast, forKey: .simulcast)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)
