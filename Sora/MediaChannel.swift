@@ -180,7 +180,7 @@ public final class MediaChannel {
      - parameter error: (接続失敗時) エラー
      */
     func connect(webRTCConfiguration: WebRTCConfiguration,
-                 timeout: Int = Configuration.defaultConnectionTimeout,
+                 timeout: Int = 30,
                  handler: @escaping (_ error: Error?) -> Void) -> ConnectionTask {
         let task = ConnectionTask()
         if state.isConnecting {

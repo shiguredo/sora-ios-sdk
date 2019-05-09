@@ -10,14 +10,6 @@ private let defaultPublisherAudioTrackId: String = "mainAudio"
  */
 public struct Configuration {
     
-    // MARK: デフォルト値
-    
-    /// 映像の最大ビットレート
-    public static let maxVideoVideoBitRate = 5000
-    
-    /// デフォルトの接続タイムアウト時間 (秒)
-    public static let defaultConnectionTimeout = 10
-
     // MARK: - 接続に関する設定
     
     /// サーバーの URL
