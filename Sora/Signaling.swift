@@ -29,7 +29,7 @@ enum SignalingType: String {
     case push
 }
 
-public enum SignalingSimulcast {
+public enum Simulcast {
     case low
     case middle
     case high
@@ -75,9 +75,6 @@ public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encod
     /// スポットライト数
     public var spotlight: Int?
     
-    /// サイマルキャスト
-    public var simulcast: SignalingSimulcast?
-    
     /// 映像の可否
     public var videoEnabled: Bool
     
@@ -95,6 +92,9 @@ public struct SignalingConnect<ConnectMetadata: Encodable, NotifyMetadata: Encod
     
     /// 最大話者数
     public var maxNumberOfSpeakers: Int?
+    
+    /// サイマルキャスト
+    public var simulcast: Simulcast?
     
 }
 
@@ -203,14 +203,18 @@ public struct SignalingPong {}
 // MARK: -
 // MARK: Codable
 
-private var simulcastTable: PairTable<String, SignalingSimulcast> =
-    PairTable(name: "SignalingSimulcast",
+private var simulcastTable: PairTable<String, Simulcast> =
+    PairTable(name: "Simulcast",
               pairs: [("low", .low),
                       ("middle", .middle),
                       ("high", .high)])
 
 /// :nodoc:
-extension SignalingSimulcast: Encodable {
+extension Simulcast: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
     
     public func encode(to encoder: Encoder) throws {
         try simulcastTable.encode(self, to: encoder)
