@@ -1,19 +1,47 @@
 import Foundation
 
+/**
+ シグナリングの種別です。
+ */
 public enum Signaling {
+    
+    /// "connect" シグナリング
     case connect(SignalingConnect)
+    
+    /// "offer" シグナリング
     case offer(SignalingOffer)
+    
+    /// "answer" シグナリング
     case answer(SignalingAnswer)
+    
+    /// "update" シグナリング
     case update(SignalingUpdate)
+    
+    /// "candidate" シグナリング
     case candidate(SignalingCandidate)
+    
+    /// "notify" シグナリング ("connection.created", "connection.updated", "connection.destroyed")
     case notifyConnection(SignalingNotifyConnection)
+    
+    /// "notify" シグナリング ("spotlight.changed")
     case notifySpotlightChanged(SignalingNotifySpotlightChanged)
+    
+    /// "notify" シグナリング ("network.status")
     case notifyNetworkStatus(SignalingNotifyNetworkStatus)
+    
+    /// "ping" シグナリング
     case ping
+    
+    /// "pong" シグナリング
     case pong(SignalingPong)
+    
+    /// "disconnect" シグナリング
     case disconnect
+    
+    /// "pong" シグナリング
     case push(SignalingPush)
     
+    /// :nodoc:
     public func typeName() -> String {
         switch self {
         case .connect(_):
@@ -45,16 +73,43 @@ public enum Signaling {
     
 }
 
+/**
+ サイマルキャストの種別を表します。
+ */
 public enum Simulcast {
+    
+    /// 低画質
     case low
+    
+    /// 中画質
     case middle
+    
+    /// 高画質
     case high
+    
 }
 
+/**
+ シグナリングに含まれるメタデータ (任意のデータ) を表します。
+ `connect` などのサーバーに送信するシグナリングにセットすると、
+ `data` プロパティの値が JSON にエンコードされて送信されます。
+ `notify` などのサーバーから受信するシグナリングにメタデータが含まれる場合は、
+ `decoder` プロパティに JSON デコーダーがセットされます。
+ 受信したメタデータを任意のデータ型に変換するには、このデコーダーを使ってください。
+ */
 public struct SignalingMetadata {
+    
+    /// シグナリングに含めて送信するメタデータ
     public var data: Encodable?
+    
+    /// シグナリングに含まれるメタデータの JSON デコーダー
     public var decoder: Decoder?
     
+    /**
+     初期化します。
+     
+     - parameter data: 送信するデータ
+     */
     public init(data: Encodable) {
         self.data = data
     }
@@ -146,6 +201,9 @@ public struct SignalingOffer {
     
 }
 
+/**
+ "answer" シグナリングメッセージを表します。
+ */
 public struct SignalingAnswer {
     
     /// SDP メッセージ
@@ -153,12 +211,19 @@ public struct SignalingAnswer {
 
 }
 
+/**
+ "candidate" シグナリングメッセージを表します。
+ */
 public struct SignalingCandidate {
     
+    /// ICE candidate
     public let candidate: ICECandidate
     
 }
 
+/**
+ "update" シグナリングメッセージを表します。
+ */
 public struct SignalingUpdate {
     
     /// SDP メッセージ
@@ -177,41 +242,117 @@ public struct SignalingPush {
     
 }
 
+/**
+ "notify" シグナリングメッセージで通知されるイベントの種別です。
+ 詳細は Sora のドキュメントを参照してください。
+ */
 public enum SignalingNotifyEventType {
+    
+    /// "connection.created"
     case connectionCreated
+    
+    /// "connection.updated"
     case connectionUpdated
+    
+    /// "connection.destroyed"
     case connectionDestroyed
+    
+    /// "spotlight.changed"
     case spotlightChanged
+    
+    /// "network.status"
     case networkStatus
+    
 }
 
+/**
+ "notify" シグナリングメッセージのうち、次のイベントを表します。
+ 
+ - `connection.created`
+ - `connection.updated`
+ - `connection.destroyed`
+ 
+ このメッセージは接続の確立後、チャネルへの接続数に変更があるとサーバーから送信されます。
+ */
 public struct SignalingNotifyConnection {
 
-    var eventType: SignalingNotifyEventType
-    var role: Role
-    var clientId: String?
-    var connectionId: String?
-    var audio: Bool?
-    var video: Bool?
-    var metadata: SignalingMetadata?
-    var metadataList: [SignalingMetadata]
-    var minutes: Int
-    var connectionCount: Int
-    var upstreamConnectionCount: Int
-    var downstreamConnectionCount: Int
-}
-
-public struct SignalingNotifySpotlightChanged {
-    var clientId: String?
-    var connectionId: String?
-    var spotlightId: String
-    public var isFixed: Bool?
+    // MARK: イベント情報
+    
+    /// イベントの種別
+    public var eventType: SignalingNotifyEventType
+    
+    // MARK: 接続情報
+    
+    /// ロール
+    public var role: Role
+    
+    /// クライアント ID
+    public var clientId: String?
+    
+    /// 接続 ID
+    public var connectionId: String?
+    
+    /// 音声の可否
     public var audioEnabled: Bool?
+    
+    /// 映像の可否
     public var videoEnabled: Bool?
+    
+    /// メタデータ
+    public var metadata: SignalingMetadata?
+    
+    /// メタデータのリスト
+    public var metadataList: [SignalingMetadata]
+    
+    // MARK: 接続状態
+    
+    /// 接続時間
+    public var connectionTime: Int
+    
+    /// 接続中のクライアントの数
+    public var connectionCount: Int
+    
+    /// 接続中のパブリッシャーの数
+    public var publisherCount: Int
+    
+    /// 接続中のサブスクライバーの数
+    public var subscriberCount: Int
+    
 }
 
+/**
+ "notify" シグナリングメッセージのうち、 `spotlight.changed` イベントを表します。
+ */
+public struct SignalingNotifySpotlightChanged {
+    
+    /// クライアント ID
+    public var clientId: String?
+    
+    /// 接続 ID
+    public var connectionId: String?
+    
+    /// スポットライト ID
+    public var spotlightId: String
+    
+    /// 固定の有無
+    public var isFixed: Bool?
+    
+    /// 音声の可否
+    public var audioEnabled: Bool?
+    
+    /// 映像の可否
+    public var videoEnabled: Bool?
+    
+}
+
+/**
+ "notify" シグナリングメッセージのうち、 "network.status" イベントを表します。
+ */
 public struct SignalingNotifyNetworkStatus {
-    var unstableLevel: Int
+    
+    /// ネットワークの不安定度
+    public var unstableLevel: Int
+    
 }
 
 /**

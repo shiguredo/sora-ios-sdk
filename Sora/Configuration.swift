@@ -65,8 +65,10 @@ public struct Configuration {
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
 
+    /// `connect` シグナリングに含めるメタデータ
     public var signalingConnectMetadata: SignalingMetadata?
     
+    /// `connect` シグナリングに含める通知用のメタデータ
     public var signalingConnectNotifyMetadata: SignalingMetadata?
     
     // MARK: - 接続チャネルに関する設定
