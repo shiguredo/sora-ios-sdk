@@ -205,9 +205,9 @@ public struct SignalingNotifySpotlightChanged {
     var clientId: String?
     var connectionId: String?
     var spotlightId: String
-    var fixed: Bool?
-    var audio: Bool?
-    var video: Bool?
+    public var isFixed: Bool?
+    public var audioEnabled: Bool?
+    public var videoEnabled: Bool?
 }
 
 public struct SignalingNotifyNetworkStatus {
@@ -573,19 +573,19 @@ extension SignalingNotifyConnection: Codable {
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
         connectionId = try container.decodeIfPresent(String.self,
                                                      forKey: .connection_id)
-        audio = try container.decodeIfPresent(Bool.self, forKey: .connection_id)
-        video = try container.decodeIfPresent(Bool.self, forKey: .video)
+        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .connection_id)
+        videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
         metadata = try container.decodeIfPresent(SignalingMetadata.self,
                                                  forKey: .metadata)
         metadataList =
             try container.decode([SignalingMetadata].self,
                                  forKey: .metadata_list)
-        minutes = try container.decode(Int.self, forKey: .minutes)
+        connectionTime = try container.decode(Int.self, forKey: .minutes)
         connectionCount =
             try container.decode(Int.self, forKey: .channel_connections)
-        upstreamConnectionCount =
+        publisherCount =
             try container.decode(Int.self, forKey: .channel_upstream_connections)
-        downstreamConnectionCount =
+        subscriberCount =
             try container.decode(Int.self, forKey: .channel_downstream_connections)
     }
     
@@ -633,9 +633,9 @@ extension SignalingNotifySpotlightChanged: Codable {
         clientId = try container.decode(String?.self, forKey: .client_id)
         connectionId = try container.decode(String?.self, forKey: .connection_id)
         spotlightId = try container.decode(String.self, forKey: .spotlight_id)
-        fixed = try container.decodeIfPresent(Bool.self, forKey: .fixed)
-        audio = try container.decodeIfPresent(Bool.self, forKey: .audio)
-        video = try container.decodeIfPresent(Bool.self, forKey: .video)
+        isFixed = try container.decodeIfPresent(Bool.self, forKey: .fixed)
+        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
+        videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
     }
     
     public func encode(to encoder: Encoder) throws {
