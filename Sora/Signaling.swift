@@ -732,7 +732,7 @@ extension SignalingNotifyConnection: Codable {
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
         connectionId = try container.decodeIfPresent(String.self,
                                                      forKey: .connection_id)
-        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .connection_id)
+        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
         videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
         metadata = try container.decodeIfPresent(SignalingMetadata.self,
                                                  forKey: .metadata)
