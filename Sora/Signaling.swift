@@ -284,7 +284,7 @@ public struct SignalingNotifyConnection {
     // MARK: 接続情報
     
     /// ロール
-    public var role: Role
+    public var role: SignalingRole
     
     /// クライアント ID
     public var clientId: String?
@@ -482,6 +482,24 @@ extension SignalingMetadata: Codable {
         if let data = self.data {
             try data.encode(to: encoder)
         }
+    }
+    
+}
+
+private var roleTable: PairTable<String, SignalingRole> =
+    PairTable(name: "SignalingRole",
+              pairs: [("upstream", .upstream),
+                      ("downstream", .downstream)])
+
+/// :nodoc:
+extension SignalingRole: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        self = try roleTable.decode(from: decoder)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        try roleTable.encode(self, to: encoder)
     }
     
 }
@@ -710,7 +728,7 @@ extension SignalingNotifyConnection: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         eventType = try container.decode(SignalingNotifyEventType.self,
                                          forKey: .event_type)
-        role = try container.decode(Role.self, forKey: .role)
+        role = try container.decode(SignalingRole.self, forKey: .role)
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
         connectionId = try container.decodeIfPresent(String.self,
                                                      forKey: .connection_id)
