@@ -677,14 +677,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 break
             }
             
-            Logger.debug(type: .peerChannel, message: "call onReceiveSignalingHandler")
-            channel.internalHandlers.onReceiveSignalingHandler?(signaling)
-            channel.handlers.onReceiveSignalingHandler?(signaling)
-            
         default:
             // discard
             break
         }
+        
+        Logger.debug(type: .peerChannel, message: "call onReceiveSignalingHandler")
+        channel.internalHandlers.onReceiveSignalingHandler?(signaling)
+        channel.handlers.onReceiveSignalingHandler?(signaling)
     }
     
     func finishConnecting() {
