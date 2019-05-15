@@ -116,6 +116,14 @@ public struct SignalingMetadata {
     
 }
 
+public struct SignalingClientMetadata {
+
+    public var clientId: String?
+    public var connectionId: String?
+    public var metadata: SignalingMetadata
+    
+}
+
 /**
  "connect" シグナリングメッセージを表します。
  このメッセージはシグナリング接続の確立後、最初に送信されます。
@@ -302,7 +310,7 @@ public struct SignalingNotifyConnection {
     public var metadata: SignalingMetadata?
     
     /// メタデータのリスト
-    public var metadataList: [SignalingMetadata]
+    public var metadataList: [SignalingClientMetadata]?
     
     // MARK: 接続状態
     
@@ -482,6 +490,29 @@ extension SignalingMetadata: Codable {
         if let data = self.data {
             try data.encode(to: encoder)
         }
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingClientMetadata: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case client_id
+        case connection_id
+        case metadata
+    }
+    
+    public init(from decoder: Decoder) throws {
+        do {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
+            connectionId = try container.decodeIfPresent(String.self, forKey: .connection_id)
+            metadata = try container.decode(SignalingMetadata.self, forKey: .metadata)
+        } catch {
+            metadata = try SignalingMetadata(from: decoder)
+        }
+
     }
     
 }
@@ -737,8 +768,8 @@ extension SignalingNotifyConnection: Codable {
         metadata = try container.decodeIfPresent(SignalingMetadata.self,
                                                  forKey: .metadata)
         metadataList =
-            try container.decode([SignalingMetadata].self,
-                                 forKey: .metadata_list)
+            try container.decodeIfPresent([SignalingClientMetadata].self,
+                                          forKey: .metadata_list)
         connectionTime = try container.decode(Int.self, forKey: .minutes)
         connectionCount =
             try container.decode(Int.self, forKey: .channel_connections)
