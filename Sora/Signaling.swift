@@ -760,7 +760,7 @@ private var signalingNotifyEventType: PairTable<String, SignalingNotifyEventType
                       ("connection.updated", .connectionUpdated),
                       ("connection.destroyed", .connectionDestroyed),
                       ("spotlight.changed", .spotlightChanged),
-                      ("newtork.status", .networkStatus)])
+                      ("network.status", .networkStatus)])
 
 /// :nodoc:
 extension SignalingNotifyEventType: Codable {
