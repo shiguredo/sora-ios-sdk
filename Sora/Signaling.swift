@@ -91,28 +91,14 @@ public enum Simulcast {
 
 /**
  シグナリングに含まれるメタデータ (任意のデータ) を表します。
- `connect` などのサーバーに送信するシグナリングにセットすると、
- `data` プロパティの値が JSON にエンコードされて送信されます。
- `notify` などのサーバーから受信するシグナリングにメタデータが含まれる場合は、
+ サーバーから受信するシグナリングにメタデータが含まれる場合は、
  `decoder` プロパティに JSON デコーダーがセットされます。
  受信したメタデータを任意のデータ型に変換するには、このデコーダーを使ってください。
  */
 public struct SignalingMetadata {
     
-    /// シグナリングに含めて送信するメタデータ
-    public var data: Encodable?
-    
     /// シグナリングに含まれるメタデータの JSON デコーダー
     public var decoder: Decoder?
-    
-    /**
-     初期化します。
-     
-     - parameter data: 送信するデータ
-     */
-    public init(data: Encodable) {
-        self.data = data
-    }
     
 }
 
@@ -137,10 +123,10 @@ public struct SignalingConnect {
     public var channelId: String
     
     /// メタデータ
-    public var metadata: SignalingMetadata?
+    public var metadata: Encodable?
     
     /// notify メタデータ
-    public var notifyMetadata: SignalingMetadata?
+    public var notifyMetadata: Encodable?
     
     /// SDP 。クライアントの判別に使われます。
     public var sdp: String?
@@ -480,16 +466,10 @@ extension Simulcast: Codable {
 }
 
 /// :nodoc:
-extension SignalingMetadata: Codable {
+extension SignalingMetadata: Decodable {
     
     public init(from decoder: Decoder) throws {
         self.decoder = decoder
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        if let data = self.data {
-            try data.encode(to: encoder)
-        }
     }
     
 }
@@ -571,9 +551,10 @@ extension SignalingConnect: Codable {
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channel_id)
         try container.encodeIfPresent(sdp, forKey: .sdp)
-        try container.encodeIfPresent(metadata, forKey: .metadata)
-        try container.encodeIfPresent(notifyMetadata,
-                                      forKey: .signaling_notify_metadata)
+        let metadataEnc = container.superEncoder(forKey: .metadata)
+        try metadata?.encode(to: metadataEnc)
+        let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
+        try notifyMetadata?.encode(to: notifyEnc)
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
         try container.encodeIfPresent(planBEnabled, forKey: .plan_b)

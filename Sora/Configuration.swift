@@ -66,10 +66,10 @@ public struct Configuration {
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
 
     /// `connect` シグナリングに含めるメタデータ
-    public var signalingConnectMetadata: SignalingMetadata?
+    public var signalingConnectMetadata: Encodable?
     
     /// `connect` シグナリングに含める通知用のメタデータ
-    public var signalingConnectNotifyMetadata: SignalingMetadata?
+    public var signalingConnectNotifyMetadata: Encodable?
     
     // MARK: - 接続チャネルに関する設定
     
@@ -169,17 +169,12 @@ extension Configuration: Codable {
     }
     
     public init(from decoder: Decoder) throws {
+        // NOTE: メタデータはサポートしない
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
         self.init(url: url, channelId: channelId, role: role)
-        signalingConnectMetadata =
-            try container.decodeIfPresent(SignalingMetadata.self,
-                                          forKey: .signalingConnectMetadata)
-        signalingConnectNotifyMetadata =
-            try container.decodeIfPresent(SignalingMetadata.self,
-                                          forKey: .signalingConnectNotifyMetadata)
         simulcast = try container.decodeIfPresent(Simulcast.self, forKey: .simulcast)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
@@ -208,14 +203,11 @@ extension Configuration: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
+        // NOTE: メタデータはサポートしない
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
         try container.encode(role, forKey: .role)
-        try container.encodeIfPresent(signalingConnectMetadata,
-                                      forKey: .signalingConnectMetadata)
-        try container.encodeIfPresent(signalingConnectNotifyMetadata,
-                                      forKey: .signalingConnectNotifyMetadata)
         try container.encodeIfPresent(simulcast, forKey: .simulcast)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
