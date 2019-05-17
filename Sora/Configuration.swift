@@ -175,7 +175,7 @@ extension Configuration: Codable {
     }
     
     public init(from decoder: Decoder) throws {
-        // NOTE: メタデータはサポートしない
+        // NOTE: メタデータとイベントハンドラはサポートしない
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
@@ -209,7 +209,7 @@ extension Configuration: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
-        // NOTE: メタデータはサポートしない
+        // NOTE: メタデータとイベントハンドラはサポートしない
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
