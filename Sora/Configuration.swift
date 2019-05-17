@@ -73,8 +73,13 @@ public struct Configuration {
     
     // MARK: - イベントハンドラ
     
+    /// シグナリングチャネルに関するイベントハンドラ
     public var signalingChannelHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
+    
+    /// ピアチャネルに関するイベントハンドラ
     public var peerChannelHandlers: PeerChannelHandlers = PeerChannelHandlers()
+    
+    /// メディアチャネルに関するイベントハンドラ
     public var mediaChannelHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
     // MARK: - 接続チャネルに関する設定
