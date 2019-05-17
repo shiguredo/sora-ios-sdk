@@ -13,6 +13,7 @@
 		910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */; };
 		9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */; };
 		9138B4D01E655728006A76FB /* WebRTCInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9138B4CF1E655728006A76FB /* WebRTCInfo.swift */; };
+		913C895A226EFC61001B2569 /* Signaling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 913C8959226EFC61001B2569 /* Signaling.swift */; };
 		9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */; };
 		9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9145A58F1F0CB093002D6EC6 /* Utilities.swift */; };
 		915344121FE96F750083762B /* SoraError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 915344111FE96F750083762B /* SoraError.swift */; };
@@ -48,7 +49,6 @@
 		91C7B0991D54636A006F5FA2 /* SoraTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C7B0981D54636A006F5FA2 /* SoraTests.swift */; };
 		91CD2A4A1F288A6A00D039D1 /* Sora.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91CD2A491F288A6A00D039D1 /* Sora.swift */; };
 		91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */; };
-		91FAB3EC1F29130700EDF53C /* SignalingMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FAB3EB1F29130700EDF53C /* SignalingMessage.swift */; };
 		91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FD95741DCA06F700047BA9 /* RTC+Description.swift */; };
 		C5D3C7421F7CEB18004660F5 /* VideoCapturerDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */; };
 /* End PBXBuildFile section */
@@ -82,6 +82,7 @@
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
 		9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaStream.swift; sourceTree = "<group>"; };
 		9138B4CF1E655728006A76FB /* WebRTCInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebRTCInfo.swift; sourceTree = "<group>"; };
+		913C8959226EFC61001B2569 /* Signaling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Signaling.swift; sourceTree = "<group>"; };
 		9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTimer.swift; sourceTree = "<group>"; };
 		9145A58F1F0CB093002D6EC6 /* Utilities.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
 		915344111FE96F750083762B /* SoraError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoraError.swift; sourceTree = "<group>"; };
@@ -120,7 +121,6 @@
 		91C7B0A81D5463EA006F5FA2 /* Cartfile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Cartfile; sourceTree = "<group>"; };
 		91CD2A491F288A6A00D039D1 /* Sora.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Sora.swift; sourceTree = "<group>"; };
 		91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoFrame.swift; sourceTree = "<group>"; };
-		91FAB3EB1F29130700EDF53C /* SignalingMessage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SignalingMessage.swift; sourceTree = "<group>"; };
 		91FD95741DCA06F700047BA9 /* RTC+Description.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "RTC+Description.swift"; sourceTree = "<group>"; };
 		C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCapturerDevice.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -209,8 +209,8 @@
 				91A19B8B1F19366B00A76852 /* PeerChannel.swift */,
 				9174A8901F73F89400D586C4 /* Role.swift */,
 				91BD9488204536D9006ED524 /* SDKInfo.swift */,
+				913C8959226EFC61001B2569 /* Signaling.swift */,
 				91A19B891F19366000A76852 /* SignalingChannel.swift */,
-				91FAB3EB1F29130700EDF53C /* SignalingMessage.swift */,
 				91CD2A491F288A6A00D039D1 /* Sora.swift */,
 				915344111FE96F750083762B /* SoraError.swift */,
 				9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */,
@@ -386,7 +386,6 @@
 				91554F431F179CFD00403C39 /* WebSocketChannel.swift in Sources */,
 				91756E221F90ADE900B70C53 /* PeerChannel.swift in Sources */,
 				91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */,
-				91FAB3EC1F29130700EDF53C /* SignalingMessage.swift in Sources */,
 				9163401B1F74F1F300303516 /* RTCPeerConnection+SessionDescription.swift in Sources */,
 				915CEC901F821A90006E45E2 /* CameraVideoCapturer.swift in Sources */,
 				91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */,
@@ -401,6 +400,7 @@
 				9174A8971F73F93B00D586C4 /* ICETransportPolicy.swift in Sources */,
 				91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */,
 				9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */,
+				913C895A226EFC61001B2569 /* Signaling.swift in Sources */,
 				91BD9489204536D9006ED524 /* SDKInfo.swift in Sources */,
 				91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */,
 				91CD2A4A1F288A6A00D039D1 /* Sora.swift in Sources */,

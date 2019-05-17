@@ -1,6 +1,8 @@
 import Foundation
 import WebRTC
 
+// MARK: デフォルト値
+
 private let defaultPublisherStreamId: String = "mainStream"
 private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
@@ -10,14 +12,6 @@ private let defaultPublisherAudioTrackId: String = "mainAudio"
  */
 public struct Configuration {
     
-    // MARK: デフォルト値
-    
-    /// 映像の最大ビットレート
-    public static let maxVideoVideoBitRate = 5000
-    
-    /// デフォルトの接続タイムアウト時間 (秒)
-    public static let defaultConnectionTimeout = 10
-
     // MARK: - 接続に関する設定
     
     /// サーバーの URL
@@ -29,7 +23,9 @@ public struct Configuration {
     /// ロール
     public var role: Role
     
-    /// メタデータ。 `connect` シグナリングメッセージにセットされます。
+    /// このプロパティは `signalingConnectMetadata` に置き換えられました。
+    @available(*, deprecated, renamed: "signalingConnectMetadata",
+    message: "このプロパティは signalingConnectMetadata に置き換えられました。")
     public var metadata: String?
     
     /**
@@ -59,6 +55,9 @@ public struct Configuration {
     /// デフォルトは `true` です。
     public var audioEnabled: Bool = true
     
+    /// サイマルキャスト
+    public var simulcast: Simulcast?
+    
     /**
      最大話者数。マルチストリーム時のみ有効です。
      
@@ -70,7 +69,24 @@ public struct Configuration {
 
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
+
+    /// `connect` シグナリングに含めるメタデータ
+    public var signalingConnectMetadata: Encodable?
     
+    /// `connect` シグナリングに含める通知用のメタデータ
+    public var signalingConnectNotifyMetadata: Encodable?
+    
+    // MARK: - イベントハンドラ
+    
+    /// シグナリングチャネルに関するイベントハンドラ
+    public var signalingChannelHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
+    
+    /// ピアチャネルに関するイベントハンドラ
+    public var peerChannelHandlers: PeerChannelHandlers = PeerChannelHandlers()
+    
+    /// メディアチャネルに関するイベントハンドラ
+    public var mediaChannelHandlers: MediaChannelHandlers = MediaChannelHandlers()
+
     // MARK: - 接続チャネルに関する設定
     
     /**
@@ -155,8 +171,11 @@ extension Configuration: Codable {
         case audioCodec
         case videoEnabled
         case audioEnabled
+        case simulcast
         case maxNumberOfSpeakers
         case webRTCConfiguration
+        case signalingConnectMetadata
+        case signalingConnectNotifyMetadata
         case signalingChannelType
         case webSocketChannelType
         case peerChannelType
@@ -166,14 +185,13 @@ extension Configuration: Codable {
     }
     
     public init(from decoder: Decoder) throws {
+        // NOTE: メタデータとイベントハンドラはサポートしない
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
         self.init(url: url, channelId: channelId, role: role)
-        if container.contains(.metadata) {
-            metadata = try container.decode(String.self, forKey: .metadata)
-        }
+        simulcast = try container.decodeIfPresent(Simulcast.self, forKey: .simulcast)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
@@ -201,13 +219,12 @@ extension Configuration: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
+        // NOTE: メタデータとイベントハンドラはサポートしない
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
         try container.encode(role, forKey: .role)
-        if let metadata = self.metadata {
-            try container.encode(metadata, forKey: .metadata)
-        }
+        try container.encodeIfPresent(simulcast, forKey: .simulcast)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)
