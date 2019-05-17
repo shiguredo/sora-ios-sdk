@@ -189,13 +189,13 @@ public protocol PeerChannel: class {
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
-    var handlers: PeerChannelHandlers { get }
+    var handlers: PeerChannelHandlers { get set }
     
     /**
      内部処理で使われるイベントハンドラ。
      このハンドラをカスタマイズに使うべきではありません。
      */
-    var internalHandlers: PeerChannelHandlers { get }
+    var internalHandlers: PeerChannelHandlers { get set }
     
     // MARK: - 接続情報
     
@@ -247,8 +247,8 @@ public protocol PeerChannel: class {
 
 class BasicPeerChannel: PeerChannel {
     
-    let handlers: PeerChannelHandlers = PeerChannelHandlers()
-    let internalHandlers: PeerChannelHandlers = PeerChannelHandlers()
+    var handlers: PeerChannelHandlers = PeerChannelHandlers()
+    var internalHandlers: PeerChannelHandlers = PeerChannelHandlers()
     let configuration: Configuration
     let signalingChannel: SignalingChannel
     

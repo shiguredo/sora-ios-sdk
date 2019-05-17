@@ -45,10 +45,10 @@ public final class MediaChannel {
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
-    public let handlers: MediaChannelHandlers = MediaChannelHandlers()
+    public var handlers: MediaChannelHandlers = MediaChannelHandlers()
     
     /// 内部処理で使われるイベントハンドラ
-    let internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
+    var internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
     // MARK: - 接続情報
     

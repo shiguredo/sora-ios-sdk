@@ -56,13 +56,13 @@ public protocol SignalingChannel: class {
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
-    var handlers: SignalingChannelHandlers { get }
+    var handlers: SignalingChannelHandlers { get set }
     
     /**
      内部処理で使われるイベントハンドラ。
      このハンドラをカスタマイズに使うべきではありません。
      */
-    var internalHandlers: SignalingChannelHandlers { get }
+    var internalHandlers: SignalingChannelHandlers { get set }
 
     // MARK: - インスタンスの生成
     
