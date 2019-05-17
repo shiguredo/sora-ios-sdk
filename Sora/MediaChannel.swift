@@ -155,9 +155,14 @@ public final class MediaChannel {
         self.configuration = configuration
         signalingChannel = configuration._signalingChannelType
             .init(configuration: configuration)
+        signalingChannel.handlers =
+            configuration.signalingChannelHandlers
         peerChannel = configuration._peerChannelType
             .init(configuration: configuration,
                   signalingChannel: signalingChannel)
+        peerChannel.handlers =
+            configuration.peerChannelHandlers
+        handlers = configuration.mediaChannelHandlers
         
         connectionTimer = ConnectionTimer(monitors: [
             .webSocketChannel(signalingChannel.webSocketChannel),

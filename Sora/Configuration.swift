@@ -71,6 +71,12 @@ public struct Configuration {
     /// `connect` シグナリングに含める通知用のメタデータ
     public var signalingConnectNotifyMetadata: Encodable?
     
+    // MARK: - イベントハンドラ
+    
+    public var signalingChannelHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
+    public var peerChannelHandlers: PeerChannelHandlers = PeerChannelHandlers()
+    public var mediaChannelHandlers: MediaChannelHandlers = MediaChannelHandlers()
+
     // MARK: - 接続チャネルに関する設定
     
     /**
