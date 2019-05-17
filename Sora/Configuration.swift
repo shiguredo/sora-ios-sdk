@@ -23,6 +23,11 @@ public struct Configuration {
     /// ロール
     public var role: Role
     
+    /// このプロパティは `signalingConnectMetadata` に置き換えられました。
+    @available(*, deprecated, renamed: "signalingConnectMetadata",
+    message: "このプロパティは signalingConnectMetadata に置き換えられました。")
+    public var metadata: String?
+    
     /**
      接続試行中のタイムアウト (秒) 。
      指定した時間内に接続が成立しなければ接続試行を中止します。
