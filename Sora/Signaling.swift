@@ -98,7 +98,7 @@ public enum Simulcast {
 public struct SignalingMetadata {
     
     /// シグナリングに含まれるメタデータの JSON デコーダー
-    public var decoder: Decoder?
+    public var decoder: Decoder
     
 }
 
