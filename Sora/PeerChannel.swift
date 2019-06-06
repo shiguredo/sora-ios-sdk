@@ -592,20 +592,22 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func handleMessage(_ message: SignalingMessage?, _ text: String) {
-        Logger.debug(type: .mediaStream, message: "handle message")
         guard let message = message else {
+            Logger.debug(type: .peerChannel, message: "receive invalid signaling")
             return
         }
+        
+        Logger.debug(type: .peerChannel, message: "receive signaling '\(message.shortDescription)'")
         switch state {
         case .waitingOffer:
             switch message {
             case .offer(let offer):
-                Logger.debug(type: .peerChannel, message: "receive offer")
                 clientId = offer.clientId
                 createAndSendAnswerMessage(offer: offer)
                 
             default:
                 // discard
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling in 'waiting offer' state")
                 break
             }
             
@@ -614,17 +616,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             case .update(sdp: let sdp):
                 guard configuration.role == .group ||
                     configuration.role == .groupSub else { return }
-                Logger.debug(type: .peerChannel, message: "receive update")
                 createAndSendUpdateAnswerMessage(forOffer: sdp)
 
             case .notify(message: let message):
-                Logger.debug(type: .peerChannel, message: "receive notify")
                 Logger.debug(type: .peerChannel, message: "call onNotifyHandler")
                 channel.internalHandlers.onNotifyHandler?(message)
                 channel.handlers.onNotifyHandler?(message)
                 
             case .ping:
-                Logger.debug(type: .peerChannel, message: "receive ping")
                 signalingChannel.send(message: .pong)
                 Logger.debug(type: .peerChannel, message: "call onPingHandler")
                 channel.internalHandlers.onPingHandler?()
@@ -632,11 +631,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 
             default:
                 // discard
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling in 'connected' state")
                 break
             }
             
         default:
             // discard
+            Logger.debug(type: .peerChannel, message: "discard invalid signaling in disconnected state")
             break
         }
     }
