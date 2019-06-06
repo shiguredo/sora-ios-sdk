@@ -248,6 +248,37 @@ public enum SignalingMessage {
         return msg
     }
     
+    var shortDescription: String {
+        get {
+            switch self {
+            case .connect(message: let message):
+                return "connect(\(message.channelId), \(message.role))"
+            case .offer(message: let message):
+                return "offer(\(message.clientId))"
+            case .answer(sdp: _):
+                return "answer"
+            case .candidate(let candidate):
+                if let url = candidate.url {
+                    return "candidate(\(url))"
+                } else {
+                    return "candidate"
+                }
+            case .update(sdp: _):
+                return "update"
+            case .notify(message: let message):
+                return "notify(\(message.eventType))"
+            case .ping:
+                return "ping"
+            case .pong:
+                return "pong"
+            case .disconnect:
+                return "disconnect"
+            case .push(message: _):
+                return "push"
+            }
+        }
+    }
+    
 }
 
 // MARK: -
