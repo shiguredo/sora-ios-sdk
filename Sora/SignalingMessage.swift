@@ -132,6 +132,9 @@ public struct SignalingNotifyMessage {
     /// クライアント ID
     public let clientId: String?
     
+    /// 接続 ID
+    public let connectionId: String?
+    
     /// 音声の可否
     public let audioEnabled: Bool?
     
@@ -470,6 +473,7 @@ extension SignalingNotifyMessage: Codable {
         case subscriberCount = "channel_downstream_connections"
         case channelId = "channel_id"
         case clientId = "client_id"
+        case connectionId = "connection_id"
         case spotlightId = "spotlight_id"
         case audio = "audio"
         case video = "video"
@@ -496,6 +500,7 @@ extension SignalingNotifyMessage: Codable {
         subscriberCount = try container.decodeIfPresent(Int.self, forKey: .subscriberCount)
         channelId = try container.decodeIfPresent(String.self, forKey: .channelId)
         clientId = try container.decodeIfPresent(String.self, forKey: .clientId)
+        connectionId = try container.decodeIfPresent(String.self, forKey: .connectionId)
         audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
         videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
         spotlightId = try container.decodeIfPresent(String.self, forKey: .spotlightId)
