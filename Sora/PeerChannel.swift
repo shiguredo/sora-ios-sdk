@@ -598,6 +598,16 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         Logger.debug(type: .peerChannel, message: "receive signaling '\(message.shortDescription)'")
+        
+        switch message {
+        case .notify(message: let message):
+            Logger.debug(type: .peerChannel, message: "call onNotifyHandler")
+            channel.internalHandlers.onNotifyHandler?(message)
+            channel.handlers.onNotifyHandler?(message)
+        default:
+            break
+        }
+        
         switch state {
         case .waitingOffer:
             switch message {
@@ -605,10 +615,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 clientId = offer.clientId
                 createAndSendAnswerMessage(offer: offer)
                 
-            default:
-                // discard
-                Logger.debug(type: .peerChannel, message: "discard invalid signaling in 'waiting offer' state")
+            case .notify(message: _):
                 break
+                
+            default:
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling")
             }
             
         case .connected:
@@ -617,28 +628,28 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 guard configuration.role == .group ||
                     configuration.role == .groupSub else { return }
                 createAndSendUpdateAnswerMessage(forOffer: sdp)
-
-            case .notify(message: let message):
-                Logger.debug(type: .peerChannel, message: "call onNotifyHandler")
-                channel.internalHandlers.onNotifyHandler?(message)
-                channel.handlers.onNotifyHandler?(message)
-                
+  
             case .ping:
                 signalingChannel.send(message: .pong)
                 Logger.debug(type: .peerChannel, message: "call onPingHandler")
                 channel.internalHandlers.onPingHandler?()
                 channel.handlers.onPingHandler?()
                 
-            default:
-                // discard
-                Logger.debug(type: .peerChannel, message: "discard invalid signaling in 'connected' state")
+            case .notify(message: _):
                 break
+                
+            default:
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling")
             }
             
         default:
-            // discard
-            Logger.debug(type: .peerChannel, message: "discard invalid signaling in disconnected state")
-            break
+            switch message {
+            case .notify(message: _):
+                break
+                
+            default:
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling")
+            }
         }
     }
     
