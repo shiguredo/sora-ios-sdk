@@ -9,6 +9,22 @@
 - FIX
     - バグ修正
 
+## 2.3.2
+
+### CHANGE
+
+- SDP セマンティクスのデフォルトを Unified Plan に変更した
+
+- API: シグナリング "notify" の "connection_id" プロパティに対応した
+
+- API: ``SDPSemantics``: ``case default`` を削除した
+
+- API: ``SignalingNotifyMessage``: ``connectionId`` プロパティを追加した
+
+### FIX
+
+- 接続状態によってシグナリング "notify" が無視される現象を修正する
+
 ## 2.3.1
 
 ### FIX
