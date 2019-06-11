@@ -592,21 +592,34 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func handleMessage(_ message: SignalingMessage?, _ text: String) {
-        Logger.debug(type: .mediaStream, message: "handle message")
         guard let message = message else {
+            Logger.debug(type: .peerChannel, message: "receive invalid signaling")
             return
         }
+        
+        Logger.debug(type: .peerChannel, message: "receive signaling '\(message.shortDescription)'")
+        
+        switch message {
+        case .notify(message: let message):
+            Logger.debug(type: .peerChannel, message: "call onNotifyHandler")
+            channel.internalHandlers.onNotifyHandler?(message)
+            channel.handlers.onNotifyHandler?(message)
+        default:
+            break
+        }
+        
         switch state {
         case .waitingOffer:
             switch message {
             case .offer(let offer):
-                Logger.debug(type: .peerChannel, message: "receive offer")
                 clientId = offer.clientId
                 createAndSendAnswerMessage(offer: offer)
                 
-            default:
-                // discard
+            case .notify(message: _):
                 break
+                
+            default:
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling")
             }
             
         case .connected:
@@ -614,30 +627,29 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             case .update(sdp: let sdp):
                 guard configuration.role == .group ||
                     configuration.role == .groupSub else { return }
-                Logger.debug(type: .peerChannel, message: "receive update")
                 createAndSendUpdateAnswerMessage(forOffer: sdp)
-
-            case .notify(message: let message):
-                Logger.debug(type: .peerChannel, message: "receive notify")
-                Logger.debug(type: .peerChannel, message: "call onNotifyHandler")
-                channel.internalHandlers.onNotifyHandler?(message)
-                channel.handlers.onNotifyHandler?(message)
-                
+  
             case .ping:
-                Logger.debug(type: .peerChannel, message: "receive ping")
                 signalingChannel.send(message: .pong)
                 Logger.debug(type: .peerChannel, message: "call onPingHandler")
                 channel.internalHandlers.onPingHandler?()
                 channel.handlers.onPingHandler?()
                 
-            default:
-                // discard
+            case .notify(message: _):
                 break
+                
+            default:
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling")
             }
             
         default:
-            // discard
-            break
+            switch message {
+            case .notify(message: _):
+                break
+                
+            default:
+                Logger.debug(type: .peerChannel, message: "discard invalid signaling")
+            }
         }
     }
     

@@ -27,10 +27,7 @@ public struct MediaConstraints {
  SDP でのマルチストリームの記述方式です。
  */
 public enum SDPSemantics {
-    
-    /// デフォルト
-    case `default`
-    
+
     /// Plan B
     case planB
     
@@ -42,8 +39,6 @@ public enum SDPSemantics {
     var nativeValue: RTCSdpSemantics {
         get {
             switch self {
-            case .default:
-                return RTCSdpSemantics.default
             case .planB:
                 return RTCSdpSemantics.planB
             case .unifiedPlan:
@@ -75,7 +70,7 @@ public struct WebRTCConfiguration {
     // MARK: SDP に関する設定
     
     /// SDP でのマルチストリームの記述方式
-    public var sdpSemantics: SDPSemantics = .default
+    public var sdpSemantics: SDPSemantics = .unifiedPlan
     
     // MARK: - インスタンスの生成
     
