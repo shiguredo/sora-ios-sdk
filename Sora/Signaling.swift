@@ -74,10 +74,10 @@ public enum Signaling {
 }
 
 /**
- サイマルキャストの種別を表します。
+ サイマルキャストの品質を表します。
  */
-public enum Simulcast {
-    
+public enum SimulcastQuality {
+
     /// 低画質
     case low
     
@@ -162,9 +162,12 @@ public struct SignalingConnect {
     
     /// 最大話者数
     public var maxNumberOfSpeakers: Int?
-    
-    /// サイマルキャスト
-    public var simulcast: Simulcast?
+
+    /// サイマルキャストの可否
+    public var simulcastEnabled: Bool
+
+    /// サイマルキャストの品質
+    public var simulcastQuality: SimulcastQuality
     
 }
 
@@ -454,21 +457,21 @@ extension Signaling: Codable {
     
 }
 
-private var simulcastTable: PairTable<String, Simulcast> =
-    PairTable(name: "Simulcast",
+private var simulcastQualityTable: PairTable<String, SimulcastQuality> =
+    PairTable(name: "SimulcastQuality",
               pairs: [("low", .low),
                       ("middle", .middle),
                       ("high", .high)])
 
 /// :nodoc:
-extension Simulcast: Codable {
+extension SimulcastQuality: Codable {
     
     public init(from decoder: Decoder) throws {
         throw SoraError.invalidSignalingMessage
     }
     
     public func encode(to encoder: Encoder) throws {
-        try simulcastTable.encode(self, to: encoder)
+        try simulcastQualityTable.encode(self, to: encoder)
     }
     
 }
@@ -549,6 +552,10 @@ extension SignalingConnect: Codable {
     enum AudioCodingKeys: String, CodingKey {
         case codec_type
     }
+
+    enum SimulcastQualityCodingKeys: String, CodingKey {
+        case quality
+    }
     
     public init(from decoder: Decoder) throws {
         throw SoraError.invalidSignalingMessage
@@ -596,7 +603,17 @@ extension SignalingConnect: Codable {
         }
         
         try container.encodeIfPresent(maxNumberOfSpeakers, forKey: .vad)
-        try container.encodeIfPresent(simulcast, forKey: .simulcast)
+
+        if simulcastEnabled {
+            switch role {
+            case .downstream:
+                var simulcastContainer = container
+                        .nestedContainer(keyedBy: SimulcastQualityCodingKeys.self, forKey: .simulcast)
+                try simulcastContainer.encode(simulcastQuality, forKey: .quality)
+            default:
+                try container.encode(true, forKey: .simulcast)
+            }
+        }
     }
     
 }

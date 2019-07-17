@@ -55,9 +55,14 @@ public struct Configuration {
     /// デフォルトは `true` です。
     public var audioEnabled: Bool = true
     
-    /// サイマルキャスト
-    public var simulcast: Simulcast?
-    
+    /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
+    public var simulcastEnabled: Bool = false
+
+    /// サイマルキャストの品質。
+    /// ロールが `.subscriber` または `.groupSub` のときのみ有効です。
+    /// デフォルトは `.high` です。
+    public var simulcastQuality: SimulcastQuality = .high
+
     /**
      最大話者数。マルチストリーム時のみ有効です。
      
@@ -171,7 +176,8 @@ extension Configuration: Codable {
         case audioCodec
         case videoEnabled
         case audioEnabled
-        case simulcast
+        case simulcastEnabled
+        case simulcastQuality
         case maxNumberOfSpeakers
         case webRTCConfiguration
         case signalingConnectMetadata
@@ -191,7 +197,6 @@ extension Configuration: Codable {
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
         self.init(url: url, channelId: channelId, role: role)
-        simulcast = try container.decodeIfPresent(Simulcast.self, forKey: .simulcast)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
@@ -207,6 +212,9 @@ extension Configuration: Codable {
             maxNumberOfSpeakers = try container.decode(Int.self,
                                                        forKey: .maxNumberOfSpeakers)
         }
+        simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
+        simulcastQuality = try container.decode(SimulcastQuality.self,
+                                                forKey: .simulcastQuality)
         webRTCConfiguration = try container.decode(WebRTCConfiguration.self,
                                                    forKey: .webRTCConfiguration)
         publisherStreamId = try container.decode(String.self,
@@ -224,7 +232,8 @@ extension Configuration: Codable {
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
         try container.encode(role, forKey: .role)
-        try container.encodeIfPresent(simulcast, forKey: .simulcast)
+        try container.encode(simulcastEnabled, forKey: .simulcastEnabled)
+        try container.encode(simulcastQuality, forKey: .simulcastQuality)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)
