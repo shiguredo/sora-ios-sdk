@@ -1,4 +1,5 @@
 import Foundation
+import WebRTC
 
 /**
  シグナリングの種別です。
@@ -188,7 +189,33 @@ public struct SignalingOffer {
         /// ICE 通信ポリシー
         public let iceTransportPolicy: ICETransportPolicy
     }
-    
+
+    public struct Encoding {
+
+        public let rid: String?
+        public let maxBitrate: Int?
+        public let maxFramerate: Double?
+        public let scaleResolutionDownBy: Double?
+
+        public var rtpEncodingParameters: RTCRtpEncodingParameters {
+            get {
+                let params = RTCRtpEncodingParameters()
+                params.rid = rid
+                if let value = maxBitrate {
+                    params.maxBitrateBps = NSNumber(value: value)
+                }
+                if let value = maxFramerate {
+                    params.maxFramerate = NSNumber(value: value)
+                }
+                if let value = scaleResolutionDownBy {
+                    params.scaleResolutionDownBy = NSNumber(value: value)
+                }
+                return params
+            }
+        }
+
+    }
+
     /// クライアント ID
     public let clientId: String
     
@@ -203,7 +230,10 @@ public struct SignalingOffer {
     
     /// メタデータ
     public let metadata: SignalingMetadata?
-    
+
+    /// エンコーディング
+    public let encodings: [Encoding]?
+
 }
 
 /**
@@ -641,6 +671,31 @@ extension SignalingOffer.Configuration: Codable {
 }
 
 /// :nodoc:
+extension SignalingOffer.Encoding: Codable {
+
+    enum CodingKeys: String, CodingKey {
+        case rid
+        case maxBitrate
+        case maxFramerate
+        case scaleResolutionDownBy
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rid = try container.decodeIfPresent(String.self, forKey: .rid)
+        maxBitrate = try container.decodeIfPresent(Int.self, forKey: .maxBitrate)
+        maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
+        scaleResolutionDownBy = try container.decodeIfPresent(Double.self,
+                forKey: .scaleResolutionDownBy)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+
+}
+
+/// :nodoc:
 extension SignalingOffer: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -649,6 +704,7 @@ extension SignalingOffer: Codable {
         case sdp
         case config
         case metadata
+        case encodings
     }
     
     public init(from decoder: Decoder) throws {
@@ -662,8 +718,11 @@ extension SignalingOffer: Codable {
         metadata =
             try container.decodeIfPresent(SignalingMetadata.self,
                                           forKey: .metadata)
+        encodings =
+            try container.decodeIfPresent([Encoding].self,
+                                          forKey: .encodings)
     }
-    
+
     public func encode(to encoder: Encoder) throws {
         throw SoraError.invalidSignalingMessage
     }
