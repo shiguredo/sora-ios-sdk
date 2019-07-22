@@ -491,13 +491,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         switch configuration.role {
         case .publisher:
             role = .upstream
-            initializePublisherStream()
         case .subscriber:
             role = .downstream
         case .group:
             role = .upstream
             multistream = true
-            initializePublisherStream()
         case .groupSub:
             role = .downstream
             multistream = true
@@ -527,6 +525,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func initializePublisherStream() {
+        Logger.debug(type: .peerChannel, message: "init publisher stream")
+
         let nativeStream = NativePeerChannelFactory.default
             .createNativePublisherStream(streamId: configuration.publisherStreamId,
                                          videoTrackId:
@@ -583,7 +583,60 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         }
     }
-    
+
+    func createAnswer(initsPublisher: Bool,
+                      offer: String,
+                      constraints: RTCMediaConstraints,
+                      handler: @escaping (String?, Error?) -> Void) {
+        Logger.debug(type: .peerChannel, message: "try create answer")
+        Logger.debug(type: .peerChannel, message: offer)
+
+        Logger.debug(type: .peerChannel, message: "try setting remote description")
+        let offer = RTCSessionDescription(type: .offer, sdp: offer)
+        nativeChannel.setRemoteDescription(offer) { error in
+            guard error == nil else {
+                Logger.debug(type: .peerChannel,
+                          message: "failed setting remote description: (\(error!.localizedDescription)")
+                handler(nil, error)
+                return
+            }
+            Logger.debug(type: .peerChannel, message: "did set remote description")
+            Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
+
+            if initsPublisher {
+                self.initializePublisherStream()
+            }
+
+            Logger.debug(type: .peerChannel, message: "try creating native answer")
+            self.nativeChannel.answer(for: constraints) { answer, error in
+                guard error == nil else {
+                    Logger.debug(type: .peerChannel,
+                              message: "failed creating native answer (\(error!.localizedDescription)")
+                    handler(nil, error)
+                    return
+                }
+                Logger.debug(type: .peerChannel, message: "did create answer")
+
+                Logger.debug(type: .peerChannel, message: "try setting local description")
+                self.nativeChannel.setLocalDescription(answer!) { error in
+                    guard error == nil else {
+                        Logger.debug(type: .peerChannel,
+                                  message: "failed setting local description")
+                        handler(nil, error)
+                        return
+                    }
+                    Logger.debug(type: .peerChannel,
+                              message: "did set local description")
+                    Logger.debug(type: .peerChannel,
+                              message: "\(answer!.sdpDescription)")
+                    Logger.debug(type: .peerChannel,
+                              message: "did create answer")
+                    handler(answer!.sdp, nil)
+                }
+            }
+        }
+    }
+
     func createAndSendAnswer(offer: SignalingOffer) {
         Logger.debug(type: .peerChannel, message: "try sending answer")
         state = .waitingComplete
@@ -598,8 +651,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         lock.lock()
-        nativeChannel.createAnswer(forOffer: offer.sdp,
-                                   constraints: webRTCConfiguration.nativeConstraints)
+        createAnswer(initsPublisher: true,
+                offer: offer.sdp,
+                constraints: webRTCConfiguration.nativeConstraints)
         { sdp, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
@@ -622,8 +676,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "create and send update-answer")
         lock.lock()
         state = .waitingUpdateComplete
-        nativeChannel.createAnswer(forOffer: offer,
-                                   constraints: webRTCConfiguration.nativeConstraints)
+        createAnswer(initsPublisher: false,
+                offer: offer,
+                constraints: webRTCConfiguration.nativeConstraints)
         { answer, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
