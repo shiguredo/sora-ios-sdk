@@ -161,6 +161,9 @@ public struct SignalingConnect {
     /// 音声コーデック
     public var audioCodec: AudioCodec
     
+    /// 音声ビットレート
+    public var audioBitRate: Int?
+
     /// 最大話者数
     public var maxNumberOfSpeakers: Int?
 
@@ -581,6 +584,7 @@ extension SignalingConnect: Codable {
     
     enum AudioCodingKeys: String, CodingKey {
         case codec_type
+        case bit_rate
     }
 
     enum SimulcastQualityCodingKeys: String, CodingKey {
@@ -620,13 +624,15 @@ extension SignalingConnect: Codable {
         }
         
         if audioEnabled {
-            switch audioCodec {
-            case .default:
-                break
-            default:
+            if audioCodec != .default || audioBitRate != nil {
                 var audioContainer = container
-                    .nestedContainer(keyedBy: AudioCodingKeys.self, forKey: .audio)
-                try audioContainer.encode(audioCodec, forKey: .codec_type)
+                    .nestedContainer(keyedBy: AudioCodingKeys.self,
+                                     forKey: .audio)
+                if audioCodec != .default {
+                    try audioContainer.encode(audioCodec, forKey: .codec_type)
+                }
+                try audioContainer.encodeIfPresent(audioBitRate,
+                                                   forKey: .bit_rate)
             }
         } else {
             try container.encode(false, forKey: .audio)

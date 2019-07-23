@@ -517,6 +517,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             // audioEnabled: config.audioEnabled,
             audioEnabled: true,
             audioCodec: configuration.audioCodec,
+            audioBitRate: configuration.audioBitRate,
             maxNumberOfSpeakers: configuration.maxNumberOfSpeakers,
             simulcastEnabled: configuration.simulcastEnabled,
             simulcastQuality: configuration.simulcastQuality)

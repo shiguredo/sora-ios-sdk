@@ -46,7 +46,10 @@ public struct Configuration {
     
     /// 音声コーデック。デフォルトは `.default` です。
     public var audioCodec: AudioCodec = .default
-    
+
+    /// 音声ビットレート。デフォルトは無指定です。
+    public var audioBitRate: Int?
+
     /// 映像の可否。 `true` であれば映像を送受信します。
     /// デフォルトは `true` です。
     public var videoEnabled: Bool = true
@@ -174,6 +177,7 @@ extension Configuration: Codable {
         case videoBitRate
         case videoCapturerDevice
         case audioCodec
+        case audioBitRate
         case videoEnabled
         case audioEnabled
         case simulcastEnabled
@@ -208,6 +212,7 @@ extension Configuration: Codable {
         }
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
+        audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
         if container.contains(.maxNumberOfSpeakers) {
             maxNumberOfSpeakers = try container.decode(Int.self,
                                                        forKey: .maxNumberOfSpeakers)
@@ -243,6 +248,7 @@ extension Configuration: Codable {
         try container.encode(videoCapturerDevice, forKey: .videoCapturerDevice)
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
+        try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
         if let num = self.maxNumberOfSpeakers {
             try container.encode(num, forKey: .maxNumberOfSpeakers)
         }
