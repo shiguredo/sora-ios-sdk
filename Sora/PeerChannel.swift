@@ -518,7 +518,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             audioEnabled: true,
             audioCodec: configuration.audioCodec,
             audioBitRate: configuration.audioBitRate,
-            maxNumberOfSpeakers: configuration.maxNumberOfSpeakers,
+            spotlight: configuration.spotlight,
             simulcastEnabled: configuration.simulcastEnabled,
             simulcastQuality: configuration.simulcastQuality)
         Logger.debug(type: .peerChannel, message: "send connect")

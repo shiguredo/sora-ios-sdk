@@ -66,14 +66,9 @@ public struct Configuration {
     /// デフォルトは `.high` です。
     public var simulcastQuality: SimulcastQuality = .high
 
-    /**
-     最大話者数。マルチストリーム時のみ有効です。
-     
-     このプロパティをセットすると、直近に発言した話者の映像のみを参加者に配信できます。
-     映像の配信者数を制限できるため、参加者の端末やサーバーの負荷を減らすことが可能です。
-     詳しくは Sora の音声検出 (VAD) 機能を参照してください。
-    */
-    public var maxNumberOfSpeakers: Int?
+    /// アクティブな配信数。
+    /// 詳しくは Sora のスポットライト機能を参照してください。
+    public var spotlight: Int?
 
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
@@ -182,7 +177,7 @@ extension Configuration: Codable {
         case audioEnabled
         case simulcastEnabled
         case simulcastQuality
-        case maxNumberOfSpeakers
+        case spotlight
         case webRTCConfiguration
         case signalingConnectMetadata
         case signalingConnectNotifyMetadata
@@ -213,9 +208,9 @@ extension Configuration: Codable {
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
         audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
-        if container.contains(.maxNumberOfSpeakers) {
-            maxNumberOfSpeakers = try container.decode(Int.self,
-                                                       forKey: .maxNumberOfSpeakers)
+        if container.contains(.spotlight) {
+            spotlight = try container.decode(Int.self,
+                                                       forKey: .spotlight)
         }
         simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
         simulcastQuality = try container.decode(SimulcastQuality.self,
@@ -249,8 +244,8 @@ extension Configuration: Codable {
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
-        if let num = self.maxNumberOfSpeakers {
-            try container.encode(num, forKey: .maxNumberOfSpeakers)
+        if let num = self.spotlight {
+            try container.encode(num, forKey: .spotlight)
         }
         try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
         try container.encode(publisherStreamId, forKey: .publisherStreamId)

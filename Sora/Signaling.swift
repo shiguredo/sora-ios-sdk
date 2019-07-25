@@ -145,7 +145,7 @@ public struct SignalingConnect {
     
     /// Plan B の可否
     public var planBEnabled: Bool?
-    
+
     /// 映像の可否
     public var videoEnabled: Bool
     
@@ -164,8 +164,8 @@ public struct SignalingConnect {
     /// 音声ビットレート
     public var audioBitRate: Int?
 
-    /// 最大話者数
-    public var maxNumberOfSpeakers: Int?
+    /// スポットライト
+    public var spotlight: Int?
 
     /// サイマルキャストの可否
     public var simulcastEnabled: Bool
@@ -607,7 +607,8 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
         try container.encodeIfPresent(planBEnabled, forKey: .plan_b)
-        
+        try container.encodeIfPresent(spotlight, forKey: .spotlight)
+
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
                 var videoContainer = container
@@ -638,8 +639,6 @@ extension SignalingConnect: Codable {
             try container.encode(false, forKey: .audio)
         }
         
-        try container.encodeIfPresent(maxNumberOfSpeakers, forKey: .vad)
-
         if simulcastEnabled {
             switch role {
             case .downstream:
