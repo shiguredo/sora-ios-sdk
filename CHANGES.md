@@ -33,6 +33,10 @@
 
 - API: `Configuration`: `maxNumberOfSpeakers` プロパティを削除した
 
+- API: `Configuration`: `simulcastEnabled` プロパティを追加した
+
+- API: `Configuration`: `simulcastQuality` プロパティを追加した
+
 - API: `Configuration`: `spotlight` プロパティを追加した
 
 - API: `SimulcastQuality`: 追加した
