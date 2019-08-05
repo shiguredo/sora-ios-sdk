@@ -193,13 +193,27 @@ public struct SignalingOffer {
         public let iceTransportPolicy: ICETransportPolicy
     }
 
+    /**
+     RTP ペイロードに含まれる映像・音声エンコーディングの情報です。
+
+     次のリンクも参考にしてください。
+     https://w3c.github.io/webrtc-pc/#rtcrtpencodingparameters
+     */
     public struct Encoding {
 
+        /// RTP ストリーム ID
         public let rid: String?
+
+        /// 最大ビットレート
         public let maxBitrate: Int?
+
+        /// 最大フレームレート
         public let maxFramerate: Double?
+
+        /// 映像解像度を送信前に下げる度合
         public let scaleResolutionDownBy: Double?
 
+        /// RTP エンコーディングに関するパラメーター
         public var rtpEncodingParameters: RTCRtpEncodingParameters {
             get {
                 let params = RTCRtpEncodingParameters()
