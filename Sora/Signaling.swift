@@ -1,4 +1,5 @@
 import Foundation
+import WebRTC
 
 /**
  シグナリングの種別です。
@@ -74,10 +75,10 @@ public enum Signaling {
 }
 
 /**
- サイマルキャストの種別を表します。
+ サイマルキャストの品質を表します。
  */
-public enum Simulcast {
-    
+public enum SimulcastQuality {
+
     /// 低画質
     case low
     
@@ -144,7 +145,7 @@ public struct SignalingConnect {
     
     /// Plan B の可否
     public var planBEnabled: Bool?
-    
+
     /// 映像の可否
     public var videoEnabled: Bool
     
@@ -160,11 +161,17 @@ public struct SignalingConnect {
     /// 音声コーデック
     public var audioCodec: AudioCodec
     
-    /// 最大話者数
-    public var maxNumberOfSpeakers: Int?
-    
-    /// サイマルキャスト
-    public var simulcast: Simulcast?
+    /// 音声ビットレート
+    public var audioBitRate: Int?
+
+    /// スポットライト
+    public var spotlight: Int?
+
+    /// サイマルキャストの可否
+    public var simulcastEnabled: Bool
+
+    /// サイマルキャストの品質
+    public var simulcastQuality: SimulcastQuality
     
 }
 
@@ -185,7 +192,33 @@ public struct SignalingOffer {
         /// ICE 通信ポリシー
         public let iceTransportPolicy: ICETransportPolicy
     }
-    
+
+    public struct Encoding {
+
+        public let rid: String?
+        public let maxBitrate: Int?
+        public let maxFramerate: Double?
+        public let scaleResolutionDownBy: Double?
+
+        public var rtpEncodingParameters: RTCRtpEncodingParameters {
+            get {
+                let params = RTCRtpEncodingParameters()
+                params.rid = rid
+                if let value = maxBitrate {
+                    params.maxBitrateBps = NSNumber(value: value)
+                }
+                if let value = maxFramerate {
+                    params.maxFramerate = NSNumber(value: value)
+                }
+                if let value = scaleResolutionDownBy {
+                    params.scaleResolutionDownBy = NSNumber(value: value)
+                }
+                return params
+            }
+        }
+
+    }
+
     /// クライアント ID
     public let clientId: String
     
@@ -200,7 +233,10 @@ public struct SignalingOffer {
     
     /// メタデータ
     public let metadata: SignalingMetadata?
-    
+
+    /// エンコーディング
+    public let encodings: [Encoding]?
+
 }
 
 /**
@@ -454,21 +490,21 @@ extension Signaling: Codable {
     
 }
 
-private var simulcastTable: PairTable<String, Simulcast> =
-    PairTable(name: "Simulcast",
+private var simulcastQualityTable: PairTable<String, SimulcastQuality> =
+    PairTable(name: "SimulcastQuality",
               pairs: [("low", .low),
                       ("middle", .middle),
                       ("high", .high)])
 
 /// :nodoc:
-extension Simulcast: Codable {
+extension SimulcastQuality: Codable {
     
     public init(from decoder: Decoder) throws {
         throw SoraError.invalidSignalingMessage
     }
     
     public func encode(to encoder: Encoder) throws {
-        try simulcastTable.encode(self, to: encoder)
+        try simulcastQualityTable.encode(self, to: encoder)
     }
     
 }
@@ -548,6 +584,11 @@ extension SignalingConnect: Codable {
     
     enum AudioCodingKeys: String, CodingKey {
         case codec_type
+        case bit_rate
+    }
+
+    enum SimulcastQualityCodingKeys: String, CodingKey {
+        case quality
     }
     
     public init(from decoder: Decoder) throws {
@@ -566,7 +607,8 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
         try container.encodeIfPresent(planBEnabled, forKey: .plan_b)
-        
+        try container.encodeIfPresent(spotlight, forKey: .spotlight)
+
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
                 var videoContainer = container
@@ -583,20 +625,30 @@ extension SignalingConnect: Codable {
         }
         
         if audioEnabled {
-            switch audioCodec {
-            case .default:
-                break
-            default:
+            if audioCodec != .default || audioBitRate != nil {
                 var audioContainer = container
-                    .nestedContainer(keyedBy: AudioCodingKeys.self, forKey: .audio)
-                try audioContainer.encode(audioCodec, forKey: .codec_type)
+                    .nestedContainer(keyedBy: AudioCodingKeys.self,
+                                     forKey: .audio)
+                if audioCodec != .default {
+                    try audioContainer.encode(audioCodec, forKey: .codec_type)
+                }
+                try audioContainer.encodeIfPresent(audioBitRate,
+                                                   forKey: .bit_rate)
             }
         } else {
             try container.encode(false, forKey: .audio)
         }
         
-        try container.encodeIfPresent(maxNumberOfSpeakers, forKey: .vad)
-        try container.encodeIfPresent(simulcast, forKey: .simulcast)
+        if simulcastEnabled {
+            switch role {
+            case .downstream:
+                var simulcastContainer = container
+                        .nestedContainer(keyedBy: SimulcastQualityCodingKeys.self, forKey: .simulcast)
+                try simulcastContainer.encode(simulcastQuality, forKey: .quality)
+            default:
+                try container.encode(true, forKey: .simulcast)
+            }
+        }
     }
     
 }
@@ -624,6 +676,31 @@ extension SignalingOffer.Configuration: Codable {
 }
 
 /// :nodoc:
+extension SignalingOffer.Encoding: Codable {
+
+    enum CodingKeys: String, CodingKey {
+        case rid
+        case maxBitrate
+        case maxFramerate
+        case scaleResolutionDownBy
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rid = try container.decodeIfPresent(String.self, forKey: .rid)
+        maxBitrate = try container.decodeIfPresent(Int.self, forKey: .maxBitrate)
+        maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
+        scaleResolutionDownBy = try container.decodeIfPresent(Double.self,
+                forKey: .scaleResolutionDownBy)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+
+}
+
+/// :nodoc:
 extension SignalingOffer: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -632,6 +709,7 @@ extension SignalingOffer: Codable {
         case sdp
         case config
         case metadata
+        case encodings
     }
     
     public init(from decoder: Decoder) throws {
@@ -645,8 +723,11 @@ extension SignalingOffer: Codable {
         metadata =
             try container.decodeIfPresent(SignalingMetadata.self,
                                           forKey: .metadata)
+        encodings =
+            try container.decodeIfPresent([Encoding].self,
+                                          forKey: .encodings)
     }
-    
+
     public func encode(to encoder: Encoder) throws {
         throw SoraError.invalidSignalingMessage
     }

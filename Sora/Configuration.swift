@@ -46,7 +46,10 @@ public struct Configuration {
     
     /// 音声コーデック。デフォルトは `.default` です。
     public var audioCodec: AudioCodec = .default
-    
+
+    /// 音声ビットレート。デフォルトは無指定です。
+    public var audioBitRate: Int?
+
     /// 映像の可否。 `true` であれば映像を送受信します。
     /// デフォルトは `true` です。
     public var videoEnabled: Bool = true
@@ -55,17 +58,17 @@ public struct Configuration {
     /// デフォルトは `true` です。
     public var audioEnabled: Bool = true
     
-    /// サイマルキャスト
-    public var simulcast: Simulcast?
-    
-    /**
-     最大話者数。マルチストリーム時のみ有効です。
-     
-     このプロパティをセットすると、直近に発言した話者の映像のみを参加者に配信できます。
-     映像の配信者数を制限できるため、参加者の端末やサーバーの負荷を減らすことが可能です。
-     詳しくは Sora の音声検出 (VAD) 機能を参照してください。
-    */
-    public var maxNumberOfSpeakers: Int?
+    /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
+    public var simulcastEnabled: Bool = false
+
+    /// サイマルキャストの品質。
+    /// ロールが `.subscriber` または `.groupSub` のときのみ有効です。
+    /// デフォルトは `.high` です。
+    public var simulcastQuality: SimulcastQuality = .high
+
+    /// アクティブな配信数。
+    /// 詳しくは Sora のスポットライト機能を参照してください。
+    public var spotlight: Int?
 
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
@@ -169,10 +172,12 @@ extension Configuration: Codable {
         case videoBitRate
         case videoCapturerDevice
         case audioCodec
+        case audioBitRate
         case videoEnabled
         case audioEnabled
-        case simulcast
-        case maxNumberOfSpeakers
+        case simulcastEnabled
+        case simulcastQuality
+        case spotlight
         case webRTCConfiguration
         case signalingConnectMetadata
         case signalingConnectNotifyMetadata
@@ -191,7 +196,6 @@ extension Configuration: Codable {
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
         self.init(url: url, channelId: channelId, role: role)
-        simulcast = try container.decodeIfPresent(Simulcast.self, forKey: .simulcast)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
@@ -203,10 +207,14 @@ extension Configuration: Codable {
         }
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
-        if container.contains(.maxNumberOfSpeakers) {
-            maxNumberOfSpeakers = try container.decode(Int.self,
-                                                       forKey: .maxNumberOfSpeakers)
+        audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
+        if container.contains(.spotlight) {
+            spotlight = try container.decode(Int.self,
+                                                       forKey: .spotlight)
         }
+        simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
+        simulcastQuality = try container.decode(SimulcastQuality.self,
+                                                forKey: .simulcastQuality)
         webRTCConfiguration = try container.decode(WebRTCConfiguration.self,
                                                    forKey: .webRTCConfiguration)
         publisherStreamId = try container.decode(String.self,
@@ -224,7 +232,8 @@ extension Configuration: Codable {
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
         try container.encode(role, forKey: .role)
-        try container.encodeIfPresent(simulcast, forKey: .simulcast)
+        try container.encode(simulcastEnabled, forKey: .simulcastEnabled)
+        try container.encode(simulcastQuality, forKey: .simulcastQuality)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)
@@ -234,8 +243,9 @@ extension Configuration: Codable {
         try container.encode(videoCapturerDevice, forKey: .videoCapturerDevice)
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
-        if let num = self.maxNumberOfSpeakers {
-            try container.encode(num, forKey: .maxNumberOfSpeakers)
+        try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
+        if let num = self.spotlight {
+            try container.encode(num, forKey: .spotlight)
         }
         try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
         try container.encode(publisherStreamId, forKey: .publisherStreamId)
