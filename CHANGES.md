@@ -9,6 +9,64 @@
 - FIX
     - バグ修正
 
+## 2.4.0
+
+### CHANGE
+
+- システム条件を更新した
+
+  - Xcode 10.3
+  
+- WebRTC M76 に対応した
+
+- サイマルキャスト機能に対応した
+
+- スポットライト機能に対応した
+
+- VAD 機能を削除した
+
+- 音声ビットレートの指定に対応した
+
+- シグナリングのメタデータに対応した
+
+- API: `Configuration`: `audioBitRate` プロパティを追加した
+
+- API: `Configuration`: `maxNumberOfSpeakers` プロパティを削除した
+
+- API: `Configuration`: `spotlight` プロパティを追加した
+
+- API: `SimulcastQuality`: 追加した
+
+- API: シグナリングに関する API の名前を変更した
+
+  - `SignalingMessage` -> `Signaling`
+  - `SignalingNotificationEventType` -> `SignalingNotifyEventType`
+  - `SignalingConnectMessage` -> `SignalingConnect`
+  - `SignalingOfferMessage` -> `SignalingOffer`
+  - `SignalingOfferMessage.Configuration` -> `SignalingOffer.Configuration`
+  - `SignalingPongMessage` -> `SignalingPong`
+  - `SignalingPushMessage` -> `SignalingPush`
+  
+- API: `SignalingAnswer`: 追加した
+
+- API: `SignalingCandidate`: 追加した
+
+- API: `SignalingClientMetadata`: 追加した
+
+- API: `SignalingMetadata`: 追加した
+
+- API: `SignalingNotifyConnection`: 追加した
+
+- API: `SignalingNotifyNetworkStatus`: 追加した
+
+- API: `SignalingNotifySpotlightChanged`: 追加した
+
+- API: `SignalingOffer.Encoding`: 追加した
+
+- API: `SignalingUpdate`: 追加した
+
+- API: `Signaling`: 追加した
+  
 ## 2.3.2
 
 ### CHANGE
