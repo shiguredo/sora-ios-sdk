@@ -749,7 +749,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "media streams = \(channel.streams.count)")
         Logger.debug(type: .peerChannel,
-                     message: "native media streams = \(nativeChannel.localStreams.count)")
+                     message: "native senders = \(nativeChannel.senders.count)")
+        Logger.debug(type: .peerChannel,
+                     message: "native receivers = \(nativeChannel.receivers.count)")
         state = .connected
         
         if onConnectHandler != nil {
