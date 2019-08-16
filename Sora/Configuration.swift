@@ -66,6 +66,10 @@ public struct Configuration {
     /// デフォルトは `.high` です。
     public var simulcastQuality: SimulcastQuality = .high
 
+    /// このプロパティは廃止されました。
+    @available(*, deprecated)
+    public var maxNumberOfSpeakers: Int?
+
     /// アクティブな配信数。
     /// 詳しくは Sora のスポットライト機能を参照してください。
     public var spotlight: Int?

@@ -457,10 +457,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func sendConnectMessage(error: Error?) {
-        Logger.debug(type: .peerChannel, message: "try creating offer SDP")
-        NativePeerChannelFactory.default
-            .createClientOfferSDP(configuration: webRTCConfiguration,
-                                  constraints: webRTCConfiguration.constraints)
+        switch configuration.role {
+        case .publisher, .group:
+            Logger.debug(type: .peerChannel, message: "try creating offer SDP")
+            NativePeerChannelFactory.default
+                    .createClientOfferSDP(configuration: webRTCConfiguration,
+                    constraints: webRTCConfiguration.constraints)
             { sdp, sdpError in
                 if let error = sdpError {
                     Logger.debug(type: .peerChannel,
@@ -470,6 +472,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                  message: "did create offer SDP")
                 }
                 self.sendConnectMessage(with: sdp, error: error)
+            }
+        default:
+            self.sendConnectMessage(with: nil, error: error)
         }
     }
     
@@ -652,7 +657,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         lock.lock()
-        createAnswer(initsPublisher: true,
+        var initsPublisher = false
+        switch configuration.role {
+        case .publisher, .group:
+            initsPublisher = true
+        default:
+            break
+        }
+        createAnswer(initsPublisher: initsPublisher,
                 offer: offer.sdp,
                 constraints: webRTCConfiguration.nativeConstraints)
         { sdp, error in
@@ -749,7 +761,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "media streams = \(channel.streams.count)")
         Logger.debug(type: .peerChannel,
-                     message: "native media streams = \(nativeChannel.localStreams.count)")
+                     message: "native senders = \(nativeChannel.senders.count)")
+        Logger.debug(type: .peerChannel,
+                     message: "native receivers = \(nativeChannel.receivers.count)")
         state = .connected
         
         if onConnectHandler != nil {

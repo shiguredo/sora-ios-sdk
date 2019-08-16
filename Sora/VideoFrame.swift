@@ -7,7 +7,7 @@ import WebRTC
  現在の実装では次の映像フレームに対応しています。
  
  - ネイティブの映像フレーム (`RTCVideoFrame`)
- - `CMSampleBuffer` (`RTCVideoFrame` に変換されます)
+ - `CMSampleBuffer` (映像のみ、音声は非対応。 `RTCVideoFrame` に変換されます)
  
  */
 public enum VideoFrame {
@@ -57,6 +57,8 @@ public enum VideoFrame {
      初期化します。
      指定されたサンプルバッファーからピクセル画像データを取得できなければ
      `nil` を返します。
+     
+     音声データを含むサンプルバッファーには対応していません。
      
      - parameter sampleBuffer: ピクセルバッファーを含むサンプルバッファー
      */
