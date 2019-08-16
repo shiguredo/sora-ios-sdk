@@ -9,18 +9,15 @@ public final class MediaChannelHandlers {
     /// 接続解除時に呼ばれるブロック
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// シグナリングメッセージの受信時に呼ばれるブロック
-    public var onMessageHandler: ((SignalingMessage) -> Void)?
-    
     /// ストリームが追加されたときに呼ばれるブロック
     public var onAddStreamHandler: ((MediaStream) -> Void)?
     
     /// ストリームが除去されたときに呼ばれるブロック
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     
-    /// サーバーからのイベント通知の受信時に呼ばれるハンドラ
-    public var onNotifyHandler: ((SignalingNotifyMessage) -> Void)?
-    
+    /// シグナリング受信時に呼ばれるブロック
+    public var onReceiveSignalingHandler: ((Signaling) -> Void)?
+
 }
 
 // MARK: -
@@ -48,10 +45,10 @@ public final class MediaChannel {
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
-    public let handlers: MediaChannelHandlers = MediaChannelHandlers()
+    public var handlers: MediaChannelHandlers = MediaChannelHandlers()
     
     /// 内部処理で使われるイベントハンドラ
-    let internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
+    var internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
     // MARK: - 接続情報
     
@@ -158,9 +155,14 @@ public final class MediaChannel {
         self.configuration = configuration
         signalingChannel = configuration._signalingChannelType
             .init(configuration: configuration)
+        signalingChannel.handlers =
+            configuration.signalingChannelHandlers
         peerChannel = configuration._peerChannelType
             .init(configuration: configuration,
                   signalingChannel: signalingChannel)
+        peerChannel.handlers =
+            configuration.peerChannelHandlers
+        handlers = configuration.mediaChannelHandlers
         
         connectionTimer = ConnectionTimer(monitors: [
             .webSocketChannel(signalingChannel.webSocketChannel),
@@ -180,7 +182,7 @@ public final class MediaChannel {
      - parameter error: (接続失敗時) エラー
      */
     func connect(webRTCConfiguration: WebRTCConfiguration,
-                 timeout: Int = Configuration.defaultConnectionTimeout,
+                 timeout: Int = 30,
                  handler: @escaping (_ error: Error?) -> Void) -> ConnectionTask {
         let task = ConnectionTask()
         if state.isConnecting {
@@ -229,14 +231,19 @@ public final class MediaChannel {
             self.handlers.onRemoveStreamHandler?(stream)
         }
         
-        peerChannel.internalHandlers.onNotifyHandler = { message in
-            Logger.debug(type: .mediaChannel, message: "receive event notification")
-            self.publisherCount = message.publisherCount
-            self.subscriberCount = message.subscriberCount
+        peerChannel.internalHandlers.onReceiveSignalingHandler = { message in
+            Logger.debug(type: .mediaChannel, message: "receive signaling")
+            switch message {
+            case .notifyConnection(let message):
+                self.publisherCount = message.publisherCount
+                self.subscriberCount = message.subscriberCount
+            default:
+                break
+            }
             
-            Logger.debug(type: .mediaChannel, message: "call onNotifyHandler")
-            self.internalHandlers.onNotifyHandler?(message)
-            self.handlers.onNotifyHandler?(message)
+            Logger.debug(type: .mediaChannel, message: "call onReceiveSignalingHandler")
+            self.internalHandlers.onReceiveSignalingHandler?(message)
+            self.handlers.onReceiveSignalingHandler?(message)
         }
         
         peerChannel.connect() { error in

@@ -1,7 +1,8 @@
 import Foundation
 
 private let descriptionTable: PairTable<String, VideoCodec> =
-    PairTable(pairs: [("default", .default),
+    PairTable(name: "VideoCodec",
+              pairs: [("default", .default),
                       ("VP8", .vp8),
                       ("VP9", .vp9),
                       ("H264", .h264)])

@@ -40,3 +40,19 @@ public final class ICECandidate: Equatable {
     }
     
 }
+
+/// :nodoc:
+extension ICECandidate: Codable {
+    
+    public convenience init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let sdp = try container.decode(String.self)
+        self.init(url: nil, sdp: sdp)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(sdp)
+    }
+    
+}

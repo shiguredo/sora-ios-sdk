@@ -27,7 +27,7 @@ public struct MediaConstraints {
  SDP でのマルチストリームの記述方式です。
  */
 public enum SDPSemantics {
-
+    
     /// Plan B
     case planB
     
@@ -106,7 +106,8 @@ public struct WebRTCConfiguration {
 }
 
 private var sdpSemanticsTable: PairTable<String, SDPSemantics> =
-    PairTable(pairs: [("planB", .planB),
+    PairTable(name: "SDPSemantics",
+              pairs: [("planB", .planB),
                       ("unifiedPlan", .unifiedPlan)])
 
 /// :nodoc:

@@ -2,7 +2,8 @@ import Foundation
 import WebRTC
 
 private var iceTransportPolicyTable: PairTable<ICETransportPolicy, RTCIceTransportPolicy> =
-    PairTable(pairs: [(.relay, .relay), (.all, .all)])
+    PairTable(name: "ICETransportPolicy",
+              pairs: [(.relay, .relay), (.all, .all)])
 
 /**
  ICE 通信ポリシーを表します。
@@ -27,9 +28,12 @@ public enum ICETransportPolicy {
 extension ICETransportPolicy: CustomStringConvertible {
 
     public var description: String {
-        let encoder = JSONEncoder()
-        let data = try! encoder.encode(self)
-        return String(data: data, encoding: .utf8)!
+        switch self {
+        case .relay:
+            return "relay"
+        case .all:
+            return "all"
+        }
     }
     
 }

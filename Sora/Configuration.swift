@@ -1,6 +1,8 @@
 import Foundation
 import WebRTC
 
+// MARK: デフォルト値
+
 private let defaultPublisherStreamId: String = "mainStream"
 private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
@@ -10,14 +12,6 @@ private let defaultPublisherAudioTrackId: String = "mainAudio"
  */
 public struct Configuration {
     
-    // MARK: デフォルト値
-    
-    /// 映像の最大ビットレート
-    public static let maxVideoVideoBitRate = 5000
-    
-    /// デフォルトの接続タイムアウト時間 (秒)
-    public static let defaultConnectionTimeout = 10
-
     // MARK: - 接続に関する設定
     
     /// サーバーの URL
@@ -29,7 +23,9 @@ public struct Configuration {
     /// ロール
     public var role: Role
     
-    /// メタデータ。 `connect` シグナリングメッセージにセットされます。
+    /// このプロパティは `signalingConnectMetadata` に置き換えられました。
+    @available(*, deprecated, renamed: "signalingConnectMetadata",
+    message: "このプロパティは signalingConnectMetadata に置き換えられました。")
     public var metadata: String?
     
     /**
@@ -50,7 +46,10 @@ public struct Configuration {
     
     /// 音声コーデック。デフォルトは `.default` です。
     public var audioCodec: AudioCodec = .default
-    
+
+    /// 音声ビットレート。デフォルトは無指定です。
+    public var audioBitRate: Int?
+
     /// 映像の可否。 `true` であれば映像を送受信します。
     /// デフォルトは `true` です。
     public var videoEnabled: Bool = true
@@ -59,18 +58,42 @@ public struct Configuration {
     /// デフォルトは `true` です。
     public var audioEnabled: Bool = true
     
-    /**
-     最大話者数。マルチストリーム時のみ有効です。
-     
-     このプロパティをセットすると、直近に発言した話者の映像のみを参加者に配信できます。
-     映像の配信者数を制限できるため、参加者の端末やサーバーの負荷を減らすことが可能です。
-     詳しくは Sora の音声検出 (VAD) 機能を参照してください。
-    */
+    /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
+    public var simulcastEnabled: Bool = false
+
+    /// サイマルキャストの品質。
+    /// ロールが `.subscriber` または `.groupSub` のときのみ有効です。
+    /// デフォルトは `.high` です。
+    public var simulcastQuality: SimulcastQuality = .high
+
+    /// このプロパティは廃止されました。
+    @available(*, deprecated)
     public var maxNumberOfSpeakers: Int?
+
+    /// アクティブな配信数。
+    /// 詳しくは Sora のスポットライト機能を参照してください。
+    public var spotlight: Int?
 
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
+
+    /// `connect` シグナリングに含めるメタデータ
+    public var signalingConnectMetadata: Encodable?
     
+    /// `connect` シグナリングに含める通知用のメタデータ
+    public var signalingConnectNotifyMetadata: Encodable?
+    
+    // MARK: - イベントハンドラ
+    
+    /// シグナリングチャネルに関するイベントハンドラ
+    public var signalingChannelHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
+    
+    /// ピアチャネルに関するイベントハンドラ
+    public var peerChannelHandlers: PeerChannelHandlers = PeerChannelHandlers()
+    
+    /// メディアチャネルに関するイベントハンドラ
+    public var mediaChannelHandlers: MediaChannelHandlers = MediaChannelHandlers()
+
     // MARK: - 接続チャネルに関する設定
     
     /**
@@ -153,10 +176,15 @@ extension Configuration: Codable {
         case videoBitRate
         case videoCapturerDevice
         case audioCodec
+        case audioBitRate
         case videoEnabled
         case audioEnabled
-        case maxNumberOfSpeakers
+        case simulcastEnabled
+        case simulcastQuality
+        case spotlight
         case webRTCConfiguration
+        case signalingConnectMetadata
+        case signalingConnectNotifyMetadata
         case signalingChannelType
         case webSocketChannelType
         case peerChannelType
@@ -166,14 +194,12 @@ extension Configuration: Codable {
     }
     
     public init(from decoder: Decoder) throws {
+        // NOTE: メタデータとイベントハンドラはサポートしない
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
         self.init(url: url, channelId: channelId, role: role)
-        if container.contains(.metadata) {
-            metadata = try container.decode(String.self, forKey: .metadata)
-        }
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
@@ -185,10 +211,14 @@ extension Configuration: Codable {
         }
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
-        if container.contains(.maxNumberOfSpeakers) {
-            maxNumberOfSpeakers = try container.decode(Int.self,
-                                                       forKey: .maxNumberOfSpeakers)
+        audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
+        if container.contains(.spotlight) {
+            spotlight = try container.decode(Int.self,
+                                                       forKey: .spotlight)
         }
+        simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
+        simulcastQuality = try container.decode(SimulcastQuality.self,
+                                                forKey: .simulcastQuality)
         webRTCConfiguration = try container.decode(WebRTCConfiguration.self,
                                                    forKey: .webRTCConfiguration)
         publisherStreamId = try container.decode(String.self,
@@ -201,13 +231,13 @@ extension Configuration: Codable {
     }
     
     public func encode(to encoder: Encoder) throws {
+        // NOTE: メタデータとイベントハンドラはサポートしない
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
         try container.encode(role, forKey: .role)
-        if let metadata = self.metadata {
-            try container.encode(metadata, forKey: .metadata)
-        }
+        try container.encode(simulcastEnabled, forKey: .simulcastEnabled)
+        try container.encode(simulcastQuality, forKey: .simulcastQuality)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)
@@ -217,8 +247,9 @@ extension Configuration: Codable {
         try container.encode(videoCapturerDevice, forKey: .videoCapturerDevice)
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
-        if let num = self.maxNumberOfSpeakers {
-            try container.encode(num, forKey: .maxNumberOfSpeakers)
+        try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
+        if let num = self.spotlight {
+            try container.encode(num, forKey: .spotlight)
         }
         try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
         try container.encode(publisherStreamId, forKey: .publisherStreamId)

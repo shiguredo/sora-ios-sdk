@@ -1,7 +1,8 @@
 import Foundation
 
 private let descriptionTable: PairTable<String, AudioCodec> =
-    PairTable(pairs: [("default", .default),
+    PairTable(name: "AudioCodec",
+              pairs: [("default", .default),
                       ("OPUS", .opus),
                       ("PCMU", .pcmu)])
 

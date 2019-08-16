@@ -340,7 +340,8 @@ extension CameraVideoCapturer.Settings: Codable {
 }
 
 private var resolutionTable: PairTable<String, CameraVideoCapturer.Settings.Resolution> =
-    PairTable(pairs: [("qvga240p", .qvga240p),
+    PairTable(name: "CameraVideoCapturer.Settings.Resolution",
+              pairs: [("qvga240p", .qvga240p),
                       ("vga480p", .vga480p),
                       ("hd720p", .hd720p),
                       ("hd1080p", .hd1080p)])
