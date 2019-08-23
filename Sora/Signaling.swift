@@ -588,7 +588,6 @@ extension SignalingConnect: Codable {
         case simulcast
         case video
         case audio
-        case vad
     }
     
     enum VideoCodingKeys: String, CodingKey {
