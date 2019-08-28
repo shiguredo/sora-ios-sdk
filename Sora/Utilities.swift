@@ -1,4 +1,5 @@
 import Foundation
+import WebRTC
 
 /// :nodoc:
 public struct Utilities {
@@ -16,7 +17,15 @@ public struct Utilities {
         }
         return chars.joined()
     }
-    
+
+    public static func sdkInfo() -> String {
+        var string = "Sora iOS SDK \(SDKInfo.shared.version) (\(SDKInfo.shared.shortRevision))"
+        if let webRTCInfo = WebRTCInfo.load() {
+            string.append(", WebRTC \(webRTCInfo.version) (\(webRTCInfo.shortRevision))")
+        }
+        return string
+    }
+
     public final class Stopwatch {
         
         private var timer: Timer!
