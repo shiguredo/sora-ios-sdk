@@ -174,10 +174,13 @@ public struct SignalingConnect {
     public var simulcastQuality: SimulcastQuality
 
     /// :nodoc:
-    public var sdk_version: String?
+    public var sdkVersion: String?
 
     /// :nodoc:
-    public var sdk_type: String?
+    public var sdkType: String?
+
+    /// :nodoc:
+    public var userAgent: String?
 
 }
 
@@ -596,6 +599,7 @@ extension SignalingConnect: Codable {
         case audio
         case sdk_version
         case sdk_type
+        case user_agent
     }
     
     enum VideoCodingKeys: String, CodingKey {
@@ -629,8 +633,9 @@ extension SignalingConnect: Codable {
                                       forKey: .multistream)
         try container.encodeIfPresent(planBEnabled, forKey: .plan_b)
         try container.encodeIfPresent(spotlight, forKey: .spotlight)
-        try container.encodeIfPresent(sdk_version, forKey: .sdk_version)
-        try container.encodeIfPresent(sdk_type, forKey: .sdk_type)
+        try container.encodeIfPresent(sdkVersion, forKey: .sdk_version)
+        try container.encodeIfPresent(sdkType, forKey: .sdk_type)
+        try container.encodeIfPresent(userAgent, forKey: .user_agent)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
