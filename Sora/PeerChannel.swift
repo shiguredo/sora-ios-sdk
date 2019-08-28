@@ -528,6 +528,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             simulcastQuality: configuration.simulcastQuality,
             sdkVersion: Utilities.sdkInfo(),
             sdkType: "iOS",
+            userAgent: DeviceInfo.current.description)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }

@@ -179,6 +179,9 @@ public struct SignalingConnect {
     /// :nodoc:
     public var sdkType: String?
 
+    /// :nodoc:
+    public var userAgent: String?
+
 }
 
 /**
@@ -596,6 +599,7 @@ extension SignalingConnect: Codable {
         case audio
         case sdk_version
         case sdk_type
+        case user_agent
     }
     
     enum VideoCodingKeys: String, CodingKey {
@@ -631,6 +635,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(spotlight, forKey: .spotlight)
         try container.encodeIfPresent(sdkVersion, forKey: .sdk_version)
         try container.encodeIfPresent(sdkType, forKey: .sdk_type)
+        try container.encodeIfPresent(userAgent, forKey: .user_agent)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
