@@ -505,7 +505,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             role = .downstream
             multistream = true
         }
-        
+
         let connect = SignalingConnect(
             role: role,
             channelId: configuration.channelId,
@@ -525,7 +525,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             audioBitRate: configuration.audioBitRate,
             spotlight: configuration.spotlight,
             simulcastEnabled: configuration.simulcastEnabled,
-            simulcastQuality: configuration.simulcastQuality)
+            simulcastQuality: configuration.simulcastQuality,
+            sdkVersion: Utilities.sdkInfo(),
+            sdkType: "iOS",
+            userAgent: DeviceInfo.current.description)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }
