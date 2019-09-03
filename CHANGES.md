@@ -13,6 +13,10 @@
 
 ### CHANGE
 
+- 依存するライブラリを変更した (`Cartfile`)
+
+  - sora-webrtc-ios 76.3.1 -> shiguredo-webrtc-ios 76.3.1
+
 - 対応アーキテクチャから armv7 を外した
 
 - 対応アーキテクチャに x86_64 を追加した (シミュレーターの動作は未保証)
