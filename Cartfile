@@ -1,2 +1,2 @@
-github "shiguredo/sora-webrtc-ios" "76.3.0"
+github "shiguredo/shiguredo-webrtc-ios" "76.3.1"
 github "shiguredo/SocketRocket" "0.5.1-carthage.1"
