@@ -25,8 +25,8 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 - iOS 10.0 以降
 - アーキテクチャ arm64, x86_64 (シミュレーターの動作は未保証)
 - macOS 10.14.4 以降
-- Xcode 10.3
-- Swift 5.0
+- Xcode 11.0
+- Swift 5.1
 - Carthage 0.33.0 以降、または CocoaPods 1.6.1 以降
 - WebRTC SFU Sora 19.04.0 以降
 
