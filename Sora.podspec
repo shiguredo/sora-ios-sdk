@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "Sora"
-  s.version      = "2.4.0"
+  s.version      = "2.5.0"
   s.summary      = "Sora iOS SDK"
   s.description  = <<-DESC
                    A library to develop Sora client applications.
@@ -13,6 +13,6 @@ Pod::Spec.new do |s|
   s.source_files  = "Carthage/Build/iOS/Sora.framework/Headers/*.h"
   s.frameworks = "SocketRocket"
   s.vendored_frameworks = "Carthage/Build/iOS/Sora.framework"
-  s.dependency "WebRTC", "76.3.0"
+  s.dependency "WebRTC", "76.3.1"
   s.dependency "SocketRocket", "0.5.1"
 end
