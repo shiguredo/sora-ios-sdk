@@ -20,7 +20,8 @@ jobs:
             BUNDLE_RETRY: 3
       - save_cache:
           key: gems-{{ checksum "Gemfile.lock" }}
-          path: vendor/bundle
+          paths:
+            - vendor/bundle
       - restore_cache:
           key: pods-{{ checksum "Podfile.lock" }}
       - run:
