@@ -10,10 +10,20 @@ jobs:
     steps:
       - checkout
       - run: mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
+      - restore_cache:
+          key: pods-{{ checksum "Podfile.lock" }}
       - run:
-          name: Install Carthage
-          command: carthage update --platform iOS
-
+          name: Install CocoaPods
+          command: |
+            curl https://cocoapods-specs.circleci.com/fetch-cocoapods-repo-from-s3.sh | bash -s cf
+            bundle exec pod install
+      - run:
+          name: Install CocoaPods Dependencies
+          command: pods install
+      - save_cache:
+          key: pods-{{ checksum "Podfile.lock" }}
+          paths:
+            - Pods
       - run:
           name: Build
           command: |
