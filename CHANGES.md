@@ -9,6 +9,12 @@
 - FIX
     - バグ修正
 
+## develop
+
+### CHANGE
+
+- Carthage を廃止した
+
 ## 2.6.0
 
 ### CHANGE
