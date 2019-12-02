@@ -41,7 +41,7 @@ jobs:
           command: |
             set -o pipefail && \
             xcodebuild \
-              -project 'Sora.xcodeproj' \
+              -workspace 'Sora.xcworkspace' \
               -scheme 'Sora' \
               clean build \
               -sdk iphoneos \
