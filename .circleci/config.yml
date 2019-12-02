@@ -31,7 +31,7 @@ jobs:
             bundle exec pod install
       - run:
           name: Install CocoaPods Dependencies
-          command: pods install
+          command: pod install
       - save_cache:
           key: pods-{{ checksum "Podfile.lock" }}
           paths:
