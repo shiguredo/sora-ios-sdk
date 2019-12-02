@@ -10,16 +10,42 @@ jobs:
     steps:
       - checkout
       - run: mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
+      - restore_cache:
+          keys:
+            - gems-{{ checksum "Gemfile.lock" }}
+            - gems
       - run:
-          name: Install Carthage
-          command: carthage update --platform iOS
-
+          name: Install Bundle
+          command: bundle check || bundle install
+          environment:
+            BUNDLE_JOBS: 4
+            BUNDLE_RETRY: 3
+      - save_cache:
+          key: gems-{{ checksum "Gemfile.lock" }}
+          paths:
+            - vendor/bundle
+      - restore_cache:
+          keys:
+            - pods-{{ checksum "Podfile.lock" }}
+            - pods-
+      - run:
+          name: Install CocoaPods
+          command: |
+            curl https://cocoapods-specs.circleci.com/fetch-cocoapods-repo-from-s3.sh | bash -s cf
+            bundle exec pod install
+      - run:
+          name: Install CocoaPods Dependencies
+          command: pod install
+      - save_cache:
+          key: pods-{{ checksum "Podfile.lock" }}
+          paths:
+            - Pods
       - run:
           name: Build
           command: |
             set -o pipefail && \
             xcodebuild \
-              -project 'Sora.xcodeproj' \
+              -workspace 'Sora.xcworkspace' \
               -scheme 'Sora' \
               clean build \
               -sdk iphoneos \
