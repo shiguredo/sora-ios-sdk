@@ -11,7 +11,9 @@ jobs:
       - checkout
       - run: mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
       - restore_cache:
-          key: gems-{{ checksum "Gemfile.lock" }}
+          keys:
+            - gems-{{ checksum "Gemfile.lock" }}
+            - gems
       - run:
           name: Install Bundle
           command: bundle check || bundle install
@@ -23,7 +25,9 @@ jobs:
           paths:
             - vendor/bundle
       - restore_cache:
-          key: pods-{{ checksum "Podfile.lock" }}
+          keys:
+            - pods-{{ checksum "Podfile.lock" }}
+            - pods-
       - run:
           name: Install CocoaPods
           command: |
