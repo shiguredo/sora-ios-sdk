@@ -29,6 +29,7 @@ jobs:
           xcodebuild \
             -workspace 'Sora.xcworkspace' \
             -scheme 'Sora' \
+            -sdk iphonesimulator \
             -configuration Release \
             -derivedDataPath build \
             clean build \
