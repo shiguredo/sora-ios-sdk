@@ -38,7 +38,7 @@ jobs:
         path: ./build/Build/Products/Release/Sora.framework
   release:
     if: contains(github.ref, 'tags/v')
-    needs: [package]
+    needs: [build]
     runs-on: macOS-latest
     steps:
     - name: Checkout code
