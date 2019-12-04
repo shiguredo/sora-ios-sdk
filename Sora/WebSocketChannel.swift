@@ -1,5 +1,5 @@
 import Foundation
-import SocketRocket
+import Starscream
 
 /**
  WebSocket のステータスコードを表します。
@@ -151,7 +151,7 @@ public final class WebSocketChannelHandlers {
     public var onDisconnectHandler: ((Error?) -> Void)?
     
     /// pong の送信時に呼ばれるブロック
-    public var onPongHandler: ((Data) -> Void)?
+    public var onPongHandler: ((Data?) -> Void)?
     
     /// メッセージ受信時に呼ばれるブロック
     public var onMessageHandler: ((WebSocketMessage) ->Void)?
@@ -255,10 +255,10 @@ class BasicWebSocketChannel: WebSocketChannel {
 
 }
 
-class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
+class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     
     weak var channel: BasicWebSocketChannel!
-    var nativeChannel: SRWebSocket
+    var nativeChannel: WebSocket
     
     var state: ConnectionState = .disconnected {
         didSet {
@@ -271,7 +271,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
 
     init(channel: BasicWebSocketChannel) {
         self.channel = channel
-        nativeChannel = SRWebSocket(url: channel.url)
+        nativeChannel = WebSocket(url: channel.url)
         super.init()
         nativeChannel.delegate = self
     }
@@ -286,7 +286,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
         Logger.debug(type: .webSocketChannel, message: "try connecting")
         state = .connecting
         onConnectHandler = handler
-        nativeChannel.open()
+        nativeChannel.connect()
     }
     
     func disconnect(error: Error?) {
@@ -302,7 +302,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             }
             
             state = .disconnecting
-            nativeChannel.close()
+            nativeChannel.disconnect()
             state = .disconnected
             
             Logger.debug(type: .webSocketChannel, message: "call onDisconnectHandler")
@@ -320,19 +320,21 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
     }
     
     func send(message: WebSocketMessage) {
-        var nativeMsg: Any!
+        Logger.debug(type: .webSocketChannel, message: "call onMessageHandler")
+        channel.internalHandlers.onMessageHandler?(message)
+        channel.handlers.onMessageHandler?(message)
+        
         switch message {
         case .text(let text):
             Logger.debug(type: .webSocketChannel, message: text)
-            nativeMsg = text
+            nativeChannel.write(string: text)
         case .binary(let data):
             Logger.debug(type: .webSocketChannel, message: "\(data)")
-            nativeMsg = data
+            nativeChannel.write(data: data)
         }
-        nativeChannel.send(nativeMsg)
     }
     
-    func webSocketDidOpen(_ webSocket: SRWebSocket!) {
+    func websocketDidConnect(socket: WebSocketClient) {
         Logger.debug(type: .webSocketChannel, message: "connected")
         state = .connected
         if onConnectHandler != nil {
@@ -342,6 +344,7 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
         }
     }
     
+    /*
     func webSocket(_ webSocket: SRWebSocket!,
                    didCloseWithCode code: Int,
                    reason: String?,
@@ -355,43 +358,36 @@ class BasicWebSocketChannelContext: NSObject, SRWebSocketDelegate {
             disconnect(error: error)
         }
     }
+ */
     
-    func webSocket(_ webSocket: SRWebSocket!, didFailWithError error: Error!) {
-        Logger.error(type: .webSocketChannel,
-                     message: "failed (\(error.localizedDescription))")
-        disconnect(error: SoraError.webSocketError(error))
-    }
-    
-    func webSocket(_ webSocket: SRWebSocket!, didReceiveMessage message: Any!) {
-        Logger.debug(type: .webSocketChannel, message: "receive message")
-        Logger.debug(type: .webSocketChannel, message: "\(message!)")
-        var newMessage: WebSocketMessage?
-        if let text = message as? String {
-            newMessage = .text(text)
-        } else if let data = message as? Data {
-            newMessage = .binary(data)
-        }
-        if let message = newMessage {
-            Logger.debug(type: .webSocketChannel, message: "call onMessageHandler")
-            channel.internalHandlers.onMessageHandler?(message)
-            channel.handlers.onMessageHandler?(message)
+    func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
+        if let error = error {
+            Logger.error(type: .webSocketChannel,
+                         message: "disconnected => (\(error.localizedDescription))")
+            disconnect(error: SoraError.webSocketError(error))
         } else {
-            Logger.debug(type: .webSocketChannel,
-                      message: "received message is not string or binary (discarded)")
-            // discard
+            Logger.error(type: .webSocketChannel,
+                         message: "disconnected")
+            disconnect(error: nil)
         }
     }
     
-    func webSocket(_ webSocket: SRWebSocket!, didReceivePong pongPayload: Data!) {
-        Logger.debug(type: .webSocketChannel, message: "receive poing payload")
-        Logger.debug(type: .webSocketChannel, message: "\(pongPayload!)")
-        Logger.debug(type: .webSocketChannel, message: "call onPongHandler")
-        channel.internalHandlers.onPongHandler?(pongPayload)
-        channel.handlers.onPongHandler?(pongPayload)
+    func websocketDidReceiveMessage(socket: WebSocketClient, text: String) {
+        Logger.debug(type: .webSocketChannel, message: "receive text message => \(text)")
+        send(message: .text(text))
     }
     
-    func webSocketShouldConvertTextFrame(toString webSocket: SRWebSocket!) -> Bool {
-        return true
+    func websocketDidReceiveData(socket: WebSocketClient, data: Data) {
+        Logger.debug(type: .webSocketChannel, message: "receive binary message => \(data)")
+        send(message: .binary(data))
+    }
+
+    func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
+        Logger.debug(type: .webSocketChannel,
+                     message: "receive poing payload => \(data)")
+        Logger.debug(type: .webSocketChannel, message: "call onPongHandler")
+        channel.internalHandlers.onPongHandler?(data)
+        channel.handlers.onPongHandler?(data)
     }
     
 }
