@@ -1,0 +1,61 @@
+name: Build
+
+on:
+  push:
+    paths-ignore:
+    - 'README.md'
+    - 'CHANGES.md'
+    - 'LICENSE'
+    - 'Sora.podspec'
+  schedule:
+  - cron: "0 0 * * *"
+
+jobs:
+  build:
+    runs-on: macOS-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Select Xcode Version
+      run: sudo xcode-select -s '/Applications/Xcode_11.2.app/Contents/Developer'
+    - name: Show Xcode Version
+      run: xcodebuild -version
+    - name: Install Dependences
+      run: |
+        pod repo update
+        pod install
+    - name: Build Xcode Project
+      run: |
+        set -o pipefail && \
+          xcodebuild \
+            -workspace 'Sora.xcworkspace' \
+            -scheme 'Sora' \
+            -sdk iphoneos13.2 \
+            -configuration Release \
+            -derivedDataPath build \
+            clean build \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            PROVISIONING_PROFILE=
+    - name: Upload Framework
+      uses: actions/upload-artifact@v1
+      with:
+        name: Sora
+        path: ./build/Build/Products/Release-iphoneos/Sora.framework
+  release:
+    if: contains(github.ref, 'tags/v')
+    needs: [build]
+    runs-on: macOS-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@master
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1.0.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
