@@ -29,7 +29,7 @@ jobs:
           xcodebuild \
             -workspace 'Sora.xcworkspace' \
             -scheme 'Sora' \
-            -sdk iphonesimulator \
+            -sdk iphoneos13.2 \
             -configuration Release \
             -derivedDataPath build \
             clean build \
@@ -40,7 +40,7 @@ jobs:
       uses: actions/upload-artifact@v1
       with:
         name: Sora
-        path: ./build/Build/Products/Release/Sora.framework
+        path: ./build/Build/Products/Release-iphoneos/Sora.framework
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]
