@@ -344,22 +344,6 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         }
     }
     
-    /*
-    func webSocket(_ webSocket: SRWebSocket!,
-                   didCloseWithCode code: Int,
-                   reason: String?,
-                   wasClean: Bool) {
-        Logger.debug(type: .webSocketChannel,
-                  message: "closed with code \(code) \(reason ?? "")")
-        if code != SRStatusCodeNormal.rawValue {
-            let statusCode = WebSocketStatusCode(rawValue: code)
-            let error = SoraError.webSocketClosed(statusCode: statusCode,
-                                                  reason: reason)
-            disconnect(error: error)
-        }
-    }
- */
-    
     func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
         if let error = error {
             Logger.error(type: .webSocketChannel,
