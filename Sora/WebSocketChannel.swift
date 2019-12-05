@@ -320,10 +320,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     }
     
     func send(message: WebSocketMessage) {
-        Logger.debug(type: .webSocketChannel, message: "call onMessageHandler")
-        channel.internalHandlers.onMessageHandler?(message)
-        channel.handlers.onMessageHandler?(message)
-        
+        callMessageHandler(message: message)
         switch message {
         case .text(let text):
             Logger.debug(type: .webSocketChannel, message: text)
@@ -332,6 +329,12 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
             Logger.debug(type: .webSocketChannel, message: "\(data)")
             nativeChannel.write(data: data)
         }
+    }
+    
+    func callMessageHandler(message: WebSocketMessage) {
+        Logger.debug(type: .webSocketChannel, message: "call onMessageHandler")
+        channel.internalHandlers.onMessageHandler?(message)
+        channel.handlers.onMessageHandler?(message)
     }
     
     func websocketDidConnect(socket: WebSocketClient) {
@@ -358,12 +361,12 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     
     func websocketDidReceiveMessage(socket: WebSocketClient, text: String) {
         Logger.debug(type: .webSocketChannel, message: "receive text message => \(text)")
-        send(message: .text(text))
+        callMessageHandler(message: .text(text))
     }
     
     func websocketDidReceiveData(socket: WebSocketClient, data: Data) {
         Logger.debug(type: .webSocketChannel, message: "receive binary message => \(data)")
-        send(message: .binary(data))
+        callMessageHandler(message: .binary(data))
     }
 
     func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
