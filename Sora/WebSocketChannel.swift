@@ -371,7 +371,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
 
     func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
         Logger.debug(type: .webSocketChannel,
-                     message: "receive poing payload => \(data)")
+                     message: "receive poing payload => \(data?.description ?? "empty")")
         Logger.debug(type: .webSocketChannel, message: "call onPongHandler")
         channel.internalHandlers.onPongHandler?(data)
         channel.handlers.onPongHandler?(data)
