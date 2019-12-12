@@ -14,6 +14,7 @@ Pod::Spec.new do |s|
       :tag => s.version
   }
   s.source_files  = "Sora/**/*.swift"
+  s.resources = ['Sora/info.json', 'Sora/*.xib']
   s.dependency "WebRTC", "79.5.0"
   s.dependency "Starscream", "3.1.1"
 end
