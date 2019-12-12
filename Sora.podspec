@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "Sora"
-  s.version      = "2.6.1"
+  s.version      = "3.0.0"
   s.summary      = "Sora iOS SDK"
   s.description  = <<-DESC
                    A library to develop Sora client applications.
@@ -14,7 +14,6 @@ Pod::Spec.new do |s|
       :tag => s.version
   }
   s.source_files  = "Sora/**/*.swift"
-  s.frameworks = "SocketRocket"
-  s.dependency "WebRTC", "78.8.1"
-  s.dependency "SocketRocket", "0.5.1"
+  s.dependency "WebRTC", "79.5.0"
+  s.dependency "SocketRocket", "3.1.1"
 end
