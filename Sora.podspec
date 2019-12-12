@@ -15,5 +15,5 @@ Pod::Spec.new do |s|
   }
   s.source_files  = "Sora/**/*.swift"
   s.dependency "WebRTC", "79.5.0"
-  s.dependency "SocketRocket", "3.1.1"
+  s.dependency "Starscream", "3.1.1"
 end
