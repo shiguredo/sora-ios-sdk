@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   }
   s.source_files  = "Sora/**/*.swift"
   s.resources = ['Sora/info.sh', 'Sora/info.json', 'Sora/*.xib']
-  s.prepare_command = 'sh Sora/Sora/info.sh > Sora/Sora/info.json'
+  s.prepare_command = 'sh Sora/Sora/info.sh'
   s.dependency "WebRTC", "79.5.0"
   s.dependency "Starscream", "3.1.1"
 end
