@@ -9,11 +9,23 @@
 - FIX
     - バグ修正
 
-## develop
+## 3.0.0
 
 ### CHANGE
 
-- Carthage を廃止した
+- システム条件を更新した
+
+   - Xcode 11.3
+
+   - CocoaPods 1.8.4 以降
+
+- WebRTC M79 に対応した
+
+- Carthage の使用を止めた
+
+- シグナリングに含める各種バージョン情報を変更した
+
+- API: SocketRocket の使用を止めて Starscream を採用した
 
 ## 2.6.0
 
