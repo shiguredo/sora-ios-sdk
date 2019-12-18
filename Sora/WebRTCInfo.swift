@@ -28,7 +28,10 @@ public struct WebRTCInfo {
     
     /// WebRTC フレームワークのバージョン
     public let version: String
-    
+
+    /// WebRTC フレームワークのコミットポジション
+    public let commitPosition: String
+
     /// WebRTC フレームワークのソースコードのリビジョン
     public let revision: String
     
@@ -37,7 +40,10 @@ public struct WebRTCInfo {
         return String(revision[revision.startIndex..<revision.index(
             revision.startIndex, offsetBy: 7)])
     }
-    
+
+    /// WebRTC フレームワークのメンテナンスバージョン
+    public let maintenanceVersion: String
+
 }
 
 /// :nodoc:
@@ -45,13 +51,17 @@ extension WebRTCInfo: Decodable {
     
     enum CodingKeys: String, CodingKey {
         case version = "webrtc_version"
+        case commit = "webrtc_commit"
         case revision = "webrtc_revision"
+        case maint = "webrtc_maint"
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.version = try container.decode(String.self, forKey: .version)
+        self.commitPosition = try container.decode(String.self, forKey: .commit)
         self.revision = try container.decode(String.self, forKey: .revision)
+        self.maintenanceVersion = try container.decode(String.self, forKey: .maint)
     }
     
 }
