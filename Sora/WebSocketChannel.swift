@@ -320,7 +320,6 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     }
     
     func send(message: WebSocketMessage) {
-        callMessageHandler(message: message)
         switch message {
         case .text(let text):
             Logger.debug(type: .webSocketChannel, message: text)
