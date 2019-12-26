@@ -506,6 +506,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             multistream = true
         }
 
+        let soraClient = "Sora iOS SDK \(SDKInfo.shared.version) (\(SDKInfo.shared.shortRevision))"
+
+        var webRTCVersion: String?
+        if let info = WebRTCInfo.load() {
+            webRTCVersion = "Shiguredo-build M\(info.version) (\(info.version).\(info.commitPosition).\(info.maintenanceVersion) \(info.shortRevision))"
+        }
+
         let connect = SignalingConnect(
             role: role,
             channelId: configuration.channelId,
@@ -526,9 +533,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             spotlight: configuration.spotlight,
             simulcastEnabled: configuration.simulcastEnabled,
             simulcastQuality: configuration.simulcastQuality,
-            sdkVersion: Utilities.sdkInfo(),
-            sdkType: "iOS",
-            userAgent: DeviceInfo.current.description)
+            soraClient: soraClient,
+            webRTCVersion: webRTCVersion,
+            environment: DeviceInfo.current.description)
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }

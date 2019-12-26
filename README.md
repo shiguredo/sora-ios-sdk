@@ -2,6 +2,7 @@
 
 [![CircleCI branch](https://img.shields.io/circleci/project/github/shiguredo/sora-ios-sdk/develop.svg)](https://github.com/shiguredo/sora-ios-sdk) 
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライアントアプリケーションを開発するためのライブラリです。
 
@@ -9,9 +10,8 @@ Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライ�
 
 ## About Support
 
-Support for Sora iOS SDK by Shiguredo Inc. are limited
-**ONLY in JAPANESE** through GitHub issues and there is no guarantee such
-as response time or resolution.
+We check PRs or Issues only when written in JAPANESE.
+In other languages, we won't be able to deal with them. Thank you for your understanding.
 
 ## サポートについて
 
@@ -25,12 +25,12 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 - iOS 10.0 以降
 - アーキテクチャ arm64, x86_64 (シミュレーターの動作は未保証)
 - macOS 10.15 以降
-- Xcode 11.1
+- Xcode 11.3
 - Swift 5.1
-- Carthage 0.33.0 以降、または CocoaPods 1.6.1 以降
+- CocoaPods 1.8.4 以降
 - WebRTC SFU Sora 19.04.0 以降
 
-Xcode と Swift のバージョンによっては、 Carthage と CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
+Xcode と Swift のバージョンによっては、  CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
 ## サンプル
 
@@ -47,7 +47,7 @@ Xcode と Swift のバージョンによっては、 Carthage と CocoaPods で�
 - Xcode
 - Swift
 - iOS
-- Carthage
+- CocoaPods
 
 ## ライセンス
 

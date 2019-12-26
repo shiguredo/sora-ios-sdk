@@ -174,13 +174,13 @@ public struct SignalingConnect {
     public var simulcastQuality: SimulcastQuality
 
     /// :nodoc:
-    public var sdkVersion: String?
+    public var soraClient: String?
 
     /// :nodoc:
-    public var sdkType: String?
+    public var webRTCVersion: String?
 
     /// :nodoc:
-    public var userAgent: String?
+    public var environment: String?
 
 }
 
@@ -597,9 +597,9 @@ extension SignalingConnect: Codable {
         case simulcast
         case video
         case audio
-        case sdk_version
-        case sdk_type
-        case user_agent
+        case sora_client
+        case libwebrtc
+        case environment
     }
     
     enum VideoCodingKeys: String, CodingKey {
@@ -633,9 +633,9 @@ extension SignalingConnect: Codable {
                                       forKey: .multistream)
         try container.encodeIfPresent(planBEnabled, forKey: .plan_b)
         try container.encodeIfPresent(spotlight, forKey: .spotlight)
-        try container.encodeIfPresent(sdkVersion, forKey: .sdk_version)
-        try container.encodeIfPresent(sdkType, forKey: .sdk_type)
-        try container.encodeIfPresent(userAgent, forKey: .user_agent)
+        try container.encodeIfPresent(soraClient, forKey: .sora_client)
+        try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
+        try container.encodeIfPresent(environment, forKey: .environment)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
