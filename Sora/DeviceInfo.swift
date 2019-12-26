@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-// :nodoc:
+/// :nodoc:
 public enum DeviceModel {
 
     case unknown(String)
@@ -398,7 +398,7 @@ public enum DeviceModel {
     
 }
 
-// :nodoc:
+/// :nodoc:
 public struct DeviceInfo {
 
     public static var current: DeviceInfo = {
