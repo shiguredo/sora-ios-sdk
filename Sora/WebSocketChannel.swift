@@ -156,6 +156,9 @@ public final class WebSocketChannelHandlers {
     /// メッセージ受信時に呼ばれるブロック
     public var onMessageHandler: ((WebSocketMessage) ->Void)?
     
+    /// メッセージ送信時に呼ばれるブロック
+    public var onSendHandler: ((WebSocketMessage) ->WebSocketMessage)?
+
 }
 
 /**
@@ -177,13 +180,13 @@ public protocol WebSocketChannel: class {
     var state: ConnectionState { get }
     
     /// イベントハンドラ
-    var handlers: WebSocketChannelHandlers { get }
+    var handlers: WebSocketChannelHandlers { get set }
     
     /**
      内部処理で使われるイベントハンドラ。
      このハンドラをカスタマイズに使うべきではありません。
      */
-    var internalHandlers: WebSocketChannelHandlers { get }
+    var internalHandlers: WebSocketChannelHandlers { get set }
 
     // MARK: - インスタンスの生成
     
@@ -320,6 +323,8 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     }
     
     func send(message: WebSocketMessage) {
+        var message = channel.internalHandlers.onSendHandler?(message) ?? message
+        message = channel.handlers.onSendHandler?(message) ?? message
         switch message {
         case .text(let text):
             Logger.debug(type: .webSocketChannel, message: text)

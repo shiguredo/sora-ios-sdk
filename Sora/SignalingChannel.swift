@@ -142,6 +142,7 @@ class BasicSignalingChannel: SignalingChannel {
         }
         
         webSocketChannel.internalHandlers.onMessageHandler = handle
+        webSocketChannel.handlers = configuration.webSocketChannelHandlers
     }
     
     func connect(handler: @escaping (Error?) -> Void) {

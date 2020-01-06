@@ -85,6 +85,9 @@ public struct Configuration {
     
     // MARK: - イベントハンドラ
     
+    /// WebSocket チャネルに関するイベントハンドラ
+    public var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
+    
     /// シグナリングチャネルに関するイベントハンドラ
     public var signalingChannelHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
     
