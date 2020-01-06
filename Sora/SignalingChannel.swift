@@ -25,6 +25,9 @@ public final class SignalingChannelHandlers {
     /// シグナリング受信時に呼ばれるブロック
     public var onReceiveSignalingHandler: ((Signaling) -> Void)?
 
+    /// シグナリング送信時に呼ばれるブロック
+    public var onSendSignalingHandler: ((Signaling) -> Signaling)?
+    
 }
 
 /**
@@ -139,6 +142,7 @@ class BasicSignalingChannel: SignalingChannel {
         }
         
         webSocketChannel.internalHandlers.onMessageHandler = handle
+        webSocketChannel.handlers = configuration.webSocketChannelHandlers
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -202,6 +206,8 @@ class BasicSignalingChannel: SignalingChannel {
     
     func send(message: Signaling) {
         Logger.debug(type: .signalingChannel, message: "send message")
+        var message = internalHandlers.onSendSignalingHandler?(message) ?? message
+        message = handlers.onSendSignalingHandler?(message) ?? message
         let encoder = JSONEncoder()
         do {
             let data = try encoder.encode(message)
