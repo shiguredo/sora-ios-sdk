@@ -492,7 +492,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         state = .waitingOffer
         var role: SignalingRole!
-        var multistream = false
+        var multistream = configuration.multistreamEnabled
         switch configuration.role {
         case .publisher:
             role = .upstream
@@ -504,6 +504,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .groupSub:
             role = .downstream
             multistream = true
+        case .sendonly:
+            role = .sendonly
+        case .recvonly:
+            role = .recvonly
+        case .sendrecv:
+            role = .sendrecv
         }
 
         let soraClient = "Sora iOS SDK \(SDKInfo.shared.version) (\(SDKInfo.shared.shortRevision))"
@@ -804,9 +810,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         state = .disconnecting
         
         switch configuration.role {
-        case .publisher: terminatePublisherStream()
-        case .subscriber, .groupSub: break
-        case .group: terminatePublisherStream()
+        case .publisher, .sendonly:
+            terminatePublisherStream()
+        case .subscriber, .groupSub, .recvonly:
+            break
+        case .group, .sendrecv:
+            terminatePublisherStream()
         }
         channel.terminateAllStreams()
         nativeChannel.close()
