@@ -457,8 +457,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func sendConnectMessage(error: Error?) {
-        switch configuration.role {
-        case .publisher, .group:
+        if configuration.isSender {
             Logger.debug(type: .peerChannel, message: "try creating offer SDP")
             NativePeerChannelFactory.default
                 .createClientOfferSDP(configuration: webRTCConfiguration,
@@ -473,7 +472,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     }
                     self.sendConnectMessage(with: sdp, error: error)
             }
-        default:
+        } else {
             self.sendConnectMessage(with: nil, error: error)
         }
     }
@@ -494,22 +493,18 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         var role: SignalingRole!
         var multistream = configuration.multistreamEnabled
         switch configuration.role {
-        case .publisher:
-            role = .upstream
-        case .subscriber:
-            role = .downstream
-        case .group:
-            role = .upstream
-            multistream = true
-        case .groupSub:
-            role = .downstream
-            multistream = true
-        case .sendonly:
+        case .publisher, .sendonly:
             role = .sendonly
-        case .recvonly:
+        case .subscriber, .recvonly:
             role = .recvonly
         case .sendrecv:
             role = .sendrecv
+        case .group:
+            role = .sendrecv
+            multistream = true
+        case .groupSub:
+            role = .recvonly
+            multistream = true
         }
         
         let soraClient = "Sora iOS SDK \(SDKInfo.shared.version) (\(SDKInfo.shared.shortRevision))"
@@ -674,14 +669,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         lock.lock()
-        var isSender = false
-        switch configuration.role {
-        case .publisher, .group, .sendonly:
-            isSender = true
-        default:
-            break
-        }
-        createAnswer(isSender: isSender,
+        createAnswer(isSender: configuration.isSender,
                      offer: offer.sdp,
                      constraints: webRTCConfiguration.nativeConstraints)
         { sdp, error in
@@ -751,9 +739,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .connected:
             switch signaling {
             case .update(let update):
-                guard configuration.role == .group ||
-                    configuration.role == .groupSub else { return }
-                createAndSendUpdateAnswer(forOffer: update.sdp)
+                if configuration.isMultistream {
+                    createAndSendUpdateAnswer(forOffer: update.sdp)
+                }
                 
             case .ping:
                 signalingChannel.send(message: .pong(SignalingPong()))
@@ -810,12 +798,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         state = .disconnecting
         
-        switch configuration.role {
-        case .publisher, .sendonly:
-            terminateSenderStream()
-        case .subscriber, .groupSub, .recvonly:
-            break
-        case .group, .sendrecv:
+        if configuration.isSender {
             terminateSenderStream()
         }
         channel.terminateAllStreams()
@@ -861,8 +844,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         }
         
-        if (channel.configuration.role == .group ||
-            channel.configuration.role == .groupSub) && stream.streamId == clientId {
+        if channel.configuration.isMultistream &&
+            stream.streamId == clientId {
             Logger.debug(type: .peerChannel,
                          message: "stream already exists in multistream")
             return

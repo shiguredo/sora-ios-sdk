@@ -26,6 +26,26 @@ public struct Configuration {
     /// マルチストリームの可否
     public var multistreamEnabled: Bool
     
+    /// :nodoc:
+    var isMultistream: Bool {
+        switch role {
+        case .group, .groupSub:
+            return true
+        default:
+            return multistreamEnabled
+        }
+    }
+    
+    /// :nodoc:
+    var isSender: Bool {
+        switch role {
+        case .publisher, .group, .sendonly, .sendrecv:
+            return true
+        default:
+            return false
+        }
+    }
+    
     /**
      接続試行中のタイムアウト (秒) 。
      指定した時間内に接続が成立しなければ接続試行を中止します。
