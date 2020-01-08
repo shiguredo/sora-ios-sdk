@@ -675,7 +675,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         var initsPublisher = false
         switch configuration.role {
-        case .publisher, .group:
+        case .publisher, .group, .sendonly:
             initsPublisher = true
         default:
             break
