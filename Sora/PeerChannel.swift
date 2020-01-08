@@ -606,7 +606,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-    func createAnswer(initsPublisher: Bool,
+    func createAnswer(isSender: Bool,
                       offer: String,
                       constraints: RTCMediaConstraints,
                       handler: @escaping (String?, Error?) -> Void) {
@@ -625,7 +625,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "did set remote description")
             Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
 
-            if initsPublisher {
+            if isSender {
                 self.initializePublisherStream()
             }
 
@@ -680,7 +680,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         default:
             break
         }
-        createAnswer(initsPublisher: initsPublisher,
+        createAnswer(isSender: initsPublisher,
                 offer: offer.sdp,
                 constraints: webRTCConfiguration.nativeConstraints)
         { sdp, error in
@@ -705,7 +705,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "create and send update-answer")
         lock.lock()
         state = .waitingUpdateComplete
-        createAnswer(initsPublisher: false,
+        createAnswer(isSender: false,
                 offer: offer,
                 constraints: webRTCConfiguration.nativeConstraints)
         { answer, error in
