@@ -546,11 +546,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         signalingChannel.send(message: Signaling.connect(connect))
     }
     
-    func initializePublisherStream() {
-        Logger.debug(type: .peerChannel, message: "init publisher stream")
+    func initializeSenderStream() {
+        Logger.debug(type: .peerChannel,
+                     message: "initialize sender stream")
         
         let nativeStream = NativePeerChannelFactory.default
-            .createNativePublisherStream(streamId: configuration.publisherStreamId,
+            .createNativeSenderStream(streamId: configuration.publisherStreamId,
                                          videoTrackId:
                 configuration.videoEnabled ? configuration.publisherVideoTrackId: nil,
                                          audioTrackId:
@@ -588,8 +589,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                      message: "create publisher stream (id: \(configuration.publisherStreamId))")
     }
     
-    /** `initializePublisherStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
-    func terminatePublisherStream() {
+    /** `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
+    func terminateSenderStream() {
         if configuration.videoEnabled {
             switch configuration.videoCapturerDevice {
             case .camera(settings: let settings):
@@ -626,7 +627,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
             
             if isSender {
-                self.initializePublisherStream()
+                self.initializeSenderStream()
             }
             
             Logger.debug(type: .peerChannel, message: "try creating native answer")
@@ -673,14 +674,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         lock.lock()
-        var initsPublisher = false
+        var isSender = false
         switch configuration.role {
         case .publisher, .group, .sendonly:
-            initsPublisher = true
+            isSender = true
         default:
             break
         }
-        createAnswer(isSender: initsPublisher,
+        createAnswer(isSender: isSender,
                      offer: offer.sdp,
                      constraints: webRTCConfiguration.nativeConstraints)
         { sdp, error in
@@ -811,11 +812,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         switch configuration.role {
         case .publisher, .sendonly:
-            terminatePublisherStream()
+            terminateSenderStream()
         case .subscriber, .groupSub, .recvonly:
             break
         case .group, .sendrecv:
-            terminatePublisherStream()
+            terminateSenderStream()
         }
         channel.terminateAllStreams()
         nativeChannel.close()

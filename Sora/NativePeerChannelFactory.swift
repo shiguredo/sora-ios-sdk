@@ -60,12 +60,12 @@ class NativePeerChannelFactory {
         return nativeFactory.audioTrack(with: audioSource, trackId: trackId)
     }
     
-    func createNativePublisherStream(streamId: String,
+    func createNativeSenderStream(streamId: String,
                                      videoTrackId: String?,
                                      audioTrackId: String?,
                                      constraints: MediaConstraints) -> RTCMediaStream {
         Logger.debug(type: .nativePeerChannel,
-                     message: "create native publisher stream (\(streamId))")
+                     message: "create native sender stream (\(streamId))")
         let nativeStream = createNativeStream(streamId: streamId)
         
         if let trackId = videoTrackId {
@@ -93,7 +93,7 @@ class NativePeerChannelFactory {
                               constraints: MediaConstraints,
                               handler: @escaping (String?, Error?) -> Void) {
         let peer = createNativePeerChannel(configuration: configuration, constraints: constraints, delegate: nil)
-        let stream = createNativePublisherStream(streamId: "offer",
+        let stream = createNativeSenderStream(streamId: "offer",
                                                  videoTrackId: "video",
                                                  audioTrackId: "audio",
                                                  constraints: constraints)
