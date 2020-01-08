@@ -26,11 +26,6 @@ public struct Configuration {
     /// マルチストリームの可否
     public var multistreamEnabled: Bool
     
-    /// このプロパティは `signalingConnectMetadata` に置き換えられました。
-    @available(*, deprecated, renamed: "signalingConnectMetadata",
-    message: "このプロパティは signalingConnectMetadata に置き換えられました。")
-    public var metadata: String?
-    
     /**
      接続試行中のタイムアウト (秒) 。
      指定した時間内に接続が成立しなければ接続試行を中止します。
@@ -68,10 +63,6 @@ public struct Configuration {
     /// ロールが `.subscriber` または `.groupSub` のときのみ有効です。
     /// デフォルトは `.high` です。
     public var simulcastQuality: SimulcastQuality = .high
-
-    /// このプロパティは廃止されました。
-    @available(*, deprecated)
-    public var maxNumberOfSpeakers: Int?
 
     /// アクティブな配信数。
     /// 詳しくは Sora のスポットライト機能を参照してください。
