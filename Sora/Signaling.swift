@@ -567,7 +567,10 @@ extension SignalingClientMetadata: Decodable {
 private var roleTable: PairTable<String, SignalingRole> =
     PairTable(name: "SignalingRole",
               pairs: [("upstream", .upstream),
-                      ("downstream", .downstream)])
+                      ("downstream", .downstream),
+                      ("sendonly", .sendonly),
+                      ("recvonly", .recvonly),
+                      ("sendrecv", .sendrecv)])
 
 /// :nodoc:
 extension SignalingRole: Codable {

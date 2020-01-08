@@ -6,11 +6,24 @@ import Foundation
  */
 public enum SignalingRole: String {
     
-    /// アップストリーム (パブリッシャー)
+    /// この列挙子は sendonly に置き換えられました。
+    @available(*, deprecated, renamed: "sendonly",
+    message: "この列挙子は sendonly に置き換えられました。")
     case upstream
     
-    /// ダウンストリーム (サブスクライバー)
+    /// この列挙子は recvonly に置き換えられました。
+    @available(*, deprecated, renamed: "recvonly",
+    message: "この列挙子は recvonly に置き換えられました。")
     case downstream
+    
+    /// 送信のみ
+    case sendonly
+    
+    /// 受信のみ
+    case recvonly
+    
+    /// 送受信
+    case sendrecv
     
 }
 

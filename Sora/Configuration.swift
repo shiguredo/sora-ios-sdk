@@ -23,6 +23,9 @@ public struct Configuration {
     /// ロール
     public var role: Role
     
+    /// マルチストリームの可否
+    public var multistreamEnabled: Bool
+    
     /// このプロパティは `signalingConnectMetadata` に置き換えられました。
     @available(*, deprecated, renamed: "signalingConnectMetadata",
     message: "このプロパティは signalingConnectMetadata に置き換えられました。")
@@ -157,11 +160,16 @@ public struct Configuration {
      - parameter url: サーバーの URL
      - parameter channelId: チャネル ID
      - parameter role: ロール
+     - parameter multistreamEnabled: マルチストリームの可否
      */
-    public init(url: URL, channelId: String, role: Role) {
+    public init(url: URL,
+                channelId: String,
+                role: Role,
+                multistreamEnabled: Bool) {
         self.url = url
         self.channelId = channelId
         self.role = role
+        self.multistreamEnabled = multistreamEnabled
     }
     
 }
@@ -173,6 +181,7 @@ extension Configuration: Codable {
         case url
         case channelId
         case role
+        case multistreamEnabled
         case metadata
         case connectionTimeout
         case videoCodec
@@ -202,7 +211,11 @@ extension Configuration: Codable {
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
-        self.init(url: url, channelId: channelId, role: role)
+        let multistreamEnabled = try container.decode(Bool.self, forKey: .multistreamEnabled)
+        self.init(url: url,
+                  channelId: channelId,
+                  role: role,
+                  multistreamEnabled: multistreamEnabled)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
