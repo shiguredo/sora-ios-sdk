@@ -17,11 +17,27 @@ public enum MediaStreamAudioVolume {
 /// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
     
+    /// このプロパティは onSwitchVideo に置き換えられました。
+    @available(*, deprecated, renamed: "onSwitchVideo",
+    message: "このプロパティは onSwitchVideo に置き換えられました。")
+    public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)? {
+        get { onSwitchVideo }
+        set { onSwitchVideo = newValue }
+    }
+    
+    /// このプロパティは onSwitchAudio に置き換えられました。
+    @available(*, deprecated, renamed: "onSwitchAudio",
+    message: "このプロパティは onSwitchAudio に置き換えられました。")
+    public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)? {
+        get { onSwitchAudio }
+        set { onSwitchAudio = newValue }
+    }
+    
     /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
-    public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)?
+    public var onSwitchVideo: ((_ isEnabled: Bool) -> Void)?
     
     /// 音声トラックが有効または無効にセットされたときに呼ばれるクロージャー
-    public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)?
+    public var onSwitchAudio: ((_ isEnabled: Bool) -> Void)?
 
 }
 
@@ -190,7 +206,7 @@ class BasicMediaStream: MediaStream {
             }
             if let track = nativeVideoTrack {
                 track.isEnabled = newValue
-                handlers.onSwitchVideoHandler?(newValue)
+                handlers.onSwitchVideo?(newValue)
                 videoRenderer?.onSwitch(video: newValue)
             }
         }
@@ -206,7 +222,7 @@ class BasicMediaStream: MediaStream {
             }
             if let track = nativeAudioTrack {
                 track.isEnabled = newValue
-                handlers.onSwitchAudioHandler?(newValue)
+                handlers.onSwitchAudio?(newValue)
                 videoRenderer?.onSwitch(audio: newValue)
             }
         }

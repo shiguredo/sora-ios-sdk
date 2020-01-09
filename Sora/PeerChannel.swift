@@ -154,22 +154,61 @@ class PeerChannelInternalState {
  */
 public final class PeerChannelHandlers {
     
+    /// このプロパティは onDisconnect に置き換えられました。
+    @available(*, deprecated, renamed: "onDisconnect",
+    message: "このプロパティは onDisconnect に置き換えられました。")
+    public var onDisconnectHandler: ((Error?) -> Void)? {
+        get { onDisconnect }
+        set { onDisconnect = newValue }
+    }
+    
+    /// このプロパティは onAddStream に置き換えられました。
+    @available(*, deprecated, renamed: "onAddStream",
+    message: "このプロパティは onConnect に置き換えられました。")
+    public var onAddStreamHandler: ((MediaStream) -> Void)? {
+        get { onAddStream }
+        set { onAddStream = newValue }
+    }
+    
+    /// このプロパティは onRemoveStream に置き換えられました。
+    @available(*, deprecated, renamed: "onRemoveStream",
+    message: "このプロパティは onRemoveStream に置き換えられました。")
+    public var onRemoveStreamHandler: ((MediaStream) -> Void)? {
+        get { onRemoveStream }
+        set { onRemoveStream = newValue }
+    }
+    
+    /// このプロパティは onUpdate に置き換えられました。
+    @available(*, deprecated, renamed: "onUpdate",
+    message: "このプロパティは onUpdate に置き換えられました。")
+    public var onUpdateHandler: ((String) -> Void)? {
+        get { onUpdate }
+        set { onUpdate = newValue }
+    }
+    
+    /// このプロパティは onReceiveSignaling に置き換えられました。
+    @available(*, deprecated, renamed: "onReceiveSignaling",
+    message: "このプロパティは onReceiveSignaling に置き換えられました。")
+    public var onReceiveSignalingHandler: ((Signaling) -> Void)? {
+        get { onReceiveSignaling }
+        set { onReceiveSignaling = newValue }
+    }
+    
     /// 接続解除時に呼ばれるクロージャー
-    public var onDisconnectHandler: ((Error?) -> Void)?
+    public var onDisconnect: ((Error?) -> Void)?
     
     /// ストリームの追加時に呼ばれるクロージャー
-    public var onAddStreamHandler: ((MediaStream) -> Void)?
+    public var onAddStream: ((MediaStream) -> Void)?
     
     /// ストリームの除去時に呼ばれるクロージャー
-    public var onRemoveStreamHandler: ((MediaStream) -> Void)?
+    public var onRemoveStream: ((MediaStream) -> Void)?
     
     /// マルチストリームの状態の更新に呼ばれるクロージャー。
     /// 更新により、ストリームの追加または除去が行われます。
-    public var onUpdateHandler: ((String) -> Void)?
+    public var onUpdate: ((String) -> Void)?
     
     /// シグナリング受信時に呼ばれるクロージャー
-    public var onReceiveSignalingHandler: ((Signaling) -> Void)?
-    
+    public var onReceiveSignaling: ((Signaling) -> Void)?
 }
 
 // MARK: -
@@ -284,9 +323,9 @@ class BasicPeerChannel: PeerChannel {
     
     func add(stream: MediaStream) {
         streams.append(stream)
-        Logger.debug(type: .peerChannel, message: "call onAddStreamHandler")
-        internalHandlers.onAddStreamHandler?(stream)
-        handlers.onAddStreamHandler?(stream)
+        Logger.debug(type: .peerChannel, message: "call onAddStream")
+        internalHandlers.onAddStream?(stream)
+        handlers.onAddStream?(stream)
     }
     
     func remove(streamId: String) {
@@ -298,9 +337,9 @@ class BasicPeerChannel: PeerChannel {
     
     func remove(stream: MediaStream) {
         streams = streams.filter { each in each.streamId != stream.streamId }
-        Logger.debug(type: .peerChannel, message: "call onRemoveStreamHandler")
-        internalHandlers.onRemoveStreamHandler?(stream)
-        handlers.onRemoveStreamHandler?(stream)
+        Logger.debug(type: .peerChannel, message: "call onRemoveStream")
+        internalHandlers.onRemoveStream?(stream)
+        handlers.onRemoveStream?(stream)
     }
     
     func add(iceCandidate: ICECandidate) {
@@ -413,11 +452,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         super.init()
         lock.context = self
         
-        signalingChannel.internalHandlers.onDisconnectHandler = { error in
+        signalingChannel.internalHandlers.onDisconnect = { error in
             self.disconnect(error: error)
         }
         
-        signalingChannel.internalHandlers.onReceiveSignalingHandler = handle
+        signalingChannel.internalHandlers.onReceive = handle
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -714,9 +753,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             // Answer を送信したら更新完了とする
             self.state = .connected
             
-            Logger.debug(type: .peerChannel, message: "call onUpdateHandler")
-            self.channel.internalHandlers.onUpdateHandler?(answer!)
-            self.channel.handlers.onUpdateHandler?(answer!)
+            Logger.debug(type: .peerChannel, message: "call onUpdate")
+            self.channel.internalHandlers.onUpdate?(answer!)
+            self.channel.handlers.onUpdate?(answer!)
             
             self.lock.unlock()
         }
@@ -756,9 +795,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             break
         }
         
-        Logger.debug(type: .peerChannel, message: "call onReceiveSignalingHandler")
-        channel.internalHandlers.onReceiveSignalingHandler?(signaling)
-        channel.handlers.onReceiveSignalingHandler?(signaling)
+        Logger.debug(type: .peerChannel, message: "call onReceiveSignaling")
+        channel.internalHandlers.onReceiveSignaling?(signaling)
+        channel.handlers.onReceiveSignaling?(signaling)
     }
     
     func finishConnecting() {
@@ -772,7 +811,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         state = .connected
         
         if onConnectHandler != nil {
-            Logger.debug(type: .peerChannel, message: "call connect(handler:) handler")
+            Logger.debug(type: .peerChannel, message: "call connect(handler:)")
             onConnectHandler!(nil)
             onConnectHandler = nil
         }
@@ -809,12 +848,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         state = .disconnected
         
-        Logger.debug(type: .peerChannel, message: "call onDisconnectHandler")
-        channel.internalHandlers.onDisconnectHandler?(error)
-        channel.handlers.onDisconnectHandler?(error)
+        Logger.debug(type: .peerChannel, message: "call onDisconnect")
+        channel.internalHandlers.onDisconnect?(error)
+        channel.handlers.onDisconnect?(error)
         
         if onConnectHandler != nil {
-            Logger.debug(type: .peerChannel, message: "call connect(handler:) handler")
+            Logger.debug(type: .peerChannel, message: "call connect(handler:)")
             onConnectHandler!(error)
             onConnectHandler = nil
         }

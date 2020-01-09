@@ -6,8 +6,16 @@ import WebRTC
  */
 public final class VideoCapturerHandlers {
     
+    /// このプロパティは onCapture に置き換えられました。
+    @available(*, deprecated, renamed: "onCapture",
+    message: "このプロパティは onCapture に置き換えられました。")
+    public var onCaptureHandler: ((VideoFrame) -> Void)? {
+        get { onCapture }
+        set { onCapture = newValue }
+    }
+    
     /// 映像フレームの生成時に呼ばれるクロージャー
-    public var onCaptureHandler: ((VideoFrame) -> Void)?
+    public var onCapture: ((VideoFrame) -> Void)?
     
 }
 
