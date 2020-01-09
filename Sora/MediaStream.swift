@@ -17,11 +17,27 @@ public enum MediaStreamAudioVolume {
 /// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
     
-    /// 映像トラックが有効または無効にセットされたときに呼ばれるブロック
-    public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)?
+    /// このプロパティは onSwitchVideo に置き換えられました。
+    @available(*, deprecated, renamed: "onSwitchVideo",
+    message: "このプロパティは onSwitchVideo に置き換えられました。")
+    public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)? {
+        get { onSwitchVideo }
+        set { onSwitchVideo = newValue }
+    }
     
-    /// 音声トラックが有効または無効にセットされたときに呼ばれるブロック
-    public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)?
+    /// このプロパティは onSwitchAudio に置き換えられました。
+    @available(*, deprecated, renamed: "onSwitchAudio",
+    message: "このプロパティは onSwitchAudio に置き換えられました。")
+    public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)? {
+        get { onSwitchAudio }
+        set { onSwitchAudio = newValue }
+    }
+    
+    /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
+    public var onSwitchVideo: ((_ isEnabled: Bool) -> Void)?
+    
+    /// 音声トラックが有効または無効にセットされたときに呼ばれるクロージャー
+    public var onSwitchAudio: ((_ isEnabled: Bool) -> Void)?
 
 }
 
@@ -68,13 +84,6 @@ public protocol MediaStream: class {
      サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
      */
     var audioEnabled: Bool { get set }
-
-    /**
-     このプロパティは ``remoteAudioVolume`` に置き換えられました。
-     */
-    @available(*, deprecated, renamed: "remoteAudioVolume",
-        message: "このプロパティは remoteAudioVolume に置き換えられました。")
-    var audioVolume: Double? { get set }
 
     /**
      受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
@@ -197,7 +206,7 @@ class BasicMediaStream: MediaStream {
             }
             if let track = nativeVideoTrack {
                 track.isEnabled = newValue
-                handlers.onSwitchVideoHandler?(newValue)
+                handlers.onSwitchVideo?(newValue)
                 videoRenderer?.onSwitch(video: newValue)
             }
         }
@@ -213,21 +222,12 @@ class BasicMediaStream: MediaStream {
             }
             if let track = nativeAudioTrack {
                 track.isEnabled = newValue
-                handlers.onSwitchAudioHandler?(newValue)
+                handlers.onSwitchAudio?(newValue)
                 videoRenderer?.onSwitch(audio: newValue)
             }
         }
     }
-    
-    var audioVolume: Double? {
-        get {
-            return remoteAudioVolume
-        }
-        set {
-            remoteAudioVolume = newValue
-        }
-    }
-    
+
     var remoteAudioVolume: Double? {
         get {
             return nativeAudioTrack?.source.volume

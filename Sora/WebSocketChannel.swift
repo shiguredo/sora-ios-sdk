@@ -147,18 +147,50 @@ public enum WebSocketMessage {
  */
 public final class WebSocketChannelHandlers {
     
-    /// 接続解除時に呼ばれるブロック
-    public var onDisconnectHandler: ((Error?) -> Void)?
+    /// このプロパティは onDisconnect に置き換えられました。
+    @available(*, deprecated, renamed: "onDisconnect",
+    message: "このプロパティは onDisconnect に置き換えられました。")
+    public var onDisconnectHandler: ((Error?) -> Void)? {
+        get { onDisconnect }
+        set { onDisconnect = newValue }
+    }
     
-    /// pong の送信時に呼ばれるブロック
-    public var onPongHandler: ((Data?) -> Void)?
+    /// このプロパティは onPong に置き換えられました。
+    @available(*, deprecated, renamed: "onPong",
+    message: "このプロパティは onPong に置き換えられました。")
+    public var onPongHandler: ((Data?) -> Void)? {
+        get { onPong }
+        set { onPong = newValue }
+    }
     
-    /// メッセージ受信時に呼ばれるブロック
-    public var onMessageHandler: ((WebSocketMessage) ->Void)?
+    /// このプロパティは onReceive に置き換えられました。
+    @available(*, deprecated, renamed: "onReceive",
+    message: "このプロパティは onReceive に置き換えられました。")
+    public var onMessageHandler: ((WebSocketMessage) ->Void)? {
+        get { onReceive }
+        set { onReceive = newValue }
+    }
     
-    /// メッセージ送信時に呼ばれるブロック
-    public var onSendHandler: ((WebSocketMessage) ->WebSocketMessage)?
-
+    /// このプロパティは onDisconnect に置き換えられました。
+    @available(*, deprecated, renamed: "onSend",
+    message: "このプロパティは onSend に置き換えられました。")
+    public var onSendHandler: ((WebSocketMessage) ->WebSocketMessage)? {
+        get { onSend }
+        set { onSend = newValue }
+    }
+    
+    /// 接続解除時に呼ばれるクロージャー
+    public var onDisconnect: ((Error?) -> Void)?
+    
+    /// pong の送信時に呼ばれるクロージャー
+    public var onPong: ((Data?) -> Void)?
+    
+    /// メッセージ受信時に呼ばれるクロージャー
+    public var onReceive: ((WebSocketMessage) ->Void)?
+    
+    /// メッセージ送信時に呼ばれるクロージャー
+    public var onSend: ((WebSocketMessage) ->WebSocketMessage)?
+    
 }
 
 /**
@@ -202,7 +234,7 @@ public protocol WebSocketChannel: class {
     /**
      サーバーに接続します。
      
-     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時のみ) エラー
      */
     func connect(handler: @escaping (_ error: Error?) -> Void)
@@ -308,12 +340,12 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
             nativeChannel.disconnect()
             state = .disconnected
             
-            Logger.debug(type: .webSocketChannel, message: "call onDisconnectHandler")
-            channel.internalHandlers.onDisconnectHandler?(error)
-            channel.handlers.onDisconnectHandler?(error)
+            Logger.debug(type: .webSocketChannel, message: "call onDisconnect")
+            channel.internalHandlers.onDisconnect?(error)
+            channel.handlers.onDisconnect?(error)
             
             if onConnectHandler != nil {
-                Logger.debug(type: .webSocketChannel, message: "call connect(handler:) handler")
+                Logger.debug(type: .webSocketChannel, message: "call connect(handler:)")
                 onConnectHandler!(error)
                 onConnectHandler = nil
             }
@@ -323,8 +355,8 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     }
     
     func send(message: WebSocketMessage) {
-        var message = channel.internalHandlers.onSendHandler?(message) ?? message
-        message = channel.handlers.onSendHandler?(message) ?? message
+        var message = channel.internalHandlers.onSend?(message) ?? message
+        message = channel.handlers.onSend?(message) ?? message
         switch message {
         case .text(let text):
             Logger.debug(type: .webSocketChannel, message: text)
@@ -336,16 +368,16 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     }
     
     func callMessageHandler(message: WebSocketMessage) {
-        Logger.debug(type: .webSocketChannel, message: "call onMessageHandler")
-        channel.internalHandlers.onMessageHandler?(message)
-        channel.handlers.onMessageHandler?(message)
+        Logger.debug(type: .webSocketChannel, message: "call onMessage")
+        channel.internalHandlers.onReceive?(message)
+        channel.handlers.onReceive?(message)
     }
     
     func websocketDidConnect(socket: WebSocketClient) {
         Logger.debug(type: .webSocketChannel, message: "connected")
         state = .connected
         if onConnectHandler != nil {
-            Logger.debug(type: .webSocketChannel, message: "call connect(handler:) handler")
+            Logger.debug(type: .webSocketChannel, message: "call connect(handler:)")
             onConnectHandler!(nil)
             onConnectHandler = nil
         }
@@ -376,9 +408,9 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
         Logger.debug(type: .webSocketChannel,
                      message: "receive poing payload => \(data?.description ?? "empty")")
-        Logger.debug(type: .webSocketChannel, message: "call onPongHandler")
-        channel.internalHandlers.onPongHandler?(data)
-        channel.handlers.onPongHandler?(data)
+        Logger.debug(type: .webSocketChannel, message: "call onPong")
+        channel.internalHandlers.onPong?(data)
+        channel.handlers.onPong?(data)
     }
     
 }

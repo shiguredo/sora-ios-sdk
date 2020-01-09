@@ -26,10 +26,25 @@ public struct Configuration {
     /// マルチストリームの可否
     public var multistreamEnabled: Bool
     
-    /// このプロパティは `signalingConnectMetadata` に置き換えられました。
-    @available(*, deprecated, renamed: "signalingConnectMetadata",
-    message: "このプロパティは signalingConnectMetadata に置き換えられました。")
-    public var metadata: String?
+    /// :nodoc:
+    var isMultistream: Bool {
+        switch role {
+        case .group, .groupSub:
+            return true
+        default:
+            return multistreamEnabled
+        }
+    }
+    
+    /// :nodoc:
+    var isSender: Bool {
+        switch role {
+        case .publisher, .group, .sendonly, .sendrecv:
+            return true
+        default:
+            return false
+        }
+    }
     
     /**
      接続試行中のタイムアウト (秒) 。
@@ -68,10 +83,6 @@ public struct Configuration {
     /// ロールが `.subscriber` または `.groupSub` のときのみ有効です。
     /// デフォルトは `.high` です。
     public var simulcastQuality: SimulcastQuality = .high
-
-    /// このプロパティは廃止されました。
-    @available(*, deprecated)
-    public var maxNumberOfSpeakers: Int?
 
     /// アクティブな配信数。
     /// 詳しくは Sora のスポットライト機能を参照してください。
