@@ -17,10 +17,10 @@ public enum MediaStreamAudioVolume {
 /// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
     
-    /// 映像トラックが有効または無効にセットされたときに呼ばれるブロック
+    /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
     public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)?
     
-    /// 音声トラックが有効または無効にセットされたときに呼ばれるブロック
+    /// 音声トラックが有効または無効にセットされたときに呼ばれるクロージャー
     public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)?
 
 }

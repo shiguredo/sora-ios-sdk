@@ -147,16 +147,16 @@ public enum WebSocketMessage {
  */
 public final class WebSocketChannelHandlers {
     
-    /// 接続解除時に呼ばれるブロック
+    /// 接続解除時に呼ばれるクロージャー
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// pong の送信時に呼ばれるブロック
+    /// pong の送信時に呼ばれるクロージャー
     public var onPongHandler: ((Data?) -> Void)?
     
-    /// メッセージ受信時に呼ばれるブロック
+    /// メッセージ受信時に呼ばれるクロージャー
     public var onMessageHandler: ((WebSocketMessage) ->Void)?
     
-    /// メッセージ送信時に呼ばれるブロック
+    /// メッセージ送信時に呼ばれるクロージャー
     public var onSendHandler: ((WebSocketMessage) ->WebSocketMessage)?
 
 }
@@ -202,7 +202,7 @@ public protocol WebSocketChannel: class {
     /**
      サーバーに接続します。
      
-     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時のみ) エラー
      */
     func connect(handler: @escaping (_ error: Error?) -> Void)

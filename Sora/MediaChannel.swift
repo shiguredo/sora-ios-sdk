@@ -3,19 +3,19 @@ import Foundation
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
     
-    /// 接続成功時に呼ばれるブロック
+    /// 接続成功時に呼ばれるクロージャー
     public var onConnectHandler: ((Error?) -> Void)?
     
-    /// 接続解除時に呼ばれるブロック
+    /// 接続解除時に呼ばれるクロージャー
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// ストリームが追加されたときに呼ばれるブロック
+    /// ストリームが追加されたときに呼ばれるクロージャー
     public var onAddStreamHandler: ((MediaStream) -> Void)?
     
-    /// ストリームが除去されたときに呼ばれるブロック
+    /// ストリームが除去されたときに呼ばれるクロージャー
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     
-    /// シグナリング受信時に呼ばれるブロック
+    /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignalingHandler: ((Signaling) -> Void)?
 
 }
@@ -178,7 +178,7 @@ public final class MediaChannel {
      
      - parameter webRTCConfiguration: WebRTC の設定
      - parameter timeout: タイムアウトまでの秒数
-     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時) エラー
      */
     func connect(webRTCConfiguration: WebRTCConfiguration,

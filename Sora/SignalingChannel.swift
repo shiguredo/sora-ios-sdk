@@ -32,13 +32,13 @@ public enum SignalingRole: String {
  */
 public final class SignalingChannelHandlers {
     
-    /// 接続解除時に呼ばれるブロック
+    /// 接続解除時に呼ばれるクロージャー
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// シグナリング受信時に呼ばれるブロック
+    /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignalingHandler: ((Signaling) -> Void)?
 
-    /// シグナリング送信時に呼ばれるブロック
+    /// シグナリング送信時に呼ばれるクロージャー
     public var onSendSignalingHandler: ((Signaling) -> Signaling)?
     
 }
@@ -94,7 +94,7 @@ public protocol SignalingChannel: class {
     /**
      サーバーに接続します。
      
-     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時のみ) エラー
      */
     func connect(handler: @escaping (_ error: Error?) -> Void)

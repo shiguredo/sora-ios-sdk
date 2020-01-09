@@ -6,7 +6,7 @@ import WebRTC
  */
 public final class VideoCapturerHandlers {
     
-    /// 映像フレームの生成時に呼ばれるブロック
+    /// 映像フレームの生成時に呼ばれるクロージャー
     public var onCaptureHandler: ((VideoFrame) -> Void)?
     
 }

@@ -154,20 +154,20 @@ class PeerChannelInternalState {
  */
 public final class PeerChannelHandlers {
     
-    /// 接続解除時に呼ばれるブロック
+    /// 接続解除時に呼ばれるクロージャー
     public var onDisconnectHandler: ((Error?) -> Void)?
     
-    /// ストリームの追加時に呼ばれるブロック
+    /// ストリームの追加時に呼ばれるクロージャー
     public var onAddStreamHandler: ((MediaStream) -> Void)?
     
-    /// ストリームの除去時に呼ばれるブロック
+    /// ストリームの除去時に呼ばれるクロージャー
     public var onRemoveStreamHandler: ((MediaStream) -> Void)?
     
-    /// マルチストリームの状態の更新に呼ばれるブロック。
+    /// マルチストリームの状態の更新に呼ばれるクロージャー。
     /// 更新により、ストリームの追加または除去が行われます。
     public var onUpdateHandler: ((String) -> Void)?
     
-    /// シグナリング受信時に呼ばれるブロック
+    /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignalingHandler: ((Signaling) -> Void)?
     
 }
@@ -229,7 +229,7 @@ public protocol PeerChannel: class {
     /**
      サーバーに接続します。
      
-     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時のみ) エラー
      */
     func connect(handler: @escaping (_ error: Error?) -> Void)

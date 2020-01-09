@@ -4,16 +4,16 @@ import WebRTC
 /// `Sora` オブジェクトのイベントハンドラです。
 public final class SoraHandlers {
     
-    /// 接続成功時に呼ばれるブロック
+    /// 接続成功時に呼ばれるクロージャー
     public var onConnectHandler: ((MediaChannel?, Error?) -> Void)?
     
-    /// 接続解除時に呼ばれるブロック
+    /// 接続解除時に呼ばれるクロージャー
     public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)?
     
-    /// メディアチャネルが追加されたときに呼ばれるブロック
+    /// メディアチャネルが追加されたときに呼ばれるクロージャー
     public var onAddMediaChannelHandler: ((MediaChannel) -> Void)?
     
-    /// メディアチャネルが除去されたときに呼ばれるブロック
+    /// メディアチャネルが除去されたときに呼ばれるクロージャー
     public var onRemoveMediaChannelHandler: ((MediaChannel) -> Void)?
 
 }
@@ -129,7 +129,7 @@ public final class Sora {
      
      - parameter configuration: クライアントの設定
      - parameter webRTCConfiguration: WebRTC の設定
-     - parameter handler: 接続試行後に呼ばれるブロック。
+     - parameter handler: 接続試行後に呼ばれるクロージャー。
      - parameter mediaChannel: (接続成功時のみ) メディアチャネル
      - parameter error: (接続失敗時のみ) エラー
      - returns: 接続試行中の状態
@@ -237,7 +237,7 @@ public final class Sora {
      * - ``setInputDataSource(_:)``
      * - ``setOutputDataSource(_:)``
      *
-     * - parameter block: ロック中に実行されるブロック
+     * - parameter block: ロック中に実行されるクロージャー
      */
     public func configureAudioSession(block: () -> Void) {
         let session = RTCAudioSession.sharedInstance()
