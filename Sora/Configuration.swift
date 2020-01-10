@@ -166,6 +166,27 @@ public struct Configuration {
     // MARK: - インスタンスの生成
     
     /**
+     このイニシャライザーは ``init(url:channelId:role:multistreamEnabled:)`` に置き換えられました。
+     以降はマルチストリームの可否を明示的に指定してください。
+     このイニシャライザーはマルチストリームを無効にして初期化します。
+     
+     - parameter url: サーバーの URL
+     - parameter channelId: チャネル ID
+     - parameter role: ロール
+     */
+    ///
+    @available(*, deprecated, renamed: "init(url:channelId:role:)",
+    message: "このイニシャライザーは init(url:channelId:role:multistreamEnabled:) に置き換えられました。")
+    public init(url: URL,
+                channelId: String,
+                role: Role) {
+        self.url = url
+        self.channelId = channelId
+        self.role = role
+        self.multistreamEnabled = false
+    }
+    
+    /**
      初期化します。
      
      - parameter url: サーバーの URL
