@@ -29,6 +29,21 @@
 
 - API: SocketRocket の使用を止めて Starscream を採用した
 
+- API: イベントハンドラのプロパティ名を短縮した
+
+- API: `Configuration`: `init(url:channelId:role:)` を非推奨にした
+
+- API: `Configuration`: `init(url:channelId:role:multistreamEnabled:)` を追加した
+
+- API: `Configuration`: `webSocketChannelHandlers`: プロパティを追加した
+
+- API: `Configuration`: `multistreamEnabled`: プロパティを追加した
+
+- API: `Role`: Sora の仕様に合わせて `sendonly`, `recvonly`, `sendrecv` を追加した
+
+- API: `Role`: `publisher`, `subscriber`, `group`, `groupSub` を非推奨にした
+
+
 ## 2.6.0
 
 ### CHANGE
