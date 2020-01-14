@@ -175,7 +175,7 @@ public struct Configuration {
      - parameter role: ロール
      */
     ///
-    @available(*, deprecated, renamed: "init(url:channelId:role:)",
+    @available(*, deprecated, renamed: "init(url:channelId:role:multistreamEnabled:)",
     message: "このイニシャライザーは init(url:channelId:role:multistreamEnabled:) に置き換えられました。")
     public init(url: URL,
                 channelId: String,
