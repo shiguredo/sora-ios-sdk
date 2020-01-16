@@ -21,6 +21,8 @@
 
    - CocoaPods 1.8.4 以降
 
+   - WebRTC SFU Sora 19.10.3 以降
+
 - WebRTC M79 に対応した
 
 - Carthage の使用を止めた
