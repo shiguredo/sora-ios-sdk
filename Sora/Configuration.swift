@@ -80,7 +80,7 @@ public struct Configuration {
     public var simulcastEnabled: Bool = false
 
     /// サイマルキャストの品質。
-    /// ロールが `.subscriber` または `.groupSub` のときのみ有効です。
+    /// ロールが `.recvonly` のときのみ有効です。
     /// デフォルトは `.high` です。
     public var simulcastQuality: SimulcastQuality = .high
 
