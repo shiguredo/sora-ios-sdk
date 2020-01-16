@@ -6,7 +6,7 @@
 
 Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライアントアプリケーションを開発するためのライブラリです。
 
-使い方は [Sora iOS SDK ドキュメント](https://sora.shiguredo.jp/ios-sdk-doc/) を参照してください。
+使い方は [Sora iOS SDK ドキュメント](https://sora-ios-sdk.shiguredo.jp/) を参照してください。
 
 ## About Support
 
@@ -28,7 +28,7 @@ Sora iOS SDK に対する有償のサポートについては現在提供して�
 - Xcode 11.3
 - Swift 5.1
 - CocoaPods 1.8.4 以降
-- WebRTC SFU Sora 19.04.0 以降
+- WebRTC SFU Sora 19.10.3 以降
 
 Xcode と Swift のバージョンによっては、  CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
