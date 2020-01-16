@@ -25,13 +25,13 @@ public enum Role {
     message: "この列挙子は廃止されました。マルチストリームで recvonly を指定してください。")
     case groupSub
     
-    // 送信のみ
+    /// 送信のみ
     case sendonly
     
-    // 受信のみ
+    /// 受信のみ
     case recvonly
     
-    // 送受信
+    /// 送受信
     case sendrecv
     
 }
