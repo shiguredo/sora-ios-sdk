@@ -21,6 +21,8 @@
 
    - CocoaPods 1.8.4 以降
 
+   - WebRTC SFU Sora 19.10.3 以降
+
 - WebRTC M79 に対応した
 
 - Carthage の使用を止めた
@@ -28,6 +30,21 @@
 - シグナリングに含める各種バージョン情報を変更した
 
 - API: SocketRocket の使用を止めて Starscream を採用した
+
+- API: イベントハンドラのプロパティ名を短縮した
+
+- API: `Configuration`: `init(url:channelId:role:)` を非推奨にした
+
+- API: `Configuration`: `init(url:channelId:role:multistreamEnabled:)` を追加した
+
+- API: `Configuration`: `webSocketChannelHandlers`: プロパティを追加した
+
+- API: `Configuration`: `multistreamEnabled`: プロパティを追加した
+
+- API: `Role`: Sora の仕様に合わせて `sendonly`, `recvonly`, `sendrecv` を追加した
+
+- API: `Role`: `publisher`, `subscriber`, `group`, `groupSub` を非推奨にした
+
 
 ## 2.6.0
 

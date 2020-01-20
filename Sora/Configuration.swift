@@ -23,10 +23,28 @@ public struct Configuration {
     /// ロール
     public var role: Role
     
-    /// このプロパティは `signalingConnectMetadata` に置き換えられました。
-    @available(*, deprecated, renamed: "signalingConnectMetadata",
-    message: "このプロパティは signalingConnectMetadata に置き換えられました。")
-    public var metadata: String?
+    /// マルチストリームの可否
+    public var multistreamEnabled: Bool
+    
+    /// :nodoc:
+    var isMultistream: Bool {
+        switch role {
+        case .group, .groupSub:
+            return true
+        default:
+            return multistreamEnabled
+        }
+    }
+    
+    /// :nodoc:
+    var isSender: Bool {
+        switch role {
+        case .publisher, .group, .sendonly, .sendrecv:
+            return true
+        default:
+            return false
+        }
+    }
     
     /**
      接続試行中のタイムアウト (秒) 。
@@ -62,13 +80,9 @@ public struct Configuration {
     public var simulcastEnabled: Bool = false
 
     /// サイマルキャストの品質。
-    /// ロールが `.subscriber` または `.groupSub` のときのみ有効です。
+    /// ロールが `.recvonly` のときのみ有効です。
     /// デフォルトは `.high` です。
     public var simulcastQuality: SimulcastQuality = .high
-
-    /// このプロパティは廃止されました。
-    @available(*, deprecated)
-    public var maxNumberOfSpeakers: Int?
 
     /// アクティブな配信数。
     /// 詳しくは Sora のスポットライト機能を参照してください。
@@ -84,6 +98,9 @@ public struct Configuration {
     public var signalingConnectNotifyMetadata: Encodable?
     
     // MARK: - イベントハンドラ
+    
+    /// WebSocket チャネルに関するイベントハンドラ
+    public var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
     
     /// シグナリングチャネルに関するイベントハンドラ
     public var signalingChannelHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
@@ -149,16 +166,42 @@ public struct Configuration {
     // MARK: - インスタンスの生成
     
     /**
-     初期化します。
+     このイニシャライザーは ``init(url:channelId:role:multistreamEnabled:)`` に置き換えられました。
+     以降はマルチストリームの可否を明示的に指定してください。
+     このイニシャライザーはマルチストリームを無効にして初期化します。
      
      - parameter url: サーバーの URL
      - parameter channelId: チャネル ID
      - parameter role: ロール
      */
-    public init(url: URL, channelId: String, role: Role) {
+    ///
+    @available(*, deprecated, renamed: "init(url:channelId:role:multistreamEnabled:)",
+    message: "このイニシャライザーは init(url:channelId:role:multistreamEnabled:) に置き換えられました。")
+    public init(url: URL,
+                channelId: String,
+                role: Role) {
         self.url = url
         self.channelId = channelId
         self.role = role
+        self.multistreamEnabled = false
+    }
+    
+    /**
+     初期化します。
+     
+     - parameter url: サーバーの URL
+     - parameter channelId: チャネル ID
+     - parameter role: ロール
+     - parameter multistreamEnabled: マルチストリームの可否
+     */
+    public init(url: URL,
+                channelId: String,
+                role: Role,
+                multistreamEnabled: Bool) {
+        self.url = url
+        self.channelId = channelId
+        self.role = role
+        self.multistreamEnabled = multistreamEnabled
     }
     
 }
@@ -170,6 +213,7 @@ extension Configuration: Codable {
         case url
         case channelId
         case role
+        case multistreamEnabled
         case metadata
         case connectionTimeout
         case videoCodec
@@ -199,7 +243,11 @@ extension Configuration: Codable {
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
         let role = try container.decode(Role.self, forKey: .role)
-        self.init(url: url, channelId: channelId, role: role)
+        let multistreamEnabled = try container.decode(Bool.self, forKey: .multistreamEnabled)
+        self.init(url: url,
+                  channelId: channelId,
+                  role: role,
+                  multistreamEnabled: multistreamEnabled)
         connectionTimeout = try container.decode(Int.self,
                                                  forKey: .connectionTimeout)
         videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)

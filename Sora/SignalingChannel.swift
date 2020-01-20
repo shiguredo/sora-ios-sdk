@@ -6,11 +6,24 @@ import Foundation
  */
 public enum SignalingRole: String {
     
-    /// アップストリーム (パブリッシャー)
+    /// この列挙子は sendonly に置き換えられました。
+    @available(*, deprecated, renamed: "sendonly",
+    message: "この列挙子は sendonly に置き換えられました。")
     case upstream
     
-    /// ダウンストリーム (サブスクライバー)
+    /// この列挙子は recvonly に置き換えられました。
+    @available(*, deprecated, renamed: "recvonly",
+    message: "この列挙子は recvonly に置き換えられました。")
     case downstream
+    
+    /// 送信のみ
+    case sendonly
+    
+    /// 受信のみ
+    case recvonly
+    
+    /// 送受信
+    case sendrecv
     
 }
 
@@ -18,13 +31,40 @@ public enum SignalingRole: String {
  シグナリングチャネルのイベントハンドラです。
  */
 public final class SignalingChannelHandlers {
-    
-    /// 接続解除時に呼ばれるブロック
-    public var onDisconnectHandler: ((Error?) -> Void)?
-    
-    /// シグナリング受信時に呼ばれるブロック
-    public var onReceiveSignalingHandler: ((Signaling) -> Void)?
 
+    /// このプロパティは onDisconnect に置き換えられました。
+    @available(*, deprecated, renamed: "onDisconnect",
+    message: "このプロパティは onDisconnect に置き換えられました。")
+    public var onDisconnectHandler: ((Error?) -> Void)? {
+           get { onDisconnect }
+           set { onDisconnect = newValue }
+       }
+    
+    /// このプロパティは onReceive に置き換えられました。
+    @available(*, deprecated, renamed: "onReceive",
+    message: "このプロパティは onReceive に置き換えられました。")
+    public var onReceiveSignalingHandler: ((Signaling) -> Void)? {
+           get { onReceive }
+           set { onReceive = newValue }
+       }
+
+    /// このプロパティは onDisconnect に置き換えられました。
+    @available(*, deprecated, renamed: "onSend",
+    message: "このプロパティは onSend に置き換えられました。")
+    public var onSendSignalingHandler: ((Signaling) -> Signaling)? {
+           get { onSend }
+           set { onSend = newValue }
+       }
+    
+    /// 接続解除時に呼ばれるクロージャー
+    public var onDisconnect: ((Error?) -> Void)?
+    
+    /// シグナリング受信時に呼ばれるクロージャー
+    public var onReceive: ((Signaling) -> Void)?
+
+    /// シグナリング送信時に呼ばれるクロージャー
+    public var onSend: ((Signaling) -> Signaling)?
+    
 }
 
 /**
@@ -78,7 +118,7 @@ public protocol SignalingChannel: class {
     /**
      サーバーに接続します。
      
-     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時のみ) エラー
      */
     func connect(handler: @escaping (_ error: Error?) -> Void)
@@ -134,11 +174,12 @@ class BasicSignalingChannel: SignalingChannel {
         self.webSocketChannel = configuration
             ._webSocketChannelType.init(url: configuration.url)
         
-        webSocketChannel.internalHandlers.onDisconnectHandler = { error in
+        webSocketChannel.internalHandlers.onDisconnect = { error in
             self.disconnect(error: error)
         }
         
-        webSocketChannel.internalHandlers.onMessageHandler = handle
+        webSocketChannel.internalHandlers.onReceive = handle
+        webSocketChannel.handlers = configuration.webSocketChannelHandlers
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -154,7 +195,7 @@ class BasicSignalingChannel: SignalingChannel {
 
         webSocketChannel.connect { error in
             if self.onConnectHandler != nil {
-                Logger.debug(type: .signalingChannel, message: "call connect(handler:) handler")
+                Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
                 self.onConnectHandler!(error)
                 self.onConnectHandler = nil
             }
@@ -186,12 +227,12 @@ class BasicSignalingChannel: SignalingChannel {
             webSocketChannel.disconnect(error: error)
             state = .disconnected
             
-            Logger.debug(type: .signalingChannel, message: "call onDisconnectHandler")
-            self.internalHandlers.onDisconnectHandler?(error)
-            self.handlers.onDisconnectHandler?(error)
+            Logger.debug(type: .signalingChannel, message: "call onDisconnect")
+            self.internalHandlers.onDisconnect?(error)
+            self.handlers.onDisconnect?(error)
             
             if self.onConnectHandler != nil {
-                Logger.debug(type: .signalingChannel, message: "call connect(handler:) handler")
+                Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
                 self.onConnectHandler!(error)
                 self.onConnectHandler = nil
             }
@@ -202,6 +243,8 @@ class BasicSignalingChannel: SignalingChannel {
     
     func send(message: Signaling) {
         Logger.debug(type: .signalingChannel, message: "send message")
+        var message = internalHandlers.onSend?(message) ?? message
+        message = handlers.onSend?(message) ?? message
         let encoder = JSONEncoder()
         do {
             let data = try encoder.encode(message)
@@ -241,9 +284,9 @@ class BasicSignalingChannel: SignalingChannel {
                 return
             }
             
-            Logger.debug(type: .signalingChannel, message: "call onReceiveSignalingHandler")
-            internalHandlers.onReceiveSignalingHandler?(signaling)
-            handlers.onReceiveSignalingHandler?(signaling)
+            Logger.debug(type: .signalingChannel, message: "call onReceiveSignaling")
+            internalHandlers.onReceive?(signaling)
+            handlers.onReceive?(signaling)
         }
     }
     

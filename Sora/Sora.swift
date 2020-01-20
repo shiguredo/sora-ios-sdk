@@ -4,17 +4,49 @@ import WebRTC
 /// `Sora` オブジェクトのイベントハンドラです。
 public final class SoraHandlers {
     
-    /// 接続成功時に呼ばれるブロック
-    public var onConnectHandler: ((MediaChannel?, Error?) -> Void)?
+    /// このプロパティは onConnect に置き換えられました。
+    @available(*, deprecated, renamed: "onConnect",
+    message: "このプロパティは onConnect に置き換えられました。")
+    public var onConnectHandler: ((MediaChannel?, Error?) -> Void)? {
+        get { onConnect }
+        set { onConnect = newValue }
+    }
     
-    /// 接続解除時に呼ばれるブロック
-    public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)?
+    /// このプロパティは onDisconnect に置き換えられました。
+    @available(*, deprecated, renamed: "onDisconnect",
+    message: "このプロパティは onDisconnect に置き換えられました。")
+    public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)? {
+           get { onDisconnect }
+           set { onDisconnect = newValue }
+       }
     
-    /// メディアチャネルが追加されたときに呼ばれるブロック
-    public var onAddMediaChannelHandler: ((MediaChannel) -> Void)?
+    /// このプロパティは onAddMediaChannel に置き換えられました。
+    @available(*, deprecated, renamed: "onAddMediaChannel",
+    message: "このプロパティは onAddMediaChannel に置き換えられました。")
+    public var onAddMediaChannelHandler: ((MediaChannel) -> Void)? {
+           get { onAddMediaChannel }
+           set { onAddMediaChannel = newValue }
+       }
     
-    /// メディアチャネルが除去されたときに呼ばれるブロック
-    public var onRemoveMediaChannelHandler: ((MediaChannel) -> Void)?
+    /// このプロパティは onRemoveMediaChannel に置き換えられました。
+    @available(*, deprecated, renamed: "onRemoveMediaChannel",
+    message: "このプロパティは onRemoveMediaChannel に置き換えられました。")
+    public var onRemoveMediaChannelHandler: ((MediaChannel) -> Void)? {
+           get { onRemoveMediaChannel }
+           set { onRemoveMediaChannel = newValue }
+       }
+    
+    /// 接続成功時に呼ばれるクロージャー
+    public var onConnect: ((MediaChannel?, Error?) -> Void)?
+    
+    /// 接続解除時に呼ばれるクロージャー
+    public var onDisconnect: ((MediaChannel, Error?) -> Void)?
+    
+    /// メディアチャネルが追加されたときに呼ばれるクロージャー
+    public var onAddMediaChannel: ((MediaChannel) -> Void)?
+    
+    /// メディアチャネルが除去されたときに呼ばれるクロージャー
+    public var onRemoveMediaChannel: ((MediaChannel) -> Void)?
 
 }
 
@@ -107,7 +139,7 @@ public final class Sora {
             if !mediaChannels.contains(mediaChannel) {
                 Logger.debug(type: .sora, message: "add media channel")
                 mediaChannels.append(mediaChannel)
-                handlers.onAddMediaChannelHandler?(mediaChannel)
+                handlers.onAddMediaChannel?(mediaChannel)
             }
         }
     }
@@ -117,7 +149,7 @@ public final class Sora {
             if mediaChannels.contains(mediaChannel) {
                 Logger.debug(type: .sora, message: "remove media channel")
                 mediaChannels.remove(mediaChannel)
-                handlers.onAddMediaChannelHandler?(mediaChannel)
+                handlers.onAddMediaChannel?(mediaChannel)
             }
         }
     }
@@ -129,7 +161,7 @@ public final class Sora {
      
      - parameter configuration: クライアントの設定
      - parameter webRTCConfiguration: WebRTC の設定
-     - parameter handler: 接続試行後に呼ばれるブロック。
+     - parameter handler: 接続試行後に呼ばれるクロージャー。
      - parameter mediaChannel: (接続成功時のみ) メディアチャネル
      - parameter error: (接続失敗時のみ) エラー
      - returns: 接続試行中の状態
@@ -143,18 +175,18 @@ public final class Sora {
         return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
             if let error = error {
                 handler(nil, error)
-                self.handlers.onConnectHandler?(nil, error)
+                self.handlers.onConnect?(nil, error)
                 return
             }
             
-            mediaChan.internalHandlers.onDisconnectHandler = { error in
+            mediaChan.internalHandlers.onDisconnect = { error in
                 self.remove(mediaChannel: mediaChan)
-                self.handlers.onDisconnectHandler?(mediaChan, error)
+                self.handlers.onDisconnect?(mediaChan, error)
             }
             
             self.add(mediaChannel: mediaChan)
             handler(mediaChan, nil)
-            self.handlers.onConnectHandler?(mediaChan, nil)
+            self.handlers.onConnect?(mediaChan, nil)
         }
     }
     
@@ -237,7 +269,7 @@ public final class Sora {
      * - ``setInputDataSource(_:)``
      * - ``setOutputDataSource(_:)``
      *
-     * - parameter block: ロック中に実行されるブロック
+     * - parameter block: ロック中に実行されるクロージャー
      */
     public func configureAudioSession(block: () -> Void) {
         let session = RTCAudioSession.sharedInstance()

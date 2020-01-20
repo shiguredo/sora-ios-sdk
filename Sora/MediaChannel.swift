@@ -3,21 +3,61 @@ import Foundation
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
     
-    /// 接続成功時に呼ばれるブロック
-    public var onConnectHandler: ((Error?) -> Void)?
+    /// このプロパティは onConnect に置き換えられました。
+    @available(*, deprecated, renamed: "onConnect",
+    message: "このプロパティは onConnect に置き換えられました。")
+    public var onConnectHandler: ((Error?) -> Void)? {
+        get { onConnect }
+        set { onConnect = newValue }
+    }
     
-    /// 接続解除時に呼ばれるブロック
-    public var onDisconnectHandler: ((Error?) -> Void)?
+    /// このプロパティは onDisconnect に置き換えられました。
+    @available(*, deprecated, renamed: "onDisconnect",
+    message: "このプロパティは onDisconnect に置き換えられました。")
+    public var onDisconnectHandler: ((Error?) -> Void)? {
+        get { onDisconnect }
+        set { onDisconnect = newValue }
+    }
     
-    /// ストリームが追加されたときに呼ばれるブロック
-    public var onAddStreamHandler: ((MediaStream) -> Void)?
+    /// このプロパティは onAddStream に置き換えられました。
+    @available(*, deprecated, renamed: "onAddStream",
+    message: "このプロパティは onAddStream に置き換えられました。")
+    public var onAddStreamHandler: ((MediaStream) -> Void)? {
+        get { onAddStream }
+        set { onAddStream = newValue }
+    }
     
-    /// ストリームが除去されたときに呼ばれるブロック
-    public var onRemoveStreamHandler: ((MediaStream) -> Void)?
+    /// このプロパティは onRemoveStream に置き換えられました。
+    @available(*, deprecated, renamed: "onRemoveStream",
+    message: "このプロパティは onRemoveStream に置き換えられました。")
+    public var onRemoveStreamHandler: ((MediaStream) -> Void)? {
+        get { onRemoveStream }
+        set { onRemoveStream = newValue }
+    }
     
-    /// シグナリング受信時に呼ばれるブロック
-    public var onReceiveSignalingHandler: ((Signaling) -> Void)?
-
+    /// このプロパティは onReceiveSignaling に置き換えられました。
+    @available(*, deprecated, renamed: "onReceiveSignaling",
+    message: "このプロパティは onReceiveSignaling に置き換えられました。")
+    public var onReceiveSignalingHandler: ((Signaling) -> Void)? {
+        get { onReceiveSignaling }
+        set { onReceiveSignaling = newValue }
+    }
+    
+    /// 接続成功時に呼ばれるクロージャー
+    public var onConnect: ((Error?) -> Void)?
+    
+    /// 接続解除時に呼ばれるクロージャー
+    public var onDisconnect: ((Error?) -> Void)?
+    
+    /// ストリームが追加されたときに呼ばれるクロージャー
+    public var onAddStream: ((MediaStream) -> Void)?
+    
+    /// ストリームが除去されたときに呼ばれるクロージャー
+    public var onRemoveStream: ((MediaStream) -> Void)?
+    
+    /// シグナリング受信時に呼ばれるクロージャー
+    public var onReceiveSignaling: ((Signaling) -> Void)?
+    
 }
 
 // MARK: -
@@ -32,7 +72,7 @@ public final class MediaChannelHandlers {
  メディアチャネルの接続が解除される条件を以下に示します。
  いずれかの条件が 1 つでも成立すると、メディアチャネルを含めたすべてのチャネル
  (シグナリングチャネル、ピアチャネル、 WebSocket チャネル) の接続が解除されます。
-
+ 
  - シグナリングチャネル (`SignalingChannel`) の接続が解除される。
  - WebSocket チャネル (`WebSocketChannel`) の接続が解除される。
  - ピアチャネル (`PeerChannel`) の接続が解除される。
@@ -41,7 +81,7 @@ public final class MediaChannelHandlers {
  
  */
 public final class MediaChannel {
-        
+    
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
@@ -49,7 +89,7 @@ public final class MediaChannel {
     
     /// 内部処理で使われるイベントハンドラ
     var internalHandlers: MediaChannelHandlers = MediaChannelHandlers()
-
+    
     // MARK: - 接続情報
     
     /// クライアントの設定
@@ -68,7 +108,7 @@ public final class MediaChannel {
     public private(set) var state: ConnectionState = .disconnected {
         didSet {
             Logger.trace(type: .mediaChannel,
-                      message: "changed state from \(oldValue) to \(state)")
+                         message: "changed state from \(oldValue) to \(state)")
         }
     }
     
@@ -123,7 +163,7 @@ public final class MediaChannel {
     
     /// ピアチャネル
     public let peerChannel: PeerChannel
-        
+    
     /// ストリームのリスト
     public var streams: [MediaStream] {
         return peerChannel.streams
@@ -133,7 +173,7 @@ public final class MediaChannel {
     public var mainStream: MediaStream? {
         return streams.first
     }
-
+    
     private var connectionTimer: ConnectionTimer
     private let manager: Sora
     
@@ -147,9 +187,9 @@ public final class MediaChannel {
      */
     init(manager: Sora, configuration: Configuration) {
         Logger.debug(type: .mediaChannel,
-                  message: "create signaling channel (\(configuration._signalingChannelType))")
+                     message: "create signaling channel (\(configuration._signalingChannelType))")
         Logger.debug(type: .mediaChannel,
-                  message: "create peer channel (\(configuration._peerChannelType))")
+                     message: "create peer channel (\(configuration._peerChannelType))")
         
         self.manager = manager
         self.configuration = configuration
@@ -178,7 +218,7 @@ public final class MediaChannel {
      
      - parameter webRTCConfiguration: WebRTC の設定
      - parameter timeout: タイムアウトまでの秒数
-     - parameter handler: 接続試行後に呼ばれるブロック
+     - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時) エラー
      */
     func connect(webRTCConfiguration: WebRTCConfiguration,
@@ -209,29 +249,29 @@ public final class MediaChannel {
         state = .connecting
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
-
-        peerChannel.internalHandlers.onDisconnectHandler = { error in
+        
+        peerChannel.internalHandlers.onDisconnect = { error in
             if self.state == .connecting || self.state == .connected {
                 self.disconnect(error: error)
             }
             connectionTask.complete()
         }
         
-        peerChannel.internalHandlers.onAddStreamHandler = { stream in
+        peerChannel.internalHandlers.onAddStream = { stream in
             Logger.debug(type: .mediaChannel, message: "added a stream")
-            Logger.debug(type: .mediaChannel, message: "call onAddStreamHandler")
-            self.internalHandlers.onAddStreamHandler?(stream)
-            self.handlers.onAddStreamHandler?(stream)
+            Logger.debug(type: .mediaChannel, message: "call onAddStream")
+            self.internalHandlers.onAddStream?(stream)
+            self.handlers.onAddStream?(stream)
         }
         
-        peerChannel.internalHandlers.onRemoveStreamHandler = { stream in
+        peerChannel.internalHandlers.onRemoveStream = { stream in
             Logger.debug(type: .mediaChannel, message: "removed a stream")
-            Logger.debug(type: .mediaChannel, message: "call onRemoveStreamHandler")
-            self.internalHandlers.onRemoveStreamHandler?(stream)
-            self.handlers.onRemoveStreamHandler?(stream)
+            Logger.debug(type: .mediaChannel, message: "call onRemoveStream")
+            self.internalHandlers.onRemoveStream?(stream)
+            self.handlers.onRemoveStream?(stream)
         }
         
-        peerChannel.internalHandlers.onReceiveSignalingHandler = { message in
+        peerChannel.internalHandlers.onReceiveSignaling = { message in
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
             case .notifyConnection(let message):
@@ -241,9 +281,9 @@ public final class MediaChannel {
                 break
             }
             
-            Logger.debug(type: .mediaChannel, message: "call onReceiveSignalingHandler")
-            self.internalHandlers.onReceiveSignalingHandler?(message)
-            self.handlers.onReceiveSignalingHandler?(message)
+            Logger.debug(type: .mediaChannel, message: "call onReceiveSignaling")
+            self.internalHandlers.onReceiveSignaling?(message)
+            self.handlers.onReceiveSignaling?(message)
         }
         
         peerChannel.connect() { error in
@@ -255,17 +295,17 @@ public final class MediaChannel {
                 self.disconnect(error: error)
                 handler(error)
                 
-                Logger.debug(type: .mediaChannel, message: "call onConnectHandler")
-                self.internalHandlers.onConnectHandler?(error)
-                self.handlers.onConnectHandler?(error)
+                Logger.debug(type: .mediaChannel, message: "call onConnect")
+                self.internalHandlers.onConnect?(error)
+                self.handlers.onConnect?(error)
                 return
             }
             Logger.debug(type: .mediaChannel, message: "did connect")
             self.state = .connected
             handler(nil)
-            Logger.debug(type: .mediaChannel, message: "call onConnectHandler")
-            self.internalHandlers.onConnectHandler?(nil)
-            self.handlers.onConnectHandler?(nil)
+            Logger.debug(type: .mediaChannel, message: "call onConnect")
+            self.internalHandlers.onConnect?(nil)
+            self.handlers.onConnect?(nil)
         }
         
         self.connectionStartTime = Date()
@@ -274,7 +314,7 @@ public final class MediaChannel {
             self.disconnect(error: SoraError.connectionTimeout)
         }
     }
-
+    
     /**
      接続を解除します。
      
@@ -298,9 +338,9 @@ public final class MediaChannel {
             Logger.debug(type: .mediaChannel, message: "did disconnect")
             state = .disconnected
             
-            Logger.debug(type: .mediaChannel, message: "call onDisconnectHandler")
-            internalHandlers.onDisconnectHandler?(error)
-            handlers.onDisconnectHandler?(error)
+            Logger.debug(type: .mediaChannel, message: "call onDisconnect")
+            internalHandlers.onDisconnect?(error)
+            handlers.onDisconnect?(error)
         }
     }
     

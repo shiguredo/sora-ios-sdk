@@ -5,17 +5,35 @@ import Foundation
  */
 public enum Role {
     
-    /// パブリッシャー
+    /// この列挙子は sendonly に置き換えられました。
+    @available(*, deprecated, renamed: "sendonly",
+    message: "この列挙子は sendonly に置き換えられました。")
     case publisher
     
-    /// サブスクライバー
+    /// この列挙子は recvonly に置き換えられました。
+    @available(*, deprecated, renamed: "recvonly",
+    message: "この列挙子は recvonly に置き換えられました。")
     case subscriber
     
-    /// グループ (マルチストリーム、配信)
+    /// この列挙子は sendrecv に置き換えられました。
+    @available(*, deprecated, renamed: "sendrecv",
+    message: "この列挙子は sendrecv に置き換えられました。")
     case group
     
-    /// グループ (マルチストリーム、視聴のみ)
+    /// この列挙子は廃止されました。マルチストリームで recvonly を指定してください。
+    @available(*, deprecated,
+    message: "この列挙子は廃止されました。マルチストリームで recvonly を指定してください。")
     case groupSub
+    
+    /// 送信のみ
+    case sendonly
+    
+    /// 受信のみ
+    case recvonly
+    
+    /// 送受信
+    case sendrecv
+    
 }
 
 private var roleTable: PairTable<String, Role> =
@@ -23,7 +41,10 @@ private var roleTable: PairTable<String, Role> =
               pairs: [("publisher", .publisher),
                       ("subscriber", .subscriber),
                       ("group", .group),
-                      ("groupSub", .groupSub)])
+                      ("groupSub", .groupSub),
+                      ("sendonly", .sendonly),
+                      ("recvonly", .recvonly),
+                      ("sendrecv", .sendrecv)])
 
 /// :nodoc:
 extension Role: Codable {
