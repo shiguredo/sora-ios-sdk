@@ -149,7 +149,7 @@ public final class Sora {
             if mediaChannels.contains(mediaChannel) {
                 Logger.debug(type: .sora, message: "remove media channel")
                 mediaChannels.remove(mediaChannel)
-                handlers.onAddMediaChannel?(mediaChannel)
+                handlers.onRemoveMediaChannel?(mediaChannel)
             }
         }
     }
