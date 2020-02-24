@@ -598,6 +598,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         if configuration.videoEnabled {
             switch configuration.videoCapturerDevice {
             case .camera(let settings):
+                Logger.debug(type: .peerChannel,
+                             message: "initialize video capture device")
                 // カメラが指定されている場合は、接続処理と同時にデフォルトのCameraVideoCapturerを使用してキャプチャを開始する
                 if CameraVideoCapturer.shared.isRunning {
                     CameraVideoCapturer.shared.stop()
