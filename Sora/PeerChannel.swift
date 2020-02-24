@@ -444,8 +444,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     var onConnectHandler: ((Error?) -> Void)?
     
-    private var lock: Lock
+    var isAudioInputInitialized: Bool = false
     
+    private var lock: Lock
+        
     init(channel: BasicPeerChannel) {
         self.channel = channel
         lock = Lock()
@@ -607,6 +609,27 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 // カスタムが指定されている場合は、接続処理時には何もしない
                 // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
                 break
+            }
+        }
+        
+        if configuration.audioEnabled {
+            if !isAudioInputInitialized {
+                Logger.debug(type: .peerChannel,
+                             message: "audio input is already initialized")
+            } else {
+                Logger.debug(type: .peerChannel,
+                             message: "initialize audio input")
+                RTCAudioSession.sharedInstance().initializeInput { error in
+                    if let error = error {
+                        Logger.debug(type: .peerChannel,
+                                     message: "failed to initialize audio input => \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    Logger.debug(type: .peerChannel,
+                                 message: "audio input is initialized")
+                }
+                isAudioInputInitialized = true
             }
         }
         
