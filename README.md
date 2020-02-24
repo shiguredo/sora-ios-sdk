@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![CircleCI branch](https://img.shields.io/circleci/project/github/shiguredo/sora-ios-sdk/develop.svg)](https://github.com/shiguredo/sora-ios-sdk) 
+[![CircleCI branch](https://img.shields.io/circleci/project/github/shiguredo/sora-ios-sdk/develop.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -19,7 +19,7 @@ https://discord.gg/Ac9fJ9S
 
 Sora iOS SDK に関する質問・要望などの報告は Disocrd へお願いします。
 
-バグに関してはまず Discord へお願いします。 
+バグに関してはまず Discord へお願いします。
 ただし、 Sora のライセンス契約の有無に関わらず、 Issue への応答時間と問題の解決を保証しませんのでご了承ください。
 
 Sora iOS SDK に対する有償のサポートについては提供しておりません。
@@ -58,7 +58,7 @@ Xcode と Swift のバージョンによっては、  CocoaPods で取得でき�
 Apache License 2.0
 
 ```
-Copyright 2017-2020, Shiguredo Inc. and Masashi Ono (akisute)
+Copyright 2017-2020, Shiguredo Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
