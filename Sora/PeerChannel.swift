@@ -621,6 +621,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             } else {
                 Logger.debug(type: .peerChannel,
                              message: "initialize audio input")
+                
+                // カテゴリをマイク用途のものに変更する
+                // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
+                RTCAudioSessionConfiguration.webRTC().category =
+                    AVAudioSession.Category.playAndRecord.rawValue
+                
                 RTCAudioSession.sharedInstance().initializeInput { error in
                     if let error = error {
                         Logger.debug(type: .peerChannel,
