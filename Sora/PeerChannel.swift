@@ -615,7 +615,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         if configuration.audioEnabled {
-            if !isAudioInputInitialized {
+            if isAudioInputInitialized {
                 Logger.debug(type: .peerChannel,
                              message: "audio input is already initialized")
             } else {
@@ -627,11 +627,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                      message: "failed to initialize audio input => \(error.localizedDescription)")
                         return
                     }
-                    
+                    self.isAudioInputInitialized = true
                     Logger.debug(type: .peerChannel,
                                  message: "audio input is initialized")
                 }
-                isAudioInputInitialized = true
             }
         }
         
