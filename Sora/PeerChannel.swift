@@ -615,23 +615,28 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         if configuration.audioEnabled {
-            if !isAudioInputInitialized {
+            if isAudioInputInitialized {
                 Logger.debug(type: .peerChannel,
                              message: "audio input is already initialized")
             } else {
                 Logger.debug(type: .peerChannel,
                              message: "initialize audio input")
+                
+                // カテゴリをマイク用途のものに変更する
+                // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
+                RTCAudioSessionConfiguration.webRTC().category =
+                    AVAudioSession.Category.playAndRecord.rawValue
+                
                 RTCAudioSession.sharedInstance().initializeInput { error in
                     if let error = error {
                         Logger.debug(type: .peerChannel,
                                      message: "failed to initialize audio input => \(error.localizedDescription)")
                         return
                     }
-                    
+                    self.isAudioInputInitialized = true
                     Logger.debug(type: .peerChannel,
                                  message: "audio input is initialized")
                 }
-                isAudioInputInitialized = true
             }
         }
         
