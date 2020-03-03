@@ -143,9 +143,6 @@ public struct SignalingConnect {
     /// マルチストリームの可否
     public var multistreamEnabled: Bool?
     
-    /// Plan B の可否
-    public var planBEnabled: Bool?
-
     /// 映像の可否
     public var videoEnabled: Bool
     
@@ -595,7 +592,6 @@ extension SignalingConnect: Codable {
         case signaling_notify_metadata
         case sdp
         case multistream
-        case plan_b
         case spotlight
         case simulcast
         case video
@@ -634,7 +630,6 @@ extension SignalingConnect: Codable {
         try notifyMetadata?.encode(to: notifyEnc)
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
-        try container.encodeIfPresent(planBEnabled, forKey: .plan_b)
         try container.encodeIfPresent(spotlight, forKey: .spotlight)
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
         try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
