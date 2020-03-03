@@ -13,6 +13,12 @@ Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライ�
 We check PRs or Issues only when written in JAPANESE.
 In other languages, we won't be able to deal with them. Thank you for your understanding.
 
+## 注意
+
+現在 Sora iOS SDK の 2020.1, 2020.2, 2020.3 は WebSocket ライブラリをアップデートしたことにより正常に動作しない問題が出ています。2.6.0 をご利用ください。
+
+不明点などありましたら Discord までご連絡ください。
+
 ## Discord
 
 https://discord.gg/Ac9fJ9S
