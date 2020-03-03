@@ -10,6 +10,10 @@
     - バグ修正
 
 
+## develop
+
+- [CHANGE] plan_b はすでに利用されていないので削除する
+
 ## 2020.3
 
 ### FIX
@@ -108,7 +112,7 @@
 - システム条件を更新した
 
   - Xcode 10.3
-  
+
 - WebRTC M76 に対応した
 
 - サイマルキャスト機能に対応した
@@ -142,7 +146,7 @@
   - `SignalingOfferMessage.Configuration` -> `SignalingOffer.Configuration`
   - `SignalingPongMessage` -> `SignalingPong`
   - `SignalingPushMessage` -> `SignalingPush`
-  
+
 - API: `SignalingAnswer`: 追加した
 
 - API: `SignalingCandidate`: 追加した
@@ -162,7 +166,7 @@
 - API: `SignalingUpdate`: 追加した
 
 - API: `Signaling`: 追加した
-  
+
 ## 2.3.2
 
 ### CHANGE
@@ -336,7 +340,7 @@
 - API: ``SoraError``: WebSocket に関するエラーを次の二つに分割した
 
   - ``webSocketClosed(statusCode:reason:)``
-    
+
   - ``webSocketError()``
 
 - API: ``PeerChannelHandlers``: ``onDisconnectHandler`` を追加した
