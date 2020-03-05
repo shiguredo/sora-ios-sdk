@@ -15,6 +15,10 @@
     - @szktty
 - [CHANGE] Plan B に関連する API を削除する
     - @szktty
+- [CHANGE] シグナリングで送信する JSON にて、 role を upstream/downstream のどちらかで出力するようにする
+    - @szktty
+- [CHANGE] 端末情報を追加する (iPhone 11, iPhone 11 Pro, iPhone1 11 Pro Max, iPad 7th)
+    - @szktty
 
 ## 2020.3
 
