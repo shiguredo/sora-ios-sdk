@@ -11,6 +11,9 @@
 
 ## develop
 
+- [CHANGE] iOS 13 以降の場合に URLSession を使って WebSocket 通信を行うようにする
+    - @szktty
+
 ## 2020.3
 
 - [FIX] マイクが初期化されない事象を修正する
