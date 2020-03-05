@@ -13,6 +13,8 @@
 
 - [CHANGE] iOS 13 以降の場合に URLSession を使って WebSocket 通信を行うようにする
     - @szktty
+- [CHANGE] Plan B に関連する API を削除する
+    - @szktty
 
 ## 2020.3
 
