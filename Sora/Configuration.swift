@@ -139,7 +139,11 @@ public struct Configuration {
     
     var _webSocketChannelType: WebSocketChannel.Type {
         get {
-            return webSocketChannelType ?? BasicWebSocketChannel.self
+            if #available(iOS 13, *) {
+                return webSocketChannelType ?? URLSessionWebSocketChannel.self
+            } else {
+                return webSocketChannelType ?? BasicWebSocketChannel.self
+            }
         }
     }
     
