@@ -565,9 +565,9 @@ private var roleTable: PairTable<String, SignalingRole> =
     PairTable(name: "SignalingRole",
               pairs: [("upstream", .upstream),
                       ("downstream", .downstream),
-                      ("sendonly", .sendonly),
-                      ("recvonly", .recvonly),
-                      ("sendrecv", .sendrecv)])
+                      ("upstream", .sendonly),
+                      ("downstream", .recvonly),
+                      ("upstream", .sendrecv)])
 
 /// :nodoc:
 extension SignalingRole: Codable {
