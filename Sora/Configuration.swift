@@ -139,11 +139,13 @@ public struct Configuration {
     
     var _webSocketChannelType: WebSocketChannel.Type {
         get {
+            var type: WebSocketChannel.Type = BasicWebSocketChannel.self
             if #available(iOS 13, *) {
-                return webSocketChannelType ?? URLSessionWebSocketChannel.self
-            } else {
-                return webSocketChannelType ?? BasicWebSocketChannel.self
+                if allowsURLSessionWebSocketChannel {
+                    type = URLSessionWebSocketChannel.self
+                }
             }
+            return type
         }
     }
     
@@ -152,6 +154,9 @@ public struct Configuration {
             return peerChannelType ?? BasicPeerChannel.self
         }
     }
+    
+    /// :nodoc:
+    public var allowsURLSessionWebSocketChannel: Bool = true
     
     // MARK: パブリッシャーに関する設定
     
