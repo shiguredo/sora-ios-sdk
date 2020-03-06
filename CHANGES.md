@@ -19,6 +19,8 @@
     - @szktty
 - [CHANGE] 端末情報を追加する (iPhone 11, iPhone 11 Pro, iPhone1 11 Pro Max, iPad 7th)
     - @szktty
+- [CHANGE] ログに出力される WebSocket のエラー内容を詳細にする
+    - @szktty
 
 ## 2020.3
 
