@@ -1,4 +1,5 @@
 import Foundation
+import Starscream
 
 /**
  SDK に関するエラーを表します。
@@ -68,4 +69,31 @@ extension SoraError: LocalizedError {
         }
     }
     
+}
+
+/// :nodoc:
+extension WSError: LocalizedError {
+    
+    public var errorDescription: String? {
+        var desc = "\(code): "
+        switch type {
+        case .closeError:
+            desc += "close error"
+        case .compressionError:
+            desc += "compression error"
+        case .invalidSSLError:
+            desc += "invalid SSL error"
+        case .outputStreamWriteError:
+            desc += "output stream write error"
+        case .protocolError:
+            desc += "protocol error"
+        case .upgradeError:
+            desc += "upgrade error"
+        case .writeTimeoutError:
+            desc += "write timeout error"
+        }
+        desc += ": \(message)"
+        return desc
+    }
+
 }
