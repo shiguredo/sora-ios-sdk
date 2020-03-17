@@ -9,7 +9,7 @@
 - FIX
     - バグ修正
 
-## develop
+## 2020.4
 
 - [CHANGE] iOS 13 以降の場合に URLSession を使って WebSocket 通信を行うようにする
     - @szktty
