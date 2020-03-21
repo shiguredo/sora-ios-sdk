@@ -792,35 +792,20 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func handle(signaling: Signaling) {
         Logger.debug(type: .mediaStream, message: "handle signaling => \(signaling.typeName())")
-        switch state {
-        case .waitingOffer:
-            switch signaling {
-            case .offer(let offer):
-                clientId = offer.clientId
-                createAndSendAnswer(offer: offer)
-                
-            default:
-                // discard
-                break
+        switch signaling {
+        case .offer(let offer):
+            clientId = offer.clientId
+            createAndSendAnswer(offer: offer)
+            
+        case .update(let update):
+            if configuration.isMultistream {
+                createAndSendUpdateAnswer(forOffer: update.sdp)
             }
             
-        case .connected:
-            switch signaling {
-            case .update(let update):
-                if configuration.isMultistream {
-                    createAndSendUpdateAnswer(forOffer: update.sdp)
-                }
-                
-            case .ping:
-                signalingChannel.send(message: .pong(SignalingPong()))
-                
-            default:
-                // discard
-                break
-            }
+        case .ping:
+            signalingChannel.send(message: .pong(SignalingPong()))
             
         default:
-            // discard
             break
         }
         
