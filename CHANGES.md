@@ -21,6 +21,10 @@
     - @szktty
 - [CHANGE] ログに出力される WebSocket のエラー内容を詳細にする
     - @szktty
+- [CHANGE] API: ``MediaChannel``: ``senderStream`` プロパティを追加する
+    - @szktty
+- [CHANGE] API: ``MediaChannel``: ``receiverStreams`` プロパティを追加する
+    - @szktty
 
 ## 2020.3
 
