@@ -20,6 +20,7 @@
 		91554F431F179CFD00403C39 /* WebSocketChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91554F421F179CFD00403C39 /* WebSocketChannel.swift */; };
 		915CEC901F821A90006E45E2 /* CameraVideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */; };
 		916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* AspectRatio.swift */; };
+		9161AECA2410D75A00BA3E0E /* URLSessionWebSocketChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */; };
 		91629BF21F8E5099001193D0 /* Array+Base.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91629BF11F8E5098001193D0 /* Array+Base.swift */; };
 		91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */; };
 		916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916BBF711F19EF5800846166 /* ICECandidate.swift */; };
@@ -84,6 +85,7 @@
 		915344111FE96F750083762B /* SoraError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoraError.swift; sourceTree = "<group>"; };
 		91554F421F179CFD00403C39 /* WebSocketChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebSocketChannel.swift; sourceTree = "<group>"; };
 		915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraVideoCapturer.swift; sourceTree = "<group>"; };
+		9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = URLSessionWebSocketChannel.swift; sourceTree = "<group>"; };
 		91629BF11F8E5098001193D0 /* Array+Base.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "Array+Base.swift"; sourceTree = "<group>"; };
 		91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCConfigration.swift; sourceTree = "<group>"; };
 		916BBF711F19EF5800846166 /* ICECandidate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICECandidate.swift; sourceTree = "<group>"; };
@@ -202,6 +204,7 @@
 				91CD2A491F288A6A00D039D1 /* Sora.swift */,
 				915344111FE96F750083762B /* SoraError.swift */,
 				9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */,
+				9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
 				9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */,
 				C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */,
@@ -387,6 +390,7 @@
 				9174A8971F73F93B00D586C4 /* ICETransportPolicy.swift in Sources */,
 				91CDC1ED23166A5300C3A31E /* DeviceInfo.swift in Sources */,
 				91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */,
+				9161AECA2410D75A00BA3E0E /* URLSessionWebSocketChannel.swift in Sources */,
 				9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */,
 				913C895A226EFC61001B2569 /* Signaling.swift in Sources */,
 				91BD9489204536D9006ED524 /* SDKInfo.swift in Sources */,
@@ -568,7 +572,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.3;
+				MARKETING_VERSION = 2020.4;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -601,7 +605,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.3;
+				MARKETING_VERSION = 2020.4;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";

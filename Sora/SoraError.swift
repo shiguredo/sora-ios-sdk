@@ -1,4 +1,5 @@
 import Foundation
+import Starscream
 
 /**
  SDK に関するエラーを表します。
@@ -39,35 +40,60 @@ public enum SoraError: Error {
 extension SoraError: LocalizedError {
     
     public var errorDescription: String? {
-        get {
-            switch self {
-            case .connectionCancelled:
-                return "Connection is cancelled"
-            case .connectionTimeout:
-                return "Connection is timeout"
-            case .connectionBusy(reason: let reason):
-                return "Connection is busy (\(reason))"
-            case .webSocketClosed(statusCode: let statusCode, reason: let reason):
-                var desc = "WebSocket is closed (\(statusCode.intValue()) "
-                if let reason = reason {
-                    desc.append(reason)
-                } else {
-                    desc.append("Unknown reason")
-                }
-                desc.append(")")
-                return desc
-            case .webSocketError(let error):
-                return "WebSocket error (\(error.localizedDescription))"
-            case .signalingChannelError(reason: let reason):
-                return "SignalingChannel error (\(reason))"
-            case .invalidSignalingMessage:
-                return "Invalid signaling message format"
-            case .unknownSignalingMessageType(type: let type):
-                return "Unknown signaling message type \(type)"
-            case .peerChannelError(reason: let reason):
-                return "PeerChannel error (\(reason))"
+        switch self {
+        case .connectionCancelled:
+            return "Connection is cancelled"
+        case .connectionTimeout:
+            return "Connection is timeout"
+        case .connectionBusy(reason: let reason):
+            return "Connection is busy (\(reason))"
+        case .webSocketClosed(statusCode: let statusCode, reason: let reason):
+            var desc = "WebSocket is closed (\(statusCode.intValue()) "
+            if let reason = reason {
+                desc.append(reason)
+            } else {
+                desc.append("Unknown reason")
             }
+            desc.append(")")
+            return desc
+        case .webSocketError(let error):
+            return "WebSocket error (\(error.localizedDescription))"
+        case .signalingChannelError(reason: let reason):
+            return "SignalingChannel error (\(reason))"
+        case .invalidSignalingMessage:
+            return "Invalid signaling message format"
+        case .unknownSignalingMessageType(type: let type):
+            return "Unknown signaling message type \(type)"
+        case .peerChannelError(reason: let reason):
+            return "PeerChannel error (\(reason))"
         }
     }
     
+}
+
+/// :nodoc:
+extension WSError: LocalizedError {
+    
+    public var errorDescription: String? {
+        var desc = "\(code): "
+        switch type {
+        case .closeError:
+            desc += "close error"
+        case .compressionError:
+            desc += "compression error"
+        case .invalidSSLError:
+            desc += "invalid SSL error"
+        case .outputStreamWriteError:
+            desc += "output stream write error"
+        case .protocolError:
+            desc += "protocol error"
+        case .upgradeError:
+            desc += "upgrade error"
+        case .writeTimeoutError:
+            desc += "write timeout error"
+        }
+        desc += ": \(message)"
+        return desc
+    }
+
 }

@@ -169,9 +169,38 @@ public final class MediaChannel {
         return peerChannel.streams
     }
     
-    /// 先頭のストリーム
+    /**
+     最初のストリーム。
+     マルチストリームでは、必ずしも最初のストリームが 送信ストリームとは限りません。
+     送信ストリームが必要であれば `senderStream` を使用してください。
+     */
     public var mainStream: MediaStream? {
         return streams.first
+    }
+    
+    /// 送信ストリーム
+    public var senderStream: MediaStream? {
+        if let senderId = CameraVideoCapturer.shared.stream?.streamId {
+            for stream in streams {
+                if stream.streamId == senderId {
+                    return stream
+                }
+            }
+        }
+        return nil
+    }
+    
+    /// 受信ストリームのリスト
+    public var receiverStreams: [MediaStream] {
+        var receiverStreams: [MediaStream] = []
+        if let senderId = CameraVideoCapturer.shared.stream?.streamId {
+            for stream in streams {
+                if stream.streamId != senderId {
+                    receiverStreams.append(stream)
+                }
+            }
+        }
+        return receiverStreams
     }
     
     private var connectionTimer: ConnectionTimer

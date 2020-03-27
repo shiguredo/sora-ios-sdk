@@ -38,6 +38,9 @@ public enum DeviceModel {
     case iPhoneXS
     case iPhoneXSMax
     case iPhoneXR
+    case iPhone11
+    case iPhone11Pro
+    case iPhone11ProMax
     case iPodTouch1st
     case iPodTouch2nd
     case iPodTouch3rd
@@ -82,6 +85,8 @@ public enum DeviceModel {
     case iPadPro10InchGSM
     case iPad6thWiFi
     case iPad6thGSM
+    case iPad7thWiFi
+    case iPad7thGSM
     case iPadPro11InchWiFi
     case iPadPro11InchGSM
     case iPadPro12Inch3rdWiFi
@@ -128,6 +133,9 @@ public enum DeviceModel {
             "iPhone11,2": .iPhoneXS,
             "iPhone11,6": .iPhoneXSMax,
             "iPhone11,8": .iPhoneXR,
+            "iPhone12,1": .iPhone11,
+            "iPhone12,3": .iPhone11Pro,
+            "iPhone12,5": .iPhone11ProMax,
             "iPod1,1": .iPodTouch1st,
             "iPod2,1": .iPodTouch2nd,
             "iPod3,1": .iPodTouch3rd,
@@ -172,6 +180,8 @@ public enum DeviceModel {
             "iPad7,4": .iPadPro10InchGSM,
             "iPad7,5": .iPad6thWiFi,
             "iPad7,6": .iPad6thGSM,
+            "iPad7,11": .iPad7thWiFi,
+            "iPad7,12": .iPad7thGSM,
             "iPad8,1": .iPadPro11InchWiFi,
             "iPad8,2": .iPadPro11InchWiFi,
             "iPad8,3": .iPadPro11InchGSM,
@@ -284,6 +294,12 @@ public enum DeviceModel {
                 return "iPhone XS Max"
             case .iPhoneXR:
                 return "iPhone XR"
+            case .iPhone11:
+                return "iPhone 11"
+            case .iPhone11Pro:
+                return "iPhone 11 Pro"
+            case .iPhone11ProMax:
+                return "iPhone 11 Pro Max"
             case .iPodTouch1st:
                 return "iPod touch (1st)"
             case .iPodTouch2nd:
@@ -372,6 +388,10 @@ public enum DeviceModel {
                 return "iPad (6th, Wi-Fi)"
             case .iPad6thGSM:
                 return "iPad (6th, GSM)"
+            case .iPad7thWiFi:
+                return "iPad (7th, Wi-Fi)"
+            case .iPad7thGSM:
+                return "iPad (7th, GSM)"
             case .iPadPro11InchWiFi:
                 return "iPad Pro 11-inch (Wi-Fi)"
             case .iPadPro11InchGSM:

@@ -28,9 +28,6 @@ public struct MediaConstraints {
  */
 public enum SDPSemantics {
     
-    /// Plan B
-    case planB
-    
     /// Unified Plan
     case unifiedPlan
     
@@ -39,8 +36,6 @@ public enum SDPSemantics {
     var nativeValue: RTCSdpSemantics {
         get {
             switch self {
-            case .planB:
-                return RTCSdpSemantics.planB
             case .unifiedPlan:
                 return RTCSdpSemantics.unifiedPlan
             }
@@ -107,8 +102,7 @@ public struct WebRTCConfiguration {
 
 private var sdpSemanticsTable: PairTable<String, SDPSemantics> =
     PairTable(name: "SDPSemantics",
-              pairs: [("planB", .planB),
-                      ("unifiedPlan", .unifiedPlan)])
+              pairs: [("unifiedPlan", .unifiedPlan)])
 
 /// :nodoc:
 extension SDPSemantics: Codable {
