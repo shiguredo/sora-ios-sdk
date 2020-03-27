@@ -9,7 +9,7 @@
 - FIX
     - バグ修正
 
-## develop
+## 2020.4
 
 - [CHANGE] iOS 13 以降の場合に URLSession を使って WebSocket 通信を行うようにする
     - @szktty
@@ -20,6 +20,10 @@
 - [CHANGE] 端末情報を追加する (iPhone 11, iPhone 11 Pro, iPhone1 11 Pro Max, iPad 7th)
     - @szktty
 - [CHANGE] ログに出力される WebSocket のエラー内容を詳細にする
+    - @szktty
+- [CHANGE] API: ``MediaChannel``: ``senderStream`` プロパティを追加する
+    - @szktty
+- [CHANGE] API: ``MediaChannel``: ``receiverStreams`` プロパティを追加する
     - @szktty
 
 ## 2020.3
@@ -36,7 +40,7 @@
 
 ## 2020.1
 
-本バージョンよりバージョン表記を「リリース年.リリース回数」に変更しまする。
+本バージョンよりバージョン表記を「リリース年.リリース回数」に変更する
 
 - [UPDATE] システム条件を更新する
     - Xcode 11.3
