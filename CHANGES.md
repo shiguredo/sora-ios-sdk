@@ -17,6 +17,8 @@
     - @szktty
 - [CHANGE] シグナリングで送信する JSON にて、 role を upstream/downstream のどちらかで出力するようにする
     - @szktty
+- [CHANGE] シグナリングの offer/update/ping を peer connection の状態に関わらず処理する
+    - @szktty
 - [CHANGE] 端末情報を追加する (iPhone 11, iPhone 11 Pro, iPhone1 11 Pro Max, iPad 7th)
     - @szktty
 - [CHANGE] ログに出力される WebSocket のエラー内容を詳細にする
