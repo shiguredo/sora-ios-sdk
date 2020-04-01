@@ -43,6 +43,16 @@ public enum Signaling {
     case push(SignalingPush)
     
     /// :nodoc:
+    public static func decode(_ data: Data) -> Result<Signaling, Error> {
+        do {
+            let decoder = JSONDecoder()
+            return .success(try decoder.decode(Signaling.self, from: data))
+        } catch let error {
+            return .failure(error)
+        }
+    }
+    
+    /// :nodoc:
     public func typeName() -> String {
         switch self {
         case .connect(_):
@@ -565,9 +575,9 @@ private var roleTable: PairTable<String, SignalingRole> =
     PairTable(name: "SignalingRole",
               pairs: [("upstream", .upstream),
                       ("downstream", .downstream),
-                      ("upstream", .sendonly),
-                      ("downstream", .recvonly),
-                      ("upstream", .sendrecv)])
+                      ("sendonly", .sendonly),
+                      ("recvonly", .recvonly),
+                      ("sendrecv", .sendrecv)])
 
 /// :nodoc:
 extension SignalingRole: Codable {

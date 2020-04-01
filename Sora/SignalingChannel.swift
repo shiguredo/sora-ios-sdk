@@ -274,19 +274,15 @@ class BasicSignalingChannel: SignalingChannel {
                 return
             }
             
-            var signaling: Signaling!
-            do {
-                let decoder = JSONDecoder()
-                signaling = try decoder.decode(Signaling.self, from: data)
-            } catch let error {
+            switch Signaling.decode(data) {
+            case .success(let signaling):
+                Logger.debug(type: .signalingChannel, message: "call onReceiveSignaling")
+                internalHandlers.onReceive?(signaling)
+                handlers.onReceive?(signaling)
+            case .failure(let error):
                 Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription)) => \(text)")
-                return
             }
-            
-            Logger.debug(type: .signalingChannel, message: "call onReceiveSignaling")
-            internalHandlers.onReceive?(signaling)
-            handlers.onReceive?(signaling)
         }
     }
     

@@ -534,17 +534,15 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         var role: SignalingRole!
         var multistream = configuration.multistreamEnabled
         switch configuration.role {
-        case .publisher, .sendonly:
-            role = .sendonly
+        case .publisher, .sendonly, .sendrecv:
+            role = .upstream
         case .subscriber, .recvonly:
-            role = .recvonly
-        case .sendrecv:
-            role = .sendrecv
+            role = .downstream
         case .group:
-            role = .sendrecv
+            role = .upstream
             multistream = true
         case .groupSub:
-            role = .recvonly
+            role = .downstream
             multistream = true
         }
         
