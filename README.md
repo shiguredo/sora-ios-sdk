@@ -17,7 +17,7 @@ In other languages, we won't be able to deal with them. Thank you for your under
 
 https://discord.gg/Ac9fJ9S
 
-Sora iOS SDK に関する質問・要望などの報告は Disocrd へお願いします。
+Sora iOS SDK に関する質問・要望などの報告は Discord へお願いします。
 
 バグに関してはまず Discord へお願いします。
 ただし、 Sora のライセンス契約の有無に関わらず、応答時間と問題の解決を保証しませんのでご了承ください。
