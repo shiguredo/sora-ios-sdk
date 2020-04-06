@@ -9,6 +9,11 @@
 - FIX
     - バグ修正
 
+## 2020.4.1
+
+- [FIX] 受信したシグナリングの role が ``sendonly``, ``recvonly``, ``sendrecv`` の場合にデコードに失敗する事象を修正する
+    - @szktty
+
 ## 2020.4
 
 - [CHANGE] iOS 13 以降の場合に URLSession を使って WebSocket 通信を行うようにする
