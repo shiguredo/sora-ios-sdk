@@ -180,27 +180,16 @@ public final class MediaChannel {
     
     /// 送信ストリーム
     public var senderStream: MediaStream? {
-        if let senderId = CameraVideoCapturer.shared.stream?.streamId {
-            for stream in streams {
-                if stream.streamId == senderId {
-                    return stream
-                }
-            }
+        streams.first { stream in
+            stream.streamId == configuration.publisherStreamId
         }
-        return nil
     }
     
     /// 受信ストリームのリスト
     public var receiverStreams: [MediaStream] {
-        var receiverStreams: [MediaStream] = []
-        if let senderId = CameraVideoCapturer.shared.stream?.streamId {
-            for stream in streams {
-                if stream.streamId != senderId {
-                    receiverStreams.append(stream)
-                }
-            }
+        streams.filter { stream in
+            stream.streamId != configuration.publisherStreamId
         }
-        return receiverStreams
     }
     
     private var connectionTimer: ConnectionTimer
