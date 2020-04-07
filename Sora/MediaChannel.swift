@@ -178,14 +178,16 @@ public final class MediaChannel {
         return streams.first
     }
     
-    /// 送信ストリーム
+    /// 送信に使われるストリーム。
+    /// ストリーム ID が `configuration.publisherStreamId` に等しいストリームを返します。
     public var senderStream: MediaStream? {
         streams.first { stream in
             stream.streamId == configuration.publisherStreamId
         }
     }
     
-    /// 受信ストリームのリスト
+    /// 受信ストリームのリスト。
+    /// ストリーム ID が `configuration.publisherStreamId` と異なるストリームを返します。
     public var receiverStreams: [MediaStream] {
         streams.filter { stream in
             stream.streamId != configuration.publisherStreamId
