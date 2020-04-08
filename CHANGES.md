@@ -13,6 +13,10 @@
 
 - [FIX] 受信したシグナリングの role が ``sendonly``, ``recvonly``, ``sendrecv`` の場合にデコードに失敗する事象を修正する
     - @szktty
+- [FIX] API: ``MediaChannel``: ``senderStream``: ストリーム ID が接続時に指定した配信用ストリームID と一致するストリームを返すようにする (変更前はカメラのストリームを返した)
+    - @szktty
+- [FIX] API: ``MediaChannel``: ``receiverStreams``: ``senderStream`` 以外のストリームを返すようにする (変更前はカメラ以外のストリームを返した)
+    - @szktty
 
 ## 2020.4
 
