@@ -9,6 +9,15 @@
 - FIX
     - バグ修正
 
+## 2020.4.1
+
+- [FIX] 受信したシグナリングの role が ``sendonly``, ``recvonly``, ``sendrecv`` の場合にデコードに失敗する事象を修正する
+    - @szktty
+- [FIX] API: ``MediaChannel``: ``senderStream``: ストリーム ID が接続時に指定した配信用ストリームID と一致するストリームを返すようにする (変更前はカメラのストリームを返した)
+    - @szktty
+- [FIX] API: ``MediaChannel``: ``receiverStreams``: ``senderStream`` 以外のストリームを返すようにする (変更前はカメラ以外のストリームを返した)
+    - @szktty
+
 ## 2020.4
 
 - [CHANGE] iOS 13 以降の場合に URLSession を使って WebSocket 通信を行うようにする
@@ -16,6 +25,8 @@
 - [CHANGE] Plan B に関連する API を削除する
     - @szktty
 - [CHANGE] シグナリングで送信する JSON にて、 role を upstream/downstream のどちらかで出力するようにする
+    - @szktty
+- [CHANGE] シグナリングの offer/update/ping を peer connection の状態に関わらず処理する
     - @szktty
 - [CHANGE] 端末情報を追加する (iPhone 11, iPhone 11 Pro, iPhone1 11 Pro Max, iPad 7th)
     - @szktty

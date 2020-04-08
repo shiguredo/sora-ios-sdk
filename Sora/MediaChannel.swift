@@ -178,29 +178,20 @@ public final class MediaChannel {
         return streams.first
     }
     
-    /// 送信ストリーム
+    /// 送信に使われるストリーム。
+    /// ストリーム ID が `configuration.publisherStreamId` に等しいストリームを返します。
     public var senderStream: MediaStream? {
-        if let senderId = CameraVideoCapturer.shared.stream?.streamId {
-            for stream in streams {
-                if stream.streamId == senderId {
-                    return stream
-                }
-            }
+        streams.first { stream in
+            stream.streamId == configuration.publisherStreamId
         }
-        return nil
     }
     
-    /// 受信ストリームのリスト
+    /// 受信ストリームのリスト。
+    /// ストリーム ID が `configuration.publisherStreamId` と異なるストリームを返します。
     public var receiverStreams: [MediaStream] {
-        var receiverStreams: [MediaStream] = []
-        if let senderId = CameraVideoCapturer.shared.stream?.streamId {
-            for stream in streams {
-                if stream.streamId != senderId {
-                    receiverStreams.append(stream)
-                }
-            }
+        streams.filter { stream in
+            stream.streamId != configuration.publisherStreamId
         }
-        return receiverStreams
     }
     
     private var connectionTimer: ConnectionTimer
