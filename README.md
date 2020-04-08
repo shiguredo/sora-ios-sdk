@@ -17,7 +17,7 @@ In other languages, we won't be able to deal with them. Thank you for your under
 
 https://discord.gg/Ac9fJ9S
 
-Sora iOS SDK に関する質問・要望などの報告は Disocrd へお願いします。
+Sora iOS SDK に関する質問・要望などの報告は Discord へお願いします。
 
 バグに関してはまず Discord へお願いします。
 ただし、 Sora のライセンス契約の有無に関わらず、応答時間と問題の解決を保証しませんのでご了承ください。
@@ -43,7 +43,7 @@ Xcode と Swift のバージョンによっては、  CocoaPods で取得でき�
 
 ## Issues について
 
-質問やバグ報告の場合は、次の開発環境のバージョンを **「メジャーバージョン、マイナーバージョン、メンテナンスバージョン」** まで含めて書いてください (8.3.1 など) 。
+質問やバグ報告の場合は、次の開発環境のバージョンを **「メジャーバージョン、マイナーバージョン、メンテナンスバージョン」** まで含めて書いてください (2020.4.1 など) 。
 これらの開発環境はメンテナンスバージョンの違いでも Sora iOS SDK の挙動が変わる可能性があります。
 
 - Sora iOS SDK
