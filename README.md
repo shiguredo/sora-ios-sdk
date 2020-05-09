@@ -1,6 +1,5 @@
 # Sora iOS SDK
 
-[![CircleCI branch](https://img.shields.io/circleci/project/github/shiguredo/sora-ios-sdk/develop.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
