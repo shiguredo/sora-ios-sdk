@@ -16,7 +16,8 @@ public final class VideoCapturerHandlers {
     
     /// 映像フレームの生成時に呼ばれるクロージャー
     public var onCapture: ((VideoFrame) -> Void)?
-    
+
+    public init() {}
 }
 
 /**
