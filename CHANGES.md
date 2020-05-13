@@ -9,6 +9,18 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加した
+    - @itoyama @szktty
+    - ``MediaChannelHandlers``
+    - ``MediaStreamHandlers``
+    - ``PeerChannelHandlers``
+    - ``SignalingChannelHandlers``
+    - ``SoraHandlers``
+    - ``VideoCapturerHandlers``
+    - ``WebSocketChannelHandlers``
+
 ## 2020.4.1
 
 - [FIX] 受信したシグナリングの role が ``sendonly``, ``recvonly``, ``sendrecv`` の場合にデコードに失敗する事象を修正する

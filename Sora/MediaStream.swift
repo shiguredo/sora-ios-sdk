@@ -39,6 +39,9 @@ public final class MediaStreamHandlers {
     /// 音声トラックが有効または無効にセットされたときに呼ばれるクロージャー
     public var onSwitchAudio: ((_ isEnabled: Bool) -> Void)?
 
+    /// 初期化します。
+    public init() {}
+    
 }
 
 /**

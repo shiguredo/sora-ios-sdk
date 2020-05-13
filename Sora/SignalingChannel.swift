@@ -65,6 +65,9 @@ public final class SignalingChannelHandlers {
     /// シグナリング送信時に呼ばれるクロージャー
     public var onSend: ((Signaling) -> Signaling)?
     
+    /// 初期化します。
+    public init() {}
+    
 }
 
 /**
