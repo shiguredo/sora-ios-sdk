@@ -75,6 +75,7 @@ final class PairTable<T: Equatable, U: Equatable> {
     
 }
 
+/// :nodoc:
 extension PairTable where T == String {
     
     func decode(from decoder: Decoder) throws -> U {
