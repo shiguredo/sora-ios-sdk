@@ -9,7 +9,7 @@ min_acl: public
 sdk: iphoneos
 module: Sora
 module_version: 2020.4.1
-swift_version: 5.2.2
+swift_version: 5.2.4
 xcodebuild_arguments:
     - -parallelizeTargets
     - -scheme
