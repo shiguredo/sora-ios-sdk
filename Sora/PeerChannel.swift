@@ -502,6 +502,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func sendConnectMessage(error: Error?) {
+        if let error = error {
+            Logger.error(type: .peerChannel,
+                         message: "failed connecting to signaling channel (\(error.localizedDescription))")
+            onConnectHandler?(error)
+            onConnectHandler = nil
+            return
+        }
+        
         if configuration.isSender {
             Logger.debug(type: .peerChannel, message: "try creating offer SDP")
             NativePeerChannelFactory.default
@@ -518,7 +526,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     self.sendConnectMessage(with: sdp, error: error)
             }
         } else {
-            self.sendConnectMessage(with: nil, error: error)
+            self.sendConnectMessage(with: nil, error: nil)
         }
     }
     

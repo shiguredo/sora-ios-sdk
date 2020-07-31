@@ -11,6 +11,9 @@
 
 ## develop
 
+- [FIX] API: `Sora.connect()`: 接続先ホストが存在しない場合にハンドラが実行されない事象を修正する
+    - @szktty
+
 - [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加した
     - @itoyama @szktty
     - ``MediaChannelHandlers``
