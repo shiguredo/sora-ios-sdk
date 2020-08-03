@@ -11,10 +11,9 @@
 
 ## develop
 
-- [FIX] API: `Sora.connect()`: 接続先ホストが存在しない場合にハンドラが実行されない事象を修正する
+- [CHANGE] WebRTC M84 に対応する
     - @szktty
-
-- [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加した
+- [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加する
     - @itoyama @szktty
     - ``MediaChannelHandlers``
     - ``MediaStreamHandlers``
@@ -23,6 +22,8 @@
     - ``SoraHandlers``
     - ``VideoCapturerHandlers``
     - ``WebSocketChannelHandlers``
+- [FIX] API: `Sora.connect()`: 接続先ホストが存在しない場合にハンドラが実行されない事象を修正する
+    - @szktty
 
 ## 2020.4.1
 
