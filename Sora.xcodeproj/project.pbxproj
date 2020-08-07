@@ -11,6 +11,7 @@
 		910090501E58B5450099E00E /* VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9100904F1E58B5450099E00E /* VideoView.swift */; };
 		9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9106C27D1F31A3470019E3C7 /* Logger.swift */; };
 		910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */; };
+		910F2DB124D7F6EE007336A6 /* Statistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910F2DB024D7F6EE007336A6 /* Statistics.swift */; };
 		9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */; };
 		9138B4D01E655728006A76FB /* WebRTCInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9138B4CF1E655728006A76FB /* WebRTCInfo.swift */; };
 		913C895A226EFC61001B2569 /* Signaling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 913C8959226EFC61001B2569 /* Signaling.swift */; };
@@ -77,6 +78,7 @@
 		9100904F1E58B5450099E00E /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		9106C27D1F31A3470019E3C7 /* Logger.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
+		910F2DB024D7F6EE007336A6 /* Statistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Statistics.swift; sourceTree = "<group>"; };
 		9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaStream.swift; sourceTree = "<group>"; };
 		9138B4CF1E655728006A76FB /* WebRTCInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebRTCInfo.swift; sourceTree = "<group>"; };
 		913C8959226EFC61001B2569 /* Signaling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Signaling.swift; sourceTree = "<group>"; };
@@ -203,6 +205,7 @@
 				91A19B891F19366000A76852 /* SignalingChannel.swift */,
 				91CD2A491F288A6A00D039D1 /* Sora.swift */,
 				915344111FE96F750083762B /* SoraError.swift */,
+				910F2DB024D7F6EE007336A6 /* Statistics.swift */,
 				9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */,
 				9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
@@ -376,6 +379,7 @@
 			files = (
 				91554F431F179CFD00403C39 /* WebSocketChannel.swift in Sources */,
 				91756E221F90ADE900B70C53 /* PeerChannel.swift in Sources */,
+				910F2DB124D7F6EE007336A6 /* Statistics.swift in Sources */,
 				91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */,
 				915CEC901F821A90006E45E2 /* CameraVideoCapturer.swift in Sources */,
 				91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */,
@@ -554,6 +558,7 @@
 		};
 		91C7B09E1D54636A006F5FA2 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B882BC644E31956A70216BE /* Pods-Sora.debug.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
@@ -587,6 +592,7 @@
 		};
 		91C7B09F1D54636A006F5FA2 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 779D4B9435F98F14FF3A3059 /* Pods-Sora.release.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
