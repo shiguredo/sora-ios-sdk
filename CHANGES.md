@@ -13,6 +13,8 @@
 
 - [CHANGE] WebRTC M84 に対応する
     - @szktty
+- [CHANGE] シグナリング pong に統計情報を含める
+    - @szktty
 - [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加する
     - @itoyama @szktty
     - ``MediaChannelHandlers``
