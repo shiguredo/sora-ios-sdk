@@ -16,10 +16,31 @@ In other languages, we won't be able to deal with them. Thank you for your under
 
 https://discord.gg/Ac9fJ9S
 
-Sora iOS SDK に関する質問・要望などの報告は Discord へお願いします。
+## 開発について
 
-バグに関してはまず Discord へお願いします。
-ただし、 Sora のライセンス契約の有無に関わらず、応答時間と問題の解決を保証しませんのでご了承ください。
+Sora Unity SDK はオープンソースソフトウェアですが、開発についてはオープンではありません。
+そのため Discord での相談なく Issue や Pull-Request を頂いても採用はしません。
+
+まずは Discord にてご連絡ください。
+
+## 質問
+
+Sora iOS SDK への質問は Discord へお願いします。
+
+## 改善希望やバグ報告
+
+Sora iOS SDK への改善希望やバグ報告はまず Discord へお願いします
+ただし、 Sora のライセンス契約の有無に関わらず、応答時間と解決を保証しませんのでご了承ください。
+
+## Pull-Request
+
+Sora iOS SDK への改善や修正 Pull-Request はまず Discord へお願いします。
+
+## 機能追加について
+
+機能追加はお受けしていません。
+
+## 有償でのサポート
 
 Sora iOS SDK に対する有償のサポートについては提供しておりません。
 
@@ -39,18 +60,6 @@ Xcode と Swift のバージョンによっては、  CocoaPods で取得でき�
 
 - [クイックスタート](https://github.com/shiguredo/sora-ios-sdk-quickstart)
 - [サンプル集](https://github.com/shiguredo/sora-ios-sdk-samples)
-
-## Issues について
-
-質問やバグ報告の場合は、次の開発環境のバージョンを **「メジャーバージョン、マイナーバージョン、メンテナンスバージョン」** まで含めて書いてください (2020.4.1 など) 。
-これらの開発環境はメンテナンスバージョンの違いでも Sora iOS SDK の挙動が変わる可能性があります。
-
-- Sora iOS SDK
-- Mac OS X
-- Xcode
-- Swift
-- iOS
-- CocoaPods
 
 ## ライセンス
 
