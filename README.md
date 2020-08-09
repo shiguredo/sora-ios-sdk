@@ -18,27 +18,23 @@ https://discord.gg/Ac9fJ9S
 
 ## 開発について
 
-Sora Unity SDK はオープンソースソフトウェアですが、開発についてはオープンではありません。
+Sora iOS SDK はオープンソースソフトウェアですが、開発についてはオープンではありません。
 そのため Discord での相談なく Issue や Pull-Request を頂いても採用はしません。
 
 まずは Discord にてご連絡ください。
 
 ## 質問
 
-Sora iOS SDK への質問は Discord へお願いします。
+質問は Discord の #ios へお願いします。
 
 ## 改善希望やバグ報告
 
-Sora iOS SDK への改善希望やバグ報告はまず Discord へお願いします
+改善希望やバグ報告はまず Discord の #ios へお願いします
 ただし、 Sora のライセンス契約の有無に関わらず、応答時間と解決を保証しませんのでご了承ください。
 
 ## Pull-Request
 
-Sora iOS SDK への改善や修正 Pull-Request はまず Discord へお願いします。
-
-## 機能追加について
-
-機能追加はお受けしていません。
+改善や修正 Pull-Request はまず Discord の #ios へお願いします。
 
 ## 有償でのサポート
 
