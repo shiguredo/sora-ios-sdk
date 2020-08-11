@@ -58,6 +58,9 @@ public final class MediaChannelHandlers {
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
     
+    /// 初期化します。
+    public init() {}
+    
 }
 
 // MARK: -

@@ -48,6 +48,9 @@ public final class SoraHandlers {
     /// メディアチャネルが除去されたときに呼ばれるクロージャー
     public var onRemoveMediaChannel: ((MediaChannel) -> Void)?
 
+    /// 初期化します。
+    public init() {}
+    
 }
 
 /**

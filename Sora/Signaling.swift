@@ -31,7 +31,7 @@ public enum Signaling {
     case notifyNetworkStatus(SignalingNotifyNetworkStatus)
     
     /// "ping" シグナリング
-    case ping
+    case ping(SignalingPing)
     
     /// "pong" シグナリング
     case pong(SignalingPong)
@@ -423,6 +423,12 @@ public struct SignalingNotifyNetworkStatus {
     
 }
 
+public struct SignalingPing {
+    
+    public var statisticsEnabled: Bool?
+    
+}
+
 /**
  "pong" シグナリングメッセージを表します。
  このメッセージはサーバーから "ping" シグナリングメッセージを受信すると
@@ -483,7 +489,7 @@ extension Signaling: Codable {
                     try SignalingNotifyNetworkStatus(from: decoder))
             }
         case "ping":
-            self = .ping
+            self = .ping(try SignalingPing(from: decoder))
         case "push":
             self = .push(try SignalingPush(from: decoder))
         default:
@@ -950,6 +956,24 @@ extension SignalingNotifyNetworkStatus: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         unstableLevel = try container.decode(Int.self, forKey: .unstable_level)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingPing: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case stats
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        statisticsEnabled = try container.decode(Bool.self, forKey: .stats)
     }
     
     public func encode(to encoder: Encoder) throws {

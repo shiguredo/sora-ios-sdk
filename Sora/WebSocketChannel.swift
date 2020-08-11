@@ -191,6 +191,9 @@ public final class WebSocketChannelHandlers {
     /// メッセージ送信時に呼ばれるクロージャー
     public var onSend: ((WebSocketMessage) ->WebSocketMessage)?
     
+    /// 初期化します。
+    public init() {}
+    
 }
 
 /**

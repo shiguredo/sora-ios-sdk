@@ -152,7 +152,15 @@ public final class CameraVideoCapturer: VideoCapturer {
     
     // MARK: カメラの操作
     
-    /// カメラを起動します。
+    /**
+     * カメラを起動します。
+     *
+     * このメソッドを実行すると、 `UIDevice` の
+     * `beginGeneratingDeviceOrientationNotifications()` が実行されます。
+     * `beginGeneratingDeviceOrientationNotifications()` または
+     * `endGeneratingDeviceOrientationNotifications()` を使う際は
+     * 必ず対に実行するように注意してください。
+     */
     public func start() {
         if isRunning {
             return
@@ -180,7 +188,15 @@ public final class CameraVideoCapturer: VideoCapturer {
         isRunning = true
     }
     
-    /// カメラを停止します。
+    /**
+     * カメラを停止します。
+     *
+     * このメソッドを実行すると、 `UIDevice` の
+     * `endGeneratingDeviceOrientationNotifications()` が実行されます。
+     * `beginGeneratingDeviceOrientationNotifications()` または
+     * `endGeneratingDeviceOrientationNotifications()` を使う際は
+     * 必ず対に実行するように注意してください。
+     */
     public func stop() {
         if isRunning {
             Logger.debug(type: .cameraVideoCapturer, message: "stop")

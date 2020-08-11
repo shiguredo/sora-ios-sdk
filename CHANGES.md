@@ -9,6 +9,29 @@
 - FIX
     - バグ修正
 
+## 2020.5
+
+- [UPDATE] システム条件を更新する
+    - Xcode 11.6
+    - Swift 5.2.4
+    - WebRTC SFU Sora 2020.1 以降
+    - @szktty
+- [CHANGE] WebRTC M84 に対応する
+    - @szktty
+- [CHANGE] シグナリング pong に統計情報を含める
+    - @szktty
+- [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加する
+    - @itoyama @szktty
+    - ``MediaChannelHandlers``
+    - ``MediaStreamHandlers``
+    - ``PeerChannelHandlers``
+    - ``SignalingChannelHandlers``
+    - ``SoraHandlers``
+    - ``VideoCapturerHandlers``
+    - ``WebSocketChannelHandlers``
+- [FIX] API: `Sora.connect()`: 接続先ホストが存在しない場合にハンドラが実行されない事象を修正する
+    - @szktty
+
 ## 2020.4.1
 
 - [FIX] 受信したシグナリングの role が ``sendonly``, ``recvonly``, ``sendrecv`` の場合にデコードに失敗する事象を修正する
@@ -333,7 +356,7 @@
 
 ## 2.0.0
 
-設計と API を大きく見直する。
+設計と API を大きく見直した。
 
 - [UPDATE] WebRTC M62 に対応する
     - @szktty

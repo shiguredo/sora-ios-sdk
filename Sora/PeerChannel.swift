@@ -209,6 +209,10 @@ public final class PeerChannelHandlers {
     
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
+    
+    /// 初期化します。
+    public init() {}
+    
 }
 
 // MARK: -
@@ -498,6 +502,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func sendConnectMessage(error: Error?) {
+        if let error = error {
+            Logger.error(type: .peerChannel,
+                         message: "failed connecting to signaling channel (\(error.localizedDescription))")
+            onConnectHandler?(error)
+            onConnectHandler = nil
+            return
+        }
+        
         if configuration.isSender {
             Logger.debug(type: .peerChannel, message: "try creating offer SDP")
             NativePeerChannelFactory.default
@@ -514,7 +526,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     self.sendConnectMessage(with: sdp, error: error)
             }
         } else {
-            self.sendConnectMessage(with: nil, error: error)
+            self.sendConnectMessage(with: nil, error: nil)
         }
     }
     
@@ -534,15 +546,15 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         var role: SignalingRole!
         var multistream = configuration.multistreamEnabled
         switch configuration.role {
-        case .publisher, .sendonly, .sendrecv:
-            role = .upstream
+        case .publisher, .sendonly:
+            role = .sendonly
         case .subscriber, .recvonly:
-            role = .downstream
-        case .group:
-            role = .upstream
+            role = .recvonly
+        case .group, .sendrecv:
+            role = .sendrecv
             multistream = true
         case .groupSub:
-            role = .downstream
+            role = .recvonly
             multistream = true
         }
         
@@ -800,8 +812,27 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 createAndSendUpdateAnswer(forOffer: update.sdp)
             }
             
-        case .ping:
-            signalingChannel.send(message: .pong(SignalingPong()))
+        case .ping(let ping):
+            let pong = SignalingPong()
+            if ping.statisticsEnabled == true {
+                nativeChannel.statistics { report in
+                    var json: [String: Any] = ["type": "pong"]
+                    let stats = Statistics(contentsOf: report)
+                    json["stats"] = stats.jsonObject
+                    do {
+                        let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+                        if let message = String(data: data, encoding: .utf8) {
+                            self.signalingChannel.send(text: message)
+                        } else {
+                            self.signalingChannel.send(message: .pong(pong))
+                        }
+                    } catch {
+                        self.signalingChannel.send(message: .pong(pong))
+                    }
+                }
+            } else {
+                signalingChannel.send(message: .pong(pong))
+            }
             
         default:
             break
