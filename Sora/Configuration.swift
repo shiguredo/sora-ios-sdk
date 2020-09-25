@@ -84,10 +84,25 @@ public struct Configuration {
     /// デフォルトは `.high` です。
     public var simulcastQuality: SimulcastQuality = .high
 
-    /// アクティブな配信数。
+    /// スポットライトの可否
     /// 詳しくは Sora のスポットライト機能を参照してください。
-    public var spotlight: Int?
+    public var spotlightEnabled: Bool = false
+    
+    // スポットライトの対象人数
+    @available(*, deprecated, renamed: "numberOfSpotlights",
+    message: "このプロパティは numberOfSpotlights に置き換えられました。")
+    public var spotlight: Int? {
+        get {
+            numberOfSpotlights
+        }
+        set {
+            numberOfSpotlights = newValue
+        }
+    }
 
+    // スポットライトの対象人数
+    public var numberOfSpotlights: Int?
+    
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
 
@@ -234,7 +249,8 @@ extension Configuration: Codable {
         case audioEnabled
         case simulcastEnabled
         case simulcastQuality
-        case spotlight
+        case spotlightEnabled
+        case numberOfSpotlights
         case webRTCConfiguration
         case signalingConnectMetadata
         case signalingConnectNotifyMetadata
@@ -269,10 +285,8 @@ extension Configuration: Codable {
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
         audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
-        if container.contains(.spotlight) {
-            spotlight = try container.decode(Int.self,
-                                                       forKey: .spotlight)
-        }
+        spotlightEnabled = try container.decode(Bool.self, forKey: .spotlightEnabled)
+        numberOfSpotlights = try container.decode(Int.self, forKey: .numberOfSpotlights)
         simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
         simulcastQuality = try container.decode(SimulcastQuality.self,
                                                 forKey: .simulcastQuality)
@@ -305,9 +319,7 @@ extension Configuration: Codable {
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
-        if let num = self.spotlight {
-            try container.encode(num, forKey: .spotlight)
-        }
+        try container.encodeIfPresent(numberOfSpotlights, forKey: .numberOfSpotlights)
         try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
         try container.encode(publisherStreamId, forKey: .publisherStreamId)
         try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
