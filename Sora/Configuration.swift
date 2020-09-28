@@ -89,19 +89,19 @@ public struct Configuration {
     public var spotlightEnabled: Bool = false
     
     // スポットライトの対象人数
-    @available(*, deprecated, renamed: "numberOfSpotlights",
-    message: "このプロパティは numberOfSpotlights に置き換えられました。")
+    @available(*, deprecated, renamed: "activeSpeakerLimit",
+    message: "このプロパティは activeSpeakerLimit に置き換えられました。")
     public var spotlight: Int? {
         get {
-            numberOfSpotlights
+            activeSpeakerLimit
         }
         set {
-            numberOfSpotlights = newValue
+            activeSpeakerLimit = newValue
         }
     }
 
     // スポットライトの対象人数
-    public var numberOfSpotlights: Int?
+    public var activeSpeakerLimit: Int?
     
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
@@ -250,7 +250,7 @@ extension Configuration: Codable {
         case simulcastEnabled
         case simulcastQuality
         case spotlightEnabled
-        case numberOfSpotlights
+        case activeSpeakerLimit
         case webRTCConfiguration
         case signalingConnectMetadata
         case signalingConnectNotifyMetadata
@@ -286,7 +286,7 @@ extension Configuration: Codable {
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
         audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
         spotlightEnabled = try container.decode(Bool.self, forKey: .spotlightEnabled)
-        numberOfSpotlights = try container.decode(Int.self, forKey: .numberOfSpotlights)
+        activeSpeakerLimit = try container.decode(Int.self, forKey: .activeSpeakerLimit)
         simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
         simulcastQuality = try container.decode(SimulcastQuality.self,
                                                 forKey: .simulcastQuality)
@@ -319,7 +319,7 @@ extension Configuration: Codable {
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
-        try container.encodeIfPresent(numberOfSpotlights, forKey: .numberOfSpotlights)
+        try container.encodeIfPresent(activeSpeakerLimit, forKey: .activeSpeakerLimit)
         try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
         try container.encode(publisherStreamId, forKey: .publisherStreamId)
         try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)

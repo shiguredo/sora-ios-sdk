@@ -175,19 +175,19 @@ public struct SignalingConnect {
     public var spotlightEnabled: Bool
 
     // スポットライトの対象人数
-    @available(*, deprecated, renamed: "numberOfSpotlights",
-    message: "このプロパティは numberOfSpotlights に置き換えられました。")
+    @available(*, deprecated, renamed: "activeSpeakerLimit",
+    message: "このプロパティは activeSpeakerLimit に置き換えられました。")
     public var spotlight: Int? {
         get {
-            numberOfSpotlights
+            activeSpeakerLimit
         }
         set {
-            numberOfSpotlights = newValue
+            activeSpeakerLimit = newValue
         }
     }
 
     // スポットライトの対象人数
-    public var numberOfSpotlights: Int?
+    public var activeSpeakerLimit: Int?
     
     /// サイマルキャストの可否
     public var simulcastEnabled: Bool
@@ -662,8 +662,6 @@ extension SignalingConnect: Codable {
         try notifyMetadata?.encode(to: notifyEnc)
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
-        try container.encodeIfPresent(spotlightEnabled, forKey: .spotlight)
-        try container.encodeIfPresent(numberOfSpotlights, forKey: .spotlight_number)
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
         try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
         try container.encodeIfPresent(environment, forKey: .environment)
@@ -707,6 +705,11 @@ extension SignalingConnect: Codable {
             default:
                 try container.encode(true, forKey: .simulcast)
             }
+        }
+        
+        if spotlightEnabled {
+            try container.encodeIfPresent(spotlightEnabled, forKey: .spotlight)
+            try container.encodeIfPresent(activeSpeakerLimit, forKey: .spotlight_number)
         }
     }
     
