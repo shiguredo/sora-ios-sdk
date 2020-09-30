@@ -9,6 +9,21 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [UPDATE] システム条件を更新する
+    - @szktty
+    - Xcode 12.0
+    - Swift 5.3
+    - CocoaPods 1.9.3
+- [CHANGE] WebRTC M86 に対応する
+    - @szktty
+- [CHANGE] API: スポットライトに関する API
+    - @szktty
+    - ``Configuration.spotlight``: 非推奨
+    - ``Configuration.spotlightEnabled``: 追加
+    - ``Configuration.activeSpeakerLimit``: 追加
+
 ## 2020.5
 
 - [UPDATE] システム条件を更新する
