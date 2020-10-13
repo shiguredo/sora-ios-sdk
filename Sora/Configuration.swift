@@ -88,7 +88,7 @@ public struct Configuration {
     /// 詳しくは Sora のスポットライト機能を参照してください。
     public var spotlightEnabled: Bool = false
     
-    // スポットライトの対象人数
+    /// スポットライトの対象人数
     @available(*, deprecated, renamed: "activeSpeakerLimit",
     message: "このプロパティは activeSpeakerLimit に置き換えられました。")
     public var spotlight: Int? {
@@ -100,7 +100,7 @@ public struct Configuration {
         }
     }
 
-    // スポットライトの対象人数
+    /// スポットライトの対象人数
     public var activeSpeakerLimit: Int?
     
     /// WebRTC に関する設定
