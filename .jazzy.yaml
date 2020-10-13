@@ -12,5 +12,9 @@ module_version: 2020.6
 swift_version: 5.3
 xcodebuild_arguments:
     - -parallelizeTargets
+    - -sdk
+    - iphoneos14.0
+    - -workspace
+    - Sora.xcworkspace
     - -scheme
     - Sora
