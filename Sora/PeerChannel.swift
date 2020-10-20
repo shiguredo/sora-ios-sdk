@@ -634,6 +634,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 
                 // カテゴリをマイク用途のものに変更する
                 // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
+                Logger.debug(type: .peerChannel,
+                             message: "change audio session category (playAndRecord)")
                 RTCAudioSessionConfiguration.webRTC().category =
                     AVAudioSession.Category.playAndRecord.rawValue
                 
@@ -645,7 +647,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     }
                     self.isAudioInputInitialized = true
                     Logger.debug(type: .peerChannel,
-                                 message: "audio input is initialized")
+                                 message: "audio input is initialized => category \(RTCAudioSession.sharedInstance().category)")
                 }
             }
         }
