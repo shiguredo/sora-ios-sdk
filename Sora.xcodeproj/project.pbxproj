@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		9100904E1E58B4470099E00E /* VideoView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 9100904D1E58B4470099E00E /* VideoView.xib */; };
 		910090501E58B5450099E00E /* VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9100904F1E58B5450099E00E /* VideoView.swift */; };
+		910444CF253EC6F400EA06BE /* AudioMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910444CE253EC6F400EA06BE /* AudioMode.swift */; };
 		9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9106C27D1F31A3470019E3C7 /* Logger.swift */; };
 		910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */; };
 		910F2DB124D7F6EE007336A6 /* Statistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910F2DB024D7F6EE007336A6 /* Statistics.swift */; };
@@ -76,6 +77,7 @@
 /* Begin PBXFileReference section */
 		9100904D1E58B4470099E00E /* VideoView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = VideoView.xib; sourceTree = "<group>"; };
 		9100904F1E58B5450099E00E /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
+		910444CE253EC6F400EA06BE /* AudioMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMode.swift; sourceTree = "<group>"; };
 		9106C27D1F31A3470019E3C7 /* Logger.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
 		910F2DB024D7F6EE007336A6 /* Statistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Statistics.swift; sourceTree = "<group>"; };
@@ -185,6 +187,7 @@
 				91C7B08E1D54636A006F5FA2 /* Info.plist */,
 				9174A88E1F7395CA00D586C4 /* AspectRatio.swift */,
 				9174A8941F73F90B00D586C4 /* AudioCodec.swift */,
+				910444CE253EC6F400EA06BE /* AudioMode.swift */,
 				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
 				915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,

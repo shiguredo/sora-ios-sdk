@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import WebRTC
 
 /// `Sora` オブジェクトのイベントハンドラです。
@@ -281,6 +282,31 @@ public final class Sora {
         session.unlockForConfiguration()
     }
     
+    public func setAudioMode(_ mode: AudioMode) -> Result<Void, Error> {
+        do {
+            let session = RTCAudioSession.sharedInstance()
+            session.lockForConfiguration()
+            let options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+            switch mode {
+            case .default(category: let category):
+                try session.setCategory(category, options: options)
+                try session.setMode(.default)
+            case .videoChat(output: let output):
+                try session.setCategory(.playAndRecord, options: options)
+                try session.setMode(.videoChat)
+                try session.overrideOutputAudioPort(output.portOverride)
+            case .voiceChat(output: let output):
+                try session.setCategory(.playAndRecord, options: options)
+                try session.setMode(.voiceChat)
+                try session.overrideOutputAudioPort(output.portOverride)
+            }
+            session.unlockForConfiguration()
+            return .success(())
+        } catch let error {
+            return .failure(error)
+        }
+    }
+    
 }
 
 /**
@@ -330,6 +356,20 @@ public final class ConnectionTask {
             Logger.debug(type: .mediaChannel, message: "connection task completed")
             state = .completed
         }
+    }
+    
+}
+
+/// :nodoc:
+extension RTCAudioSession {
+    
+    func setCategory(_ category: AVAudioSession.Category,
+                     options: AVAudioSession.CategoryOptions = []) throws {
+        try setCategory(category.rawValue, with: options)
+    }
+    
+    func setMode(_ mode: AVAudioSession.Mode) throws {
+        try setMode(mode.rawValue)
     }
     
 }
