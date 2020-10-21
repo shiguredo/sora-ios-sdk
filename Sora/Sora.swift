@@ -282,15 +282,15 @@ public final class Sora {
         session.unlockForConfiguration()
     }
     
-    public func setAudioMode(_ mode: AudioMode) -> Result<Void, Error> {
+    public func setAudioMode(_ mode: AudioMode, options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]) -> Result<Void, Error> {
         do {
             let session = RTCAudioSession.sharedInstance()
             session.lockForConfiguration()
-            let options: AVAudioSession.CategoryOptions = [.allowBluetooth]
             switch mode {
-            case .default(category: let category):
+            case .default(category: let category, output: let output):
                 try session.setCategory(category, options: options)
                 try session.setMode(.default)
+                try session.overrideOutputAudioPort(output.portOverride)
             case .videoChat(output: let output):
                 try session.setCategory(.playAndRecord, options: options)
                 try session.setMode(.videoChat)

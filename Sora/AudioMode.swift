@@ -3,7 +3,7 @@ import AVFoundation
 
 public enum AudioMode {
     
-    case `default`(category: AVAudioSession.Category)
+    case `default`(category: AVAudioSession.Category, output: AudioOutput)
     case videoChat(output: AudioOutput)
     case voiceChat(output: AudioOutput)
     
