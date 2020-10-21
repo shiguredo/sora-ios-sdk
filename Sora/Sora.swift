@@ -282,6 +282,12 @@ public final class Sora {
         session.unlockForConfiguration()
     }
     
+    /**
+     * 音声モードを変更します。
+     *
+     * - parameter mode: 音声モード
+     * - returns: 変更の成否
+     */
     public func setAudioMode(_ mode: AudioMode, options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]) -> Result<Void, Error> {
         do {
             let session = RTCAudioSession.sharedInstance()
