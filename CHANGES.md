@@ -20,9 +20,14 @@
     - @szktty
 - [CHANGE] API: スポットライトに関する API
     - @szktty
-    - ``Configuration.spotlight``: 非推奨
-    - ``Configuration.spotlightEnabled``: 追加
-    - ``Configuration.activeSpeakerLimit``: 追加
+    - `Configuration.spotlight`: 非推奨
+    - `Configuration.spotlightEnabled`: 追加
+    - `Configuration.activeSpeakerLimit`: 追加
+- [CHANGE] API: 音声モードに関する API
+    - @szktty
+    - `Sora.setAudioMode(_:options:)`: 追加
+    - `AudioMode`: 追加
+    - `AudioOutput`: 追加
 
 ## 2020.5
 
