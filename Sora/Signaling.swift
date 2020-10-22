@@ -174,7 +174,7 @@ public struct SignalingConnect {
     /// スポットライトの可否
     public var spotlightEnabled: Bool
 
-    // スポットライトの対象人数
+    /// スポットライトの対象人数
     @available(*, deprecated, renamed: "activeSpeakerLimit",
     message: "このプロパティは activeSpeakerLimit に置き換えられました。")
     public var spotlight: Int? {
@@ -186,7 +186,7 @@ public struct SignalingConnect {
         }
     }
 
-    // スポットライトの対象人数
+    /// スポットライトの対象人数
     public var activeSpeakerLimit: Int?
     
     /// サイマルキャストの可否
@@ -438,8 +438,15 @@ public struct SignalingNotifyNetworkStatus {
     
 }
 
+/**
+ "ping" シグナリングメッセージを表します。
+ このメッセージはサーバーから送信されます。
+ "ping" 受信後は一定時間内に "pong" を返さなければ、
+ サーバーとの接続が解除されます。
+ */
 public struct SignalingPing {
     
+    /// :nodoc:
     public var statisticsEnabled: Bool?
     
 }
