@@ -284,6 +284,7 @@ public final class Sora {
     
     /**
      * 音声モードを変更します。
+     * このメソッドは **接続完了後** に実行してください。
      *
      * - parameter mode: 音声モード
      * - returns: 変更の成否
