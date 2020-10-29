@@ -28,6 +28,8 @@
     - `Sora.setAudioMode(_:options:)`: 追加
     - `AudioMode`: 追加
     - `AudioOutput`: 追加
+- [FIX] API: `Sora.connect()`: タイムアウト時にハンドラが実行されない事象を修正する
+    - @szktty
 
 ## 2020.5
 
