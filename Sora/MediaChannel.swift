@@ -236,6 +236,13 @@ public final class MediaChannel {
     
     // MARK: - 接続
     
+    private var _handler: ((_ error: Error?) -> Void)?
+
+    private func executeHandler(error: Error?) {
+        _handler?(error)
+        _handler = nil
+    }
+    
     /**
      サーバーに接続します。
      
@@ -269,6 +276,7 @@ public final class MediaChannel {
                               timeout: Int,
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
+        _handler = handler
         state = .connecting
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
@@ -353,6 +361,9 @@ public final class MediaChannel {
             if let error = error {
                 Logger.error(type: .mediaChannel,
                              message: "error: \(error.localizedDescription)")
+            }
+            if state == .connecting {
+                executeHandler(error: error)
             }
             
             state = .disconnecting
