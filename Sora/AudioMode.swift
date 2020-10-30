@@ -31,10 +31,9 @@ public enum AudioMode {
      * ビデオチャット。
      * ``AVAudioSession`` の音声モードを ``videoChat`` に変更します。
      * 音声カテゴリを ``playAndRecord`` に変更します。
-     *
-     * - parameter output: 音声出力先
+     * 音声はスピーカーから出力されます。
      */
-    case videoChat(output: AudioOutput)
+    case videoChat
     
     /**
      * ボイスチャット。
