@@ -2,7 +2,7 @@ clean: true
 author: Shiguredo Inc. and Masashi Ono (akisute)
 author_url: https://sora.shiguredo.jp/
 github_url: https://github.com/shiguredo/sora-ios-sdk/
-github_file_prefix: https://github.com/shiguredo/sora-ios-sdk/develop/
+github_file_prefix: https://github.com/shiguredo/sora-ios-sdk/blob/master
 root_url: https://sora.shiguredo.jp/ios-sdk-doc/
 theme: apple
 min_acl: public
