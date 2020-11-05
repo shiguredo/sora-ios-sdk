@@ -21,9 +21,9 @@ In other languages, we won't be able to deal with them. Thank you for your under
 - iOS 10.0 以降
 - アーキテクチャ arm64, x86_64 (シミュレーターの動作は未保証)
 - macOS 10.15 以降
-- Xcode 11.6
-- Swift 5.2.4
-- CocoaPods 1.8.4 以降
+- Xcode 12.0
+- Swift 5.3
+- CocoaPods 1.9.3 以降
 - WebRTC SFU Sora 2020.1 以降
 
 Xcode と Swift のバージョンによっては、  CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。

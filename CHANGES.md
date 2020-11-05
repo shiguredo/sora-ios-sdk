@@ -9,6 +9,28 @@
 - FIX
     - バグ修正
 
+## 2020.6
+
+- [UPDATE] システム条件を更新する
+    - @szktty
+    - Xcode 12.0
+    - Swift 5.3
+    - CocoaPods 1.9.3
+- [CHANGE] WebRTC M86 に対応する
+    - @szktty
+- [CHANGE] API: スポットライトに関する API
+    - @szktty
+    - `Configuration.spotlight`: 非推奨
+    - `Configuration.spotlightEnabled`: 追加
+    - `Configuration.activeSpeakerLimit`: 追加
+- [CHANGE] API: 音声モードに関する API
+    - @szktty
+    - `Sora.setAudioMode(_:options:)`: 追加
+    - `AudioMode`: 追加
+    - `AudioOutput`: 追加
+- [FIX] API: `Sora.connect()`: タイムアウト時にハンドラが実行されない事象を修正する
+    - @szktty
+
 ## 2020.5
 
 - [UPDATE] システム条件を更新する

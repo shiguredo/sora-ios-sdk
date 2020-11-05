@@ -36,6 +36,7 @@
 		91756E221F90ADE900B70C53 /* PeerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8B1F19366B00A76852 /* PeerChannel.swift */; };
 		9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */; };
 		918A38F81F30F49500D047BA /* ICEServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918A38F71F30F49500D047BA /* ICEServerInfo.swift */; };
+		919CBB87254169A50054FAFD /* AudioMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910444CE253EC6F400EA06BE /* AudioMode.swift */; };
 		91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B891F19366000A76852 /* SignalingChannel.swift */; };
 		91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8D1F19367700A76852 /* MediaChannel.swift */; };
 		91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91B1D6451D75E11F00112A4E /* VideoRenderer.swift */; };
@@ -76,6 +77,7 @@
 /* Begin PBXFileReference section */
 		9100904D1E58B4470099E00E /* VideoView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = VideoView.xib; sourceTree = "<group>"; };
 		9100904F1E58B5450099E00E /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
+		910444CE253EC6F400EA06BE /* AudioMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMode.swift; sourceTree = "<group>"; };
 		9106C27D1F31A3470019E3C7 /* Logger.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
 		910F2DB024D7F6EE007336A6 /* Statistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Statistics.swift; sourceTree = "<group>"; };
@@ -185,6 +187,7 @@
 				91C7B08E1D54636A006F5FA2 /* Info.plist */,
 				9174A88E1F7395CA00D586C4 /* AspectRatio.swift */,
 				9174A8941F73F90B00D586C4 /* AudioCodec.swift */,
+				910444CE253EC6F400EA06BE /* AudioMode.swift */,
 				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
 				915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,
@@ -558,7 +561,7 @@
 		};
 		91C7B09E1D54636A006F5FA2 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5B882BC644E31956A70216BE /* Pods-Sora.debug.xcconfig */;
+			baseConfigurationReference = E468BA3260AB17F9220A5002 /* Pods-Sora.debug.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
@@ -577,7 +580,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.5.0;
+				MARKETING_VERSION = 2020.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -592,7 +595,7 @@
 		};
 		91C7B09F1D54636A006F5FA2 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 779D4B9435F98F14FF3A3059 /* Pods-Sora.release.xcconfig */;
+			baseConfigurationReference = 6523F57BC3EF8964AFA55070 /* Pods-Sora.release.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
@@ -611,7 +614,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.5.0;
+				MARKETING_VERSION = 2020.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";

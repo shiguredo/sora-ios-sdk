@@ -171,9 +171,24 @@ public struct SignalingConnect {
     /// 音声ビットレート
     public var audioBitRate: Int?
 
-    /// スポットライト
-    public var spotlight: Int?
+    /// スポットライトの可否
+    public var spotlightEnabled: Bool
 
+    /// スポットライトの対象人数
+    @available(*, deprecated, renamed: "activeSpeakerLimit",
+    message: "このプロパティは activeSpeakerLimit に置き換えられました。")
+    public var spotlight: Int? {
+        get {
+            activeSpeakerLimit
+        }
+        set {
+            activeSpeakerLimit = newValue
+        }
+    }
+
+    /// スポットライトの対象人数
+    public var activeSpeakerLimit: Int?
+    
     /// サイマルキャストの可否
     public var simulcastEnabled: Bool
 
@@ -423,8 +438,15 @@ public struct SignalingNotifyNetworkStatus {
     
 }
 
+/**
+ "ping" シグナリングメッセージを表します。
+ このメッセージはサーバーから送信されます。
+ "ping" 受信後は一定時間内に "pong" を返さなければ、
+ サーバーとの接続が解除されます。
+ */
 public struct SignalingPing {
     
+    /// :nodoc:
     public var statisticsEnabled: Bool?
     
 }
@@ -609,6 +631,7 @@ extension SignalingConnect: Codable {
         case sdp
         case multistream
         case spotlight
+        case spotlight_number
         case simulcast
         case video
         case audio
@@ -646,7 +669,6 @@ extension SignalingConnect: Codable {
         try notifyMetadata?.encode(to: notifyEnc)
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
-        try container.encodeIfPresent(spotlight, forKey: .spotlight)
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
         try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
         try container.encodeIfPresent(environment, forKey: .environment)
@@ -690,6 +712,11 @@ extension SignalingConnect: Codable {
             default:
                 try container.encode(true, forKey: .simulcast)
             }
+        }
+        
+        if spotlightEnabled {
+            try container.encodeIfPresent(spotlightEnabled, forKey: .spotlight)
+            try container.encodeIfPresent(activeSpeakerLimit, forKey: .spotlight_number)
         }
     }
     

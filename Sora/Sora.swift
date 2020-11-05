@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import WebRTC
 
 /// `Sora` オブジェクトのイベントハンドラです。
@@ -281,6 +282,45 @@ public final class Sora {
         session.unlockForConfiguration()
     }
     
+    /**
+     * 音声モードを変更します。
+     * このメソッドは **接続完了後** に実行してください。
+     *
+     * - parameter mode: 音声モード
+     * - returns: 変更の成否
+     */
+    public func setAudioMode(_ mode: AudioMode, options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]) -> Result<Void, Error> {
+        do {
+            var options = options
+            let session = RTCAudioSession.sharedInstance()
+            session.lockForConfiguration()
+            switch mode {
+            case .default(category: let category, output: let output):
+                if output == .speaker {
+                    options = [options, .defaultToSpeaker]
+                }
+                try session.setCategory(category, options: options)
+                try session.setMode(.default)
+            case .videoChat:
+                try session.setCategory(.playAndRecord, options: options)
+                try session.setMode(.videoChat)
+            case .voiceChat(output: let output):
+                if output == .speaker {
+                    options = [options, .defaultToSpeaker]
+                }
+                try session.setCategory(.playAndRecord, options: options)
+                try session.setMode(.voiceChat)
+                if output == .speaker {
+                    try session.overrideOutputAudioPort(.speaker)
+                }
+            }
+            session.unlockForConfiguration()
+            return .success(())
+        } catch let error {
+            return .failure(error)
+        }
+    }
+    
 }
 
 /**
@@ -330,6 +370,20 @@ public final class ConnectionTask {
             Logger.debug(type: .mediaChannel, message: "connection task completed")
             state = .completed
         }
+    }
+    
+}
+
+/// :nodoc:
+extension RTCAudioSession {
+    
+    func setCategory(_ category: AVAudioSession.Category,
+                     options: AVAudioSession.CategoryOptions = []) throws {
+        try setCategory(category.rawValue, with: options)
+    }
+    
+    func setMode(_ mode: AVAudioSession.Mode) throws {
+        try setMode(mode.rawValue)
     }
     
 }
