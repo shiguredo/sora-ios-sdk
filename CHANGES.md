@@ -9,7 +9,7 @@
 - FIX
     - バグ修正
 
-## develop
+## 2020.6
 
 - [UPDATE] システム条件を更新する
     - @szktty
