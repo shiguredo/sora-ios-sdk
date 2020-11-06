@@ -9,6 +9,13 @@
 - FIX
     - バグ修正
 
+## 2020.7
+
+- [CHANGE] WebRTC 86.4240.10.0 に上げる
+    - @szktty
+- [CHANGE] `AudioMode.swift` がターゲット含まれておらずビルドできなかった事象を修正する
+    - @szktty
+
 ## 2020.6
 
 - [UPDATE] システム条件を更新する

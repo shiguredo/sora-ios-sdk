@@ -24,6 +24,7 @@
 		9161AECA2410D75A00BA3E0E /* URLSessionWebSocketChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */; };
 		91629BF21F8E5099001193D0 /* Array+Base.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91629BF11F8E5098001193D0 /* Array+Base.swift */; };
 		91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */; };
+		916B0B992553D9620035B5F9 /* AudioMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910444CE253EC6F400EA06BE /* AudioMode.swift */; };
 		916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916BBF711F19EF5800846166 /* ICECandidate.swift */; };
 		9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9173595D1F2CCEBF00806F8B /* Configuration.swift */; };
 		9174A8911F73F89400D586C4 /* Role.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8901F73F89400D586C4 /* Role.swift */; };
@@ -36,7 +37,6 @@
 		91756E221F90ADE900B70C53 /* PeerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8B1F19366B00A76852 /* PeerChannel.swift */; };
 		9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */; };
 		918A38F81F30F49500D047BA /* ICEServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918A38F71F30F49500D047BA /* ICEServerInfo.swift */; };
-		919CBB87254169A50054FAFD /* AudioMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910444CE253EC6F400EA06BE /* AudioMode.swift */; };
 		91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B891F19366000A76852 /* SignalingChannel.swift */; };
 		91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8D1F19367700A76852 /* MediaChannel.swift */; };
 		91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91B1D6451D75E11F00112A4E /* VideoRenderer.swift */; };
@@ -417,6 +417,7 @@
 				9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */,
 				9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */,
 				C5D3C7421F7CEB18004660F5 /* VideoCapturerDevice.swift in Sources */,
+				916B0B992553D9620035B5F9 /* AudioMode.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -580,7 +581,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.6.0;
+				MARKETING_VERSION = 2020.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -614,7 +615,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.6.0;
+				MARKETING_VERSION = 2020.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";

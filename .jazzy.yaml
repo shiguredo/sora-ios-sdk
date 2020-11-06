@@ -13,7 +13,7 @@ swift_version: 5.3
 xcodebuild_arguments:
     - -parallelizeTargets
     - -sdk
-    - iphoneos14.0
+    - iphoneos14.1
     - -workspace
     - Sora.xcworkspace
     - -scheme
