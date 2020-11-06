@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "Sora"
-  s.version      = "2020.6"
+  s.version      = "2020.7"
   s.summary      = "Sora iOS SDK"
   s.description  = <<-DESC
                    A library to develop Sora client applications.
@@ -16,6 +16,6 @@ Pod::Spec.new do |s|
   s.source_files  = "Sora/**/*.swift"
   s.resources = ['Sora/info.json', 'Sora/*.xib']
   s.prepare_command = 'sh Sora/info.sh'
-  s.dependency "WebRTC", '86.4240.1.2'
+  s.dependency "WebRTC", '86.4240.10.0'
   s.dependency "Starscream", "3.1.1"
 end
