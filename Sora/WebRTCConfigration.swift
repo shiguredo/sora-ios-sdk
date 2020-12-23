@@ -73,11 +73,7 @@ public struct WebRTCConfiguration {
      初期化します。
      */
     public init() {
-        iceServerInfos = [
-            ICEServerInfo(urls: [URL(string: "stun:stun.l.google.com:19302")!],
-                          userName: nil,
-                          credential: nil,
-                          tlsSecurityPolicy: .secure)]
+        iceServerInfos = []
     }
     
     // MARK: - ネイティブ
