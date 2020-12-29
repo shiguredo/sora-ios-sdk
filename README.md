@@ -1,5 +1,6 @@
 # Sora iOS SDK
 
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-m86.4240-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/4240)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -24,7 +25,7 @@ In other languages, we won't be able to deal with them. Thank you for your under
 - Xcode 12.0
 - Swift 5.3
 - CocoaPods 1.9.3 以降
-- WebRTC SFU Sora 2020.2 以降
+- WebRTC SFU Sora 2020.3 以降
 
 Xcode と Swift のバージョンによっては、  CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
