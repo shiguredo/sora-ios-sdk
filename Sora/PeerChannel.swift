@@ -248,6 +248,9 @@ public protocol PeerChannel: class {
     /// クライアント ID 。接続成立後にセットされます。
     var clientId: String? { get }
     
+    /// 接続 ID 。接続成立後にセットされます。
+    var connectionId: String? { get }
+    
     /// メディアストリームのリスト。シングルストリームでは 1 つです。
     var streams: [MediaStream] { get }
     
@@ -300,6 +303,10 @@ class BasicPeerChannel: PeerChannel {
     
     var clientId: String? {
         get { return context.clientId }
+    }
+    
+    var connectionId: String? {
+        context.connectionId
     }
     
     var state: ConnectionState {
@@ -441,7 +448,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     var webRTCConfiguration: WebRTCConfiguration!
     var clientId: String?
-    
+    var connectionId: String?
+
     var configuration: Configuration {
         get { return channel.configuration }
     }
@@ -808,6 +816,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         switch signaling {
         case .offer(let offer):
             clientId = offer.clientId
+            connectionId = offer.connectionId
             createAndSendAnswer(offer: offer)
             
         case .update(let update):

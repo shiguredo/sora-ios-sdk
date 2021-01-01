@@ -107,6 +107,15 @@ public final class MediaChannel {
         }
     }
     
+    /**
+     接続 ID 。接続後にセットされます。
+     */
+    public var connectionId: String? {
+        get {
+            return peerChannel.connectionId
+        }
+    }
+    
     /// 接続状態
     public private(set) var state: ConnectionState = .disconnected {
         didSet {
