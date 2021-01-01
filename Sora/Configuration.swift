@@ -79,10 +79,9 @@ public struct Configuration {
     /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
     public var simulcastEnabled: Bool = false
 
-    /// サイマルキャストの品質。
+    /// サイマルキャストでの映像の種類。
     /// ロールが `.recvonly` のときのみ有効です。
-    /// デフォルトは `.high` です。
-    public var simulcastQuality: SimulcastQuality = .high
+    public var simulcastRid: SimulcastRid?
 
     /// スポットライトの可否
     /// 詳しくは Sora のスポットライト機能を参照してください。
@@ -248,7 +247,7 @@ extension Configuration: Codable {
         case videoEnabled
         case audioEnabled
         case simulcastEnabled
-        case simulcastQuality
+        case simulcastRid
         case spotlightEnabled
         case activeSpeakerLimit
         case webRTCConfiguration
@@ -288,8 +287,8 @@ extension Configuration: Codable {
         spotlightEnabled = try container.decode(Bool.self, forKey: .spotlightEnabled)
         activeSpeakerLimit = try container.decode(Int.self, forKey: .activeSpeakerLimit)
         simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
-        simulcastQuality = try container.decode(SimulcastQuality.self,
-                                                forKey: .simulcastQuality)
+        simulcastRid = try container.decode(SimulcastRid.self,
+                                                forKey: .simulcastRid)
         webRTCConfiguration = try container.decode(WebRTCConfiguration.self,
                                                    forKey: .webRTCConfiguration)
         publisherStreamId = try container.decode(String.self,
@@ -308,7 +307,7 @@ extension Configuration: Codable {
         try container.encode(channelId, forKey: .channelId)
         try container.encode(role, forKey: .role)
         try container.encode(simulcastEnabled, forKey: .simulcastEnabled)
-        try container.encode(simulcastQuality, forKey: .simulcastQuality)
+        try container.encode(simulcastRid, forKey: .simulcastRid)
         try container.encode(connectionTimeout, forKey: .connectionTimeout)
         try container.encode(videoEnabled, forKey: .videoEnabled)
         try container.encode(videoCodec, forKey: .videoCodec)

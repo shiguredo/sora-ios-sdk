@@ -85,18 +85,18 @@ public enum Signaling {
 }
 
 /**
- サイマルキャストの品質を表します。
+ サイマルキャストでの映像の種類を表します。
  */
-public enum SimulcastQuality {
+public enum SimulcastRid {
 
-    /// 低画質
-    case low
+    /// R0
+    case r0
     
-    /// 中画質
-    case middle
+    /// R1
+    case r1
     
-    /// 高画質
-    case high
+    /// R2
+    case r2
     
 }
 
@@ -192,8 +192,8 @@ public struct SignalingConnect {
     /// サイマルキャストの可否
     public var simulcastEnabled: Bool
 
-    /// サイマルキャストの品質
-    public var simulcastQuality: SimulcastQuality
+    /// サイマルキャストでの映像の種類
+    public var simulcastRid: SimulcastRid?
 
     /// :nodoc:
     public var soraClient: String?
@@ -231,6 +231,9 @@ public struct SignalingOffer {
      https://w3c.github.io/webrtc-pc/#rtcrtpencodingparameters
      */
     public struct Encoding {
+
+        /// エンコーディングの有効・無効
+        public let active: Bool
 
         /// RTP ストリーム ID
         public let rid: String?
@@ -548,21 +551,21 @@ extension Signaling: Codable {
     
 }
 
-private var simulcastQualityTable: PairTable<String, SimulcastQuality> =
-    PairTable(name: "SimulcastQuality",
-              pairs: [("low", .low),
-                      ("middle", .middle),
-                      ("high", .high)])
+private var simulcastRidTable: PairTable<String, SimulcastRid> =
+    PairTable(name: "simulcastRid",
+              pairs: [("r0", .r0),
+                      ("r1", .r1),
+                      ("r2", .r2)])
 
 /// :nodoc:
-extension SimulcastQuality: Codable {
+extension SimulcastRid: Codable {
     
     public init(from decoder: Decoder) throws {
         throw SoraError.invalidSignalingMessage
     }
     
     public func encode(to encoder: Encoder) throws {
-        try simulcastQualityTable.encode(self, to: encoder)
+        try simulcastRidTable.encode(self, to: encoder)
     }
     
 }
@@ -633,6 +636,7 @@ extension SignalingConnect: Codable {
         case spotlight
         case spotlight_number
         case simulcast
+        case simulcast_rid
         case video
         case audio
         case sora_client
@@ -648,10 +652,6 @@ extension SignalingConnect: Codable {
     enum AudioCodingKeys: String, CodingKey {
         case codec_type
         case bit_rate
-    }
-
-    enum SimulcastQualityCodingKeys: String, CodingKey {
-        case quality
     }
     
     public init(from decoder: Decoder) throws {
@@ -704,13 +704,12 @@ extension SignalingConnect: Codable {
         }
         
         if simulcastEnabled {
+            try container.encode(true, forKey: .simulcast)
             switch role {
-            case .downstream:
-                var simulcastContainer = container
-                        .nestedContainer(keyedBy: SimulcastQualityCodingKeys.self, forKey: .simulcast)
-                try simulcastContainer.encode(simulcastQuality, forKey: .quality)
+            case .downstream, .sendrecv, .recvonly:
+                try container.encode(simulcastRid, forKey: .simulcast_rid)
             default:
-                try container.encode(true, forKey: .simulcast)
+                break
             }
         }
         
@@ -749,6 +748,7 @@ extension SignalingOffer.Encoding: Codable {
 
     enum CodingKeys: String, CodingKey {
         case rid
+        case active
         case maxBitrate
         case maxFramerate
         case scaleResolutionDownBy
@@ -757,6 +757,7 @@ extension SignalingOffer.Encoding: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         rid = try container.decodeIfPresent(String.self, forKey: .rid)
+        active = try container.decodeIfPresent(Bool.self, forKey: .active) ?? true
         maxBitrate = try container.decodeIfPresent(Int.self, forKey: .maxBitrate)
         maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
         scaleResolutionDownBy = try container.decodeIfPresent(Double.self,
