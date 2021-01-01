@@ -459,7 +459,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     var isAudioInputInitialized: Bool = false
     
     private var lock: Lock
-        
+    
+    private var offerEncodings: [SignalingOffer.Encoding]?
+
     init(channel: BasicPeerChannel) {
         self.channel = channel
         lock = Lock()
@@ -712,6 +714,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             if isSender {
                 self.initializeSenderStream()
+                self.updateSenderOfferEncodings()
             }
             
             Logger.debug(type: .peerChannel, message: "try creating native answer")
@@ -743,10 +746,21 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         }
     }
+        
+    private func updateSenderOfferEncodings() {
+        guard let oldEncodings = offerEncodings else {
+            return
+        }
+        Logger.debug(type: .peerChannel, message: "update sender offer encodings")
+        for sender in nativeChannel.senders {
+            sender.updateOfferEncodings(oldEncodings)
+        }
+    }
     
     func createAndSendAnswer(offer: SignalingOffer) {
         Logger.debug(type: .peerChannel, message: "try sending answer")
         state = .waitingComplete
+        offerEncodings = offer.encodings
         
         if let config = offer.configuration {
             Logger.debug(type: .peerChannel, message: "update configuration")
@@ -1027,4 +1041,45 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // 何もしない
     }
     
+}
+
+extension RTCRtpSender {
+    
+    func updateOfferEncodings(_ encodings: [SignalingOffer.Encoding]) {
+        Logger.debug(type: .peerChannel, message: "update offer encodings for sender => \(senderId)")
+        
+        // paramaters はアクセスのたびにコピーされてしまうので、すべての parameters をセットし直す
+        let newParameters = parameters // コピーされる
+        for oldEncoding in newParameters.encodings {
+            Logger.debug(type: .peerChannel, message: "update encoding => \(ObjectIdentifier(oldEncoding))")
+            for encoding in encodings {
+                guard oldEncoding.rid == encoding.rid else {
+                    continue
+                }
+                
+                if let rid = encoding.rid {
+                    Logger.debug(type: .peerChannel, message: "rid => \(rid)")
+                    oldEncoding.rid = rid
+                }
+                
+                Logger.debug(type: .peerChannel, message: "active => \(encoding.active)")
+                oldEncoding.isActive = encoding.active
+                Logger.debug(type: .peerChannel, message: "old active => \(oldEncoding.isActive)")
+
+                if let value = encoding.maxFramerate {
+                    Logger.debug(type: .peerChannel, message: "maxFramerate:  \(value)")
+                    oldEncoding.maxFramerate = NSNumber(floatLiteral: value)
+                }
+                
+                if let value = encoding.maxBitrate {
+                    Logger.debug(type: .peerChannel, message: "maxBitrate: \(value))")
+                    oldEncoding.maxBitrateBps = NSNumber(integerLiteral: value)
+                }
+                
+                break
+            }
+        }
+        
+        self.parameters = newParameters
+    }
 }
