@@ -172,7 +172,7 @@ public struct SignalingConnect {
     public var audioBitRate: Int?
 
     /// スポットライトの可否
-    public var spotlightEnabled: Bool
+    public var spotlightEnabled: Configuration.Spotlight
 
     /// スポットライトの対象人数
     @available(*, deprecated, renamed: "activeSpeakerLimit",
@@ -714,9 +714,14 @@ extension SignalingConnect: Codable {
             }
         }
         
-        if spotlightEnabled {
-            try container.encodeIfPresent(spotlightEnabled, forKey: .spotlight)
+        switch spotlightEnabled {
+        case .enabled:
+            try container.encode(true, forKey: .spotlight)
             try container.encodeIfPresent(activeSpeakerLimit, forKey: .spotlight_number)
+        case .legacy:
+            try container.encodeIfPresent(activeSpeakerLimit, forKey: .spotlight)
+        case .disabled:
+            break
         }
     }
     
