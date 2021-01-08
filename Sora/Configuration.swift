@@ -14,6 +14,22 @@ public struct Configuration {
     
     // MARK: - 接続に関する設定
     
+    /**
+     スポットライトの設定
+     */
+    public enum Spotlight {
+        
+        /// 有効
+        case enabled
+        
+        /// 無効
+        case disabled
+        
+        /// スポットライトレガシー機能
+        case legacy
+        
+    }
+    
     /// サーバーの URL
     public var url: URL
     
@@ -85,7 +101,7 @@ public struct Configuration {
 
     /// スポットライトの可否
     /// 詳しくは Sora のスポットライト機能を参照してください。
-    public var spotlightEnabled: Bool = false
+    public var spotlightEnabled: Spotlight = .disabled
     
     /// スポットライトの対象人数
     @available(*, deprecated, renamed: "activeSpeakerLimit",
@@ -284,7 +300,7 @@ extension Configuration: Codable {
         audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
         audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
-        spotlightEnabled = try container.decode(Bool.self, forKey: .spotlightEnabled)
+        spotlightEnabled = try container.decode(Spotlight.self, forKey: .spotlightEnabled)
         activeSpeakerLimit = try container.decode(Int.self, forKey: .activeSpeakerLimit)
         simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
         simulcastRid = try container.decode(SimulcastRid.self,
@@ -332,6 +348,37 @@ extension Configuration: Codable {
         try container.encode(String(describing: type(of: _webSocketChannelType))
             ,
                              forKey: .webSocketChannelType)
+    }
+    
+}
+
+/// :nodoc:
+extension Configuration.Spotlight: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        switch try container.decode(String.self) {
+        case "enabled":
+            self = .enabled
+        case "disabled":
+            self = .disabled
+        case "legacy":
+            self = .legacy
+        default:
+            self = .disabled
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .enabled:
+            try container.encode("enabled")
+        case .disabled:
+            try container.encode("disabled")
+        case .legacy:
+            try container.encode("legacy")
+        }
     }
     
 }
