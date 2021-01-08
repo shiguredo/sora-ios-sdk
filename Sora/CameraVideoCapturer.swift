@@ -3,7 +3,7 @@ import WebRTC
 
 /**
  デバイスのカメラを利用した `VideoCapturer` のデフォルト実装です。
- `Configuration` の `videoCapturerDevice` に `.camera(settings:)` を
+ `Configuration` の `videoCapturerDevice` に `CameraVideoCapturerDevice` を
  指定すると、この実装が映像キャプチャーとして使用されます。
  
  カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
@@ -14,6 +14,7 @@ import WebRTC
  カメラの設定を変更したい場合は、一旦カメラを停止 `stop()` してから
  `settings` プロパティに新しい設定をセットし、カメラを再起動 `start()` します。
  */
+@available(iOSApplicationExtension, unavailable)
 public final class CameraVideoCapturer: VideoCapturer {
     
     // MARK: インスタンスの取得
@@ -214,6 +215,7 @@ public final class CameraVideoCapturer: VideoCapturer {
 
 // MARK: -
 
+@available(iOSApplicationExtension, unavailable)
 public extension CameraVideoCapturer {
     
     /**
@@ -312,6 +314,7 @@ public extension CameraVideoCapturer {
 
 // MARK: -
 
+@available(iOSApplicationExtension, unavailable)
 private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     
     weak var cameraVideoCapturer: CameraVideoCapturer!
@@ -331,6 +334,7 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
 // MARK: -
 
 /// :nodoc:
+@available(iOSApplicationExtension, unavailable)
 extension CameraVideoCapturer.Settings: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -355,6 +359,7 @@ extension CameraVideoCapturer.Settings: Codable {
     
 }
 
+@available(iOSApplicationExtension, unavailable)
 private var resolutionTable: PairTable<String, CameraVideoCapturer.Settings.Resolution> =
     PairTable(name: "CameraVideoCapturer.Settings.Resolution",
               pairs: [("qvga240p", .qvga240p),
@@ -363,6 +368,7 @@ private var resolutionTable: PairTable<String, CameraVideoCapturer.Settings.Reso
                       ("hd1080p", .hd1080p)])
 
 /// :nodoc:
+@available(iOSApplicationExtension, unavailable)
 extension CameraVideoCapturer.Settings.Resolution: Codable {
     
     public init(from decoder: Decoder) throws {

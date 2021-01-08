@@ -34,6 +34,7 @@ public enum VideoViewConnectionMode {
  Storyboard や Interface Builder 上で設定した Content Mode の値が使用されます。
  
  */
+@available(iOSApplicationExtension, unavailable)
 public class VideoView: UIView {
     
     // キーウィンドウ外で RTCEAGLVideoView を生成すると次のエラーが発生するため、
@@ -187,6 +188,7 @@ public class VideoView: UIView {
 // MARK: - VideoRenderer
 
 /// :nodoc:
+@available(iOSApplicationExtension, unavailable)
 extension VideoView: VideoRenderer {
 
     /// :nodoc:
@@ -242,6 +244,7 @@ extension VideoView: VideoRenderer {
 
 // MARK: -
 
+@available(iOSApplicationExtension, unavailable)
 class VideoViewContentView: UIView {
     
     @IBOutlet private weak var nativeVideoView: RTCEAGLVideoView!

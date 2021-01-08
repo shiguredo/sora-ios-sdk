@@ -616,21 +616,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let stream = BasicMediaStream(peerChannel: channel,
                                       nativeStream: nativeStream)
         if configuration.videoEnabled {
-            switch configuration.videoCapturerDevice {
-            case .camera(let settings):
+            if let device = configuration.videoCapturerDevice {
                 Logger.debug(type: .peerChannel,
                              message: "initialize video capture device")
-                // カメラが指定されている場合は、接続処理と同時にデフォルトのCameraVideoCapturerを使用してキャプチャを開始する
-                if CameraVideoCapturer.shared.isRunning {
-                    CameraVideoCapturer.shared.stop()
-                }
-                CameraVideoCapturer.shared.settings = settings
-                CameraVideoCapturer.shared.start()
-                stream.videoCapturer = CameraVideoCapturer.shared
-            case .custom:
-                // カスタムが指定されている場合は、接続処理時には何もしない
-                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
-                break
+                device.stream(to: stream)
             }
         }
         
@@ -678,17 +667,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     /** `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
     func terminateSenderStream() {
         if configuration.videoEnabled {
-            switch configuration.videoCapturerDevice {
-            case .camera(settings: let settings):
-                // カメラが指定されている場合は
-                // 接続時に自動的に開始したキャプチャを、切断時に自動的に停止する必要がある
-                if settings.canStop {
-                    CameraVideoCapturer.shared.stop()
-                }
-            case .custom:
-                // カスタムが指定されている場合は、切断処理時には何もしない
-                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
-                break
+            if let device = configuration.videoCapturerDevice {
+                device.terminate()
             }
         }
     }

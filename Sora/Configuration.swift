@@ -74,9 +74,20 @@ public struct Configuration {
     /// 映像ビットレート。デフォルトは無指定です。
     public var videoBitRate: Int?
     
-    /// 映像キャプチャーの種別。
-    /// デフォルトは `.camera(settings: CameraVideoCapturer.Settings.default)` です。
-    public var videoCapturerDevice: VideoCapturerDevice = .camera(settings: .default)
+    /**
+     映像キャプチャーの種別。デフォルトは無指定です。
+     
+     無指定の場合、 `Sora` はストリームへの接続完了時に `VideoCapturer` を自動的に設定**しません**。
+     したがってこのオプションを使用する場合は、ストリームへの接続完了後、自身でストリームの `VideoCapturer` を設定しない限り、映像は配信されません。
+     また無指定の場合、 `Sora` はストリームから切断したタイミングに `VideoCapturer` を自動的に終了**しません**。
+     必要に応じて終了時に `VideoCapturer` を停止する処理を忘れないようにしてください。
+     
+     以下のような場合に無指定にすることをおすすめします。
+     
+     - カメラ以外の映像ソースから映像のキャプチャと配信を行いたいとき。
+     - 映像のキャプチャ開始・終了タイミングを細かく調整したいとき。
+     */
+    public var videoCapturerDevice: VideoCapturerDevice?
     
     /// 音声コーデック。デフォルトは `.default` です。
     public var audioCodec: AudioCodec = .default
@@ -241,144 +252,6 @@ public struct Configuration {
         self.channelId = channelId
         self.role = role
         self.multistreamEnabled = multistreamEnabled
-    }
-    
-}
-
-/// :nodoc:
-extension Configuration: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case url
-        case channelId
-        case role
-        case multistreamEnabled
-        case metadata
-        case connectionTimeout
-        case videoCodec
-        case videoBitRate
-        case videoCapturerDevice
-        case audioCodec
-        case audioBitRate
-        case videoEnabled
-        case audioEnabled
-        case simulcastEnabled
-        case simulcastRid
-        case spotlightEnabled
-        case activeSpeakerLimit
-        case webRTCConfiguration
-        case signalingConnectMetadata
-        case signalingConnectNotifyMetadata
-        case signalingChannelType
-        case webSocketChannelType
-        case peerChannelType
-        case publisherStreamId
-        case publisherVideoTrackId
-        case publisherAudioTrackId
-    }
-    
-    public init(from decoder: Decoder) throws {
-        // NOTE: メタデータとイベントハンドラはサポートしない
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let url = try container.decode(URL.self, forKey: .url)
-        let channelId = try container.decode(String.self, forKey: .channelId)
-        let role = try container.decode(Role.self, forKey: .role)
-        let multistreamEnabled = try container.decode(Bool.self, forKey: .multistreamEnabled)
-        self.init(url: url,
-                  channelId: channelId,
-                  role: role,
-                  multistreamEnabled: multistreamEnabled)
-        connectionTimeout = try container.decode(Int.self,
-                                                 forKey: .connectionTimeout)
-        videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
-        videoCodec = try container.decode(VideoCodec.self, forKey: .videoCodec)
-        videoCapturerDevice = try container
-            .decode(VideoCapturerDevice.self, forKey: .videoCapturerDevice)
-        if container.contains(.videoBitRate) {
-            videoBitRate = try container.decode(Int.self, forKey: .videoBitRate)
-        }
-        audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
-        audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
-        audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
-        spotlightEnabled = try container.decode(Spotlight.self, forKey: .spotlightEnabled)
-        activeSpeakerLimit = try container.decode(Int.self, forKey: .activeSpeakerLimit)
-        simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
-        simulcastRid = try container.decode(SimulcastRid.self,
-                                                forKey: .simulcastRid)
-        webRTCConfiguration = try container.decode(WebRTCConfiguration.self,
-                                                   forKey: .webRTCConfiguration)
-        publisherStreamId = try container.decode(String.self,
-                                                 forKey: .publisherStreamId)
-        publisherVideoTrackId = try container.decode(String.self,
-                                                     forKey: .publisherVideoTrackId)
-        publisherAudioTrackId = try container.decode(String.self,
-                                                     forKey: .publisherAudioTrackId)
-        // TODO: channel types
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        // NOTE: メタデータとイベントハンドラはサポートしない
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(url, forKey: .url)
-        try container.encode(channelId, forKey: .channelId)
-        try container.encode(role, forKey: .role)
-        try container.encode(simulcastEnabled, forKey: .simulcastEnabled)
-        try container.encode(simulcastRid, forKey: .simulcastRid)
-        try container.encode(connectionTimeout, forKey: .connectionTimeout)
-        try container.encode(videoEnabled, forKey: .videoEnabled)
-        try container.encode(videoCodec, forKey: .videoCodec)
-        if let bitRate = self.videoBitRate {
-            try container.encode(bitRate, forKey: .videoBitRate)
-        }
-        try container.encode(videoCapturerDevice, forKey: .videoCapturerDevice)
-        try container.encode(audioCodec, forKey: .audioCodec)
-        try container.encode(audioEnabled, forKey: .audioEnabled)
-        try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
-        try container.encodeIfPresent(activeSpeakerLimit, forKey: .activeSpeakerLimit)
-        try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
-        try container.encode(publisherStreamId, forKey: .publisherStreamId)
-        try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
-        try container.encode(publisherAudioTrackId, forKey: .publisherAudioTrackId)
-        try container.encode(String(describing: type(of: _peerChannelType))
-            ,
-                             forKey: .peerChannelType)
-        try container.encode(String(describing: type(of: _signalingChannelType))
-            ,
-                             forKey: .signalingChannelType)
-        try container.encode(String(describing: type(of: _webSocketChannelType))
-            ,
-                             forKey: .webSocketChannelType)
-    }
-    
-}
-
-/// :nodoc:
-extension Configuration.Spotlight: Codable {
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        switch try container.decode(String.self) {
-        case "enabled":
-            self = .enabled
-        case "disabled":
-            self = .disabled
-        case "legacy":
-            self = .legacy
-        default:
-            self = .disabled
-        }
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .enabled:
-            try container.encode("enabled")
-        case .disabled:
-            try container.encode("disabled")
-        case .legacy:
-            try container.encode("legacy")
-        }
     }
     
 }
