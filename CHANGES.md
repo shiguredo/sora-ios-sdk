@@ -9,6 +9,15 @@
 - FIX
     - バグ修正
 
+## 2020.7.1
+
+- [CHANGE] スポットライトレガシー機能に対応する
+    - @szktty
+- [CHANGE] API: スポットライトに関する API
+    - @szktty
+    - `Configuration.Spotlight`: 追加
+    - `Configuration.spotlightEnabled`: 型を `Spotlight` に変更
+
 ## 2020.7
 
 - [CHANGE] WebRTC 86.4240.10.0 に上げる
