@@ -14,12 +14,18 @@ public struct Configuration {
     
     // MARK: - 接続に関する設定
     
+    /**
+     スポットライトの設定
+     */
     public enum Spotlight {
         
+        /// 有効
         case enabled
         
+        /// 無効
         case disabled
         
+        /// スポットライトレガシー機能
         case legacy
         
     }
