@@ -40,6 +40,7 @@ Xcode と Swift のバージョンによっては、  CocoaPods で取得でき�
 Apache License 2.0
 
 ```
+Copyright 2017-2020, SUZUKI Tetsuya (Original Author)
 Copyright 2017-2020, Shiguredo Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
