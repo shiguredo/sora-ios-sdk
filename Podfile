@@ -1,7 +1,7 @@
-source 'https://github.com/shiguredo/sora-ios-sdk-specs.git'
+source 'https://github.com/soudegesu/sora-macos-sdk-specs.git'
 source 'https://github.com/CocoaPods/Specs.git'
 
-platform :ios, '10.0'
+platform :osx, '10.15'
 
 target 'Sora' do
   use_frameworks!
