@@ -18,19 +18,16 @@ public enum AudioMode {
     /**
      * デフォルト。
      * ``AVAudioSession`` の音声モードを ``default`` に変更します。
-     * 音声カテゴリを ``category`` の値に変更します。
      * 音声出力先の変更は、指定した音声出力先に音声カテゴリが対応している場合のみ有効です。
      * 詳細は ``AVAudioSession`` のドキュメントを参照して下さい。
      *
-     * - parameter category: 音声カテゴリ
      * - parameter output: 音声出力先
      */
-    case `default`(category: AVAudioSession.Category, output: AudioOutput)
+    case `default`(output: AudioOutput)
     
     /**
      * ビデオチャット。
      * ``AVAudioSession`` の音声モードを ``videoChat`` に変更します。
-     * 音声カテゴリを ``playAndRecord`` に変更します。
      * 音声はスピーカーから出力されます。
      */
     case videoChat
@@ -38,7 +35,6 @@ public enum AudioMode {
     /**
      * ボイスチャット。
      * ``AVAudioSession`` の音声モードを ``voiceChat`` に変更します。
-     * 音声カテゴリを ``playAndRecord`` に変更します。
      *
      * - parameter output: 音声出力先
      */
@@ -56,14 +52,5 @@ public enum AudioOutput {
     
     /// スピーカー
     case speaker
-    
-    var portOverride: AVAudioSession.PortOverride {
-        switch self {
-        case .default:
-            return .none
-        case .speaker:
-            return .speaker
-        }
-    }
     
 }

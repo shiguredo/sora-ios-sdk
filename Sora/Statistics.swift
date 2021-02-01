@@ -5,21 +5,18 @@ import WebRTC
 public class Statistics {
     
     public var timestamp: CFTimeInterval
-    public var entries: [StatisticsEntry] = []
+    public var entries: [RTCLegacyStatsReport] = []
     
-    init(contentsOf report: RTCStatisticsReport) {
-        timestamp = report.timestamp_us
-        for (_, statistics) in report.statistics {
-            let entry = StatisticsEntry(contentsOf: statistics)
-            entries.append(entry)
-        }
+    init(contentsOf report: RTCLegacyStatsReport) {
+        timestamp = report.timestamp
+        entries.append(report)
     }
     
     public var jsonObject: Any {
         let json = NSMutableArray()
         for entry in entries {
             var map: [String: Any] = [:]
-            map["id"] = entry.id
+            map["id"] = entry.reportId
             map["type"] = entry.type
             map["timestamp"] = entry.timestamp
             map.merge(entry.values, uniquingKeysWith: { a, b in a })
@@ -28,21 +25,4 @@ public class Statistics {
         return json
     }
 
-}
-
-/// :nodoc:
-public class StatisticsEntry {
-    
-    public var id: String
-    public var type: String
-    public var timestamp: CFTimeInterval
-    public var values: [String: NSObject]
-    
-    init(contentsOf statistics: RTCStatistics) {
-        id = statistics.id
-        type = statistics.type
-        timestamp = statistics.timestamp_us
-        values = statistics.values
-    }
-    
 }

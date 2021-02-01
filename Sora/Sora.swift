@@ -212,14 +212,14 @@ public final class Sora {
      * ``true`` をセットした場合、音声ユニットは自動的に初期化されません。
      * デフォルトは ``false`` です。
      */
-    public var usesManualAudio: Bool {
-        get {
-            return RTCAudioSession.sharedInstance().useManualAudio
-        }
-        set {
-            RTCAudioSession.sharedInstance().useManualAudio = newValue
-        }
-    }
+//    public var usesManualAudio: Bool {
+//        get {
+//            return RTCAudioSession.sharedInstance().useManualAudio
+//        }
+//        set {
+//            RTCAudioSession.sharedInstance().useManualAudio = newValue
+//        }
+//    }
     
     /**
      * 音声ユニットの使用の可否。
@@ -233,14 +233,14 @@ public final class Sora {
      * このプロパティを使用すると、音声ユニットの初期化によって
      * AVPlayer などによる再生中の音声が中断されてしまうことを防げます。
      */
-    public var audioEnabled: Bool {
-        get {
-            return RTCAudioSession.sharedInstance().isAudioEnabled
-        }
-        set {
-            RTCAudioSession.sharedInstance().isAudioEnabled = newValue
-        }
-    }
+//    public var audioEnabled: Bool {
+//        get {
+//            return RTCAudioSession.sharedInstance().isAudioEnabled
+//        }
+//        set {
+//            RTCAudioSession.sharedInstance().isAudioEnabled = newValue
+//        }
+//    }
     
     /**
      * ``AVAudioSession`` の設定を変更する際に使います。
@@ -284,12 +284,12 @@ public final class Sora {
      *
      * - parameter block: ロック中に実行されるクロージャー
      */
-    public func configureAudioSession(block: () -> Void) {
-        let session = RTCAudioSession.sharedInstance()
-        session.lockForConfiguration()
-        block()
-        session.unlockForConfiguration()
-    }
+//    public func configureAudioSession(block: () -> Void) {
+//        let session = RTCAudioSession.sharedInstance()
+//        session.lockForConfiguration()
+//        block()
+//        session.unlockForConfiguration()
+//    }
     
     /**
      * 音声モードを変更します。
@@ -298,37 +298,37 @@ public final class Sora {
      * - parameter mode: 音声モード
      * - returns: 変更の成否
      */
-    public func setAudioMode(_ mode: AudioMode, options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]) -> Result<Void, Error> {
-        do {
-            var options = options
-            let session = RTCAudioSession.sharedInstance()
-            session.lockForConfiguration()
-            switch mode {
-            case .default(category: let category, output: let output):
-                if output == .speaker {
-                    options = [options, .defaultToSpeaker]
-                }
-                try session.setCategory(category, options: options)
-                try session.setMode(.default)
-            case .videoChat:
-                try session.setCategory(.playAndRecord, options: options)
-                try session.setMode(.videoChat)
-            case .voiceChat(output: let output):
-                if output == .speaker {
-                    options = [options, .defaultToSpeaker]
-                }
-                try session.setCategory(.playAndRecord, options: options)
-                try session.setMode(.voiceChat)
-                if output == .speaker {
-                    try session.overrideOutputAudioPort(.speaker)
-                }
-            }
-            session.unlockForConfiguration()
-            return .success(())
-        } catch let error {
-            return .failure(error)
-        }
-    }
+//    public func setAudioMode(_ mode: AudioMode, options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]) -> Result<Void, Error> {
+//        do {
+//            var options = options
+//            let session = RTCAudioSession.sharedInstance()
+//            session.lockForConfiguration()
+//            switch mode {
+//            case .default(category: let category, output: let output):
+//                if output == .speaker {
+//                    options = [options, .defaultToSpeaker]
+//                }
+//                try session.setCategory(category, options: options)
+//                try session.setMode(.default)
+//            case .videoChat:
+//                try session.setCategory(.playAndRecord, options: options)
+//                try session.setMode(.videoChat)
+//            case .voiceChat(output: let output):
+//                if output == .speaker {
+//                    options = [options, .defaultToSpeaker]
+//                }
+//                try session.setCategory(.playAndRecord, options: options)
+//                try session.setMode(.voiceChat)
+//                if output == .speaker {
+//                    try session.overrideOutputAudioPort(.speaker)
+//                }
+//            }
+//            session.unlockForConfiguration()
+//            return .success(())
+//        } catch let error {
+//            return .failure(error)
+//        }
+//    }
     
 }
 
@@ -384,15 +384,15 @@ public final class ConnectionTask {
 }
 
 /// :nodoc:
-extension RTCAudioSession {
-    
-    func setCategory(_ category: AVAudioSession.Category,
-                     options: AVAudioSession.CategoryOptions = []) throws {
-        try setCategory(category.rawValue, with: options)
-    }
-    
-    func setMode(_ mode: AVAudioSession.Mode) throws {
-        try setMode(mode.rawValue)
-    }
-    
-}
+//extension RTCAudioSession {
+//
+//    func setCategory(_ category: AVAudioSession.Category,
+//                     options: AVAudioSession.CategoryOptions = []) throws {
+//        try setCategory(category.rawValue, with: options)
+//    }
+//
+//    func setMode(_ mode: AVAudioSession.Mode) throws {
+//        try setMode(mode.rawValue)
+//    }
+//
+//}

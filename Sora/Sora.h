@@ -1,4 +1,4 @@
-#import <UIKit/UIKit.h>
+#import <AppKit/AppKit.h>
 
 //! Project version number for Sora.
 FOUNDATION_EXPORT double SoraVersionNumber;
