@@ -13,6 +13,8 @@
 
 - [CHANGE] WebRTC M88 に対応する
   - @enm10k
+- [CHANGE] Configuration.activeSpeakerLimit を spotlightNumber に変更
+  - @enm10k
 
 ## 2020.7.1
 
