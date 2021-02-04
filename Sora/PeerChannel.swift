@@ -592,7 +592,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             audioCodec: configuration.audioCodec,
             audioBitRate: configuration.audioBitRate,
             spotlightEnabled: configuration.spotlightEnabled,
-            activeSpeakerLimit: configuration.activeSpeakerLimit,
+            spotlightNumber: configuration.spotlightNumber,
             simulcastEnabled: configuration.simulcastEnabled,
             simulcastRid: configuration.simulcastRid,
             soraClient: soraClient,

@@ -175,19 +175,31 @@ public struct SignalingConnect {
     public var spotlightEnabled: Configuration.Spotlight
 
     /// スポットライトの対象人数
-    @available(*, deprecated, renamed: "activeSpeakerLimit",
-    message: "このプロパティは activeSpeakerLimit に置き換えられました。")
+    @available(*, deprecated, renamed: "spotlightNumber",
+    message: "このプロパティは spotlightNumber に置き換えられました。")
     public var spotlight: Int? {
         get {
-            activeSpeakerLimit
+            spotlightNumber
         }
         set {
-            activeSpeakerLimit = newValue
+            spotlightNumber = newValue
         }
     }
 
     /// スポットライトの対象人数
-    public var activeSpeakerLimit: Int?
+    @available(*, deprecated, renamed: "spotlightNumber",
+    message: "このプロパティは spotlightNumber に置き換えられました。")
+    public var activeSpeakerLimit: Int? {
+        get {
+            spotlightNumber
+        }
+        set {
+            spotlightNumber = newValue
+        }
+    }
+
+    // スポットライトの対象人数
+    public var spotlightNumber: Int?
     
     /// サイマルキャストの可否
     public var simulcastEnabled: Bool
@@ -716,9 +728,9 @@ extension SignalingConnect: Codable {
         switch spotlightEnabled {
         case .enabled:
             try container.encode(true, forKey: .spotlight)
-            try container.encodeIfPresent(activeSpeakerLimit, forKey: .spotlight_number)
+            try container.encodeIfPresent(spotlightNumber, forKey: .spotlight_number)
         case .legacy:
-            try container.encodeIfPresent(activeSpeakerLimit, forKey: .spotlight)
+            try container.encodeIfPresent(spotlightNumber, forKey: .spotlight)
         case .disabled:
             break
         }

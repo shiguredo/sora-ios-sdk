@@ -104,19 +104,31 @@ public struct Configuration {
     public var spotlightEnabled: Spotlight = .disabled
     
     /// スポットライトの対象人数
-    @available(*, deprecated, renamed: "activeSpeakerLimit",
-    message: "このプロパティは activeSpeakerLimit に置き換えられました。")
+    @available(*, deprecated, renamed: "spotlightNumber",
+    message: "このプロパティは spotlightNumber に置き換えられました。")
     public var spotlight: Int? {
         get {
-            activeSpeakerLimit
+            spotlightNumber
         }
         set {
-            activeSpeakerLimit = newValue
+            spotlightNumber = newValue
         }
     }
 
     /// スポットライトの対象人数
-    public var activeSpeakerLimit: Int?
+    @available(*, deprecated, renamed: "spotlightNumber",
+    message: "このプロパティは spotlightNumber に置き換えられました。")
+    public var activeSpeakerLimit: Int? {
+        get {
+            spotlightNumber
+        }
+        set {
+            spotlightNumber = newValue
+        }
+    }
+
+    // スポットライトの対象人数
+    public var spotlightNumber: Int?
     
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
@@ -265,7 +277,7 @@ extension Configuration: Codable {
         case simulcastEnabled
         case simulcastRid
         case spotlightEnabled
-        case activeSpeakerLimit
+        case spotlightNumber
         case webRTCConfiguration
         case signalingConnectMetadata
         case signalingConnectNotifyMetadata
@@ -301,7 +313,7 @@ extension Configuration: Codable {
         audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
         audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
         spotlightEnabled = try container.decode(Spotlight.self, forKey: .spotlightEnabled)
-        activeSpeakerLimit = try container.decode(Int.self, forKey: .activeSpeakerLimit)
+        spotlightNumber = try container.decode(Int.self, forKey: .spotlightNumber)
         simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
         simulcastRid = try container.decode(SimulcastRid.self,
                                                 forKey: .simulcastRid)
@@ -334,7 +346,7 @@ extension Configuration: Codable {
         try container.encode(audioCodec, forKey: .audioCodec)
         try container.encode(audioEnabled, forKey: .audioEnabled)
         try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
-        try container.encodeIfPresent(activeSpeakerLimit, forKey: .activeSpeakerLimit)
+        try container.encodeIfPresent(spotlightNumber, forKey: .spotlightNumber)
         try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
         try container.encode(publisherStreamId, forKey: .publisherStreamId)
         try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
