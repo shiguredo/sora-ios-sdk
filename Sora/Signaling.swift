@@ -727,10 +727,12 @@ extension SignalingConnect: Codable {
         
         switch spotlightEnabled {
         case .enabled:
-            try container.encode(true, forKey: .spotlight)
-            try container.encodeIfPresent(spotlightNumber, forKey: .spotlight_number)
-        case .legacy:
-            try container.encodeIfPresent(spotlightNumber, forKey: .spotlight)
+            if Sora.isSpotlightLegacyEnabled {
+                try container.encodeIfPresent(spotlightNumber, forKey: .spotlight)
+            } else {
+                try container.encode(true, forKey: .spotlight)
+                try container.encodeIfPresent(spotlightNumber, forKey: .spotlight_number)
+            }
         case .disabled:
             break
         }
