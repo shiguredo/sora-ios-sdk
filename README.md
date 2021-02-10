@@ -1,4 +1,4 @@
-/# Sora iOS SDK
+# Sora iOS SDK
 
 [![libwebrtc](https://img.shields.io/badge/libwebrtc-m88.4324-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/4240)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
