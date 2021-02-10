@@ -12,7 +12,13 @@
 ## develop
 
 - [CHANGE] WebRTC M88 に対応する
-  - @enm10k
+    - @enm10k
+- [CHANGE] スポットライトのオプションを整理する
+    - @enm10k
+    - Sora のスポットライトレガシー機能を利用するための API を Sora.useSpotlightLegacy() に変更
+    - Configuration.activeSpeakerLimit を非推奨にして、 Configuration.spotlightNumber に変更
+
+
 
 ## 2020.7.1
 
