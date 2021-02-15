@@ -1076,6 +1076,11 @@ extension RTCRtpSender {
                     oldEncoding.maxBitrateBps = NSNumber(integerLiteral: value)
                 }
                 
+                if let value = encoding.scaleResolutionDownBy {
+                    Logger.debug(type: .peerChannel, message: "scaleResolutionDownBy: \(value))")
+                    oldEncoding.scaleResolutionDownBy = NSNumber(value: value)
+                }
+                
                 break
             }
         }
