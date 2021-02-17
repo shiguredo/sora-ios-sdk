@@ -71,3 +71,6 @@ fastlane/screenshots
 
 docs
 Sora/info.json
+
+Podfile.lock
+*.xcworkspace

@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
                    A library to develop Sora client applications.
                    DESC
   s.license      = { :type => "Apache License, Version 2.0" }
-  s.authors      = { "Shiguredo Inc." => "sora@shiguredo.jp" }
+  s.authors      = { "Shiguredo Inc." => "sora@shiguredo.jp", "soudegesu" => "" }
   s.platform     = :osx, "10.15"
   s.homepage     = "https://github.com/soudegesu/sora-macos-sdk"
   s.source       = {
