@@ -4,6 +4,7 @@ import Foundation
 public enum LogType {
     case sora
     case webSocketChannel
+    case signaling
     case signalingChannel
     case peerChannel
     case nativePeerChannel
@@ -26,6 +27,8 @@ extension LogType: CustomStringConvertible {
             return "Sora"
         case .webSocketChannel:
             return "WebSocketChannel"
+        case .signaling:
+            return "Signaling"
         case .signalingChannel:
             return "SignalingChannel"
         case .peerChannel:
