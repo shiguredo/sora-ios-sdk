@@ -17,8 +17,20 @@
     - @enm10k
     - Sora のスポットライトレガシー機能を利用するための API を Sora.useSpotlightLegacy() に変更
     - Configuration.activeSpeakerLimit を非推奨にして、 Configuration.spotlightNumber に変更
-
-
+- [CHANGE] シグナリングに含まれる JSON 型のフィールドを JSONSerialization でデコードする
+    - @enm10k
+    - フィールドの型が SignalingMetadata から Any? に変更されたため、任意の型にキャストして利用します
+    - 対象のフィールド
+        - SignalingNotifyConnection.metadata
+        - SignalingNotifyConnection.metadataList
+        - SignalingOffer.metadata
+        - SignalingPush.data
+    - 修正にともない、 SignalingMetadata と SignalingClientMetadata を unavailable に変更
+- [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
+    - @enm10k
+    - SignalingNotifyConnection.authnMetadata
+    - SignalingNotifyConnection.authzMetadata
+    - SignalingNotifyConnection.data
 
 ## 2020.7.1
 
