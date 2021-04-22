@@ -1031,7 +1031,7 @@ extension SignalingPing: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        statisticsEnabled = try container.decode(Bool.self, forKey: .stats)
+        statisticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .stats)
     }
     
     public func encode(to encoder: Encoder) throws {
