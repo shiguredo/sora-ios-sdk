@@ -1,6 +1,44 @@
 import Foundation
 import WebRTC
 
+/// :nodoc:
+private func serializeMetadataList(_ data: Any?) -> [SignalingNotifyMetadata]? {
+    guard let array = data as? [[String: Any]] else {
+        Logger.info(type: .signaling,
+                    message: "downcast failed in serializeMetadataList. data: \(String(describing: data))")
+        return nil
+    }
+    
+    let result = array.map { (dict: [String: Any]) -> SignalingNotifyMetadata in
+        var signalingNotifyMetadata = SignalingNotifyMetadata()
+        if dict.keys.contains("client_id"), let clinetId = dict["client_id"] as? String? {
+            signalingNotifyMetadata.clientId = clinetId
+        }
+        
+        if dict.keys.contains("connection_id"), let connectionId = dict["connection_id"] as? String? {
+            signalingNotifyMetadata.connectionId = connectionId
+        }
+        
+        if dict.keys.contains("authn_metadata") {
+            signalingNotifyMetadata.authnMetadata = dict["authn_metadata"]
+        }
+        
+        if dict.keys.contains("authz_metadata") {
+            signalingNotifyMetadata.authzMetadata = dict["authz_metadata"]
+        }
+        
+        if dict.keys.contains("metadata") {
+            signalingNotifyMetadata.metadata = dict["metadata"]
+        }
+        
+        return signalingNotifyMetadata
+    }
+
+    
+    return result
+}
+
+/// :nodoc:
 private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
     var json: [String: Any]
     do {
@@ -35,10 +73,10 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
             message.metadata = json["metadata"]
         }
         if json.keys.contains("metadata_list") {
-            message.metadataList = json["metadata_list"]
+            message.metadataList = serializeMetadataList(json["metadata_list"])
         }
         if json.keys.contains("data") {
-            message.data = json["data"]
+            message.data = serializeMetadataList(json["data"])
         }
         return .notifyConnection(message)
     default:
@@ -165,9 +203,7 @@ public struct SignalingMetadata {
 /**
  シグナリングに含まれる、同チャネルに接続中のクライアントに関するメタデータ (任意のデータ) を表します。
  */
-@available(*, unavailable,
-message: "SignalingClientMetadata は廃止されました。")
-public struct SignalingClientMetadata {
+public struct SignalingNotifyMetadata {
 
     /// クライアント ID
     public var clientId: String?
@@ -175,8 +211,14 @@ public struct SignalingClientMetadata {
     /// 接続 ID
     public var connectionId: String?
     
+    /// シグナリング接続時にクライアントが指定した値
+    public var authnMetadata: Any?
+
+    /// Sora の認証ウェブフックの戻り値で指定された値
+    public var authzMetadata: Any?
+    
     /// メタデータ
-    // public var metadata: SignalingMetadata
+    public var metadata: Any?
     
 }
 
@@ -343,7 +385,7 @@ public struct SignalingOffer {
     public let configuration: Configuration?
     
     /// メタデータ
-    public var metadata: Any? = {}
+    public var metadata: Any?
 
     /// エンコーディング
     public let encodings: [Encoding]?
@@ -457,10 +499,10 @@ public struct SignalingNotifyConnection {
     public var authzMetadata: Any?
 
     /// メタデータのリスト
-    public var metadataList: Any?
+    public var metadataList: [SignalingNotifyMetadata]?
 
     // メタデータのリスト
-    public var data: Any?
+    public var data: [SignalingNotifyMetadata]?
     
     // MARK: 接続状態
     
