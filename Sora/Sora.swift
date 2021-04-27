@@ -330,6 +330,46 @@ public final class Sora {
         }
     }
     
+    // MARK: - libwebrtc のログ出力
+    
+    private static var webRTCLoggingSeverity: RTCLoggingSeverity = .none
+    private static var webRTCCallbackLogger = RTCCallbackLogger()
+    private static let webRTCLoggingDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
+    
+    // TODO: メソッドの説明
+    public static func setWebRTCLoggingSeverity(_ severity: RTCLoggingSeverity) {
+        // RTCSetMinDebugLogLevel() でログレベルを指定すると
+        // RTCCallbackLogger 以外のログも出力されてしまい、
+        // ログ出力が二重になるので RTCSetMinDebugLogLevel() は使わない。
+        // また、 RTCCallbackLogger はすべてのログをコールバックで受け取るので
+        // 出力されるログを取捨選択する必要がある
+        webRTCCallbackLogger.stop()
+        webRTCCallbackLogger.start { message, sererity in
+            // TODO: 出力されるログを取捨選択する
+            let severityName: String
+            switch severity {
+            case .info:
+                severityName = "INFO"
+            case .verbose:
+                severityName = "VERBOSE"
+            case .warning:
+                severityName = "WARNING"
+            case .error:
+                severityName = "ERROR"
+            case .none:
+                return
+            @unknown default:
+                return
+            }
+            let timestamp = Date()
+            print("\(webRTCLoggingDateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
+    }
+    
 }
 
 /**
