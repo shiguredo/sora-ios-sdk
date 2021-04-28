@@ -6,8 +6,6 @@
 
 Sora iOS SDK は [WebRTC SFU Sora](https://sora.shiguredo.jp) の iOS クライアントアプリケーションを開発するためのライブラリです。
 
-使い方は [Sora iOS SDK ドキュメント](https://sora-ios-sdk.shiguredo.jp/) を参照してください。
-
 ## About Shiguredo's open source software
 
 We will not respond to PRs or issues that have not been discussed on Discord. Also, Discord is only available in Japanese.
@@ -34,6 +32,10 @@ Xcode と Swift のバージョンによっては、  CocoaPods で取得でき�
 
 - [クイックスタート](https://github.com/shiguredo/sora-ios-sdk-quickstart)
 - [サンプル集](https://github.com/shiguredo/sora-ios-sdk-samples)
+
+## ドキュメント
+
+[Sora iOS SDK ドキュメント — Sora iOS SDK](https://sora-ios-sdk.shiguredo.jp/)
 
 ## ライセンス
 
