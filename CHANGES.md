@@ -22,10 +22,9 @@
     - フィールドの型が SignalingMetadata から Any? に変更されたため、任意の型にキャストして利用します
     - 対象のフィールド
         - SignalingNotifyConnection.metadata
-        - SignalingNotifyConnection.metadataList
         - SignalingOffer.metadata
         - SignalingPush.data
-    - 修正にともない、 SignalingMetadata と SignalingClientMetadata を unavailable に変更
+    - 修正にともない、 SignalingClientMetadata が SignalingNotifyMetadata にリネームされました
 - [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
     - @enm10k
     - SignalingNotifyConnection.authnMetadata
