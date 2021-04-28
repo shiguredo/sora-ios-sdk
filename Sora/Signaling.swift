@@ -513,11 +513,22 @@ public struct SignalingNotifyConnection {
     public var connectionCount: Int
     
     /// 接続中のパブリッシャーの数
-    public var publisherCount: Int
+    @available(*, deprecated, message: "このプロパティは channelSendonlyConnections と channelSendrecvConnections に置き換えられました。")
+    public var publisherCount: Int?
     
     /// 接続中のサブスクライバーの数
-    public var subscriberCount: Int
+    @available(*, deprecated, message: "このプロパティは channelRecvonlyConnections と channelSendrecvConnections に置き換えられました。")
+    public var subscriberCount: Int?
     
+    /// 接続中の送信専用接続の数
+    public var channelSendonlyConnections: Int?
+    
+    /// 接続中の受信専用接続の数
+    public var channelRecvonlyConnections: Int?
+    
+    /// 接続中の送受信可能接続の数
+    public var channelSendrecvConnections: Int?
+
 }
 
 /**
@@ -970,6 +981,9 @@ extension SignalingNotifyConnection: Codable {
         case channel_connections
         case channel_upstream_connections
         case channel_downstream_connections
+        case channel_sendonly_connections
+        case channel_recvonly_connections
+        case channel_sendrecv_connections
     }
     
     public init(from decoder: Decoder) throws {
@@ -986,9 +1000,15 @@ extension SignalingNotifyConnection: Codable {
         connectionCount =
             try container.decode(Int.self, forKey: .channel_connections)
         publisherCount =
-            try container.decode(Int.self, forKey: .channel_upstream_connections)
+            try container.decodeIfPresent(Int.self, forKey: .channel_upstream_connections)
         subscriberCount =
-            try container.decode(Int.self, forKey: .channel_downstream_connections)
+            try container.decodeIfPresent(Int.self, forKey: .channel_downstream_connections)
+        channelSendonlyConnections =
+               try container.decodeIfPresent(Int.self, forKey: .channel_sendonly_connections)
+        channelRecvonlyConnections =
+               try container.decodeIfPresent(Int.self, forKey: .channel_recvonly_connections)
+        channelSendrecvConnections =
+               try container.decodeIfPresent(Int.self, forKey: .channel_sendrecv_connections)
     }
     
     public func encode(to encoder: Encoder) throws {
