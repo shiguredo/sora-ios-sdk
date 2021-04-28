@@ -572,7 +572,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         var webRTCVersion: String?
         if let info = WebRTCInfo.load() {
-            webRTCVersion = "Shiguredo-build M\(info.version) (\(info.version).\(info.commitPosition).\(info.maintenanceVersion) \(info.shortRevision))"
+            webRTCVersion = "Shiguredo-build \(info.version) (\(info.version).\(info.commitPosition).\(info.maintenanceVersion) \(info.shortRevision))"
         }
         
         let connect = SignalingConnect(
