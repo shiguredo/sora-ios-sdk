@@ -344,7 +344,11 @@ public final class Sora {
         return formatter
     }()
     
-    // TODO: メソッドの説明
+    /**
+     * libwebrtc のログレベルを指定します。
+     * ログは `RTCSetMinDebugLogLevel()` でも指定可能ですが、 `RTCSetMinDebugLogLevel()` ではログの時刻が表示されません。
+     * 本メソッドでログレベルを指定すると、時刻を含むログを出力します。
+     */
     public static func setWebRTCLoggingSeverity(_ severity: RTCLoggingSeverity) {
         // RTCSetMinDebugLogLevel() でログレベルを指定すると
         // RTCCallbackLogger 以外のログも出力されてしまい、
