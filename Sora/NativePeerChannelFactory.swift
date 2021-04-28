@@ -1,6 +1,37 @@
 import Foundation
 import WebRTC
 
+class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
+
+    static var shared = WrapperVideoEncoderFactory()
+
+    var defaultEncoderFactory: RTCDefaultVideoEncoderFactory
+
+    var simulcastEncoderFactory: RTCVideoEncoderFactorySimulcast
+
+    var currentEncoderFactory: RTCVideoEncoderFactory {
+        simulcastEnabled ? simulcastEncoderFactory : defaultEncoderFactory
+    }
+
+    var simulcastEnabled = false
+
+    override init() {
+        // Sora iOS SDK では VP8, VP9, H.264 が有効
+        defaultEncoderFactory = RTCDefaultVideoEncoderFactory()
+        simulcastEncoderFactory = RTCVideoEncoderFactorySimulcast(primary: defaultEncoderFactory, fallback: defaultEncoderFactory)
+    }
+
+    func createEncoder(_ info: RTCVideoCodecInfo) -> RTCVideoEncoder? {
+        currentEncoderFactory.createEncoder(info)
+    }
+
+    func supportedCodecs() -> [RTCVideoCodecInfo] {
+        currentEncoderFactory.supportedCodecs()
+    }
+
+}
+
+
 class NativePeerChannelFactory {
     
     static var `default`: NativePeerChannelFactory = NativePeerChannelFactory()
@@ -11,8 +42,7 @@ class NativePeerChannelFactory {
         Logger.debug(type: .peerChannel, message: "create native peer channel factory")
         
         // 映像コーデックのエンコーダーとデコーダーを用意する
-        // Sora iOS SDK では VP8, VP9, H.264 が有効
-        let encoder = RTCDefaultVideoEncoderFactory()
+        let encoder = WrapperVideoEncoderFactory.shared
         let decoder = RTCDefaultVideoDecoderFactory()
         nativeFactory =
             RTCPeerConnectionFactory(encoderFactory: encoder,

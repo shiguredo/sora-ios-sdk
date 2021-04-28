@@ -490,6 +490,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         onConnectHandler = handler
         
         self.webRTCConfiguration = channel.configuration.webRTCConfiguration
+
+        // サイマルキャストを利用する場合は、 NativePeerChannelFactory の初期化前に WrapperVideoEncoderFactory を設定する必要がある
+        WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
         nativeChannel = NativePeerChannelFactory.default
             .createNativePeerChannel(configuration: webRTCConfiguration,
                                      constraints: webRTCConfiguration.constraints,
