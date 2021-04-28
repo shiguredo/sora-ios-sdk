@@ -200,6 +200,21 @@ public struct SignalingMetadata {
 
 }
 
+@available(*, unavailable, renamed: "SignalingNotifyMetadata",
+message: "SignalingClientMetadata は SignalingNotifyMetadata に置き換えられました。")
+public struct SignalingClientMetadata {
+
+    /// クライアント ID
+    public var clientId: String?
+    
+    /// 接続 ID
+    public var connectionId: String?
+    
+    /// メタデータ
+    public var metadata: SignalingMetadata
+    
+}
+
 /**
  シグナリングに含まれる、同チャネルに接続中のクライアントに関するメタデータ (任意のデータ) を表します。
  */
