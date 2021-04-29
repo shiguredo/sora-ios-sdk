@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
+    - @szktty @enm10k
 - [ADD] libwebrtc のログレベルを設定する API を追加
     - @szktty
     - `Sora.setWebRTCLogLevel(_:)`
