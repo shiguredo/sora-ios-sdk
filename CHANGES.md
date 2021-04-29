@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
+    - @szktty @enm10k
 - [CHANGE] WebRTC M88 に対応する
     - @enm10k
 - [CHANGE] スポットライトのオプションを整理する
