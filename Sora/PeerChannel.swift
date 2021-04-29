@@ -494,7 +494,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // サイマルキャストを利用する場合は、 NativePeerChannelFactory の初期化前に WrapperVideoEncoderFactory を設定する必要がある
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         if (configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)) {
-            WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
+            WrapperVideoEncoderFactory.shared.simulcastEnabled = true
         }
         nativeChannel = NativePeerChannelFactory.default
             .createNativePeerChannel(configuration: webRTCConfiguration,
@@ -581,6 +581,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             webRTCVersion = "Shiguredo-build \(info.version) (\(info.version).\(info.commitPosition).\(info.maintenanceVersion) \(info.shortRevision))"
         }
         
+        let simulcast = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
         let connect = SignalingConnect(
             role: role,
             channelId: configuration.channelId,
@@ -599,7 +600,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             audioBitRate: configuration.audioBitRate,
             spotlightEnabled: configuration.spotlightEnabled,
             spotlightNumber: configuration.spotlightNumber,
-            simulcastEnabled: configuration.simulcastEnabled,
+            simulcastEnabled: simulcast,
             simulcastRid: configuration.simulcastRid,
             soraClient: soraClient,
             webRTCVersion: webRTCVersion,
