@@ -25,8 +25,9 @@
         - SignalingOffer.metadata
         - SignalingPush.data
     - 修正にともない、 SignalingClientMetadata が SignalingNotifyMetadata にリネームされました
-- [CHANGE] API: `Sora.setWebRTCLogLevel(_:)` を追加
+- [CHANGE] libwebrtc のログレベルを設定する API を追加
     - @szktty
+    - `Sora.setWebRTCLogLevel(_:)`
 - [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
     - @enm10k
     - SignalingNotifyConnection.authnMetadata
