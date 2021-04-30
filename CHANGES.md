@@ -11,6 +11,9 @@
 
 ## develop
 
+- [ADD] libwebrtc のログレベルを設定する API を追加
+    - @szktty
+    - `Sora.setWebRTCLogLevel(_:)`
 - [CHANGE] WebRTC M88 に対応する
     - @enm10k
 - [CHANGE] スポットライトのオプションを整理する
@@ -25,9 +28,6 @@
         - SignalingOffer.metadata
         - SignalingPush.data
     - 修正にともない、 SignalingClientMetadata が SignalingNotifyMetadata にリネームされました
-- [CHANGE] libwebrtc のログレベルを設定する API を追加
-    - @szktty
-    - `Sora.setWebRTCLogLevel(_:)`
 - [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
     - @enm10k
     - SignalingNotifyConnection.authnMetadata
