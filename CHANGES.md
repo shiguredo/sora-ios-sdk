@@ -17,8 +17,8 @@
     - @enm10k
     - Sora のスポットライトレガシー機能を利用するための API を Sora.useSpotlightLegacy() に変更
     - Configuration.activeSpeakerLimit を非推奨にして、 Configuration.spotlightNumber に変更
-
-
+- [CHANGE] API: `Sora.setWebRTCLogLevel(_:)` を追加
+    - @szktty
 
 ## 2020.7.1
 
