@@ -16,7 +16,7 @@
 - [ADD] libwebrtc のログレベルを設定する API を追加
     - @szktty
     - `Sora.setWebRTCLogLevel(_:)`
-- [CHANGE] WebRTC M88 に対応する
+- [UPDATE] WebRTC 90.4430.3.2 に上げる
     - @enm10k
 - [CHANGE] スポットライトのオプションを整理する
     - @enm10k
