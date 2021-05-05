@@ -491,7 +491,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         self.webRTCConfiguration = channel.configuration.webRTCConfiguration
 
-        // サイマルキャストを利用する場合は、 NativePeerChannelFactory の初期化前に WrapperVideoEncoderFactory を設定する必要がある
+        // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         if (configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)) {
             WrapperVideoEncoderFactory.shared.simulcastEnabled = true

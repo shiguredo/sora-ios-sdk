@@ -330,6 +330,52 @@ public final class Sora {
         }
     }
     
+    // MARK: - libwebrtc のログ出力
+    
+    private static var webRTCCallbackLogger: RTCCallbackLogger = {
+        let logger = RTCCallbackLogger()
+        logger.severity = .none
+        return logger
+    }()
+    
+    private static let webRTCLoggingDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
+    
+    /**
+     * libwebrtc のログレベルを指定します。
+     * ログは `RTCSetMinDebugLogLevel()` でも指定可能ですが、 `RTCSetMinDebugLogLevel()` ではログの時刻が表示されません。
+     * 本メソッドでログレベルを指定すると、時刻を含むログを出力します。
+     */
+    public static func setWebRTCLogLevel(_ severity: RTCLoggingSeverity) {
+        // RTCSetMinDebugLogLevel() でログレベルを指定すると
+        // RTCCallbackLogger 以外のログも出力されてしまい、
+        // ログ出力が二重になるので RTCSetMinDebugLogLevel() は使わない。
+        webRTCCallbackLogger.severity = severity
+        webRTCCallbackLogger.stop()
+        webRTCCallbackLogger.start { message, callbackSeverity in
+            let severityName: String
+            switch callbackSeverity {
+            case .info:
+                severityName = "INFO"
+            case .verbose:
+                severityName = "VERBOSE"
+            case .warning:
+                severityName = "WARNING"
+            case .error:
+                severityName = "ERROR"
+            case .none:
+                return
+            @unknown default:
+                return
+            }
+            let timestamp = Date()
+            print("\(webRTCLoggingDateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
+    }
+    
 }
 
 /**
