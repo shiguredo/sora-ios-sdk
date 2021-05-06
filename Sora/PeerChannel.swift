@@ -492,7 +492,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         self.webRTCConfiguration = channel.configuration.webRTCConfiguration
 
         // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
-        WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
+        // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
+        WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
+
         nativeChannel = NativePeerChannelFactory.default
             .createNativePeerChannel(configuration: webRTCConfiguration,
                                      constraints: webRTCConfiguration.constraints,
@@ -557,7 +559,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         state = .waitingOffer
         var role: SignalingRole!
-        var multistream = configuration.multistreamEnabled
+        var multistream = configuration.multistreamEnabled || configuration.spotlightEnabled == .enabled
         switch configuration.role {
         case .publisher, .sendonly:
             role = .sendonly
@@ -578,6 +580,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             webRTCVersion = "Shiguredo-build \(info.version) (\(info.version).\(info.commitPosition).\(info.maintenanceVersion) \(info.shortRevision))"
         }
         
+        let simulcast = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
         let connect = SignalingConnect(
             role: role,
             channelId: configuration.channelId,
@@ -596,7 +599,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             audioBitRate: configuration.audioBitRate,
             spotlightEnabled: configuration.spotlightEnabled,
             spotlightNumber: configuration.spotlightNumber,
-            simulcastEnabled: configuration.simulcastEnabled,
+            simulcastEnabled: simulcast,
             simulcastRid: configuration.simulcastRid,
             soraClient: soraClient,
             webRTCVersion: webRTCVersion,
