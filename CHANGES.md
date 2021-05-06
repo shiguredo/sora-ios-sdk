@@ -14,40 +14,39 @@
 - [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
     - @szktty @enm10k
 - [ADD] libwebrtc のログレベルを設定する API を追加
-    - @szktty
     - `Sora.setWebRTCLogLevel(_:)`
 - [UPDATE] WebRTC 90.4430.3.2 に上げる
     - @enm10k
 - [CHANGE] スポットライトのオプションを整理する
-    - @enm10k
     - Sora のスポットライトレガシー機能を利用するための API を Sora.useSpotlightLegacy() に変更
     - Configuration.activeSpeakerLimit を非推奨にして、 Configuration.spotlightNumber に変更
-- [CHANGE] シグナリングに含まれる JSON 型のフィールドを JSONSerialization でデコードする
     - @enm10k
+- [CHANGE] シグナリングに含まれる JSON 型のフィールドを JSONSerialization でデコードする
     - フィールドの型が SignalingMetadata から Any? に変更されたため、任意の型にキャストして利用します
     - 対象のフィールド
         - SignalingNotifyConnection.metadata
         - SignalingOffer.metadata
         - SignalingPush.data
     - 修正にともない、 SignalingClientMetadata が SignalingNotifyMetadata にリネームされました
-- [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
     - @enm10k
+- [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
     - SignalingNotifyConnection.authnMetadata
     - SignalingNotifyConnection.authzMetadata
     - SignalingNotifyConnection.data
+    - @enm10k
 
 ## 2020.7.1
 
 - [FIX] スポットライトレガシー機能に対応する
     - @szktty
 - [CHANGE] API: スポットライトに関する API
-    - @szktty
     - `Configuration.Spotlight`: 追加
     - `Configuration.spotlightEnabled`: 型を `Spotlight` に変更
+    - @szktty
 
 ## 2020.7
 
-- [CHANGE] WebRTC 86.4240.10.0 に上げる
+- [UPDATE] WebRTC 86.4240.10.0 に上げる
     - @szktty
 - [CHANGE] `AudioMode.swift` がターゲット含まれておらずビルドできなかった事象を修正する
     - @szktty
@@ -55,22 +54,22 @@
 ## 2020.6
 
 - [UPDATE] システム条件を更新する
-    - @szktty
     - Xcode 12.0
     - Swift 5.3
     - CocoaPods 1.9.3
-- [CHANGE] WebRTC M86 に対応する
+    - @szktty
+- [UPDATE] WebRTC M86 に対応する
     - @szktty
 - [CHANGE] API: スポットライトに関する API
-    - @szktty
     - `Configuration.spotlight`: 非推奨
     - `Configuration.spotlightEnabled`: 追加
     - `Configuration.activeSpeakerLimit`: 追加
-- [CHANGE] API: 音声モードに関する API
     - @szktty
+- [CHANGE] API: 音声モードに関する API
     - `Sora.setAudioMode(_:options:)`: 追加
     - `AudioMode`: 追加
     - `AudioOutput`: 追加
+    - @szktty
 - [FIX] API: `Sora.connect()`: タイムアウト時にハンドラが実行されない事象を修正する
     - @szktty
 
@@ -81,12 +80,11 @@
     - Swift 5.2.4
     - WebRTC SFU Sora 2020.1 以降
     - @szktty
-- [CHANGE] WebRTC M84 に対応する
+- [UPDATE] WebRTC M84 に対応する
     - @szktty
 - [CHANGE] シグナリング pong に統計情報を含める
     - @szktty
 - [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加する
-    - @itoyama @szktty
     - ``MediaChannelHandlers``
     - ``MediaStreamHandlers``
     - ``PeerChannelHandlers``
@@ -94,6 +92,7 @@
     - ``SoraHandlers``
     - ``VideoCapturerHandlers``
     - ``WebSocketChannelHandlers``
+    - @itoyama @szktty
 - [FIX] API: `Sora.connect()`: 接続先ホストが存在しない場合にハンドラが実行されない事象を修正する
     - @szktty
 
@@ -146,7 +145,7 @@
     - CocoaPods 1.8.4 以降
     - WebRTC SFU Sora 19.10.3 以降
     - @szktty
-- [CHANGE] WebRTC M79 に対応する
+- [UPDATE] WebRTC M79 に対応する
     - @szktty
 - [CHANGE] Carthage の使用を止める
     - @szktty
