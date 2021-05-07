@@ -191,13 +191,17 @@ extension VideoView: VideoRenderer {
 
     /// :nodoc:
     public func onChange(size: CGSize) {
-        contentView.onVideoFrameSizeUpdated(size)
+        DispatchQueue.main.async {
+          self.contentView.onVideoFrameSizeUpdated(size)
+        }
     }
     
     /// :nodoc:
     public func render(videoFrame: VideoFrame?) {
         if isRendering {
-            contentView.render(videoFrame: videoFrame)
+          DispatchQueue.main.async {
+            self.contentView.render(videoFrame: videoFrame)
+          }
         }
     }
     

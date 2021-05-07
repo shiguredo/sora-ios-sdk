@@ -69,9 +69,7 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
         if let renderer = videoRenderer {
             Logger.debug(type: .videoRenderer,
                          message: "set size \(size) for \(renderer)")
-            DispatchQueue.main.async {
-                renderer.onChange(size: size)
-            }
+            renderer.onChange(size: size)
         } else {
             Logger.debug(type: .videoRenderer,
                          message: "set size \(size) IGNORED, no renderer set")
@@ -79,16 +77,14 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     }
     
     func renderFrame(_ frame: RTCVideoFrame?) {
-        DispatchQueue.main.async {
-            if let renderer = self.videoRenderer {
-                if let frame = frame {
-                    let frame = VideoFrame.native(capturer: nil, frame: frame)
-                    renderer.render(videoFrame: frame)
-                } else {
-                    renderer.render(videoFrame: nil)
-                }
-            }
-        }
+          if let renderer = self.videoRenderer {
+              if let frame = frame {
+                  let frame = VideoFrame.native(capturer: nil, frame: frame)
+                  renderer.render(videoFrame: frame)
+              } else {
+                  renderer.render(videoFrame: nil)
+              }
+          }
     }
     
 }
