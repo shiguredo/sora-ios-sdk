@@ -96,7 +96,7 @@ public struct Configuration {
     public var simulcastEnabled: Bool = false
 
     /// サイマルキャストでの映像の種類。
-    /// ロールが `.recvonly` のときのみ有効です。
+    /// ロールが `.sendrecv` または `.recvonly` のときのみ有効です。
     public var simulcastRid: SimulcastRid?
 
     /// スポットライトの可否
