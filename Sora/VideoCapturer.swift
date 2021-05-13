@@ -4,6 +4,7 @@ import WebRTC
 /**
  映像キャプチャーのイベントハンドラです。
  */
+@available(*, unavailable, message: "VideoCapturerHandlers は廃止されました。今後は CameraVideoCapturerHandlers を使用してください。")
 public final class VideoCapturerHandlers {
     
     /// このプロパティは onCapture に置き換えられました。
@@ -22,6 +23,20 @@ public final class VideoCapturerHandlers {
     
 }
 
+public class CameraVideoCapturerHandlers {
+    
+    // 生成された映像フレームを受け取る
+    // 返した映像フレームがストリームに渡される
+    public var onCapture: ((VideoFrame) -> VideoFrame)?
+
+    // カメラの起動時に呼ばれる
+    public var onStart: (() -> Void)?
+    
+    // カメラの停止時に呼ばれる
+    public var onStop: (() -> Void)?
+    
+}
+
 /**
  映像キャプチャーの機能を定義したプロトコルです。
  生成した映像フレームを引数として `MediaStream.send(videoFrame:)` に与えると、
@@ -31,19 +46,20 @@ public final class VideoCapturerHandlers {
  映像キャプチャーが映像フレームを生成しても、
  メディアストリームなしではサーバーに映像が送信されません。
  */
-public protocol VideoCapturer: class {
+public protocol VideoCapturer: AnyObject {
     
     /// 映像フレームを渡すストリーム
     var stream: MediaStream? { get set }
     
     /// イベントハンドラ
-    var handlers: VideoCapturerHandlers { get }
+    var handlers: CameraVideoCapturerHandlers { get }
     
     /// 映像キャプチャーを起動します。
-    func start()
+    func start(with device: AVCaptureDevice, settings: CameraVideoCapturer.Settings, completionHandler: ((Error?) -> Void))
+    func start(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: ((Error?) -> Void))
     
     /// 映像キャプチャーを停止します。
-    func stop()
+    func stop(completionHandler: ((Error?) -> Void))
     
 }
 
@@ -52,7 +68,7 @@ public protocol VideoCapturer: class {
  `MediaStream.videoFilter` にセットすると、
  生成された映像フレームはこのプロトコルの実装によって加工されます。
  */
-public protocol VideoFilter: class {
+public protocol VideoFilter: AnyObject {
     
     /**
      映像フレームを加工します。

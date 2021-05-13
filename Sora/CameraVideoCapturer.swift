@@ -14,6 +14,8 @@ import WebRTC
  カメラの設定を変更したい場合は、一旦カメラを停止 `stop()` してから
  `settings` プロパティに新しい設定をセットし、カメラを再起動 `start()` します。
  */
+
+
 public final class CameraVideoCapturer: VideoCapturer {
     
     // MARK: インスタンスの取得
@@ -21,13 +23,20 @@ public final class CameraVideoCapturer: VideoCapturer {
     /// シングルトンインスタンス
     public static var shared: CameraVideoCapturer = CameraVideoCapturer()
     
-    /// :nodoc:
+    /// 利用可能なデバイスのリスト
+    /// RTCCameraVideoCapturer.captureDevices を返す
     public static var captureDevices: [AVCaptureDevice] {
         get { return RTCCameraVideoCapturer.captureDevices() }
     }
     
-    /// :nodoc:
-    public static func captureDevice(for position: CameraPosition) -> AVCaptureDevice? {
+    /// RTCCameraVideoCapturer が保持している AVCaptureSession
+    public var captureSession: AVCaptureSession {
+        get { return nativeCameraVideoCapturer.captureSession }
+    }
+
+    /// 指定したカメラ位置にマッチした最初のデバイスを返す
+    /// captureDevice(for: .back) とすれば背面カメラを取得できる
+    public static func captureDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
         for device in CameraVideoCapturer.captureDevices {
             switch (device.position, position) {
             case (.front, .front), (.back, .back):
@@ -77,81 +86,43 @@ public final class CameraVideoCapturer: VideoCapturer {
     public private(set) var isRunning: Bool = false
     
     /// イベントハンドラ
-    public var handlers: VideoCapturerHandlers = VideoCapturerHandlers()
+    public var handlers: CameraVideoCapturerHandlers = CameraVideoCapturerHandlers()
     
-    /**
-     カメラの設定
-     
-     カメラの設定を切り替える必要がある場合は、 `start()` を実行する前に設定してください。
-     一旦 `start()` すると、一度 `stop()` して再度 `start()` するまで設定の変更は反映されません。
-     */
-    public var settings: CameraVideoCapturer.Settings = .default
+    /// カメラの設定
+    @available(*, unavailable, message: "settings は廃止されました。")
+    public private(set) var settings: CameraVideoCapturer.Settings = .default
     
     /// カメラの位置
-    public var position: CameraPosition = .front {
-        didSet {
-            guard isRunning else { return }
-            guard let current = currentCameraDevice else { return }
-            
-            Logger.debug(type: .cameraVideoCapturer,
-                         message: "try change camera position")
-            let session = nativeCameraVideoCapturer.captureSession
-            let oldInputs = session.inputs
-            for input in session.inputs {
-                session.removeInput(input)
-            }
-            do {
-                let newInput = try AVCaptureDeviceInput(device: current)
-                if session.canAddInput(newInput) {
-                    session.addInput(newInput)
-                    Logger.debug(type: .cameraVideoCapturer,
-                                 message: "did change camera position")
-                    return
-                }
-            } catch let e {
-                Logger.debug(type: .cameraVideoCapturer,
-                             message: "failed change camera pasition (\(e.localizedDescription))")
-            }
-
-            Logger.debug(type: .cameraVideoCapturer,
-                         message: "cannot add input device")
-            for input in oldInputs {
-                if session.canAddInput(input) {
-                    session.addInput(input)
-                } else {
-                    Logger.debug(type: .cameraVideoCapturer,
-                                 message: "failed revert input device \(input)")
-                }
-            }
-        }
-    }
+    @available(*, unavailable, message: "position は廃止されました。")
+    public var position: AVCaptureDevice.Position = .front
 
     /// 使用中のカメラの位置に対応するデバイス
-    public var currentCameraDevice: AVCaptureDevice? {
-        get {
-            switch position {
-            case .front:
-                return frontCameraDevice
-            case .back:
-                return backCameraDevice
-            }
-        }
-    }
+    @available(*, unavailable, renamed: "captureDevice")
+    public var currentCameraDevice: AVCaptureDevice?
+    
+    // 使用中のデバイス
+    public var captureDevice: AVCaptureDevice?
+    
+    /// フレームレート
+    public private(set) var frameRate: Int?
+    
+    /// `true` であれば接続解除時にカメラを停止します。
+    public private(set) var stopWhenDone: Bool = false
+    
+    /// フォーマット
+    public private(set) var format: AVCaptureDevice.Format?
     
     private var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
-    private var frontCameraDevice: AVCaptureDevice?
-    private var backCameraDevice: AVCaptureDevice?
     private var nativeDelegate: CameraVideoCapturerDelegate!
     
-    init() {
+    public init() {
         nativeDelegate = CameraVideoCapturerDelegate(cameraVideoCapturer: self)
         nativeCameraVideoCapturer = RTCCameraVideoCapturer(delegate: nativeDelegate)
-        frontCameraDevice = CameraVideoCapturer.captureDevice(for: .front)
-        backCameraDevice = CameraVideoCapturer.captureDevice(for: .back)
     }
     
     // MARK: カメラの操作
     
+
     /**
      * カメラを起動します。
      *
@@ -161,31 +132,41 @@ public final class CameraVideoCapturer: VideoCapturer {
      * `endGeneratingDeviceOrientationNotifications()` を使う際は
      * 必ず対に実行するように注意してください。
      */
-    public func start() {
-        if isRunning {
+    public func start(with device: AVCaptureDevice, settings: CameraVideoCapturer.Settings, completionHandler: ((Error?) -> Void)) {
+        guard !isRunning else {
+            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "start", isRunning: isRunning))
             return
         }
         
-        Logger.debug(type: .cameraVideoCapturer, message: "try start all devices with settings \(settings)")
-        for device in RTCCameraVideoCapturer.captureDevices() {
-            Logger.debug(type: .cameraVideoCapturer, message: "try start \(device) with settings \(settings)")
-            guard let format = CameraVideoCapturer.suitableFormat(for: device, settings: settings) else {
-                Logger.debug(type: .cameraVideoCapturer,
-                             message: "    suitable format is not found")
-                break
-            }
-            guard let fps = CameraVideoCapturer.suitableFrameRate(for: format, settings: settings) else {
-                Logger.debug(type: .cameraVideoCapturer,
-                             message: "    suitable frame rate is not found")
-                break
-            }
-
-            nativeCameraVideoCapturer.startCapture(with: device, format: format, fps: fps)
-            Logger.debug(type: .cameraVideoCapturer, message: "did start \(device) with \(format), \(fps)fps")
+        guard let format = CameraVideoCapturer.suitableFormat(for: device, settings: settings) else {
+            completionHandler(SoraError.cameraError(reason: "suitable format is not found"))
+            return
         }
-        Logger.debug(type: .cameraVideoCapturer, message: "did start all devices")
-
+        guard let frameRate = CameraVideoCapturer.suitableFrameRate(for: format, settings: settings) else {
+            completionHandler(SoraError.cameraError(reason: "suitable frame rate is not found"))
+            return
+        }
+        
+        start(with: device, format: format, frameRate: frameRate, stopWhenDone: settings.stopWhenDone, completionHandler: completionHandler)
+    }
+    
+    public func start(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: ((Error?) -> Void)) {
+        guard !isRunning else {
+            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "start", isRunning: isRunning))
+            return
+        }
+        
+        nativeCameraVideoCapturer.startCapture(with: device, format: format, fps: frameRate)
+        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to start \(device) with \(format), \(frameRate)fps")
+        
+        // start が成功した際の処理
         isRunning = true
+        captureDevice = device
+        self.format = format
+        self.frameRate = frameRate
+        self.stopWhenDone = stopWhenDone
+        handlers.onStart?()
+        completionHandler(nil)
     }
     
     /**
@@ -197,19 +178,111 @@ public final class CameraVideoCapturer: VideoCapturer {
      * `endGeneratingDeviceOrientationNotifications()` を使う際は
      * 必ず対に実行するように注意してください。
      */
-    public func stop() {
-        if isRunning {
-            Logger.debug(type: .cameraVideoCapturer, message: "stop")
-            nativeCameraVideoCapturer.stopCapture()
+    public func stop(completionHandler: ((Error?) -> Void)) {
+        guard isRunning else {
+            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "stop", isRunning: isRunning))
+            return
         }
+        
+        nativeCameraVideoCapturer.stopCapture()
+        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to stop \(String(describing: captureDevice))")
+        
+        // stop が成功した際の処理
         isRunning = false
+        handlers.onStop?()
+        completionHandler(nil)
     }
     
-    /// カメラの位置を反転します。
-    public func flip() {
-        position = position.flip()
+    public func restart(completionHandler: ((Error?) -> Void)) {
+        guard isRunning else {
+            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "restart", isRunning: isRunning))
+            return
+        }
+        guard let device = captureDevice else {
+            completionHandler(SoraError.cameraError(reason: "failed to access captureDevice"))
+            return
+        }
+        
+        guard let format = self.format else {
+            completionHandler(SoraError.cameraError(reason: "failed to access format"))
+            return
+        }
+        
+        guard let frameRate = self.frameRate else {
+            completionHandler(SoraError.cameraError(reason: "failed to access frame rate"))
+            return
+        }
+        
+        // error が発生した場合のみ completionHandler に渡す
+        let handler = { (error: Error?) in
+            if error != nil {
+                completionHandler(error)
+            }
+        }
+        
+        stop(completionHandler: handler)
+        start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone, completionHandler: handler)
+        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
+
+        completionHandler(nil)
     }
     
+    public func changeSettings(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: ((Error?) -> Void)) {
+        // error が発生した場合のみ completionHandler に渡す
+        let handler = { (error: Error?) in
+            if error != nil {
+                completionHandler(error)
+            }
+        }
+        
+        if isRunning {
+            stop(completionHandler: handler)
+        }
+        
+        start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone, completionHandler: handler)
+        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to changeSettings")
+
+        completionHandler(nil)
+    }
+
+    // カメラの前面と背面を切り替える
+    // - カメラが起動していなければエラー (SoraError.cameraError)
+    // - Settings.flip を使い、カメラの位置を切り替えた Settings を取得する
+    // - その Settings を changeSettings() に渡せばよい
+    public func flip(completionHandler: ((Error?) -> Void)) {
+        guard isRunning else {
+            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "flip", isRunning:isRunning))
+            return
+        }
+
+        guard let format = self.format else {
+            completionHandler(SoraError.cameraError(reason: "failed to access format"))
+            return
+        }
+        guard let frameRate = self.frameRate else {
+            completionHandler(SoraError.cameraError(reason: "failed to access frameRate"))
+            return
+        }
+        guard let position = captureDevice?.position else {
+            completionHandler(SoraError.cameraError(reason: "failed to access captureDevice.position"))
+            return
+        }
+        
+        let flippedPosition: AVCaptureDevice.Position = (position == .front) ? .back : .front
+        guard let device = CameraVideoCapturer.captureDevice(for: flippedPosition) else {
+            completionHandler(SoraError.cameraError(reason: "device is not found"))
+            return
+        }
+
+        changeSettings(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone, completionHandler: completionHandler)
+        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to flip")
+
+        completionHandler(nil)
+    }
+    
+    private static func getUnexpectedIsRunningError(action: String, isRunning: Bool) -> SoraError {
+        return SoraError.cameraError(reason: "tried to \(action) but isRunning is unexpected value: isRunning => \(isRunning)")
+    }
 }
 
 // MARK: -
@@ -225,7 +298,8 @@ public extension CameraVideoCapturer {
         public static let `default` = Settings(
             resolution: .hd720p,
             frameRate: 30,
-            canStop: true
+            stopWhenDone: true,
+            position: .front
         )
         
         /**
@@ -274,7 +348,7 @@ public extension CameraVideoCapturer {
          例えばデバイス側が対応していない値が指定された場合などは、
          ここで指定された値と異なる値が実際には使用される事があります。
          */
-        public let resolution: Resolution
+        public var resolution: Resolution
         
         /**
          希望する映像フレームレート(Frames Per Second)。
@@ -283,10 +357,17 @@ public extension CameraVideoCapturer {
          例えばデバイス側が対応していない値が指定された場合などは、
          ここで指定された値と異なる値が実際には使用される事があります。
          */
-        public let frameRate: Int
+        public var frameRate: Int
         
         /// `true` であれば接続解除時にカメラを停止します。
-        public let canStop: Bool
+        @available(*, unavailable, renamed: "stopWhenDone")
+        public var canStop: Bool = false
+        
+        /// `true` であれば接続解除時にカメラを停止します。
+        public var stopWhenDone: Bool
+        
+        /// カメラの位置
+        public var position: AVCaptureDevice.Position
         
         /// 文字列表現を返します。
         public var description: String {
@@ -298,12 +379,13 @@ public extension CameraVideoCapturer {
          
          - parameter resolution: 解像度
          - parameter frameRate: フレームレート
-         - parameter canStop: `true` であれば接続解除時にカメラを停止する
+         - parameter stopWhenDone: `true` であれば接続解除時にカメラを停止する
          */
-        public init(resolution: Resolution, frameRate: Int, canStop: Bool) {
+        public init(resolution: Resolution, frameRate: Int, stopWhenDone: Bool, position: AVCaptureDevice.Position) {
             self.resolution = resolution
             self.frameRate = frameRate
-            self.canStop = canStop
+            self.stopWhenDone = stopWhenDone
+            self.position = position
         }
         
     }
@@ -322,38 +404,16 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     
     func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
         let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
-        cameraVideoCapturer.stream?.send(videoFrame: frame)
-        cameraVideoCapturer.handlers.onCapture?(frame)
+        if let editedFrame = cameraVideoCapturer.handlers.onCapture?(frame) {
+            cameraVideoCapturer.stream?.send(videoFrame: editedFrame)
+        } else {
+            cameraVideoCapturer.stream?.send(videoFrame: frame)
+        }
     }
     
 }
 
 // MARK: -
-
-/// :nodoc:
-extension CameraVideoCapturer.Settings: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case resolution
-        case frameRate
-        case canStop
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        resolution = try container.decode(Resolution.self, forKey: .resolution)
-        frameRate = try container.decode(Int.self, forKey: .frameRate)
-        canStop = try container.decode(Bool.self, forKey: .canStop)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(resolution, forKey: .resolution)
-        try container.encode(frameRate, forKey: .frameRate)
-        try container.encode(canStop, forKey: .canStop)
-    }
-    
-}
 
 private var resolutionTable: PairTable<String, CameraVideoCapturer.Settings.Resolution> =
     PairTable(name: "CameraVideoCapturer.Settings.Resolution",

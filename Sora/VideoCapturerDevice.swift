@@ -5,6 +5,7 @@ import Foundation
  
  `Configuration` 内で `videoEnabled` が有効になっている際に、初期値としてどの `VideoCapturer` が使用されるかを指定するオプションです。
  */
+@available(*, unavailable, message: "VideoCapturerDevice は廃止されました。")
 public enum VideoCapturerDevice {
     
     /**
@@ -31,50 +32,5 @@ public enum VideoCapturerDevice {
      - 映像のキャプチャ開始・終了タイミングを細かく調整したいとき。
      */
     case custom
-    
-}
-
-/// :nodoc:
-extension VideoCapturerDevice: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case type
-        case camera
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(String.self, forKey: .type)
-        switch type {
-        case "camera":
-            guard container.contains(.camera) else {
-                throw DecodingError
-                    .dataCorruptedError(forKey: .camera,
-                                        in: container,
-                                        debugDescription: "no camera settings")
-            }
-            let settings = try container
-                .decode(CameraVideoCapturer.Settings.self, forKey: .camera)
-            self = .camera(settings: settings)
-        case "custom":
-            self = .custom
-        default:
-            throw DecodingError
-                .dataCorruptedError(forKey: .type,
-                                    in: container,
-                                    debugDescription: "invalid VideoCapturerDevice value: \(type)")
-        }
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .camera(let settings):
-            try container.encode("camera", forKey: .type)
-            try container.encode(settings, forKey: .camera)
-        case .custom:
-            try container.encode("custom", forKey: .type)
-        }
-    }
     
 }

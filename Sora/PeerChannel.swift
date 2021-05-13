@@ -623,21 +623,39 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let stream = BasicMediaStream(peerChannel: channel,
                                       nativeStream: nativeStream)
         if configuration.videoEnabled {
-            switch configuration.videoCapturerDevice {
-            case .camera(let settings):
+            // Configuration で cameraVideoCapturer が指定されている場合
+            if let customCapturer = configuration.cameraVideoCapturer {
                 Logger.debug(type: .peerChannel,
-                             message: "initialize video capture device")
-                // カメラが指定されている場合は、接続処理と同時にデフォルトのCameraVideoCapturerを使用してキャプチャを開始する
+                             message: "set Configuration.cameraVideoCapturer to sender stream")
+                stream.videoCapturer = customCapturer
+            } else {
+                // CameraVideoCapturer.shared が起動中の場合停止する
                 if CameraVideoCapturer.shared.isRunning {
-                    CameraVideoCapturer.shared.stop()
+                    CameraVideoCapturer.shared.stop { error in
+                        if error != nil {
+                            Logger.debug(type: .peerChannel,
+                                         message: "failed to stop CameraVideoCapturer =>  \(error!)")
+                        }
+                    }
                 }
-                CameraVideoCapturer.shared.settings = settings
-                CameraVideoCapturer.shared.start()
-                stream.videoCapturer = CameraVideoCapturer.shared
-            case .custom:
-                // カスタムが指定されている場合は、接続処理時には何もしない
-                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
-                break
+                if let device = CameraVideoCapturer.captureDevice(for: configuration.cameraSettings.position) {
+                    // 起動可能なデバイスが存在する場合
+                    CameraVideoCapturer.shared.start(with: device, settings: configuration.cameraSettings) { error in
+                        guard error == nil else {
+                            Logger.debug(type: .peerChannel,
+                                         message: "failed to start CameraVideoCapturer =>  \(error!)")
+                            return
+                        }
+                        Logger.debug(type: .peerChannel,
+                                     message: "set CameraVideoCapturer.shared to sender stream")
+                        stream.videoCapturer = CameraVideoCapturer.shared
+                    }
+                } else {
+                    // 起動可能なデバイスが存在しない場合
+                    // iPhone/iPad であればここに来ない
+                    Logger.debug(type: .peerChannel,
+                                 message: "video capturer is not found")
+                }
             }
         }
         
@@ -684,18 +702,22 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     /** `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
     func terminateSenderStream() {
-        if configuration.videoEnabled {
-            switch configuration.videoCapturerDevice {
-            case .camera(settings: let settings):
-                // カメラが指定されている場合は
-                // 接続時に自動的に開始したキャプチャを、切断時に自動的に停止する必要がある
-                if settings.canStop {
-                    CameraVideoCapturer.shared.stop()
+        if !configuration.videoEnabled {
+            return
+        }
+        
+        // Configuration に cameraVideoCapturer が設定されている場合は、切断処理を行わない
+        // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
+        if (configuration.cameraVideoCapturer != nil) {
+            return
+        }
+
+        if CameraVideoCapturer.shared.isRunning && CameraVideoCapturer.shared.stopWhenDone {
+            CameraVideoCapturer.shared.stop { error in
+                if error != nil {
+                    Logger.debug(type: .peerChannel,
+                                 message: "failed to stop CameraVideoCapturer =>  \(error!)")
                 }
-            case .custom:
-                // カスタムが指定されている場合は、切断処理時には何もしない
-                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
-                break
             }
         }
     }

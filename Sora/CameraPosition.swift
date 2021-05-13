@@ -4,10 +4,10 @@ private var descriptionTable: PairTable<String, CameraPosition> =
     PairTable(name: "CameraPosition",
               pairs: [("front", .front),
                       ("back", .back)])
-
 /**
  カメラの位置を表します。
  */
+@available(*, deprecated, message: "CameraPosition は廃止されました。")
 public enum CameraPosition {
     
     /// 前面
