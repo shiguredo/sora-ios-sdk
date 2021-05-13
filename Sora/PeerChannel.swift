@@ -633,22 +633,66 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                          constraints: webRTCConfiguration.constraints)
         let stream = BasicMediaStream(peerChannel: channel,
                                       nativeStream: nativeStream)
-        if configuration.videoEnabled {
-            switch configuration.videoCapturerDevice {
-            case .camera(let settings):
-                Logger.debug(type: .peerChannel,
-                             message: "initialize video capture device")
-                // カメラが指定されている場合は、接続処理と同時にデフォルトのCameraVideoCapturerを使用してキャプチャを開始する
-                if CameraVideoCapturer.shared.isRunning {
-                    CameraVideoCapturer.shared.stop()
+        
+        // NOTE:  videoEnabled と cameraSettings.isEnabled は意味が違うが、役割が被っている気がする
+        if configuration.videoEnabled && configuration.cameraSettings.isEnabled {
+            let position = configuration.cameraSettings.position
+            
+            // position に対応した CameraVideoCapturer を取得する
+            guard position != .unspecified else {
+                Logger.error(type: .peerChannel, message: "CameraSettings.position should not be .unspecified")
+                return
+            }
+            let capturer = position == .front ? CameraVideoCapturer.front : CameraVideoCapturer.back
+        
+            if let device = CameraVideoCapturer.device(for: position) {
+                // デバイスに対応したフォーマットとフレームレートを取得する
+                guard let format = CameraVideoCapturer.format(width: configuration.cameraSettings.resolution.width,
+                                                              height: configuration.cameraSettings.resolution.height,
+                                                              for: device) else {
+                    Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable format rate is not found")
+                    return
                 }
-                CameraVideoCapturer.shared.settings = settings
-                CameraVideoCapturer.shared.start()
-                stream.videoCapturer = CameraVideoCapturer.shared
-            case .custom:
-                // カスタムが指定されている場合は、接続処理時には何もしない
-                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
-                break
+                
+                guard let frameRate = CameraVideoCapturer.maxFrameRate(configuration.cameraSettings.frameRate, for: format) else {
+                    Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable frame rate is not found")
+                    return
+                }
+                
+                if let current = CameraVideoCapturer.current {
+                    current.stop { error in
+                        if error != nil {
+                            Logger.debug(type: .peerChannel,
+                                         message: "failed to stop CameraVideoCapturer =>  \(error!)")
+                        }
+                        CameraVideoCapturer.current?.start(format: format, frameRate: frameRate) { error in
+                            guard error == nil else {
+                                Logger.debug(type: .peerChannel,
+                                             message: "failed to start CameraVideoCapturer =>  \(error!)")
+                                return
+                            }
+                            Logger.debug(type: .peerChannel,
+                                         message: "set CameraVideoCapturer.shared to sender stream")
+                            stream.cameraVideoCapturer = capturer
+                        }
+                    }
+                } else {
+                    capturer.start(format: format, frameRate: frameRate) { error in
+                        guard error == nil else {
+                            Logger.debug(type: .peerChannel,
+                                         message: "failed to start CameraVideoCapturer =>  \(error!)")
+                            return
+                        }
+                        Logger.debug(type: .peerChannel,
+                                     message: "set CameraVideoCapturer.shared to sender stream")
+                        stream.cameraVideoCapturer = capturer
+                    }
+                }
+            } else {
+                // 起動可能なデバイスが存在しない場合
+                // iPhone/iPad であればここに来ない
+                Logger.debug(type: .peerChannel,
+                             message: "video capturer is not found")
             }
         }
         
@@ -695,18 +739,15 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     /** `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
     func terminateSenderStream() {
-        if configuration.videoEnabled {
-            switch configuration.videoCapturerDevice {
-            case .camera(settings: let settings):
-                // カメラが指定されている場合は
-                // 接続時に自動的に開始したキャプチャを、切断時に自動的に停止する必要がある
-                if settings.canStop {
-                    CameraVideoCapturer.shared.stop()
+        if configuration.videoEnabled || configuration.cameraSettings.isEnabled {
+            // CameraVideoCapturer が起動中の場合は停止する
+            if let current = CameraVideoCapturer.current {
+                current.stop { error in
+                    if error != nil {
+                        Logger.debug(type: .peerChannel,
+                                     message: "failed to stop CameraVideoCapturer =>  \(error!)")
+                    }
                 }
-            case .custom:
-                // カスタムが指定されている場合は、切断処理時には何もしない
-                // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
-                break
             }
         }
     }
