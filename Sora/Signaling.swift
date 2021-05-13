@@ -816,7 +816,7 @@ extension SignalingConnect: Codable {
             try container.encode(true, forKey: .simulcast)
             switch role {
             case .downstream, .sendrecv, .recvonly:
-                try container.encode(simulcastRid, forKey: .simulcast_rid)
+                try container.encodeIfPresent(simulcastRid, forKey: .simulcast_rid)
             default:
                 break
             }
