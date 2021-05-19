@@ -35,6 +35,11 @@
     - SignalingNotifyConnection.authzMetadata
     - SignalingNotifyConnection.data
     - @enm10k
+- [CHANGE] サイマルキャストのオプションを整理する
+    - SimulcastQuality を削除し、 SimulcastRid を追加する
+    - Configuration.simulcastQuality を削除し、 simulcastRid を追加する
+    - SignalingConnect.simulcastQuality を削除し、 simulcastRid を追加する
+    - @szktty
 
 ## 2020.7.1
 
