@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 /// :nodoc:
-func getMachineName () -> String {
+func currentMachineName () -> String {
     let machineKey = "hw.machine"
     let machineKeyPtr = UnsafeMutableBufferPointer<Int8>
         .allocate(capacity: machineKey.utf8CString.count)
@@ -25,7 +25,7 @@ public struct DeviceInfo {
 
     public static var current: DeviceInfo = {
         return DeviceInfo(device: UIDevice.current,
-                          machineName: getMachineName())
+                          machineName: currentMachineName())
     }()
 
     @available(*, unavailable, message: "model は廃止されました。")
