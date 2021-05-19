@@ -819,6 +819,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             let message = Signaling.update(SignalingUpdate(sdp: answer!))
             self.signalingChannel.send(message: message)
             
+            if (self.configuration.isSender) {
+                self.updateSenderOfferEncodings()
+            }
+            
             // Answer 送信後に RTCPeerConnection の状態に変化はないため、
             // Answer を送信したら更新完了とする
             self.state = .connected

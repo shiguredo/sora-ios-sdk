@@ -35,16 +35,18 @@
         - SignalingPush.data
     - 修正にともない、 SignalingClientMetadata が SignalingNotifyMetadata にリネームされました
     - @enm10k
-- [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
-    - SignalingNotifyConnection.authnMetadata
-    - SignalingNotifyConnection.authzMetadata
-    - SignalingNotifyConnection.data
-    - @enm10k
 - [CHANGE] サイマルキャストのオプションを整理する
     - SimulcastQuality を削除し、 SimulcastRid を追加する
     - Configuration.simulcastQuality を削除し、 simulcastRid を追加する
     - SignalingConnect.simulcastQuality を削除し、 simulcastRid を追加する
     - @szktty
+- [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
+    - SignalingNotifyConnection.authnMetadata
+    - SignalingNotifyConnection.authzMetadata
+    - SignalingNotifyConnection.data
+    - @enm10k
+- [FIX] サイマルキャストのパラメーター active: false が無効化されてしまう問題を修正する
+    - @enm10k
 
 ## 2020.7.1
 
