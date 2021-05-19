@@ -9,6 +9,11 @@
 - FIX
     - バグ修正
 
+## feature/remove-device-model
+
+- [CHANGE] DeviceModel を廃止し、 hw.machine の結果を表示する
+  - @enm10k
+
 ## develop
 
 - [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
@@ -30,6 +35,11 @@
         - SignalingPush.data
     - 修正にともない、 SignalingClientMetadata が SignalingNotifyMetadata にリネームされました
     - @enm10k
+- [CHANGE] サイマルキャストのオプションを整理する
+    - SimulcastQuality を削除し、 SimulcastRid を追加する
+    - Configuration.simulcastQuality を削除し、 simulcastRid を追加する
+    - SignalingConnect.simulcastQuality を削除し、 simulcastRid を追加する
+    - @szktty
 - [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
     - SignalingNotifyConnection.authnMetadata
     - SignalingNotifyConnection.authzMetadata
