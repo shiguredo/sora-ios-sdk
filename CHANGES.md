@@ -47,6 +47,9 @@
     - @enm10k
 - [FIX] サイマルキャストのパラメーター active: false が無効化されてしまう問題を修正する
     - @enm10k
+- [CHANGE] VideoView に解像度とフレームレートを表示するデバッグモードを追加する
+    - VideoView.debugMode を追加
+    - @szktty
 
 ## 2020.7.1
 
