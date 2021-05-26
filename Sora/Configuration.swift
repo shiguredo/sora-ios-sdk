@@ -36,6 +36,9 @@ public struct Configuration {
     /// チャネル ID
     public var channelId: String
     
+    /// クライアント ID
+    public var clientId: String?
+    
     /// ロール
     public var role: Role
     
@@ -252,6 +255,7 @@ extension Configuration: Codable {
     enum CodingKeys: String, CodingKey {
         case url
         case channelId
+        case clientId
         case role
         case multistreamEnabled
         case metadata
@@ -283,6 +287,7 @@ extension Configuration: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let url = try container.decode(URL.self, forKey: .url)
         let channelId = try container.decode(String.self, forKey: .channelId)
+        let clientId = try container.decodeIfPresent(String.self, forKey: .clientId)
         let role = try container.decode(Role.self, forKey: .role)
         let multistreamEnabled = try container.decode(Bool.self, forKey: .multistreamEnabled)
         self.init(url: url,
@@ -322,6 +327,7 @@ extension Configuration: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(url, forKey: .url)
         try container.encode(channelId, forKey: .channelId)
+        try container.encodeIfPresent(clientId, forKey: .clientId)
         try container.encode(role, forKey: .role)
         try container.encode(simulcastEnabled, forKey: .simulcastEnabled)
         try container.encode(simulcastQuality, forKey: .simulcastQuality)
