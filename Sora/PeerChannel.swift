@@ -584,6 +584,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let connect = SignalingConnect(
             role: role,
             channelId: configuration.channelId,
+            clientId: configuration.clientId,
             metadata: configuration.signalingConnectMetadata,
             notifyMetadata: configuration.signalingConnectNotifyMetadata,
             sdp: sdp,

@@ -249,6 +249,9 @@ public struct SignalingConnect {
     /// チャネル ID
     public var channelId: String
     
+    /// クライアント ID
+    public var clientId: String?
+
     /// メタデータ
     public var metadata: Encodable?
     
@@ -738,6 +741,7 @@ extension SignalingConnect: Codable {
     enum CodingKeys: String, CodingKey {
         case role
         case channel_id
+        case client_id
         case metadata
         case signaling_notify_metadata
         case sdp
@@ -771,6 +775,7 @@ extension SignalingConnect: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channel_id)
+        try container.encodeIfPresent(clientId, forKey: .client_id)
         try container.encodeIfPresent(sdp, forKey: .sdp)
         let metadataEnc = container.superEncoder(forKey: .metadata)
         try metadata?.encode(to: metadataEnc)

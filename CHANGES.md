@@ -46,6 +46,10 @@
     - SignalingNotifyConnection.data
     - @enm10k
 - [FIX] サイマルキャストのパラメーター active: false が無効化されてしまう問題を修正する
+
+## 2020.7.2
+
+- [FIX] SignalingConnect に clientId が漏れていたので追加する
     - @enm10k
 
 ## 2020.7.1
