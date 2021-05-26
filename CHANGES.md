@@ -9,6 +9,11 @@
 - FIX
     - バグ修正
 
+## 2020.7.2
+
+- [FIX] SignalingConnect に clientId が漏れていたので追加する
+    - @enm10k
+
 ## 2020.7.1
 
 - [CHANGE] スポットライトレガシー機能に対応する
