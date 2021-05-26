@@ -51,6 +51,9 @@
 
 - [FIX] SignalingConnect に clientId が漏れていたので追加する
     - @enm10k
+- [CHANGE] VideoView に解像度とフレームレートを表示するデバッグモードを追加する
+    - VideoView.debugMode を追加
+    - @szktty
 
 ## 2020.7.1
 
