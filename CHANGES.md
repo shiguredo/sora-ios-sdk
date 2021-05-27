@@ -18,7 +18,7 @@
 - [ADD] libwebrtc のログレベルを設定する API を追加
     - `Sora.setWebRTCLogLevel(_:)`
     - @szktty
-- [CHANGE] スポットライトに関する API
+- [CHANGE] スポットライトに関する API を更新する
     - Sora のスポットライトレガシー機能を利用するための API を Sora.useSpotlightLegacy() に変更
     - Configuration.activeSpeakerLimit を非推奨にして、 Configuration.spotlightNumber に変更
     - Configuration.spotlightFocusRid を追加
