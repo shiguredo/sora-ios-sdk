@@ -9,23 +9,20 @@
 - FIX
     - バグ修正
 
-## feature/remove-device-model
-
-- [CHANGE] DeviceModel を廃止し、 hw.machine の結果を表示する
-  - @enm10k
-
 ## develop
 
 - [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
     - @szktty @enm10k
+- [UPDATE] WebRTC 90.4430.3.2 に上げる
+    - @enm10k
 - [ADD] libwebrtc のログレベルを設定する API を追加
     - `Sora.setWebRTCLogLevel(_:)`
     - @szktty
-- [UPDATE] WebRTC 90.4430.3.2 に上げる
-    - @enm10k
-- [CHANGE] スポットライトのオプションを整理する
+- [CHANGE] スポットライトに関する API を更新する
     - Sora のスポットライトレガシー機能を利用するための API を Sora.useSpotlightLegacy() に変更
     - Configuration.activeSpeakerLimit を非推奨にして、 Configuration.spotlightNumber に変更
+    - Configuration.spotlightFocusRid を追加
+    - Configuration.spotlightUnfocusRid を追加
     - @enm10k
 - [CHANGE] シグナリングに含まれる JSON 型のフィールドを JSONSerialization でデコードする
     - フィールドの型が SignalingMetadata から Any? に変更されたため、任意の型にキャストして利用します
@@ -40,6 +37,8 @@
     - Configuration.simulcastQuality を削除し、 simulcastRid を追加する
     - SignalingConnect.simulcastQuality を削除し、 simulcastRid を追加する
     - @szktty
+- [CHANGE] DeviceModel を廃止し、 hw.machine の結果を表示する
+    - @enm10k
 - [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
     - SignalingNotifyConnection.authnMetadata
     - SignalingNotifyConnection.authzMetadata

@@ -174,15 +174,38 @@ public enum Signaling {
  */
 public enum SimulcastRid {
 
-    /// R0
+    /// r0
     case r0
     
-    /// R1
+    /// r1
     case r1
     
-    /// R2
+    /// r2
     case r2
 
+}
+
+/**
+ スポットライトの映像の種類を表します 。
+ */
+public enum SpotlightRid {
+    /**
+     SpotlightRid が設定されていない状態
+     変数の型に SpotlightRid? を指定した場合、  Optional.none とSpotlightRid.none が紛らわしくなるのを避ける
+     */
+    case unspecified
+
+    /// 映像を受信しない
+    case none
+    
+    /// r0
+    case r0
+    
+    /// r1
+    case r1
+    
+    /// r2
+    case r2
 }
 
 /**
@@ -309,12 +332,18 @@ public struct SignalingConnect {
         }
     }
 
-    // スポットライトの対象人数
+    /// スポットライトの対象人数
     public var spotlightNumber: Int?
+    
+    /// スポットライト機能でフォーカスした場合に受信する映像の種類
+    public var spotlightFocusRid: SpotlightRid
+    
+    /// スポットライト機能でフォーカスしていない場合に受信する映像の種類
+    public var spotlightUnfocusRid: SpotlightRid
     
     /// サイマルキャストの可否
     public var simulcastEnabled: Bool
-
+    
     /// サイマルキャストでの映像の種類
     public var simulcastRid: SimulcastRid?
 
@@ -713,6 +742,27 @@ extension SimulcastRid: Codable {
     
 }
 
+private var spotlightRidTable: PairTable<String, SpotlightRid> =
+    PairTable(name: "spotlightRid",
+              pairs: [("unspecified", .unspecified),
+                      ("none", .none),
+                      ("r0", .r0),
+                      ("r1", .r1),
+                      ("r2", .r2)])
+
+/// :nodoc:
+extension SpotlightRid: Codable {
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        try spotlightRidTable.encode(self, to: encoder)
+    }
+
+}
+
 /// :nodoc:
 private var roleTable: PairTable<String, SignalingRole> =
     PairTable(name: "SignalingRole",
@@ -748,6 +798,8 @@ extension SignalingConnect: Codable {
         case multistream
         case spotlight
         case spotlight_number
+        case spotlight_focus_rid
+        case spotlight_unfocus_rid
         case simulcast
         case simulcast_rid
         case video
@@ -834,6 +886,12 @@ extension SignalingConnect: Codable {
             } else {
                 try container.encode(true, forKey: .spotlight)
                 try container.encodeIfPresent(spotlightNumber, forKey: .spotlight_number)
+                if spotlightFocusRid != .unspecified {
+                    try container.encode(spotlightFocusRid, forKey: .spotlight_focus_rid)
+                }
+                if spotlightUnfocusRid != .unspecified {
+                    try container.encode(spotlightUnfocusRid, forKey: .spotlight_unfocus_rid)
+                }
             }
         case .disabled:
             break
