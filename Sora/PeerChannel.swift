@@ -624,7 +624,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                       nativeStream: nativeStream)
         if configuration.videoEnabled {
             // Configuration で cameraVideoCapturer が指定されている場合
-            if let customCapturer = configuration.cameraVideoCapturer {
+            if let customCapturer = configuration.videoCapturer {
                 Logger.debug(type: .peerChannel,
                              message: "set Configuration.cameraVideoCapturer to sender stream")
                 stream.videoCapturer = customCapturer
@@ -708,7 +708,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         // Configuration に cameraVideoCapturer が設定されている場合は、切断処理を行わない
         // 完全にユーザーサイドにVideoCapturerの設定とマネジメントを任せる
-        if (configuration.cameraVideoCapturer != nil) {
+        if (configuration.videoCapturer != nil) {
             return
         }
 

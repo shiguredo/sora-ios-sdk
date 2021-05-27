@@ -84,7 +84,7 @@ public struct Configuration {
 
     /// 利用するカメラを指定する
     /// nil であれば CameraVideoCapturer.shared を利用する
-    public var cameraVideoCapturer: CameraVideoCapturer?
+    public var videoCapturer: VideoCapturer?
     
     /// カメラの設定
     public var cameraSettings: CameraVideoCapturer.Settings = CameraVideoCapturer.Settings.default
