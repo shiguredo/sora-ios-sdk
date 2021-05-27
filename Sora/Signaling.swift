@@ -174,13 +174,13 @@ public enum Signaling {
  */
 public enum SimulcastRid {
 
-    /// R0
+    /// r0
     case r0
     
-    /// R1
+    /// r1
     case r1
     
-    /// R2
+    /// r2
     case r2
 
 }
@@ -198,13 +198,13 @@ public enum SpotlightRid {
     /// 映像を受信しない
     case none
     
-    /// R0
+    /// r0
     case r0
     
-    /// R1
+    /// r1
     case r1
     
-    /// R2
+    /// r2
     case r2
 }
 
@@ -332,10 +332,10 @@ public struct SignalingConnect {
     /// スポットライトの対象人数
     public var spotlightNumber: Int?
     
-    /// スポットライト機能でフォーカスした場合の映像の種類
+    /// スポットライト機能でフォーカスした場合に受信する映像の種類
     public var spotlightFocusRid: SpotlightRid
     
-    /// スポットライト機能でフォーカスしていない場合の映像の種類
+    /// スポットライト機能でフォーカスしていない場合に受信する映像の種類
     public var spotlightUnfocusRid: SpotlightRid
     
     /// サイマルキャストの可否
