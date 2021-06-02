@@ -3,6 +3,7 @@ import WebRTC
 
 /**
  映像キャプチャーのイベントハンドラです。
+ 廃止されました。
  */
 @available(*, unavailable, message: "VideoCapturerHandlers は廃止されました。今後は CameraVideoCapturerHandlers を使用してください。")
 public final class VideoCapturerHandlers {

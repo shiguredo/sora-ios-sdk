@@ -6,6 +6,7 @@ private var descriptionTable: PairTable<String, CameraPosition> =
                       ("back", .back)])
 /**
  カメラの位置を表します。
+ 廃止されました。
  */
 @available(*, deprecated, message: "CameraPosition は廃止されました。")
 public enum CameraPosition {

@@ -3,19 +3,13 @@ import WebRTC
 
 /**
  デバイスのカメラを利用した `VideoCapturer` のデフォルト実装です。
- `Configuration` の `videoCapturerDevice` に `.camera(settings:)` を
- 指定すると、この実装が映像キャプチャーとして使用されます。
- 
+ 解像度やフレームレートなどの設定は `start` 実行時に指定します。
+
  カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
- 接続解除時は、 `Settings.canStop` が `true` であればカメラが停止されます。
- 
- カメラの解像度とフレームレートは `CameraVideoCapturer.Settings` で指定可能です。
- ただし、カメラの起動中は設定を変更できません。
- カメラの設定を変更したい場合は、一旦カメラを停止 `stop()` してから
- `settings` プロパティに新しい設定をセットし、カメラを再起動 `start()` します。
+ 接続解除時は、 `stopWhenDone` が `true` であればカメラが停止されます。
+
+ カメラの設定を変更したい場合は、 `changeSettings` を実行します。
  */
-
-
 public final class CameraVideoCapturer: VideoCapturer {
     
     // MARK: インスタンスの取得
@@ -89,6 +83,7 @@ public final class CameraVideoCapturer: VideoCapturer {
     public var handlers: CameraVideoCapturerHandlers = CameraVideoCapturerHandlers()
     
     /// カメラの設定
+    /// 廃止されました
     @available(*, unavailable, message: "settings は廃止されました。")
     public private(set) var settings: CameraVideoCapturer.Settings = .default
     
@@ -97,8 +92,13 @@ public final class CameraVideoCapturer: VideoCapturer {
     public var position: AVCaptureDevice.Position = .front
 
     /// 使用中のカメラの位置に対応するデバイス
-    @available(*, unavailable, renamed: "captureDevice")
-    public var currentCameraDevice: AVCaptureDevice?
+    /// captureDevice に変更されました
+    @available(*, deprecated, renamed: "captureDevice")
+    public var currentCameraDevice: AVCaptureDevice? {
+        get {
+            captureDevice
+        }
+    }
     
     // 使用中のデバイス
     public private(set) var captureDevice: AVCaptureDevice?
@@ -400,8 +400,12 @@ public extension CameraVideoCapturer {
         public var frameRate: Int
         
         /// `true` であれば接続解除時にカメラを停止します。
-        @available(*, unavailable, renamed: "stopWhenDone")
-        public var canStop: Bool = false
+        /// stopWhenDone に変更されました。
+        @available(*, deprecated, renamed: "stopWhenDone")
+        public var canStop: Bool {
+            get { stopWhenDone }
+            set { stopWhenDone = newValue }
+        }
         
         /// `true` であれば接続解除時にカメラを停止します。
         public var stopWhenDone: Bool

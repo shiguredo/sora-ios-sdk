@@ -78,7 +78,7 @@ public struct Configuration {
     public var videoBitRate: Int?
     
     /// 映像キャプチャーの種別。
-    /// デフォルトは `.camera(settings: CameraVideoCapturer.Settings.default)` です。
+    /// 廃止されました。
     @available(*, unavailable, message: "videoCapturerDevice は廃止されました。")
     public var videoCapturerDevice: VideoCapturerDevice = .camera(settings: .default)
 
