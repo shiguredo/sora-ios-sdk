@@ -132,7 +132,7 @@ public final class CameraVideoCapturer: VideoCapturer {
      * `endGeneratingDeviceOrientationNotifications()` を使う際は
      * 必ず対に実行するように注意してください。
      */
-    public func start(with device: AVCaptureDevice, settings: CameraVideoCapturer.Settings, completionHandler: ((Error?) -> Void)) {
+    public func start(with device: AVCaptureDevice, settings: CameraVideoCapturer.Settings, completionHandler: @escaping ((Error?) -> Void)) {
         guard !isRunning else {
             completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "start", isRunning: isRunning))
             return
@@ -150,23 +150,33 @@ public final class CameraVideoCapturer: VideoCapturer {
         start(with: device, format: format, frameRate: frameRate, stopWhenDone: settings.stopWhenDone, completionHandler: completionHandler)
     }
     
-    public func start(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: ((Error?) -> Void)) {
+    public func start(with device: AVCaptureDevice,
+                      format: AVCaptureDevice.Format,
+                      frameRate: Int, stopWhenDone: Bool,
+                      completionHandler: @escaping ((Error?) -> Void)) {
         guard !isRunning else {
             completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "start", isRunning: isRunning))
             return
         }
         
-        nativeCameraVideoCapturer.startCapture(with: device, format: format, fps: frameRate)
-        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to start \(device) with \(format), \(frameRate)fps")
-        
-        // start が成功した際の処理
-        isRunning = true
-        captureDevice = device
-        self.format = format
-        self.frameRate = frameRate
-        self.stopWhenDone = stopWhenDone
-        handlers.onStart?()
-        completionHandler(nil)
+        nativeCameraVideoCapturer.startCapture(with: device,
+                                               format: format,
+                                               fps: frameRate) { [self] (error: Error?) in
+            guard error == nil else {
+                completionHandler(error)
+                return
+            }
+            Logger.debug(type: .cameraVideoCapturer, message: "succeeded to start \(device) with \(format), \(frameRate)fps")
+            
+            // start が成功した際の処理
+            isRunning = true
+            captureDevice = device
+            self.format = format
+            self.frameRate = frameRate
+            self.stopWhenDone = stopWhenDone
+            handlers.onStart?()
+            completionHandler(nil)
+        }
     }
     
     /**
@@ -178,22 +188,23 @@ public final class CameraVideoCapturer: VideoCapturer {
      * `endGeneratingDeviceOrientationNotifications()` を使う際は
      * 必ず対に実行するように注意してください。
      */
-    public func stop(completionHandler: ((Error?) -> Void)) {
+    public func stop(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
             completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "stop", isRunning: isRunning))
             return
         }
         
-        nativeCameraVideoCapturer.stopCapture()
-        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to stop \(String(describing: captureDevice))")
-        
-        // stop が成功した際の処理
-        isRunning = false
-        handlers.onStop?()
-        completionHandler(nil)
+        nativeCameraVideoCapturer.stopCapture() { [self] in
+            Logger.debug(type: .cameraVideoCapturer, message: "succeeded to stop \(String(describing: captureDevice))")
+            
+            // stop が成功した際の処理
+            isRunning = false
+            handlers.onStop?()
+            completionHandler(nil)
+        }
     }
     
-    public func restart(completionHandler: ((Error?) -> Void)) {
+    public func restart(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
             completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "restart", isRunning: isRunning))
             return
@@ -213,43 +224,48 @@ public final class CameraVideoCapturer: VideoCapturer {
             return
         }
         
-        // error が発生した場合のみ completionHandler に渡す
-        let handler = { (error: Error?) in
-            if error != nil {
+        stop() { [self] (error: Error?) in
+            guard error == nil else {
                 completionHandler(error)
+                return
+            }
+
+            start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone) { (error: Error?) in
+                guard error == nil else {
+                    completionHandler(error)
+                    return
+                }
+                
+                Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
+                completionHandler(nil)
             }
         }
-        
-        stop(completionHandler: handler)
-        start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone, completionHandler: handler)
-        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
-
-        completionHandler(nil)
     }
     
-    public func changeSettings(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: ((Error?) -> Void)) {
-        // error が発生した場合のみ completionHandler に渡す
-        let handler = { (error: Error?) in
-            if error != nil {
-                completionHandler(error)
+    public func changeSettings(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: @escaping ((Error?) -> Void)) {
+        if isRunning {
+            stop() { [self] (error: Error?) in
+                guard error == nil else {
+                    completionHandler(error)
+                    return
+                }
+                start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone) { (error: Error?) in
+                    guard error == nil else {
+                        completionHandler(error)
+                        return
+                    }
+                    Logger.debug(type: .cameraVideoCapturer, message: "succeeded to changeSettings")
+                    completionHandler(nil)
+                }
             }
         }
-        
-        if isRunning {
-            stop(completionHandler: handler)
-        }
-        
-        start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone, completionHandler: handler)
-        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to changeSettings")
-
-        completionHandler(nil)
     }
 
     // カメラの前面と背面を切り替える
     // - カメラが起動していなければエラー (SoraError.cameraError)
     // - Settings.flip を使い、カメラの位置を切り替えた Settings を取得する
     // - その Settings を changeSettings() に渡せばよい
-    public func flip(completionHandler: ((Error?) -> Void)) {
+    public func flip(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
             completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "flip", isRunning:isRunning))
             return
@@ -274,10 +290,15 @@ public final class CameraVideoCapturer: VideoCapturer {
             return
         }
 
-        changeSettings(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone, completionHandler: completionHandler)
-        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to flip")
-
-        completionHandler(nil)
+        changeSettings(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone) {
+            (error: Error?) in
+            guard error == nil else {
+                completionHandler(error)
+                return
+            }
+            Logger.debug(type: .cameraVideoCapturer, message: "succeeded to flip")
+            completionHandler(nil)
+        }
     }
     
     private static func getUnexpectedIsRunningError(action: String, isRunning: Bool) -> SoraError {
