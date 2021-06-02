@@ -101,7 +101,7 @@ public final class CameraVideoCapturer: VideoCapturer {
     public var currentCameraDevice: AVCaptureDevice?
     
     // 使用中のデバイス
-    public var captureDevice: AVCaptureDevice?
+    public private(set) var captureDevice: AVCaptureDevice?
     
     /// フレームレート
     public private(set) var frameRate: Int?
