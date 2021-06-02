@@ -132,7 +132,9 @@ public final class CameraVideoCapturer: VideoCapturer {
      * `endGeneratingDeviceOrientationNotifications()` を使う際は
      * 必ず対に実行するように注意してください。
      */
-    public func start(with device: AVCaptureDevice, settings: CameraVideoCapturer.Settings, completionHandler: @escaping ((Error?) -> Void)) {
+    public func start(with device: AVCaptureDevice,
+                      settings: CameraVideoCapturer.Settings,
+                      completionHandler: @escaping ((Error?) -> Void)) {
         guard !isRunning else {
             completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "start", isRunning: isRunning))
             return
@@ -147,7 +149,11 @@ public final class CameraVideoCapturer: VideoCapturer {
             return
         }
         
-        start(with: device, format: format, frameRate: frameRate, stopWhenDone: settings.stopWhenDone, completionHandler: completionHandler)
+        start(with: device,
+              format: format,
+              frameRate: frameRate,
+              stopWhenDone: settings.stopWhenDone,
+              completionHandler: completionHandler)
     }
     
     public func start(with device: AVCaptureDevice,
@@ -230,7 +236,10 @@ public final class CameraVideoCapturer: VideoCapturer {
                 return
             }
 
-            start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone) { (error: Error?) in
+            start(with: device,
+                  format: format,
+                  frameRate: frameRate,
+                  stopWhenDone: stopWhenDone) { (error: Error?) in
                 guard error == nil else {
                     completionHandler(error)
                     return
@@ -242,14 +251,21 @@ public final class CameraVideoCapturer: VideoCapturer {
         }
     }
     
-    public func changeSettings(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: @escaping ((Error?) -> Void)) {
+    public func changeSettings(with device: AVCaptureDevice,
+                               format: AVCaptureDevice.Format,
+                               frameRate: Int,
+                               stopWhenDone: Bool,
+                               completionHandler: @escaping ((Error?) -> Void)) {
         if isRunning {
             stop() { [self] (error: Error?) in
                 guard error == nil else {
                     completionHandler(error)
                     return
                 }
-                start(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone) { (error: Error?) in
+                start(with: device,
+                      format: format,
+                      frameRate: frameRate,
+                      stopWhenDone: stopWhenDone) { (error: Error?) in
                     guard error == nil else {
                         completionHandler(error)
                         return
@@ -290,7 +306,10 @@ public final class CameraVideoCapturer: VideoCapturer {
             return
         }
 
-        changeSettings(with: device, format: format, frameRate: frameRate, stopWhenDone: stopWhenDone) {
+        changeSettings(with: device,
+                       format: format,
+                       frameRate: frameRate,
+                       stopWhenDone: stopWhenDone) {
             (error: Error?) in
             guard error == nil else {
                 completionHandler(error)

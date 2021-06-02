@@ -55,8 +55,14 @@ public protocol VideoCapturer: AnyObject {
     var handlers: CameraVideoCapturerHandlers { get }
     
     /// 映像キャプチャーを起動します。
-    func start(with device: AVCaptureDevice, settings: CameraVideoCapturer.Settings, completionHandler: @escaping ((Error?) -> Void))
-    func start(with device: AVCaptureDevice, format: AVCaptureDevice.Format, frameRate: Int, stopWhenDone: Bool, completionHandler: @escaping ((Error?) -> Void))
+    func start(with device: AVCaptureDevice,
+               settings: CameraVideoCapturer.Settings,
+               completionHandler: @escaping ((Error?) -> Void))
+    func start(with device: AVCaptureDevice,
+               format: AVCaptureDevice.Format,
+               frameRate: Int,
+               stopWhenDone: Bool,
+               completionHandler: @escaping ((Error?) -> Void))
     
     /// 映像キャプチャーを停止します。
     func stop(completionHandler: @escaping ((Error?) -> Void))
