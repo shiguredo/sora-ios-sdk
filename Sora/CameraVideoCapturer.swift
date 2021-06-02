@@ -136,7 +136,7 @@ public final class CameraVideoCapturer: VideoCapturer {
                       settings: CameraVideoCapturer.Settings,
                       completionHandler: @escaping ((Error?) -> Void)) {
         guard !isRunning else {
-            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "start", isRunning: isRunning))
+            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "start", isRunning: isRunning))
             return
         }
         
@@ -161,7 +161,7 @@ public final class CameraVideoCapturer: VideoCapturer {
                       frameRate: Int, stopWhenDone: Bool,
                       completionHandler: @escaping ((Error?) -> Void)) {
         guard !isRunning else {
-            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "start", isRunning: isRunning))
+            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "start", isRunning: isRunning))
             return
         }
         
@@ -196,7 +196,7 @@ public final class CameraVideoCapturer: VideoCapturer {
      */
     public func stop(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
-            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "stop", isRunning: isRunning))
+            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "stop", isRunning: isRunning))
             return
         }
         
@@ -212,7 +212,7 @@ public final class CameraVideoCapturer: VideoCapturer {
     
     public func restart(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
-            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "restart", isRunning: isRunning))
+            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "restart", isRunning: isRunning))
             return
         }
         guard let device = captureDevice else {
@@ -283,7 +283,7 @@ public final class CameraVideoCapturer: VideoCapturer {
     // - その Settings を changeSettings() に渡せばよい
     public func flip(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
-            completionHandler(CameraVideoCapturer.getUnexpectedIsRunningError(action: "flip", isRunning:isRunning))
+            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "flip", isRunning:isRunning))
             return
         }
 
@@ -320,7 +320,7 @@ public final class CameraVideoCapturer: VideoCapturer {
         }
     }
     
-    private static func getUnexpectedIsRunningError(action: String, isRunning: Bool) -> SoraError {
+    private static func unexpectedIsRunningError(action: String, isRunning: Bool) -> SoraError {
         return SoraError.cameraError(reason: "tried to \(action) but isRunning is unexpected value: isRunning => \(isRunning)")
     }
 }
