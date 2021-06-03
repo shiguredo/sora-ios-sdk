@@ -1070,7 +1070,7 @@ extension SignalingNotify: Codable {
         case channel_recvonly_connections
         case channel_sendrecv_connections
         case spotlight_id
-        case is_fixed
+        case fixed
         case unstable_level
     }
     
@@ -1100,7 +1100,7 @@ extension SignalingNotify: Codable {
         spotlightId =
             try container.decodeIfPresent(String.self, forKey: .spotlight_id)
         isFixed =
-            try container.decodeIfPresent(Bool.self, forKey: .is_fixed)
+            try container.decodeIfPresent(Bool.self, forKey: .fixed)
         unstableLevel =
             try container.decodeIfPresent(Int.self, forKey: .unstable_level)
     }
