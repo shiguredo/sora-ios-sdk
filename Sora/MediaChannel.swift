@@ -314,7 +314,7 @@ public final class MediaChannel {
         peerChannel.internalHandlers.onReceiveSignaling = { message in
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
-            case .notifyConnection(let message):
+            case .notify(let message):
                 self.publisherCount = message.publisherCount
                 self.subscriberCount = message.subscriberCount
             default:

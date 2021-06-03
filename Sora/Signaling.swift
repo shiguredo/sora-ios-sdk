@@ -62,7 +62,7 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
             message.data = json["data"]
         }
         return .push(message)
-    case .notifyConnection(var message):
+    case .notify(var message):
         if json.keys.contains("authn_metadata") {
             message.authnMetadata = json["authn_metadata"]
         }
@@ -78,7 +78,7 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
         if json.keys.contains("data") {
             message.data = serializeMetadataList(json["data"])
         }
-        return .notifyConnection(message)
+        return .notify(message)
     default:
         return signaling
     }
@@ -103,15 +103,9 @@ public enum Signaling {
     
     /// "candidate" シグナリング
     case candidate(SignalingCandidate)
-    
-    /// "notify" シグナリング ("connection.created", "connection.updated", "connection.destroyed")
-    case notifyConnection(SignalingNotifyConnection)
-    
-    /// "notify" シグナリング ("spotlight.changed")
-    case notifySpotlightChanged(SignalingNotifySpotlightChanged)
-    
-    /// "notify" シグナリング ("network.status")
-    case notifyNetworkStatus(SignalingNotifyNetworkStatus)
+
+    /// "notify" シグナリング
+    case notify(SignalingNotify)
     
     /// "ping" シグナリング
     case ping(SignalingPing)
@@ -150,12 +144,8 @@ public enum Signaling {
             return "update"
         case .candidate(_):
             return "candidate"
-        case .notifyConnection(let notify):
-            return "notify(\(notify.eventType))"
-        case .notifySpotlightChanged(_):
-            return "notify(spotlight.changed)"
-        case .notifyNetworkStatus(_):
-            return "notify(network.status)"
+        case .notify:
+            return "notify"
         case .ping:
             return "ping"
         case .pong(_):
@@ -455,6 +445,7 @@ public struct SignalingPush {
  "notify" シグナリングメッセージで通知されるイベントの種別です。
  詳細は Sora のドキュメントを参照してください。
  */
+/*
 public enum SignalingNotifyEventType {
     
     /// "connection.created"
@@ -473,6 +464,88 @@ public enum SignalingNotifyEventType {
     case networkStatus
     
 }
+ */
+
+// これまでは eventType が増えた際にエラーになっていたので、 type: notify に対応する struct を1つに統合してそれを防ぐ
+// eventType 以外は全て Optional にする必要がある
+public struct SignalingNotify {
+
+    // SignalingNotifyConnection から引き継いだ値
+    
+    // MARK: イベント情報
+    
+    /// イベントの種別
+    public var eventType: String
+    
+    // MARK: 接続情報
+    
+    /// ロール
+    public var role: SignalingRole?
+    
+    /// クライアント ID
+    public var clientId: String?
+    
+    /// 接続 ID
+    public var connectionId: String?
+    
+    /// 音声の可否
+    public var audioEnabled: Bool?
+    
+    /// 映像の可否
+    public var videoEnabled: Bool?
+    
+    /// メタデータ
+    public var metadata: Any?
+    
+    /// シグナリング接続時にクライアントが指定した値
+    public var authnMetadata: Any?
+
+    /// Sora の認証ウェブフックの戻り値で指定された値
+    public var authzMetadata: Any?
+
+    /// メタデータのリスト
+    public var metadataList: [SignalingNotifyMetadata]?
+
+    // メタデータのリスト
+    public var data: [SignalingNotifyMetadata]?
+    
+    // MARK: 接続状態
+    
+    /// 接続時間
+    public var connectionTime: Int?
+    
+    /// 接続中のクライアントの数
+    public var connectionCount: Int?
+    
+    /// 接続中のパブリッシャーの数
+    @available(*, deprecated, message: "このプロパティは channelSendonlyConnections と channelSendrecvConnections に置き換えられました。")
+    public var publisherCount: Int?
+    
+    /// 接続中のサブスクライバーの数
+    @available(*, deprecated, message: "このプロパティは channelRecvonlyConnections と channelSendrecvConnections に置き換えられました。")
+    public var subscriberCount: Int?
+    
+    /// 接続中の送信専用接続の数
+    public var channelSendonlyConnections: Int?
+    
+    /// 接続中の受信専用接続の数
+    public var channelRecvonlyConnections: Int?
+    
+    /// 接続中の送受信可能接続の数
+    public var channelSendrecvConnections: Int?
+    
+    // SignalingNotifySpotlightChanged から引き継いだ値
+
+    /// スポットライト ID
+    public var spotlightId: String?
+    
+    /// 固定の有無
+    public var isFixed: Bool?
+    
+    // SignalingNotifyNetworkStatus から引き継いだ値
+    /// ネットワークの不安定度
+    public var unstableLevel: Int?
+}
 
 /**
  "notify" シグナリングメッセージのうち、次のイベントを表します。
@@ -483,6 +556,7 @@ public enum SignalingNotifyEventType {
  
  このメッセージは接続の確立後、チャネルへの接続数に変更があるとサーバーから送信されます。
  */
+/*
 public struct SignalingNotifyConnection {
 
     // MARK: イベント情報
@@ -548,10 +622,12 @@ public struct SignalingNotifyConnection {
     public var channelSendrecvConnections: Int?
 
 }
+*/
 
 /**
  "notify" シグナリングメッセージのうち、 `spotlight.changed` イベントを表します。
  */
+/*
 public struct SignalingNotifySpotlightChanged {
     
     /// クライアント ID
@@ -573,16 +649,19 @@ public struct SignalingNotifySpotlightChanged {
     public var videoEnabled: Bool?
     
 }
+*/
 
 /**
  "notify" シグナリングメッセージのうち、 "network.status" イベントを表します。
  */
+/*
 public struct SignalingNotifyNetworkStatus {
     
     /// ネットワークの不安定度
     public var unstableLevel: Int
     
 }
+*/
 
 /**
  "ping" シグナリングメッセージを表します。
@@ -642,20 +721,7 @@ extension Signaling: Codable {
         case "update":
             self = .update(try SignalingUpdate(from: decoder))
         case "notify":
-            let eventType = try container.decode(SignalingNotifyEventType.self,
-                                                 forKey: .event_type)
-            switch eventType {
-            case .connectionCreated,
-                 .connectionUpdated,
-                 .connectionDestroyed:
-                self = .notifyConnection(try SignalingNotifyConnection(from: decoder))
-            case .spotlightChanged:
-                self = .notifySpotlightChanged(
-                    try SignalingNotifySpotlightChanged(from: decoder))
-            case .networkStatus:
-                self = .notifyNetworkStatus(
-                    try SignalingNotifyNetworkStatus(from: decoder))
-            }
+            self = .notify(try SignalingNotify(from: decoder))
         case "ping":
             self = .ping(try SignalingPing(from: decoder))
         case "push":
@@ -987,7 +1053,66 @@ extension SignalingPush: Codable {
     
 }
 
+extension SignalingNotify: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case event_type
+        case role
+        case client_id
+        case connection_id
+        case audio
+        case video
+        case minutes
+        case channel_connections
+        case channel_upstream_connections
+        case channel_downstream_connections
+        case channel_sendonly_connections
+        case channel_recvonly_connections
+        case channel_sendrecv_connections
+        case spotlight_id
+        case is_fixed
+        case unstable_level
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        eventType = try container.decode(String.self,
+                                         forKey: .event_type)
+        role = try container.decodeIfPresent(SignalingRole.self, forKey: .role)
+        clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
+        connectionId = try container.decodeIfPresent(String.self,
+                                                     forKey: .connection_id)
+        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
+        videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
+        connectionTime = try container.decodeIfPresent(Int.self, forKey: .minutes)
+        connectionCount =
+            try container.decodeIfPresent(Int.self, forKey: .channel_connections)
+        publisherCount =
+            try container.decodeIfPresent(Int.self, forKey: .channel_upstream_connections)
+        subscriberCount =
+            try container.decodeIfPresent(Int.self, forKey: .channel_downstream_connections)
+        channelSendonlyConnections =
+            try container.decodeIfPresent(Int.self, forKey: .channel_sendonly_connections)
+        channelRecvonlyConnections =
+            try container.decodeIfPresent(Int.self, forKey: .channel_recvonly_connections)
+        channelSendrecvConnections =
+            try container.decodeIfPresent(Int.self, forKey: .channel_sendrecv_connections)
+        spotlightId =
+            try container.decodeIfPresent(String.self, forKey: .spotlight_id)
+        isFixed =
+            try container.decodeIfPresent(Bool.self, forKey: .is_fixed)
+        unstableLevel =
+            try container.decodeIfPresent(Int.self, forKey: .unstable_level)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
+}
+
 /// :nodoc:
+/*
 extension SignalingNotifyConnection: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -1036,8 +1161,9 @@ extension SignalingNotifyConnection: Codable {
     }
     
 }
-
-private var signalingNotifyEventType: PairTable<String, SignalingNotifyEventType> =
+*/
+/*
+ private var signalingNotifyEventType: PairTable<String, SignalingNotifyEventType> =
     PairTable(name: "SignalingNotifyEventType",
               pairs: [("connection.created", .connectionCreated),
                       ("connection.updated", .connectionUpdated),
@@ -1103,6 +1229,7 @@ extension SignalingNotifyNetworkStatus: Codable {
     }
     
 }
+*/
 
 /// :nodoc:
 extension SignalingPing: Codable {
