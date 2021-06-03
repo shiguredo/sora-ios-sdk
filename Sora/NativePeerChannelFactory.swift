@@ -60,7 +60,7 @@ class NativePeerChannelFactory {
     
     func createNativePeerChannel(configuration: WebRTCConfiguration,
                                  constraints: MediaConstraints,
-                                 delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection {
+                                 delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection? {
         return nativeFactory
             .peerConnection(with: configuration.nativeValue,
                             constraints: constraints.nativeValue,
@@ -123,6 +123,12 @@ class NativePeerChannelFactory {
                               constraints: MediaConstraints,
                               handler: @escaping (String?, Error?) -> Void) {
         let peer = createNativePeerChannel(configuration: configuration, constraints: constraints, delegate: nil)
+        
+        guard let peer = peer else {
+            handler(nil, SoraError.peerChannelError(reason: "createNativePeerChannel failed"))
+            return
+        }
+        
         let stream = createNativeSenderStream(streamId: "offer",
                                                  videoTrackId: "video",
                                                  audioTrackId: "audio",
