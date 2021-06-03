@@ -444,8 +444,9 @@ public struct SignalingPush {
 /**
  "notify" シグナリングメッセージで通知されるイベントの種別です。
  詳細は Sora のドキュメントを参照してください。
+ 廃止されました。
  */
-/*
+@available(*, unavailable, message: "SignalingNotifyEventType は廃止されました。")
 public enum SignalingNotifyEventType {
     
     /// "connection.created"
@@ -464,10 +465,13 @@ public enum SignalingNotifyEventType {
     case networkStatus
     
 }
- */
 
-// これまでは eventType が増えた際にエラーになっていたので、 type: notify に対応する struct を1つに統合してそれを防ぐ
-// eventType 以外は全て Optional にする必要がある
+/// "notidy" シグナリングメッセージを表します。
+///
+/// type:notify の event_type ごとに struct を定義するのではなく、 type: notify に対して1つの struct を定義しています。
+/// そのため、アクセスする際は eventType をチェックする必要があります。
+///
+/// 上記の理由により、この struct では、 eventType 以外のパラメーターを Optional にする必要があります。
 public struct SignalingNotify {
 
     // SignalingNotifyConnection から引き継いだ値
@@ -555,14 +559,16 @@ public struct SignalingNotify {
  - `connection.destroyed`
  
  このメッセージは接続の確立後、チャネルへの接続数に変更があるとサーバーから送信されます。
+ 廃止されました。
+ SignalingNotify を利用してください。
  */
-/*
+@available(*, unavailable, message: "SignalingNotifyConnection は廃止されました。  SignalingNotify を利用してください。")
 public struct SignalingNotifyConnection {
 
     // MARK: イベント情報
     
     /// イベントの種別
-    public var eventType: SignalingNotifyEventType
+    public var eventType: Any
     
     // MARK: 接続情報
     
@@ -622,12 +628,13 @@ public struct SignalingNotifyConnection {
     public var channelSendrecvConnections: Int?
 
 }
-*/
 
 /**
  "notify" シグナリングメッセージのうち、 `spotlight.changed` イベントを表します。
+ 廃止されました。
+ SignalingNotify を利用してください。
  */
-/*
+@available(*, unavailable, message: "SignalingNotifySpotlightChanged は廃止されました。 SignalingNotify を利用してください。")
 public struct SignalingNotifySpotlightChanged {
     
     /// クライアント ID
@@ -649,19 +656,19 @@ public struct SignalingNotifySpotlightChanged {
     public var videoEnabled: Bool?
     
 }
-*/
 
 /**
  "notify" シグナリングメッセージのうち、 "network.status" イベントを表します。
+ 廃止されました。
+ SignalingNotify を利用してください。
  */
-/*
+@available(*, unavailable, message: "SignalingNotifyNetworkStatus は廃止されました。 SignalingNotify を利用してください。")
 public struct SignalingNotifyNetworkStatus {
     
     /// ネットワークの不安定度
     public var unstableLevel: Int
     
 }
-*/
 
 /**
  "ping" シグナリングメッセージを表します。
@@ -1110,126 +1117,6 @@ extension SignalingNotify: Codable {
     }
     
 }
-
-/// :nodoc:
-/*
-extension SignalingNotifyConnection: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case event_type
-        case role
-        case client_id
-        case connection_id
-        case audio
-        case video
-        case minutes
-        case channel_connections
-        case channel_upstream_connections
-        case channel_downstream_connections
-        case channel_sendonly_connections
-        case channel_recvonly_connections
-        case channel_sendrecv_connections
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        eventType = try container.decode(SignalingNotifyEventType.self,
-                                         forKey: .event_type)
-        role = try container.decode(SignalingRole.self, forKey: .role)
-        clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
-        connectionId = try container.decodeIfPresent(String.self,
-                                                     forKey: .connection_id)
-        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
-        videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
-        connectionTime = try container.decode(Int.self, forKey: .minutes)
-        connectionCount =
-            try container.decode(Int.self, forKey: .channel_connections)
-        publisherCount =
-            try container.decodeIfPresent(Int.self, forKey: .channel_upstream_connections)
-        subscriberCount =
-            try container.decodeIfPresent(Int.self, forKey: .channel_downstream_connections)
-        channelSendonlyConnections =
-               try container.decodeIfPresent(Int.self, forKey: .channel_sendonly_connections)
-        channelRecvonlyConnections =
-               try container.decodeIfPresent(Int.self, forKey: .channel_recvonly_connections)
-        channelSendrecvConnections =
-               try container.decodeIfPresent(Int.self, forKey: .channel_sendrecv_connections)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        throw SoraError.invalidSignalingMessage
-    }
-    
-}
-*/
-/*
- private var signalingNotifyEventType: PairTable<String, SignalingNotifyEventType> =
-    PairTable(name: "SignalingNotifyEventType",
-              pairs: [("connection.created", .connectionCreated),
-                      ("connection.updated", .connectionUpdated),
-                      ("connection.destroyed", .connectionDestroyed),
-                      ("spotlight.changed", .spotlightChanged),
-                      ("network.status", .networkStatus)])
-
-/// :nodoc:
-extension SignalingNotifyEventType: Codable {
-    
-    public init(from decoder: Decoder) throws {
-        self = try signalingNotifyEventType.decode(from: decoder)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        try signalingNotifyEventType.encode(self, to: encoder)
-    }
-    
-}
-
-/// :nodoc:
-extension SignalingNotifySpotlightChanged: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case client_id
-        case connection_id
-        case spotlight_id
-        case fixed
-        case audio
-        case video
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        clientId = try container.decode(String?.self, forKey: .client_id)
-        connectionId = try container.decode(String?.self, forKey: .connection_id)
-        spotlightId = try container.decode(String.self, forKey: .spotlight_id)
-        isFixed = try container.decodeIfPresent(Bool.self, forKey: .fixed)
-        audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
-        videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        throw SoraError.invalidSignalingMessage
-    }
-    
-}
-
-/// :nodoc:
-extension SignalingNotifyNetworkStatus: Codable {
-    
-    enum CodingKeys: String, CodingKey {
-        case unstable_level
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        unstableLevel = try container.decode(Int.self, forKey: .unstable_level)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        throw SoraError.invalidSignalingMessage
-    }
-    
-}
-*/
 
 /// :nodoc:
 extension SignalingPing: Codable {
