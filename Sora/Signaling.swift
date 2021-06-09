@@ -474,8 +474,6 @@ public enum SignalingNotifyEventType {
 /// 上記の理由により、この struct では、 eventType 以外のパラメーターを Optional にする必要があります。
 public struct SignalingNotify {
 
-    // SignalingNotifyConnection から引き継いだ値
-    
     // MARK: イベント情報
     
     /// イベントの種別
@@ -538,15 +536,12 @@ public struct SignalingNotify {
     /// 接続中の送受信可能接続の数
     public var channelSendrecvConnections: Int?
     
-    // SignalingNotifySpotlightChanged から引き継いだ値
-
     /// スポットライト ID
     public var spotlightId: String?
     
     /// 固定の有無
     public var isFixed: Bool?
     
-    // SignalingNotifyNetworkStatus から引き継いだ値
     /// ネットワークの不安定度
     public var unstableLevel: Int?
 }
