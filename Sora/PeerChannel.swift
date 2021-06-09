@@ -488,6 +488,17 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "try connecting")
         Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
         
+        nativeChannel = NativePeerChannelFactory.default
+            .createNativePeerChannel(configuration: webRTCConfiguration,
+                                     constraints: webRTCConfiguration.constraints,
+                                     delegate: self)
+        guard nativeChannel != nil else {
+            let message = "createNativePeerChannel failed"
+            Logger.debug(type: .peerChannel, message: message)
+            handler(SoraError.peerChannelError(reason: message))
+            return
+        }
+        
         // このロックは finishConnecting() で解除される
         lock.lock()
         onConnectHandler = handler
@@ -497,18 +508,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
-
-        nativeChannel = NativePeerChannelFactory.default
-            .createNativePeerChannel(configuration: webRTCConfiguration,
-                                     constraints: webRTCConfiguration.constraints,
-                                     delegate: self)
-        
-        guard nativeChannel != nil else {
-            let message = "createNativePeerChannel failed"
-            Logger.debug(type: .peerChannel, message: message)
-            handler(SoraError.peerChannelError(reason: message))
-            return
-        }
 
         internalState = PeerChannelInternalState(
             signalingState: PeerChannelSignalingState(
