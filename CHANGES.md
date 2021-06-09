@@ -13,7 +13,7 @@
 
 - [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
     - @szktty @enm10k
-- [UPDATE] WebRTC 90.4430.3.2 に上げる
+- [UPDATE] WebRTC 91.4472.9.1 に上げる
     - @enm10k
 - [ADD] libwebrtc のログレベルを設定する API を追加
     - `Sora.setWebRTCLogLevel(_:)`
