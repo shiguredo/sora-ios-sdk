@@ -439,6 +439,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     weak var channel: BasicPeerChannel!
     var state: State = .disconnected
+    
+    // connect() の成功後は必ずセットされるので nil チェックを省略する
+    // connect() 実行前は nil なのでアクセスしないこと
     var nativeChannel: RTCPeerConnection!
     var internalState: PeerChannelInternalState!
     
@@ -499,6 +502,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             .createNativePeerChannel(configuration: webRTCConfiguration,
                                      constraints: webRTCConfiguration.constraints,
                                      delegate: self)
+        
+        guard nativeChannel != nil else {
+            let message = "createNativePeerChannel failed"
+            Logger.debug(type: .peerChannel, message: message)
+            handler(SoraError.peerChannelError(reason: message))
+            return
+        }
+
         internalState = PeerChannelInternalState(
             signalingState: PeerChannelSignalingState(
                 nativeValue: nativeChannel.signalingState),
