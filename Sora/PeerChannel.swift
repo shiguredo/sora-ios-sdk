@@ -439,7 +439,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     weak var channel: BasicPeerChannel!
     var state: State = .disconnected
-    var nativeChannel: RTCPeerConnection!
+    var nativeChannel: RTCPeerConnection?
     var internalState: PeerChannelInternalState!
     
     var signalingChannel: SignalingChannel {
@@ -499,6 +499,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             .createNativePeerChannel(configuration: webRTCConfiguration,
                                      constraints: webRTCConfiguration.constraints,
                                      delegate: self)
+        guard let nativeChannel = self.nativeChannel else {
+            handler(SoraError.peerChannelError(reason: "connect failed: nativeCannel is not initialized"))
+            return
+        }
+        
         internalState = PeerChannelInternalState(
             signalingState: PeerChannelSignalingState(
                 nativeValue: nativeChannel.signalingState),
@@ -615,6 +620,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "initialize sender stream")
         
+        guard let nativeChannel = nativeChannel else {
+            let message = "initializeSenderStream failed: nativeChannel is not initialized"
+            Logger.error(type: .peerChannel, message: message)
+            self.disconnect(error: SoraError
+                .peerChannelError(reason: message))
+            return
+        }
+        
         let nativeStream = NativePeerChannelFactory.default
             .createNativeSenderStream(streamId: configuration.publisherStreamId,
                                          videoTrackId:
@@ -708,6 +721,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                       handler: @escaping (String?, Error?) -> Void) {
         Logger.debug(type: .peerChannel, message: "try create answer")
         Logger.debug(type: .peerChannel, message: offer)
+        guard let nativeChannel = nativeChannel else {
+            handler(nil, SoraError.peerChannelError(reason: "createAnswer failed: nativeCannel is not initialized"))
+            return
+        }
         
         Logger.debug(type: .peerChannel, message: "try setting remote description")
         let offer = RTCSessionDescription(type: .offer, sdp: offer)
@@ -727,7 +744,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
             
             Logger.debug(type: .peerChannel, message: "try creating native answer")
-            self.nativeChannel.answer(for: constraints) { answer, error in
+            guard let nativeChannel = self.nativeChannel else {
+                handler(nil, SoraError.peerChannelError(reason: "setRemoteDescription failed: nativeCannel is not initialized"))
+                return
+            }
+            nativeChannel.answer(for: constraints) { answer, error in
                 guard error == nil else {
                     Logger.debug(type: .peerChannel,
                                  message: "failed creating native answer (\(error!.localizedDescription)")
@@ -737,7 +758,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 Logger.debug(type: .peerChannel, message: "did create answer")
                 
                 Logger.debug(type: .peerChannel, message: "try setting local description")
-                self.nativeChannel.setLocalDescription(answer!) { error in
+                nativeChannel.setLocalDescription(answer!) { error in
                     guard error == nil else {
                         Logger.debug(type: .peerChannel,
                                      message: "failed setting local description")
@@ -761,6 +782,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             return
         }
         Logger.debug(type: .peerChannel, message: "update sender offer encodings")
+        
+        guard let nativeChannel = self.nativeChannel else {
+            Logger.error(type: .peerChannel, message: "updateSenderOfferEncodings failed: nativeCannel is not initialized")
+            return
+        }
+        
         for sender in nativeChannel.senders {
             sender.updateOfferEncodings(oldEncodings)
         }
@@ -770,6 +797,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "try sending answer")
         state = .waitingComplete
         offerEncodings = offer.encodings
+        
+        guard let nativeChannel = self.nativeChannel else {
+            let message = "createAndSendAnswer failed: nativeCannel is not initialized"
+            Logger.error(type: .peerChannel, message: message)
+            self.disconnect(error: SoraError
+                .peerChannelError(reason: message))
+            return
+        }
         
         if let config = offer.configuration {
             Logger.debug(type: .peerChannel, message: "update configuration")
@@ -854,7 +889,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .ping(let ping):
             let pong = SignalingPong()
             if ping.statisticsEnabled == true {
-                nativeChannel.statistics { report in
+                nativeChannel?.statistics { report in
                     var json: [String: Any] = ["type": "pong"]
                     let stats = Statistics(contentsOf: report)
                     json["stats"] = stats.jsonObject
@@ -887,9 +922,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "media streams = \(channel.streams.count)")
         Logger.debug(type: .peerChannel,
-                     message: "native senders = \(nativeChannel.senders.count)")
+                     message: "native senders = \(String(describing: nativeChannel?.senders.count))")
         Logger.debug(type: .peerChannel,
-                     message: "native receivers = \(nativeChannel.receivers.count)")
+                     message: "native receivers = \(String(describing: nativeChannel?.receivers.count))")
         state = .connected
         
         if onConnectHandler != nil {
@@ -923,7 +958,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             terminateSenderStream()
         }
         channel.terminateAllStreams()
-        nativeChannel.close()
+        nativeChannel?.close()
         
         signalingChannel.send(message: Signaling.disconnect)
         signalingChannel.disconnect(error: error)
