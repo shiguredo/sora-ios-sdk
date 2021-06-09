@@ -124,7 +124,8 @@ class NativePeerChannelFactory {
                               handler: @escaping (String?, Error?) -> Void) {
         let peer = createNativePeerChannel(configuration: configuration, constraints: constraints, delegate: nil)
         
-        guard let peer = peer else {
+        // `guard let peer = peer {` と書いた場合、 Xcode 12.5 でビルド・エラーになった
+        guard let peer2 = peer else {
             handler(nil, SoraError.peerChannelError(reason: "createNativePeerChannel failed"))
             return
         }
@@ -133,15 +134,15 @@ class NativePeerChannelFactory {
                                                  videoTrackId: "video",
                                                  audioTrackId: "audio",
                                                  constraints: constraints)
-        peer.add(stream.videoTracks[0], streamIds: [stream.streamId])
-        peer.add(stream.audioTracks[0], streamIds: [stream.streamId])
-        peer.offer(for: constraints.nativeValue) { sdp, error in
+        peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
+        peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
+        peer2.offer(for: constraints.nativeValue) { sdp, error in
             if let error = error {
                 handler(nil, error)
             } else if let sdp = sdp {
                 handler(sdp.sdp, nil)
             }
-            peer.close()
+            peer2.close()
         }
     }
     
