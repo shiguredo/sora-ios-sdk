@@ -439,6 +439,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     weak var channel: BasicPeerChannel!
     var state: State = .disconnected
+    
+    // connect() の成功後は必ずセットされるので nil チェックを省略する
+    // connect() 実行前は nil なのでアクセスしないこと
     var nativeChannel: RTCPeerConnection!
     var internalState: PeerChannelInternalState!
     
@@ -485,20 +488,26 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "try connecting")
         Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
         
+        self.webRTCConfiguration = channel.configuration.webRTCConfiguration
+        nativeChannel = NativePeerChannelFactory.default
+            .createNativePeerChannel(configuration: webRTCConfiguration,
+                                     constraints: webRTCConfiguration.constraints,
+                                     delegate: self)
+        guard nativeChannel != nil else {
+            let message = "createNativePeerChannel failed"
+            Logger.debug(type: .peerChannel, message: message)
+            handler(SoraError.peerChannelError(reason: message))
+            return
+        }
+        
         // このロックは finishConnecting() で解除される
         lock.lock()
         onConnectHandler = handler
-        
-        self.webRTCConfiguration = channel.configuration.webRTCConfiguration
 
         // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
 
-        nativeChannel = NativePeerChannelFactory.default
-            .createNativePeerChannel(configuration: webRTCConfiguration,
-                                     constraints: webRTCConfiguration.constraints,
-                                     delegate: self)
         internalState = PeerChannelInternalState(
             signalingState: PeerChannelSignalingState(
                 nativeValue: nativeChannel.signalingState),
@@ -600,6 +609,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             audioBitRate: configuration.audioBitRate,
             spotlightEnabled: configuration.spotlightEnabled,
             spotlightNumber: configuration.spotlightNumber,
+            spotlightFocusRid: configuration.spotlightFocusRid,
+            spotlightUnfocusRid: configuration.spotlightUnfocusRid,
             simulcastEnabled: simulcast,
             simulcastRid: configuration.simulcastRid,
             soraClient: soraClient,

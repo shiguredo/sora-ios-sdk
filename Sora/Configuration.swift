@@ -133,6 +133,12 @@ public struct Configuration {
     // スポットライトの対象人数
     public var spotlightNumber: Int?
     
+    /// スポットライト機能でフォーカスした場合の映像の種類
+    public var spotlightFocusRid: SpotlightRid = .unspecified
+
+    /// スポットライト機能でフォーカスしていない場合の映像の種類
+    public var spotlightUnfocusRid: SpotlightRid = .unspecified
+
     /// WebRTC に関する設定
     public var webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()
 
@@ -282,6 +288,8 @@ extension Configuration: Codable {
         case simulcastRid
         case spotlightEnabled
         case spotlightNumber
+        case spotlightFocusRid
+        case spotlightUnfocusRid
         case webRTCConfiguration
         case signalingConnectMetadata
         case signalingConnectNotifyMetadata
@@ -319,6 +327,8 @@ extension Configuration: Codable {
         audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
         spotlightEnabled = try container.decode(Spotlight.self, forKey: .spotlightEnabled)
         spotlightNumber = try container.decode(Int.self, forKey: .spotlightNumber)
+        spotlightFocusRid = try container.decodeIfPresent(SpotlightRid.self, forKey: .spotlightFocusRid) ?? .unspecified
+        spotlightUnfocusRid = try container.decodeIfPresent(SpotlightRid.self, forKey: .spotlightUnfocusRid) ?? .unspecified
         simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
         simulcastRid = try container.decode(SimulcastRid.self,
                                                 forKey: .simulcastRid)
@@ -354,6 +364,12 @@ extension Configuration: Codable {
         try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
         try container.encodeIfPresent(spotlightNumber, forKey: .spotlightNumber)
         try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
+        if spotlightFocusRid != .unspecified {
+            try container.encodeIfPresent(spotlightFocusRid, forKey: .spotlightFocusRid)
+        }
+        if spotlightUnfocusRid != .unspecified {
+            try container.encodeIfPresent(spotlightUnfocusRid, forKey: .spotlightUnfocusRid)
+        }
         try container.encode(publisherStreamId, forKey: .publisherStreamId)
         try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
         try container.encode(publisherAudioTrackId, forKey: .publisherAudioTrackId)
