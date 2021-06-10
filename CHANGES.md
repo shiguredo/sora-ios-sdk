@@ -15,6 +15,8 @@
     - @szktty @enm10k
 - [UPDATE] WebRTC 91.4472.9.1 に上げる
     - @enm10k
+- [ADD] AV1 に対応する
+    - @enm10k
 - [ADD] libwebrtc のログレベルを設定する API を追加
     - `Sora.setWebRTCLogLevel(_:)`
     - @szktty
