@@ -466,7 +466,7 @@ public enum SignalingNotifyEventType {
     
 }
 
-/// "notidy" シグナリングメッセージを表します。
+/// "notify" シグナリングメッセージを表します。
 ///
 /// type:notify の event_type ごとに struct を定義するのではなく、 type: notify に対して1つの struct を定義しています。
 /// そのため、アクセスする際は eventType をチェックする必要があります。
