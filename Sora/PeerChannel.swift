@@ -488,6 +488,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "try connecting")
         Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
         
+        self.webRTCConfiguration = channel.configuration.webRTCConfiguration
         nativeChannel = NativePeerChannelFactory.default
             .createNativePeerChannel(configuration: webRTCConfiguration,
                                      constraints: webRTCConfiguration.constraints,
@@ -502,8 +503,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // このロックは finishConnecting() で解除される
         lock.lock()
         onConnectHandler = handler
-        
-        self.webRTCConfiguration = channel.configuration.webRTCConfiguration
 
         // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
