@@ -513,7 +513,7 @@ public struct SignalingNotify {
     
     // MARK: 接続状態
     
-    /// 接続時間
+    /// 接続時間 (分)
     public var connectionTime: Int?
     
     /// 接続中のクライアントの数
@@ -599,7 +599,7 @@ public struct SignalingNotifyConnection {
     
     // MARK: 接続状態
     
-    /// 接続時間
+    /// 接続時間 (分)
     public var connectionTime: Int
     
     /// 接続中のクライアントの数
