@@ -578,7 +578,7 @@ public struct SignalingNotify {
     /// ネットワークの不安定度
     public var unstableLevel: Int?
     
-    /// TURN が利用しているトランスポート層のプロトコ
+    /// TURN が利用しているトランスポート層のプロトコル
     public var turnTransportType: String?
 }
 
