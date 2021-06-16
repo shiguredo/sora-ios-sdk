@@ -47,10 +47,11 @@
     - @szktty
 - [CHANGE] DeviceModel を廃止し、 hw.machine の結果を表示する
     - @enm10k
-- [FIX] SignalingNotifyConnection に漏れていたフィールドを追加する
-    - SignalingNotifyConnection.authnMetadata
-    - SignalingNotifyConnection.authzMetadata
-    - SignalingNotifyConnection.data
+- [FIX] SignalingNotify に漏れていたフィールドを追加する
+    - SignalingNotify.authnMetadata
+    - SignalingNotify.authzMetadata
+    - SignalingNotify.data
+    - SignalingNotify.turnTransportType
     - @enm10k
 - [FIX] サイマルキャストのパラメーター active: false が無効化されてしまう問題を修正する
     - @enm10k

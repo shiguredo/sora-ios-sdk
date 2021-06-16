@@ -130,7 +130,7 @@ public struct Configuration {
         }
     }
 
-    // スポットライトの対象人数
+    /// スポットライトの対象人数
     public var spotlightNumber: Int?
     
     /// スポットライト機能でフォーカスした場合の映像の種類

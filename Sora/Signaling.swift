@@ -181,7 +181,11 @@ public enum SimulcastRid {
 public enum SpotlightRid {
     /**
      SpotlightRid が設定されていない状態
-     変数の型に SpotlightRid? を指定した場合、  Optional.none とSpotlightRid.none が紛らわしくなるのを避ける
+
+     変数の型を SpotlightRid? にした場合、 .none が Optional.none と SpotlightRid.none の
+     どちらを指しているか分かりにくいという問題がありました。
+     この問題を解決するため、変数に値が設定されていない状態を表す .unspecified を定義するとともに、
+     SpotlightRid を Optional にラップせずに利用することとしました。
      */
     case unspecified
 
@@ -537,7 +541,7 @@ public struct SignalingNotify {
     /// メタデータのリスト
     public var metadataList: [SignalingNotifyMetadata]?
 
-    // メタデータのリスト
+    /// メタデータのリスト
     public var data: [SignalingNotifyMetadata]?
     
     // MARK: 接続状態
@@ -573,6 +577,9 @@ public struct SignalingNotify {
     
     /// ネットワークの不安定度
     public var unstableLevel: Int?
+    
+    /// TURN が利用しているトランスポート層のプロトコル
+    public var turnTransportType: String?
 }
 
 /**
@@ -1113,6 +1120,7 @@ extension SignalingPush: Codable {
     
 }
 
+/// :nodoc:
 extension SignalingNotify: Codable {
     
     enum CodingKeys: String, CodingKey {
@@ -1132,6 +1140,7 @@ extension SignalingNotify: Codable {
         case spotlight_id
         case fixed
         case unstable_level
+        case turn_transport_type
     }
     
     public init(from decoder: Decoder) throws {
@@ -1163,6 +1172,8 @@ extension SignalingNotify: Codable {
             try container.decodeIfPresent(Bool.self, forKey: .fixed)
         unstableLevel =
             try container.decodeIfPresent(Int.self, forKey: .unstable_level)
+        turnTransportType =
+            try container.decodeIfPresent(String.self, forKey: .turn_transport_type)
     }
     
     public func encode(to encoder: Encoder) throws {
