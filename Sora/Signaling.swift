@@ -181,7 +181,11 @@ public enum SimulcastRid {
 public enum SpotlightRid {
     /**
      SpotlightRid が設定されていない状態
-     変数の型に SpotlightRid? を指定した場合、  Optional.none とSpotlightRid.none が紛らわしくなるのを避ける
+
+     変数の型を SpotlightRid? にした場合、 .none が Optional.none と SpotlightRid.none の
+     どちらを指しているか分かりにくいという問題がありました。
+     この問題を解決するため、変数に値が設定されていない状態を表す .unspecified を定義するとともに、
+     SpotlightRid を Optional にラップせずに利用することとしました。
      */
     case unspecified
 
