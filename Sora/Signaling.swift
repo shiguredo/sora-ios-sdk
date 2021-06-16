@@ -577,6 +577,9 @@ public struct SignalingNotify {
     
     /// ネットワークの不安定度
     public var unstableLevel: Int?
+    
+    /// TURN が利用しているトランスポート層のプロトコ
+    public var turnTransportType: String?
 }
 
 /**
@@ -1137,6 +1140,7 @@ extension SignalingNotify: Codable {
         case spotlight_id
         case fixed
         case unstable_level
+        case turn_transport_type
     }
     
     public init(from decoder: Decoder) throws {
@@ -1168,6 +1172,8 @@ extension SignalingNotify: Codable {
             try container.decodeIfPresent(Bool.self, forKey: .fixed)
         unstableLevel =
             try container.decodeIfPresent(Int.self, forKey: .unstable_level)
+        turnTransportType =
+            try container.decodeIfPresent(String.self, forKey: .turn_transport_type)
     }
     
     public func encode(to encoder: Encoder) throws {
