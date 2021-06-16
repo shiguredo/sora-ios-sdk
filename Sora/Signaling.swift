@@ -541,7 +541,7 @@ public struct SignalingNotify {
     /// メタデータのリスト
     public var metadataList: [SignalingNotifyMetadata]?
 
-    // メタデータのリスト
+    /// メタデータのリスト
     public var data: [SignalingNotifyMetadata]?
     
     // MARK: 接続状態
@@ -1117,6 +1117,7 @@ extension SignalingPush: Codable {
     
 }
 
+/// :nodoc:
 extension SignalingNotify: Codable {
     
     enum CodingKeys: String, CodingKey {
