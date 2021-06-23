@@ -55,6 +55,8 @@
     - @enm10k
 - [FIX] サイマルキャストのパラメーター active: false が無効化されてしまう問題を修正する
     - @enm10k
+- [FIX] WebSocketChannel 切断時に MediaChannel を切断する処理が漏れていたので追加する
+    - @enm10k
 
 ## 2020.7.2
 

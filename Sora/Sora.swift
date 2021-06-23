@@ -97,7 +97,7 @@ public final class Sora {
         }
     }
     
-    // スポットライトレガシー機能を有効化する
+    /// スポットライトレガシー機能を有効化する
     @available(*, deprecated,
     message: "Sora のスポットライトレガシー機能は 2021 年 12 月のリリースにて廃止予定です。")
     public static func useSpotlightLegacy() {
