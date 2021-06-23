@@ -11,47 +11,52 @@
 
 ## develop
 
+- [UPDATE] システム条件を変更する
+    - Xcode 12.5
+    - Swift 5.4
+    - CocoaPods 1.10.1
+    - @miosakuma
 - [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
     - @szktty @enm10k
 - [UPDATE] WebRTC 91.4472.9.1 に上げる
     - @enm10k
-- [ADD] AV1 に対応する
+- [UPDATE] AV1 に対応する
     - @enm10k
 - [ADD] libwebrtc のログレベルを設定する API を追加
     - `Sora.setWebRTCLogLevel(_:)`
     - @szktty
-- [CHANGE] スポットライトに関する API を更新する
-    - Sora のスポットライトレガシー機能を利用するための API を Sora.useSpotlightLegacy() に変更
-    - Configuration.activeSpeakerLimit を非推奨にして、 Configuration.spotlightNumber に変更
-    - Configuration.spotlightFocusRid を追加
-    - Configuration.spotlightUnfocusRid を追加
+- [CHANGE] スポットライトに関する API を変更する
+    - Sora のスポットライトレガシー機能を利用するための API を `Sora.useSpotlightLegacy()` に変更
+    - `Configuration.activeSpeakerLimit` を非推奨にして、 `Configuration.spotlightNumber` に変更
+    - `Configuration.spotlightFocusRid` を追加
+    - `Configuration.spotlightUnfocusRid` を追加
     - @enm10k
 - [CHANGE] シグナリングに含まれる JSON 型のフィールドを JSONSerialization でデコードする
-    - フィールドの型が SignalingMetadata から Any? に変更されたため、任意の型にキャストして利用します
+    - フィールドの型を SignalingMetadata から Any? に変更したため、任意の型にキャストして利用することとなる
     - 対象のフィールド
-        - SignalingNotifyConnection.metadata
-        - SignalingOffer.metadata
-        - SignalingPush.data
-    - 修正にともない、 SignalingClientMetadata が SignalingNotifyMetadata にリネームされました
+        - `SignalingNotifyConnection.metadata`
+        - `SignalingOffer.metadata`
+        - `SignalingPush.data`
+    - 修正にともない、 `SignalingClientMetadata` を `SignalingNotifyMetadata` にリネームする
     - @enm10k
 - [CHANGES] type: notify のシグナリング・メッセージに対応する struct として SignalingNotify を追加する
-    - event_type 毎に定義されていた以下の struct が廃止され、 SignalingNotify に統合されます
-        - SignalingNotifyConnection
-        - SignalingNotifySpotlightChanged
-        - SignalingNotifyNetworkStatus
+    - event_type 毎に定義されていた以下の struct を廃止し、 SignalingNotify に統合する
+        - `SignalingNotifyConnection`
+        - `SignalingNotifySpotlightChanged`
+        - `SignalingNotifyNetworkStatus`
     - @enm10k
-- [CHANGE] サイマルキャストのオプションを整理する
-    - SimulcastQuality を削除し、 SimulcastRid を追加する
-    - Configuration.simulcastQuality を削除し、 simulcastRid を追加する
-    - SignalingConnect.simulcastQuality を削除し、 simulcastRid を追加する
+- [CHANGE] サイマルキャストのオプションを Sora のアップデートへ追従する
+    - `SimulcastQuality` を削除し、 `SimulcastRid` を追加する
+    - `Configuration.simulcastQuality` を削除し、 `simulcastRid` を追加する
+    - `SignalingConnect.simulcastQuality` を削除し、 `simulcastRid` を追加する
     - @szktty
 - [CHANGE] DeviceModel を廃止し、 hw.machine の結果を表示する
     - @enm10k
 - [FIX] SignalingNotify に漏れていたフィールドを追加する
-    - SignalingNotify.authnMetadata
-    - SignalingNotify.authzMetadata
-    - SignalingNotify.data
-    - SignalingNotify.turnTransportType
+    - `SignalingNotify.authnMetadata`
+    - `SignalingNotify.authzMetadata`
+    - `SignalingNotify.data`
+    - `SignalingNotify.turnTransportType`
     - @enm10k
 - [FIX] サイマルキャストのパラメーター active: false が無効化されてしまう問題を修正する
     - @enm10k
@@ -60,11 +65,11 @@
 
 ## 2020.7.2
 
+- [ADD] VideoView に解像度とフレームレートを表示するデバッグモードを追加する
+    - `VideoView.debugMode` を追加
+    - @szktty
 - [FIX] SignalingConnect に clientId が漏れていたので追加する
     - @enm10k
-- [CHANGE] VideoView に解像度とフレームレートを表示するデバッグモードを追加する
-    - VideoView.debugMode を追加
-    - @szktty
 
 ## 2020.7.1
 
