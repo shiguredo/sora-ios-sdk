@@ -659,32 +659,26 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     return
                 }
                 
-                if let current = CameraVideoCapturer.current {
-                    current.stop { error in
-                        if error != nil {
+                if CameraVideoCapturer.current != nil {
+                    capturer.change(format: format, frameRate: frameRate) {error in
+                        guard error == nil else {
                             Logger.debug(type: .peerChannel,
-                                         message: "failed to stop CameraVideoCapturer =>  \(error!)")
+                                         message: "CameraVideoCapturer.change failed =>  \(error!)")
+                            return
                         }
-                        CameraVideoCapturer.current?.start(format: format, frameRate: frameRate) { error in
-                            guard error == nil else {
-                                Logger.debug(type: .peerChannel,
-                                             message: "failed to start CameraVideoCapturer =>  \(error!)")
-                                return
-                            }
-                            Logger.debug(type: .peerChannel,
-                                         message: "set CameraVideoCapturer.shared to sender stream")
-                            stream.cameraVideoCapturer = capturer
-                        }
+                        Logger.debug(type: .peerChannel,
+                                     message: "set CameraVideoCapturer to sender stream")
+                        stream.cameraVideoCapturer = capturer
                     }
                 } else {
                     capturer.start(format: format, frameRate: frameRate) { error in
                         guard error == nil else {
                             Logger.debug(type: .peerChannel,
-                                         message: "failed to start CameraVideoCapturer =>  \(error!)")
+                                         message: "CameraVideoCapturer.start failed =>  \(error!)")
                             return
                         }
                         Logger.debug(type: .peerChannel,
-                                     message: "set CameraVideoCapturer.shared to sender stream")
+                                     message: "set CameraVideoCapturer to sender stream")
                         stream.cameraVideoCapturer = capturer
                     }
                 }
