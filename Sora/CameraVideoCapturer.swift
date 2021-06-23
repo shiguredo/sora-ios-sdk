@@ -12,26 +12,30 @@ public final class CameraVideoCapturer {
     // MARK: インスタンスの取得
     
     /// シングルトンインスタンス
-    ///
     /// shared は廃止されました。
     @available(*, unavailable, message: "shared は廃止されました。")
     public static var shared: CameraVideoCapturer?
     
     /// 利用可能なデバイスのリスト
-    /// RTCCameraVideoCapturer.captureDevices を返す
     /// 名称が devices に変更されました
     @available(*, unavailable, renamed: "devices")
     public static var captureDevices: [AVCaptureDevice] {
         get { return RTCCameraVideoCapturer.captureDevices() }
     }
-    
+ 
+    /// 利用可能なデバイスのリスト
+    /// RTCCameraVideoCapturer.captureDevices を返す
     public static var devices: [AVCaptureDevice] {
         get { return RTCCameraVideoCapturer.captureDevices() }
     }
     
+    /// 前面のカメラに対応するデバイス
     public private(set) static var front: CameraVideoCapturer = CameraVideoCapturer(device: device(for: .front) ?? nil)
+
+    /// 背面のカメラに対応するデバイス
     public private(set) static var back: CameraVideoCapturer = CameraVideoCapturer(device: device(for: .back) ?? nil)
-    
+
+    /// 起動中のデバイス
     public private(set) static var current: CameraVideoCapturer?
     
     /// RTCCameraVideoCapturer が保持している AVCaptureSession
@@ -40,13 +44,13 @@ public final class CameraVideoCapturer {
     }
 
     /// 指定したカメラ位置にマッチした最初のデバイスを返す
-    /// captureDevice(for: .back) とすれば背面カメラを取得できる
     /// 名称が device に変更されました
     @available(*, unavailable, renamed: "device")
     public static func captureDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
         return nil
     }
-    
+    /// 指定したカメラ位置にマッチした最初のデバイスを返す
+    /// captureDevice(for: .back) とすれば背面カメラを取得できる
     public static func device(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
         for device in CameraVideoCapturer.devices {
             switch (device.position, position) {
@@ -65,8 +69,8 @@ public final class CameraVideoCapturer {
         return nil
     }
     
+    /// 指定された設定に最も近い  AVCaptureDevice.Format? を返す
     public static func format(width: Int32, height: Int32, for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
-        // 利用できる全フォーマットのうち、最も指定された設定の値に近いものを使用します。
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
         var currentFormat: AVCaptureDevice.Format? = nil
         var currentDiff = INT_MAX
@@ -84,19 +88,12 @@ public final class CameraVideoCapturer {
     /// :nodoc:
     @available(*, unavailable, message: "suitableFrameRate は廃止されました。 maxFramerate を利用してください。")
     public static func suitableFrameRate(for format: AVCaptureDevice.Format, frameRate: Int) -> Int? {
-        // 設定で指定されたFPS値をサポートしているレンジが一つでも存在すれば、その設定の値を使用する。
-        // 一つも見つからなかった場合はサポートされているレンジの中で最も大きなFPS値を使用する。
-        if format.videoSupportedFrameRateRanges.contains(where: { Int($0.minFrameRate) <= frameRate && frameRate <= Int($0.maxFrameRate) }) {
-            return frameRate
-        }
-        return format.videoSupportedFrameRateRanges
-            .max { $0.maxFrameRate < $1.maxFrameRate }
-            .map { Int($0.maxFrameRate) }
+        return nil
     }
     
+    /// 指定された FPS 値をサポートしているレンジが存在すれば、その値を返す
+    /// 存在しない場合はサポートされているレンジの中で最大の値を返す
     public static func maxFrameRate(_ frameRate: Int, for format: AVCaptureDevice.Format) -> Int? {
-        // 設定で指定されたFPS値をサポートしているレンジが一つでも存在すれば、その設定の値を使用する。
-        // 一つも見つからなかった場合はサポートされているレンジの中で最も大きなFPS値を使用する。
         if format.videoSupportedFrameRateRanges.contains(where: { Int($0.minFrameRate) <= frameRate && frameRate <= Int($0.maxFrameRate) }) {
             return frameRate
         }
@@ -121,8 +118,8 @@ public final class CameraVideoCapturer {
     public private(set) var settings: Any?
     
     /// カメラの位置
-    @available(*, unavailable, message: "position は廃止されました。")
-    public var position: AVCaptureDevice.Position = .front
+    @available(*, unavailable, message: "position は廃止されました。 現在利用されているデバイスは CameraVideoCapturer.current.position で取得してください。")
+    public var position: AVCaptureDevice.Position? = nil
 
     /// 使用中のカメラの位置に対応するデバイス
     /// captureDevice に変更されました
@@ -170,8 +167,9 @@ public final class CameraVideoCapturer {
     public func start(format: AVCaptureDevice.Format,
                       frameRate: Int,
                       completionHandler: @escaping ((Error?) -> Void)) {
-        guard !isRunning else {
-            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "start", isRunning: isRunning))
+
+        guard CameraVideoCapturer.current != nil else {
+            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should be nil to execute CmaeraVideoCapturer.start"))
             return
         }
         
@@ -210,7 +208,7 @@ public final class CameraVideoCapturer {
      */
     public func stop(completionHandler: @escaping ((Error?) -> Void)) {
         guard CameraVideoCapturer.current != nil else {
-            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "stop", isRunning: isRunning))
+            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should not be nil to execute CmaeraVideoCapturer.stop"))
             return
         }
         
@@ -227,7 +225,7 @@ public final class CameraVideoCapturer {
     
     public func restart(completionHandler: @escaping ((Error?) -> Void)) {
         guard let current = CameraVideoCapturer.current else {
-            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "stop", isRunning: isRunning))
+            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should not be nil to execute CmaeraVideoCapturer.restart"))
             return
         }
         
@@ -268,7 +266,7 @@ public final class CameraVideoCapturer {
     
     func change(format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil, completionHandler: @escaping ((Error?) -> Void)) {
         guard let current = CameraVideoCapturer.current else {
-            completionHandler(CameraVideoCapturer.unexpectedIsRunningError(action: "stop", isRunning: isRunning))
+            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should not be nil to execute CmaeraVideoCapturer.change"))
             return
         }
         
@@ -298,10 +296,6 @@ public final class CameraVideoCapturer {
                 completionHandler(nil)
             }
         }
-    }
-
-    private static func unexpectedIsRunningError(action: String, isRunning: Bool) -> SoraError {
-        return SoraError.cameraError(reason: "tried to \(action) but isRunning is unexpected value: isRunning => \(isRunning)")
     }
 }
 
