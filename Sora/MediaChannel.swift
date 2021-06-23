@@ -289,6 +289,15 @@ public final class MediaChannel {
         state = .connecting
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
+
+        let webSocketChannel = signalingChannel.webSocketChannel
+        
+        webSocketChannel.internalHandlers.onDisconnect = { error in
+            if self.state == .connecting || self.state == .connected {
+                self.disconnect(error: error)
+            }
+            connectionTask.complete()
+        }
         
         peerChannel.internalHandlers.onDisconnect = { error in
             if self.state == .connecting || self.state == .connected {
