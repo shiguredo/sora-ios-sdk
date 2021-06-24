@@ -107,6 +107,15 @@ public final class MediaChannel {
         }
     }
     
+    /**
+     接続 ID 。接続後にセットされます。
+     */
+    public var connectionId: String? {
+        get {
+            return peerChannel.connectionId
+        }
+    }
+    
     /// 接続状態
     public private(set) var state: ConnectionState = .disconnected {
         didSet {
@@ -280,6 +289,13 @@ public final class MediaChannel {
         state = .connecting
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
+
+        signalingChannel.internalHandlers.onDisconnect = { error in
+            if self.state == .connecting || self.state == .connected {
+                self.disconnect(error: error)
+            }
+            connectionTask.complete()
+        }
         
         peerChannel.internalHandlers.onDisconnect = { error in
             if self.state == .connecting || self.state == .connected {
@@ -305,7 +321,7 @@ public final class MediaChannel {
         peerChannel.internalHandlers.onReceiveSignaling = { message in
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
-            case .notifyConnection(let message):
+            case .notify(let message):
                 self.publisherCount = message.publisherCount
                 self.subscriberCount = message.subscriberCount
             default:

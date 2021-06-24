@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="14109" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES">
-    <device id="retina4_7" orientation="portrait">
-        <adaptation id="fullscreen"/>
-    </device>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="18122" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES">
+    <device id="retina4_7" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14088"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="18093"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
@@ -15,17 +14,44 @@
             <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
-                <view contentMode="scaleToFill" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Qak-TX-EGf" customClass="RTCEAGLVideoView">
+                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Qak-TX-EGf" customClass="RTCEAGLVideoView">
                     <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
-                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                     <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="calibratedWhite"/>
                 </view>
+                <label hidden="YES" opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Debug Info" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="eO6-a0-tZC">
+                    <rect key="frame" x="8" y="8" width="359" height="21"/>
+                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                    <accessibility key="accessibilityConfiguration">
+                        <accessibilityTraits key="traits" staticText="YES" notEnabled="YES"/>
+                    </accessibility>
+                    <constraints>
+                        <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="21" id="mYv-Pa-QiJ"/>
+                    </constraints>
+                    <fontDescription key="fontDescription" type="system" weight="medium" pointSize="17"/>
+                    <nil key="textColor"/>
+                    <nil key="highlightedColor"/>
+                </label>
             </subviews>
             <color key="backgroundColor" white="0.0" alpha="1" colorSpace="calibratedWhite"/>
+            <constraints>
+                <constraint firstItem="eO6-a0-tZC" firstAttribute="top" secondItem="iN0-l3-epB" secondAttribute="top" constant="8" id="9br-Od-VYz"/>
+                <constraint firstItem="eO6-a0-tZC" firstAttribute="leading" secondItem="iN0-l3-epB" secondAttribute="leading" constant="8" id="LLO-Xo-ZLH"/>
+                <constraint firstAttribute="trailing" secondItem="eO6-a0-tZC" secondAttribute="trailing" constant="8" id="Nfh-Pw-eoz"/>
+                <constraint firstItem="Qak-TX-EGf" firstAttribute="bottom" secondItem="iN0-l3-epB" secondAttribute="bottomMargin" id="Umr-Rf-L0U"/>
+                <constraint firstItem="Qak-TX-EGf" firstAttribute="centerX" secondItem="iN0-l3-epB" secondAttribute="centerX" id="XFa-Et-C0F"/>
+                <constraint firstItem="Qak-TX-EGf" firstAttribute="top" secondItem="iN0-l3-epB" secondAttribute="topMargin" id="jTe-7T-z4p"/>
+                <constraint firstItem="Qak-TX-EGf" firstAttribute="leading" secondItem="iN0-l3-epB" secondAttribute="leading" id="kIM-nK-R6T"/>
+            </constraints>
             <connections>
+                <outlet property="debugInfoLabel" destination="eO6-a0-tZC" id="vWc-du-Fbs"/>
                 <outlet property="nativeVideoView" destination="Qak-TX-EGf" id="gS7-Ox-9Bu"/>
             </connections>
-            <point key="canvasLocation" x="-194.5" y="-8.5"/>
+            <point key="canvasLocation" x="240.80000000000001" y="-42.728635682158924"/>
         </view>
     </objects>
+    <resources>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+    </resources>
 </document>

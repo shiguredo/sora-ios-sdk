@@ -182,6 +182,17 @@ public class VideoView: UIView {
         self.isRendering = false
     }
     
+    // MARK: - デバッグモード
+    
+    /**
+     デバッグモードを有効にします。
+     有効にすると、映像の上部に解像度とフレームレートを表示します。
+     */
+    public var debugMode: Bool {
+        get { contentView.debugMode }
+        set { contentView.debugMode = newValue }
+    }
+    
 }
 
 // MARK: - VideoRenderer
@@ -245,9 +256,39 @@ extension VideoView: VideoRenderer {
 class VideoViewContentView: UIView {
     
     @IBOutlet private weak var nativeVideoView: RTCEAGLVideoView!
+    @IBOutlet private weak var debugInfoLabel: UILabel!
     
     fileprivate var currentVideoFrameSize: CGSize?
     private var videoFrameSizeToChange: CGSize?
+    
+    private var frameCount: Int = 0
+    
+    var debugMode: Bool = false {
+        didSet {
+            if debugMode {
+                DispatchQueue.main.async {
+                    self.debugInfoLabel.text = ""
+                    self.debugInfoLabel.isHidden = false
+                }
+                
+                frameCount = 0
+                debugMonitor = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
+                    DispatchQueue.main.async {
+                        self.updateDebugInfo()
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.debugInfoLabel.isHidden = true
+                }
+                
+                debugMonitor?.invalidate()
+                debugMonitor = nil
+            }
+        }
+    }
+    
+    private var debugMonitor: Timer?
     
     // MARK: - Init/deinit
     
@@ -297,6 +338,10 @@ class VideoViewContentView: UIView {
         updateSizeIfNeeded()
         
         if let frame = videoFrame {
+            if debugMode {
+                frameCount += 1
+            }
+            
             switch frame {
             case .native(capturer: _, frame: let frame):
                 nativeVideoView.isHidden = false
@@ -357,6 +402,23 @@ class VideoViewContentView: UIView {
         nativeVideoView.setSize(adjustSize)
         currentVideoFrameSize = videoFrameSize
         setNeedsDisplay()
+    }
+    
+    private func updateDebugInfo() {
+        var info: String
+        if let size = currentVideoFrameSize {
+            info = "\(Int(size.width))x\(Int(size.height)) / "
+        } else {
+            info = ""
+        }
+        
+        info += "\(frameCount) fps"
+        frameCount = 0
+        
+        debugInfoLabel.text = info
+        debugInfoLabel.isHidden = false
+        
+        Logger.debug(type: .videoView, message: "\(self.superview ?? self): \(info)")
     }
     
 }
