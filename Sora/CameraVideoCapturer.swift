@@ -40,7 +40,7 @@ public final class CameraVideoCapturer {
     
     /// RTCCameraVideoCapturer が保持している AVCaptureSession
     public var captureSession: AVCaptureSession {
-        get { return nativeCameraVideoCapturer.captureSession }
+        get { return native.captureSession }
     }
 
     /// 指定したカメラ位置にマッチした最初のデバイスを返す
@@ -143,13 +143,13 @@ public final class CameraVideoCapturer {
     /// フォーマット
     public private(set) var format: AVCaptureDevice.Format?
     
-    private var nativeCameraVideoCapturer: RTCCameraVideoCapturer!
+    private var native: RTCCameraVideoCapturer!
     private var nativeDelegate: CameraVideoCapturerDelegate!
     
     public init(device: AVCaptureDevice?) {
         self.device = device
         nativeDelegate = CameraVideoCapturerDelegate(cameraVideoCapturer: self)
-        nativeCameraVideoCapturer = RTCCameraVideoCapturer(delegate: nativeDelegate)
+        native = RTCCameraVideoCapturer(delegate: nativeDelegate)
     }
     
     // MARK: カメラの操作
@@ -178,9 +178,9 @@ public final class CameraVideoCapturer {
             return
         }
         
-        nativeCameraVideoCapturer.startCapture(with: device,
-                                               format: format,
-                                               fps: frameRate) { [self] (error: Error?) in
+        native.startCapture(with: device,
+                            format: format,
+                            fps: frameRate) { [self] (error: Error?) in
             guard error == nil else {
                 completionHandler(error)
                 return
@@ -212,7 +212,7 @@ public final class CameraVideoCapturer {
             return
         }
         
-        nativeCameraVideoCapturer.stopCapture() { [self] in
+        native.stopCapture() { [self] in
             Logger.debug(type: .cameraVideoCapturer, message: "succeeded to stop \(String(describing: device))")
             
             // stop が成功した際の処理
