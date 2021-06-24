@@ -118,7 +118,7 @@ public final class CameraVideoCapturer {
     public private(set) var settings: Any?
     
     /// カメラの位置
-    @available(*, unavailable, message: "position は廃止されました。 現在利用されているデバイスは CameraVideoCapturer.current.position で取得してください。")
+    @available(*, unavailable, message: "position は廃止されました。 現在利用されているデバイスは CameraVideoCapturer.current?.device?.position で取得してください。")
     public var position: AVCaptureDevice.Position? = nil
 
     /// 使用中のカメラの位置に対応するデバイス
@@ -167,14 +167,13 @@ public final class CameraVideoCapturer {
     public func start(format: AVCaptureDevice.Format,
                       frameRate: Int,
                       completionHandler: @escaping ((Error?) -> Void)) {
-
-        guard CameraVideoCapturer.current != nil else {
-            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should be nil to execute CmaeraVideoCapturer.start"))
+        guard isRunning == false else {
+            completionHandler(SoraError.cameraError(reason: "isRunning should be false to execute start"))
             return
         }
         
         guard let device = device else {
-            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.device is not initialized"))
+            completionHandler(SoraError.cameraError(reason: "device is not initialized"))
             return
         }
         
@@ -207,8 +206,8 @@ public final class CameraVideoCapturer {
      * 必ず対に実行するように注意してください。
      */
     public func stop(completionHandler: @escaping ((Error?) -> Void)) {
-        guard CameraVideoCapturer.current != nil else {
-            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should not be nil to execute CmaeraVideoCapturer.stop"))
+        guard isRunning else {
+            completionHandler(SoraError.cameraError(reason: "isRunning should be true to execute stop"))
             return
         }
         
@@ -225,7 +224,7 @@ public final class CameraVideoCapturer {
     
     public func restart(completionHandler: @escaping ((Error?) -> Void)) {
         guard let current = CameraVideoCapturer.current else {
-            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should not be nil to execute CmaeraVideoCapturer.restart"))
+            completionHandler(SoraError.cameraError(reason: "current should not be nil to execute restart"))
             return
         }
         
@@ -257,16 +256,15 @@ public final class CameraVideoCapturer {
             }
         }
     }
-
-    
     
     /// 廃止されました。
     @available(*, unavailable, message: "flip は廃止されました。")
     public func flip() {}
     
+    /// カメラを停止後、指定されたパラメーターで起動します
     func change(format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil, completionHandler: @escaping ((Error?) -> Void)) {
         guard let current = CameraVideoCapturer.current else {
-            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.current should not be nil to execute CmaeraVideoCapturer.change"))
+            completionHandler(SoraError.cameraError(reason: "current should not be nil to execute change"))
             return
         }
         
