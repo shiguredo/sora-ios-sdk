@@ -192,8 +192,8 @@ public final class CameraVideoCapturer {
             self.frameRate = frameRate
             isRunning = true
             CameraVideoCapturer.current = self
-            handlers.onStart?()
             completionHandler(nil)
+            handlers.onStart?()
         }
     }
     
@@ -218,8 +218,8 @@ public final class CameraVideoCapturer {
             // stop が成功した際の処理
             isRunning = false
             CameraVideoCapturer.current = nil
-            handlers.onStop?()
             completionHandler(nil)
+            handlers.onStop?()
         }
     }
     
