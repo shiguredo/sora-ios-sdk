@@ -659,16 +659,24 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     return
                 }
                 
-                if CameraVideoCapturer.current != nil {
-                    capturer.change(format: format, frameRate: frameRate) {error in
+                if CameraVideoCapturer.current != nil && CameraVideoCapturer.current!.isRunning {
+                    // CameraVideoCapturer.current を停止してから capturer を start する
+                    CameraVideoCapturer.current!.stop() { (error: Error?) in
                         guard error == nil else {
                             Logger.debug(type: .peerChannel,
-                                         message: "CameraVideoCapturer.change failed =>  \(error!)")
+                                         message: "CameraVideoCapturer.stop failed =>  \(error!)")
                             return
                         }
-                        Logger.debug(type: .peerChannel,
-                                     message: "set CameraVideoCapturer to sender stream")
-                        stream.cameraVideoCapturer = capturer
+
+                        capturer.start(format: format,
+                              frameRate: frameRate) { (error: Error?) in
+                            guard error == nil else {
+                                Logger.debug(type: .peerChannel,
+                                             message: "CameraVideoCapturer.start failed =>  \(error!)")
+                                return
+                            }
+                            stream.cameraVideoCapturer = capturer
+                        }
                     }
                 } else {
                     capturer.start(format: format, frameRate: frameRate) { error in

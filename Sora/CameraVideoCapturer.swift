@@ -168,7 +168,7 @@ public final class CameraVideoCapturer {
                       frameRate: Int,
                       completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning == false else {
-            completionHandler(SoraError.cameraError(reason: "isRunning should be false to execute start"))
+            completionHandler(SoraError.cameraError(reason: "isRunning should be false"))
             return
         }
         
@@ -207,7 +207,7 @@ public final class CameraVideoCapturer {
      */
     public func stop(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
-            completionHandler(SoraError.cameraError(reason: "isRunning should be true to execute stop"))
+            completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
             return
         }
         
@@ -223,8 +223,8 @@ public final class CameraVideoCapturer {
     }
     
     public func restart(completionHandler: @escaping ((Error?) -> Void)) {
-        guard let current = CameraVideoCapturer.current else {
-            completionHandler(SoraError.cameraError(reason: "current should not be nil to execute restart"))
+        guard isRunning else {
+            completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
             return
         }
         
@@ -238,7 +238,7 @@ public final class CameraVideoCapturer {
             return
         }
         
-        current.stop() { [self] (error: Error?) in
+        stop() { [self] (error: Error?) in
             guard error == nil else {
                 completionHandler(error)
                 return
@@ -263,8 +263,8 @@ public final class CameraVideoCapturer {
     
     /// カメラを停止後、指定されたパラメーターで起動します
     public func change(format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil, completionHandler: @escaping ((Error?) -> Void)) {
-        guard let current = CameraVideoCapturer.current else {
-            completionHandler(SoraError.cameraError(reason: "current should not be nil to execute change"))
+        guard isRunning else {
+            completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
             return
         }
         
@@ -278,7 +278,7 @@ public final class CameraVideoCapturer {
             return
         }
         
-        current.stop() { [self] (error: Error?) in
+        stop() { [self] (error: Error?) in
             guard error == nil else {
                 completionHandler(error)
                 return
