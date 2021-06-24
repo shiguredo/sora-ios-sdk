@@ -262,7 +262,7 @@ public final class CameraVideoCapturer {
     public func flip() {}
     
     /// カメラを停止後、指定されたパラメーターで起動します
-    func change(format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil, completionHandler: @escaping ((Error?) -> Void)) {
+    public func change(format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil, completionHandler: @escaping ((Error?) -> Void)) {
         guard let current = CameraVideoCapturer.current else {
             completionHandler(SoraError.cameraError(reason: "current should not be nil to execute change"))
             return
@@ -290,7 +290,7 @@ public final class CameraVideoCapturer {
                     return
                 }
                 
-                Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
+                Logger.debug(type: .cameraVideoCapturer, message: "succeeded to change")
                 completionHandler(nil)
             }
         }
