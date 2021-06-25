@@ -203,6 +203,27 @@ public final class Sora {
         }
     }
     
+    @available(iOS 15.0, *)
+    public func connect(configuration: Configuration,
+                        webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration()) async throws -> MediaChannel {
+        typealias ConnectContinuation = CheckedContinuation<MediaChannel, Error>
+        var connectianTask: ConnectionTask?
+        return try await withTaskCancellationHandler {
+            // TODO: Sendable
+            // connectianTask?.cancel()
+        } operation: {
+            return try await withCheckedThrowingContinuation { (continuation: ConnectContinuation) in
+                connectianTask = self.connect(configuration: configuration, webRTCConfiguration: webRTCConfiguration) { mediaChannel, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: mediaChannel!)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - 音声ユニットの操作
     
     /**
