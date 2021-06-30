@@ -95,9 +95,6 @@ public protocol MediaStream: class {
     var remoteAudioVolume: Double? { get set }
     
     // MARK: 映像フレームの送信
-
-    /// 映像キャプチャー
-    var cameraVideoCapturer: CameraVideoCapturer? { get set }
     
     /// 映像フィルター
     var videoFilter: VideoFilter? { get set }
@@ -135,19 +132,6 @@ class BasicMediaStream: MediaStream {
     var videoTrackId: String = ""
     var audioTrackId: String = ""
     var creationTime: Date
-    
-    var cameraVideoCapturer: CameraVideoCapturer? {
-        willSet {
-            if let oldValue = cameraVideoCapturer {
-                // Do not autostop here, let others manage videoCapturer's life cycle
-                oldValue.stream = nil
-            }
-            if let newValue = newValue {
-                newValue.stream = self
-                // Do not autostart here, let others manage videoCapturer's life cycle
-            }
-        }
-    }
     
     var videoFilter: VideoFilter?
     

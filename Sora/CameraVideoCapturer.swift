@@ -103,7 +103,7 @@ public final class CameraVideoCapturer {
     }
     
     /// 引数に指定された capturer を停止し、反対の position を持つ CameraVideoCapturer を起動します
-    /// 起動に成功した場合は、 capturer の保持していた MediaStream に CameraVideoCapturer がセットされます
+    /// CameraVideoCapturer の起動には capturer に近い設定が利用されます
     public static func flip(_ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)) {
         guard capturer.device != nil else {
             completionHandler(SoraError.cameraError(reason: "device should not be nil"))
@@ -131,11 +131,6 @@ public final class CameraVideoCapturer {
             return
         }
         
-        guard let stream = capturer.stream else {
-            completionHandler(SoraError.cameraError(reason: "stream should not be nil"))
-            return
-        }
-        
         capturer.stop { error in
             guard error == nil else {
                 print("\(String(describing: error))")
@@ -147,7 +142,7 @@ public final class CameraVideoCapturer {
                     completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
                     return
                 }
-                stream.cameraVideoCapturer = flip
+                flip.stream = capturer.stream
                 completionHandler(nil)
             }
         }

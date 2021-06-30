@@ -674,7 +674,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                              message: "CameraVideoCapturer.start failed =>  \(error!)")
                                 return
                             }
-                            stream.cameraVideoCapturer = capturer
+                            capturer.stream = stream
                         }
                     }
                 } else {
@@ -686,7 +686,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                         }
                         Logger.debug(type: .peerChannel,
                                      message: "set CameraVideoCapturer to sender stream")
-                        stream.cameraVideoCapturer = capturer
+                        capturer.stream = stream
                     }
                 }
             } else {
