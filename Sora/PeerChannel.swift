@@ -634,7 +634,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let stream = BasicMediaStream(peerChannel: channel,
                                       nativeStream: nativeStream)
         
-        // NOTE:  videoEnabled と cameraSettings.isEnabled は意味が違うが、役割が被っている気がする
         if configuration.videoEnabled && configuration.cameraSettings.isEnabled {
             let position = configuration.cameraSettings.position
             
