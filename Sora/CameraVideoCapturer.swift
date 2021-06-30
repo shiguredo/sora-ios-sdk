@@ -102,6 +102,56 @@ public final class CameraVideoCapturer {
             .map { Int($0.maxFrameRate) }
     }
     
+    /// 引数に指定された capturer を停止し、反対の position を持つ CameraVideoCapturer を起動します
+    /// 起動に成功した場合は、 capturer の保持していた MediaStream に CameraVideoCapturer がセットされます
+    public static func flip(_ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)) {
+        guard capturer.device != nil else {
+            completionHandler(SoraError.cameraError(reason: "device should not be nil"))
+            return
+        }
+        
+        guard capturer.format != nil else {
+            completionHandler(SoraError.cameraError(reason: "format should not be nil"))
+            return
+        }
+        
+        // 反対の position を持つ CameraVideoCapturer を取得する
+        let flip: CameraVideoCapturer = capturer.device!.position == .front ? .back : .front
+        
+        let dimension = CMVideoFormatDescriptionGetDimensions(capturer.format!.formatDescription)
+        guard let format = CameraVideoCapturer.format(width: dimension.width,
+                                                      height: dimension.height,
+                                                      for: flip.device!) else {
+            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.format failed: suitable format is not found"))
+            return
+        }
+        
+        guard let frameRate = CameraVideoCapturer.maxFrameRate(capturer.frameRate!, for: format) else {
+            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.maxFramerate failed: suitable frameRate is not found"))
+            return
+        }
+        
+        guard let stream = capturer.stream else {
+            completionHandler(SoraError.cameraError(reason: "stream should not be nil"))
+            return
+        }
+        
+        capturer.stop { error in
+            guard error == nil else {
+                print("\(String(describing: error))")
+                completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.stop failed"))
+                return
+            }
+            flip.start(format: format, frameRate: frameRate) { error in
+                guard error == nil else {
+                    completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
+                    return
+                }
+                stream.cameraVideoCapturer = flip
+                completionHandler(nil)
+            }
+        }
+    }
     // MARK: プロパティ
     
     /// 出力先のストリーム
@@ -222,6 +272,7 @@ public final class CameraVideoCapturer {
         }
     }
     
+    /// カメラを再起動します
     public func restart(completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
             completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
@@ -256,11 +307,7 @@ public final class CameraVideoCapturer {
             }
         }
     }
-    
-    /// 廃止されました。
-    @available(*, unavailable, message: "flip は廃止されました。")
-    public func flip() {}
-    
+
     /// カメラを停止後、指定されたパラメーターで起動します
     public func change(format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil, completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning else {
