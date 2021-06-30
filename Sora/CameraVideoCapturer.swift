@@ -102,8 +102,8 @@ public final class CameraVideoCapturer {
             .map { Int($0.maxFrameRate) }
     }
     
-    /// 引数に指定された capturer を停止し、反対の position を持つ CameraVideoCapturer を起動します
-    /// CameraVideoCapturer の起動には capturer に近い設定が利用されます
+    /// 引数に指定された capturer を停止し、反対の position を持つ CameraVideoCapturer を capturer に近い設定で起動します
+    /// 起動に成功した場合は、 capturer の保持する MediaStream が CameraVideoCapturer に設定されます
     public static func flip(_ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)) {
         guard capturer.device != nil else {
             completionHandler(SoraError.cameraError(reason: "device should not be nil"))
