@@ -180,7 +180,7 @@ public final class CameraVideoCapturer {
         }
     }
     
-    // 使用中のデバイス
+    /// 使用中のデバイス
     public var device: AVCaptureDevice?
     
     /// フレームレート
