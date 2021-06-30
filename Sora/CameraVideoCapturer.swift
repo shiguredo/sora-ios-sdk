@@ -133,7 +133,6 @@ public final class CameraVideoCapturer {
         
         capturer.stop { error in
             guard error == nil else {
-                print("\(String(describing: error))")
                 completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.stop failed"))
                 return
             }
