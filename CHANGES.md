@@ -9,6 +9,14 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [CHANGE] 接続開始時のカメラ・デバイスを指定可能にする
+    - Configuration.cameraSettings.position に .front または .back を設定して、接続開始時のカメラ・デバイスを指定します
+    - この変更に伴い、 CameraVideoCapturer の API が破壊的に変更されました
+    - 併せて、 `Configuration.videoCapturerDevice` が廃止されました
+    - @szktty @enm10k
+
 ## 2021.1
 
 - [UPDATE] システム条件を変更する
