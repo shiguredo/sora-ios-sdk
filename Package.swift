@@ -19,6 +19,7 @@ let package = Package(
             checksum: "1951c3e83259a28f594b0447565c6284cd6a281639492179799428e17e1da325"),
         .target(
             name: "Sora",
-            dependencies: ["Starscream"]),
+            dependencies: ["Starscream"],
+            path: "Sora"),
     ]
 )
