@@ -8,6 +8,7 @@ let package = Package(
     name: "Sora",
     products: [
         .library(name: "Sora", targets: ["Sora"]),
+        .library(name: "WebRTC", targets: ["WebRTC"]),
     ],
     dependencies: [
         .package(url: "https://github.com/daltoniam/Starscream.git", .exact( "3.1.1")),
@@ -19,7 +20,7 @@ let package = Package(
             checksum: "1951c3e83259a28f594b0447565c6284cd6a281639492179799428e17e1da325"),
         .target(
             name: "Sora",
-            dependencies: ["Starscream"],
+            dependencies: ["WebRTC", "Starscream"],
             path: "Sora"),
     ]
 )
