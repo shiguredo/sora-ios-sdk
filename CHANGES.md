@@ -11,6 +11,9 @@
 
 ## develop
 
+- [UPDATE] システム条件を変更する
+    - iOS 12.1 以降
+    - @miosakuma
 - [CHANGE] 接続開始時のカメラ・デバイスを指定可能にする
     - `Configuration.cameraSettings.position` に `.front` または `.back` を設定して、接続開始時のカメラ・デバイスを指定します
     - この修正に伴い、以下の API が変更されました
