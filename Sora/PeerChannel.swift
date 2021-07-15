@@ -904,6 +904,20 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                      message: "changed ICE gathering state to \(newState)")
     }
     
+    func peerConnection(_ peerConnection: RTCPeerConnection,
+                        didChange newState: RTCPeerConnectionState) {
+        Logger.debug(type: .peerChannel,
+                     message: "changed peer connection state to \(newState)")
+        switch newState {
+        case .failed:
+            disconnect(error: nil) // TODO: 返却するエラーについて検討する
+        case .connected:
+            finishConnecting()
+        default:
+            break
+        }
+    }
+    
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didGenerate candidate: RTCIceCandidate) {
         Logger.debug(type: .peerChannel,
