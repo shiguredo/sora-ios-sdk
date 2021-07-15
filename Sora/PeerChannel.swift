@@ -82,7 +82,7 @@ public final class PeerChannelHandlers {
  映像と音声の送受信が可能になります。
  メディアストリームはシングルストリームでは 1 つ、マルチストリームでは複数用意されます。
  */
-public protocol PeerChannel: class {
+public protocol PeerChannel: AnyObject {
     
     // MARK: - イベントハンドラ
     
