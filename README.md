@@ -18,7 +18,7 @@ Please read https://github.com/shiguredo/oss before use.
 
 ## システム条件
 
-- iOS 10.0 以降
+- iOS 12.1 以降
 - アーキテクチャ arm64, x86_64 (シミュレーターの動作は未保証)
 - macOS 11.3 以降
 - Xcode 12.5
