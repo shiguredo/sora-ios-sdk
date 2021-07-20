@@ -81,6 +81,7 @@ extension WSError: LocalizedError {
     
     public var errorDescription: String? {
         var desc = "\(code): "
+        /*
         switch type {
         case .closeError:
             desc += "close error"
@@ -98,6 +99,7 @@ extension WSError: LocalizedError {
             desc += "write timeout error"
         }
         desc += ": \(message)"
+ */
         return desc
     }
 

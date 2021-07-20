@@ -43,7 +43,8 @@ public class VideoView: UIView {
     // また、遅延プロパティでもキーウィンドウ外で初期化すれば
     // エラーが発生するため、根本的な解決策ではないので注意
     private lazy var contentView: VideoViewContentView = {
-        guard let topLevel = Bundle(for: VideoView.self)
+        //guard let topLevel = Bundle(for: VideoView.self)
+        guard let topLevel = Bundle.module
             .loadNibNamed("VideoView", owner: self, options: nil) else
         {
             fatalError("cannot load VideoView's nib file")
