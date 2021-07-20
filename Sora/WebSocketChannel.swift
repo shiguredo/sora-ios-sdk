@@ -294,6 +294,10 @@ class BasicWebSocketChannel: WebSocketChannel {
 }
 
 class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
+    func didReceive(event: WebSocketEvent, client: WebSocket) {
+
+    }
+
     
     weak var channel: BasicWebSocketChannel!
     var nativeChannel: WebSocket
@@ -309,7 +313,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
 
     init(channel: BasicWebSocketChannel) {
         self.channel = channel
-        nativeChannel = WebSocket(url: channel.url)
+        nativeChannel = WebSocket(request: .init(url: channel.url))
         super.init()
         nativeChannel.delegate = self
     }
