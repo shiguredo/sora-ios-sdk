@@ -837,7 +837,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didChange stateChanged: RTCSignalingState) {
         Logger.debug(type: .peerChannel,
-                     message: "changed signaling state to \(stateChanged)")
+                     message: "signaling state: \(stateChanged)")
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
@@ -892,22 +892,22 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didChange newState: RTCIceConnectionState) {
         Logger.debug(type: .peerChannel,
-                     message: "changed ICE connection state to \(newState)")
+                     message: "ICE connection state: \(newState)")
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didChange newState: RTCIceGatheringState) {
         Logger.debug(type: .peerChannel,
-                     message: "changed ICE gathering state to \(newState)")
+                     message: "ICE gathering state: \(newState)")
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange newState: RTCPeerConnectionState) {
         Logger.debug(type: .peerChannel,
-                     message: "changed peer connection state to \(newState)")
+                     message: "peer connection state: \(newState)")
         switch newState {
         case .failed:
-            disconnect(error: nil) // TODO: 返却するエラーについて検討する
+            disconnect(error: SoraError.peerChannelError(reason: "peer connection state: failed"))
         case .connected:
             finishConnecting()
         default:
