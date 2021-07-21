@@ -1,9 +1,6 @@
 import Foundation
 import WebRTC
 
-@available(*, unavailable) // TODO: message を書く
-class PeerChannelInternalState {}
-
 /**
  ピアチャネルのイベントハンドラです。
  */
