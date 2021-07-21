@@ -1,154 +1,6 @@
 import Foundation
 import WebRTC
 
-private let peerChannelSignalingStateTable: PairTable<PeerChannelSignalingState, RTCSignalingState> =
-    PairTable(name: "PeerChannelSignalingState",
-              pairs: [(.stable, .stable),
-                      (.haveLocalOffer, .haveLocalOffer),
-                      (.haveLocalPrAnswer, .haveLocalPrAnswer),
-                      (.haveRemoteOffer, .haveRemoteOffer),
-                      (.haveRemotePrAnswer, .haveRemotePrAnswer),
-                      (.closed, .closed)])
-
-private let iceConnectionStateTable: PairTable<ICEConnectionState, RTCIceConnectionState> =
-    PairTable(name: "ICEConnectionState",
-              pairs: [(.new, .new),
-                      (.checking, .checking),
-                      (.connected, .connected),
-                      (.completed, .completed),
-                      (.failed, .failed),
-                      (.disconnected, .disconnected),
-                      (.closed, .closed),
-                      (.count, .count)])
-
-private let iceGatheringStateTable: PairTable<ICEGatheringState, RTCIceGatheringState> =
-    PairTable(name: "ICEGatheringState",
-              pairs: [(.new, .new),
-                      (.gathering, .gathering),
-                      (.complete, .complete)])
-
-enum PeerChannelSignalingState {
-    
-    case stable
-    case haveLocalOffer
-    case haveLocalPrAnswer
-    case haveRemoteOffer
-    case haveRemotePrAnswer
-    case closed
-    
-    init(nativeValue: RTCSignalingState) {
-        self = peerChannelSignalingStateTable.left(other: nativeValue)!
-    }
-    
-}
-
-enum ICEConnectionState {
-    
-    case new
-    case checking
-    case connected
-    case completed
-    case failed
-    case disconnected
-    case closed
-    case count
-    
-    init(nativeValue: RTCIceConnectionState) {
-        self = iceConnectionStateTable.left(other: nativeValue)!
-    }
-    
-}
-
-enum ICEGatheringState {
-    
-    case new
-    case gathering
-    case complete
-    
-    init(nativeValue: RTCIceGatheringState) {
-        self = iceGatheringStateTable.left(other: nativeValue)!
-    }
-    
-}
-
-class PeerChannelInternalState {
-    
-    var signalingState: PeerChannelSignalingState {
-        didSet { validate() }
-    }
-    
-    var iceConnectionState: ICEConnectionState {
-        didSet { validate() }
-    }
-    
-    var iceGatheringState: ICEGatheringState {
-        didSet { validate() }
-    }
-    
-    private var isConnected: Bool = false
-    
-    private var isCompleted: Bool {
-        get {
-            switch (signalingState, iceConnectionState, iceGatheringState) {
-            case (.stable, .connected, .complete):
-                return true
-            default:
-                return false
-            }
-        }
-    }
-    
-    var onCompleteHandler: (() -> Void)?
-    var onDisconnectHandler: (() -> Void)?
-    
-    init(signalingState: PeerChannelSignalingState,
-         iceConnectionState: ICEConnectionState,
-         iceGatheringState: ICEGatheringState) {
-        self.signalingState = signalingState
-        self.iceConnectionState = iceConnectionState
-        self.iceGatheringState = iceGatheringState
-    }
-    
-    private func validate() {
-        if isCompleted {
-            Logger.debug(type: .peerChannel,
-                         message: "peer channel state: completed")
-            Logger.debug(type: .peerChannel,
-                         message: "    signaling state: \(signalingState)")
-            Logger.debug(type: .peerChannel,
-                         message: "    ICE connection state: \(iceConnectionState)")
-            Logger.debug(type: .peerChannel,
-                         message: "    ICE gathering state: \(iceGatheringState)")
-            
-            isConnected = true
-            onCompleteHandler?()
-            onCompleteHandler = nil
-        } else if isConnected {
-            if signalingState == .closed {
-                Logger.debug(type: .peerChannel,
-                             message: "peer channel state: disconnected")
-                Logger.debug(type: .peerChannel,
-                             message: "    signaling state: \(signalingState)")
-                Logger.debug(type: .peerChannel,
-                             message: "    ICE connection state: \(iceConnectionState)")
-                Logger.debug(type: .peerChannel,
-                             message: "    ICE gathering state: \(iceGatheringState)")
-                isConnected = false
-                onDisconnectHandler?()
-            }
-        } else {
-            Logger.debug(type: .peerChannel,
-                         message: "peer channel state: not completed")
-            Logger.debug(type: .peerChannel,
-                         message: "    signaling state: \(signalingState)")
-            Logger.debug(type: .peerChannel,
-                         message: "    ICE connection state: \(iceConnectionState)")
-            Logger.debug(type: .peerChannel,
-                         message: "    ICE gathering state: \(iceGatheringState)")
-        }
-    }
-}
-
 /**
  ピアチャネルのイベントハンドラです。
  */
@@ -227,7 +79,7 @@ public final class PeerChannelHandlers {
  映像と音声の送受信が可能になります。
  メディアストリームはシングルストリームでは 1 つ、マルチストリームでは複数用意されます。
  */
-public protocol PeerChannel: class {
+public protocol PeerChannel: AnyObject {
     
     // MARK: - イベントハンドラ
     
@@ -443,7 +295,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     // connect() の成功後は必ずセットされるので nil チェックを省略する
     // connect() 実行前は nil なのでアクセスしないこと
     var nativeChannel: RTCPeerConnection!
-    var internalState: PeerChannelInternalState!
     
     var signalingChannel: SignalingChannel {
         get { return channel.signalingChannel }
@@ -507,19 +358,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
-
-        internalState = PeerChannelInternalState(
-            signalingState: PeerChannelSignalingState(
-                nativeValue: nativeChannel.signalingState),
-            iceConnectionState: ICEConnectionState(
-                nativeValue: nativeChannel.iceConnectionState),
-            iceGatheringState: ICEGatheringState(
-                nativeValue: nativeChannel.iceGatheringState))
-        internalState.onCompleteHandler = finishConnecting
-        
-        internalState.onDisconnectHandler = {
-            self.disconnect(error: nil)
-        }
         
         signalingChannel.connect(handler: sendConnectMessage)
         state = .connecting
@@ -998,10 +836,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didChange stateChanged: RTCSignalingState) {
-        let newState = PeerChannelSignalingState(nativeValue: stateChanged)
         Logger.debug(type: .peerChannel,
-                     message: "changed signaling state to \(newState)")
-        internalState.signalingState = newState
+                     message: "signaling state: \(stateChanged)")
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
@@ -1055,18 +891,28 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didChange newState: RTCIceConnectionState) {
-        let newState = ICEConnectionState(nativeValue: newState)
         Logger.debug(type: .peerChannel,
-                     message: "changed ICE connection state to \(newState)")
-        internalState.iceConnectionState = newState
+                     message: "ICE connection state: \(newState)")
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didChange newState: RTCIceGatheringState) {
-        let newState = ICEGatheringState(nativeValue: newState)
         Logger.debug(type: .peerChannel,
-                     message: "changed ICE gathering state to \(newState)")
-        internalState.iceGatheringState = newState
+                     message: "ICE gathering state: \(newState)")
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection,
+                        didChange newState: RTCPeerConnectionState) {
+        Logger.debug(type: .peerChannel,
+                     message: "peer connection state: \(newState)")
+        switch newState {
+        case .failed:
+            disconnect(error: SoraError.peerChannelError(reason: "peer connection state: failed"))
+        case .connected:
+            finishConnecting()
+        default:
+            break
+        }
     }
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
