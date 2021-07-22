@@ -191,6 +191,9 @@ public final class WebSocketChannelHandlers {
     /// メッセージ送信時に呼ばれるクロージャー
     public var onSend: ((WebSocketMessage) ->WebSocketMessage)?
     
+    /// エラー発生時に呼ばれるクロージャー
+    public var onError: ((Error?) -> Void)?
+
     /// 初期化します。
     public init() {}
     
@@ -204,7 +207,7 @@ public final class WebSocketChannelHandlers {
  
  WebSocket チャネルはシグナリングチャネル `SignalingChannel` により使用されます。
  */
-public protocol WebSocketChannel: class {
+public protocol WebSocketChannel: AnyObject {
     
     // MARK: - プロパティ
     
@@ -295,6 +298,33 @@ class BasicWebSocketChannel: WebSocketChannel {
 
 class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     
+    func didReceive(event: WebSocketEvent, client socket: WebSocket) {
+        switch event {
+        case .connected(_):
+            websocketDidConnect(socket: socket)
+        case .disconnected(let reason, let code):
+            let error = SoraError.webSocketClosed(statusCode: WebSocketStatusCode.init(rawValue: Int(code)),
+                                                  reason: reason)
+            websocketDidDisconnect(socket: socket, error: error)
+        case .text(let text):
+            websocketDidReceiveMessage(socket: socket, text: text)
+        case .binary(let data):
+            websocketDidReceiveData(socket: socket, data: data)
+        case .ping(_):
+            break
+        case .pong(let data):
+            websocketDidReceivePong(socket: socket, data: data)
+        case .viabilityChanged(_):
+            break
+        case .reconnectSuggested(_):
+            break
+        case .cancelled:
+            break
+        case .error(let error):
+            channel.handlers.onError?(error)
+        }
+    }
+    
     weak var channel: BasicWebSocketChannel!
     var nativeChannel: WebSocket
     
@@ -309,13 +339,14 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
 
     init(channel: BasicWebSocketChannel) {
         self.channel = channel
-        nativeChannel = WebSocket(url: channel.url)
+        nativeChannel = WebSocket(request: URLRequest(url: channel.url))
         super.init()
         nativeChannel.delegate = self
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
         if channel.state.isConnecting {
+            // TODO: onError と handler のどちらを利用すべきなのか? 両方?
             handler(SoraError.connectionBusy(reason:
                 "WebSocketChannel is already connected"))
             return
@@ -376,7 +407,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         channel.handlers.onReceive?(message)
     }
     
-    func websocketDidConnect(socket: WebSocketClient) {
+    private func websocketDidConnect(socket: WebSocketClient) {
         Logger.debug(type: .webSocketChannel, message: "connected")
         state = .connected
         if onConnectHandler != nil {
@@ -386,7 +417,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         }
     }
     
-    func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
+    private func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
         if let error = error {
             Logger.error(type: .webSocketChannel,
                          message: "disconnected => (\(error.localizedDescription))")
@@ -398,22 +429,22 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         }
     }
     
-    func websocketDidReceiveMessage(socket: WebSocketClient, text: String) {
+    private func websocketDidReceiveMessage(socket: WebSocketClient, text: String) {
         Logger.debug(type: .webSocketChannel, message: "receive text message => \(text)")
         callMessageHandler(message: .text(text))
     }
     
-    func websocketDidReceiveData(socket: WebSocketClient, data: Data) {
+    private func websocketDidReceiveData(socket: WebSocketClient, data: Data) {
         Logger.debug(type: .webSocketChannel, message: "receive binary message => \(data)")
         callMessageHandler(message: .binary(data))
     }
 
-    func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
+    private func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
         Logger.debug(type: .webSocketChannel,
                      message: "receive poing payload => \(data?.description ?? "empty")")
         Logger.debug(type: .webSocketChannel, message: "call onPong")
         channel.internalHandlers.onPong?(data)
         channel.handlers.onPong?(data)
     }
-    
+
 }
