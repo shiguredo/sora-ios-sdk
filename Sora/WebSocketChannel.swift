@@ -301,19 +301,19 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     func didReceive(event: WebSocketEvent, client socket: WebSocket) {
         switch event {
         case .connected(_):
-            websocketDidConnect(socket: socket)
+            onOpen(socket: socket)
         case .disconnected(let reason, let code):
             let error = SoraError.webSocketClosed(statusCode: WebSocketStatusCode.init(rawValue: Int(code)),
                                                   reason: reason)
-            websocketDidDisconnect(socket: socket, error: error)
+            onClose(socket: socket, error: error)
         case .text(let text):
-            websocketDidReceiveMessage(socket: socket, text: text)
+            onMessage(socket: socket, text: text)
         case .binary(let data):
-            websocketDidReceiveData(socket: socket, data: data)
+            onData(socket: socket, data: data)
         case .ping(_):
             break
         case .pong(let data):
-            websocketDidReceivePong(socket: socket, data: data)
+            onPong(socket: socket, data: data)
         case .viabilityChanged(_):
             break
         case .reconnectSuggested(_):
@@ -407,7 +407,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         channel.handlers.onReceive?(message)
     }
     
-    private func websocketDidConnect(socket: WebSocketClient) {
+    private func onOpen(socket: WebSocketClient) {
         Logger.debug(type: .webSocketChannel, message: "connected")
         state = .connected
         if onConnectHandler != nil {
@@ -417,7 +417,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         }
     }
     
-    private func websocketDidDisconnect(socket: WebSocketClient, error: Error?) {
+    private func onClose(socket: WebSocketClient, error: Error?) {
         if let error = error {
             Logger.error(type: .webSocketChannel,
                          message: "disconnected => (\(error.localizedDescription))")
@@ -429,17 +429,17 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         }
     }
     
-    private func websocketDidReceiveMessage(socket: WebSocketClient, text: String) {
+    private func onMessage(socket: WebSocketClient, text: String) {
         Logger.debug(type: .webSocketChannel, message: "receive text message => \(text)")
         callMessageHandler(message: .text(text))
     }
     
-    private func websocketDidReceiveData(socket: WebSocketClient, data: Data) {
+    private func onData(socket: WebSocketClient, data: Data) {
         Logger.debug(type: .webSocketChannel, message: "receive binary message => \(data)")
         callMessageHandler(message: .binary(data))
     }
 
-    private func websocketDidReceivePong(socket: WebSocketClient, data: Data?) {
+    private func onPong(socket: WebSocketClient, data: Data?) {
         Logger.debug(type: .webSocketChannel,
                      message: "receive poing payload => \(data?.description ?? "empty")")
         Logger.debug(type: .webSocketChannel, message: "call onPong")
