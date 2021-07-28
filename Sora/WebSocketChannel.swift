@@ -276,6 +276,8 @@ class BasicWebSocketChannel: WebSocketChannel {
 
     var context: BasicWebSocketChannelContext!
     
+    internal static var useStarscreamCustomEngine: Bool = true
+
     required init(url: URL) {
         self.url = url
         context = BasicWebSocketChannelContext(channel: self)
@@ -339,7 +341,8 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
 
     init(channel: BasicWebSocketChannel) {
         self.channel = channel
-        nativeChannel = WebSocket(request: URLRequest(url: channel.url))
+        nativeChannel = WebSocket(request: URLRequest(url: channel.url),
+                                  useCustomEngine: BasicWebSocketChannel.useStarscreamCustomEngine)
         super.init()
         nativeChannel.delegate = self
     }
