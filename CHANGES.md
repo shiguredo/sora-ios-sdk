@@ -26,6 +26,8 @@
         - `Configuration.videoCapturerDevice` を廃止
         - `MediaStream.videoCapturer` を廃止
     - @szktty @enm10k
+- [FIX] 接続、切断の検知に RTCPeerConnectionState を参照する
+    - @enm10k
 
 ## 2021.1
 
