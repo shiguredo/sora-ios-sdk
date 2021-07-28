@@ -276,7 +276,7 @@ class BasicWebSocketChannel: WebSocketChannel {
 
     var context: BasicWebSocketChannelContext!
     
-    internal static var useStarscreamCustomEngine: Bool = true
+    static var useStarscreamCustomEngine: Bool = true
 
     required init(url: URL) {
         self.url = url
