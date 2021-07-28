@@ -292,7 +292,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     weak var channel: BasicPeerChannel!
-    var state: ConnectionState = .disconnected
+    var state: ConnectionState = .disconnected {
+        didSet {
+            Logger.debug(type: .peerChannel,
+                         message: "changed BasicPeerChannelContext.state from \(oldValue) to \(state)")
+        }
+    }
     
     // connect() の成功後は必ずセットされるので nil チェックを省略する
     // connect() 実行前は nil なのでアクセスしないこと
