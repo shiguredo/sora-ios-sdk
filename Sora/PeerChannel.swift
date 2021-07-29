@@ -67,6 +67,27 @@ public final class PeerChannelHandlers {
     
 }
 
+extension RTCPeerConnectionState: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .new:
+            return "new"
+        case .connecting:
+            return "connecting"
+        case .connected:
+            return "connected"
+        case .disconnected:
+            return "disconnected"
+        case .failed:
+            return "failed"
+        case .closed:
+            return "closed"
+        @unknown default:
+            return "unknown"
+        }
+    }
+}
+
 // MARK: -
 
 /**
@@ -163,16 +184,7 @@ class BasicPeerChannel: PeerChannel {
     
     var state: ConnectionState {
         get {
-            switch context.state {
-            case .disconnecting:
-                return .disconnecting
-            case .disconnected:
-                return .disconnected
-            case .connected:
-                return .connected
-            default:
-                return .connecting
-            }
+            return context.state
         }
     }
     
@@ -236,16 +248,6 @@ class BasicPeerChannel: PeerChannel {
 
 class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
-    enum State {
-        case connecting
-        case waitingOffer
-        case waitingComplete
-        case waitingUpdateComplete
-        case connected
-        case disconnecting
-        case disconnected
-    }
-    
     final class Lock {
         
         weak var context: BasicPeerChannelContext?
@@ -290,7 +292,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     weak var channel: BasicPeerChannel!
-    var state: State = .disconnected
+    var state: ConnectionState = .disconnected {
+        didSet {
+            Logger.debug(type: .peerChannel,
+                         message: "changed BasicPeerChannelContext.state from \(oldValue) to \(state)")
+        }
+    }
     
     // connect() の成功後は必ずセットされるので nil チェックを省略する
     // connect() 実行前は nil なのでアクセスしないこと
@@ -404,7 +411,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "did connect to signaling channel")
         
-        state = .waitingOffer
         var role: SignalingRole!
         var multistream = configuration.multistreamEnabled || configuration.spotlightEnabled == .enabled
         switch configuration.role {
@@ -657,7 +663,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func createAndSendAnswer(offer: SignalingOffer) {
         Logger.debug(type: .peerChannel, message: "try sending answer")
-        state = .waitingComplete
         offerEncodings = offer.encodings
         
         if let config = offer.configuration {
@@ -694,7 +699,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     func createAndSendUpdateAnswer(forOffer offer: String) {
         Logger.debug(type: .peerChannel, message: "create and send update-answer")
         lock.lock()
-        state = .waitingUpdateComplete
         createAnswer(isSender: false,
                      offer: offer,
                      constraints: webRTCConfiguration.nativeConstraints)
@@ -714,10 +718,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             if (self.configuration.isSender) {
                 self.updateSenderOfferEncodings()
             }
-            
-            // Answer 送信後に RTCPeerConnection の状態に変化はないため、
-            // Answer を送信したら更新完了とする
-            self.state = .connected
             
             Logger.debug(type: .peerChannel, message: "call onUpdate")
             self.channel.internalHandlers.onUpdate?(answer!)
@@ -904,12 +904,16 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange newState: RTCPeerConnectionState) {
         Logger.debug(type: .peerChannel,
-                     message: "peer connection state: \(newState)")
+                     message: "peer connection state: \(String(describing: newState))")
         switch newState {
         case .failed:
             disconnect(error: SoraError.peerChannelError(reason: "peer connection state: failed"))
         case .connected:
-            finishConnecting()
+            // peer connection state が connecting => connected => connecting => connected と変化するケースがあった
+            // 初回の connected のみで finishConnecting を実行したい
+            if state != .connected {
+                finishConnecting()
+            }
         default:
             break
         }
