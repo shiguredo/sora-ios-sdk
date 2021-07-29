@@ -349,7 +349,6 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
     
     func connect(handler: @escaping (Error?) -> Void) {
         if channel.state.isConnecting {
-            // TODO: onError と handler のどちらを利用すべきなのか? 両方?
             handler(SoraError.connectionBusy(reason:
                 "WebSocketChannel is already connected"))
             return
