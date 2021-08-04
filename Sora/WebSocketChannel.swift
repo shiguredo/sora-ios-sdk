@@ -191,9 +191,6 @@ public final class WebSocketChannelHandlers {
     /// メッセージ送信時に呼ばれるクロージャー
     public var onSend: ((WebSocketMessage) ->WebSocketMessage)?
     
-    /// エラー発生時に呼ばれるクロージャー
-    public var onError: ((Error?) -> Void)?
-
     /// 初期化します。
     public init() {}
     
@@ -323,7 +320,7 @@ class BasicWebSocketChannelContext: NSObject, WebSocketDelegate {
         case .cancelled:
             break
         case .error(let error):
-            channel.handlers.onError?(error)
+            disconnect(error: error)
         }
     }
     
