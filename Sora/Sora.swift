@@ -212,15 +212,9 @@ public final class Sora {
      * ``true`` をセットした場合、音声ユニットは自動的に初期化されません。
      * デフォルトは ``false`` です。
      */
-    public var usesManualAudio: Bool {
-        get {
-            return RTCAudioSession.sharedInstance().useManualAudio
-        }
-        set {
-            RTCAudioSession.sharedInstance().useManualAudio = newValue
-        }
-    }
-    
+    @available(*, unavailable, message: "TODO")
+    public var usesManualAudio: Bool = false
+
     /**
      * 音声ユニットの使用の可否。
      * このプロパティは ``usesManualAudio`` が ``true`` の場合のみ有効です。
@@ -233,14 +227,8 @@ public final class Sora {
      * このプロパティを使用すると、音声ユニットの初期化によって
      * AVPlayer などによる再生中の音声が中断されてしまうことを防げます。
      */
-    public var audioEnabled: Bool {
-        get {
-            return RTCAudioSession.sharedInstance().isAudioEnabled
-        }
-        set {
-            RTCAudioSession.sharedInstance().isAudioEnabled = newValue
-        }
-    }
+    @available(*, unavailable, message: "TODO")
+    public var audioEnabled: Bool = false
     
     /**
      * ``AVAudioSession`` の設定を変更する際に使います。
@@ -284,12 +272,8 @@ public final class Sora {
      *
      * - parameter block: ロック中に実行されるクロージャー
      */
-    public func configureAudioSession(block: () -> Void) {
-        let session = RTCAudioSession.sharedInstance()
-        session.lockForConfiguration()
-        block()
-        session.unlockForConfiguration()
-    }
+    @available(*, unavailable, message: "TODO")
+    public func configureAudioSession(block: () -> Void) {}
     
     /**
      * 音声モードを変更します。
@@ -298,36 +282,9 @@ public final class Sora {
      * - parameter mode: 音声モード
      * - returns: 変更の成否
      */
+    @available(*, unavailable, message: "TODO")
     public func setAudioMode(_ mode: AudioMode, options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]) -> Result<Void, Error> {
-        do {
-            var options = options
-            let session = RTCAudioSession.sharedInstance()
-            session.lockForConfiguration()
-            switch mode {
-            case .default(category: let category, output: let output):
-                if output == .speaker {
-                    options = [options, .defaultToSpeaker]
-                }
-                try session.setCategory(category, options: options)
-                try session.setMode(.default)
-            case .videoChat:
-                try session.setCategory(.playAndRecord, options: options)
-                try session.setMode(.videoChat)
-            case .voiceChat(output: let output):
-                if output == .speaker {
-                    options = [options, .defaultToSpeaker]
-                }
-                try session.setCategory(.playAndRecord, options: options)
-                try session.setMode(.voiceChat)
-                if output == .speaker {
-                    try session.overrideOutputAudioPort(.speaker)
-                }
-            }
-            session.unlockForConfiguration()
-            return .success(())
-        } catch let error {
-            return .failure(error)
-        }
+        return .success(())
     }
     
     // MARK: - libwebrtc のログ出力

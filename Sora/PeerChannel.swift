@@ -541,30 +541,32 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         }
         
-        if configuration.audioEnabled {
-            if isAudioInputInitialized {
+        if configuration.audioEnabled && configuration.microphoneSettings.isEnabled {
+            // カテゴリをマイク用途のものに変更する
+            // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
+            Logger.debug(type: .peerChannel,
+                         message: "change audio session mode (\(configuration.microphoneSettings.mode)")
+            Logger.debug(type: .peerChannel,
+                         message: "change audio session category (\(configuration.microphoneSettings.category)")
+            /*
+            do {
+                try RTCAudioSession.sharedInstance().setActive(true)
+            } catch {
                 Logger.debug(type: .peerChannel,
-                             message: "audio input is already initialized")
-            } else {
-                Logger.debug(type: .peerChannel,
-                             message: "initialize audio input")
-                
-                // カテゴリをマイク用途のものに変更する
-                // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
-                Logger.debug(type: .peerChannel,
-                             message: "change audio session category (playAndRecord)")
-                RTCAudioSessionConfiguration.webRTC().category =
-                    AVAudioSession.Category.playAndRecord.rawValue
-                
-                RTCAudioSession.sharedInstance().initializeInput { error in
-                    if let error = error {
-                        Logger.debug(type: .peerChannel,
-                                     message: "failed to initialize audio input => \(error.localizedDescription)")
-                        return
-                    }
-                    self.isAudioInputInitialized = true
+                             message: "failed to RTCAudioSession.sharedInstance().setActive(true): \(error.localizedDescription)")
+            }
+            */
+            RTCAudioSessionConfiguration.webRTC().mode = configuration.microphoneSettings.mode.rawValue
+            RTCAudioSessionConfiguration.webRTC().category = configuration.microphoneSettings.category.rawValue
+
+            if let categoryOptions = configuration.microphoneSettings.options {
+                RTCAudioSessionConfiguration.webRTC().categoryOptions = categoryOptions
+            }
+            MicrophoneAudioCapturer.shared.activate() {error in
+                if let error = error {
                     Logger.debug(type: .peerChannel,
-                                 message: "audio input is initialized => category \(RTCAudioSession.sharedInstance().category)")
+                                 message: "MicrophoneAudioCapturer.shared.activate failed \(String(describing: error.localizedDescription))")
+                    return
                 }
             }
         }
@@ -779,6 +781,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                      message: "native senders = \(nativeChannel.senders.count)")
         Logger.debug(type: .peerChannel,
                      message: "native receivers = \(nativeChannel.receivers.count)")
+        
+        Logger.debug(type: .peerChannel,
+                     message: "audio session isActive => \(String(describing: MicrophoneAudioCapturer.shared.isActive)) \(String(describing: RTCAudioSession.sharedInstance().isActive))")
+        Logger.debug(type: .peerChannel,
+                     message: "audio session category => \(String(describing: MicrophoneAudioCapturer.shared.native.category))")
+        Logger.debug(type: .peerChannel,
+                     message: "audio session mode => \(String(describing: MicrophoneAudioCapturer.shared.native.mode))")
+        
         state = .connected
         
         if onConnectHandler != nil {

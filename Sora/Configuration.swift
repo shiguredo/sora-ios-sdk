@@ -227,6 +227,7 @@ public struct Configuration {
     /// 通常、指定する必要はありません。
     public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
     
+    public var microphoneSettings: MicrophoneSettings = MicrophoneSettings.init()
     // MARK: - インスタンスの生成
     
     /**
