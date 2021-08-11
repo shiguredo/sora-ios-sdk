@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   s.resources = ['Sora/info.json', 'Sora/*.xib']
   s.prepare_command = 'sh Sora/info.sh'
   s.dependency "WebRTC", '91.4472.9.1'
-  s.dependency "Starscream", "3.1.1"
+  s.dependency "Starscream", "4.0.4"
   s.pod_target_xcconfig = {
     'ARCHS' => 'arm64',
     'ARCHS[config=Debug]' => '$(ARCHS_STANDARD)'

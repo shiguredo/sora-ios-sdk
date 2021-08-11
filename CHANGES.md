@@ -14,6 +14,8 @@
 - [UPDATE] システム条件を変更する
     - iOS 12.1 以降
     - @miosakuma
+- [UPDATE] Starscream のバージョンを 4.0.4 に更新する
+    - @szktty @enm10k
 - [CHANGE] 接続開始時のカメラ・デバイスを指定可能にする
     - `Configuration.cameraSettings.position` に `.front` または `.back` を設定して、接続開始時のカメラ・デバイスを指定します
     - この修正に伴い、以下の API が変更されました
