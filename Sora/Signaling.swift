@@ -101,6 +101,12 @@ public enum Signaling {
     /// "update" シグナリング
     case update(SignalingUpdate)
     
+    /// "re-offer" シグナリング
+    case reOffer(SignalingReOffer)
+    
+    /// "re-answer" シグナリング
+    case reAnswer(SignalingReAnswer)
+    
     /// "candidate" シグナリング
     case candidate(SignalingCandidate)
 
@@ -142,6 +148,10 @@ public enum Signaling {
             return "answer"
         case .update(_):
             return "update"
+        case .reOffer(_):
+            return "re-offer"
+        case .reAnswer(_):
+            return "re-answer"
         case .candidate(_):
             return "candidate"
         case .notify:
@@ -464,6 +474,24 @@ public struct SignalingUpdate {
 }
 
 /**
+ "re-offer"　メッセージ
+ */
+public struct SignalingReOffer {
+ 
+    /// SDP メッセージ
+    public let sdp: String
+}
+
+/**
+ "re-answer" メッセージ
+ */
+public struct SignalingReAnswer {
+
+    /// SDP メッセージ
+    public let sdp: String
+}
+
+/**
  "push" シグナリングメッセージを表します。
  このメッセージは Sora のプッシュ API を使用して送信されたデータです。
  */
@@ -734,6 +762,7 @@ extension Signaling: Codable {
         case offer
         case answer
         case update
+        case reAnswer
         case candidate
         case notify
         case ping
@@ -764,6 +793,8 @@ extension Signaling: Codable {
             self = .ping(try SignalingPing(from: decoder))
         case "push":
             self = .push(try SignalingPush(from: decoder))
+        case "re-offer":
+            self = .reOffer(try SignalingReOffer(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
@@ -786,6 +817,9 @@ extension Signaling: Codable {
             try message.encode(to: encoder)
         case .update(let message):
             try container.encode(MessageType.update.rawValue, forKey: .type)
+            try message.encode(to: encoder)
+        case .reAnswer(let message):
+            try container.encode(self.typeName(), forKey: .type)
             try message.encode(to: encoder)
         case .pong:
             try container.encode(MessageType.pong.rawValue, forKey: .type)
@@ -1107,6 +1141,43 @@ extension SignalingUpdate: Codable {
         try container.encode(sdp, forKey: .sdp)
     }
     
+}
+
+/// :nodoc:
+extension SignalingReOffer: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case sdp
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sdp = try container.decode(String.self, forKey: .sdp)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sdp, forKey: .sdp)
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingReAnswer: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case sdp
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sdp = try container.decode(String.self, forKey: .sdp)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sdp, forKey: .sdp)
+    }
 }
 
 /// :nodoc:

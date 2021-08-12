@@ -727,6 +727,37 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
+    func createAndSendReAnswer(forReOffer reOffer: String) {
+        Logger.debug(type: .peerChannel, message: "create and send re-answer")
+        lock.lock()
+        createAnswer(isSender: false,
+                     offer: reOffer,
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
+            guard error == nil else {
+                Logger.error(type: .peerChannel,
+                             message: "failed to create re-answer (\(error!.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError
+                    .peerChannelError(reason: "failed to create re-answer"))
+                return
+            }
+            
+            let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+            self.signalingChannel.send(message: message)
+            
+            if (self.configuration.isSender) {
+                self.updateSenderOfferEncodings()
+            }
+            
+            Logger.debug(type: .peerChannel, message: "call onUpdate")
+            self.channel.internalHandlers.onUpdate?(answer!)
+            self.channel.handlers.onUpdate?(answer!)
+            
+            self.lock.unlock()
+        }
+    }
+    
     func handle(signaling: Signaling) {
         Logger.debug(type: .mediaStream, message: "handle signaling => \(signaling.typeName())")
         switch signaling {
@@ -739,7 +770,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             if configuration.isMultistream {
                 createAndSendUpdateAnswer(forOffer: update.sdp)
             }
-            
+        case .reOffer(let reOffer):
+            createAndSendReAnswer(forReOffer: reOffer.sdp)
+
         case .ping(let ping):
             let pong = SignalingPong()
             if ping.statisticsEnabled == true {
