@@ -474,7 +474,7 @@ public struct SignalingUpdate {
 }
 
 /**
- "re-offer"　メッセージ
+ "re-offer" メッセージ
  */
 public struct SignalingReOffer {
  
