@@ -86,6 +86,12 @@ public struct WebRTCConfiguration {
             }
             config.iceTransportPolicy = iceTransportPolicy.nativeValue
             config.sdpSemantics = sdpSemantics.nativeValue
+
+            // AES-GCM を有効にする
+            config.cryptoOptions = RTCCryptoOptions.init(srtpEnableGcmCryptoSuites: true,
+                                                         srtpEnableAes128Sha1_32CryptoCipher: false,
+                                                         srtpEnableEncryptedRtpHeaderExtensions: false,
+                                                         sframeRequireFrameEncryption: false)
             return config
         }
     }

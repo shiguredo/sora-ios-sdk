@@ -61,16 +61,8 @@ class NativePeerChannelFactory {
     func createNativePeerChannel(configuration: WebRTCConfiguration,
                                  constraints: MediaConstraints,
                                  delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection? {
-
-        // AES-GCM を有効にする
-        let nativeConfiguration = configuration.nativeValue
-        nativeConfiguration.cryptoOptions = RTCCryptoOptions(srtpEnableGcmCryptoSuites: true,
-                                                             srtpEnableAes128Sha1_32CryptoCipher: false,
-                                                             srtpEnableEncryptedRtpHeaderExtensions: false,
-                                                             sframeRequireFrameEncryption: false)
-
         return nativeFactory
-            .peerConnection(with: nativeConfiguration,
+            .peerConnection(with: configuration.nativeValue,
                             constraints: constraints.nativeValue,
                             delegate: delegate)
     }
