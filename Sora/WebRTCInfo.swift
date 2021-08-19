@@ -9,7 +9,12 @@ import WebRTC
 public struct WebRTCInfo {
     
     static func load() -> WebRTCInfo? {
-        let bundle = Bundle(for: RTCPeerConnection.self)
+        #if SWIFT_PACKAGE
+            let bundle = Bundle.module
+        #else
+            let bundle = Bundle(for: RTCPeerConnection.self)
+        #endif
+        
         guard let url = bundle.url(forResource: "build_info",
                                    withExtension: "json") else
         {
