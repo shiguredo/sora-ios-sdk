@@ -8,7 +8,11 @@ public class Dummy {}
 public struct SDKInfo {
     
     static var bundle: Bundle {
-        return Bundle(for: Dummy.self)
+        #if SWIFT_PACKAGE
+            return Bundle.module
+        #else
+            return Bundle(for: Dummy.self)
+        #endif
     }
     
     static func load() -> SDKInfo {
@@ -20,9 +24,9 @@ public struct SDKInfo {
     
     public static let shared: SDKInfo = load()
 
-    public var version: String {
+    public var version: String? {
         return SDKInfo.bundle.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString") as! String
+            forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     }
     
     public let branch: String
