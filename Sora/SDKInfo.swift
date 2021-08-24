@@ -24,11 +24,8 @@ public struct SDKInfo {
     
     public static let shared: SDKInfo = load()
 
-    public var version: String? {
-        return SDKInfo.bundle.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-    }
-    
+    public let version: String
+
     public let branch: String
     
     public let revision: String
@@ -44,12 +41,14 @@ public struct SDKInfo {
 extension SDKInfo: Decodable {
     
     enum CodingKeys: String, CodingKey {
+        case version = "version"
         case branch = "branch"
         case revision = "revision"
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.version = try container.decode(String.self, forKey: .version)
         self.branch = try container.decode(String.self, forKey: .branch)
         self.revision = try container.decode(String.self, forKey: .revision)
     }
