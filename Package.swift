@@ -5,11 +5,6 @@ import Foundation
 
 let file = "WebRTC-93.4577.1.0/WebRTC.xcframework.zip"
 
-// info.sh を実行する
-let buildInfo = Process()
-buildInfo.arguments = ["sh", "Sora/info.sh"]
-buildInfo.waitUntilExit()
-
 let package = Package(
     name: "Sora",
     platforms: [.iOS(.v12)],
@@ -29,7 +24,7 @@ let package = Package(
             name: "Sora",
             dependencies: ["WebRTC", "Starscream"],
             path: "Sora",
-            exclude: ["Info.plist", "info.sh"],
-            resources: [.process("info.json"), .process("Sora/VideoView.xib")])
+            exclude: ["Info.plist"],
+            resources: [.process("Sora/VideoView.xib")])
     ]
 )
