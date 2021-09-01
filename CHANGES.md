@@ -13,6 +13,8 @@
 
 - [UPDATE] Swift Package Manager に対応する
     - @miosakuma
+- [UPDATE] WebRTC 93.4577.8.0 に上げる
+    - @miosakuma
 - [UPDATE] システム条件を変更する
     - iOS 12.1 以降
     - @miosakuma
