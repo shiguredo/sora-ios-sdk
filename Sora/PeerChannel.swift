@@ -329,11 +329,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         super.init()
         lock.context = self
         
-        signalingChannel.internalHandlers.onDisconnect = { error in
-            self.disconnect(error: error)
+        signalingChannel.internalHandlers.onDisconnect = { [weak self] error in
+            self?.disconnect(error: error)
         }
         
-        signalingChannel.internalHandlers.onReceive = handle
+        signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
+            self?.handle(signaling: signaling)
+        }
     }
     
     func connect(handler: @escaping (Error?) -> Void) {

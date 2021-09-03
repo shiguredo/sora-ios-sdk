@@ -271,8 +271,8 @@ public final class MediaChannel {
             return task
         }
         
-        DispatchQueue.global().async {
-            self.basicConnect(connectionTask: task,
+        DispatchQueue.global().async { [weak self] in
+            self?.basicConnect(connectionTask: task,
                               webRTCConfiguration: webRTCConfiguration,
                               timeout: timeout,
                               handler: handler)
@@ -290,69 +290,88 @@ public final class MediaChannel {
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
 
-        signalingChannel.internalHandlers.onDisconnect = { error in
-            if self.state == .connecting || self.state == .connected {
-                self.disconnect(error: error)
+        signalingChannel.internalHandlers.onDisconnect = { [weak self] error in
+            guard let weakSelf = self else {
+                return
+            }
+            if weakSelf.state == .connecting || weakSelf.state == .connected {
+                weakSelf.disconnect(error: error)
             }
             connectionTask.complete()
         }
         
-        peerChannel.internalHandlers.onDisconnect = { error in
-            if self.state == .connecting || self.state == .connected {
-                self.disconnect(error: error)
+        peerChannel.internalHandlers.onDisconnect = { [weak self] error in
+            guard let weakSelf = self else {
+                return
+            }
+            if weakSelf.state == .connecting || weakSelf.state == .connected {
+                weakSelf.disconnect(error: error)
             }
             connectionTask.complete()
         }
         
-        peerChannel.internalHandlers.onAddStream = { stream in
+        peerChannel.internalHandlers.onAddStream = { [weak self] stream in
+            guard let weakSelf = self else {
+                return
+            }
             Logger.debug(type: .mediaChannel, message: "added a stream")
             Logger.debug(type: .mediaChannel, message: "call onAddStream")
-            self.internalHandlers.onAddStream?(stream)
-            self.handlers.onAddStream?(stream)
+            weakSelf.internalHandlers.onAddStream?(stream)
+            weakSelf.handlers.onAddStream?(stream)
         }
         
-        peerChannel.internalHandlers.onRemoveStream = { stream in
+        peerChannel.internalHandlers.onRemoveStream = { [weak self] stream in
+            guard let weakSelf = self else {
+                return
+            }
             Logger.debug(type: .mediaChannel, message: "removed a stream")
             Logger.debug(type: .mediaChannel, message: "call onRemoveStream")
-            self.internalHandlers.onRemoveStream?(stream)
-            self.handlers.onRemoveStream?(stream)
+            weakSelf.internalHandlers.onRemoveStream?(stream)
+            weakSelf.handlers.onRemoveStream?(stream)
         }
         
-        peerChannel.internalHandlers.onReceiveSignaling = { message in
+        peerChannel.internalHandlers.onReceiveSignaling = { [weak self] message in
+            guard let weakSelf = self else {
+                return
+            }
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
             case .notify(let message):
-                self.publisherCount = message.publisherCount
-                self.subscriberCount = message.subscriberCount
+                weakSelf.publisherCount = message.publisherCount
+                weakSelf.subscriberCount = message.subscriberCount
             default:
                 break
             }
             
             Logger.debug(type: .mediaChannel, message: "call onReceiveSignaling")
-            self.internalHandlers.onReceiveSignaling?(message)
-            self.handlers.onReceiveSignaling?(message)
+            weakSelf.internalHandlers.onReceiveSignaling?(message)
+            weakSelf.handlers.onReceiveSignaling?(message)
         }
         
-        peerChannel.connect() { error in
-            self.connectionTimer.stop()
+        peerChannel.connect() { [weak self] error in
+            guard let weakSelf = self else {
+                return
+            }
+
+            weakSelf.connectionTimer.stop()
             connectionTask.complete()
             
             if let error = error {
                 Logger.error(type: .mediaChannel, message: "failed to connect")
-                self.disconnect(error: error)
+                weakSelf.disconnect(error: error)
                 handler(error)
                 
                 Logger.debug(type: .mediaChannel, message: "call onConnect")
-                self.internalHandlers.onConnect?(error)
-                self.handlers.onConnect?(error)
+                weakSelf.internalHandlers.onConnect?(error)
+                weakSelf.handlers.onConnect?(error)
                 return
             }
             Logger.debug(type: .mediaChannel, message: "did connect")
-            self.state = .connected
+            weakSelf.state = .connected
             handler(nil)
             Logger.debug(type: .mediaChannel, message: "call onConnect")
-            self.internalHandlers.onConnect?(nil)
-            self.handlers.onConnect?(nil)
+            weakSelf.internalHandlers.onConnect?(nil)
+            weakSelf.handlers.onConnect?(nil)
         }
         
         self.connectionStartTime = Date()

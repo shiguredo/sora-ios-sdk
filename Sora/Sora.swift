@@ -185,21 +185,25 @@ public final class Sora {
         _ error: Error?) -> Void) -> ConnectionTask {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
-        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
-            if let error = error {
-                handler(nil, error)
-                self.handlers.onConnect?(nil, error)
+        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { [weak self] error in
+            guard let weakSelf = self else {
                 return
             }
-            
+
+            if let error = error {
+                handler(nil, error)
+                weakSelf.handlers.onConnect?(nil, error)
+                return
+            }
+
             mediaChan.internalHandlers.onDisconnect = { error in
-                self.remove(mediaChannel: mediaChan)
-                self.handlers.onDisconnect?(mediaChan, error)
+                weakSelf.remove(mediaChannel: mediaChan)
+                weakSelf.handlers.onDisconnect?(mediaChan, error)
             }
             
-            self.add(mediaChannel: mediaChan)
+            weakSelf.add(mediaChannel: mediaChan)
             handler(mediaChan, nil)
-            self.handlers.onConnect?(mediaChan, nil)
+            weakSelf.handlers.onConnect?(mediaChan, nil)
         }
     }
     
