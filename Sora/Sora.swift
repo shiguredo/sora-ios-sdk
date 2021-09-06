@@ -185,8 +185,27 @@ public final class Sora {
         _ error: Error?) -> Void) -> ConnectionTask {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
-        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { [weak self] error in
+        mediaChan.internalHandlers.onDisconnect = { [weak self, weak mediaChan] error in
             guard let weakSelf = self else {
+                return
+            }
+            guard let mediaChan = mediaChan else {
+                return
+            }
+            weakSelf.remove(mediaChannel: mediaChan)
+            weakSelf.handlers.onDisconnect?(mediaChan, error)
+        }
+
+        // MediaChannel.connect() の引数のハンドラが実行されるまで
+        // 解放されないように先にリストに追加しておく
+        // ただ、 mediaChannels を weak array にすべきかもしれない
+        add(mediaChannel: mediaChan)
+
+        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { [weak self, weak mediaChan] error in
+            guard let weakSelf = self else {
+                return
+            }
+            guard let mediaChan = mediaChan else {
                 return
             }
 
@@ -196,12 +215,6 @@ public final class Sora {
                 return
             }
 
-            mediaChan.internalHandlers.onDisconnect = { error in
-                weakSelf.remove(mediaChannel: mediaChan)
-                weakSelf.handlers.onDisconnect?(mediaChan, error)
-            }
-            
-            weakSelf.add(mediaChannel: mediaChan)
             handler(mediaChan, nil)
             weakSelf.handlers.onConnect?(mediaChan, nil)
         }
