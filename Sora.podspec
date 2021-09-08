@@ -14,9 +14,8 @@ Pod::Spec.new do |s|
       :tag => s.version
   }
   s.source_files  = "Sora/**/*.swift"
-  s.resources = ['Sora/info.json', 'Sora/*.xib']
-  s.prepare_command = 'sh Sora/info.sh'
-  s.dependency "WebRTC", '91.4472.9.1'
+  s.resources = ['Sora/*.xib']
+  s.dependency "WebRTC", '93.4577.8.0'
   s.dependency "Starscream", "4.0.4"
   s.pod_target_xcconfig = {
     'ARCHS' => 'arm64',

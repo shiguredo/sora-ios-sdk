@@ -426,7 +426,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             multistream = true
         }
         
-        let soraClient = "Sora iOS SDK \(SDKInfo.shared.version) (\(SDKInfo.shared.shortRevision))"
+        let soraClient = "Sora iOS SDK \(SDKInfo.version)"
         
         var webRTCVersion: String?
         if let info = WebRTCInfo.load() {
