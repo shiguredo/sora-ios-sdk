@@ -87,7 +87,7 @@ class URLSessionWebSocketChannelContext: NSObject, URLSessionDelegate, URLSessio
             
             state = .disconnecting
             webSocketTask?.cancel(with: .normalClosure, reason: nil)
-            urlSession?.finishTasksAndInvalidate()
+            urlSession?.invalidateAndCancel()
             state = .disconnected
             
             Logger.debug(type: .webSocketChannel, message: "call onDisconnect")
