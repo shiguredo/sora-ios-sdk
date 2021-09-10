@@ -368,7 +368,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
         
-        signalingChannel.connect(handler: sendConnectMessage)
+        signalingChannel.connect { [weak self] error in
+            self?.sendConnectMessage(error: error)
+        }
         state = .connecting
     }
     
