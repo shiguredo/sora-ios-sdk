@@ -37,7 +37,7 @@ class URLSessionWebSocketChannel: WebSocketChannel {
 @available(iOS 13, *)
 class URLSessionWebSocketChannelContext: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionWebSocketDelegate {
     
-    weak var channel: URLSessionWebSocketChannel!
+    weak var channel: URLSessionWebSocketChannel?
     var urlSession: URLSession?
     var webSocketTask: URLSessionWebSocketTask?
     
@@ -56,6 +56,10 @@ class URLSessionWebSocketChannelContext: NSObject, URLSessionDelegate, URLSessio
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
+        guard let channel = channel else {
+            return
+        }
+
         if channel.state.isConnecting {
             handler(SoraError.connectionBusy(reason:
                 "WebSocketChannel is already connected"))
@@ -74,6 +78,12 @@ class URLSessionWebSocketChannelContext: NSObject, URLSessionDelegate, URLSessio
     }
     
     func disconnect(error: Error?) {
+        guard let channel = channel else {
+            webSocketTask?.cancel(with: .normalClosure, reason: nil)
+            urlSession?.invalidateAndCancel()
+            return
+        }
+
         switch state {
         case .disconnecting, .disconnected:
             break
@@ -147,8 +157,8 @@ class URLSessionWebSocketChannelContext: NSObject, URLSessionDelegate, URLSessio
                 
                 if let message = newMessage {
                     Logger.debug(type: .webSocketChannel, message: "call onReceive")
-                    weakSelf.channel.internalHandlers.onReceive?(message)
-                    weakSelf.channel.handlers.onReceive?(message)
+                    weakSelf.channel?.internalHandlers.onReceive?(message)
+                    weakSelf.channel?.handlers.onReceive?(message)
                 } else {
                     Logger.debug(type: .webSocketChannel,
                               message: "received message is not string or binary (discarded)")
