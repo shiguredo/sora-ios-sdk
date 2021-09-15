@@ -20,6 +20,7 @@ public class CameraVideoCapturerHandlers {
     // カメラの停止時に呼ばれる
     public var onStop: (() -> Void)?
     
+    public init() {}
 }
 
 /**
