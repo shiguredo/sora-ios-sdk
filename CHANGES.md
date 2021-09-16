@@ -24,6 +24,9 @@
     - @enm10k
 - [UPDATE] AES-GCM を有効にする
     - @enm10k
+- [UPDATE] SoraDispatcher を追加する
+    - libwebrtc 内部で利用されているディスパッチ・キューをラップし、 SDK のユーザーから利用しやすくした
+    - @szktty @enm10k
 - [CHANGE] 接続開始時のカメラ・デバイスを指定可能にする
     - `Configuration.cameraSettings.position` に `.front` または `.back` を設定して、接続開始時のカメラ・デバイスを指定します
     - この修正に伴い、以下の API が変更されました
