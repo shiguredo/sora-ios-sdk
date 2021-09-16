@@ -480,3 +480,25 @@ extension CameraSettings.Resolution: Codable {
     }
     
 }
+
+
+/**
+ CameraVideoCapturer のイベントハンドラです。
+ */
+public class CameraVideoCapturerHandlers {
+    
+    /// 生成された映像フレームを受け取ります。
+    /// 返した映像フレームがストリームに渡されます。
+    public var onCapture: ((VideoFrame) -> VideoFrame)?
+
+    /// CameraVideoCapturer.start(format:frameRate:completionHandler) 内で completionHandler の後に実行されます。
+    /// そのため、 CameraVideoCapturer.restart(completionHandler) のように、 stop の completionHandler で start を実行する場合、
+    /// イベントハンドラは onStart, onStop の順に呼び出されることに注意してください。
+    public var onStart: (() -> Void)?
+    
+    /// CameraVideoCapturer.stop(completionHandler) 内で completionHandler の後に実行されます。
+    /// 注意点については、 onStart のコメントを参照してください。
+    public var onStop: (() -> Void)?
+    
+    public init() {}
+}
