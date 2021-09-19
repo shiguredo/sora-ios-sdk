@@ -3,14 +3,12 @@ import WebRTC
 public enum SoraDispatcher {
 
     /// カメラ用のキュー
-    /// RTCDispatcherQueueType.typeCaptureSession に相当する
     case camera
 
     /// 音声処理用のキュー
-    /// RTCDispatcherQueueType.typeAudioSession に相当する
     case audio
 
-    /// RTCDispatcher を利用して、 block を非同期で実行する
+    /// 指定されたキューを利用して、 block を非同期で実行します。
     public static func async(on queue: SoraDispatcher, block: @escaping () -> Void) {
         let native: RTCDispatcherQueueType
         switch queue {
