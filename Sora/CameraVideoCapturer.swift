@@ -191,6 +191,9 @@ public final class CameraVideoCapturer {
     private var native: RTCCameraVideoCapturer!
     private var nativeDelegate: CameraVideoCapturerDelegate!
     
+    /// 引数に指定した device を利用して CameraVideoCapturer を初期化します。
+    /// このイニシャライザーを利用して自動的に初期化される .front と .back が定義されています。
+    /// .front と .back を利用しても要件が満たせない場合に、このイニシャライザーの利用を検討してください。
     public init(device: AVCaptureDevice?) {
         self.device = device
         nativeDelegate = CameraVideoCapturerDelegate(cameraVideoCapturer: self)
@@ -500,5 +503,6 @@ public class CameraVideoCapturerHandlers {
     /// 注意点については、 onStart のコメントを参照してください。
     public var onStop: (() -> Void)?
     
+    /// CameraVideoCapturer のイベントハンドラを初期化します。
     public init() {}
 }
