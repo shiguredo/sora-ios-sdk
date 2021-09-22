@@ -329,11 +329,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         super.init()
         lock.context = self
         
-        signalingChannel.internalHandlers.onDisconnect = { error in
-            self.disconnect(error: error)
+        signalingChannel.internalHandlers.onDisconnect = { [weak self] error in
+            self?.disconnect(error: error)
         }
         
-        signalingChannel.internalHandlers.onReceive = handle
+        signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
+            self?.handle(signaling: signaling)
+        }
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -366,7 +368,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // また、 (非レガシーな) スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
         
-        signalingChannel.connect(handler: sendConnectMessage)
+        signalingChannel.connect { [weak self] error in
+            self?.sendConnectMessage(error: error)
+        }
         state = .connecting
     }
     

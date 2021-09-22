@@ -41,6 +41,8 @@
     - @szktty @enm10k
 - [FIX] 接続、切断の検知に RTCPeerConnectionState を参照する
     - @enm10k
+- [FIX] 接続終了後に MediaChannel のメモリが解放されずに残り続ける事象を修正する
+    - @szktty
 
 ## 2021.1
 
