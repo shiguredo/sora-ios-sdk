@@ -192,7 +192,7 @@ public final class CameraVideoCapturer {
     private var nativeDelegate: CameraVideoCapturerDelegate!
     
     /// 引数に指定した device を利用して CameraVideoCapturer を初期化します。
-    /// 自動的に初期化される静的プロパティ、 front/back が定義されています。
+    /// 自動的に初期化される静的プロパティ、 front/back を定義しています。
     /// 上記以外のデバイスを利用したい場合のみ CameraVideoCapturer を生成してください。
     public init(device: AVCaptureDevice?) {
         self.device = device
