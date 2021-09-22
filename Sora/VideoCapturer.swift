@@ -8,21 +8,6 @@ import WebRTC
 @available(*, unavailable, message: "VideoCapturerHandlers は廃止されました。 CameraVideoCapturerHandlers を利用してください。")
 public final class VideoCapturerHandlers {}
 
-public class CameraVideoCapturerHandlers {
-    
-    // 生成された映像フレームを受け取る
-    // 返した映像フレームがストリームに渡される
-    public var onCapture: ((VideoFrame) -> VideoFrame)?
-
-    // カメラの起動時に呼ばれる
-    public var onStart: (() -> Void)?
-    
-    // カメラの停止時に呼ばれる
-    public var onStop: (() -> Void)?
-    
-    public init() {}
-}
-
 /**
  映像キャプチャーの機能を定義したプロトコルです。
  生成した映像フレームを引数として `MediaStream.send(videoFrame:)` に与えると、
