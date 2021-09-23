@@ -106,10 +106,6 @@ public final class Sora {
     
     // MARK: - プロパティ
     
-    /// リンクしている WebRTC フレームワークの情報。
-    /// Sora iOS SDK が指定するバイナリでなければ ``nil`` 。
-    public let webRTCInfo: WebRTCInfo? = WebRTCInfo.load()
-
     /// 接続中のメディアチャネルのリスト
     public private(set) var mediaChannels: [MediaChannel] = []
     
