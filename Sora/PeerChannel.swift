@@ -432,10 +432,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         let soraClient = "Sora iOS SDK \(SDKInfo.version)"
         
-        var webRTCVersion: String?
-        if let info = WebRTCInfo.load() {
-            webRTCVersion = "Shiguredo-build \(info.version) (\(info.version).\(info.commitPosition).\(info.maintenanceVersion) \(info.shortRevision))"
-        }
+        let webRTCVersion = "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
         
         let simulcast = configuration.simulcastEnabled || (!Sora.isSpotlightLegacyEnabled && configuration.spotlightEnabled == .enabled)
         let connect = SignalingConnect(
