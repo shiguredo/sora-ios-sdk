@@ -164,8 +164,9 @@ public final class CameraVideoCapturer {
     public private(set) var settings: Any?
     
     /// カメラの位置
-    @available(*, unavailable, message: "position は廃止されました。 現在利用されているデバイスは CameraVideoCapturer.current?.device?.position で取得してください。")
-    public var position: AVCaptureDevice.Position? = nil
+    public var position: AVCaptureDevice.Position? {
+        device?.position
+    }
 
     /// 使用中のカメラの位置に対応するデバイス
     /// captureDevice に変更されました
