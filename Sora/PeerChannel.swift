@@ -529,7 +529,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                                      message: "CameraVideoCapturer.stop failed =>  \(error!)")
                         return
                     }
-                } else {
+
                     capturer.start(format: format, frameRate: frameRate) { error in
                         guard error == nil else {
                             Logger.debug(type: .peerChannel,
