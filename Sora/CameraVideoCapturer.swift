@@ -175,8 +175,8 @@ public final class CameraVideoCapturer {
     public private(set) var settings: Any?
     
     /// カメラの位置
-    public var position: AVCaptureDevice.Position? {
-        device?.position
+    public var position: AVCaptureDevice.Position {
+        device.position
     }
 
     /// 使用中のカメラの位置に対応するデバイス
