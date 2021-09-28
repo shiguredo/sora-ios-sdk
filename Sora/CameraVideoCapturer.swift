@@ -154,8 +154,9 @@ public final class CameraVideoCapturer {
     
     /// カメラが起動中であれば ``true``
     public private(set) var isRunning: Bool = false
+
     /// イベントハンドラ
-    public var handlers: CameraVideoCapturerHandlers = CameraVideoCapturerHandlers()
+    public static var handlers: CameraVideoCapturerHandlers = CameraVideoCapturerHandlers()
     
     /// カメラの設定
     /// 廃止されました
@@ -163,8 +164,9 @@ public final class CameraVideoCapturer {
     public private(set) var settings: Any?
     
     /// カメラの位置
-    @available(*, unavailable, message: "position は廃止されました。 現在利用されているデバイスは CameraVideoCapturer.current?.device?.position で取得してください。")
-    public var position: AVCaptureDevice.Position? = nil
+    public var position: AVCaptureDevice.Position? {
+        device?.position
+    }
 
     /// 使用中のカメラの位置に対応するデバイス
     /// captureDevice に変更されました
@@ -240,7 +242,7 @@ public final class CameraVideoCapturer {
             isRunning = true
             CameraVideoCapturer.current = self
             completionHandler(nil)
-            handlers.onStart?()
+            CameraVideoCapturer.handlers.onStart?(self)
         }
     }
     
@@ -266,7 +268,7 @@ public final class CameraVideoCapturer {
             isRunning = false
             CameraVideoCapturer.current = nil
             completionHandler(nil)
-            handlers.onStop?()
+            CameraVideoCapturer.handlers.onStop?(self)
         }
     }
     
@@ -453,7 +455,7 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     
     func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
         let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
-        if let editedFrame = cameraVideoCapturer.handlers.onCapture?(frame) {
+        if let editedFrame = CameraVideoCapturer.handlers.onCapture?(cameraVideoCapturer, frame) {
             cameraVideoCapturer.stream?.send(videoFrame: editedFrame)
         } else {
             cameraVideoCapturer.stream?.send(videoFrame: frame)
@@ -492,16 +494,16 @@ public class CameraVideoCapturerHandlers {
     
     /// 生成された映像フレームを受け取ります。
     /// 返した映像フレームがストリームに渡されます。
-    public var onCapture: ((VideoFrame) -> VideoFrame)?
+    public var onCapture: ((CameraVideoCapturer, VideoFrame) -> VideoFrame)?
 
     /// CameraVideoCapturer.start(format:frameRate:completionHandler) 内で completionHandler の後に実行されます。
     /// そのため、 CameraVideoCapturer.restart(completionHandler) のように、 stop の completionHandler で start を実行する場合、
     /// イベントハンドラは onStart, onStop の順に呼び出されることに注意してください。
-    public var onStart: (() -> Void)?
+    public var onStart: ((CameraVideoCapturer) -> Void)?
     
     /// CameraVideoCapturer.stop(completionHandler) 内で completionHandler の後に実行されます。
     /// 注意点については、 onStart のコメントを参照してください。
-    public var onStop: (() -> Void)?
+    public var onStop: ((CameraVideoCapturer) -> Void)?
     
     /// CameraVideoCapturer のイベントハンドラを初期化します。
     public init() {}
