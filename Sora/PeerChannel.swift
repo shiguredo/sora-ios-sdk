@@ -483,46 +483,53 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             let position = configuration.cameraSettings.position
             
             // position に対応した CameraVideoCapturer を取得する
-            guard position != .unspecified else {
+            let capturer: CameraVideoCapturer
+            switch position {
+            case .front:
+                guard let front = CameraVideoCapturer.front else {
+                    Logger.error(type: .peerChannel, message: "front camera is not found")
+                    return
+                }
+                capturer = front
+            case .back:
+                guard let back = CameraVideoCapturer.back else {
+                    Logger.error(type: .peerChannel, message: "back camera is not found")
+                    return
+                }
+                capturer = back
+            case .unspecified:
                 Logger.error(type: .peerChannel, message: "CameraSettings.position should not be .unspecified")
                 return
+            @unknown default:
+                guard let device = CameraVideoCapturer.device(for: position) else {
+                    Logger.error(type: .peerChannel, message: "device is not found for position")
+                    return
+                }
+                capturer = CameraVideoCapturer(device: device)
             }
-            let capturer = position == .front ? CameraVideoCapturer.front : CameraVideoCapturer.back
-        
-            if let device = CameraVideoCapturer.device(for: position) {
-                // デバイスに対応したフォーマットとフレームレートを取得する
-                guard let format = CameraVideoCapturer.format(width: configuration.cameraSettings.resolution.width,
-                                                              height: configuration.cameraSettings.resolution.height,
-                                                              for: device) else {
-                    Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable format rate is not found")
-                    return
-                }
-                
-                guard let frameRate = CameraVideoCapturer.maxFrameRate(configuration.cameraSettings.frameRate, for: format) else {
-                    Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable frame rate is not found")
-                    return
-                }
-                
-                if CameraVideoCapturer.current != nil && CameraVideoCapturer.current!.isRunning {
-                    // CameraVideoCapturer.current を停止してから capturer を start する
-                    CameraVideoCapturer.current!.stop() { (error: Error?) in
-                        guard error == nil else {
-                            Logger.debug(type: .peerChannel,
-                                         message: "CameraVideoCapturer.stop failed =>  \(error!)")
-                            return
-                        }
 
-                        capturer.start(format: format,
-                              frameRate: frameRate) { (error: Error?) in
-                            guard error == nil else {
-                                Logger.debug(type: .peerChannel,
-                                             message: "CameraVideoCapturer.start failed =>  \(error!)")
-                                return
-                            }
-                            capturer.stream = stream
-                        }
+            // デバイスに対応したフォーマットとフレームレートを取得する
+            guard let format = CameraVideoCapturer.format(width: configuration.cameraSettings.resolution.width,
+                                                          height: configuration.cameraSettings.resolution.height,
+                                                          for: capturer.device) else {
+                Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable format rate is not found")
+                return
+            }
+
+            guard let frameRate = CameraVideoCapturer.maxFrameRate(configuration.cameraSettings.frameRate, for: format) else {
+                Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable frame rate is not found")
+                return
+            }
+
+            if CameraVideoCapturer.current != nil && CameraVideoCapturer.current!.isRunning {
+                // CameraVideoCapturer.current を停止してから capturer を start する
+                CameraVideoCapturer.current!.stop() { (error: Error?) in
+                    guard error == nil else {
+                        Logger.debug(type: .peerChannel,
+                                     message: "CameraVideoCapturer.stop failed =>  \(error!)")
+                        return
                     }
-                } else {
+
                     capturer.start(format: format, frameRate: frameRate) { error in
                         guard error == nil else {
                             Logger.debug(type: .peerChannel,
@@ -535,10 +542,16 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     }
                 }
             } else {
-                // 起動可能なデバイスが存在しない場合
-                // iPhone/iPad であればここに来ない
-                Logger.debug(type: .peerChannel,
-                             message: "video capturer is not found")
+                capturer.start(format: format, frameRate: frameRate) { error in
+                    guard error == nil else {
+                        Logger.debug(type: .peerChannel,
+                                     message: "CameraVideoCapturer.start failed =>  \(error!)")
+                        return
+                    }
+                    Logger.debug(type: .peerChannel,
+                                 message: "set CameraVideoCapturer to sender stream")
+                    capturer.stream = stream
+                }
             }
         }
         

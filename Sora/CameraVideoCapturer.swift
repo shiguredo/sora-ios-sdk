@@ -30,10 +30,22 @@ public final class CameraVideoCapturer {
     }
     
     /// 前面のカメラに対応するデバイス
-    public private(set) static var front: CameraVideoCapturer = CameraVideoCapturer(device: device(for: .front) ?? nil)
+    public private(set) static var front: CameraVideoCapturer? = {
+        if let device = device(for: .front) {
+            return CameraVideoCapturer(device: device)
+        } else {
+            return nil
+        }
+    }()
 
     /// 背面のカメラに対応するデバイス
-    public private(set) static var back: CameraVideoCapturer = CameraVideoCapturer(device: device(for: .back) ?? nil)
+    public private(set) static var back: CameraVideoCapturer? = {
+        if let device = device(for: .back) {
+            return CameraVideoCapturer(device: device)
+        } else {
+            return nil
+        }
+    }()
 
     /// 起動中のデバイス
     public private(set) static var current: CameraVideoCapturer?
@@ -106,23 +118,22 @@ public final class CameraVideoCapturer {
     /// CameraVideoCapturer の起動には、 capturer と近い設定のフォーマットとフレームレートが利用されます
     /// また、起動された CameraVideoCapturer には capturer の保持する MediaStream が設定されます
     public static func flip(_ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)) {
-        guard capturer.device != nil else {
-            completionHandler(SoraError.cameraError(reason: "device should not be nil"))
-            return
-        }
-        
         guard capturer.format != nil else {
             completionHandler(SoraError.cameraError(reason: "format should not be nil"))
             return
         }
         
         // 反対の position を持つ CameraVideoCapturer を取得する
-        let flip: CameraVideoCapturer = capturer.device!.position == .front ? .back : .front
+        guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front) else {
+            let name = capturer.device.position == .front ? "back" : "front"
+            completionHandler(SoraError.cameraError(reason: "\(name) camera is not found"))
+            return
+        }
         
         let dimension = CMVideoFormatDescriptionGetDimensions(capturer.format!.formatDescription)
         guard let format = CameraVideoCapturer.format(width: dimension.width,
                                                       height: dimension.height,
-                                                      for: flip.device!) else {
+                                                      for: flip.device) else {
             completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.format failed: suitable format is not found"))
             return
         }
@@ -178,7 +189,7 @@ public final class CameraVideoCapturer {
     }
     
     /// 使用中のデバイス
-    public var device: AVCaptureDevice?
+    public var device: AVCaptureDevice
     
     /// フレームレート
     public private(set) var frameRate: Int?
@@ -196,7 +207,7 @@ public final class CameraVideoCapturer {
     /// 引数に指定した device を利用して CameraVideoCapturer を初期化します。
     /// 自動的に初期化される静的プロパティ、 front/back を定義しています。
     /// 上記以外のデバイスを利用したい場合のみ CameraVideoCapturer を生成してください。
-    public init(device: AVCaptureDevice?) {
+    public init(device: AVCaptureDevice) {
         self.device = device
         nativeDelegate = CameraVideoCapturerDelegate(cameraVideoCapturer: self)
         native = RTCCameraVideoCapturer(delegate: nativeDelegate)
@@ -219,11 +230,6 @@ public final class CameraVideoCapturer {
                       completionHandler: @escaping ((Error?) -> Void)) {
         guard isRunning == false else {
             completionHandler(SoraError.cameraError(reason: "isRunning should be false"))
-            return
-        }
-        
-        guard let device = device else {
-            completionHandler(SoraError.cameraError(reason: "device is not initialized"))
             return
         }
         
