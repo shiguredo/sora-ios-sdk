@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		3591D8EE27014F7C000AD514 /* PackageInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3591D8ED27014F7C000AD514 /* PackageInfo.swift */; };
+		3591D8F027032233000AD514 /* SoraDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3591D8EF27032233000AD514 /* SoraDispatcher.swift */; };
 		9100904E1E58B4470099E00E /* VideoView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 9100904D1E58B4470099E00E /* VideoView.xib */; };
 		910090501E58B5450099E00E /* VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9100904F1E58B5450099E00E /* VideoView.swift */; };
 		9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9106C27D1F31A3470019E3C7 /* Logger.swift */; };
@@ -74,6 +75,7 @@
 
 /* Begin PBXFileReference section */
 		3591D8ED27014F7C000AD514 /* PackageInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PackageInfo.swift; sourceTree = "<group>"; };
+		3591D8EF27032233000AD514 /* SoraDispatcher.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SoraDispatcher.swift; sourceTree = "<group>"; };
 		9100904D1E58B4470099E00E /* VideoView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = VideoView.xib; sourceTree = "<group>"; };
 		9100904F1E58B5450099E00E /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		910444CE253EC6F400EA06BE /* AudioMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMode.swift; sourceTree = "<group>"; };
@@ -204,6 +206,7 @@
 				910F2DB024D7F6EE007336A6 /* Statistics.swift */,
 				9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */,
 				9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */,
+				3591D8EF27032233000AD514 /* SoraDispatcher.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
 				9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */,
 				C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */,
@@ -375,6 +378,7 @@
 				9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */,
 				9174A8911F73F89400D586C4 /* Role.swift in Sources */,
 				9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */,
+				3591D8F027032233000AD514 /* SoraDispatcher.swift in Sources */,
 				915344121FE96F750083762B /* SoraError.swift in Sources */,
 				9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */,
 				9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */,
