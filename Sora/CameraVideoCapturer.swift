@@ -272,12 +272,8 @@ public final class CameraVideoCapturer {
         }
     }
     
-    /// カメラを再起動します
+    /// 停止前と同じ設定でカメラを再起動します。
     public func restart(completionHandler: @escaping ((Error?) -> Void)) {
-        guard isRunning else {
-            completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
-            return
-        }
         
         guard let format = self.format else {
             completionHandler(SoraError.cameraError(reason: "failed to access format"))
@@ -289,12 +285,25 @@ public final class CameraVideoCapturer {
             return
         }
         
-        stop() { [self] (error: Error?) in
-            guard error == nil else {
-                completionHandler(error)
-                return
-            }
+        if isRunning {
+            stop() { [self] (error: Error?) in
+                guard error == nil else {
+                    completionHandler(error)
+                    return
+                }
 
+                start(format: format,
+                      frameRate: frameRate) { (error: Error?) in
+                    guard error == nil else {
+                        completionHandler(error)
+                        return
+                    }
+                    
+                    Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
+                    completionHandler(nil)
+                }
+            }
+        } else {
             start(format: format,
                   frameRate: frameRate) { (error: Error?) in
                 guard error == nil else {
