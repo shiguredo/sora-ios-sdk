@@ -125,7 +125,8 @@ public final class CameraVideoCapturer {
         
         // 反対の position を持つ CameraVideoCapturer を取得する
         guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front) else {
-            completionHandler(SoraError.cameraError(reason: "device is not found"))
+            let name = capturer.device.position == .front ? "back" : "front"
+            completionHandler(SoraError.cameraError(reason: "\(name) camera is not found"))
             return
         }
         
