@@ -1,7 +1,7 @@
 /// :nodoc:
 public struct SDKInfo {
     // Sora iOS SDK のバージョンを定義する
-    public static let version = "2021.1"
+    public static let version = "2021.2"
 }
 
 /**
