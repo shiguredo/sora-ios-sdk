@@ -9,10 +9,10 @@
 - FIX
     - バグ修正
 
-## develop
+## 2021.2
 
 - [UPDATE] Swift Package Manager に対応する
-    - @miosakuma
+    - @miosakuma @enm10k
 - [UPDATE] WebRTC 93.4577.8.0 に上げる
     - @miosakuma
 - [UPDATE] システム条件を変更する
