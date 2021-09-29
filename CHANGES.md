@@ -9,6 +9,11 @@
 - FIX
     - バグ修正
 
+## 2021.2.1
+
+- [FIX] Swift Package Manager に対応するためバージョニングを修正
+    - @miosakuma
+
 ## 2021.2
 
 - [UPDATE] Swift Package Manager に対応する
