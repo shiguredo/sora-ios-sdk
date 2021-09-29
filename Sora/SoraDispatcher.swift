@@ -1,5 +1,6 @@
 import WebRTC
 
+/// libwebrtc の内部で利用されているキューを表します。
 public enum SoraDispatcher {
 
     /// カメラ用のキュー
