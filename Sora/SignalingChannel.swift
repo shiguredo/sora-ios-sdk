@@ -176,12 +176,14 @@ class BasicSignalingChannel: SignalingChannel {
         self.configuration = configuration
         self.webSocketChannel = configuration
             ._webSocketChannelType.init(url: configuration.url)
-        
-        webSocketChannel.internalHandlers.onDisconnect = { error in
-            self.disconnect(error: error)
+        BasicWebSocketChannel.useStarscreamCustomEngine = !configuration.allowsURLSessionWebSocketChannel
+        webSocketChannel.internalHandlers.onDisconnect = { [weak self] error in
+            self?.disconnect(error: error)
         }
         
-        webSocketChannel.internalHandlers.onReceive = handle
+        webSocketChannel.internalHandlers.onReceive = { [weak self] message in
+            self?.handle(message: message)
+        }
         webSocketChannel.handlers = configuration.webSocketChannelHandlers
     }
     

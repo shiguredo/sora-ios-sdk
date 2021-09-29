@@ -7,13 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3591D8EE27014F7C000AD514 /* PackageInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3591D8ED27014F7C000AD514 /* PackageInfo.swift */; };
+		3591D8F027032233000AD514 /* SoraDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3591D8EF27032233000AD514 /* SoraDispatcher.swift */; };
 		9100904E1E58B4470099E00E /* VideoView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 9100904D1E58B4470099E00E /* VideoView.xib */; };
 		910090501E58B5450099E00E /* VideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9100904F1E58B5450099E00E /* VideoView.swift */; };
 		9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9106C27D1F31A3470019E3C7 /* Logger.swift */; };
 		910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */; };
 		910F2DB124D7F6EE007336A6 /* Statistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910F2DB024D7F6EE007336A6 /* Statistics.swift */; };
 		9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */; };
-		9138B4D01E655728006A76FB /* WebRTCInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9138B4CF1E655728006A76FB /* WebRTCInfo.swift */; };
 		913C895A226EFC61001B2569 /* Signaling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 913C8959226EFC61001B2569 /* Signaling.swift */; };
 		9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */; };
 		9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9145A58F1F0CB093002D6EC6 /* Utilities.swift */; };
@@ -40,8 +41,6 @@
 		91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B891F19366000A76852 /* SignalingChannel.swift */; };
 		91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8D1F19367700A76852 /* MediaChannel.swift */; };
 		91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91B1D6451D75E11F00112A4E /* VideoRenderer.swift */; };
-		91BD94832045323E006ED524 /* info.json in Resources */ = {isa = PBXBuildFile; fileRef = 91BD94822045323E006ED524 /* info.json */; };
-		91BD9489204536D9006ED524 /* SDKInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BD9488204536D9006ED524 /* SDKInfo.swift */; };
 		91C7B08D1D54636A006F5FA2 /* Sora.h in Headers */ = {isa = PBXBuildFile; fileRef = 91C7B08C1D54636A006F5FA2 /* Sora.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		91C7B0941D54636A006F5FA2 /* Sora.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91C7B0891D54636A006F5FA2 /* Sora.framework */; };
 		91C7B0991D54636A006F5FA2 /* SoraTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C7B0981D54636A006F5FA2 /* SoraTests.swift */; };
@@ -75,6 +74,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3591D8ED27014F7C000AD514 /* PackageInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PackageInfo.swift; sourceTree = "<group>"; };
+		3591D8EF27032233000AD514 /* SoraDispatcher.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SoraDispatcher.swift; sourceTree = "<group>"; };
 		9100904D1E58B4470099E00E /* VideoView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = VideoView.xib; sourceTree = "<group>"; };
 		9100904F1E58B5450099E00E /* VideoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoView.swift; sourceTree = "<group>"; };
 		910444CE253EC6F400EA06BE /* AudioMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMode.swift; sourceTree = "<group>"; };
@@ -82,7 +83,6 @@
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
 		910F2DB024D7F6EE007336A6 /* Statistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Statistics.swift; sourceTree = "<group>"; };
 		9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaStream.swift; sourceTree = "<group>"; };
-		9138B4CF1E655728006A76FB /* WebRTCInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebRTCInfo.swift; sourceTree = "<group>"; };
 		913C8959226EFC61001B2569 /* Signaling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Signaling.swift; sourceTree = "<group>"; };
 		9141AB631F4204C0007C4D1C /* ConnectionTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTimer.swift; sourceTree = "<group>"; };
 		9145A58F1F0CB093002D6EC6 /* Utilities.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
@@ -108,16 +108,12 @@
 		91A19B8B1F19366B00A76852 /* PeerChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeerChannel.swift; sourceTree = "<group>"; };
 		91A19B8D1F19367700A76852 /* MediaChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaChannel.swift; sourceTree = "<group>"; };
 		91B1D6451D75E11F00112A4E /* VideoRenderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoRenderer.swift; sourceTree = "<group>"; };
-		91BD94822045323E006ED524 /* info.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; name = info.json; path = Sora/info.json; sourceTree = "<group>"; };
-		91BD94862045331C006ED524 /* info.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; name = info.sh; path = Sora/info.sh; sourceTree = "<group>"; };
-		91BD9488204536D9006ED524 /* SDKInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDKInfo.swift; sourceTree = "<group>"; };
 		91C7B0891D54636A006F5FA2 /* Sora.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Sora.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		91C7B08C1D54636A006F5FA2 /* Sora.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Sora.h; sourceTree = "<group>"; };
 		91C7B08E1D54636A006F5FA2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		91C7B0931D54636A006F5FA2 /* SoraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SoraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		91C7B0981D54636A006F5FA2 /* SoraTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoraTests.swift; sourceTree = "<group>"; };
 		91C7B09A1D54636A006F5FA2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		91C7B0A81D5463EA006F5FA2 /* Cartfile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Cartfile; sourceTree = "<group>"; };
 		91CD2A491F288A6A00D039D1 /* Sora.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Sora.swift; sourceTree = "<group>"; };
 		91CDC1EC23166A5200C3A31E /* DeviceInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DeviceInfo.swift; sourceTree = "<group>"; };
 		91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoFrame.swift; sourceTree = "<group>"; };
@@ -164,7 +160,6 @@
 			isa = PBXGroup;
 			children = (
 				91C7B08B1D54636A006F5FA2 /* Sora */,
-				91C7B0A31D5463A4006F5FA2 /* Misc */,
 				91C7B0971D54636A006F5FA2 /* SoraTests */,
 				9182018E1D58667600178E2B /* Frameworks */,
 				91C7B08A1D54636A006F5FA2 /* Products */,
@@ -202,8 +197,8 @@
 				9128A4A81F2A6CB100AC6B1E /* MediaStream.swift */,
 				910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */,
 				91A19B8B1F19366B00A76852 /* PeerChannel.swift */,
+				3591D8ED27014F7C000AD514 /* PackageInfo.swift */,
 				9174A8901F73F89400D586C4 /* Role.swift */,
-				91BD9488204536D9006ED524 /* SDKInfo.swift */,
 				913C8959226EFC61001B2569 /* Signaling.swift */,
 				91A19B891F19366000A76852 /* SignalingChannel.swift */,
 				91CD2A491F288A6A00D039D1 /* Sora.swift */,
@@ -211,6 +206,7 @@
 				910F2DB024D7F6EE007336A6 /* Statistics.swift */,
 				9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */,
 				9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */,
+				3591D8EF27032233000AD514 /* SoraDispatcher.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
 				9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */,
 				C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */,
@@ -219,7 +215,6 @@
 				91B1D6451D75E11F00112A4E /* VideoRenderer.swift */,
 				9100904F1E58B5450099E00E /* VideoView.swift */,
 				91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */,
-				9138B4CF1E655728006A76FB /* WebRTCInfo.swift */,
 				91554F421F179CFD00403C39 /* WebSocketChannel.swift */,
 				9100904D1E58B4470099E00E /* VideoView.xib */,
 				91BDC1D31F6285D10084DC3A /* Extensions */,
@@ -234,16 +229,6 @@
 				91C7B09A1D54636A006F5FA2 /* Info.plist */,
 			);
 			path = SoraTests;
-			sourceTree = "<group>";
-		};
-		91C7B0A31D5463A4006F5FA2 /* Misc */ = {
-			isa = PBXGroup;
-			children = (
-				91C7B0A81D5463EA006F5FA2 /* Cartfile */,
-				91BD94822045323E006ED524 /* info.json */,
-				91BD94862045331C006ED524 /* info.sh */,
-			);
-			name = Misc;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -264,7 +249,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 91C7B09D1D54636A006F5FA2 /* Build configuration list for PBXNativeTarget "Sora" */;
 			buildPhases = (
-				91BD9485204532E9006ED524 /* ShellScript */,
 				91C7B0841D54636A006F5FA2 /* Sources */,
 				91C7B0851D54636A006F5FA2 /* Frameworks */,
 				91C7B0861D54636A006F5FA2 /* Headers */,
@@ -346,7 +330,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				9100904E1E58B4470099E00E /* VideoView.xib in Resources */,
-				91BD94832045323E006ED524 /* info.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -358,22 +341,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		91BD9485204532E9006ED524 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "sh $SRCROOT/Sora/info.sh > $SRCROOT/Sora/info.json\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		91C7B0841D54636A006F5FA2 /* Sources */ = {
@@ -393,14 +360,13 @@
 				918A38F81F30F49500D047BA /* ICEServerInfo.swift in Sources */,
 				916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */,
 				91756E211F90A87500B70C53 /* ConnectionState.swift in Sources */,
-				9138B4D01E655728006A76FB /* WebRTCInfo.swift in Sources */,
 				9174A8971F73F93B00D586C4 /* ICETransportPolicy.swift in Sources */,
+				3591D8EE27014F7C000AD514 /* PackageInfo.swift in Sources */,
 				91CDC1ED23166A5300C3A31E /* DeviceInfo.swift in Sources */,
 				91B1D6461D75E11F00112A4E /* VideoRenderer.swift in Sources */,
 				9161AECA2410D75A00BA3E0E /* URLSessionWebSocketChannel.swift in Sources */,
 				9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */,
 				913C895A226EFC61001B2569 /* Signaling.swift in Sources */,
-				91BD9489204536D9006ED524 /* SDKInfo.swift in Sources */,
 				91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */,
 				91CD2A4A1F288A6A00D039D1 /* Sora.swift in Sources */,
 				9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */,
@@ -412,6 +378,7 @@
 				9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */,
 				9174A8911F73F89400D586C4 /* Role.swift in Sources */,
 				9145A5901F0CB093002D6EC6 /* Utilities.swift in Sources */,
+				3591D8F027032233000AD514 /* SoraDispatcher.swift in Sources */,
 				915344121FE96F750083762B /* SoraError.swift in Sources */,
 				9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */,
 				9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */,
@@ -489,7 +456,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PROVISIONING_PROFILE = "49e345ee-1e24-4cef-9228-9df5fc1f7525";
@@ -546,7 +513,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PROVISIONING_PROFILE = "49e345ee-1e24-4cef-9228-9df5fc1f7525";
 				SDKROOT = iphoneos;
@@ -562,7 +529,6 @@
 		};
 		91C7B09E1D54636A006F5FA2 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E468BA3260AB17F9220A5002 /* Pods-Sora.debug.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
@@ -579,9 +545,9 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INFOPLIST_FILE = Sora/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.7.0;
+				MARKETING_VERSION = 2021.2;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -596,7 +562,6 @@
 		};
 		91C7B09F1D54636A006F5FA2 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6523F57BC3EF8964AFA55070 /* Pods-Sora.release.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
@@ -613,9 +578,9 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INFOPLIST_FILE = Sora/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2020.7.0;
+				MARKETING_VERSION = 2021.2;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";

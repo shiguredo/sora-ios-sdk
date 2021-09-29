@@ -106,10 +106,6 @@ public final class Sora {
     
     // MARK: - プロパティ
     
-    /// リンクしている WebRTC フレームワークの情報。
-    /// Sora iOS SDK が指定するバイナリでなければ ``nil`` 。
-    public let webRTCInfo: WebRTCInfo? = WebRTCInfo.load()
-
     /// 接続中のメディアチャネルのリスト
     public private(set) var mediaChannels: [MediaChannel] = []
     
@@ -185,21 +181,38 @@ public final class Sora {
         _ error: Error?) -> Void) -> ConnectionTask {
         Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
-        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { error in
-            if let error = error {
-                handler(nil, error)
-                self.handlers.onConnect?(nil, error)
+        mediaChan.internalHandlers.onDisconnect = { [weak self, weak mediaChan] error in
+            guard let weakSelf = self else {
                 return
             }
-            
-            mediaChan.internalHandlers.onDisconnect = { error in
-                self.remove(mediaChannel: mediaChan)
-                self.handlers.onDisconnect?(mediaChan, error)
+            guard let mediaChan = mediaChan else {
+                return
             }
-            
-            self.add(mediaChannel: mediaChan)
+            weakSelf.remove(mediaChannel: mediaChan)
+            weakSelf.handlers.onDisconnect?(mediaChan, error)
+        }
+
+        // MediaChannel.connect() の引数のハンドラが実行されるまで
+        // 解放されないように先にリストに追加しておく
+        // ただ、 mediaChannels を weak array にすべきかもしれない
+        add(mediaChannel: mediaChan)
+
+        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { [weak self, weak mediaChan] error in
+            guard let weakSelf = self else {
+                return
+            }
+            guard let mediaChan = mediaChan else {
+                return
+            }
+
+            if let error = error {
+                handler(nil, error)
+                weakSelf.handlers.onConnect?(nil, error)
+                return
+            }
+
             handler(mediaChan, nil)
-            self.handlers.onConnect?(mediaChan, nil)
+            weakSelf.handlers.onConnect?(mediaChan, nil)
         }
     }
     
