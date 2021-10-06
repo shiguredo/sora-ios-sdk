@@ -125,6 +125,9 @@ public enum Signaling {
     /// "pong" シグナリング
     case push(SignalingPush)
     
+    /// "switch" シグナリング
+    case switched(SignalingSwitched)
+    
     /// :nodoc:
     public static func decode(_ data: Data) -> Result<Signaling, Error> {
         do {
@@ -164,6 +167,8 @@ public enum Signaling {
             return "disconnect"
         case .push(_):
             return "push"
+        case .switched(_):
+            return "switched"
         }
     }
     
@@ -359,6 +364,9 @@ public struct SignalingConnect {
 
     /// :nodoc:
     public var environment: String?
+    
+    public var dataChannelSignaling: Bool?
+    public var ignoreDisconectWebSocket: Bool?
 
 }
 
@@ -500,6 +508,13 @@ public struct SignalingPush {
     /// プッシュ通知で送信される JSON データ
     public var data: Any? = {}
     
+}
+
+/**
+ "switched" シグナリングメッセージを表します。
+ */
+public struct SignalingSwitched {
+    public var ignoreDisconnectWebsocket: Bool?
 }
 
 /**
@@ -916,6 +931,8 @@ extension SignalingConnect: Codable {
         case sora_client
         case libwebrtc
         case environment
+        case data_channel_signaling
+        case ignore_disconnect_websocket
     }
     
     enum VideoCodingKeys: String, CodingKey {
@@ -947,7 +964,9 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
         try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
         try container.encodeIfPresent(environment, forKey: .environment)
-
+        try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
+        try container.encodeIfPresent(ignoreDisconectWebSocket, forKey: .ignore_disconnect_websocket)
+        
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
                 var videoContainer = container

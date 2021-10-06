@@ -152,6 +152,9 @@ public struct Configuration {
     /// `connect` シグナリングに含める通知用のメタデータ
     public var signalingConnectNotifyMetadata: Encodable?
     
+    public var dataChannelSignaling: Bool?
+    public var ignoreDisconnectWebsocket: Bool?
+    
     // MARK: - イベントハンドラ
     
     /// WebSocket チャネルに関するイベントハンドラ

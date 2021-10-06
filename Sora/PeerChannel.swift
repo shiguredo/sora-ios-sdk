@@ -132,6 +132,9 @@ public protocol PeerChannel: AnyObject {
     
     /// シグナリングチャネル
     var signalingChannel: SignalingChannel { get }
+
+    /// データチャンネル
+    var dataChannels: [String: RTCDataChannel] { get }
     
     // MARK: - インスタンスの生成
     
@@ -187,6 +190,8 @@ class BasicPeerChannel: PeerChannel {
             return context.state
         }
     }
+    
+    var dataChannels: [String: RTCDataChannel] = [:]
     
     private var context: BasicPeerChannelContext!
     
@@ -246,7 +251,7 @@ class BasicPeerChannel: PeerChannel {
 
 // MARK: -
 
-class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
+class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDelegate {
     
     final class Lock {
         
@@ -460,7 +465,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             simulcastRid: configuration.simulcastRid,
             soraClient: soraClient,
             webRTCVersion: webRTCVersion,
-            environment: DeviceInfo.current.description)
+            environment: DeviceInfo.current.description,
+            dataChannelSignaling: configuration.dataChannelSignaling,
+            ignoreDisconectWebSocket: configuration.ignoreDisconnectWebsocket)
+        
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }
@@ -808,7 +816,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             } else {
                 signalingChannel.send(message: .pong(pong))
             }
-            
         default:
             break
         }
@@ -995,13 +1002,25 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
-    // NOTE: Sora はデータチャネルに非対応
+    // TODO(enm10k): 既存の設計的には SignalingChannl に DataChannel を足すのが理想的な気がするが ... 可能なのか?
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
-        Logger.debug(type: .peerChannel, message: "opened data channel (ignored)")
-        // 何もしない
+        Logger.debug(type: .peerChannel, message: "opened data channel: label => \(dataChannel.label)")
+        channel.dataChannels[dataChannel.label] = dataChannel
+        dataChannel.delegate = self
+    }
+
+    func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        Logger.debug(type: .peerChannel, message: "data channel dataChannelDidChangeState: label => \(dataChannel.label)")
     }
     
+    func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
+        Logger.debug(type: .peerChannel, message: "data channel didChangeBufferedAmount: label => \(dataChannel.label)")
+    }
+    
+    func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+        Logger.debug(type: .peerChannel, message: "data channel didReceiveMessageWith: label => \(dataChannel.label)")
+    }
 }
 
 extension RTCRtpSender {
