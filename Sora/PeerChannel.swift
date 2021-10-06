@@ -1005,21 +1005,34 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChann
     // TODO(enm10k): 既存の設計的には SignalingChannl に DataChannel を足すのが理想的な気がするが ... 可能なのか?
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
-        Logger.debug(type: .peerChannel, message: "opened data channel: label => \(dataChannel.label)")
+        Logger.debug(type: .peerChannel, message: "didOpen: label => \(dataChannel.label)")
         channel.dataChannels[dataChannel.label] = dataChannel
         dataChannel.delegate = self
     }
 
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.debug(type: .peerChannel, message: "data channel dataChannelDidChangeState: label => \(dataChannel.label)")
+        Logger.debug(type: .peerChannel, message: "dataChannelDidChangeState: label => \(dataChannel.label)")
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
-        Logger.debug(type: .peerChannel, message: "data channel didChangeBufferedAmount: label => \(dataChannel.label)")
+        Logger.debug(type: .peerChannel, message: "didChangeBufferedAmount: label => \(dataChannel.label), amount => \(amount)")
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        Logger.debug(type: .peerChannel, message: "data channel didReceiveMessageWith: label => \(dataChannel.label)")
+        Logger.debug(type: .peerChannel, message: "didReceiveMessageWith: label => \(dataChannel.label)")
+        
+        // TODO: label を見て compress の有無をチェックする
+        do {
+            if #available(iOS 13.0, *) {
+                let data = try (buffer.data as NSData).decompressed(using: .zlib)
+                let message = String(data: data as Data, encoding: .utf8)
+                Logger.debug(type: .peerChannel, message: "didReceiveMessageWith: received message => \(String(describing: message))")
+            } else {
+                Logger.error(type: .peerChannel, message: "decompressed is not available.")
+            }
+        } catch {
+            Logger.error(type: .peerChannel, message: "failed to decompress data channel message: error => \(error.localizedDescription)")
+        }
     }
 }
 
