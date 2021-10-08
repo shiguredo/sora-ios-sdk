@@ -45,7 +45,7 @@ public final class ZLibUtil {
         sourceBuffer.removeFirst(2)
         
         // checksum も削除
-        let checksum = Array(sourceBuffer.suffix(4))
+        let checksum = Data(sourceBuffer.suffix(4))
         sourceBuffer.removeLast(4)
         
         let size = compression_decode_buffer(destinationBuffer, bufferSize,
@@ -60,7 +60,7 @@ public final class ZLibUtil {
         let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
         
         // checksum の検証
-        if calcAdler32(data) == Data(checksum) {
+        if calcAdler32(data) == checksum {
             return data
         }
         
