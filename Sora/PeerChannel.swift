@@ -1,5 +1,72 @@
+import Compression
 import Foundation
 import WebRTC
+import zlib
+
+// https://developer.apple.com/documentation/accelerate/compressing_and_decompressing_data_with_buffer_compression
+public final class ZLibUtil {
+    
+    public static func calcAdler32(_ data: Data) -> Data {
+        var result = data.withUnsafeBytes {
+            return UInt32(adler32(1, $0, UInt32(data.count)))
+        }.bigEndian
+        return Data(bytes: &result, count: MemoryLayout<UInt32>.size)
+    }
+
+    public static func zip(_ input: Data) -> Data? {
+        let bufferSize = 262_144
+        let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        
+        var sourceBuffer = [UInt8](input)
+        let size = compression_encode_buffer(destinationBuffer, bufferSize,
+                                             &sourceBuffer, sourceBuffer.count,
+                                             nil,
+                                             COMPRESSION_ZLIB)
+        if size == 0 {
+            return nil
+        }
+        
+        let header = Data([0x78, 0x5e])
+        let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
+        
+        var adler = calcAdler32(input)
+        let checksum = Data(bytes: &adler, count: MemoryLayout<UInt32>.size)
+        
+        return header + data + checksum
+    }
+
+    public static func unzip(_ input: Data) -> Data? {
+        let bufferSize = 262_144
+        let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        
+        var sourceBuffer = [UInt8](input)
+        
+        // header を削除
+        sourceBuffer.removeFirst(2)
+        
+        // checksum も削除
+        let checksum = Array(sourceBuffer.suffix(4))
+        sourceBuffer.removeLast(4)
+        
+        let size = compression_decode_buffer(destinationBuffer, bufferSize,
+                                             &sourceBuffer, sourceBuffer.count,
+                                             nil,
+                                             COMPRESSION_ZLIB)
+        
+        if size == 0 {
+            return nil
+        }
+        
+        let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
+        
+        // checksum の検証
+        if calcAdler32(data) == Data(checksum) {
+            return data
+        }
+        
+        return nil
+    }
+}
 
 /**
  ピアチャネルのイベントハンドラです。
@@ -1020,19 +1087,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChann
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         Logger.debug(type: .peerChannel, message: "didReceiveMessageWith: label => \(dataChannel.label)")
-        
         // TODO: label を見て compress の有無をチェックする
-        do {
-            if #available(iOS 13.0, *) {
-                let data = try (buffer.data as NSData).decompressed(using: .zlib)
-                let message = String(data: data as Data, encoding: .utf8)
-                Logger.debug(type: .peerChannel, message: "didReceiveMessageWith: received message => \(String(describing: message))")
-            } else {
-                Logger.error(type: .peerChannel, message: "decompressed is not available.")
-            }
-        } catch {
-            Logger.error(type: .peerChannel, message: "failed to decompress data channel message: error => \(error.localizedDescription)")
+        guard let unzipped = ZLibUtil.unzip(buffer.data) else {
+            Logger.error(type: .peerChannel, message: "failed to decompress data channel message")
+            return
         }
+        
+        let message = String(data: unzipped, encoding: .utf8)
+        Logger.info(type: .peerChannel, message: "received data channel message: \(message)")
     }
 }
 
