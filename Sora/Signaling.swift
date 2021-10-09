@@ -810,6 +810,8 @@ extension Signaling: Codable {
             self = .push(try SignalingPush(from: decoder))
         case "re-offer":
             self = .reOffer(try SignalingReOffer(from: decoder))
+        case "switched":
+            self = .switched(try SignalingSwitched(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
@@ -1299,6 +1301,19 @@ extension SignalingPong: Codable {
     
     public func encode(to encoder: Encoder) throws {
         // エンコードするプロパティはない
+    }
+    
+}
+
+extension SignalingSwitched: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case ignore_disconnect_websocket
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ignoreDisconnectWebsocket = try container.decode(Bool.self, forKey: .ignore_disconnect_websocket)
     }
     
 }

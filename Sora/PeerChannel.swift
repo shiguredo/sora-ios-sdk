@@ -28,9 +28,7 @@ public final class ZLibUtil {
         
         let header = Data([0x78, 0x5e])
         let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
-        
-        var adler = calcAdler32(input)
-        let checksum = Data(bytes: &adler, count: MemoryLayout<UInt32>.size)
+        let checksum = calcAdler32(input)
         
         return header + data + checksum
     }
@@ -59,12 +57,8 @@ public final class ZLibUtil {
         
         let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
         
-        // checksum の検証
-        if calcAdler32(data) == checksum {
-            return data
-        }
-        
-        return nil
+        // checksum の検証が成功したら data を返す
+        return calcAdler32(data) == checksum ? data : nil
     }
 }
 
@@ -260,7 +254,7 @@ class BasicPeerChannel: PeerChannel {
     
     var dataChannels: [String: RTCDataChannel] = [:]
     
-    private var context: BasicPeerChannelContext!
+    var context: BasicPeerChannelContext!
     
     required init(configuration: Configuration, signalingChannel: SignalingChannel) {
         self.configuration = configuration
@@ -318,7 +312,7 @@ class BasicPeerChannel: PeerChannel {
 
 // MARK: -
 
-class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDelegate {
+class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     final class Lock {
         
@@ -395,8 +389,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChann
     
     private var offerEncodings: [SignalingOffer.Encoding]?
 
+    
+    var delegate: DataChannelDelegate
+    
     init(channel: BasicPeerChannel) {
         self.channel = channel
+        self.delegate = DataChannelDelegate(channel: channel)
+
         lock = Lock()
         super.init()
         lock.context = self
@@ -408,6 +407,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChann
         signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
             self?.handle(signaling: signaling)
         }
+        
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
@@ -1069,16 +1069,26 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChann
         }
     }
     
+
     // TODO(enm10k): 既存の設計的には SignalingChannl に DataChannel を足すのが理想的な気がするが ... 可能なのか?
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
         Logger.debug(type: .peerChannel, message: "didOpen: label => \(dataChannel.label)")
         channel.dataChannels[dataChannel.label] = dataChannel
-        dataChannel.delegate = self
+        dataChannel.delegate = delegate
     }
+}
 
+class DataChannelDelegate: NSObject, RTCDataChannelDelegate {
+    
+    // TODO: 動かした後で設計を考える
+    private var channel: BasicPeerChannel
+    init(channel: BasicPeerChannel) {
+        self.channel = channel
+        super.init()
+    }
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.debug(type: .peerChannel, message: "dataChannelDidChangeState: label => \(dataChannel.label)")
+        Logger.debug(type: .peerChannel, message: "dataChannelDidChangeState: label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
@@ -1087,14 +1097,48 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate, RTCDataChann
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         Logger.debug(type: .peerChannel, message: "didReceiveMessageWith: label => \(dataChannel.label)")
-        // TODO: label を見て compress の有無をチェックする
+        
         guard let unzipped = ZLibUtil.unzip(buffer.data) else {
             Logger.error(type: .peerChannel, message: "failed to decompress data channel message")
             return
         }
         
         let message = String(data: unzipped, encoding: .utf8)
-        Logger.info(type: .peerChannel, message: "received data channel message: \(message)")
+        Logger.info(type: .peerChannel, message: "received data channel message: \(String(describing: message))")
+        
+        // TODO: label を見て compress の有無をチェックする
+        switch dataChannel.label {
+        case "stats":
+            channel.context?.nativeChannel.statistics { report in
+                // NOTE: stats の型を Signaling.swift に定義していない
+                let reports = Statistics(contentsOf: report).jsonObject
+                let json: [String: Any] = ["type": "stats",
+                                           "reports": reports]
+                do {
+                    let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+                    if let zipped = ZLibUtil.zip(data) {
+                        let dataBuffer = RTCDataBuffer(data: zipped, isBinary: false)
+                        dataChannel.sendData(dataBuffer)
+                    }
+                } catch {
+                    Logger.error(type: .peerChannel, message: "failed to encode statistic data to json")
+                }
+            }
+            return
+        case "push", "notify":
+            // TODO: DataChannel で受信したメッセージをコールバックからアクセスできるようにする
+            // (push, notify を含む) WebSocket で受信した全てのメッセージは SignalingChannelHandlers.onReceive, MediaChannelHandlers.onReceiveSignaling などでアクセスできる
+            return
+        case "signaling":
+            // TODO: re-offer を処理して re-answer を送信する
+            return
+        case "e2ee":
+            Logger.error(type: .peerChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
+            return
+        default:
+            Logger.error(type: .peerChannel, message: "unknown data channel label: \(dataChannel.label)")
+        }
+        
     }
 }
 
