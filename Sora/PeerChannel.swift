@@ -11,7 +11,7 @@ public final class ZLibUtil {
             return nil
         }
         
-        let bufferSize = 262_144
+        let bufferSize = 262_144 // TODO: 毎回確保するには大きいので何とかする
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         
         var sourceBuffer = [UInt8](input)
@@ -44,7 +44,7 @@ public final class ZLibUtil {
             return nil
         }
         
-        let bufferSize = 262_144
+        let bufferSize = 262_144 // TODO: 毎回確保するには大きいので何とかする
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         
         var sourceBuffer = [UInt8](input)
