@@ -6,14 +6,11 @@ import zlib
 // https://developer.apple.com/documentation/accelerate/compressing_and_decompressing_data_with_buffer_compression
 public final class ZLibUtil {
     
-    public static func calcAdler32(_ data: Data) -> Data {
-        var result = data.withUnsafeBytes {
-            return UInt32(adler32(1, $0, UInt32(data.count)))
-        }.bigEndian
-        return Data(bytes: &result, count: MemoryLayout<UInt32>.size)
-    }
-
     public static func zip(_ input: Data) -> Data? {
+        if input.isEmpty {
+            return nil
+        }
+        
         let bufferSize = 262_144
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         
@@ -26,14 +23,27 @@ public final class ZLibUtil {
             return nil
         }
         
-        let header = Data([0x78, 0x5e])
-        let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
-        let checksum = calcAdler32(input)
-        
-        return header + data + checksum
+        var zipped = Data(capacity: size + 6) // ヘッダー: 2バイト, チェックサム: 4バイト
+        zipped.append(contentsOf: [0x78, 0x5e]) // ヘッダーを追加
+        zipped.append(destinationBuffer, count: size)
+
+        let checksum = input.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> UInt32 in
+            let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
+            return UInt32(adler32(1, bytef, UInt32(input.count)))
+        }
+
+        zipped.append(UInt8(checksum >> 24 & 0xFF))
+        zipped.append(UInt8(checksum >> 16 & 0xFF))
+        zipped.append(UInt8(checksum >> 8 & 0xFF))
+        zipped.append(UInt8(checksum & 0xFF))
+        return zipped
     }
 
     public static func unzip(_ input: Data) -> Data? {
+        if (input.isEmpty) {
+            return nil
+        }
+        
         let bufferSize = 262_144
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         
@@ -55,10 +65,17 @@ public final class ZLibUtil {
             return nil
         }
         
+        
         let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
+
+        let calculatedChecksum = data.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Data in
+            let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
+            var result = UInt32(adler32(1, bytef, UInt32(data.count))).bigEndian
+            return Data(bytes: &result, count: MemoryLayout<UInt32>.size)
+        }
         
         // checksum の検証が成功したら data を返す
-        return calcAdler32(data) == checksum ? data : nil
+        return checksum == calculatedChecksum ? data : nil
     }
 }
 
@@ -816,6 +833,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
+    func createReAnswer(forReOffer reOffer: String) {
+        
+    }
     func createAndSendReAnswer(forReOffer reOffer: String) {
         Logger.debug(type: .peerChannel, message: "create and send re-answer")
         lock.lock()
@@ -1109,9 +1129,9 @@ class DataChannelDelegate: NSObject, RTCDataChannelDelegate {
         // TODO: label を見て compress の有無をチェックする
         switch dataChannel.label {
         case "stats":
-            channel.context?.nativeChannel.statistics { report in
+            channel.context?.nativeChannel.statistics {
                 // NOTE: stats の型を Signaling.swift に定義していない
-                let reports = Statistics(contentsOf: report).jsonObject
+                let reports = Statistics(contentsOf: $0).jsonObject
                 let json: [String: Any] = ["type": "stats",
                                            "reports": reports]
                 do {
