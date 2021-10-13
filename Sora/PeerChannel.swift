@@ -753,11 +753,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
-    func createReAnswer(forReOffer reOffer: String) {
-    
-    }
-    
-    
     func createAndSendReAnswer(forReOffer reOffer: String) {
         Logger.debug(type: .peerChannel, message: "create and send re-answer")
         lock.lock()
@@ -788,6 +783,54 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             self.lock.unlock()
         }
     }
+    
+    func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
+        Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
+        
+        guard let dataChannel = channel.dataChannels["signaling"] else {
+            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+            return
+        }
+        lock.lock()
+        createAnswer(isSender: false,
+                     offer: reOffer,
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
+            guard error == nil else {
+                Logger.error(type: .peerChannel,
+                             message: "failed to create re-answer: error => (\(error!.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError
+                    .peerChannelError(reason: "failed to create re-answer"))
+                return
+            }
+            
+            let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+            do {
+                let data = try JSONEncoder().encode(reAnswer)
+                dataChannel.send(data)
+            } catch {
+                Logger.error(type: .peerChannel,
+                             message: "failed to send re-answer: error => (\(error.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError
+                    .peerChannelError(reason: "failed to send re-answer"))
+                return
+            }
+            
+            
+            if (self.configuration.isSender) {
+                self.updateSenderOfferEncodings()
+            }
+            
+            Logger.debug(type: .peerChannel, message: "call onUpdate")
+            self.channel.internalHandlers.onUpdate?(answer!)
+            self.channel.handlers.onUpdate?(answer!)
+            
+            self.lock.unlock()
+        }
+    }
+    
     
     func handle(signaling: Signaling) {
         Logger.debug(type: .mediaStream, message: "handle signaling => \(signaling.typeName())")

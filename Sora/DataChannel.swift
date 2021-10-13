@@ -26,19 +26,19 @@ fileprivate class ZLibUtil {
         var zipped = Data(capacity: size + 6) // ヘッダー: 2バイト, チェックサム: 4バイト
         zipped.append(contentsOf: [0x78, 0x5e]) // ヘッダーを追加
         zipped.append(destinationBuffer, count: size)
-
+        
         let checksum = input.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> UInt32 in
             let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
             return UInt32(adler32(1, bytef, UInt32(input.count)))
         }
-
+        
         zipped.append(UInt8(checksum >> 24 & 0xFF))
         zipped.append(UInt8(checksum >> 16 & 0xFF))
         zipped.append(UInt8(checksum >> 8 & 0xFF))
         zipped.append(UInt8(checksum & 0xFF))
         return zipped
     }
-
+    
     public static func unzip(_ input: Data) -> Data? {
         if (input.isEmpty) {
             return nil
@@ -67,7 +67,7 @@ fileprivate class ZLibUtil {
         
         
         let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
-
+        
         let calculatedChecksum = data.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Data in
             let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
             var result = UInt32(adler32(1, bytef, UInt32(data.count))).bigEndian
@@ -80,20 +80,20 @@ fileprivate class ZLibUtil {
 }
 
 public enum DataChannelState {
-  case connecting
-  
-  case open
-  
-  case closing
-  
-  case closed
-
+    case connecting
+    
+    case open
+    
+    case closing
+    
+    case closed
+    
 }
 
 public final class DataChannelHandlers {
-
+    
     var onOpen: ((DataChannel) -> Void)?
-  
+    
     var onMessage: ((DataChannel, Data) -> Void)?
     
     var onBufferedAmount: ((DataChannel, UInt64) -> Void)?
@@ -155,14 +155,14 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         Logger.debug(type: .dataChannel, message: "didReceiveMessageWith: label => \(dataChannel.label)")
-
+        
         guard let peerChannel = peerChannel else {
-            Logger.error(type: .dataChannel, message: "peerChannel is not available")
+            Logger.error(type: .dataChannel, message: "peerChannel is unavailable")
             return
         }
         
         guard let dc = peerChannel.dataChannels[dataChannel.label] else {
-            Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is not available")
+            Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is unavailable")
             return
         }
         
@@ -170,8 +170,11 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             Logger.error(type: .dataChannel, message: "failed to decompress data channel message")
             return
         }
-
-        let message = String(data: data, encoding: .utf8)
+        
+        guard let message = String(data: data, encoding: .utf8) else {
+            Logger.error(type: .dataChannel, message: "failed to convert data to message")
+            return
+        }
         Logger.info(type: .dataChannel, message: "received data channel message: \(String(describing: message))")
         
         switch dataChannel.label {
@@ -192,8 +195,12 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         case "push", "notify":
             break
         case "signaling":
-            // TODO: re-offer を処理して re-answer を送信する
-            break
+            do {
+                let reOffer = try JSONDecoder().decode(SignalingReOffer.self, from: data)
+                peerChannel.context.createAndSendReAnswerOnDataChannel(forReOffer: reOffer.sdp)
+            } catch {
+                Logger.error(type: .dataChannel, message: "failed to decode data to SignalingReOffer")
+            }
         case "e2ee":
             Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
         default:
@@ -209,7 +216,7 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
 }
 
 internal class BasicDataChannel: DataChannel {
-
+    
     private let native: RTCDataChannel
     private let delegate: BasicDataChannelDelegate
     
@@ -237,7 +244,7 @@ internal class BasicDataChannel: DataChannel {
             return DataChannelState.closing
         case RTCDataChannelState.closed:
             return DataChannelState.closed
-        // TODO: @unknown default の実装
+            // TODO: @unknown default の実装
         }
     }
     
@@ -262,7 +269,7 @@ internal class BasicDataChannel: DataChannel {
             Logger.error(type: .dataChannel, message: "failed to compress message")
             return
         }
-
+        
         native.sendData(RTCDataBuffer(data: data, isBinary: false)) // TODO: 返り値の確認
     }
 }
