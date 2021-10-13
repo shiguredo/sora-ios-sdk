@@ -3,82 +3,6 @@ import Foundation
 import WebRTC
 import zlib
 
-// https://developer.apple.com/documentation/accelerate/compressing_and_decompressing_data_with_buffer_compression
-public final class ZLibUtil {
-    
-    public static func zip(_ input: Data) -> Data? {
-        if input.isEmpty {
-            return nil
-        }
-        
-        let bufferSize = 262_144 // TODO: 毎回確保するには大きいので何とかする
-        let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        
-        var sourceBuffer = [UInt8](input)
-        let size = compression_encode_buffer(destinationBuffer, bufferSize,
-                                             &sourceBuffer, sourceBuffer.count,
-                                             nil,
-                                             COMPRESSION_ZLIB)
-        if size == 0 {
-            return nil
-        }
-        
-        var zipped = Data(capacity: size + 6) // ヘッダー: 2バイト, チェックサム: 4バイト
-        zipped.append(contentsOf: [0x78, 0x5e]) // ヘッダーを追加
-        zipped.append(destinationBuffer, count: size)
-
-        let checksum = input.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> UInt32 in
-            let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
-            return UInt32(adler32(1, bytef, UInt32(input.count)))
-        }
-
-        zipped.append(UInt8(checksum >> 24 & 0xFF))
-        zipped.append(UInt8(checksum >> 16 & 0xFF))
-        zipped.append(UInt8(checksum >> 8 & 0xFF))
-        zipped.append(UInt8(checksum & 0xFF))
-        return zipped
-    }
-
-    public static func unzip(_ input: Data) -> Data? {
-        if (input.isEmpty) {
-            return nil
-        }
-        
-        let bufferSize = 262_144 // TODO: 毎回確保するには大きいので何とかする
-        let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        
-        var sourceBuffer = [UInt8](input)
-        
-        // header を削除
-        sourceBuffer.removeFirst(2)
-        
-        // checksum も削除
-        let checksum = Data(sourceBuffer.suffix(4))
-        sourceBuffer.removeLast(4)
-        
-        let size = compression_decode_buffer(destinationBuffer, bufferSize,
-                                             &sourceBuffer, sourceBuffer.count,
-                                             nil,
-                                             COMPRESSION_ZLIB)
-        
-        if size == 0 {
-            return nil
-        }
-        
-        
-        let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
-
-        let calculatedChecksum = data.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Data in
-            let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
-            var result = UInt32(adler32(1, bytef, UInt32(data.count))).bigEndian
-            return Data(bytes: &result, count: MemoryLayout<UInt32>.size)
-        }
-        
-        // checksum の検証が成功したら data を返す
-        return checksum == calculatedChecksum ? data : nil
-    }
-}
-
 /**
  ピアチャネルのイベントハンドラです。
  */
@@ -212,7 +136,7 @@ public protocol PeerChannel: AnyObject {
     var signalingChannel: SignalingChannel { get }
 
     /// データチャンネル
-    var dataChannels: [String: RTCDataChannel] { get }
+    var dataChannels: [String: DataChannel] { get }
     
     // MARK: - インスタンスの生成
     
@@ -269,7 +193,7 @@ class BasicPeerChannel: PeerChannel {
         }
     }
     
-    var dataChannels: [String: RTCDataChannel] = [:]
+    var dataChannels: [String: DataChannel] = [:]
     
     var context: BasicPeerChannelContext!
     
@@ -406,12 +330,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     private var offerEncodings: [SignalingOffer.Encoding]?
 
-    
-    var delegate: DataChannelDelegate
-    
     init(channel: BasicPeerChannel) {
         self.channel = channel
-        self.delegate = DataChannelDelegate(channel: channel)
 
         lock = Lock()
         super.init()
@@ -834,8 +754,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func createReAnswer(forReOffer reOffer: String) {
-        
+    
     }
+    
+    
     func createAndSendReAnswer(forReOffer reOffer: String) {
         Logger.debug(type: .peerChannel, message: "create and send re-answer")
         lock.lock()
@@ -1089,76 +1011,22 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
-
-    // TODO(enm10k): 既存の設計的には SignalingChannl に DataChannel を足すのが理想的な気がするが ... 可能なのか?
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
         Logger.debug(type: .peerChannel, message: "didOpen: label => \(dataChannel.label)")
-        channel.dataChannels[dataChannel.label] = dataChannel
-        dataChannel.delegate = delegate
-    }
-}
 
-class DataChannelDelegate: NSObject, RTCDataChannelDelegate {
-    
-    // TODO: 動かした後で設計を考える
-    private var channel: BasicPeerChannel
-    init(channel: BasicPeerChannel) {
-        self.channel = channel
-        super.init()
-    }
-    func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.debug(type: .peerChannel, message: "dataChannelDidChangeState: label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
-    }
-    
-    func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
-        Logger.debug(type: .peerChannel, message: "didChangeBufferedAmount: label => \(dataChannel.label), amount => \(amount)")
-    }
-    
-    func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        Logger.debug(type: .peerChannel, message: "didReceiveMessageWith: label => \(dataChannel.label)")
-        
-        guard let unzipped = ZLibUtil.unzip(buffer.data) else {
-            Logger.error(type: .peerChannel, message: "failed to decompress data channel message")
-            return
+        var handlers: DataChannelHandlers?
+        if configuration.dataChannelHandlers.keys.contains(dataChannel.label) {
+            handlers = configuration.dataChannelHandlers[dataChannel.label]
         }
         
-        let message = String(data: unzipped, encoding: .utf8)
-        Logger.info(type: .peerChannel, message: "received data channel message: \(String(describing: message))")
-        
-        // TODO: label を見て compress の有無をチェックする
-        switch dataChannel.label {
-        case "stats":
-            channel.context?.nativeChannel.statistics {
-                // NOTE: stats の型を Signaling.swift に定義していない
-                let reports = Statistics(contentsOf: $0).jsonObject
-                let json: [String: Any] = ["type": "stats",
-                                           "reports": reports]
-                do {
-                    let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
-                    if let zipped = ZLibUtil.zip(data) {
-                        let dataBuffer = RTCDataBuffer(data: zipped, isBinary: false)
-                        dataChannel.sendData(dataBuffer)
-                    }
-                } catch {
-                    Logger.error(type: .peerChannel, message: "failed to encode statistic data to json")
-                }
-            }
-            return
-        case "push", "notify":
-            // TODO: DataChannel で受信したメッセージをコールバックからアクセスできるようにする
-            // (push, notify を含む) WebSocket で受信した全てのメッセージは SignalingChannelHandlers.onReceive, MediaChannelHandlers.onReceiveSignaling などでアクセスできる
-            return
-        case "signaling":
-            // TODO: re-offer を処理して re-answer を送信する
-            return
-        case "e2ee":
-            Logger.error(type: .peerChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
-            return
-        default:
-            Logger.error(type: .peerChannel, message: "unknown data channel label: \(dataChannel.label)")
+        // TODO: compress が決め打ちになっている
+        let dc = BasicDataChannel(dataChannel: dataChannel, compress: true, handlers: handlers, peerChannel: self.channel)
+        channel.dataChannels[dataChannel.label] = dc
+
+        if let onOpen = handlers?.onOpen {
+            onOpen(dc)
         }
-        
     }
 }
 
