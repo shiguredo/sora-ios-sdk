@@ -138,6 +138,8 @@ public protocol PeerChannel: AnyObject {
     /// データチャンネル
     var dataChannels: [String: DataChannel] { get }
     
+    var switchedToDataChannel: Bool  { get }
+    
     // MARK: - インスタンスの生成
     
     /**
@@ -194,6 +196,7 @@ class BasicPeerChannel: PeerChannel {
     }
     
     var dataChannels: [String: DataChannel] = [:]
+    var switchedToDataChannel: Bool = false
     
     var context: BasicPeerChannelContext!
     
@@ -471,7 +474,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             webRTCVersion: webRTCVersion,
             environment: DeviceInfo.current.description,
             dataChannelSignaling: configuration.dataChannelSignaling,
-            ignoreDisconectWebSocket: configuration.ignoreDisconnectWebsocket)
+            ignoreDisconectWebSocket: configuration.ignoreDisconnectWebSocket)
         
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
@@ -867,6 +870,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 }
             } else {
                 signalingChannel.send(message: .pong(pong))
+            }
+        case .switched(let switched):
+            channel.switchedToDataChannel = true
+            signalingChannel.ignoreDisconnectWebSocket = true
+            if (signalingChannel.ignoreDisconnectWebSocket) {
+                signalingChannel.webSocketChannel.disconnect(error: nil)
             }
         default:
             break

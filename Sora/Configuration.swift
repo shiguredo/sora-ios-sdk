@@ -153,7 +153,7 @@ public struct Configuration {
     public var signalingConnectNotifyMetadata: Encodable?
     
     public var dataChannelSignaling: Bool?
-    public var ignoreDisconnectWebsocket: Bool?
+    public var ignoreDisconnectWebSocket: Bool?
     
     // MARK: - イベントハンドラ
     

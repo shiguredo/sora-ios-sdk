@@ -514,7 +514,7 @@ public struct SignalingPush {
  "switched" シグナリングメッセージを表します。
  */
 public struct SignalingSwitched {
-    public var ignoreDisconnectWebsocket: Bool?
+    public var ignoreDisconnectWebSocket: Bool?
 }
 
 /**
@@ -1313,7 +1313,7 @@ extension SignalingSwitched: Decodable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        ignoreDisconnectWebsocket = try container.decode(Bool.self, forKey: .ignore_disconnect_websocket)
+        ignoreDisconnectWebSocket = try container.decode(Bool.self, forKey: .ignore_disconnect_websocket)
     }
     
 }

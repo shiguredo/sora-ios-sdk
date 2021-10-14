@@ -199,7 +199,7 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                 let reOffer = try JSONDecoder().decode(SignalingReOffer.self, from: data)
                 peerChannel.context.createAndSendReAnswerOnDataChannel(forReOffer: reOffer.sdp)
             } catch {
-                Logger.error(type: .dataChannel, message: "failed to decode data to SignalingReOffer")
+                Logger.error(type: .dataChannel, message: "failed to decode SignalingReOffer")
             }
         case "e2ee":
             Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")

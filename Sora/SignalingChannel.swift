@@ -83,7 +83,7 @@ public final class SignalingChannelHandlers {
  
  シグナリングメッセージは WebSocket チャネル `WebSocketChannel` を使用してサーバーに送信されます。
  */
-public protocol SignalingChannel: class {
+public protocol SignalingChannel: AnyObject {
 
     // MARK: - プロパティ
     
@@ -96,6 +96,7 @@ public protocol SignalingChannel: class {
     /// 接続状態
     var state: ConnectionState { get }
     
+    var ignoreDisconnectWebSocket: Bool { get set }
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
@@ -154,10 +155,11 @@ public protocol SignalingChannel: class {
 }
 
 class BasicSignalingChannel: SignalingChannel {
-
     var handlers: SignalingChannelHandlers = SignalingChannelHandlers()
     var internalHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
     var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
+    
+    var ignoreDisconnectWebSocket: Bool = false
     
     var configuration: Configuration
     
@@ -178,7 +180,13 @@ class BasicSignalingChannel: SignalingChannel {
             ._webSocketChannelType.init(url: configuration.url)
         BasicWebSocketChannel.useStarscreamCustomEngine = !configuration.allowsURLSessionWebSocketChannel
         webSocketChannel.internalHandlers.onDisconnect = { [weak self] error in
-            self?.disconnect(error: error)
+            if let self = self {
+                Logger.debug(type: .signalingChannel, message: "ignoreDisconnectWebSocket: \(self.ignoreDisconnectWebSocket)")
+                // ignoreDisconnectWebSocket == true の場合は、 WebSocketChannel 切断時に SignalingChannel を切断しない
+                if !self.ignoreDisconnectWebSocket {
+                    self.disconnect(error: error)
+                }
+            }
         }
         
         webSocketChannel.internalHandlers.onReceive = { [weak self] message in
