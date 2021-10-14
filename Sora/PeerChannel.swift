@@ -140,6 +140,7 @@ public protocol PeerChannel: AnyObject {
     
     var switchedToDataChannel: Bool  { get }
     
+    var signalingOfferMessageDataChannels: [[String: Any]] { get }
     // MARK: - インスタンスの生成
     
     /**
@@ -197,6 +198,7 @@ class BasicPeerChannel: PeerChannel {
     
     var dataChannels: [String: DataChannel] = [:]
     var switchedToDataChannel: Bool = false
+    var signalingOfferMessageDataChannels: [[String: Any]] = []
     
     var context: BasicPeerChannelContext!
     
@@ -841,8 +843,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .offer(let offer):
             clientId = offer.clientId
             connectionId = offer.connectionId
+            channel.signalingOfferMessageDataChannels = offer.dataChannels
             createAndSendAnswer(offer: offer)
-            
         case .update(let update):
             if configuration.isMultistream {
                 createAndSendUpdateAnswer(forOffer: update.sdp)
@@ -873,7 +875,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
         case .switched(let switched):
             channel.switchedToDataChannel = true
-            signalingChannel.ignoreDisconnectWebSocket = true
+            signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
             if (signalingChannel.ignoreDisconnectWebSocket) {
                 signalingChannel.webSocketChannel.disconnect(error: nil)
             }
@@ -1065,15 +1067,17 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
-        Logger.debug(type: .peerChannel, message: "didOpen: label => \(dataChannel.label)")
+        let label = dataChannel.label
+        Logger.debug(type: .peerChannel, message: "didOpen: label => \(label)")
 
-        var handlers: DataChannelHandlers?
-        if configuration.dataChannelHandlers.keys.contains(dataChannel.label) {
-            handlers = configuration.dataChannelHandlers[dataChannel.label]
-        }
+        let handlers: DataChannelHandlers? = configuration.dataChannelHandlers[label] ?? nil
         
-        // TODO: compress が決め打ちになっている
-        let dc = BasicDataChannel(dataChannel: dataChannel, compress: true, handlers: handlers, peerChannel: self.channel)
+        let dataChannelSetting: [String: Any]? = channel.signalingOfferMessageDataChannels.filter {
+            ($0["label"] as? String) == label
+        }.first ?? nil
+        let compress = dataChannelSetting?["compress"] as? Bool ?? false
+        
+        let dc = BasicDataChannel(dataChannel: dataChannel, compress: compress, handlers: handlers, peerChannel: self.channel)
         channel.dataChannels[dataChannel.label] = dc
 
         if let onOpen = handlers?.onOpen {

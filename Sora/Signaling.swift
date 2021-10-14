@@ -46,15 +46,19 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
         json = jsonObject as! [String: Any]
     } catch {
         // JSON のシリアライズが失敗した場合は、引数として渡された signaling をそのまま返し、処理を継続する
-        Logger.info(type: .signaling,
+        Logger.error(type: .signaling,
                   message: "updateMetadata failed. error: \(error.localizedDescription), data: \(data)")
         return signaling
     }
 
     switch signaling {
     case .offer(var message):
+        // TODO: keys を if let ... に書き換えたい
         if json.keys.contains("metadata") {
             message.metadata = json["metadata"]
+        }
+        if let dataChannels = json["data_channels"] as? [[String: Any]] {
+            message.dataChannels = dataChannels
         }
         return .offer(message)
     case .push(var message):
@@ -448,6 +452,9 @@ public struct SignalingOffer {
 
     /// エンコーディング
     public let encodings: [Encoding]?
+    
+    /// データ・チャンネルの設定
+    public var dataChannels: [[String: Any]] = []
 
 }
 

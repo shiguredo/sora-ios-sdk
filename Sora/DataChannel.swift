@@ -220,7 +220,8 @@ internal class BasicDataChannel: DataChannel {
     private let native: RTCDataChannel
     private let delegate: BasicDataChannelDelegate
     
-    init(dataChannel: RTCDataChannel, compress: Bool=true, handlers: DataChannelHandlers?, peerChannel: BasicPeerChannel) {
+    init(dataChannel: RTCDataChannel, compress: Bool, handlers: DataChannelHandlers?, peerChannel: BasicPeerChannel) {
+        Logger.info(type: .dataChannel, message: "initialize DataChannel: label => \(dataChannel.label), compress => \(compress)")
         native = dataChannel
         self.delegate = BasicDataChannelDelegate(compress: compress, handlers: handlers, peerChannel: peerChannel)
         native.delegate = self.delegate
