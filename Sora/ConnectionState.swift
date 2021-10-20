@@ -16,7 +16,6 @@ public enum SoraConnectionState {
     case unknown
     
     internal init(_ state: RTCPeerConnectionState) {
-        // 参照: https://www.w3.org/TR/webrtc/#dom-rtcicetransportstate
         switch state {
         case .new:
             self = .new

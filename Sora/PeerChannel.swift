@@ -1022,8 +1022,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .failed:
             disconnect(error: SoraError.peerChannelError(reason: "peer connection state: failed"))
         case .connected:
-            // NOTE: RTCPeerConnectionState は connected -> disconencted -> connected などと遷移する可能性がある
-            // finishConnecting を複数回実行するとエラーになるので注意
+            // NOTE: RTCPeerConnectionState は connected -> disconencted -> connected などと遷移する可能性があるが、
+            // finishDoing は複数回実行するとエラーになるので注意
+            //
+            // 遷移のパターンは以下のページの Figure 2 Non-normative ICE transport state transition diagram という図を参照
+            // https://www.w3.org/TR/webrtc/#dom-rtcicetransportstate
+            // 図は (RTCPeerConnectionState ではなく) RTCIceTransportState のものなので注意
             if !connectedAtLeastOnce {
                 finishConnecting()
                 connectedAtLeastOnce = true
