@@ -14,7 +14,7 @@ enum ConnectionMonitor {
             case .signalingChannel(let chan):
                 return chan.state
             case .peerChannel(let chan):
-                return chan.state
+                return ConnectionState(chan.state)
             }
         }
     }

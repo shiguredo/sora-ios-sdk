@@ -117,11 +117,8 @@ public final class MediaChannel {
     }
     
     /// 接続状態
-    public private(set) var state: ConnectionState = .disconnected {
-        didSet {
-            Logger.trace(type: .mediaChannel,
-                         message: "changed state from \(oldValue) to \(state)")
-        }
+    public var state: SoraConnectionState {
+        return peerChannel.state
     }
     
     /// 接続中 (`state == .connected`) であれば ``true``
@@ -264,7 +261,7 @@ public final class MediaChannel {
                  timeout: Int = 30,
                  handler: @escaping (_ error: Error?) -> Void) -> ConnectionTask {
         let task = ConnectionTask()
-        if state.isConnecting {
+        if state == .connecting || state == .connected {
             handler(SoraError.connectionBusy(reason:
                 "MediaChannel is already connected"))
             task.complete()
@@ -286,7 +283,6 @@ public final class MediaChannel {
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         _handler = handler
-        state = .connecting
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
 
@@ -367,7 +363,6 @@ public final class MediaChannel {
                 return
             }
             Logger.debug(type: .mediaChannel, message: "did connect")
-            weakSelf.state = .connected
             handler(nil)
             Logger.debug(type: .mediaChannel, message: "call onConnect")
             weakSelf.internalHandlers.onConnect?(nil)
@@ -388,7 +383,7 @@ public final class MediaChannel {
      */
     public func disconnect(error: Error?) {
         switch state {
-        case .disconnecting, .disconnected:
+        case .closed:
             break
             
         default:
@@ -401,11 +396,9 @@ public final class MediaChannel {
                 executeHandler(error: error)
             }
             
-            state = .disconnecting
             connectionTimer.stop()
             peerChannel.disconnect(error: error)
             Logger.debug(type: .mediaChannel, message: "did disconnect")
-            state = .disconnected
             
             Logger.debug(type: .mediaChannel, message: "call onDisconnect")
             internalHandlers.onDisconnect?(error)

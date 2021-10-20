@@ -130,7 +130,7 @@ public protocol PeerChannel: AnyObject {
     var streams: [MediaStream] { get }
     
     /// 接続状態
-    var state: ConnectionState { get }
+    var state: SoraConnectionState { get }
     
     /// シグナリングチャネル
     var signalingChannel: SignalingChannel { get }
@@ -190,7 +190,7 @@ class BasicPeerChannel: PeerChannel {
         context.connectionId
     }
     
-    var state: ConnectionState {
+    var state: SoraConnectionState {
         get {
             return context.state
         }
@@ -293,7 +293,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             case (true, let error):
                 shouldDisconnect = (false, nil)
                 if let context = context {
-                    if context.state != .disconnecting && context.state != .disconnected {
+                    if context.state != .closed {
                         context.basicDisconnect(error: error)
                     }
                 }
@@ -304,10 +304,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     weak var channel: BasicPeerChannel!
-    var state: ConnectionState = .disconnected {
-        didSet {
-            Logger.debug(type: .peerChannel,
-                         message: "changed BasicPeerChannelContext.state from \(oldValue) to \(state)")
+    var state: SoraConnectionState {
+        get {
+            let state = nativeChannel == nil ? RTCPeerConnectionState.new : nativeChannel.connectionState
+            return SoraConnectionState(state)
         }
     }
     
@@ -335,6 +335,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     private var offerEncodings: [SignalingOffer.Encoding]?
 
+    private var connectedAtLeastOnce: Bool = false
+
     init(channel: BasicPeerChannel) {
         self.channel = channel
 
@@ -353,7 +355,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
-        if channel.state.isConnecting {
+        if channel.state == .connecting || channel.state == .connected {
             handler(SoraError.connectionBusy(reason:
                 "PeerChannel is already connected"))
             return
@@ -385,7 +387,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         signalingChannel.connect { [weak self] error in
             self?.sendConnectMessage(error: error)
         }
-        state = .connecting
     }
     
     func sendConnectMessage(error: Error?) {
@@ -896,7 +897,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                      message: "native senders = \(nativeChannel.senders.count)")
         Logger.debug(type: .peerChannel,
                      message: "native receivers = \(nativeChannel.receivers.count)")
-        state = .connected
         
         if onConnectHandler != nil {
             Logger.debug(type: .peerChannel, message: "call connect(handler:)")
@@ -908,7 +908,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     func disconnect(error: Error?) {
         switch state {
-        case .disconnecting, .disconnected:
+        case .closed:
             break
         default:
             Logger.debug(type: .peerChannel, message: "wait to disconnect")
@@ -922,9 +922,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")
         }
-        
-        state = .disconnecting
-        
+                
         if configuration.isSender {
             terminateSenderStream()
         }
@@ -933,9 +931,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         signalingChannel.send(message: Signaling.disconnect)
         signalingChannel.disconnect(error: error)
-        
-        state = .disconnected
-        
+                
         Logger.debug(type: .peerChannel, message: "call onDisconnect")
         channel.internalHandlers.onDisconnect?(error)
         channel.handlers.onDisconnect?(error)
@@ -1026,10 +1022,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .failed:
             disconnect(error: SoraError.peerChannelError(reason: "peer connection state: failed"))
         case .connected:
-            // peer connection state が connecting => connected => connecting => connected と変化するケースがあった
-            // 初回の connected のみで finishConnecting を実行したい
-            if state != .connected {
+            // NOTE: RTCPeerConnectionState は connected -> disconencted -> connected などと遷移する可能性がある
+            // finishConnecting を複数回実行するとエラーになるので注意
+            if !connectedAtLeastOnce {
                 finishConnecting()
+                connectedAtLeastOnce = true
             }
         default:
             break
