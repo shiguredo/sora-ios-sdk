@@ -64,6 +64,14 @@ public final class PeerChannelHandlers {
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
     
+    public var onOpenDataChannel: ((String) -> Void)?
+    
+    public var onDataChannelMessage: ((String, Data) -> Void)?
+    
+    public var onCloseDataChannel: ((String) -> Void)?
+    
+    public var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
+
     /// 初期化します。
     public init() {}
     
@@ -1073,19 +1081,21 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let label = dataChannel.label
         Logger.debug(type: .peerChannel, message: "didOpen: label => \(label)")
 
-        let handlers = DataChannelHandlers()
         let dataChannelSetting: [String: Any]? = channel.signalingOfferMessageDataChannels.filter {
             ($0["label"] as? String) == label
         }.first ?? nil
         let compress = dataChannelSetting?["compress"] as? Bool ?? false
         
-        let dc = DataChannel(dataChannel: dataChannel, compress: compress, handlers: handlers, peerChannel: self.channel)
+        // TODO: ここまで頑張って MediaChannel を持ってくる必要がある
+        let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: nil, peerChannel: self.channel)
         channel.dataChannels += [dataChannel.label]
         channel.dataChannelInstances[dataChannel.label] = dc
-
-        if let onOpen = handlers.onOpen {
-            onOpen(dc)
+        
+        if let handler = channel.handlers.onOpenDataChannel {
+            handler(dataChannel.label)
         }
+        
+        // TODO: MediaCahnnel のコールバックも実行する
     }
 }
 

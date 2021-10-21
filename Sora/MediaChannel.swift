@@ -57,6 +57,14 @@ public final class MediaChannelHandlers {
     
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
+
+    public var onOpenDataChannel: ((MediaChannel, String) -> Void)?
+    
+    public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?
+    
+    public var onCloseDataChannel: ((MediaChannel, String) -> Void)?
+    
+    public var onDataChannelBufferedAmount: ((MediaChannel, String, UInt64) -> Void)?
     
     /// 初期化します。
     public init() {}
