@@ -201,8 +201,7 @@ class BasicSignalingChannel: SignalingChannel {
                 Logger.debug(type: .signalingChannel, message: "ignoreDisconnectWebSocket: \(self.ignoreDisconnectWebSocket)")
                 // ignoreDisconnectWebSocket == true の場合は、 WebSocketChannel 切断時に SignalingChannel を切断しない
                 if !self.ignoreDisconnectWebSocket {
-                    // TODO: WebSocket のエラー
-                    self.disconnect(error: error, reason: .webSocket)
+                    self.disconnect(error: error, reason: error != nil ? .webSocket : .noError)
                 }
             }
         }

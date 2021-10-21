@@ -287,9 +287,8 @@ class BasicPeerChannel: PeerChannel {
         context.connect(handler: handler)
     }
     
-    // TODO: DisconnectReason を外部に出したくないが ... 内部では利用したい
     func disconnect(error: Error?, reason: DisconnectReason) {
-        context.disconnect(error: error, reason: .user)
+        context.disconnect(error: error, reason: reason)
     }
     
     fileprivate func terminateAllStreams() {
@@ -307,29 +306,17 @@ class BasicPeerChannel: PeerChannel {
 
 // type: disconnect の reason を判断するのに必要な情報を保持します。
 // internal enum DisconnectReason {
-public enum DisconnectReason {
+public enum DisconnectReason : String {
     case user
     case signalingFailure
     case internalError
     case peerConnectionStateFailed
-    case webSocket // onerror と onclose を切り分けたいが難しそうだった
+    case webSocket
+    case noError
     case unknown
     
     var description: String {
-        switch self {
-        case .user:
-            return "user"
-        case .signalingFailure:
-            return "signalingFailure"
-        case .internalError:
-            return "internalError"
-        case .peerConnectionStateFailed:
-            return "peerConnectionFailed"
-        case .webSocket:
-            return "webSocket"
-        case .unknown:
-            return "unknown"
-        }
+        return self.rawValue
     }
 }
 
@@ -991,7 +978,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func basicDisconnect(error: Error?, reason: DisconnectReason) {
-        Logger.debug(type: .peerChannel, message: "try disconnecting: error=> \(error != nil ? error?.localizedDescription : "nil"), reason => \(reason.description)")
+        Logger.debug(type: .peerChannel, message: "try disconnecting: error=> \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
         if let error = error {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")

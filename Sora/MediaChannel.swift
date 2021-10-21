@@ -378,7 +378,7 @@ public final class MediaChannel {
             
             if let error = error {
                 Logger.error(type: .mediaChannel, message: "failed to connect")
-                weakSelf.disconnect(error: error)
+                weakSelf.internalDisconnect(error: error, reason: .signalingFailure)
                 handler(error)
                 
                 Logger.debug(type: .mediaChannel, message: "call onConnect")
@@ -406,7 +406,7 @@ public final class MediaChannel {
      - parameter error: 接続解除の原因となったエラー
      */
     public func disconnect(error: Error?) {
-        // TODO: disconnect は SDK 内部では利用されるべきではない
+        // reason に .user を指定しているので、 disconnect は SDK 内部では利用しない
         internalDisconnect(error: error, reason: .user)
     }
     
