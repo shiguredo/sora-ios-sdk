@@ -124,7 +124,7 @@ public enum Signaling {
     case pong(SignalingPong)
     
     /// "disconnect" シグナリング
-    case disconnect
+    case disconnect(SignalingDisconnect)
     
     /// "pong" シグナリング
     case push(SignalingPush)
@@ -773,6 +773,10 @@ public struct SignalingPing {
  */
 public struct SignalingPong {}
 
+public struct SignalingDisconnect {
+    public var reason: String?
+}
+
 // MARK: -
 // MARK: Codable
 
@@ -847,8 +851,9 @@ extension Signaling: Codable {
             try message.encode(to: encoder)
         case .pong:
             try container.encode(MessageType.pong.rawValue, forKey: .type)
-        case .disconnect:
+        case .disconnect(let message):
             try container.encode(MessageType.disconnect.rawValue, forKey: .type)
+            try message.encode(to: encoder)
         default:
             throw SoraError.invalidSignalingMessage
         }
@@ -1310,6 +1315,24 @@ extension SignalingPong: Codable {
         // エンコードするプロパティはない
     }
     
+}
+
+/// :nodoc:
+extension SignalingDisconnect: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case reason
+    }
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(reason, forKey: .reason)
+    }
+
 }
 
 extension SignalingSwitched: Decodable {

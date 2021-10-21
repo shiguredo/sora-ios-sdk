@@ -192,7 +192,7 @@ internal class DataChannel {
         native.delegate = self.delegate
     }
     
-    var lable: String {
+    var label: String {
         return native.label
     }
     
@@ -201,11 +201,12 @@ internal class DataChannel {
     }
         
     func send(_ data: Data) {
+        Logger.debug(type: .dataChannel, message: "\(String(describing:type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())")
+
         guard let data = compress ? ZLibUtil.zip(data) : data else {
             Logger.error(type: .dataChannel, message: "failed to compress message")
             return
         }
-        
         native.sendData(RTCDataBuffer(data: data, isBinary: false)) // TODO: 返り値の確認
     }
 }

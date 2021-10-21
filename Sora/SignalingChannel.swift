@@ -113,6 +113,7 @@ public protocol SignalingChannel: AnyObject {
     var state: ConnectionState { get }
     
     var ignoreDisconnectWebSocket: Bool { get set }
+    var dataChannelSignaling: Bool { get set }
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
@@ -177,6 +178,7 @@ class BasicSignalingChannel: SignalingChannel {
     var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
     
     var ignoreDisconnectWebSocket: Bool = false
+    var dataChannelSignaling: Bool = false
     
     var configuration: Configuration
     

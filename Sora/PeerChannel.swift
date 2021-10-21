@@ -541,6 +541,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconectWebSocket: configuration.ignoreDisconnectWebSocket)
         
+        signalingChannel.dataChannelSignaling = configuration.dataChannelSignaling ?? false
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }
@@ -990,7 +991,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         channel.terminateAllStreams()
         nativeChannel.close()
         
-        signalingChannel.send(message: Signaling.disconnect)
+        sendDisconnectMessageIfNeeded(reason: reason, error: error)
         signalingChannel.disconnect(error: error, reason: reason)
                 
         Logger.debug(type: .peerChannel, message: "call onDisconnect")
@@ -1004,6 +1005,57 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         Logger.debug(type: .peerChannel, message: "did disconnect")
+    }
+
+    // https://sora-doc.shiguredo.jp/SORA_CLIENT
+    func sendDisconnectMessageIfNeeded(reason: DisconnectReason, error: Error?) {
+        // 毎回打つと長いので変数を定義
+        let dataChannelSignaling = signalingChannel.dataChannelSignaling
+        let ignoreDisconnectWebSocket = signalingChannel.ignoreDisconnectWebSocket
+        
+        switch reason {
+        case .signalingFailure, .peerConnectionStateFailed:
+            // type: disconnect の送信は不要
+            return
+        case .user, .noError:
+            // reason: .user の場合、 error はユーザーから渡されているので考慮しない
+            let noError = Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR"))
+            if !dataChannelSignaling {
+                // WebSocket
+                signalingChannel.send(message: noError)
+            } else if dataChannelSignaling && !ignoreDisconnectWebSocket {
+                // WebSocket + DataChannel
+                if channel.switchedToDataChannel {
+                    sendMessageOverDataChannel(message: noError)
+                } else {
+                    signalingChannel.send(message: noError)
+                }
+            } else if dataChannelSignaling && ignoreDisconnectWebSocket {
+                // DataChannel
+                signalingChannel.send(message: noError)
+            }
+        case .webSocket:
+            // TODO: WEBSOCKET-ONERROR, WEBSOCKET-ONCLOSE の実装
+            break
+        default:
+            // TODO: 全部まとめて INTERNAL-ERROR にする? 要確認
+            break
+        }
+
+    }
+    
+    private func sendMessageOverDataChannel(message: Signaling) {
+        guard let dataChannel = channel.dataChannelInstances["signaling"] else {
+            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+            return
+        }
+        do {
+            let data = try JSONEncoder().encode(message)
+            dataChannel.send(data)
+        } catch {
+            Logger.error(type: .peerChannel,
+                         message: "failed to send disconnect on DataChannel: error => (\(error.localizedDescription)")
+        }
     }
     
     // MARK: - RTCPeerConnectionDelegate
