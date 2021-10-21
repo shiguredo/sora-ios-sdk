@@ -179,7 +179,13 @@ public final class MediaChannel {
     public let signalingChannel: SignalingChannel
     
     /// ピアチャネル
-    public let peerChannel: PeerChannel
+    public var peerChannel: PeerChannel {
+        get {
+            _peerChannel!
+        }
+    }
+    // PeerChannel に mediaChannel を保持させる際にこの書き方が必要になった
+    private var _peerChannel: PeerChannel?
     
     /// ストリームのリスト
     public var streams: [MediaStream] {
@@ -210,8 +216,15 @@ public final class MediaChannel {
             stream.streamId != configuration.publisherStreamId
         }
     }
-    
-    private var connectionTimer: ConnectionTimer
+
+    private var connectionTimer: ConnectionTimer {
+        get {
+            _connectionTimer!
+        }
+    }
+    // PeerChannel に mediaChannel を保持させる際にこの書き方が必要になった
+    private var _connectionTimer: ConnectionTimer?
+
     private let manager: Sora
     
     // MARK: - インスタンスの生成
@@ -235,21 +248,19 @@ public final class MediaChannel {
         signalingChannel.handlers =
             configuration.signalingChannelHandlers
 
-        peerChannel = configuration._peerChannelType
+        _peerChannel = configuration._peerChannelType
             .init(configuration: configuration,
-                  signalingChannel: signalingChannel)
-        peerChannel.handlers =
+                  signalingChannel: signalingChannel,
+                  mediaChannel: self)
+        _peerChannel!.handlers =
             configuration.peerChannelHandlers
         handlers = configuration.mediaChannelHandlers
         
-        connectionTimer = ConnectionTimer(monitors: [
+        _connectionTimer = ConnectionTimer(monitors: [
             .webSocketChannel(signalingChannel.webSocketChannel),
             .signalingChannel(signalingChannel),
-            .peerChannel(peerChannel)],
+            .peerChannel(_peerChannel!)],
                                           timeout: configuration.connectionTimeout)
-
-        // この位置でないとエラーになる
-        peerChannel.mediaChannel = self
     }
     
     // MARK: - 接続

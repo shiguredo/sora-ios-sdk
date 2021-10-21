@@ -150,9 +150,8 @@ public protocol PeerChannel: AnyObject {
     
     var signalingOfferMessageDataChannels: [[String: Any]] { get }
 
-    // DataChannel のコールバックを追加する際に、必要になった
-    // TODO: setter を外せないか確認する -> 外せなかった
-    var mediaChannel: MediaChannel? { get set }
+    // DataChannel のコールバックを追加する際に必要だった
+    var mediaChannel: MediaChannel? { get }
     // MARK: - インスタンスの生成
     
     /**
@@ -161,7 +160,7 @@ public protocol PeerChannel: AnyObject {
      - parameter configuration: クライアントの設定
      - parameter signalingChannel: 使用するシグナリングチャネル
      */
-    init(configuration: Configuration, signalingChannel: SignalingChannel)
+    init(configuration: Configuration, signalingChannel: SignalingChannel, mediaChannel: MediaChannel?)
     
     // MARK: - 接続
     
@@ -217,9 +216,10 @@ class BasicPeerChannel: PeerChannel {
     
     weak var mediaChannel: MediaChannel?
     
-    required init(configuration: Configuration, signalingChannel: SignalingChannel) {
+    required init(configuration: Configuration, signalingChannel: SignalingChannel, mediaChannel: MediaChannel?) {
         self.configuration = configuration
         self.signalingChannel = signalingChannel
+        self.mediaChannel = mediaChannel
         context = BasicPeerChannelContext(channel: self)
     }
     
