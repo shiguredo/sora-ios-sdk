@@ -309,22 +309,23 @@ public final class MediaChannel {
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
 
-        signalingChannel.internalHandlers.onDisconnect = { [weak self] error in
+        signalingChannel.internalHandlers.onDisconnect = { [weak self] (error, reason) in
             guard let weakSelf = self else {
                 return
             }
             if weakSelf.state == .connecting || weakSelf.state == .connected {
-                weakSelf.disconnect(error: error)
+                weakSelf.internalDisconnect(error: error, reason: reason)
             }
             connectionTask.complete()
         }
         
-        peerChannel.internalHandlers.onDisconnect = { [weak self] error in
+        peerChannel.internalHandlers.onDisconnect = { [weak self] (error, reason) in
             guard let weakSelf = self else {
                 return
             }
             if weakSelf.state == .connecting || weakSelf.state == .connected {
-                weakSelf.disconnect(error: error)
+                // PeerChannel の disconnect から MediaChannel の disconnect を呼ぶと、その中からさらに PeerChannel の disconnect を読んでいるのが気になる
+                weakSelf.internalDisconnect(error: error, reason: reason)
             }
             connectionTask.complete()
         }
@@ -395,7 +396,7 @@ public final class MediaChannel {
         self.connectionStartTime = Date()
         connectionTimer.run {
             Logger.error(type: .mediaChannel, message: "connection timeout")
-            self.disconnect(error: SoraError.connectionTimeout)
+            self.internalDisconnect(error: SoraError.connectionTimeout, reason: .signalingFailure)
         }
     }
     
@@ -405,6 +406,11 @@ public final class MediaChannel {
      - parameter error: 接続解除の原因となったエラー
      */
     public func disconnect(error: Error?) {
+        // TODO: disconnect は SDK 内部では利用されるべきではない
+        internalDisconnect(error: error, reason: .user)
+    }
+    
+    private func internalDisconnect(error: Error?, reason: DisconnectReason) {
         switch state {
         case .closed:
             break
@@ -420,7 +426,7 @@ public final class MediaChannel {
             }
             
             connectionTimer.stop()
-            peerChannel.disconnect(error: error)
+            peerChannel.disconnect(error: error, reason: reason)
             Logger.debug(type: .mediaChannel, message: "did disconnect")
             
             Logger.debug(type: .mediaChannel, message: "call onDisconnect")
@@ -428,7 +434,6 @@ public final class MediaChannel {
             handlers.onDisconnect?(error)
         }
     }
-    
 }
 
 extension MediaChannel: CustomStringConvertible {

@@ -25,9 +25,11 @@ enum ConnectionMonitor {
         case .webSocketChannel(let chan):
             chan.disconnect(error: error)
         case .signalingChannel(let chan):
-            chan.disconnect(error: error)
+            // タイムアウトはシグナリングのエラーと考える
+            chan.disconnect(error: error, reason: .signalingFailure)
         case .peerChannel(let chan):
-            chan.disconnect(error: error)
+            // タイムアウトはシグナリングのエラーと考える
+            chan.disconnect(error: error, reason: .signalingFailure)
         }
     }
     
