@@ -150,6 +150,9 @@ public protocol PeerChannel: AnyObject {
     
     var signalingOfferMessageDataChannels: [[String: Any]] { get }
 
+    // DataChannel のコールバックを追加する際に、必要になった
+    // TODO: setter を外せないか確認する -> 外せなかった
+    var mediaChannel: MediaChannel? { get set }
     // MARK: - インスタンスの生成
     
     /**
@@ -182,7 +185,7 @@ public protocol PeerChannel: AnyObject {
 // MARK: -
 
 class BasicPeerChannel: PeerChannel {
-    
+
     var handlers: PeerChannelHandlers = PeerChannelHandlers()
     var internalHandlers: PeerChannelHandlers = PeerChannelHandlers()
     let configuration: Configuration
@@ -211,6 +214,8 @@ class BasicPeerChannel: PeerChannel {
     var signalingOfferMessageDataChannels: [[String: Any]] = []
     
     var context: BasicPeerChannelContext!
+    
+    weak var mediaChannel: MediaChannel?
     
     required init(configuration: Configuration, signalingChannel: SignalingChannel) {
         self.configuration = configuration
@@ -1086,8 +1091,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }.first ?? nil
         let compress = dataChannelSetting?["compress"] as? Bool ?? false
         
+        
+        guard let mediaChannel = channel.mediaChannel else {
+            Logger.warn(type: .peerChannel, message: "mediaChannel is unavailable")
+            return
+        }
+        
         // TODO: ここまで頑張って MediaChannel を持ってくる必要がある
-        let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: nil, peerChannel: self.channel)
+        let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self.channel)
         channel.dataChannels += [dataChannel.label]
         channel.dataChannelInstances[dataChannel.label] = dc
         
@@ -1095,7 +1106,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             handler(dataChannel.label)
         }
         
-        // TODO: MediaCahnnel のコールバックも実行する
+        if let handler = mediaChannel.handlers.onOpenDataChannel {
+            handler(mediaChannel, dataChannel.label)
+        }
     }
 }
 

@@ -234,6 +234,7 @@ public final class MediaChannel {
             .init(configuration: configuration)
         signalingChannel.handlers =
             configuration.signalingChannelHandlers
+
         peerChannel = configuration._peerChannelType
             .init(configuration: configuration,
                   signalingChannel: signalingChannel)
@@ -246,6 +247,9 @@ public final class MediaChannel {
             .signalingChannel(signalingChannel),
             .peerChannel(peerChannel)],
                                           timeout: configuration.connectionTimeout)
+
+        // この位置でないとエラーになる
+        peerChannel.mediaChannel = self
     }
     
     // MARK: - 接続
