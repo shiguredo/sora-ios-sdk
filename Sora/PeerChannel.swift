@@ -135,12 +135,13 @@ public protocol PeerChannel: AnyObject {
     /// シグナリングチャネル
     var signalingChannel: SignalingChannel { get }
 
-    /// データチャンネル
-    var dataChannels: [String: DataChannel] { get }
+    /// 利用可能な DataChannel のラベル名のリスト
+    var dataChannels: [String] { get }
     
     var switchedToDataChannel: Bool  { get }
     
     var signalingOfferMessageDataChannels: [[String: Any]] { get }
+
     // MARK: - インスタンスの生成
     
     /**
@@ -196,7 +197,8 @@ class BasicPeerChannel: PeerChannel {
         }
     }
     
-    var dataChannels: [String: DataChannel] = [:]
+    var dataChannels: [String] = []
+    var dataChannelInstances: [String: DataChannel] = [:]
     var switchedToDataChannel: Bool = false
     var signalingOfferMessageDataChannels: [[String: Any]] = []
     
@@ -793,7 +795,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
         Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
         
-        guard let dataChannel = channel.dataChannels["signaling"] else {
+        guard let dataChannel = channel.dataChannelInstances["signaling"] else {
             Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
             return
         }
@@ -1071,17 +1073,17 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let label = dataChannel.label
         Logger.debug(type: .peerChannel, message: "didOpen: label => \(label)")
 
-        let handlers: DataChannelHandlers? = configuration.dataChannelHandlers[label] ?? nil
-        
+        let handlers = DataChannelHandlers()
         let dataChannelSetting: [String: Any]? = channel.signalingOfferMessageDataChannels.filter {
             ($0["label"] as? String) == label
         }.first ?? nil
         let compress = dataChannelSetting?["compress"] as? Bool ?? false
         
-        let dc = BasicDataChannel(dataChannel: dataChannel, compress: compress, handlers: handlers, peerChannel: self.channel)
-        channel.dataChannels[dataChannel.label] = dc
+        let dc = DataChannel(dataChannel: dataChannel, compress: compress, handlers: handlers, peerChannel: self.channel)
+        channel.dataChannels += [dataChannel.label]
+        channel.dataChannelInstances[dataChannel.label] = dc
 
-        if let onOpen = handlers?.onOpen {
+        if let onOpen = handlers.onOpen {
             onOpen(dc)
         }
     }

@@ -79,18 +79,7 @@ fileprivate class ZLibUtil {
     }
 }
 
-public enum DataChannelState {
-    case connecting
-    
-    case open
-    
-    case closing
-    
-    case closed
-    
-}
-
-public final class DataChannelHandlers {
+class DataChannelHandlers {
     
     var onOpen: ((DataChannel) -> Void)?
     
@@ -99,18 +88,6 @@ public final class DataChannelHandlers {
     var onBufferedAmount: ((DataChannel, UInt64) -> Void)?
     
     var onClose: (() -> Void)?
-}
-
-public protocol DataChannel {
-    
-    var lable: String { get }
-    var compress: Bool { get }
-    var readyState: DataChannelState { get }
-    var bufferedAmount: UInt64 { get }
-    var maxPacketLifeTime: UInt16 { get }
-    var maxRetransmits: UInt16 { get }
-    var ordered: Bool { get }
-    func send(_ data: Data)
 }
 
 internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
@@ -143,7 +120,7 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             return
         }
         
-        guard let dc = peerChannel.dataChannels[dataChannel.label] else {
+        guard let dc = peerChannel.dataChannelInstances[dataChannel.label] else {
             Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is unavailable")
             return
         }
@@ -161,7 +138,7 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             return
         }
         
-        guard let dc = peerChannel.dataChannels[dataChannel.label] else {
+        guard let dc = peerChannel.dataChannelInstances[dataChannel.label] else {
             Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is unavailable")
             return
         }
@@ -215,7 +192,7 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
 }
 
-internal class BasicDataChannel: DataChannel {
+internal class DataChannel {
     
     private let native: RTCDataChannel
     private let delegate: BasicDataChannelDelegate
@@ -234,37 +211,7 @@ internal class BasicDataChannel: DataChannel {
     var compress: Bool {
         return delegate.compress
     }
-    
-    var readyState: DataChannelState {
-        switch native.readyState {
-        case RTCDataChannelState.connecting:
-            return DataChannelState.connecting
-        case RTCDataChannelState.open:
-            return DataChannelState.open
-        case RTCDataChannelState.closing:
-            return DataChannelState.closing
-        case RTCDataChannelState.closed:
-            return DataChannelState.closed
-            // TODO: @unknown default の実装
-        }
-    }
-    
-    var bufferedAmount: UInt64 {
-        return native.bufferedAmount
-    }
-    
-    var maxPacketLifeTime: UInt16 {
-        return native.maxPacketLifeTime
-    }
-    
-    var maxRetransmits: UInt16 {
-        return native.maxRetransmits
-    }
-    
-    var ordered: Bool {
-        return native.isOrdered
-    }
-    
+        
     func send(_ data: Data) {
         guard let data = compress ? ZLibUtil.zip(data) : data else {
             Logger.error(type: .dataChannel, message: "failed to compress message")

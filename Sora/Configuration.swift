@@ -170,7 +170,8 @@ public struct Configuration {
     public var mediaChannelHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
     /// データチャンネルに関するイベントハンドラ
-    public var dataChannelHandlers: [String: DataChannelHandlers] = [:]
+    ///  TODO: peerChannleHandlers, mediaChannelHandlers に移動する
+    // public var dataChannelHandlers: [String: DataChannelHandlers] = [:]
     // MARK: - 接続チャネルに関する設定
     
     /**
