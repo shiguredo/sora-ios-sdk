@@ -304,8 +304,7 @@ class BasicPeerChannel: PeerChannel {
 
 // MARK: -
 
-// type: disconnect の reason を判断するのに必要な情報を保持します。
-// internal enum DisconnectReason {
+/// type: disconnect の reason を判断するのに必要な情報を保持します。
 public enum DisconnectReason : String {
     case user
     case signalingFailure

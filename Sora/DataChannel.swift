@@ -78,7 +78,7 @@ fileprivate class ZLibUtil {
     }
 }
 
-internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
+class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     let compress: Bool
     weak var peerChannel: BasicPeerChannel?
@@ -180,7 +180,7 @@ internal class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
 }
 
-internal class DataChannel {
+class DataChannel {
     
     private let native: RTCDataChannel
     private let delegate: BasicDataChannelDelegate
