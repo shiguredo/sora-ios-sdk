@@ -978,7 +978,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func basicDisconnect(error: Error?, reason: DisconnectReason) {
-        Logger.debug(type: .peerChannel, message: "try disconnecting: error=> \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
+        Logger.debug(type: .peerChannel, message: "try disconnecting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
         if let error = error {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")
@@ -1008,14 +1008,18 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
 
     // https://sora-doc.shiguredo.jp/SORA_CLIENT
     func sendDisconnectMessageIfNeeded(reason: DisconnectReason, error: Error?) {
-        // 毎回打つと長いので変数を定義
+        if channel.state == .failed {
+            // この関数に到達した時点で .failed なので、メッセージの送信は不要
+            return
+        }
+
+        // 毎回タイプすると長いので変数を定義
         let dataChannelSignaling = signalingChannel.dataChannelSignaling
         let ignoreDisconnectWebSocket = signalingChannel.ignoreDisconnectWebSocket
         
         switch reason {
         case .signalingFailure, .peerConnectionStateFailed:
-            // type: disconnect の送信は不要
-            return
+            break
         case .user, .noError:
             // reason: .user の場合、 error はユーザーから渡されているので考慮しない
             let noError = Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR"))
@@ -1031,11 +1035,32 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 }
             } else if dataChannelSignaling && ignoreDisconnectWebSocket {
                 // DataChannel
-                signalingChannel.send(message: noError)
+                if channel.switchedToDataChannel {
+                    sendMessageOverDataChannel(message: noError)
+                } else {
+                    signalingChannel.send(message: noError)
+                }
             }
         case .webSocket:
-            // TODO: WEBSOCKET-ONERROR, WEBSOCKET-ONCLOSE の実装
-            break
+            if ignoreDisconnectWebSocket {
+                break
+            }
+
+            if let soraError = error as? SoraError {
+                Logger.debug(type: .peerChannel, message: "succeeded to down cast error to SoraError: \(soraError.localizedDescription)")
+                switch soraError {
+                case .webSocketClosed:
+                    let wsOnClose = Signaling.disconnect(SignalingDisconnect(reason: "WEBSOCKET-ONCLOSE"))
+                    sendMessageOverDataChannel(message: wsOnClose)
+                case .webSocketError:
+                    let wsOnError = Signaling.disconnect(SignalingDisconnect(reason: "WEBSOCKET-ONERROR"))
+                    sendMessageOverDataChannel(message: wsOnError)
+                default:
+                    break
+                }
+            } else {
+                Logger.warn(type: .peerChannel, message: "failed to down cast error to SoraError")
+            }
         default:
             // TODO: 全部まとめて INTERNAL-ERROR にする? 要確認
             break
