@@ -9,6 +9,11 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [UPDATE] WebRTC 95.4638.2.2 に上げる
+    - @miosakuma
+
 ## 2021.2.1
 
 - [FIX] Swift Package Manager に対応するためバージョニングを修正
