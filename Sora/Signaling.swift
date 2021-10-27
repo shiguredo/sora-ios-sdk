@@ -53,7 +53,7 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
 
     switch signaling {
     case .offer(var message):
-        // TODO: keys を if let ... に書き換えたい
+        // TODO: if json.keys.contains("key") を if let に書き換えたい
         if json.keys.contains("metadata") {
             message.metadata = json["metadata"]
         }
