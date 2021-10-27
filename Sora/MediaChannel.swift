@@ -58,12 +58,16 @@ public final class MediaChannelHandlers {
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
 
+    /// DataChannel の open 時に呼ばれるクロージャー
     public var onOpenDataChannel: ((MediaChannel, String) -> Void)?
-    
+
+    /// DataChannel のメッセージ受信時に呼ばれるクロージャー
     public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?
-    
+
+    /// DataChannel の close 時に呼ばれるクロージャー
     public var onCloseDataChannel: ((MediaChannel, String) -> Void)?
-    
+
+    /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
     public var onDataChannelBufferedAmount: ((MediaChannel, String, UInt64) -> Void)?
     
     /// 初期化します。

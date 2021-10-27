@@ -64,12 +64,16 @@ public final class PeerChannelHandlers {
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
     
+    /// DataChannel の open 時に呼ばれるクロージャー
     public var onOpenDataChannel: ((String) -> Void)?
-    
+
+    /// DataChannel のメッセージ受信時に呼ばれるクロージャー
     public var onDataChannelMessage: ((String, Data) -> Void)?
-    
+
+    /// DataChannel の close 時に呼ばれるクロージャー
     public var onCloseDataChannel: ((String) -> Void)?
-    
+
+    /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
     public var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
 
     /// 初期化します。
@@ -94,13 +98,17 @@ public final class PeerChannelInternalHandlers {
     
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
-    
+
+    /// DataChannel の open 時に呼ばれるクロージャー
     public var onOpenDataChannel: ((String) -> Void)?
-    
+
+    /// DataChannel のメッセージ受信時に呼ばれるクロージャー
     public var onDataChannelMessage: ((String, Data) -> Void)?
-    
+
+    /// DataChannel の close 時に呼ばれるクロージャー
     public var onCloseDataChannel: ((String) -> Void)?
-    
+
+    /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
     public var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
 
     /// 初期化します。
