@@ -984,13 +984,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                          message: "error: \(error.localizedDescription)")
         }
                 
+        sendDisconnectMessageIfNeeded(reason: reason, error: error)
+        
         if configuration.isSender {
             terminateSenderStream()
         }
         channel.terminateAllStreams()
         nativeChannel.close()
         
-        sendDisconnectMessageIfNeeded(reason: reason, error: error)
         signalingChannel.disconnect(error: error, reason: reason)
                 
         Logger.debug(type: .peerChannel, message: "call onDisconnect")
@@ -1062,7 +1063,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 Logger.warn(type: .peerChannel, message: "failed to down cast error to SoraError")
             }
         default:
-            // TODO: 全部まとめて INTERNAL-ERROR にする? 要確認
             break
         }
 

@@ -91,7 +91,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
     
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.debug(type: .dataChannel, message: "dataChannelDidChangeState: label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
+        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
         
         if dataChannel.readyState == RTCDataChannelState.closed {
             if let handler = peerChannel?.handlers.onCloseDataChannel {
@@ -105,7 +105,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
-        Logger.debug(type: .dataChannel, message: "didChangeBufferedAmount: label => \(dataChannel.label), amount => \(amount)")
+        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), amount => \(amount)")
 
         if let handler = peerChannel?.handlers.onDataChannelBufferedAmount {
             handler(dataChannel.label, amount)
@@ -117,7 +117,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        Logger.debug(type: .dataChannel, message: "didReceiveMessageWith: label => \(dataChannel.label)")
+        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label)")
         
         guard let peerChannel = peerChannel else {
             Logger.error(type: .dataChannel, message: "peerChannel is unavailable")
