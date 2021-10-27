@@ -204,7 +204,7 @@ class DataChannel {
     var compress: Bool {
         return delegate.compress
     }
-        
+
     func send(_ data: Data) {
         Logger.debug(type: .dataChannel, message: "\(String(describing:type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())")
 
@@ -212,6 +212,6 @@ class DataChannel {
             Logger.error(type: .dataChannel, message: "failed to compress message")
             return
         }
-        native.sendData(RTCDataBuffer(data: data, isBinary: false)) // TODO: 返り値の確認
+        native.sendData(RTCDataBuffer(data: data, isBinary: false))
     }
 }

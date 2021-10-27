@@ -208,7 +208,7 @@ public protocol PeerChannel: AnyObject {
      
      - parameter error: 接続解除の原因となったエラー
      */
-    // TODO: DisconnectReason は外部に見せたくないが ... PeerChannel を実装する上では必須になってしまった気がする
+    // TODO: DisconnectReason は外部に見せたくないが、 protocol PeerChannel の実装には必須になってしまった
     func disconnect(error: Error?, reason: DisconnectReason)
 }
 
@@ -1218,7 +1218,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             return
         }
         
-        // TODO: ここまで頑張って MediaChannel を持ってくる必要がある
         let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self.channel)
         channel.dataChannels += [dataChannel.label]
         channel.dataChannelInstances[dataChannel.label] = dc

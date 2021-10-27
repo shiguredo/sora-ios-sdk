@@ -235,7 +235,6 @@ class BasicSignalingChannel: SignalingChannel {
             if let error = error {
                 Logger.debug(type: .signalingChannel,
                           message: "connecting failed (\(error))")
-                // TODO: WebSocket のエラー
                 self.disconnect(error: error, reason: .webSocket)
                 return
             }

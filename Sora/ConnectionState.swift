@@ -77,7 +77,7 @@ public enum ConnectionState {
             self = .connecting
         case .connecting:
             self = .connecting
-        // TODO: 要議論
+        // RTCPeerConnectionState の disconnected は connected に遷移する可能性があるため接続中として扱う
         case .connected, .disconnected:
             self = .connected
         case .closed, .failed, .unknown:
