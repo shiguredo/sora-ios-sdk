@@ -1059,8 +1059,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 default:
                     break
                 }
-            } else {
-                Logger.warn(type: .peerChannel, message: "failed to down cast error to SoraError")
             }
         default:
             break
