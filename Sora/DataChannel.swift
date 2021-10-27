@@ -11,7 +11,11 @@ fileprivate class ZLibUtil {
             return nil
         }
         
-        let bufferSize = 262_144 // TODO: 毎回確保するには大きいので、 stream を利用する API に書き換える?
+        // TODO: 毎回確保するには大きいので、 stream を利用して圧縮する API への置き換えを検討する
+        // 2021年10月時点では、 DataChannel の最大メッセージサイズは 262,144 バイトだが、これを拡張する RFC が提案されている
+        // https://sora-doc.shiguredo.jp/DATA_CHANNEL_SIGNALING#48cff8
+        // https://www.rfc-editor.org/rfc/rfc8260.html
+        let bufferSize = 262_144
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         
         var sourceBuffer = [UInt8](input)
@@ -44,7 +48,8 @@ fileprivate class ZLibUtil {
             return nil
         }
         
-        let bufferSize = 262_144 // TODO: 毎回確保するには大きいので、 stream を利用する API に書き換える?
+        // TODO: zip と同様に、 stream を利用して解凍する API への置き換えを検討する
+        let bufferSize = 262_144
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         
         var sourceBuffer = [UInt8](input)
