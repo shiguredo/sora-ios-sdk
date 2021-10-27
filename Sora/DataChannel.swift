@@ -6,7 +6,7 @@ import zlib
 // https://developer.apple.com/documentation/accelerate/compressing_and_decompressing_data_with_buffer_compression
 fileprivate class ZLibUtil {
     
-    public static func zip(_ input: Data) -> Data? {
+    static func zip(_ input: Data) -> Data? {
         if input.isEmpty {
             return nil
         }
@@ -43,7 +43,7 @@ fileprivate class ZLibUtil {
         return zipped
     }
     
-    public static func unzip(_ input: Data) -> Data? {
+    static func unzip(_ input: Data) -> Data? {
         if (input.isEmpty) {
             return nil
         }
@@ -187,8 +187,8 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
 
 class DataChannel {
     
-    private let native: RTCDataChannel
-    private let delegate: BasicDataChannelDelegate
+    let native: RTCDataChannel
+    let delegate: BasicDataChannelDelegate
     
     init(dataChannel: RTCDataChannel, compress: Bool, mediaChannel: MediaChannel?, peerChannel: BasicPeerChannel?) {
         Logger.info(type: .dataChannel, message: "initialize DataChannel: label => \(dataChannel.label), compress => \(compress)")
