@@ -9,6 +9,13 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [ADD] DataChannel シグナリングに対応する
+    - `Configuration.dataChannelSignaling` を追加
+    - `Configuration.ignoreDisconnectWebSocket` を追加
+    - @szktty @enm10k
+
 ## 2021.2.1
 
 - [FIX] Swift Package Manager に対応するためバージョニングを修正
