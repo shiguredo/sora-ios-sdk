@@ -1,7 +1,5 @@
-import Compression
 import Foundation
 import WebRTC
-import zlib
 
 /**
  ピアチャネルのイベントハンドラです。
