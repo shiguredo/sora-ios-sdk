@@ -13,6 +13,10 @@
 
 - [UPDATE] WebRTC 95.4638.2.2 に上げる
     - @miosakuma
+- [ADD] DataChannel シグナリングに対応する
+    - `Configuration.dataChannelSignaling` を追加
+    - `Configuration.ignoreDisconnectWebSocket` を追加
+    - @szktty @enm10k
 
 ## 2021.2.1
 

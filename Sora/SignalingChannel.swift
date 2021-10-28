@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 /**
  ストリームの方向を表します。
@@ -30,16 +31,15 @@ public enum SignalingRole: String {
 /**
  シグナリングチャネルのイベントハンドラです。
  */
-public final class SignalingChannelHandlers {
+public class SignalingChannelHandlers {
 
     /// このプロパティは onDisconnect に置き換えられました。
     @available(*, deprecated, renamed: "onDisconnect",
     message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((Error?) -> Void)? {
+    public var onDisconnectHandler: ((Error?) -> Void)? = nil /*{
            get { onDisconnect }
            set { onDisconnect = newValue }
-       }
-    
+       }*/
     /// このプロパティは onReceive に置き換えられました。
     @available(*, deprecated, renamed: "onReceive",
     message: "このプロパティは onReceive に置き換えられました。")
@@ -70,6 +70,22 @@ public final class SignalingChannelHandlers {
     
 }
 
+public class SignalingChannelInternalHandlers {
+    
+    /// 接続解除時に呼ばれるクロージャー
+    public var onDisconnect: ((Error?, DisconnectReason) -> Void)?
+    
+    /// シグナリング受信時に呼ばれるクロージャー
+    public var onReceive: ((Signaling) -> Void)?
+
+    /// シグナリング送信時に呼ばれるクロージャー
+    public var onSend: ((Signaling) -> Signaling)?
+    
+    /// 初期化します。
+    public init() {}
+    
+}
+
 /**
  シグナリングチャネルの機能を定義したプロトコルです。
  デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
@@ -83,7 +99,7 @@ public final class SignalingChannelHandlers {
  
  シグナリングメッセージは WebSocket チャネル `WebSocketChannel` を使用してサーバーに送信されます。
  */
-public protocol SignalingChannel: class {
+public protocol SignalingChannel: AnyObject {
 
     // MARK: - プロパティ
     
@@ -96,6 +112,8 @@ public protocol SignalingChannel: class {
     /// 接続状態
     var state: ConnectionState { get }
     
+    var ignoreDisconnectWebSocket: Bool { get set }
+    var dataChannelSignaling: Bool { get set }
     // MARK: - イベントハンドラ
     
     /// イベントハンドラ
@@ -105,7 +123,7 @@ public protocol SignalingChannel: class {
      内部処理で使われるイベントハンドラ。
      このハンドラをカスタマイズに使うべきではありません。
      */
-    var internalHandlers: SignalingChannelHandlers { get set }
+    var internalHandlers: SignalingChannelInternalHandlers { get set }
 
     // MARK: - インスタンスの生成
     
@@ -131,7 +149,7 @@ public protocol SignalingChannel: class {
  
      - parameter error: 接続解除の原因となったエラー
      */
-    func disconnect(error: Error?)
+    func disconnect(error: Error?, reason: DisconnectReason)
     
     // MARK: メッセージの送信
     
@@ -154,10 +172,13 @@ public protocol SignalingChannel: class {
 }
 
 class BasicSignalingChannel: SignalingChannel {
-
+    
     var handlers: SignalingChannelHandlers = SignalingChannelHandlers()
-    var internalHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
+    var internalHandlers: SignalingChannelInternalHandlers = SignalingChannelInternalHandlers()
     var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
+    
+    var ignoreDisconnectWebSocket: Bool = false
+    var dataChannelSignaling: Bool = false
     
     var configuration: Configuration
     
@@ -178,7 +199,13 @@ class BasicSignalingChannel: SignalingChannel {
             ._webSocketChannelType.init(url: configuration.url)
         BasicWebSocketChannel.useStarscreamCustomEngine = !configuration.allowsURLSessionWebSocketChannel
         webSocketChannel.internalHandlers.onDisconnect = { [weak self] error in
-            self?.disconnect(error: error)
+            if let self = self {
+                Logger.debug(type: .signalingChannel, message: "ignoreDisconnectWebSocket: \(self.ignoreDisconnectWebSocket)")
+                // ignoreDisconnectWebSocket == true の場合は、 WebSocketChannel 切断時に SignalingChannel を切断しない
+                if !self.ignoreDisconnectWebSocket {
+                    self.disconnect(error: error, reason: error != nil ? .webSocket : .noError)
+                }
+            }
         }
         
         webSocketChannel.internalHandlers.onReceive = { [weak self] message in
@@ -208,7 +235,7 @@ class BasicSignalingChannel: SignalingChannel {
             if let error = error {
                 Logger.debug(type: .signalingChannel,
                           message: "connecting failed (\(error))")
-                self.disconnect(error: error)
+                self.disconnect(error: error, reason: .webSocket)
                 return
             }
             Logger.debug(type: .signalingChannel, message: "connected")
@@ -216,7 +243,7 @@ class BasicSignalingChannel: SignalingChannel {
         }
     }
     
-    func disconnect(error: Error?) {
+    func disconnect(error: Error?, reason: DisconnectReason) {
         switch state {
         case .disconnecting, .disconnected:
             break
@@ -233,7 +260,7 @@ class BasicSignalingChannel: SignalingChannel {
             state = .disconnected
             
             Logger.debug(type: .signalingChannel, message: "call onDisconnect")
-            self.internalHandlers.onDisconnect?(error)
+            self.internalHandlers.onDisconnect?(error, reason)
             self.handlers.onDisconnect?(error)
             
             if self.onConnectHandler != nil {

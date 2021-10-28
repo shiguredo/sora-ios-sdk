@@ -62,6 +62,53 @@ public final class PeerChannelHandlers {
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
     
+    /// DataChannel の open 時に呼ばれるクロージャー
+    public var onOpenDataChannel: ((String) -> Void)?
+
+    /// DataChannel のメッセージ受信時に呼ばれるクロージャー
+    public var onDataChannelMessage: ((String, Data) -> Void)?
+
+    /// DataChannel の close 時に呼ばれるクロージャー
+    public var onCloseDataChannel: ((String) -> Void)?
+
+    /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
+    public var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
+
+    /// 初期化します。
+    public init() {}
+    
+}
+
+public final class PeerChannelInternalHandlers {
+
+    /// 接続解除時に呼ばれるクロージャー
+    public var onDisconnect: ((Error?, DisconnectReason) -> Void)?
+    
+    /// ストリームの追加時に呼ばれるクロージャー
+    public var onAddStream: ((MediaStream) -> Void)?
+    
+    /// ストリームの除去時に呼ばれるクロージャー
+    public var onRemoveStream: ((MediaStream) -> Void)?
+    
+    /// マルチストリームの状態の更新に呼ばれるクロージャー。
+    /// 更新により、ストリームの追加または除去が行われます。
+    public var onUpdate: ((String) -> Void)?
+    
+    /// シグナリング受信時に呼ばれるクロージャー
+    public var onReceiveSignaling: ((Signaling) -> Void)?
+
+    /// DataChannel の open 時に呼ばれるクロージャー
+    public var onOpenDataChannel: ((String) -> Void)?
+
+    /// DataChannel のメッセージ受信時に呼ばれるクロージャー
+    public var onDataChannelMessage: ((String, Data) -> Void)?
+
+    /// DataChannel の close 時に呼ばれるクロージャー
+    public var onCloseDataChannel: ((String) -> Void)?
+
+    /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
+    public var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
+
     /// 初期化します。
     public init() {}
     
@@ -111,7 +158,7 @@ public protocol PeerChannel: AnyObject {
      内部処理で使われるイベントハンドラ。
      このハンドラをカスタマイズに使うべきではありません。
      */
-    var internalHandlers: PeerChannelHandlers { get set }
+    var internalHandlers: PeerChannelInternalHandlers { get set }
     
     // MARK: - 接続情報
     
@@ -128,11 +175,20 @@ public protocol PeerChannel: AnyObject {
     var streams: [MediaStream] { get }
     
     /// 接続状態
-    var state: ConnectionState { get }
+    var state: PeerChannelConnectionState { get }
     
     /// シグナリングチャネル
     var signalingChannel: SignalingChannel { get }
+
+    /// 利用可能な DataChannel のラベル名のリスト
+    var dataChannels: [String] { get }
     
+    var switchedToDataChannel: Bool  { get }
+    
+    var signalingOfferMessageDataChannels: [[String: Any]] { get }
+
+    // DataChannel のコールバックを追加する際に必要だった
+    var mediaChannel: MediaChannel? { get }
     // MARK: - インスタンスの生成
     
     /**
@@ -141,7 +197,7 @@ public protocol PeerChannel: AnyObject {
      - parameter configuration: クライアントの設定
      - parameter signalingChannel: 使用するシグナリングチャネル
      */
-    init(configuration: Configuration, signalingChannel: SignalingChannel)
+    init(configuration: Configuration, signalingChannel: SignalingChannel, mediaChannel: MediaChannel?)
     
     // MARK: - 接続
     
@@ -158,16 +214,16 @@ public protocol PeerChannel: AnyObject {
      
      - parameter error: 接続解除の原因となったエラー
      */
-    func disconnect(error: Error?)
-    
+    // TODO: DisconnectReason は外部に見せたくないが、 protocol PeerChannel の実装には必須になってしまった
+    func disconnect(error: Error?, reason: DisconnectReason)
 }
 
 // MARK: -
 
 class BasicPeerChannel: PeerChannel {
-    
+
     var handlers: PeerChannelHandlers = PeerChannelHandlers()
-    var internalHandlers: PeerChannelHandlers = PeerChannelHandlers()
+    var internalHandlers: PeerChannelInternalHandlers = PeerChannelInternalHandlers()
     let configuration: Configuration
     let signalingChannel: SignalingChannel
     
@@ -182,17 +238,25 @@ class BasicPeerChannel: PeerChannel {
         context.connectionId
     }
     
-    var state: ConnectionState {
+    var state: PeerChannelConnectionState {
         get {
             return context.state
         }
     }
     
-    private var context: BasicPeerChannelContext!
+    var dataChannels: [String] = []
+    var dataChannelInstances: [String: DataChannel] = [:]
+    var switchedToDataChannel: Bool = false
+    var signalingOfferMessageDataChannels: [[String: Any]] = []
     
-    required init(configuration: Configuration, signalingChannel: SignalingChannel) {
+    var context: BasicPeerChannelContext!
+    
+    weak var mediaChannel: MediaChannel?
+    
+    required init(configuration: Configuration, signalingChannel: SignalingChannel, mediaChannel: MediaChannel?) {
         self.configuration = configuration
         self.signalingChannel = signalingChannel
+        self.mediaChannel = mediaChannel
         context = BasicPeerChannelContext(channel: self)
     }
     
@@ -229,8 +293,8 @@ class BasicPeerChannel: PeerChannel {
         context.connect(handler: handler)
     }
     
-    func disconnect(error: Error?) {
-        context.disconnect(error: error)
+    func disconnect(error: Error?, reason: DisconnectReason) {
+        context.disconnect(error: error, reason: reason)
     }
     
     fileprivate func terminateAllStreams() {
@@ -246,19 +310,34 @@ class BasicPeerChannel: PeerChannel {
 
 // MARK: -
 
+/// type: disconnect の reason を判断するのに必要な情報を保持します。
+public enum DisconnectReason : String {
+    case user
+    case signalingFailure
+    case internalError
+    case peerConnectionStateFailed
+    case webSocket
+    case noError
+    case unknown
+    
+    var description: String {
+        return self.rawValue
+    }
+}
+
 class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     final class Lock {
         
         weak var context: BasicPeerChannelContext?
         var count: Int = 0
-        var shouldDisconnect: (Bool, Error?) = (false, nil)
+        var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
         
-        func waitDisconnect(error: Error?) {
+        func waitDisconnect(error: Error?, reason: DisconnectReason) {
             if count == 0 {
-                context?.basicDisconnect(error: error)
+                context?.basicDisconnect(error: error, reason: reason)
             } else {
-                shouldDisconnect = (true, error)
+                shouldDisconnect = (true, error, reason)
             }
         }
         
@@ -278,11 +357,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         func disconnect() {
             switch shouldDisconnect {
-            case (true, let error):
-                shouldDisconnect = (false, nil)
+            case (true, let error, let reason):
+                shouldDisconnect = (false, nil, .unknown)
                 if let context = context {
-                    if context.state != .disconnecting && context.state != .disconnected {
-                        context.basicDisconnect(error: error)
+                    if context.state != .closed {
+                        context.basicDisconnect(error: error, reason: reason)
                     }
                 }
             default:
@@ -292,10 +371,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     weak var channel: BasicPeerChannel!
-    var state: ConnectionState = .disconnected {
-        didSet {
-            Logger.debug(type: .peerChannel,
-                         message: "changed BasicPeerChannelContext.state from \(oldValue) to \(state)")
+    var state: PeerChannelConnectionState {
+        get {
+            let state = nativeChannel == nil ? RTCPeerConnectionState.new : nativeChannel.connectionState
+            return PeerChannelConnectionState(state)
         }
     }
     
@@ -323,23 +402,27 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     
     private var offerEncodings: [SignalingOffer.Encoding]?
 
+    private var connectedAtLeastOnce: Bool = false
+
     init(channel: BasicPeerChannel) {
         self.channel = channel
+
         lock = Lock()
         super.init()
         lock.context = self
         
-        signalingChannel.internalHandlers.onDisconnect = { [weak self] error in
-            self?.disconnect(error: error)
+        signalingChannel.internalHandlers.onDisconnect = { [weak self] (error, reason) in
+            self?.disconnect(error: error, reason: reason)
         }
         
         signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
             self?.handle(signaling: signaling)
         }
+        
     }
     
     func connect(handler: @escaping (Error?) -> Void) {
-        if channel.state.isConnecting {
+        if channel.state == .connecting || channel.state == .connected {
             handler(SoraError.connectionBusy(reason:
                 "PeerChannel is already connected"))
             return
@@ -371,7 +454,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         signalingChannel.connect { [weak self] error in
             self?.sendConnectMessage(error: error)
         }
-        state = .connecting
     }
     
     func sendConnectMessage(error: Error?) {
@@ -407,8 +489,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         if error != nil {
             Logger.error(type: .peerChannel,
                          message: "failed connecting to signaling channel (\(error!.localizedDescription))")
-            disconnect(error: SoraError.peerChannelError(
-                reason: "failed connecting to signaling channel"))
+            disconnect(error: SoraError.peerChannelError(reason: "failed connecting to signaling channel"),
+                       reason: .signalingFailure)
             return
         }
         
@@ -460,7 +542,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             simulcastRid: configuration.simulcastRid,
             soraClient: soraClient,
             webRTCVersion: webRTCVersion,
-            environment: DeviceInfo.current.description)
+            environment: DeviceInfo.current.description,
+            dataChannelSignaling: configuration.dataChannelSignaling,
+            ignoreDisconectWebSocket: configuration.ignoreDisconnectWebSocket)
+        
+        signalingChannel.dataChannelSignaling = configuration.dataChannelSignaling ?? false
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }
@@ -697,8 +783,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 Logger.error(type: .peerChannel,
                              message: "failed to create answer (\(error!.localizedDescription))")
                 self.lock.unlock()
-                self.disconnect(error: SoraError
-                    .peerChannelError(reason: "failed to create answer"))
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create answer"),
+                                reason: .signalingFailure)
                 return
             }
             
@@ -721,8 +807,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 Logger.error(type: .peerChannel,
                              message: "failed to create update-answer (\(error!.localizedDescription)")
                 self.lock.unlock()
-                self.disconnect(error: SoraError
-                    .peerChannelError(reason: "failed to create update-answer"))
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create update-answer"),
+                                reason: .signalingFailure)
                 return
             }
             
@@ -752,8 +838,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 Logger.error(type: .peerChannel,
                              message: "failed to create re-answer (\(error!.localizedDescription)")
                 self.lock.unlock()
-                self.disconnect(error: SoraError
-                    .peerChannelError(reason: "failed to create re-answer"))
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create re-answer"),
+                                reason: .signalingFailure)
                 return
             }
             
@@ -772,14 +858,61 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
+    func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
+        Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
+        
+        guard let dataChannel = channel.dataChannelInstances["signaling"] else {
+            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+            return
+        }
+        lock.lock()
+        createAnswer(isSender: false,
+                     offer: reOffer,
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
+            guard error == nil else {
+                Logger.error(type: .peerChannel,
+                             message: "failed to create re-answer: error => (\(error!.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create re-answer"),
+                                reason: .signalingFailure)
+                return
+            }
+            
+            let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+            do {
+                let data = try JSONEncoder().encode(reAnswer)
+                dataChannel.send(data)
+            } catch {
+                Logger.error(type: .peerChannel,
+                             message: "failed to send re-answer: error => (\(error.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer"),
+                                reason:. signalingFailure)
+                return
+            }
+
+            if (self.configuration.isSender) {
+                self.updateSenderOfferEncodings()
+            }
+            
+            Logger.debug(type: .peerChannel, message: "call onUpdate")
+            self.channel.internalHandlers.onUpdate?(answer!)
+            self.channel.handlers.onUpdate?(answer!)
+            
+            self.lock.unlock()
+        }
+    }
+    
+    
     func handle(signaling: Signaling) {
         Logger.debug(type: .mediaStream, message: "handle signaling => \(signaling.typeName())")
         switch signaling {
         case .offer(let offer):
             clientId = offer.clientId
             connectionId = offer.connectionId
+            channel.signalingOfferMessageDataChannels = offer.dataChannels
             createAndSendAnswer(offer: offer)
-            
         case .update(let update):
             if configuration.isMultistream {
                 createAndSendUpdateAnswer(forOffer: update.sdp)
@@ -808,7 +941,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             } else {
                 signalingChannel.send(message: .pong(pong))
             }
-            
+        case .switched(let switched):
+            channel.switchedToDataChannel = true
+            signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
+            if (signalingChannel.ignoreDisconnectWebSocket) {
+                signalingChannel.webSocketChannel.disconnect(error: nil)
+            }
         default:
             break
         }
@@ -826,7 +964,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                      message: "native senders = \(nativeChannel.senders.count)")
         Logger.debug(type: .peerChannel,
                      message: "native receivers = \(nativeChannel.receivers.count)")
-        state = .connected
         
         if onConnectHandler != nil {
             Logger.debug(type: .peerChannel, message: "call connect(handler:)")
@@ -836,24 +973,24 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         lock.unlock()
     }
     
-    func disconnect(error: Error?) {
+    func disconnect(error: Error?, reason: DisconnectReason) {
         switch state {
-        case .disconnecting, .disconnected:
+        case .closed:
             break
         default:
             Logger.debug(type: .peerChannel, message: "wait to disconnect")
-            lock.waitDisconnect(error: error)
+            lock.waitDisconnect(error: error, reason: reason)
         }
     }
     
-    func basicDisconnect(error: Error?) {
-        Logger.debug(type: .peerChannel, message: "try disconnecting")
+    func basicDisconnect(error: Error?, reason: DisconnectReason) {
+        Logger.debug(type: .peerChannel, message: "try disconnecting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
         if let error = error {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")
         }
-        
-        state = .disconnecting
+                
+        sendDisconnectMessageIfNeeded(reason: reason, error: error)
         
         if configuration.isSender {
             terminateSenderStream()
@@ -861,13 +998,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         channel.terminateAllStreams()
         nativeChannel.close()
         
-        signalingChannel.send(message: Signaling.disconnect)
-        signalingChannel.disconnect(error: error)
-        
-        state = .disconnected
-        
+        signalingChannel.disconnect(error: error, reason: reason)
+                
         Logger.debug(type: .peerChannel, message: "call onDisconnect")
-        channel.internalHandlers.onDisconnect?(error)
+        channel.internalHandlers.onDisconnect?(error, reason)
         channel.handlers.onDisconnect?(error)
         
         if onConnectHandler != nil {
@@ -877,6 +1011,79 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         
         Logger.debug(type: .peerChannel, message: "did disconnect")
+    }
+
+    // https://sora-doc.shiguredo.jp/SORA_CLIENT
+    func sendDisconnectMessageIfNeeded(reason: DisconnectReason, error: Error?) {
+        if channel.state == .failed {
+            // この関数に到達した時点で .failed なので、メッセージの送信は不要
+            return
+        }
+
+        // 毎回タイプすると長いので変数を定義
+        let dataChannelSignaling = signalingChannel.dataChannelSignaling
+        let ignoreDisconnectWebSocket = signalingChannel.ignoreDisconnectWebSocket
+        
+        switch reason {
+        case .signalingFailure, .peerConnectionStateFailed:
+            break
+        case .user, .noError:
+            // reason: .user の場合、 error はユーザーから渡されているので考慮しない
+            let noError = Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR"))
+            if !dataChannelSignaling {
+                // WebSocket
+                signalingChannel.send(message: noError)
+            } else if dataChannelSignaling && !ignoreDisconnectWebSocket {
+                // WebSocket + DataChannel
+                if channel.switchedToDataChannel {
+                    sendMessageOverDataChannel(message: noError)
+                } else {
+                    signalingChannel.send(message: noError)
+                }
+            } else if dataChannelSignaling && ignoreDisconnectWebSocket {
+                // DataChannel
+                if channel.switchedToDataChannel {
+                    sendMessageOverDataChannel(message: noError)
+                } else {
+                    signalingChannel.send(message: noError)
+                }
+            }
+        case .webSocket:
+            if ignoreDisconnectWebSocket {
+                break
+            }
+
+            if let soraError = error as? SoraError {
+                Logger.debug(type: .peerChannel, message: "succeeded to down cast error to SoraError: \(soraError.localizedDescription)")
+                switch soraError {
+                case .webSocketClosed:
+                    let wsOnClose = Signaling.disconnect(SignalingDisconnect(reason: "WEBSOCKET-ONCLOSE"))
+                    sendMessageOverDataChannel(message: wsOnClose)
+                case .webSocketError:
+                    let wsOnError = Signaling.disconnect(SignalingDisconnect(reason: "WEBSOCKET-ONERROR"))
+                    sendMessageOverDataChannel(message: wsOnError)
+                default:
+                    break
+                }
+            }
+        default:
+            break
+        }
+
+    }
+    
+    private func sendMessageOverDataChannel(message: Signaling) {
+        guard let dataChannel = channel.dataChannelInstances["signaling"] else {
+            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+            return
+        }
+        do {
+            let data = try JSONEncoder().encode(message)
+            dataChannel.send(data)
+        } catch {
+            Logger.error(type: .peerChannel,
+                         message: "failed to send disconnect on DataChannel: error => (\(error.localizedDescription)")
+        }
     }
     
     // MARK: - RTCPeerConnectionDelegate
@@ -954,12 +1161,18 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                      message: "peer connection state: \(String(describing: newState))")
         switch newState {
         case .failed:
-            disconnect(error: SoraError.peerChannelError(reason: "peer connection state: failed"))
+            disconnect(error: SoraError.peerChannelError(reason: "peer connection state: failed"),
+                       reason: .peerConnectionStateFailed)
         case .connected:
-            // peer connection state が connecting => connected => connecting => connected と変化するケースがあった
-            // 初回の connected のみで finishConnecting を実行したい
-            if state != .connected {
+            // NOTE: RTCPeerConnectionState は connected -> disconencted -> connected などと遷移する可能性があるが、
+            // finishDoing は複数回実行するとエラーになるので注意
+            //
+            // 遷移のパターンは以下のページの Figure 2 Non-normative ICE transport state transition diagram という図を参照
+            // https://www.w3.org/TR/webrtc/#dom-rtcicetransportstate
+            // 図は (RTCPeerConnectionState ではなく) RTCIceTransportState のものなので注意
+            if !connectedAtLeastOnce {
                 finishConnecting()
+                connectedAtLeastOnce = true
             }
         default:
             break
@@ -995,13 +1208,34 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
-    // NOTE: Sora はデータチャネルに非対応
     func peerConnection(_ nativePeerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
-        Logger.debug(type: .peerChannel, message: "opened data channel (ignored)")
-        // 何もしない
+        let label = dataChannel.label
+        Logger.debug(type: .peerChannel, message: "didOpen: label => \(label)")
+
+        let dataChannelSetting: [String: Any]? = channel.signalingOfferMessageDataChannels.filter {
+            ($0["label"] as? String) == label
+        }.first ?? nil
+        let compress = dataChannelSetting?["compress"] as? Bool ?? false
+        
+        
+        guard let mediaChannel = channel.mediaChannel else {
+            Logger.warn(type: .peerChannel, message: "mediaChannel is unavailable")
+            return
+        }
+        
+        let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self.channel)
+        channel.dataChannels += [dataChannel.label]
+        channel.dataChannelInstances[dataChannel.label] = dc
+        
+        if let handler = channel.handlers.onOpenDataChannel {
+            handler(dataChannel.label)
+        }
+        
+        if let handler = mediaChannel.handlers.onOpenDataChannel {
+            handler(mediaChannel, dataChannel.label)
+        }
     }
-    
 }
 
 extension RTCRtpSender {

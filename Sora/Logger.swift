@@ -16,6 +16,7 @@ public enum LogType {
     case videoView
     case user(String)
     case configurationViewController
+    case dataChannel
 }
 
 /// :nodoc:
@@ -51,6 +52,8 @@ extension LogType: CustomStringConvertible {
             return name
         case .configurationViewController:
             return "ConfigurationViewController"
+        case .dataChannel:
+            return "DataChannel"
         }
     }
     
@@ -253,7 +256,8 @@ public final class Logger {
                      .peerChannel,
                      .nativePeerChannel,
                      .mediaChannel,
-                     .mediaStream:
+                     .mediaStream,
+                     .dataChannel:
                     out = true
                 default:
                     break

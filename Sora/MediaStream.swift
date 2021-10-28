@@ -52,7 +52,7 @@ public final class MediaStreamHandlers {
  メディアストリームは映像と音声の送受信を行います。
  メディアストリーム 1 つにつき、 1 つの映像と 1 つの音声を送受信可能です。
  */
-public protocol MediaStream: class {
+public protocol MediaStream: AnyObject {
     
     // MARK: - イベントハンドラ
     
