@@ -90,10 +90,10 @@ fileprivate class ZLibUtil {
 class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     let compress: Bool
-    weak var peerChannel: BasicPeerChannel?
+    weak var peerChannel: PeerChannel?
     weak var mediaChannel: MediaChannel?
     
-    init(compress: Bool, mediaChannel: MediaChannel?, peerChannel: BasicPeerChannel?) {
+    init(compress: Bool, mediaChannel: MediaChannel?, peerChannel: PeerChannel?) {
         self.compress = compress
         self.mediaChannel = mediaChannel
         self.peerChannel = peerChannel
@@ -103,10 +103,6 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
         
         if dataChannel.readyState == RTCDataChannelState.closed {
-            if let handler = peerChannel?.handlers.onCloseDataChannel {
-                handler(dataChannel.label)
-            }
-            
             if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onCloseDataChannel {
                 handler(mediaChannel, dataChannel.label)
             }
@@ -115,11 +111,6 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), amount => \(amount)")
-
-        if let handler = peerChannel?.handlers.onDataChannelBufferedAmount {
-            handler(dataChannel.label, amount)
-        }
-        
         if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelBufferedAmount {
             handler(mediaChannel, dataChannel.label, amount)
         }
@@ -179,10 +170,6 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
         }
         
-        if let handler = peerChannel.handlers.onDataChannelMessage {
-            handler(dataChannel.label, data)
-        }
-        
         if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
             handler(mediaChannel, dataChannel.label, data)
         }
@@ -194,7 +181,7 @@ class DataChannel {
     let native: RTCDataChannel
     let delegate: BasicDataChannelDelegate
     
-    init(dataChannel: RTCDataChannel, compress: Bool, mediaChannel: MediaChannel?, peerChannel: BasicPeerChannel?) {
+    init(dataChannel: RTCDataChannel, compress: Bool, mediaChannel: MediaChannel?, peerChannel: PeerChannel?) {
         Logger.info(type: .dataChannel, message: "initialize DataChannel: label => \(dataChannel.label), compress => \(compress)")
         native = dataChannel
         self.delegate = BasicDataChannelDelegate(compress: compress, mediaChannel: mediaChannel, peerChannel: peerChannel)

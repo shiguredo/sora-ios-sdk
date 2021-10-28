@@ -31,149 +31,27 @@ public enum SignalingRole: String {
 /**
  シグナリングチャネルのイベントハンドラです。
  */
-public class SignalingChannelHandlers {
+@available(*, unavailable, message: "TODO")
+public class SignalingChannelHandlers {}
 
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onDisconnect",
-    message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((Error?) -> Void)? = nil /*{
-           get { onDisconnect }
-           set { onDisconnect = newValue }
-       }*/
-    /// このプロパティは onReceive に置き換えられました。
-    @available(*, deprecated, renamed: "onReceive",
-    message: "このプロパティは onReceive に置き換えられました。")
-    public var onReceiveSignalingHandler: ((Signaling) -> Void)? {
-           get { onReceive }
-           set { onReceive = newValue }
-       }
-
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onSend",
-    message: "このプロパティは onSend に置き換えられました。")
-    public var onSendSignalingHandler: ((Signaling) -> Signaling)? {
-           get { onSend }
-           set { onSend = newValue }
-       }
+class SignalingChannelInternalHandlers {
     
     /// 接続解除時に呼ばれるクロージャー
-    public var onDisconnect: ((Error?) -> Void)?
+    var onDisconnect: ((Error?, DisconnectReason) -> Void)?
     
     /// シグナリング受信時に呼ばれるクロージャー
-    public var onReceive: ((Signaling) -> Void)?
+    var onReceive: ((Signaling) -> Void)?
 
     /// シグナリング送信時に呼ばれるクロージャー
-    public var onSend: ((Signaling) -> Signaling)?
+    var onSend: ((Signaling) -> Signaling)?
     
     /// 初期化します。
-    public init() {}
+    init() {}
     
 }
 
-public class SignalingChannelInternalHandlers {
+class SignalingChannel {
     
-    /// 接続解除時に呼ばれるクロージャー
-    public var onDisconnect: ((Error?, DisconnectReason) -> Void)?
-    
-    /// シグナリング受信時に呼ばれるクロージャー
-    public var onReceive: ((Signaling) -> Void)?
-
-    /// シグナリング送信時に呼ばれるクロージャー
-    public var onSend: ((Signaling) -> Signaling)?
-    
-    /// 初期化します。
-    public init() {}
-    
-}
-
-/**
- シグナリングチャネルの機能を定義したプロトコルです。
- デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
- ソースコードは公開していますので、実装の詳細はそちらを参照してください。
- 
- シグナリングチャネルとピアチャネル `PeerChannel` はそれぞれ独立してサーバーに接続され、両者は協調してメディアチャネル `MediaChannel` の接続を確立します。
- シグナリングチャネルの接続はメディアチャネルの接続後も維持され、
- メディアチャネルが接続を解除されるとシグナリングチャネルの接続も解除されます。
- また、メディアチャネルの接続中にシグナリングチャネルの接続が解除されると、
- メディアチャネルの接続も解除されます。
- 
- シグナリングメッセージは WebSocket チャネル `WebSocketChannel` を使用してサーバーに送信されます。
- */
-public protocol SignalingChannel: AnyObject {
-
-    // MARK: - プロパティ
-    
-    /// クライアントの設定
-    var configuration: Configuration { get }
-    
-    /// WebSocket チャネル
-    var webSocketChannel: WebSocketChannel { get }
-    
-    /// 接続状態
-    var state: ConnectionState { get }
-    
-    var ignoreDisconnectWebSocket: Bool { get set }
-    var dataChannelSignaling: Bool { get set }
-    // MARK: - イベントハンドラ
-    
-    /// イベントハンドラ
-    var handlers: SignalingChannelHandlers { get set }
-    
-    /**
-     内部処理で使われるイベントハンドラ。
-     このハンドラをカスタマイズに使うべきではありません。
-     */
-    var internalHandlers: SignalingChannelInternalHandlers { get set }
-
-    // MARK: - インスタンスの生成
-    
-    /**
-     初期化します。
-     
-     - parameter configuration: クライアントの設定
-     */
-    init(configuration: Configuration)
-
-    // MARK: - 接続
-    
-    /**
-     サーバーに接続します。
-     
-     - parameter handler: 接続試行後に呼ばれるクロージャー
-     - parameter error: (接続失敗時のみ) エラー
-     */
-    func connect(handler: @escaping (_ error: Error?) -> Void)
-    
-    /**
-     接続を解除します。
- 
-     - parameter error: 接続解除の原因となったエラー
-     */
-    func disconnect(error: Error?, reason: DisconnectReason)
-    
-    // MARK: メッセージの送信
-    
-    /**
-     サーバーにシグナリングメッセージを送信します。
-     
-     - parameter message: シグナリングメッセージ
-     */
-    func send(message: Signaling)
-    
-    /**
-     サーバーに任意のメッセージを送信します。
-     Sora は仕様にないメッセージを受信すると WebSocket の接続を解除します。
-     任意のメッセージを送信する際は注意してください。
-     
-     - parameter text: メッセージ
-     */
-    func send(text: String)
-    
-}
-
-class BasicSignalingChannel: SignalingChannel {
-    
-    var handlers: SignalingChannelHandlers = SignalingChannelHandlers()
     var internalHandlers: SignalingChannelInternalHandlers = SignalingChannelInternalHandlers()
     var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
     
@@ -261,7 +139,6 @@ class BasicSignalingChannel: SignalingChannel {
             
             Logger.debug(type: .signalingChannel, message: "call onDisconnect")
             self.internalHandlers.onDisconnect?(error, reason)
-            self.handlers.onDisconnect?(error)
             
             if self.onConnectHandler != nil {
                 Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
@@ -275,8 +152,7 @@ class BasicSignalingChannel: SignalingChannel {
     
     func send(message: Signaling) {
         Logger.debug(type: .signalingChannel, message: "send message")
-        var message = internalHandlers.onSend?(message) ?? message
-        message = handlers.onSend?(message) ?? message
+        let message = internalHandlers.onSend?(message) ?? message
         let encoder = JSONEncoder()
         do {
             let data = try encoder.encode(message)
@@ -310,7 +186,6 @@ class BasicSignalingChannel: SignalingChannel {
             case .success(let signaling):
                 Logger.debug(type: .signalingChannel, message: "call onReceiveSignaling")
                 internalHandlers.onReceive?(signaling)
-                handlers.onReceive?(signaling)
             case .failure(let error):
                 Logger.error(type: .signalingChannel,
                           message: "decode failed (\(error.localizedDescription)) => \(text)")

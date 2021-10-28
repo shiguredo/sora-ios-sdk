@@ -166,40 +166,37 @@ public struct Configuration {
     public var webSocketChannelHandlers: WebSocketChannelHandlers = WebSocketChannelHandlers()
     
     /// シグナリングチャネルに関するイベントハンドラ
+    @available(*, unavailable, message: "廃止されました。 mediaChannelHandlers を利用してください。")
     public var signalingChannelHandlers: SignalingChannelHandlers = SignalingChannelHandlers()
     
     /// ピアチャネルに関するイベントハンドラ
+    @available(*, unavailable, message: "廃止されました。 mediaChannelHandlers を利用してください。")
     public var peerChannelHandlers: PeerChannelHandlers = PeerChannelHandlers()
     
     /// メディアチャネルに関するイベントハンドラ
     public var mediaChannelHandlers: MediaChannelHandlers = MediaChannelHandlers()
 
     // MARK: - 接続チャネルに関する設定
-    
     /**
      生成されるシグナリングチャネルの型。
      何も指定しなければデフォルトのシグナリングチャネルが生成されます。
      */
-    public var signalingChannelType: SignalingChannel.Type?
-    
+    @available(*, unavailable, message: "signalingChannelType は廃止されました。")
+    public var signalingChannelType: Any? = nil
+
     /**
      生成される WebSocket チャネルの型。
      何も指定しなければデフォルトの WebSocket チャネルが生成されます。
      */
     public var webSocketChannelType: WebSocketChannel.Type?
-    
+
     /**
      生成されるピアチャネルの型。
      何も指定しなければデフォルトのピアチャネルが生成されます。
      */
-    public var peerChannelType: PeerChannel.Type?
-    
-    var _signalingChannelType: SignalingChannel.Type {
-        get {
-            return signalingChannelType ?? BasicSignalingChannel.self
-        }
-    }
-    
+    @available(*, unavailable, message: "peerChannelType は廃止されました。")
+    public var peerChannelType: Any? = nil
+
     var _webSocketChannelType: WebSocketChannel.Type {
         get {
             var type: WebSocketChannel.Type = BasicWebSocketChannel.self
@@ -212,11 +209,6 @@ public struct Configuration {
         }
     }
     
-    var _peerChannelType: PeerChannel.Type {
-        get {
-            return peerChannelType ?? BasicPeerChannel.self
-        }
-    }
     
     /// :nodoc:
     public var allowsURLSessionWebSocketChannel: Bool = true
@@ -305,9 +297,7 @@ extension Configuration: Codable {
         case webRTCConfiguration
         case signalingConnectMetadata
         case signalingConnectNotifyMetadata
-        case signalingChannelType
         case webSocketChannelType
-        case peerChannelType
         case publisherStreamId
         case publisherVideoTrackId
         case publisherAudioTrackId
@@ -381,12 +371,6 @@ extension Configuration: Codable {
         try container.encode(publisherStreamId, forKey: .publisherStreamId)
         try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
         try container.encode(publisherAudioTrackId, forKey: .publisherAudioTrackId)
-        try container.encode(String(describing: type(of: _peerChannelType))
-            ,
-                             forKey: .peerChannelType)
-        try container.encode(String(describing: type(of: _signalingChannelType))
-            ,
-                             forKey: .signalingChannelType)
         try container.encode(String(describing: type(of: _webSocketChannelType))
             ,
                              forKey: .webSocketChannelType)

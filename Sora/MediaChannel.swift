@@ -1,4 +1,5 @@
 import Foundation
+import WebRTC
 
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
@@ -110,6 +111,13 @@ public final class MediaChannel {
     /// クライアントの設定
     public let configuration: Configuration
     
+    /// メディアチャンネルの内部で利用している RTCPeerConnection
+    public var native: RTCPeerConnection {
+        get {
+            return peerChannel.context.nativeChannel
+        }
+    }
+    
     /**
      クライアント ID 。接続後にセットされます。
      */
@@ -180,10 +188,10 @@ public final class MediaChannel {
     // MARK: 接続チャネル
     
     /// シグナリングチャネル
-    public let signalingChannel: SignalingChannel
+    let signalingChannel: SignalingChannel
     
     /// ピアチャネル
-    public var peerChannel: PeerChannel {
+    var peerChannel: PeerChannel {
         get {
             _peerChannel!
         }
@@ -240,24 +248,12 @@ public final class MediaChannel {
      - parameter configuration: クライアントの設定
      */
     init(manager: Sora, configuration: Configuration) {
-        Logger.debug(type: .mediaChannel,
-                     message: "create signaling channel (\(configuration._signalingChannelType))")
-        Logger.debug(type: .mediaChannel,
-                     message: "create peer channel (\(configuration._peerChannelType))")
-        
         self.manager = manager
         self.configuration = configuration
-        signalingChannel = configuration._signalingChannelType
-            .init(configuration: configuration)
-        signalingChannel.handlers =
-            configuration.signalingChannelHandlers
-
-        _peerChannel = configuration._peerChannelType
-            .init(configuration: configuration,
-                  signalingChannel: signalingChannel,
-                  mediaChannel: self)
-        _peerChannel!.handlers =
-            configuration.peerChannelHandlers
+        signalingChannel = SignalingChannel.init(configuration: configuration)
+        _peerChannel = PeerChannel.init(configuration: configuration,
+                                        signalingChannel: signalingChannel,
+                                        mediaChannel: self)
         handlers = configuration.mediaChannelHandlers
         
         _connectionTimer = ConnectionTimer(monitors: [
