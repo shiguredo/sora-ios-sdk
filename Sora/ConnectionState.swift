@@ -2,43 +2,7 @@ import Foundation
 import WebRTC
 
 /**
- PeerChannel, MediaChannel の接続状態を表します。
- TODO: enum 名が適切か検討する
- */
-public enum SoraConnectionState {
-    
-    case new
-    case connecting
-    case connected
-    case disconnected
-    case failed
-    case closed
-    case unknown
-    
-    internal init(_ state: RTCPeerConnectionState) {
-        switch state {
-        case .new:
-            self = .new
-        case .connecting:
-            self = .connecting
-        case .connected:
-            self = .connected
-        case .disconnected:
-            self = .disconnected
-        case .failed:
-            self = .failed
-        case .closed:
-            self = .closed
-        @unknown default:
-            self = .unknown
-            break
-        }
-    }
-}
-
-/**
- 接続状態を表します。
- WebRTC の ConnectionState とは異なります。
+ MediaChannel, SignalingChannel, WebSocketChannel の接続状態を表します。
  */
 public enum ConnectionState {
     
@@ -71,10 +35,10 @@ public enum ConnectionState {
         }
     }
     
-    internal init(_ state: SoraConnectionState) {
+    internal init(_ state: PeerChannelConnectionState) {
         switch state {
         case .new:
-            self = .connecting
+            self = .disconnected
         case .connecting:
             self = .connecting
         // RTCPeerConnectionState の disconnected は connected に遷移する可能性があるため接続中として扱う
@@ -82,6 +46,40 @@ public enum ConnectionState {
             self = .connected
         case .closed, .failed, .unknown:
             self = .disconnected
+        }
+    }
+}
+
+/**
+ PeerChannel の接続状態を表します。
+ */
+public enum PeerChannelConnectionState {
+    
+    case new
+    case connecting
+    case connected
+    case disconnected
+    case failed
+    case closed
+    case unknown
+    
+    internal init(_ state: RTCPeerConnectionState) {
+        switch state {
+        case .new:
+            self = .new
+        case .connecting:
+            self = .connecting
+        case .connected:
+            self = .connected
+        case .disconnected:
+            self = .disconnected
+        case .failed:
+            self = .failed
+        case .closed:
+            self = .closed
+        @unknown default:
+            self = .unknown
+            break
         }
     }
 }

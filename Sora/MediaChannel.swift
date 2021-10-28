@@ -129,8 +129,8 @@ public final class MediaChannel {
     }
     
     /// 接続状態
-    public var state: SoraConnectionState {
-        return peerChannel.state
+    public var state: ConnectionState {
+        return ConnectionState(peerChannel.state)
     }
     
     /// 接続中 (`state == .connected`) であれば ``true``
@@ -328,7 +328,6 @@ public final class MediaChannel {
                 return
             }
             if weakSelf.state == .connecting || weakSelf.state == .connected {
-                // PeerChannel の disconnect から MediaChannel の disconnect を呼ぶと、その中からさらに PeerChannel の disconnect を読んでいるのが気になる
                 weakSelf.internalDisconnect(error: error, reason: reason)
             }
             connectionTask.complete()
@@ -416,7 +415,7 @@ public final class MediaChannel {
     
     private func internalDisconnect(error: Error?, reason: DisconnectReason) {
         switch state {
-        case .closed:
+        case .disconnecting, .disconnected:
             break
             
         default:

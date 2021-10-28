@@ -175,7 +175,7 @@ public protocol PeerChannel: AnyObject {
     var streams: [MediaStream] { get }
     
     /// 接続状態
-    var state: SoraConnectionState { get }
+    var state: PeerChannelConnectionState { get }
     
     /// シグナリングチャネル
     var signalingChannel: SignalingChannel { get }
@@ -238,7 +238,7 @@ class BasicPeerChannel: PeerChannel {
         context.connectionId
     }
     
-    var state: SoraConnectionState {
+    var state: PeerChannelConnectionState {
         get {
             return context.state
         }
@@ -371,10 +371,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     weak var channel: BasicPeerChannel!
-    var state: SoraConnectionState {
+    var state: PeerChannelConnectionState {
         get {
             let state = nativeChannel == nil ? RTCPeerConnectionState.new : nativeChannel.connectionState
-            return SoraConnectionState(state)
+            return PeerChannelConnectionState(state)
         }
     }
     
