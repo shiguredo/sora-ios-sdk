@@ -35,7 +35,7 @@ public enum ConnectionState {
         }
     }
     
-    internal init(_ state: PeerChannelConnectionState) {
+    init(_ state: PeerChannelConnectionState) {
         switch state {
         case .new:
             self = .disconnected
@@ -63,7 +63,7 @@ public enum PeerChannelConnectionState {
     case closed
     case unknown
     
-    internal init(_ state: RTCPeerConnectionState) {
+    init(_ state: RTCPeerConnectionState) {
         switch state {
         case .new:
             self = .new
