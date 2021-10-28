@@ -3,7 +3,11 @@ import Foundation
 import WebRTC
 import zlib
 
+// Apple が提供する圧縮を扱う API は zlib のヘッダーとチェックサムをサポートしていないため、当該処理を実装する必要があった
 // https://developer.apple.com/documentation/accelerate/compressing_and_decompressing_data_with_buffer_compression
+//
+// TODO: iOS 12 のサポートが不要になれば、 Compression Framework の関数を、 NSData の compressed(using), decompressed(using:) に書き換えることができる
+// それに伴い、処理に必要なバッファーのサイズを指定する必要もなくなる
 fileprivate class ZLibUtil {
     
     static func zip(_ input: Data) -> Data? {
@@ -11,7 +15,7 @@ fileprivate class ZLibUtil {
             return nil
         }
         
-        // TODO: 毎回確保するには大きいので、 stream を利用して圧縮する API への置き換えを検討する
+        // TODO: 毎回確保するには大きいので、 stream を利用して圧縮する API、もしくは NSData の compressed(using:) を使用することを検討する
         // 2021年10月時点では、 DataChannel の最大メッセージサイズは 262,144 バイトだが、これを拡張する RFC が提案されている
         // https://sora-doc.shiguredo.jp/DATA_CHANNEL_SIGNALING#48cff8
         // https://www.rfc-editor.org/rfc/rfc8260.html
@@ -48,7 +52,7 @@ fileprivate class ZLibUtil {
             return nil
         }
         
-        // TODO: zip と同様に、 stream を利用して解凍する API への置き換えを検討する
+        // TODO: zip と同様に、stream を利用して解凍する API、もしくは NSData の decompressed(using:) を使用することを検討する
         let bufferSize = 262_144
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         
