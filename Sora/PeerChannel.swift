@@ -4,7 +4,7 @@ import WebRTC
 /**
  ピアチャネルのイベントハンドラです。
  */
-@available(*, unavailable, message: "TODO")
+@available(*, unavailable, message: "MediaChannelHandlers を利用してください。")
 public class PeerChannelHandlers {}
 
 final class PeerChannelInternalHandlers {

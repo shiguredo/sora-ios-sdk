@@ -31,7 +31,7 @@ public enum SignalingRole: String {
 /**
  シグナリングチャネルのイベントハンドラです。
  */
-@available(*, unavailable, message: "TODO")
+@available(*, unavailable, message: "MediaChannelHandlers を利用してください。")
 public class SignalingChannelHandlers {}
 
 class SignalingChannelInternalHandlers {
