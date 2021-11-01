@@ -189,7 +189,14 @@ public final class MediaChannel {
     
     /// シグナリングチャネル
     let signalingChannel: SignalingChannel
-    
+
+    /// ウェブソケットチャンネル
+    public var webSocketChannel: WebSocketChannel {
+        get {
+            signalingChannel.webSocketChannel
+        }
+    }
+
     /// ピアチャネル
     var peerChannel: PeerChannel {
         get {
