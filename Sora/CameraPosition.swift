@@ -1,9 +1,5 @@
 import Foundation
 
-private var descriptionTable: PairTable<String, CameraPosition> =
-    PairTable(name: "CameraPosition",
-              pairs: [("front", .front),
-                      ("back", .back)])
 /**
  カメラの位置を表します。
  廃止されました。
@@ -29,15 +25,6 @@ public enum CameraPosition {
         case .back:
             return .front
         }
-    }
-    
-}
-
-extension CameraPosition: CustomStringConvertible {
-    
-    /// 文字列表現を返します。
-    public var description: String {
-        return descriptionTable.left(other: self)!
     }
     
 }

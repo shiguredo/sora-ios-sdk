@@ -60,10 +60,7 @@ public protocol MediaStream: AnyObject {
     var handlers: MediaStreamHandlers { get }
     
     // MARK: - 接続情報
-    
-    /// ピアチャネル
-    var peerChannel: PeerChannel { get }
-    
+
     /// ストリーム ID
     var streamId: String { get }
     
@@ -245,7 +242,7 @@ class BasicMediaStream: MediaStream {
     }
     
     func terminate() {
-        videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel)
+        videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel.mediaChannel ?? nil)
     }
     
     private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()

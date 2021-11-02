@@ -4,7 +4,7 @@ import WebRTC
 /**
  映像の描画に必要な機能を定義したプロトコルです。
  */
-public protocol VideoRenderer: class {
+public protocol VideoRenderer: AnyObject {
     
     /**
      映像のサイズが変更されたときに呼ばれます。
@@ -23,10 +23,10 @@ public protocol VideoRenderer: class {
     /**
      接続解除時に呼ばれます。
      
-     - parameter from: 接続解除するピアチャネル
+     - parameter from: 接続解除するメディアチャンネル
      */
-    func onDisconnect(from: PeerChannel)
-    
+    func onDisconnect(from: MediaChannel?)
+
     /**
      ストリームへの追加時に呼ばれます。
      

@@ -4,225 +4,46 @@ import WebRTC
 /**
  ピアチャネルのイベントハンドラです。
  */
-public final class PeerChannelHandlers {
-    
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onDisconnect",
-    message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((Error?) -> Void)? {
-        get { onDisconnect }
-        set { onDisconnect = newValue }
-    }
-    
-    /// このプロパティは onAddStream に置き換えられました。
-    @available(*, deprecated, renamed: "onAddStream",
-    message: "このプロパティは onConnect に置き換えられました。")
-    public var onAddStreamHandler: ((MediaStream) -> Void)? {
-        get { onAddStream }
-        set { onAddStream = newValue }
-    }
-    
-    /// このプロパティは onRemoveStream に置き換えられました。
-    @available(*, deprecated, renamed: "onRemoveStream",
-    message: "このプロパティは onRemoveStream に置き換えられました。")
-    public var onRemoveStreamHandler: ((MediaStream) -> Void)? {
-        get { onRemoveStream }
-        set { onRemoveStream = newValue }
-    }
-    
-    /// このプロパティは onUpdate に置き換えられました。
-    @available(*, deprecated, renamed: "onUpdate",
-    message: "このプロパティは onUpdate に置き換えられました。")
-    public var onUpdateHandler: ((String) -> Void)? {
-        get { onUpdate }
-        set { onUpdate = newValue }
-    }
-    
-    /// このプロパティは onReceiveSignaling に置き換えられました。
-    @available(*, deprecated, renamed: "onReceiveSignaling",
-    message: "このプロパティは onReceiveSignaling に置き換えられました。")
-    public var onReceiveSignalingHandler: ((Signaling) -> Void)? {
-        get { onReceiveSignaling }
-        set { onReceiveSignaling = newValue }
-    }
-    
+@available(*, unavailable, message: "MediaChannelHandlers を利用してください。")
+public class PeerChannelHandlers {}
+
+final class PeerChannelInternalHandlers {
+
     /// 接続解除時に呼ばれるクロージャー
-    public var onDisconnect: ((Error?) -> Void)?
+    var onDisconnect: ((Error?, DisconnectReason) -> Void)?
     
     /// ストリームの追加時に呼ばれるクロージャー
-    public var onAddStream: ((MediaStream) -> Void)?
+    var onAddStream: ((MediaStream) -> Void)?
     
     /// ストリームの除去時に呼ばれるクロージャー
-    public var onRemoveStream: ((MediaStream) -> Void)?
+    var onRemoveStream: ((MediaStream) -> Void)?
     
     /// マルチストリームの状態の更新に呼ばれるクロージャー。
     /// 更新により、ストリームの追加または除去が行われます。
-    public var onUpdate: ((String) -> Void)?
+    var onUpdate: ((String) -> Void)?
     
     /// シグナリング受信時に呼ばれるクロージャー
-    public var onReceiveSignaling: ((Signaling) -> Void)?
-    
+    var onReceiveSignaling: ((Signaling) -> Void)?
+
     /// DataChannel の open 時に呼ばれるクロージャー
-    public var onOpenDataChannel: ((String) -> Void)?
+    var onOpenDataChannel: ((String) -> Void)?
 
     /// DataChannel のメッセージ受信時に呼ばれるクロージャー
-    public var onDataChannelMessage: ((String, Data) -> Void)?
+    var onDataChannelMessage: ((String, Data) -> Void)?
 
     /// DataChannel の close 時に呼ばれるクロージャー
-    public var onCloseDataChannel: ((String) -> Void)?
+    var onCloseDataChannel: ((String) -> Void)?
 
     /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
-    public var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
+    var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
 
     /// 初期化します。
     public init() {}
     
 }
 
-public final class PeerChannelInternalHandlers {
+class PeerChannel {
 
-    /// 接続解除時に呼ばれるクロージャー
-    public var onDisconnect: ((Error?, DisconnectReason) -> Void)?
-    
-    /// ストリームの追加時に呼ばれるクロージャー
-    public var onAddStream: ((MediaStream) -> Void)?
-    
-    /// ストリームの除去時に呼ばれるクロージャー
-    public var onRemoveStream: ((MediaStream) -> Void)?
-    
-    /// マルチストリームの状態の更新に呼ばれるクロージャー。
-    /// 更新により、ストリームの追加または除去が行われます。
-    public var onUpdate: ((String) -> Void)?
-    
-    /// シグナリング受信時に呼ばれるクロージャー
-    public var onReceiveSignaling: ((Signaling) -> Void)?
-
-    /// DataChannel の open 時に呼ばれるクロージャー
-    public var onOpenDataChannel: ((String) -> Void)?
-
-    /// DataChannel のメッセージ受信時に呼ばれるクロージャー
-    public var onDataChannelMessage: ((String, Data) -> Void)?
-
-    /// DataChannel の close 時に呼ばれるクロージャー
-    public var onCloseDataChannel: ((String) -> Void)?
-
-    /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
-    public var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
-
-    /// 初期化します。
-    public init() {}
-    
-}
-
-extension RTCPeerConnectionState: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .new:
-            return "new"
-        case .connecting:
-            return "connecting"
-        case .connected:
-            return "connected"
-        case .disconnected:
-            return "disconnected"
-        case .failed:
-            return "failed"
-        case .closed:
-            return "closed"
-        @unknown default:
-            return "unknown"
-        }
-    }
-}
-
-// MARK: -
-
-/**
- ピアチャネルの機能を定義したプロトコルです。
- デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
- ソースコードは公開していますので、実装の詳細はそちらを参照してください。
- 
- ピアチャネルは映像と音声を送受信するための接続を行います。
- サーバーへの接続を確立すると、メディアストリーム `MediaStream` を通して
- 映像と音声の送受信が可能になります。
- メディアストリームはシングルストリームでは 1 つ、マルチストリームでは複数用意されます。
- */
-public protocol PeerChannel: AnyObject {
-    
-    // MARK: - イベントハンドラ
-    
-    /// イベントハンドラ
-    var handlers: PeerChannelHandlers { get set }
-    
-    /**
-     内部処理で使われるイベントハンドラ。
-     このハンドラをカスタマイズに使うべきではありません。
-     */
-    var internalHandlers: PeerChannelInternalHandlers { get set }
-    
-    // MARK: - 接続情報
-    
-    /// クライアントの設定
-    var configuration: Configuration { get }
-    
-    /// クライアント ID 。接続成立後にセットされます。
-    var clientId: String? { get }
-    
-    /// 接続 ID 。接続成立後にセットされます。
-    var connectionId: String? { get }
-    
-    /// メディアストリームのリスト。シングルストリームでは 1 つです。
-    var streams: [MediaStream] { get }
-    
-    /// 接続状態
-    var state: PeerChannelConnectionState { get }
-    
-    /// シグナリングチャネル
-    var signalingChannel: SignalingChannel { get }
-
-    /// 利用可能な DataChannel のラベル名のリスト
-    var dataChannels: [String] { get }
-    
-    var switchedToDataChannel: Bool  { get }
-    
-    var signalingOfferMessageDataChannels: [[String: Any]] { get }
-
-    // DataChannel のコールバックを追加する際に必要だった
-    var mediaChannel: MediaChannel? { get }
-    // MARK: - インスタンスの生成
-    
-    /**
-     初期化します。
-     
-     - parameter configuration: クライアントの設定
-     - parameter signalingChannel: 使用するシグナリングチャネル
-     */
-    init(configuration: Configuration, signalingChannel: SignalingChannel, mediaChannel: MediaChannel?)
-    
-    // MARK: - 接続
-    
-    /**
-     サーバーに接続します。
-     
-     - parameter handler: 接続試行後に呼ばれるクロージャー
-     - parameter error: (接続失敗時のみ) エラー
-     */
-    func connect(handler: @escaping (_ error: Error?) -> Void)
-    
-    /**
-     接続を解除します。
-     
-     - parameter error: 接続解除の原因となったエラー
-     */
-    // TODO: DisconnectReason は外部に見せたくないが、 protocol PeerChannel の実装には必須になってしまった
-    func disconnect(error: Error?, reason: DisconnectReason)
-}
-
-// MARK: -
-
-class BasicPeerChannel: PeerChannel {
-
-    var handlers: PeerChannelHandlers = PeerChannelHandlers()
     var internalHandlers: PeerChannelInternalHandlers = PeerChannelInternalHandlers()
     let configuration: Configuration
     let signalingChannel: SignalingChannel
@@ -264,7 +85,6 @@ class BasicPeerChannel: PeerChannel {
         streams.append(stream)
         Logger.debug(type: .peerChannel, message: "call onAddStream")
         internalHandlers.onAddStream?(stream)
-        handlers.onAddStream?(stream)
     }
     
     func remove(streamId: String) {
@@ -278,7 +98,6 @@ class BasicPeerChannel: PeerChannel {
         streams = streams.filter { each in each.streamId != stream.streamId }
         Logger.debug(type: .peerChannel, message: "call onRemoveStream")
         internalHandlers.onRemoveStream?(stream)
-        handlers.onRemoveStream?(stream)
     }
     
     func add(iceCandidate: ICECandidate) {
@@ -311,7 +130,7 @@ class BasicPeerChannel: PeerChannel {
 // MARK: -
 
 /// type: disconnect の reason を判断するのに必要な情報を保持します。
-public enum DisconnectReason : String {
+enum DisconnectReason : String {
     case user
     case signalingFailure
     case internalError
@@ -370,7 +189,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
     
-    weak var channel: BasicPeerChannel!
+    weak var channel: PeerChannel!
     var state: PeerChannelConnectionState {
         get {
             let state = nativeChannel == nil ? RTCPeerConnectionState.new : nativeChannel.connectionState
@@ -404,7 +223,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
 
     private var connectedAtLeastOnce: Bool = false
 
-    init(channel: BasicPeerChannel) {
+    init(channel: PeerChannel) {
         self.channel = channel
 
         lock = Lock()
@@ -821,7 +640,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             Logger.debug(type: .peerChannel, message: "call onUpdate")
             self.channel.internalHandlers.onUpdate?(answer!)
-            self.channel.handlers.onUpdate?(answer!)
             
             self.lock.unlock()
         }
@@ -852,7 +670,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             Logger.debug(type: .peerChannel, message: "call onUpdate")
             self.channel.internalHandlers.onUpdate?(answer!)
-            self.channel.handlers.onUpdate?(answer!)
             
             self.lock.unlock()
         }
@@ -898,7 +715,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             
             Logger.debug(type: .peerChannel, message: "call onUpdate")
             self.channel.internalHandlers.onUpdate?(answer!)
-            self.channel.handlers.onUpdate?(answer!)
             
             self.lock.unlock()
         }
@@ -953,7 +769,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         
         Logger.debug(type: .peerChannel, message: "call onReceiveSignaling")
         channel.internalHandlers.onReceiveSignaling?(signaling)
-        channel.handlers.onReceiveSignaling?(signaling)
     }
     
     func finishConnecting() {
@@ -1002,7 +817,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 
         Logger.debug(type: .peerChannel, message: "call onDisconnect")
         channel.internalHandlers.onDisconnect?(error, reason)
-        channel.handlers.onDisconnect?(error)
         
         if onConnectHandler != nil {
             Logger.debug(type: .peerChannel, message: "call connect(handler:)")
@@ -1227,10 +1041,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self.channel)
         channel.dataChannels += [dataChannel.label]
         channel.dataChannelInstances[dataChannel.label] = dc
-        
-        if let handler = channel.handlers.onOpenDataChannel {
-            handler(dataChannel.label)
-        }
         
         if let handler = mediaChannel.handlers.onOpenDataChannel {
             handler(mediaChannel, dataChannel.label)

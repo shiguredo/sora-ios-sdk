@@ -17,6 +17,14 @@
     - `Configuration.dataChannelSignaling` を追加
     - `Configuration.ignoreDisconnectWebSocket` を追加
     - @szktty @enm10k
+- [CHANGE] PeerChannel, SignalingChannel protocol を削除する
+    - `Configuration.peerChannelType` を廃止
+    - `Configuration.signalingChannelType` を廃止
+    - `Configuration.peerChannelHandlers` を廃止
+    - `Configuration.signalingChannelHandlers` を廃止
+    - `MediaChannel.native` を追加
+    - `MediaChannel.webSocketChannel` を追加
+    - @szktty @enm10k
 
 ## 2021.2.1
 
