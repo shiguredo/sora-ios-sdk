@@ -365,7 +365,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconectWebSocket: configuration.ignoreDisconnectWebSocket)
         
-        signalingChannel.dataChannelSignaling = configuration.dataChannelSignaling ?? false
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }
