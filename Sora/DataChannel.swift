@@ -87,6 +87,23 @@ fileprivate class ZLibUtil {
     }
 }
 
+extension RTCDataChannelState: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .connecting:
+            return "connecting"
+        case .open:
+            return "open"
+        case .closing:
+            return "closing"
+        case .closed:
+            return "closed"
+        @unknown default:
+            return "unknown"
+        }
+    }
+}
+
 class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     let compress: Bool
@@ -100,7 +117,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
     
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
+        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
         
         switch (dataChannel.readyState) {
         case .open:
