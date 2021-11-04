@@ -454,7 +454,7 @@ public struct SignalingOffer {
     public let encodings: [Encoding]?
     
     /// データ・チャンネルの設定
-    public var dataChannels: [[String: Any]] = []
+    public var dataChannels: [[String: Any]]?
 
 }
 

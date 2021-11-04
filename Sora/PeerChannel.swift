@@ -365,7 +365,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconectWebSocket: configuration.ignoreDisconnectWebSocket)
         
-        signalingChannel.dataChannelSignaling = configuration.dataChannelSignaling ?? false
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
     }
@@ -727,7 +726,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         case .offer(let offer):
             clientId = offer.clientId
             connectionId = offer.connectionId
-            channel.signalingOfferMessageDataChannels = offer.dataChannels
+            if let dataChannels = offer.dataChannels {
+                signalingChannel.dataChannelSignaling = true
+                channel.signalingOfferMessageDataChannels = dataChannels
+            }
+
             createAndSendAnswer(offer: offer)
         case .update(let update):
             if configuration.isMultistream {
