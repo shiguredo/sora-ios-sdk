@@ -1044,10 +1044,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self.channel)
         channel.dataChannels += [dataChannel.label]
         channel.dataChannelInstances[dataChannel.label] = dc
-        
-        if let handler = mediaChannel.handlers.onOpenDataChannel {
-            handler(mediaChannel, dataChannel.label)
-        }
     }
 }
 

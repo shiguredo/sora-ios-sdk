@@ -102,10 +102,17 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
         
-        if dataChannel.readyState == RTCDataChannelState.closed {
+        switch (dataChannel.readyState) {
+        case .open:
+            if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onOpenDataChannel {
+                handler(mediaChannel, dataChannel.label)
+            }
+        case .closed:
             if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onCloseDataChannel {
                 handler(mediaChannel, dataChannel.label)
             }
+        default:
+            break
         }
     }
     
