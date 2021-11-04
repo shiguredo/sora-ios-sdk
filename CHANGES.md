@@ -11,7 +11,7 @@
 
 ## develop
 
-- [UPDATE] WebRTC 95.4638.2.2 に上げる
+- [UPDATE] WebRTC 95.4638.3.0 に上げる
     - @miosakuma
 - [ADD] DataChannel シグナリングに対応する
     - `Configuration.dataChannelSignaling` を追加
