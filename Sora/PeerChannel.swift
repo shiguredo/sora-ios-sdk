@@ -698,10 +698,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
             do {
                 let data = try JSONEncoder().encode(reAnswer)
-                dataChannel.send(data)
+                let ok = dataChannel.send(data)
+                if !ok {
+                    // re-answer の送信に失敗した場合はちゃんと catch の内容を実行したいので Error を投げる
+                    throw SoraError.peerChannelError(reason: "DataChannel.send(_:) returned false")
+                }
             } catch {
                 Logger.error(type: .peerChannel,
-                             message: "failed to send re-answer: error => (\(error.localizedDescription)")
+                             message: "failed to send re-answer over DataChannel: error => (\(error.localizedDescription)")
                 self.lock.unlock()
                 self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer"),
                                 reason:. signalingFailure)
@@ -900,10 +904,13 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
         do {
             let data = try JSONEncoder().encode(message)
-            dataChannel.send(data)
+            let ok = dataChannel.send(data)
+            if !ok {
+                Logger.warn(type: .peerChannel, message: "DataChannel.send(_:) returned false")
+            }
         } catch {
             Logger.error(type: .peerChannel,
-                         message: "failed to send disconnect on DataChannel: error => (\(error.localizedDescription)")
+                         message: "failed to send message over DataChannel: error => (\(error.localizedDescription)")
         }
     }
     
