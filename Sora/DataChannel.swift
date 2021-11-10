@@ -118,26 +118,10 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
-        
-        switch (dataChannel.readyState) {
-        case .open:
-            if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onOpenDataChannel {
-                handler(mediaChannel, dataChannel.label)
-            }
-        case .closed:
-            if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onCloseDataChannel {
-                handler(mediaChannel, dataChannel.label)
-            }
-        default:
-            break
-        }
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), amount => \(amount)")
-        if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelBufferedAmount {
-            handler(mediaChannel, dataChannel.label, amount)
-        }
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
