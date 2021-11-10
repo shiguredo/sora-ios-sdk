@@ -154,15 +154,20 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                 // NOTE: stats の型を Signaling.swift に定義していない
                 let reports = Statistics(contentsOf: $0).jsonObject
                 let json: [String: Any] = ["type": "stats",
-                                           "reports": reports]
+                                            "reports": reports]
+                
+                var data: Data?
                 do {
-                    let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+                    data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+                } catch {
+                    Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
+                }
+                
+                if let data = data {
                     let ok = dc.send(data)
                     if !ok {
-                        Logger.error(type: .dataChannel, message: "DataChannel.send(_:) failed")
+                            Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
                     }
-                } catch {
-                    Logger.error(type: .dataChannel, message: "failed to encode statistic data to json")
                 }
             }
             

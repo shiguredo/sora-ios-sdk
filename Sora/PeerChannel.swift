@@ -696,21 +696,31 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
             
             let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+            
+            var data: Data?
             do {
-                let data = try JSONEncoder().encode(reAnswer)
-                let ok = dataChannel.send(data)
-                if !ok {
-                    // re-answer の送信に失敗した場合はちゃんと catch の内容を実行したいので Error を投げる
-                    throw SoraError.peerChannelError(reason: "DataChannel.send(_:) failed")
-                }
+                data = try JSONEncoder().encode(reAnswer)
             } catch {
                 Logger.error(type: .peerChannel,
-                             message: "failed to send re-answer over DataChannel: error => (\(error.localizedDescription)")
+                             message: "failed to encode re-answer: error => (\(error.localizedDescription)")
                 self.lock.unlock()
-                self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer"),
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to encode re-answer message to json"),
                                 reason:. signalingFailure)
                 return
             }
+
+            if let data = data {
+                let ok = dataChannel.send(data)
+                if !ok {
+                    Logger.error(type: .peerChannel,
+                                 message: "failed to send re-answer message over DataChannel")
+                    self.lock.unlock()
+                    self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer message over DataChannel"),
+                                    reason:. signalingFailure)
+                    return
+                }
+            }
+            
 
             if (self.configuration.isSender) {
                 self.updateSenderOfferEncodings()
@@ -902,15 +912,20 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
             return
         }
+
+        var data: Data?
         do {
-            let data = try JSONEncoder().encode(message)
-            let ok = dataChannel.send(data)
-            if !ok {
-                Logger.error(type: .peerChannel, message: "DataChannel.send(_:) failed")
-            }
+            data = try JSONEncoder().encode(message)
         } catch {
             Logger.error(type: .peerChannel,
-                         message: "failed to send message over DataChannel: error => (\(error.localizedDescription)")
+                         message: "failed to encode \(message.typeName()) message to json: error => (\(error.localizedDescription)")
+        }
+
+        if let data = data {
+            let ok = dataChannel.send(data)
+            if !ok {
+                Logger.error(type: .peerChannel, message: "failed to send \(message.typeName()) message over DataChannel")
+            }
         }
     }
     
