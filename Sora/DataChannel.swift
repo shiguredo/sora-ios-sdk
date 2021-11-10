@@ -87,6 +87,23 @@ fileprivate class ZLibUtil {
     }
 }
 
+extension RTCDataChannelState: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .connecting:
+            return "connecting"
+        case .open:
+            return "open"
+        case .closing:
+            return "closing"
+        case .closed:
+            return "closed"
+        @unknown default:
+            return "unknown"
+        }
+    }
+}
+
 class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     let compress: Bool
@@ -100,20 +117,11 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
     
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState.rawValue)")
-        
-        if dataChannel.readyState == RTCDataChannelState.closed {
-            if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onCloseDataChannel {
-                handler(mediaChannel, dataChannel.label)
-            }
-        }
+        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), amount => \(amount)")
-        if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelBufferedAmount {
-            handler(mediaChannel, dataChannel.label, amount)
-        }
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {

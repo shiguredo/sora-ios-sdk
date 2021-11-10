@@ -766,6 +766,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             if (signalingChannel.ignoreDisconnectWebSocket) {
                 signalingChannel.webSocketChannel.disconnect(error: nil)
             }
+
+            if let mediaChannel = channel.mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
+                onDataChannel(mediaChannel)
+            }
         default:
             break
         }
@@ -1044,10 +1048,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self.channel)
         channel.dataChannels += [dataChannel.label]
         channel.dataChannelInstances[dataChannel.label] = dc
-        
-        if let handler = mediaChannel.handlers.onOpenDataChannel {
-            handler(mediaChannel, dataChannel.label)
-        }
     }
 }
 
