@@ -159,7 +159,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                     let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
                     let ok = dc.send(data)
                     if !ok {
-                        Logger.warn(type: .dataChannel, message: "DataChannel.send(_:) returned false")
+                        Logger.error(type: .dataChannel, message: "DataChannel.send(_:) failed")
                     }
                 } catch {
                     Logger.error(type: .dataChannel, message: "failed to encode statistic data to json")

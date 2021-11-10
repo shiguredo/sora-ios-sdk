@@ -701,7 +701,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                 let ok = dataChannel.send(data)
                 if !ok {
                     // re-answer の送信に失敗した場合はちゃんと catch の内容を実行したいので Error を投げる
-                    throw SoraError.peerChannelError(reason: "DataChannel.send(_:) returned false")
+                    throw SoraError.peerChannelError(reason: "DataChannel.send(_:) failed")
                 }
             } catch {
                 Logger.error(type: .peerChannel,
@@ -906,7 +906,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             let data = try JSONEncoder().encode(message)
             let ok = dataChannel.send(data)
             if !ok {
-                Logger.warn(type: .peerChannel, message: "DataChannel.send(_:) returned false")
+                Logger.error(type: .peerChannel, message: "DataChannel.send(_:) failed")
             }
         } catch {
             Logger.error(type: .peerChannel,
