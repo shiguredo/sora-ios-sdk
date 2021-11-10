@@ -25,6 +25,8 @@
     - `MediaChannel.native` を追加
     - `MediaChannel.webSocketChannel` を追加
     - @szktty @enm10k
+- [FIX] Sora 接続時に audioEnabled = false を設定すると answer 生成に失敗してしまう問題についてのワークアラウンドを削除する
+    - @miosakuma
 
 ## 2021.2.1
 
