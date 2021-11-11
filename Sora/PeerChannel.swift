@@ -136,6 +136,7 @@ enum DisconnectReason : String {
     case internalError
     case peerConnectionStateFailed
     case webSocket
+    case dataChannelClosed
     case noError
     case unknown
     
@@ -817,12 +818,12 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func basicDisconnect(error: Error?, reason: DisconnectReason) {
-        Logger.debug(type: .peerChannel, message: "try disconnecting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
+        Logger.debug(type: .peerChannel, message: "\(#function): try disconencting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
         if let error = error {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")
         }
-                
+
         sendDisconnectMessageIfNeeded(reason: reason, error: error)
         
         if configuration.isSender {
@@ -898,6 +899,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     break
                 }
             }
+        case .dataChannelClosed:
+            Logger.warn(type: .peerChannel, message: "DataChannel was closed")
         default:
             break
         }

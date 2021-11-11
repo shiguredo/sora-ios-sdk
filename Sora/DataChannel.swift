@@ -118,6 +118,15 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
+        
+        if dataChannel.readyState == .closed {
+            if let peerChannel = peerChannel {
+                // DataChannel が切断されたタイミングで PeerChannel を切断する
+                // PeerChannel -> DataChannel の順に切断されるパターンも存在するが、
+                // PeerChannel.disconnect(error:reason:) 側で排他処理が実装されているため問題ない
+                peerChannel.disconnect(error: nil, reason: DisconnectReason.dataChannelClosed)
+            }
+        }
     }
     
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
@@ -206,6 +215,10 @@ class DataChannel {
     
     var label: String {
         return native.label
+    }
+    
+    var state: RTCDataChannelState {
+        return native.readyState
     }
     
     var compress: Bool {
