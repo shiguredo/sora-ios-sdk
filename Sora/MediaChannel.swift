@@ -314,9 +314,7 @@ public final class MediaChannel {
             guard let weakSelf = self else {
                 return
             }
-            if weakSelf.state == .connecting || weakSelf.state == .connected {
-                weakSelf.internalDisconnect(error: error, reason: reason)
-            }
+            weakSelf.internalDisconnect(error: error, reason: reason)
             connectionTask.complete()
         }
         
@@ -324,9 +322,7 @@ public final class MediaChannel {
             guard let weakSelf = self else {
                 return
             }
-            if weakSelf.state == .connecting || weakSelf.state == .connected {
-                weakSelf.internalDisconnect(error: error, reason: reason)
-            }
+            weakSelf.internalDisconnect(error: error, reason: reason)
             connectionTask.complete()
         }
         
@@ -399,7 +395,7 @@ public final class MediaChannel {
             self.internalDisconnect(error: SoraError.connectionTimeout, reason: .signalingFailure)
         }
     }
-    
+
     /**
      接続を解除します。
      
@@ -409,30 +405,32 @@ public final class MediaChannel {
         // reason に .user を指定しているので、 disconnect は SDK 内部では利用しない
         internalDisconnect(error: error, reason: .user)
     }
-    
-    internal func internalDisconnect(error: Error?, reason: DisconnectReason) {
-        switch state {
-        case .disconnecting, .disconnected:
-            break
-            
-        default:
-            Logger.debug(type: .mediaChannel, message: "\(#function): try disconnecting")
-            if let error = error {
-                Logger.error(type: .mediaChannel,
-                             message: "error: \(error.localizedDescription)")
-            }
-            if state == .connecting {
-                executeHandler(error: error)
-            }
-            
-            connectionTimer.stop()
-            peerChannel.disconnect(error: error, reason: reason)
-            Logger.debug(type: .mediaChannel, message: "did disconnect")
-            
-            Logger.debug(type: .mediaChannel, message: "call onDisconnect")
-            internalHandlers.onDisconnect?(error)
-            handlers.onDisconnect?(error)
+
+    // 切断処理が重複して実行されることを防ぐためのフラグ
+    private var disconnectAlreadyExecuted: Bool = false
+
+    func internalDisconnect(error: Error?, reason: DisconnectReason) {
+        guard disconnectAlreadyExecuted == false else {
+            Logger.debug(type: .mediaChannel, message: "\(#function): already disconnecting")
+            return
         }
+        disconnectAlreadyExecuted = true
+        
+        Logger.debug(type: .mediaChannel, message: "\(#function): try disconnecting")
+        if let error = error {
+            Logger.error(type: .mediaChannel,
+                         message: "error: \(error.localizedDescription)")
+        }
+        
+        executeHandler(error: error)
+        
+        connectionTimer.stop()
+        peerChannel.disconnect(error: error, reason: reason)
+        Logger.debug(type: .mediaChannel, message: "did disconnect")
+        
+        Logger.debug(type: .mediaChannel, message: "call onDisconnect")
+        internalHandlers.onDisconnect?(error)
+        handlers.onDisconnect?(error)
     }
 }
 
