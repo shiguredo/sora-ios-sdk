@@ -410,13 +410,13 @@ public final class MediaChannel {
         internalDisconnect(error: error, reason: .user)
     }
     
-    private func internalDisconnect(error: Error?, reason: DisconnectReason) {
+    internal func internalDisconnect(error: Error?, reason: DisconnectReason) {
         switch state {
         case .disconnecting, .disconnected:
             break
             
         default:
-            Logger.debug(type: .mediaChannel, message: "try disconnecting")
+            Logger.debug(type: .mediaChannel, message: "\(): try disconnecting")
             if let error = error {
                 Logger.error(type: .mediaChannel,
                              message: "error: \(error.localizedDescription)")

@@ -818,7 +818,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
     }
     
     func basicDisconnect(error: Error?, reason: DisconnectReason) {
-        Logger.debug(type: .peerChannel, message: "\(#function): try disconencting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
+        Logger.debug(type: .peerChannel, message: "\(#function): try disconnecting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
         if let error = error {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")

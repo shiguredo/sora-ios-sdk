@@ -120,11 +120,11 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
         
         if dataChannel.readyState == .closed {
-            if let peerChannel = peerChannel {
-                // DataChannel が切断されたタイミングで PeerChannel を切断する
-                // PeerChannel -> DataChannel の順に切断されるパターンも存在するが、
-                // PeerChannel.disconnect(error:reason:) 側で排他処理が実装されているため問題ない
-                peerChannel.disconnect(error: nil, reason: DisconnectReason.dataChannelClosed)
+            if let mediaChannel = mediaChannel {
+                // DataChannel が切断されたタイミングで MediaChannel を切断する
+                // MediaChannel -> DataChannel の順に切断されるパターンも存在するが、
+                // MediaChannel.internalDisconnect(error:reason:) 側で排他処理が実装されているため問題ない
+                mediaChannel.internalDisconnect(error: nil, reason: DisconnectReason.dataChannelClosed)
             }
         }
     }
