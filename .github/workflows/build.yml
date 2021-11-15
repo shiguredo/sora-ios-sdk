@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Select Xcode Version
-      run: sudo xcode-select -s '/Applications/Xcode_11.2.app/Contents/Developer'
+      run: sudo xcode-select -s '/Applications/Xcode_13.1.app/Contents/Developer'
     - name: Show Xcode Version
       run: xcodebuild -version
     - name: Install Dependences
@@ -29,7 +29,7 @@ jobs:
           xcodebuild \
             -workspace 'Sora.xcworkspace' \
             -scheme 'Sora' \
-            -sdk iphoneos13.2 \
+            -sdk iphoneos15.0 \
             -configuration Release \
             -derivedDataPath build \
             clean build \
