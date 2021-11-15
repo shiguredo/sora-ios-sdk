@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Select Xcode Version
-      run: sudo xcode-select -s '/Applications/Xcode_13.1.app/Contents/Developer'
+      run: sudo xcode-select -s '/Applications/Xcode_12.4.app/Contents/Developer'
     - name: Show Xcode Version
       run: xcodebuild -version
     - name: Show CocoaPods Version
@@ -31,7 +31,7 @@ jobs:
           xcodebuild \
             -workspace 'Sora.xcworkspace' \
             -scheme 'Sora' \
-            -sdk iphoneos15.0 \
+            -sdk iphoneos14.4 \
             -configuration Release \
             -derivedDataPath build \
             clean build \
