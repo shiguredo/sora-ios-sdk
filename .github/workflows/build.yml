@@ -19,7 +19,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Select Xcode Version
-      run: sudo xcode-select -s '${{ XCODE }}/Contents/Developer'
+      run: sudo xcode-select -s '${{ env.XCODE }}/Contents/Developer'
     - name: Show Xcode Version
       run: xcodebuild -version
     - name: Show CocoaPods Version
@@ -34,7 +34,7 @@ jobs:
           xcodebuild \
             -workspace 'Sora.xcworkspace' \
             -scheme 'Sora' \
-            -sdk ${{ XCODE_SDK }} \
+            -sdk ${{ env.XCODE_SDK }} \
             -configuration Release \
             -derivedDataPath build \
             clean build \
