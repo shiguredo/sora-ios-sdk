@@ -19,6 +19,8 @@ jobs:
       run: sudo xcode-select -s '/Applications/Xcode_13.1.app/Contents/Developer'
     - name: Show Xcode Version
       run: xcodebuild -version
+    - name: Show CocoaPods Version
+      run: pod --version
     - name: Install Dependences
       run: |
         pod repo update
