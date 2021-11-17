@@ -421,7 +421,7 @@ public final class MediaChannel {
             break
             
         default:
-            Logger.debug(type: .mediaChannel, message: "\(#function): try disconnecting")
+            Logger.debug(type: .mediaChannel, message: "try disconnecting")
             if let error = error {
                 Logger.error(type: .mediaChannel,
                              message: "error: \(error.localizedDescription)")
