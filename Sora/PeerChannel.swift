@@ -693,17 +693,31 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             }
             
             let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+            
+            var data: Data?
             do {
-                let data = try JSONEncoder().encode(reAnswer)
-                dataChannel.send(data)
+                data = try JSONEncoder().encode(reAnswer)
             } catch {
                 Logger.error(type: .peerChannel,
-                             message: "failed to send re-answer: error => (\(error.localizedDescription)")
+                             message: "failed to encode re-answer: error => (\(error.localizedDescription)")
                 self.lock.unlock()
-                self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer"),
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to encode re-answer message to json"),
                                 reason:. signalingFailure)
                 return
             }
+
+            if let data = data {
+                let ok = dataChannel.send(data)
+                if !ok {
+                    Logger.error(type: .peerChannel,
+                                 message: "failed to send re-answer message over DataChannel")
+                    self.lock.unlock()
+                    self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer message over DataChannel"),
+                                    reason:. signalingFailure)
+                    return
+                }
+            }
+            
 
             if (self.configuration.isSender) {
                 self.updateSenderOfferEncodings()
@@ -895,12 +909,20 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
             return
         }
+
+        var data: Data?
         do {
-            let data = try JSONEncoder().encode(message)
-            dataChannel.send(data)
+            data = try JSONEncoder().encode(message)
         } catch {
             Logger.error(type: .peerChannel,
-                         message: "failed to send disconnect on DataChannel: error => (\(error.localizedDescription)")
+                         message: "failed to encode \(message.typeName()) message to json: error => (\(error.localizedDescription)")
+        }
+
+        if let data = data {
+            let ok = dataChannel.send(data)
+            if !ok {
+                Logger.error(type: .peerChannel, message: "failed to send \(message.typeName()) message over DataChannel")
+            }
         }
     }
     

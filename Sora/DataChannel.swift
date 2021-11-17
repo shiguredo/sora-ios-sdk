@@ -154,12 +154,20 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                 // NOTE: stats の型を Signaling.swift に定義していない
                 let reports = Statistics(contentsOf: $0).jsonObject
                 let json: [String: Any] = ["type": "stats",
-                                           "reports": reports]
+                                            "reports": reports]
+                
+                var data: Data?
                 do {
-                    let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
-                    dc.send(data)
+                    data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
                 } catch {
-                    Logger.error(type: .dataChannel, message: "failed to encode statistic data to json")
+                    Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
+                }
+                
+                if let data = data {
+                    let ok = dc.send(data)
+                    if !ok {
+                            Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
+                    }
                 }
             }
             
@@ -204,13 +212,13 @@ class DataChannel {
         return delegate.compress
     }
 
-    func send(_ data: Data) {
+    func send(_ data: Data) -> Bool {
         Logger.debug(type: .dataChannel, message: "\(String(describing:type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())")
 
         guard let data = compress ? ZLibUtil.zip(data) : data else {
             Logger.error(type: .dataChannel, message: "failed to compress message")
-            return
+            return false
         }
-        native.sendData(RTCDataBuffer(data: data, isBinary: false))
+        return native.sendData(RTCDataBuffer(data: data, isBinary: false))
     }
 }
