@@ -136,6 +136,7 @@ enum DisconnectReason : String {
     case internalError
     case peerConnectionStateFailed
     case webSocket
+    case dataChannelClosed
     case noError
     case unknown
     
@@ -822,7 +823,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")
         }
-                
+
         sendDisconnectMessageIfNeeded(reason: reason, error: error)
         
         if configuration.isSender {
@@ -898,6 +899,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     break
                 }
             }
+        case .dataChannelClosed:
+            Logger.warn(type: .peerChannel, message: "DataChannel was closed")
         default:
             break
         }
