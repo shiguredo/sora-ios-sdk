@@ -216,11 +216,7 @@ class DataChannel {
     var label: String {
         return native.label
     }
-    
-    var state: RTCDataChannelState {
-        return native.readyState
-    }
-    
+
     var compress: Bool {
         return delegate.compress
     }
