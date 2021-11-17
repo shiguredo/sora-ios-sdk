@@ -131,8 +131,11 @@ public final class MediaChannel {
     }
     
     /// 接続状態
-    public var state: ConnectionState {
-        return ConnectionState(peerChannel.state)
+    public private(set) var state: ConnectionState = .disconnected {
+        didSet {
+            Logger.trace(type: .mediaChannel,
+                         message: "changed state from \(oldValue) to \(state)")
+        }
     }
     
     /// 接続中 (`state == .connected`) であれば ``true``
@@ -285,7 +288,7 @@ public final class MediaChannel {
                  timeout: Int = 30,
                  handler: @escaping (_ error: Error?) -> Void) -> ConnectionTask {
         let task = ConnectionTask()
-        if state == .connecting || state == .connected {
+        if state.isConnecting {
             handler(SoraError.connectionBusy(reason:
                 "MediaChannel is already connected"))
             task.complete()
@@ -307,6 +310,7 @@ public final class MediaChannel {
                               handler: @escaping (Error?) -> Void) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         _handler = handler
+        state = .connecting
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
 
@@ -314,7 +318,9 @@ public final class MediaChannel {
             guard let weakSelf = self else {
                 return
             }
-            weakSelf.internalDisconnect(error: error, reason: reason)
+            if weakSelf.state == .connecting || weakSelf.state == .connected {
+                weakSelf.internalDisconnect(error: error, reason: reason)
+            }
             connectionTask.complete()
         }
         
@@ -322,7 +328,9 @@ public final class MediaChannel {
             guard let weakSelf = self else {
                 return
             }
-            weakSelf.internalDisconnect(error: error, reason: reason)
+            if weakSelf.state == .connecting || weakSelf.state == .connected {
+                weakSelf.internalDisconnect(error: error, reason: reason)
+            }
             connectionTask.complete()
         }
         
@@ -383,6 +391,7 @@ public final class MediaChannel {
                 return
             }
             Logger.debug(type: .mediaChannel, message: "did connect")
+            weakSelf.state = .connected
             handler(nil)
             Logger.debug(type: .mediaChannel, message: "call onConnect")
             weakSelf.internalHandlers.onConnect?(nil)
@@ -406,31 +415,32 @@ public final class MediaChannel {
         internalDisconnect(error: error, reason: .user)
     }
 
-    // 切断処理が重複して実行されることを防ぐためのフラグ
-    private var disconnectAlreadyExecuted: Bool = false
-
     func internalDisconnect(error: Error?, reason: DisconnectReason) {
-        guard disconnectAlreadyExecuted == false else {
-            Logger.debug(type: .mediaChannel, message: "\(#function): already disconnecting")
-            return
+        switch state {
+        case .disconnecting, .disconnected:
+            break
+            
+        default:
+            Logger.debug(type: .mediaChannel, message: "\(#function): try disconnecting")
+            if let error = error {
+                Logger.error(type: .mediaChannel,
+                             message: "error: \(error.localizedDescription)")
+            }
+
+            if state == .connecting {
+                executeHandler(error: error)
+            }
+
+            state = .disconnecting
+            connectionTimer.stop()
+            peerChannel.disconnect(error: error, reason: reason)
+            Logger.debug(type: .mediaChannel, message: "did disconnect")
+            state = .disconnected
+
+            Logger.debug(type: .mediaChannel, message: "call onDisconnect")
+            internalHandlers.onDisconnect?(error)
+            handlers.onDisconnect?(error)
         }
-        disconnectAlreadyExecuted = true
-        
-        Logger.debug(type: .mediaChannel, message: "\(#function): try disconnecting")
-        if let error = error {
-            Logger.error(type: .mediaChannel,
-                         message: "error: \(error.localizedDescription)")
-        }
-        
-        executeHandler(error: error)
-        
-        connectionTimer.stop()
-        peerChannel.disconnect(error: error, reason: reason)
-        Logger.debug(type: .mediaChannel, message: "did disconnect")
-        
-        Logger.debug(type: .mediaChannel, message: "call onDisconnect")
-        internalHandlers.onDisconnect?(error)
-        handlers.onDisconnect?(error)
     }
 }
 
