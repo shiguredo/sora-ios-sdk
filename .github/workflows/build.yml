@@ -41,11 +41,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
-    - name: Upload Framework
-      uses: actions/upload-artifact@v1
-      with:
-        name: Sora
-        path: ./build/Build/Products/Release-iphoneos/Sora.framework
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]
