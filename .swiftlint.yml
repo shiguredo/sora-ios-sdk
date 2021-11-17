@@ -2,3 +2,12 @@ included:
   - Sora
 excluded:
   - Pods
+disabled_rules:
+  - identifier_name
+  - force_cast
+  - force_try
+  - cyclomatic_complexity
+  - function_body_length
+  - file_length
+  - line_length
+  - type_body_length
