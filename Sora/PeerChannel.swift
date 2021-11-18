@@ -361,7 +361,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             webRTCVersion: webRTCVersion,
             environment: DeviceInfo.current.description,
             dataChannelSignaling: configuration.dataChannelSignaling,
-            ignoreDisconectWebSocket: configuration.ignoreDisconnectWebSocket)
+            ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket)
         
         Logger.debug(type: .peerChannel, message: "send connect")
         signalingChannel.send(message: Signaling.connect(connect))
