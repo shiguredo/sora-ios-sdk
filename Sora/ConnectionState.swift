@@ -53,7 +53,7 @@ public enum ConnectionState {
 /**
  PeerChannel の接続状態を表します。
  */
-public enum PeerChannelConnectionState {
+enum PeerChannelConnectionState {
     
     case new
     case connecting

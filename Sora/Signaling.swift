@@ -368,9 +368,12 @@ public struct SignalingConnect {
 
     /// :nodoc:
     public var environment: String?
-    
+
+    /// DataChannel 経由のシグナリングを利用する
     public var dataChannelSignaling: Bool?
-    public var ignoreDisconectWebSocket: Bool?
+
+    /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
+    public var ignoreDisconnectWebSocket: Bool?
 
 }
 
@@ -521,6 +524,7 @@ public struct SignalingPush {
  "switched" シグナリングメッセージを表します。
  */
 public struct SignalingSwitched {
+    /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
 }
 
@@ -773,7 +777,12 @@ public struct SignalingPing {
  */
 public struct SignalingPong {}
 
+/**
+ "disconnect" シグナリングメッセージを表します。
+ */
 public struct SignalingDisconnect {
+
+    /// Sora との接続を切断する理由
     public var reason: String?
 }
 
@@ -979,7 +988,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
         try container.encodeIfPresent(environment, forKey: .environment)
         try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
-        try container.encodeIfPresent(ignoreDisconectWebSocket, forKey: .ignore_disconnect_websocket)
+        try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
         
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
