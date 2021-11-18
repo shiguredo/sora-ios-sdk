@@ -25,6 +25,6 @@ let package = Package(
             dependencies: ["WebRTC", "Starscream"],
             path: "Sora",
             exclude: ["Info.plist"],
-            resources: [.process("Sora/VideoView.xib")])
+            resources: [.process("VideoView.xib")])
     ]
 )
