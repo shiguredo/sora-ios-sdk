@@ -13,12 +13,17 @@ on:
 jobs:
   build:
     runs-on: macOS-latest
+    env:
+      XCODE: /Applications/Xcode_12.4.app
+      XCODE_SDK: iphoneos14.4
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Select Xcode Version
-      run: sudo xcode-select -s '/Applications/Xcode_11.2.app/Contents/Developer'
+      run: sudo xcode-select -s '${{ env.XCODE }}/Contents/Developer'
     - name: Show Xcode Version
       run: xcodebuild -version
+    - name: Show CocoaPods Version
+      run: pod --version
     - name: Install Dependences
       run: |
         pod repo update
@@ -29,25 +34,20 @@ jobs:
           xcodebuild \
             -workspace 'Sora.xcworkspace' \
             -scheme 'Sora' \
-            -sdk iphoneos13.2 \
+            -sdk ${{ env.XCODE_SDK }} \
             -configuration Release \
             -derivedDataPath build \
             clean build \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
-    - name: Upload Framework
-      uses: actions/upload-artifact@v1
-      with:
-        name: Sora
-        path: ./build/Build/Products/Release-iphoneos/Sora.framework
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]
     runs-on: macOS-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@master
+      uses: actions/checkout@v2
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1.0.0
