@@ -9,8 +9,14 @@
 - FIX
     - バグ修正
 
-## develop
+## 2021.3.0
 
+- [UPDATE] システム条件を変更する
+    - macOS 12.0 以降
+    - Xcode 13.1
+    - Swift 5.5
+    - CocoaPods 1.11.2
+    - @miosakuma
 - [UPDATE] WebRTC 95.4638.3.0 に上げる
     - @miosakuma
 - [ADD] DataChannel シグナリングに対応する
