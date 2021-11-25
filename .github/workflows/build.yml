@@ -42,7 +42,8 @@ jobs:
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
     - name: Check uncommitted unformatted code
-      run: ! ./lint-format.sh
+      run: |
+        ! ./lint-format.sh
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]
