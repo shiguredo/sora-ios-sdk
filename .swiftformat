@@ -1,4 +1,3 @@
---allman true
 --exclude Pods
 --indent 4
 --semicolons inline
