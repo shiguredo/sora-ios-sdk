@@ -232,10 +232,10 @@ extension VideoView: VideoRenderer {
         }
     }
     
-    public func onDisconnect(from: PeerChannel) {
+    public func onDisconnect(from: MediaChannel?) {
         autoStop()
     }
-    
+
     public func onAdded(from: MediaStream) {
         switch connectionMode {
         case .auto, .autoClear:

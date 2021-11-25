@@ -9,6 +9,31 @@
 - FIX
     - バグ修正
 
+## 2021.3.0
+
+- [UPDATE] システム条件を変更する
+    - macOS 12.0 以降
+    - Xcode 13.1
+    - Swift 5.5
+    - CocoaPods 1.11.2
+    - @miosakuma
+- [UPDATE] WebRTC 95.4638.3.0 に上げる
+    - @miosakuma
+- [ADD] DataChannel シグナリングに対応する
+    - `Configuration.dataChannelSignaling` を追加
+    - `Configuration.ignoreDisconnectWebSocket` を追加
+    - @szktty @enm10k
+- [CHANGE] PeerChannel, SignalingChannel protocol を削除する
+    - `Configuration.peerChannelType` を廃止
+    - `Configuration.signalingChannelType` を廃止
+    - `Configuration.peerChannelHandlers` を廃止
+    - `Configuration.signalingChannelHandlers` を廃止
+    - `MediaChannel.native` を追加
+    - `MediaChannel.webSocketChannel` を追加
+    - @szktty @enm10k
+- [FIX] Sora 接続時に audioEnabled = false を設定すると answer 生成に失敗してしまう問題についてのワークアラウンドを削除する
+    - @miosakuma
+
 ## 2021.2.1
 
 - [FIX] Swift Package Manager に対応するためバージョニングを修正

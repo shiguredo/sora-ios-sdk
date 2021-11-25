@@ -46,15 +46,19 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
         json = jsonObject as! [String: Any]
     } catch {
         // JSON のシリアライズが失敗した場合は、引数として渡された signaling をそのまま返し、処理を継続する
-        Logger.info(type: .signaling,
+        Logger.error(type: .signaling,
                   message: "updateMetadata failed. error: \(error.localizedDescription), data: \(data)")
         return signaling
     }
 
     switch signaling {
     case .offer(var message):
+        // TODO: if json.keys.contains("key") を if let に書き換えたい
         if json.keys.contains("metadata") {
             message.metadata = json["metadata"]
+        }
+        if let dataChannels = json["data_channels"] as? [[String: Any]] {
+            message.dataChannels = dataChannels
         }
         return .offer(message)
     case .push(var message):
@@ -120,10 +124,13 @@ public enum Signaling {
     case pong(SignalingPong)
     
     /// "disconnect" シグナリング
-    case disconnect
+    case disconnect(SignalingDisconnect)
     
     /// "pong" シグナリング
     case push(SignalingPush)
+    
+    /// "switch" シグナリング
+    case switched(SignalingSwitched)
     
     /// :nodoc:
     public static func decode(_ data: Data) -> Result<Signaling, Error> {
@@ -164,6 +171,8 @@ public enum Signaling {
             return "disconnect"
         case .push(_):
             return "push"
+        case .switched(_):
+            return "switched"
         }
     }
     
@@ -360,6 +369,12 @@ public struct SignalingConnect {
     /// :nodoc:
     public var environment: String?
 
+    /// DataChannel 経由のシグナリングを利用する
+    public var dataChannelSignaling: Bool?
+
+    /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
+    public var ignoreDisconnectWebSocket: Bool?
+
 }
 
 /**
@@ -440,6 +455,9 @@ public struct SignalingOffer {
 
     /// エンコーディング
     public let encodings: [Encoding]?
+    
+    /// データ・チャンネルの設定
+    public var dataChannels: [[String: Any]]?
 
 }
 
@@ -500,6 +518,14 @@ public struct SignalingPush {
     /// プッシュ通知で送信される JSON データ
     public var data: Any? = {}
     
+}
+
+/**
+ "switched" シグナリングメッセージを表します。
+ */
+public struct SignalingSwitched {
+    /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
+    public var ignoreDisconnectWebSocket: Bool?
 }
 
 /**
@@ -751,6 +777,15 @@ public struct SignalingPing {
  */
 public struct SignalingPong {}
 
+/**
+ "disconnect" シグナリングメッセージを表します。
+ */
+public struct SignalingDisconnect {
+
+    /// Sora との接続を切断する理由
+    public var reason: String?
+}
+
 // MARK: -
 // MARK: Codable
 
@@ -795,6 +830,8 @@ extension Signaling: Codable {
             self = .push(try SignalingPush(from: decoder))
         case "re-offer":
             self = .reOffer(try SignalingReOffer(from: decoder))
+        case "switched":
+            self = .switched(try SignalingSwitched(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
@@ -823,8 +860,9 @@ extension Signaling: Codable {
             try message.encode(to: encoder)
         case .pong:
             try container.encode(MessageType.pong.rawValue, forKey: .type)
-        case .disconnect:
+        case .disconnect(let message):
             try container.encode(MessageType.disconnect.rawValue, forKey: .type)
+            try message.encode(to: encoder)
         default:
             throw SoraError.invalidSignalingMessage
         }
@@ -916,6 +954,8 @@ extension SignalingConnect: Codable {
         case sora_client
         case libwebrtc
         case environment
+        case data_channel_signaling
+        case ignore_disconnect_websocket
     }
     
     enum VideoCodingKeys: String, CodingKey {
@@ -947,7 +987,9 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
         try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
         try container.encodeIfPresent(environment, forKey: .environment)
-
+        try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
+        try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
+        
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
                 var videoContainer = container
@@ -1280,6 +1322,37 @@ extension SignalingPong: Codable {
     
     public func encode(to encoder: Encoder) throws {
         // エンコードするプロパティはない
+    }
+    
+}
+
+/// :nodoc:
+extension SignalingDisconnect: Codable {
+    
+    enum CodingKeys: String, CodingKey {
+        case reason
+    }
+    
+    public init(from decoder: Decoder) throws {
+        throw SoraError.invalidSignalingMessage
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(reason, forKey: .reason)
+    }
+
+}
+
+extension SignalingSwitched: Decodable {
+    
+    enum CodingKeys: String, CodingKey {
+        case ignore_disconnect_websocket
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ignoreDisconnectWebSocket = try container.decode(Bool.self, forKey: .ignore_disconnect_websocket)
     }
     
 }

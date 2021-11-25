@@ -1,4 +1,5 @@
 import Foundation
+import WebRTC
 
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
@@ -57,6 +58,12 @@ public final class MediaChannelHandlers {
     
     /// シグナリング受信時に呼ばれるクロージャー
     public var onReceiveSignaling: ((Signaling) -> Void)?
+
+    /// シグナリングが DataChannel 経由に切り替わったタイミングで呼ばれるクロージャー
+    public var onDataChannel: ((MediaChannel) -> Void)?
+
+    /// DataChannel のメッセージ受信時に呼ばれるクロージャー
+    public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?
     
     /// 初期化します。
     public init() {}
@@ -97,6 +104,13 @@ public final class MediaChannel {
     
     /// クライアントの設定
     public let configuration: Configuration
+    
+    /// メディアチャンネルの内部で利用している RTCPeerConnection
+    public var native: RTCPeerConnection {
+        get {
+            return peerChannel.context.nativeChannel
+        }
+    }
     
     /**
      クライアント ID 。接続後にセットされます。
@@ -171,10 +185,23 @@ public final class MediaChannel {
     // MARK: 接続チャネル
     
     /// シグナリングチャネル
-    public let signalingChannel: SignalingChannel
-    
+    let signalingChannel: SignalingChannel
+
+    /// ウェブソケットチャンネル
+    public var webSocketChannel: WebSocketChannel {
+        get {
+            signalingChannel.webSocketChannel
+        }
+    }
+
     /// ピアチャネル
-    public let peerChannel: PeerChannel
+    var peerChannel: PeerChannel {
+        get {
+            _peerChannel!
+        }
+    }
+    // PeerChannel に mediaChannel を保持させる際にこの書き方が必要になった
+    private var _peerChannel: PeerChannel?
     
     /// ストリームのリスト
     public var streams: [MediaStream] {
@@ -205,8 +232,15 @@ public final class MediaChannel {
             stream.streamId != configuration.publisherStreamId
         }
     }
-    
-    private var connectionTimer: ConnectionTimer
+
+    private var connectionTimer: ConnectionTimer {
+        get {
+            _connectionTimer!
+        }
+    }
+    // PeerChannel に mediaChannel を保持させる際にこの書き方が必要になった
+    private var _connectionTimer: ConnectionTimer?
+
     private let manager: Sora
     
     // MARK: - インスタンスの生成
@@ -218,28 +252,18 @@ public final class MediaChannel {
      - parameter configuration: クライアントの設定
      */
     init(manager: Sora, configuration: Configuration) {
-        Logger.debug(type: .mediaChannel,
-                     message: "create signaling channel (\(configuration._signalingChannelType))")
-        Logger.debug(type: .mediaChannel,
-                     message: "create peer channel (\(configuration._peerChannelType))")
-        
         self.manager = manager
         self.configuration = configuration
-        signalingChannel = configuration._signalingChannelType
-            .init(configuration: configuration)
-        signalingChannel.handlers =
-            configuration.signalingChannelHandlers
-        peerChannel = configuration._peerChannelType
-            .init(configuration: configuration,
-                  signalingChannel: signalingChannel)
-        peerChannel.handlers =
-            configuration.peerChannelHandlers
+        signalingChannel = SignalingChannel.init(configuration: configuration)
+        _peerChannel = PeerChannel.init(configuration: configuration,
+                                        signalingChannel: signalingChannel,
+                                        mediaChannel: self)
         handlers = configuration.mediaChannelHandlers
         
-        connectionTimer = ConnectionTimer(monitors: [
+        _connectionTimer = ConnectionTimer(monitors: [
             .webSocketChannel(signalingChannel.webSocketChannel),
             .signalingChannel(signalingChannel),
-            .peerChannel(peerChannel)],
+            .peerChannel(_peerChannel!)],
                                           timeout: configuration.connectionTimeout)
     }
     
@@ -290,22 +314,22 @@ public final class MediaChannel {
         connectionStartTime = nil
         connectionTask.peerChannel = peerChannel
 
-        signalingChannel.internalHandlers.onDisconnect = { [weak self] error in
+        signalingChannel.internalHandlers.onDisconnect = { [weak self] (error, reason) in
             guard let weakSelf = self else {
                 return
             }
             if weakSelf.state == .connecting || weakSelf.state == .connected {
-                weakSelf.disconnect(error: error)
+                weakSelf.internalDisconnect(error: error, reason: reason)
             }
             connectionTask.complete()
         }
         
-        peerChannel.internalHandlers.onDisconnect = { [weak self] error in
+        peerChannel.internalHandlers.onDisconnect = { [weak self] (error, reason) in
             guard let weakSelf = self else {
                 return
             }
             if weakSelf.state == .connecting || weakSelf.state == .connected {
-                weakSelf.disconnect(error: error)
+                weakSelf.internalDisconnect(error: error, reason: reason)
             }
             connectionTask.complete()
         }
@@ -358,7 +382,7 @@ public final class MediaChannel {
             
             if let error = error {
                 Logger.error(type: .mediaChannel, message: "failed to connect")
-                weakSelf.disconnect(error: error)
+                weakSelf.internalDisconnect(error: error, reason: .signalingFailure)
                 handler(error)
                 
                 Logger.debug(type: .mediaChannel, message: "call onConnect")
@@ -377,16 +401,21 @@ public final class MediaChannel {
         self.connectionStartTime = Date()
         connectionTimer.run {
             Logger.error(type: .mediaChannel, message: "connection timeout")
-            self.disconnect(error: SoraError.connectionTimeout)
+            self.internalDisconnect(error: SoraError.connectionTimeout, reason: .signalingFailure)
         }
     }
-    
+
     /**
      接続を解除します。
      
      - parameter error: 接続解除の原因となったエラー
      */
     public func disconnect(error: Error?) {
+        // reason に .user を指定しているので、 disconnect は SDK 内部では利用しない
+        internalDisconnect(error: error, reason: .user)
+    }
+
+    func internalDisconnect(error: Error?, reason: DisconnectReason) {
         switch state {
         case .disconnecting, .disconnected:
             break
@@ -397,22 +426,22 @@ public final class MediaChannel {
                 Logger.error(type: .mediaChannel,
                              message: "error: \(error.localizedDescription)")
             }
+
             if state == .connecting {
                 executeHandler(error: error)
             }
-            
+
             state = .disconnecting
             connectionTimer.stop()
-            peerChannel.disconnect(error: error)
+            peerChannel.disconnect(error: error, reason: reason)
             Logger.debug(type: .mediaChannel, message: "did disconnect")
             state = .disconnected
-            
+
             Logger.debug(type: .mediaChannel, message: "call onDisconnect")
             internalHandlers.onDisconnect?(error)
             handlers.onDisconnect?(error)
         }
     }
-    
 }
 
 extension MediaChannel: CustomStringConvertible {

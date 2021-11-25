@@ -52,7 +52,7 @@ public final class MediaStreamHandlers {
  メディアストリームは映像と音声の送受信を行います。
  メディアストリーム 1 つにつき、 1 つの映像と 1 つの音声を送受信可能です。
  */
-public protocol MediaStream: class {
+public protocol MediaStream: AnyObject {
     
     // MARK: - イベントハンドラ
     
@@ -60,10 +60,7 @@ public protocol MediaStream: class {
     var handlers: MediaStreamHandlers { get }
     
     // MARK: - 接続情報
-    
-    /// ピアチャネル
-    var peerChannel: PeerChannel { get }
-    
+
     /// ストリーム ID
     var streamId: String { get }
     
@@ -245,7 +242,7 @@ class BasicMediaStream: MediaStream {
     }
     
     func terminate() {
-        videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel)
+        videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel.mediaChannel ?? nil)
     }
     
     private static let dummyCapturer: RTCVideoCapturer = RTCVideoCapturer()
