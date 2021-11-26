@@ -50,7 +50,7 @@ jobs:
             PROVISIONING_PROFILE=
     - name: Check uncommitted unformatted code
       run: |
-        ! ./lint-format.sh
+        ./lint-format.sh
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]
