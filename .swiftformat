@@ -3,5 +3,6 @@
 --semicolons inline
 --trailingclosures
 --wrapparameters after-first
+--header strip
 
 --disable redundantInit,sortedSwitchCases,strongOutlets,unusedArguments,wrapSwitchCases
