@@ -9,6 +9,11 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [UPDATE] WebRTC 96.4664.2.0 に上げる
+    - @miosakuma
+
 ## 2021.3.0
 
 - [UPDATE] システム条件を変更する

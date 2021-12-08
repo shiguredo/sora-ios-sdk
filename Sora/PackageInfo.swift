@@ -9,16 +9,16 @@ public struct SDKInfo {
  */
 public struct WebRTCInfo {
     /// WebRTC フレームワークのバージョン
-    public static let version = "M95"
+    public static let version = "M96"
     
     /// WebRTC フレームワークのコミットポジション
-    public static let commitPosition = "3"
+    public static let commitPosition = "2"
     
     /// WebRTC フレームワークのメンテナンスバージョン
     public static let maintenanceVersion = "0"
     
     /// WebRTC フレームワークのソースコードのリビジョン
-    public static let revision = "cbad18b147e06f27082e0ff9312aeed86e6632b6"
+    public static let revision = "7ec519c8297828cfcd4c3a3871837ed3008d577e"
     
     /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
     public static var shortRevision: String {
