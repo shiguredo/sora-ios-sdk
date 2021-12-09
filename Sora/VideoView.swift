@@ -436,7 +436,6 @@ private func viewSize(for videoFrameSize: CGSize, containerSize: CGSize, mode: U
         return ([baseW, baseH].first { size in
             size.width >= containerSize.width && size.height >= containerSize.height
         }) ?? baseW
-    case .scaleAspectFit: fallthrough
     default:
         // デフォルトは aspect fit モード。
         // 特別に対応しているモード以外はすべて aspect fit として扱います。

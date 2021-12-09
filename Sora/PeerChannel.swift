@@ -1072,12 +1072,12 @@ extension RTCRtpSender {
 
                 if let value = encoding.maxFramerate {
                     Logger.debug(type: .peerChannel, message: "maxFramerate:  \(value)")
-                    oldEncoding.maxFramerate = NSNumber(floatLiteral: value)
+                    oldEncoding.maxFramerate = NSNumber(value: value)
                 }
 
                 if let value = encoding.maxBitrate {
                     Logger.debug(type: .peerChannel, message: "maxBitrate: \(value))")
-                    oldEncoding.maxBitrateBps = NSNumber(integerLiteral: value)
+                    oldEncoding.maxBitrateBps = NSNumber(value: value)
                 }
 
                 if let value = encoding.scaleResolutionDownBy {
