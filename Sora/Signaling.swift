@@ -1032,17 +1032,13 @@ extension SignalingConnect: Codable {
         
         switch spotlightEnabled {
         case .enabled:
-            if Sora.isSpotlightLegacyEnabled {
-                try container.encodeIfPresent(spotlightNumber, forKey: .spotlight)
-            } else {
-                try container.encode(true, forKey: .spotlight)
-                try container.encodeIfPresent(spotlightNumber, forKey: .spotlight_number)
-                if spotlightFocusRid != .unspecified {
-                    try container.encode(spotlightFocusRid, forKey: .spotlight_focus_rid)
-                }
-                if spotlightUnfocusRid != .unspecified {
-                    try container.encode(spotlightUnfocusRid, forKey: .spotlight_unfocus_rid)
-                }
+            try container.encode(true, forKey: .spotlight)
+            try container.encodeIfPresent(spotlightNumber, forKey: .spotlight_number)
+            if spotlightFocusRid != .unspecified {
+                try container.encode(spotlightFocusRid, forKey: .spotlight_focus_rid)
+            }
+            if spotlightUnfocusRid != .unspecified {
+                try container.encode(spotlightUnfocusRid, forKey: .spotlight_unfocus_rid)
             }
         case .disabled:
             break

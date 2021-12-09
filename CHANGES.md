@@ -9,6 +9,11 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [CHANGE] スポットライトレガシーを削除する
+    - @miosakuma
+
 ## 2021.3.0
 
 - [UPDATE] システム条件を変更する

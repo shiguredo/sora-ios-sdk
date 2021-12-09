@@ -25,9 +25,6 @@ public struct Configuration {
         /// 無効
         case disabled
         
-        @available(*, unavailable,
-        message: "Sora のスポットライトレガシー機能を利用している場合は、 Sora.useSpotlightLegacy() を使用してください。")
-        case legacy
     }
     
     /// サーバーの URL
@@ -397,11 +394,7 @@ extension Configuration.Spotlight: Codable {
         var container = encoder.singleValueContainer()
         switch self {
         case .enabled:
-            if Sora.isSpotlightLegacyEnabled {
-                try container.encode("legacy")
-            } else {
-                try container.encode("enabled")
-            }
+            try container.encode("enabled")
         case .disabled:
             try container.encode("disabled")
         }
