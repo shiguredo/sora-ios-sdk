@@ -24,6 +24,13 @@ jobs:
       run: xcodebuild -version
     - name: Show CocoaPods Version
       run: pod --version
+    - name: Restore Pods
+      uses: actions/cache@v2
+      with:
+        path: Pods
+        key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-
     - name: Install Dependences
       run: |
         pod repo update
@@ -41,6 +48,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
+    - name: Check uncommitted unformatted code
+      run: |
+        ./lint-format.sh
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]
