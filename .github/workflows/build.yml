@@ -15,7 +15,7 @@ jobs:
     runs-on: macos-11
     env:
       XCODE: /Applications/Xcode_13.1.app
-      XCODE_SDK: iphoneos14.4
+      XCODE_SDK: iphoneos15.0
     steps:
     - uses: actions/checkout@v2
     - name: Select Xcode Version
