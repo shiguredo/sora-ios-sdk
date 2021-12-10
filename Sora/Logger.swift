@@ -21,7 +21,6 @@ public enum LogType {
 
 /// :nodoc:
 extension LogType: CustomStringConvertible {
-    
     public var description: String {
         switch self {
         case .sora:
@@ -48,7 +47,7 @@ extension LogType: CustomStringConvertible {
             return "VideoRenderer"
         case .videoView:
             return "VideoView"
-        case .user(let name):
+        case let .user(name):
             return name
         case .configurationViewController:
             return "ConfigurationViewController"
@@ -56,7 +55,6 @@ extension LogType: CustomStringConvertible {
             return "DataChannel"
         }
     }
-    
 }
 
 // MARK: -
@@ -65,7 +63,7 @@ extension LogType: CustomStringConvertible {
  ログレベルです。
  上から下に向かってログの重要度が下がり、詳細度が上がります。
  `off` はログを出力しません。
- 
+
  6. `fatal`
  5. `error`
  4. `warn`
@@ -73,36 +71,33 @@ extension LogType: CustomStringConvertible {
  2. `debug`
  1. `trace`
  0. `off`
- 
+
  */
 public enum LogLevel {
-    
     /// 致命的なエラー情報
     case fatal
-    
+
     /// エラー情報
     case error
-    
+
     /// 警告
     case warn
-    
+
     /// 一般的な情報
     case info
-    
+
     /// デバッグ情報
     case debug
-    
+
     /// 最も詳細なデバッグ情報
     case trace
-    
+
     /// ログを出力しない
     case off
-    
 }
 
 /// :nodoc:
 extension LogLevel {
-    
     var value: Int {
         switch self {
         case .fatal:
@@ -121,12 +116,10 @@ extension LogLevel {
             return 0
         }
     }
-    
 }
 
 /// :nodoc:
 extension LogLevel: CustomStringConvertible {
-    
     public var description: String {
         switch self {
         case .fatal:
@@ -145,52 +138,46 @@ extension LogLevel: CustomStringConvertible {
             return "OFF"
         }
     }
-    
 }
 
 // MARK: -
 
 /// :nodoc:
 public struct Log {
-    
     public let level: LogLevel
     public let type: LogType
     public let timestamp: Date
     public let message: String
-    
+
     init(level: LogLevel, type: LogType, message: String) {
         self.level = level
         self.type = type
-        self.timestamp = Date()
+        timestamp = Date()
         self.message = message
     }
-    
 }
 
 /// :nodoc:
 extension Log: CustomStringConvertible {
-    
     private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter
     }()
-    
+
     public var description: String {
-        return String(format: "%@ %@ %@: %@",
-                      Log.formatter.string(from: timestamp),
-                      type.description,
-                      level.description,
-                      message)
+        String(format: "%@ %@ %@: %@",
+               Log.formatter.string(from: timestamp),
+               type.description,
+               level.description,
+               message)
     }
-    
 }
 
 // MARK: -
 
 /// :nodoc:
 public final class Logger {
-    
     public enum Group {
         case channels
         case connectionTimer
@@ -199,51 +186,51 @@ public final class Logger {
         case configurationViewController
         case user
     }
-    
-    public static var shared: Logger = Logger()
-    
+
+    public static var shared = Logger()
+
     public var onOutputHandler: ((Log) -> Void)?
-    
+
     public var groups: [Group] = [.channels, .user]
-    
+
     public static func fatal(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .fatal,
                                       type: type,
                                       message: message))
     }
-    
+
     public static func error(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .error,
                                       type: type,
                                       message: message))
     }
-    
+
     public static func debug(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .debug,
                                       type: type,
                                       message: message))
     }
-    
+
     public static func warn(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .warn,
                                       type: type,
                                       message: message))
     }
-    
+
     public static func info(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .info,
                                       type: type,
                                       message: message))
     }
-    
+
     public static func trace(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .trace,
                                       type: type,
                                       message: message))
     }
-    
+
     public var level: LogLevel = .info
-    
+
     func output(log: Log) {
         var out = false
         for group in groups {
@@ -285,7 +272,7 @@ public final class Logger {
                 }
             case .user:
                 switch log.type {
-                case .user(_):
+                case .user:
                     out = true
                 default:
                     break
@@ -301,10 +288,9 @@ public final class Logger {
         }
         if !out { return }
 
-        if 0 < level.value && level.value <= log.level.value {
+        if level.value > 0, level.value <= log.level.value {
             onOutputHandler?(log)
             print(log.description)
         }
     }
-    
 }
