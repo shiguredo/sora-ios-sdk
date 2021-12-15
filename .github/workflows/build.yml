@@ -33,6 +33,7 @@ jobs:
           ${{ runner.os }}-pods-
     - name: Install Dependences
       run: |
+        rm Podfile && mv Podfile.dev Podfile
         pod repo update
         pod install
     - name: Build Xcode Project
