@@ -22,10 +22,8 @@ func currentMachineName() -> String {
 
 /// :nodoc:
 public struct DeviceInfo {
-    public static var current: DeviceInfo = {
-        DeviceInfo(device: UIDevice.current,
-                   machineName: currentMachineName())
-    }()
+    public static var current: DeviceInfo = .init(device: UIDevice.current,
+                                                  machineName: currentMachineName())
 
     @available(*, unavailable, message: "model は廃止されました。")
     public let model: String = ""
