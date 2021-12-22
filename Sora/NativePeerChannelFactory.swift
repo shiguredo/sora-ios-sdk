@@ -2,7 +2,6 @@ import Foundation
 import WebRTC
 
 class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
-
     static var shared = WrapperVideoEncoderFactory()
 
     var defaultEncoderFactory: RTCDefaultVideoEncoderFactory
@@ -28,26 +27,23 @@ class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
     func supportedCodecs() -> [RTCVideoCodecInfo] {
         currentEncoderFactory.supportedCodecs()
     }
-
 }
 
-
 class NativePeerChannelFactory {
-    
-    static var `default`: NativePeerChannelFactory = NativePeerChannelFactory()
-    
+    static var `default` = NativePeerChannelFactory()
+
     var nativeFactory: RTCPeerConnectionFactory
-    
+
     init() {
         Logger.debug(type: .peerChannel, message: "create native peer channel factory")
-        
+
         // 映像コーデックのエンコーダーとデコーダーを用意する
         let encoder = WrapperVideoEncoderFactory.shared
         let decoder = RTCDefaultVideoDecoderFactory()
         nativeFactory =
             RTCPeerConnectionFactory(encoderFactory: encoder,
                                      decoderFactory: decoder)
-        
+
         for info in encoder.supportedCodecs() {
             Logger.debug(type: .peerChannel,
                          message: "supported video encoder: \(info.name) \(info.parameters)")
@@ -57,47 +53,51 @@ class NativePeerChannelFactory {
                          message: "supported video decoder: \(info.name) \(info.parameters)")
         }
     }
-    
+
     func createNativePeerChannel(configuration: WebRTCConfiguration,
                                  constraints: MediaConstraints,
-                                 delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection? {
-        return nativeFactory
+                                 delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection?
+    {
+        nativeFactory
             .peerConnection(with: configuration.nativeValue,
                             constraints: constraints.nativeValue,
                             delegate: delegate)
     }
-    
+
     func createNativeStream(streamId: String) -> RTCMediaStream {
-        return nativeFactory.mediaStream(withStreamId: streamId)
+        nativeFactory.mediaStream(withStreamId: streamId)
     }
-    
+
     func createNativeVideoSource() -> RTCVideoSource {
-        return nativeFactory.videoSource()
+        nativeFactory.videoSource()
     }
-    
+
     func createNativeVideoTrack(videoSource: RTCVideoSource,
-                                trackId: String) -> RTCVideoTrack {
-        return nativeFactory.videoTrack(with: videoSource, trackId: trackId)
+                                trackId: String) -> RTCVideoTrack
+    {
+        nativeFactory.videoTrack(with: videoSource, trackId: trackId)
     }
-    
+
     func createNativeAudioSource(constraints: MediaConstraints?) -> RTCAudioSource {
-        return nativeFactory.audioSource(with: constraints?.nativeValue)
+        nativeFactory.audioSource(with: constraints?.nativeValue)
     }
-    
+
     func createNativeAudioTrack(trackId: String,
-                                constraints: RTCMediaConstraints) -> RTCAudioTrack {
+                                constraints: RTCMediaConstraints) -> RTCAudioTrack
+    {
         let audioSource = nativeFactory.audioSource(with: constraints)
         return nativeFactory.audioTrack(with: audioSource, trackId: trackId)
     }
-    
+
     func createNativeSenderStream(streamId: String,
-                                     videoTrackId: String?,
-                                     audioTrackId: String?,
-                                     constraints: MediaConstraints) -> RTCMediaStream {
+                                  videoTrackId: String?,
+                                  audioTrackId: String?,
+                                  constraints: MediaConstraints) -> RTCMediaStream
+    {
         Logger.debug(type: .nativePeerChannel,
                      message: "create native sender stream (\(streamId))")
         let nativeStream = createNativeStream(streamId: streamId)
-        
+
         if let trackId = videoTrackId {
             Logger.debug(type: .nativePeerChannel,
                          message: "create native video track (\(trackId))")
@@ -106,7 +106,7 @@ class NativePeerChannelFactory {
                                                     trackId: trackId)
             nativeStream.addVideoTrack(videoTrack)
         }
-        
+
         if let trackId = audioTrackId {
             Logger.debug(type: .nativePeerChannel,
                          message: "create native audio track (\(trackId))")
@@ -114,26 +114,27 @@ class NativePeerChannelFactory {
                                                     constraints: constraints.nativeValue)
             nativeStream.addAudioTrack(audioTrack)
         }
-        
+
         return nativeStream
     }
-    
+
     // クライアント情報としての Offer SDP を生成する
     func createClientOfferSDP(configuration: WebRTCConfiguration,
                               constraints: MediaConstraints,
-                              handler: @escaping (String?, Error?) -> Void) {
+                              handler: @escaping (String?, Error?) -> Void)
+    {
         let peer = createNativePeerChannel(configuration: configuration, constraints: constraints, delegate: nil)
-        
+
         // `guard let peer = peer {` と書いた場合、 Xcode 12.5 でビルド・エラーになった
         guard let peer2 = peer else {
             handler(nil, SoraError.peerChannelError(reason: "createNativePeerChannel failed"))
             return
         }
-        
+
         let stream = createNativeSenderStream(streamId: "offer",
-                                                 videoTrackId: "video",
-                                                 audioTrackId: "audio",
-                                                 constraints: constraints)
+                                              videoTrackId: "video",
+                                              audioTrackId: "audio",
+                                              constraints: constraints)
         peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
         peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
         peer2.offer(for: constraints.nativeValue) { sdp, error in
@@ -145,5 +146,4 @@ class NativePeerChannelFactory {
             peer2.close()
         }
     }
-    
 }

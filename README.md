@@ -24,7 +24,7 @@ Please read https://github.com/shiguredo/oss before use.
 - Xcode 13.1
 - Swift 5.5
 - CocoaPods 1.11.2 以降
-- WebRTC SFU Sora 2021.1 以降
+- WebRTC SFU Sora 2021.2 以降
 
 Xcode と Swift のバージョンによっては、 CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
