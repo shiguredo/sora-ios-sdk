@@ -180,7 +180,14 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-    weak var channel: PeerChannel!
+    // PeerChannel と BasicPeerChannelContext の循環参照によるメモリー・リークを防ぐ意図で、
+    // BasicPeerChannelContext では PeerChannel を弱参照で保持していた
+    // しかし、先に PeerChannel が解放されて BasicPeerChannelContext が残るパターンがあり、
+    // その場合は basicDisconnect の途中で Implicitly Unwrapped Optional に伴うエラーが発生した
+    //
+    // この問題を解決するため、弱参照を強参照に変更し、 basicDisconnect の終了時に明示的に nil クリアする
+    var channel: PeerChannel!
+
     var state: PeerChannelConnectionState {
         let state = nativeChannel == nil ? RTCPeerConnectionState.new : nativeChannel.connectionState
         return PeerChannelConnectionState(state)
@@ -822,6 +829,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             onConnectHandler = nil
         }
 
+        channel = nil // 循環参照を防ぐために明示的に nil を代入する
         Logger.debug(type: .peerChannel, message: "did disconnect")
     }
 
