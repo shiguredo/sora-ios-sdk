@@ -13,6 +13,9 @@
 
 - [CHANGE] スポットライトレガシーを削除する
     - @miosakuma
+- [FIX] RTCPeerConnectionState が .failed に遷移した際の切断処理中にクラッシュする問題を修正する
+    - BasicPeerChannelContext と PeerChannel の循環参照を防ぐために弱参照を利用していましたが、それが原因で BasicPeerChannelContext より先に PeerChannel が解放されるケースがあり、クラッシュの原因となっていました
+    - @enm10k
 
 ## 2021.3.0
 
