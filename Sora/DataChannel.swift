@@ -21,7 +21,10 @@ fileprivate class ZLibUtil {
         // https://www.rfc-editor.org/rfc/rfc8260.html
         let bufferSize = 262_144
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        
+        defer {
+            destinationBuffer.deallocate()
+        }
+
         var sourceBuffer = [UInt8](input)
         let size = compression_encode_buffer(destinationBuffer, bufferSize,
                                              &sourceBuffer, sourceBuffer.count,
@@ -73,9 +76,9 @@ fileprivate class ZLibUtil {
         if size == 0 {
             return nil
         }
-        
-        let data = Data(referencing: NSData(bytes: destinationBuffer, length: size))
-        
+
+        let data = Data(bytesNoCopy: destinationBuffer, count: size, deallocator: .free)
+
         let calculatedChecksum = data.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Data in
             let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
             var result = UInt32(adler32(1, bytef, UInt32(data.count))).bigEndian
