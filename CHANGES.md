@@ -13,6 +13,15 @@
 
 - [CHANGE] スポットライトレガシーを削除する
     - @miosakuma
+- [CHANGE] WebSocketChannel プロトコルを廃止する
+    - `Configuration.webSocketChannelType` を廃止する
+    - `Configuration.allowsURLSessionWebSocketChannel` を廃止する
+    - `MediaChannel.webSocketChannel` を廃止する
+    - @enm10k
+- [CHANGE] Starscream を削除して、 URLSessionWebSocketTask をデフォルトで使用する
+    - @enm10k
+- [CHANGE] サポートする iOS のバージョンを13以上に変更する
+    - @enm10k
     
 ## 2021.3.1
 
