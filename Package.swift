@@ -7,7 +7,7 @@ let file = "WebRTC-95.4638.3.0/WebRTC.xcframework.zip"
 
 let package = Package(
     name: "Sora",
-    platforms: [.iOS(.v12)],
+    platforms: [.iOS(.v13)],
     products: [
         .library(name: "Sora", targets: ["Sora"]),
         .library(name: "WebRTC", targets: ["WebRTC"]),
