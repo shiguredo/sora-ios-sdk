@@ -1,7 +1,7 @@
 import Foundation
 
 enum ConnectionMonitor {
-    case webSocketChannel(WebSocketChannel)
+    case webSocketChannel(URLSessionWebSocketChannel)
     case signalingChannel(SignalingChannel)
     case peerChannel(PeerChannel)
 

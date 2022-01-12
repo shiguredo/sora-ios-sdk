@@ -1,7 +1,7 @@
 import Foundation
 
 @available(iOS 13, *)
-class URLSessionWebSocketChannel: WebSocketChannel {
+class URLSessionWebSocketChannel {
     public var url: URL
     public var sslEnabled: Bool = true
     public var handlers = WebSocketChannelHandlers()

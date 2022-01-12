@@ -173,9 +173,8 @@ public final class MediaChannel {
     let signalingChannel: SignalingChannel
 
     /// ウェブソケットチャンネル
-    public var webSocketChannel: WebSocketChannel {
-        signalingChannel.webSocketChannel
-    }
+    @available(*, unavailable, message: "webSocketChannel は廃止されました。")
+    public var webSocketChannel: Any? = nil
 
     /// ピアチャネル
     var peerChannel: PeerChannel {
@@ -242,7 +241,6 @@ public final class MediaChannel {
         handlers = configuration.mediaChannelHandlers
 
         _connectionTimer = ConnectionTimer(monitors: [
-            .webSocketChannel(signalingChannel.webSocketChannel),
             .signalingChannel(signalingChannel),
             .peerChannel(_peerChannel!),
         ],

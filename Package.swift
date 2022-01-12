@@ -12,9 +12,6 @@ let package = Package(
         .library(name: "Sora", targets: ["Sora"]),
         .library(name: "WebRTC", targets: ["WebRTC"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/daltoniam/Starscream.git", .exact("4.0.4")),
-    ],
     targets: [
         .binaryTarget(
             name: "WebRTC",
@@ -23,7 +20,7 @@ let package = Package(
         ),
         .target(
             name: "Sora",
-            dependencies: ["WebRTC", "Starscream"],
+            dependencies: ["WebRTC"],
             path: "Sora",
             exclude: ["Info.plist"],
             resources: [.process("VideoView.xib")]

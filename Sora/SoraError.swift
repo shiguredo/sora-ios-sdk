@@ -1,5 +1,4 @@
 import Foundation
-import Starscream
 
 /**
  SDK に関するエラーを表します。
@@ -72,9 +71,3 @@ extension SoraError: LocalizedError {
     }
 }
 
-/// :nodoc:
-extension WSError: LocalizedError {
-    public var errorDescription: String? {
-        "type: \(type), message: \(message), code: \(code)"
-    }
-}
