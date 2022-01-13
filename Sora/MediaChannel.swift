@@ -174,7 +174,7 @@ public final class MediaChannel {
 
     /// ウェブソケットチャンネル
     @available(*, unavailable, message: "webSocketChannel は廃止されました。")
-    public var webSocketChannel: Any? = nil
+    public var webSocketChannel: Any?
 
     /// ピアチャネル
     var peerChannel: PeerChannel {
