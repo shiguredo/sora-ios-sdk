@@ -25,7 +25,11 @@ public struct Configuration {
     }
 
     /// サーバーの URL
-    public var url: URL
+    @available(*, unavailable, message: "url は廃止されました。 candidatesUrl を利用してください。")
+    public var url: URL?
+
+    /// シグナリングに利用する URL の候補
+    public var urlCandidates: [URL]
 
     /// チャネル ID
     public var channelId: String
@@ -229,7 +233,7 @@ public struct Configuration {
                 channelId: String,
                 role: Role)
     {
-        self.url = url
+        urlCandidates = [url]
         self.channelId = channelId
         self.role = role
         multistreamEnabled = false
@@ -248,137 +252,27 @@ public struct Configuration {
                 role: Role,
                 multistreamEnabled: Bool)
     {
-        self.url = url
+        urlCandidates = [url]
         self.channelId = channelId
         self.role = role
         self.multistreamEnabled = multistreamEnabled
     }
-}
 
-/// :nodoc:
-extension Configuration: Codable {
-    enum CodingKeys: String, CodingKey {
-        case url
-        case channelId
-        case clientId
-        case role
-        case multistreamEnabled
-        case metadata
-        case connectionTimeout
-        case videoCodec
-        case videoBitRate
-        case videoCapturerDevice
-        case audioCodec
-        case audioBitRate
-        case videoEnabled
-        case audioEnabled
-        case simulcastEnabled
-        case simulcastRid
-        case spotlightEnabled
-        case spotlightNumber
-        case spotlightFocusRid
-        case spotlightUnfocusRid
-        case webRTCConfiguration
-        case signalingConnectMetadata
-        case signalingConnectNotifyMetadata
-        case webSocketChannelType
-        case publisherStreamId
-        case publisherVideoTrackId
-        case publisherAudioTrackId
-    }
-
-    public init(from decoder: Decoder) throws {
-        // NOTE: メタデータとイベントハンドラはサポートしない
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let url = try container.decode(URL.self, forKey: .url)
-        let channelId = try container.decode(String.self, forKey: .channelId)
-        let clientId = try container.decodeIfPresent(String.self, forKey: .clientId)
-        let role = try container.decode(Role.self, forKey: .role)
-        let multistreamEnabled = try container.decode(Bool.self, forKey: .multistreamEnabled)
-        self.init(url: url,
-                  channelId: channelId,
-                  role: role,
-                  multistreamEnabled: multistreamEnabled)
-        connectionTimeout = try container.decode(Int.self,
-                                                 forKey: .connectionTimeout)
-        videoEnabled = try container.decode(Bool.self, forKey: .videoEnabled)
-        if container.contains(.videoBitRate) {
-            videoBitRate = try container.decode(Int.self, forKey: .videoBitRate)
-        }
-        audioCodec = try container.decode(AudioCodec.self, forKey: .audioCodec)
-        audioEnabled = try container.decode(Bool.self, forKey: .audioEnabled)
-        audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audioBitRate)
-        spotlightEnabled = try container.decode(Spotlight.self, forKey: .spotlightEnabled)
-        spotlightNumber = try container.decode(Int.self, forKey: .spotlightNumber)
-        spotlightFocusRid = try container.decodeIfPresent(SpotlightRid.self, forKey: .spotlightFocusRid) ?? .unspecified
-        spotlightUnfocusRid = try container.decodeIfPresent(SpotlightRid.self, forKey: .spotlightUnfocusRid) ?? .unspecified
-        simulcastEnabled = try container.decode(Bool.self, forKey: .simulcastEnabled)
-        simulcastRid = try container.decode(SimulcastRid.self,
-                                            forKey: .simulcastRid)
-        webRTCConfiguration = try container.decode(WebRTCConfiguration.self,
-                                                   forKey: .webRTCConfiguration)
-        publisherStreamId = try container.decode(String.self,
-                                                 forKey: .publisherStreamId)
-        publisherVideoTrackId = try container.decode(String.self,
-                                                     forKey: .publisherVideoTrackId)
-        publisherAudioTrackId = try container.decode(String.self,
-                                                     forKey: .publisherAudioTrackId)
-        // TODO: channel types
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        // NOTE: メタデータとイベントハンドラはサポートしない
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(url, forKey: .url)
-        try container.encode(channelId, forKey: .channelId)
-        try container.encodeIfPresent(clientId, forKey: .clientId)
-        try container.encode(role, forKey: .role)
-        try container.encode(simulcastEnabled, forKey: .simulcastEnabled)
-        try container.encode(simulcastRid, forKey: .simulcastRid)
-        try container.encode(connectionTimeout, forKey: .connectionTimeout)
-        try container.encode(videoEnabled, forKey: .videoEnabled)
-        try container.encode(videoCodec, forKey: .videoCodec)
-        if let bitRate = videoBitRate {
-            try container.encode(bitRate, forKey: .videoBitRate)
-        }
-        try container.encode(audioCodec, forKey: .audioCodec)
-        try container.encode(audioEnabled, forKey: .audioEnabled)
-        try container.encodeIfPresent(audioBitRate, forKey: .audioBitRate)
-        try container.encodeIfPresent(spotlightNumber, forKey: .spotlightNumber)
-        try container.encode(webRTCConfiguration, forKey: .webRTCConfiguration)
-        if spotlightFocusRid != .unspecified {
-            try container.encodeIfPresent(spotlightFocusRid, forKey: .spotlightFocusRid)
-        }
-        if spotlightUnfocusRid != .unspecified {
-            try container.encodeIfPresent(spotlightUnfocusRid, forKey: .spotlightUnfocusRid)
-        }
-        try container.encode(publisherStreamId, forKey: .publisherStreamId)
-        try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
-        try container.encode(publisherAudioTrackId, forKey: .publisherAudioTrackId)
-    }
-}
-
-/// :nodoc:
-extension Configuration.Spotlight: Codable {
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        switch try container.decode(String.self) {
-        case "enabled":
-            self = .enabled
-        case "disabled":
-            self = .disabled
-        default:
-            self = .disabled
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .enabled:
-            try container.encode("enabled")
-        case .disabled:
-            try container.encode("disabled")
-        }
+    /**
+     初期化します。
+     - parameter urlCandidates: シグナリングに利用する URL の候補
+     - parameter channelId: チャネル ID
+     - parameter role: ロール
+     - parameter multistreamEnabled: マルチストリームの可否
+     */
+    public init(urlCandidates: [URL],
+                channelId: String,
+                role: Role,
+                multistreamEnabled: Bool)
+    {
+        self.urlCandidates = urlCandidates
+        self.channelId = channelId
+        self.role = role
+        self.multistreamEnabled = multistreamEnabled
     }
 }

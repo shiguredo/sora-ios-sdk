@@ -762,7 +762,9 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             channel.switchedToDataChannel = true
             signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
             if signalingChannel.ignoreDisconnectWebSocket {
-                signalingChannel.webSocketChannel.disconnect(error: nil)
+                if let webSocketChannel = signalingChannel.webSocketChannel {
+                    webSocketChannel.disconnect(error: nil)
+                }
             }
 
             if let mediaChannel = channel.mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {

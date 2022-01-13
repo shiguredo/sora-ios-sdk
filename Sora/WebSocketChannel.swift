@@ -183,6 +183,15 @@ public final class WebSocketChannelHandlers {
     public init() {}
 }
 
+final class WebSocketChannelInternalHandlers {
+    public var onConnect: ((URLSessionWebSocketChannel) -> Void)?
+    public var onDisconnect: ((URLSessionWebSocketChannel, Error?) -> Void)?
+    public var onReceive: ((WebSocketMessage) -> Void)?
+
+    /// 初期化します。
+    public init() {}
+}
+
 /**
  WebSocket による通信を行うチャネルの機能を定義したプロトコルです。
  デフォルトの実装は非公開 (`internal`) であり、
