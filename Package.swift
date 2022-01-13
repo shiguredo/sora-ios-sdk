@@ -7,13 +7,10 @@ let file = "WebRTC-95.4638.3.0/WebRTC.xcframework.zip"
 
 let package = Package(
     name: "Sora",
-    platforms: [.iOS(.v12)],
+    platforms: [.iOS(.v13)],
     products: [
         .library(name: "Sora", targets: ["Sora"]),
         .library(name: "WebRTC", targets: ["WebRTC"]),
-    ],
-    dependencies: [
-        .package(url: "https://github.com/daltoniam/Starscream.git", .exact("4.0.4")),
     ],
     targets: [
         .binaryTarget(
@@ -23,7 +20,7 @@ let package = Package(
         ),
         .target(
             name: "Sora",
-            dependencies: ["WebRTC", "Starscream"],
+            dependencies: ["WebRTC"],
             path: "Sora",
             exclude: ["Info.plist"],
             resources: [.process("VideoView.xib")]

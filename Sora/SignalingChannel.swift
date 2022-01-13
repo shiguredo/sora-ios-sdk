@@ -62,15 +62,13 @@ class SignalingChannel {
         }
     }
 
-    var webSocketChannel: WebSocketChannel
+    var webSocketChannel: URLSessionWebSocketChannel
 
     private var onConnectHandler: ((Error?) -> Void)?
 
     required init(configuration: Configuration) {
         self.configuration = configuration
-        webSocketChannel = configuration
-            ._webSocketChannelType.init(url: configuration.url)
-        BasicWebSocketChannel.useStarscreamCustomEngine = !configuration.allowsURLSessionWebSocketChannel
+        webSocketChannel = URLSessionWebSocketChannel(url: configuration.url)
         webSocketChannel.internalHandlers.onDisconnect = { [weak self] error in
             if let self = self {
                 Logger.debug(type: .signalingChannel, message: "ignoreDisconnectWebSocket: \(self.ignoreDisconnectWebSocket)")

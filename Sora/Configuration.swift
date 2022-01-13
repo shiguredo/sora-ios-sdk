@@ -183,6 +183,7 @@ public struct Configuration {
      生成される WebSocket チャネルの型。
      何も指定しなければデフォルトの WebSocket チャネルが生成されます。
      */
+    @available(*, unavailable, message: "webSocketChannelType は廃止されました。")
     public var webSocketChannelType: WebSocketChannel.Type?
 
     /**
@@ -192,17 +193,8 @@ public struct Configuration {
     @available(*, unavailable, message: "peerChannelType は廃止されました。")
     public var peerChannelType: Any?
 
-    var _webSocketChannelType: WebSocketChannel.Type {
-        var type: WebSocketChannel.Type = BasicWebSocketChannel.self
-        if #available(iOS 13, *) {
-            if allowsURLSessionWebSocketChannel {
-                type = URLSessionWebSocketChannel.self
-            }
-        }
-        return type
-    }
-
     /// :nodoc:
+    @available(*, unavailable, message: "allowsURLSessionWebSocketChannel は廃止されました。")
     public var allowsURLSessionWebSocketChannel: Bool = true
 
     // MARK: パブリッシャーに関する設定
@@ -363,9 +355,6 @@ extension Configuration: Codable {
         try container.encode(publisherStreamId, forKey: .publisherStreamId)
         try container.encode(publisherVideoTrackId, forKey: .publisherVideoTrackId)
         try container.encode(publisherAudioTrackId, forKey: .publisherAudioTrackId)
-        try container.encode(String(describing: type(of: _webSocketChannelType)),
-
-                             forKey: .webSocketChannelType)
     }
 }
 

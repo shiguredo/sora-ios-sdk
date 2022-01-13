@@ -1,5 +1,4 @@
 import Foundation
-import Starscream
 
 /**
  SDK に関するエラーを表します。
@@ -69,12 +68,5 @@ extension SoraError: LocalizedError {
         case let .cameraError(reason: reason):
             return "Camera error: \(reason)"
         }
-    }
-}
-
-/// :nodoc:
-extension WSError: LocalizedError {
-    public var errorDescription: String? {
-        "type: \(type), message: \(message), code: \(code)"
     }
 }
