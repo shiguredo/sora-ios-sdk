@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] WebRTC 98.4758.0.0 に上げる
+    - @miosakuma
 - [CHANGE] スポットライトレガシーを削除する
     - @miosakuma
 - [CHANGE] WebSocketChannel プロトコルを廃止する
