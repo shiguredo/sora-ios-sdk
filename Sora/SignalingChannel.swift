@@ -73,7 +73,7 @@ class SignalingChannel {
 
         // TODO: OperationQueue 追加に伴うメモリー・リークが起きないか確認する
         let queue = OperationQueue()
-        queue.name = "shiguredo.sora-ios-sdk.signaling" // TODO: name は必要?
+        // queue.name = "" // TODO: name は必要?
         queue.maxConcurrentOperationCount = 1
         queue.qualityOfService = .userInitiated
         self.queue = queue
@@ -124,7 +124,6 @@ class SignalingChannel {
             }
 
             weakSelf.webSocketChannelCandidates.removeAll()
-
             weakSelf.state = .connected
 
             if weakSelf.onConnectHandler != nil {

@@ -5,6 +5,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     let url: URL
     var handler = WebSocketChannelInternalHandlers()
     var isClosing = false
+
+    // type: redirect 処理中に破棄する WebSocket において、エラーを無視するために利用するフラグ
     var isRedirecting = false
 
     var host: String {
@@ -39,13 +41,12 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         isClosing = true
         Logger.debug(type: .webSocketChannel, message: "[\(host)] try disconnecting")
 
-        if isRedirecting {
-            Logger.debug(type: .webSocketChannel, message: "[\(host)] redirecting and ignore error")
-        } else {
-            if let error = error {
+        if let error = error {
+            if isRedirecting {
+                Logger.debug(type: .webSocketChannel, message: "[\(host)] redirecting and ignore error")
+            } else {
                 Logger.debug(type: .webSocketChannel,
                              message: "[\(host)] error: \(error.localizedDescription)")
-
                 handler.onDisconnect?(self, error)
             }
         }
