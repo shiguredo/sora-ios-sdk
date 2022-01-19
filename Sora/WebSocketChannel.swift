@@ -150,7 +150,7 @@ public final class WebSocketChannelHandlers {
     }
 
     /// onPongHandler は廃止されました。
-    @available(*, deprecated, message: "onPongHandler は廃止されました。")
+    @available(*, unavailable, message: "onPongHandler は廃止されました。")
     public var onPongHandler: ((Data?) -> Void)?
 
     /// このプロパティは onReceive に置き換えられました。
