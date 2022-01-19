@@ -161,6 +161,7 @@ public struct Configuration {
     // MARK: - イベントハンドラ
 
     /// WebSocket チャネルに関するイベントハンドラ
+    @available(*, unavailable, message: "廃止されました。 mediaChannelHandlers を利用してください。")
     public var webSocketChannelHandlers = WebSocketChannelHandlers()
 
     /// シグナリングチャネルに関するイベントハンドラ
