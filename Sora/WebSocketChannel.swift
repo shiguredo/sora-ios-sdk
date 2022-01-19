@@ -149,13 +149,9 @@ public final class WebSocketChannelHandlers {
         set { onDisconnect = newValue }
     }
 
-    /// このプロパティは onPong に置き換えられました。
-    @available(*, deprecated, renamed: "onPong",
-               message: "このプロパティは onPong に置き換えられました。")
-    public var onPongHandler: ((Data?) -> Void)? {
-        get { onPong }
-        set { onPong = newValue }
-    }
+    /// onPongHandler は廃止されました。
+    @available(*, deprecated, message: "onPongHandler は廃止されました。")
+    public var onPongHandler: ((Data?) -> Void)?
 
     /// このプロパティは onReceive に置き換えられました。
     @available(*, deprecated, renamed: "onReceive",
@@ -165,24 +161,22 @@ public final class WebSocketChannelHandlers {
         set { onReceive = newValue }
     }
 
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onSend",
-               message: "このプロパティは onSend に置き換えられました。")
-    public var onSendHandler: ((WebSocketMessage) -> WebSocketMessage)? {
-        get { onSend }
-        set { onSend = newValue }
-    }
+    /// onSendHandler は廃止されました。
+    @available(*, unavailable, message: "onSendHandler は廃止されました。")
+    public var onSendHandler: ((WebSocketMessage) -> WebSocketMessage)?
 
     /// 接続解除時に呼ばれるクロージャー
     public var onDisconnect: ((Error?) -> Void)?
 
     /// pong の送信時に呼ばれるクロージャー
+    @available(*, unavailable, message: "onPong は廃止されました。")
     public var onPong: ((Data?) -> Void)?
 
     /// メッセージ受信時に呼ばれるクロージャー
     public var onReceive: ((WebSocketMessage) -> Void)?
 
     /// メッセージ送信時に呼ばれるクロージャー
+    @available(*, unavailable, message: "onSend は廃止されました。")
     public var onSend: ((WebSocketMessage) -> WebSocketMessage)?
 
     /// 初期化します。
