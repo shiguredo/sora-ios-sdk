@@ -239,7 +239,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
 
         Logger.debug(type: .peerChannel, message: "try connecting")
-        Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
 
         webRTCConfiguration = channel.configuration.webRTCConfiguration
         nativeChannel = NativePeerChannelFactory.default
@@ -770,6 +769,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             if let mediaChannel = channel.mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
                 onDataChannel(mediaChannel)
             }
+        case let .redirect(redirect):
+            signalingChannel.redirect(location: redirect.location)
         default:
             break
         }

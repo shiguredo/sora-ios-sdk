@@ -81,7 +81,7 @@ class SignalingChannel {
                     break
                 }
             }
-            
+
             if !contains {
                 uniqueUrls.append(url)
             }
@@ -119,7 +119,6 @@ class SignalingChannel {
             if weakSelf.onConnectHandler != nil {
                 Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
                 weakSelf.onConnectHandler!(nil)
-                weakSelf.onConnectHandler = nil
             }
         }
 
@@ -173,11 +172,33 @@ class SignalingChannel {
         }
     }
 
+    func redirect(location: String) {
+        Logger.debug(type: .signalingChannel, message: "try redirecting to \(location)")
+        state = .connecting
+
+        // 切断
+        webSocketChannel?.disconnect(error: nil)
+        webSocketChannel = nil
+
+        for ws in webSocketChannelCandidates {
+            ws.disconnect(error: nil)
+        }
+        webSocketChannelCandidates.removeAll()
+
+        // 接続
+        guard let newUrl = URL(string: location) else {
+            Logger.error(type: .signalingChannel, message: "location is invalid: \(location)")
+            // TODO: エラーを SDK のユーザーまで伝搬した方が良い?
+            return
+        }
+        let ws = setUpWebSocketChannel(url: newUrl)
+        ws.connect()
+    }
+
     func disconnect(error: Error?, reason: DisconnectReason) {
         switch state {
         case .disconnecting, .disconnected:
             break
-
         default:
             Logger.debug(type: .signalingChannel, message: "try disconnecting")
             if let error = error {
@@ -198,7 +219,6 @@ class SignalingChannel {
             if onConnectHandler != nil {
                 Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
                 onConnectHandler!(error)
-                onConnectHandler = nil
             }
 
             Logger.debug(type: .signalingChannel, message: "did disconnect")

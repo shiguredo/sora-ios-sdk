@@ -130,6 +130,9 @@ public enum Signaling {
     /// "switch" シグナリング
     case switched(SignalingSwitched)
 
+    /// "redirect" シグナリング
+    case redirect(SignalingRedirect)
+
     /// :nodoc:
     public static func decode(_ data: Data) -> Result<Signaling, Error> {
         do {
@@ -171,6 +174,8 @@ public enum Signaling {
             return "push"
         case .switched:
             return "switched"
+        case .redirect:
+            return "redirect"
         }
     }
 }
@@ -499,6 +504,14 @@ public struct SignalingSwitched {
 }
 
 /**
+ "redirect" シグナリングメッセージを表します。
+ */
+public struct SignalingRedirect {
+    /// redirect する URL
+    public var location: String
+}
+
+/**
  "notify" シグナリングメッセージで通知されるイベントの種別です。
  詳細は Sora のドキュメントを参照してください。
  廃止されました。
@@ -790,6 +803,8 @@ extension Signaling: Codable {
             self = .reOffer(try SignalingReOffer(from: decoder))
         case "switched":
             self = .switched(try SignalingSwitched(from: decoder))
+        case "redirect":
+            self = .redirect(try SignalingRedirect(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
@@ -1272,5 +1287,17 @@ extension SignalingSwitched: Decodable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ignoreDisconnectWebSocket = try container.decode(Bool.self, forKey: .ignore_disconnect_websocket)
+    }
+}
+
+/// :nodoc:
+extension SignalingRedirect: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case location
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        location = try container.decode(String.self, forKey: .location)
     }
 }

@@ -8,7 +8,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     var isClosing = false
 
     var host: String {
-        url.host!
+        guard let host = url.host else {
+            return url.absoluteString
+        }
+        return host
     }
 
     var urlSession: URLSession?
@@ -138,7 +141,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
         let reasonString = reason2string(reason: reason)
         if reasonString != nil {
-            message = message + " and reason => \(String(describing: reasonString))"
+            message += " and reason => \(String(describing: reasonString))"
         }
 
         Logger.debug(type: .webSocketChannel, message: message)
