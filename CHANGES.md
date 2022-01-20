@@ -11,14 +11,20 @@
 
 ## develop
 
+- [ADD] 複数シグナリング URL の指定に対応する
+    - `Configuration.url` を廃止して `Configuration.urlCandidates` を追加する
+    - `MediaChannel.connectedUrl` を追加する
+    - @enm10k
+- [ADD] type: rediret に対応する
+    - @enm10k
 - [CHANGE] スポットライトレガシーを削除する
     - @miosakuma
 - [CHANGE] WebSocketChannel プロトコルを廃止する
     - `Configuration.webSocketChannelType` を廃止する
     - `Configuration.allowsURLSessionWebSocketChannel` を廃止する
     - `MediaChannel.webSocketChannel` を廃止する
-    - `WebSocketChannelHandlers.onPong` を廃止する
-    - `WebSocketChannelHandlers.onSend` を廃止する
+    - `MediaChannel.webSocketChannelHandlers` を廃止する
+    - `WebSocketChannelHandlers` を廃止する
     - @enm10k
 - [CHANGE] Starscream を削除して、 URLSessionWebSocketTask をデフォルトで使用する
     - @enm10k
