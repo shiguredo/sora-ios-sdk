@@ -66,7 +66,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
             }
 
             // 余計なログを出力しないために、 disconnect の前にチェックする
-            if weakSelf.isClosing {
+            guard !weakSelf.isClosing else {
                 return
             }
 
@@ -110,7 +110,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
             case let .failure(error):
                 // 余計なログを出力しないために、 disconnect の前にチェックする
-                if weakSelf.isClosing {
+                guard !weakSelf.isClosing else {
                     return
                 }
 
@@ -125,7 +125,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                     webSocketTask: URLSessionWebSocketTask,
                     didOpenWithProtocol protocol: String?)
     {
-        if isClosing {
+        guard !isClosing else {
             return
         }
 
@@ -148,7 +148,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
                     reason: Data?)
     {
-        if isClosing {
+        guard !isClosing else {
             return
         }
 
