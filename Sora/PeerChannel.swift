@@ -264,11 +264,11 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         // また、スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || configuration.spotlightEnabled == .enabled
 
-        signalingChannel.connect { [weak self] (error) in
+        signalingChannel.connect { [weak self] error in
             guard let weakSelf = self else {
                 return
             }
-            
+
             if let sdp = weakSelf.sdp {
                 weakSelf.sendConnectMessage(with: sdp, error: error, redirect: true)
             } else {

@@ -6,9 +6,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     var handler = WebSocketChannelInternalHandlers()
     var isClosing = false
 
-    // type: redirect 処理中に破棄する WebSocket において、エラーを無視するために利用するフラグ
-    var isRedirecting = false
-
     var host: String {
         guard let host = url.host else {
             return url.absoluteString
@@ -23,8 +20,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         self.url = url
     }
 
-    func connect(delegateQueue: OperationQueue) {
-        Logger.debug(type: .webSocketChannel, message: "[\(host)] try connecting")
+    func connect(delegateQueue: OperationQueue?) {
+        Logger.debug(type: .webSocketChannel, message: "[\(host)] connecting")
         urlSession = URLSession(configuration: .default,
                                 delegate: self,
                                 delegateQueue: delegateQueue)
@@ -39,22 +36,18 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         }
 
         isClosing = true
-        Logger.debug(type: .webSocketChannel, message: "[\(host)] try disconnecting")
+        Logger.debug(type: .webSocketChannel, message: "[\(host)] disconnecting")
 
         if let error = error {
-            if isRedirecting {
-                Logger.debug(type: .webSocketChannel, message: "[\(host)] redirecting and ignore error")
-            } else {
-                Logger.debug(type: .webSocketChannel,
-                             message: "[\(host)] error: \(error.localizedDescription)")
-                handler.onDisconnect?(self, error)
-            }
+            Logger.debug(type: .webSocketChannel,
+                         message: "[\(host)] error: \(error.localizedDescription)")
+            handler.onDisconnectWithError?(self, error)
         }
 
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         urlSession?.invalidateAndCancel()
 
-        Logger.debug(type: .webSocketChannel, message: "[\(host)] did disconnect")
+        Logger.debug(type: .webSocketChannel, message: "[\(host)] disconnected")
     }
 
     func send(message: WebSocketMessage) {
@@ -71,6 +64,12 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
             guard let weakSelf = self else {
                 return
             }
+
+            // 余計なログを出力しないために、 disconnect の前にチェックする
+            if weakSelf.isClosing {
+                return
+            }
+
             if let error = error {
                 Logger.debug(type: .webSocketChannel, message: "[\(weakSelf.host)] failed to send message")
                 weakSelf.disconnect(error: error)
@@ -110,6 +109,11 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                 weakSelf.receive()
 
             case let .failure(error):
+                // 余計なログを出力しないために、 disconnect の前にチェックする
+                if weakSelf.isClosing {
+                    return
+                }
+
                 Logger.debug(type: .webSocketChannel,
                              message: "[\(weakSelf.host)] failed => \(error.localizedDescription)")
                 weakSelf.disconnect(error: SoraError.webSocketError(error))
@@ -121,6 +125,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                     webSocketTask: URLSessionWebSocketTask,
                     didOpenWithProtocol protocol: String?)
     {
+        if isClosing {
+            return
+        }
+
         Logger.debug(type: .webSocketChannel, message: "[\(host)] \(#function)")
         if let onConnect = handler.onConnect {
             onConnect(self)
@@ -140,6 +148,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
                     reason: Data?)
     {
+        if isClosing {
+            return
+        }
+
         var message = "[\(host)] \(#function) closeCode => \(closeCode)"
 
         let reasonString = reason2string(reason: reason)

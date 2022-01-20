@@ -148,7 +148,7 @@ public final class WebSocketChannelHandlers {}
 
 final class WebSocketChannelInternalHandlers {
     public var onConnect: ((URLSessionWebSocketChannel) -> Void)?
-    public var onDisconnect: ((URLSessionWebSocketChannel, Error) -> Void)?
+    public var onDisconnectWithError: ((URLSessionWebSocketChannel, Error) -> Void)?
     public var onReceive: ((WebSocketMessage) -> Void)?
 
     /// 初期化します。

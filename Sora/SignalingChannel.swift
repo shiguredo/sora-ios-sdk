@@ -75,7 +75,7 @@ class SignalingChannel {
         let queue = OperationQueue()
         // queue.name = "" // TODO: name は必要?
         queue.maxConcurrentOperationCount = 1
-        queue.qualityOfService = .userInitiated
+        queue.qualityOfService = .userInteractive
         self.queue = queue
     }
 
@@ -133,7 +133,7 @@ class SignalingChannel {
         }
 
         // 切断時
-        ws.handler.onDisconnect = { [weak self] ws, error in
+        ws.handler.onDisconnectWithError = { [weak self] ws, error in
             guard let weakSelf = self else {
                 return
             }
@@ -145,7 +145,7 @@ class SignalingChannel {
             if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
                 Logger.info(type: .signalingChannel, message: "No WebSocket connection")
                 if !weakSelf.ignoreDisconnectWebSocket {
-                    weakSelf.disconnect(error: error, reason: error != nil ? .webSocket : .noError)
+                    weakSelf.disconnect(error: error, reason: .webSocket)
                 }
             }
         }
@@ -184,7 +184,6 @@ class SignalingChannel {
         state = .connecting
 
         // 切断
-        webSocketChannel?.isRedirecting = true
         webSocketChannel?.disconnect(error: nil)
         webSocketChannel = nil
 
@@ -194,6 +193,7 @@ class SignalingChannel {
             // TODO: エラーを SDK のユーザーまで伝搬した方が良い?
             return
         }
+
         let ws = setUpWebSocketChannel(url: newUrl)
         ws.connect(delegateQueue: queue)
     }
