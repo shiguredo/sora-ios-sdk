@@ -104,9 +104,7 @@ public final class MediaChannel {
 
     /// 接続中の URL
     public var connectedUrl: URL? {
-        get {
-            signalingChannel.connectedUrl
-        }
+        signalingChannel.connectedUrl
     }
 
     /// メディアチャンネルの内部で利用している RTCPeerConnection
