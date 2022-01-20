@@ -68,6 +68,8 @@ class SignalingChannel {
 
     private let queue: OperationQueue
 
+    var connectedUrl: URL?
+
     required init(configuration: Configuration) {
         self.configuration = configuration
 
@@ -114,6 +116,7 @@ class SignalingChannel {
 
             Logger.info(type: .signalingChannel, message: "connected to \(String(describing: ws.host))")
             weakSelf.webSocketChannel = webSocketChannel
+            weakSelf.connectedUrl = ws.url
 
             // 採用された WebSocket 以外を切断してから webSocketChannelCandidates を破棄する
             weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
@@ -186,6 +189,7 @@ class SignalingChannel {
         // 切断
         webSocketChannel?.disconnect(error: nil)
         webSocketChannel = nil
+        connectedUrl = nil
 
         // 接続
         guard let newUrl = URL(string: location) else {
@@ -222,6 +226,7 @@ class SignalingChannel {
                 onConnectHandler!(error)
             }
 
+            connectedUrl = nil
             Logger.debug(type: .signalingChannel, message: "did disconnect")
         }
     }
