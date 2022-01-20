@@ -22,8 +22,10 @@
 - [CHANGE] WebSocketChannel プロトコルを廃止する
     - `Configuration.webSocketChannelType` を廃止する
     - `Configuration.allowsURLSessionWebSocketChannel` を廃止する
+    - `WebSocketChannelHandlers.onDisconnect` を廃止する
+    - `WebSocketChannelHandlers.onPong` を廃止する
+    - `WebSocketChannelHandlers.onSend` を廃止する
     - `MediaChannel.webSocketChannel` を廃止する
-    - `MediaChannel.webSocketChannelHandlers` を廃止する
     - `WebSocketChannelHandlers` を廃止する
     - @enm10k
 - [CHANGE] Starscream を削除して、 URLSessionWebSocketTask をデフォルトで使用する

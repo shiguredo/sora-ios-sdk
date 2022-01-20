@@ -3,7 +3,8 @@ import Foundation
 @available(iOS 13, *)
 class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionWebSocketDelegate {
     let url: URL
-    var handler = WebSocketChannelInternalHandlers()
+    var handlers = WebSocketChannelHandlers()
+    var internalHandlers = WebSocketChannelInternalHandlers()
     var isClosing = false
 
     var host: String {
@@ -41,7 +42,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         if let error = error {
             Logger.debug(type: .webSocketChannel,
                          message: "[\(host)] error: \(error.localizedDescription)")
-            handler.onDisconnectWithError?(self, error)
+            internalHandlers.onDisconnectWithError?(self, error)
         }
 
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
@@ -99,7 +100,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
                 if let message = newMessage {
                     Logger.debug(type: .webSocketChannel, message: "[\(weakSelf.host)] call onReceive")
-                    weakSelf.handler.onReceive?(message)
+                    weakSelf.handlers.onReceive?(message)
+                    weakSelf.internalHandlers.onReceive?(message)
                 } else {
                     Logger.debug(type: .webSocketChannel,
                                  message: "[\(weakSelf.host)] received message is not string or binary (discarded)")
@@ -130,7 +132,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         }
 
         Logger.debug(type: .webSocketChannel, message: "[\(host)] \(#function)")
-        if let onConnect = handler.onConnect {
+        if let onConnect = internalHandlers.onConnect {
             onConnect(self)
         }
     }

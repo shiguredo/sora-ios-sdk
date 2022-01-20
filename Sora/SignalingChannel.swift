@@ -104,7 +104,7 @@ class SignalingChannel {
         let ws = URLSessionWebSocketChannel(url: url)
 
         // 接続時
-        ws.handler.onConnect = { [weak self] webSocketChannel in
+        ws.internalHandlers.onConnect = { [weak self] webSocketChannel in
             guard let weakSelf = self else {
                 return
             }
@@ -136,7 +136,7 @@ class SignalingChannel {
         }
 
         // 切断時
-        ws.handler.onDisconnectWithError = { [weak self] ws, error in
+        ws.internalHandlers.onDisconnectWithError = { [weak self] ws, error in
             guard let weakSelf = self else {
                 return
             }
@@ -153,8 +153,9 @@ class SignalingChannel {
             }
         }
 
+        ws.handlers = configuration.webSocketChannelHandlers
         // メッセージ受信時
-        ws.handler.onReceive = { [weak self] message in
+        ws.internalHandlers.onReceive = { [weak self] message in
             self?.handle(message: message)
         }
 
