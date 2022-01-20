@@ -193,8 +193,9 @@ class SignalingChannel {
 
         // 接続
         guard let newUrl = URL(string: location) else {
-            Logger.error(type: .signalingChannel, message: "location is invalid: \(location)")
-            // TODO: エラーを SDK のユーザーまで伝搬した方が良い?
+            let message = "invalid message: \(location)"
+            Logger.error(type: .signalingChannel, message: message)
+            disconnect(error: SoraError.signalingChannelError(reason: message), reason: DisconnectReason.signalingFailure)
             return
         }
 
