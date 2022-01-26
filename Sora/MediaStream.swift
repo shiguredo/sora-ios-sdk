@@ -62,6 +62,9 @@ public protocol MediaStream: AnyObject {
     /// 接続開始時刻
     var creationTime: Date { get }
 
+    /// メディアチャンネル
+    var mediaChannel: MediaChannel? { get }
+
     // MARK: - 映像と音声の可否
 
     /**
@@ -122,6 +125,10 @@ class BasicMediaStream: MediaStream {
     var videoTrackId: String = ""
     var audioTrackId: String = ""
     var creationTime: Date
+
+    var mediaChannel: MediaChannel? {
+        peerChannel.mediaChannel
+    }
 
     var videoFilter: VideoFilter?
 
