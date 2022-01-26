@@ -141,13 +141,8 @@ public enum WebSocketMessage {
  WebSocket チャネルのイベントハンドラです。
  */
 public final class WebSocketChannelHandlers {
-    /// onDisconnectHandler は廃止されました。
-    @available(*, unavailable, message: "onDisconnectHandler は廃止されました。")
-    public var onDisconnectHandler: ((Error?) -> Void)?
-
-    /// onPongHandler は廃止されました。
-    @available(*, unavailable, message: "onPongHandler は廃止されました。")
-    public var onPongHandler: ((Data?) -> Void)?
+    /// 初期化します。
+    public init() {}
 
     /// このプロパティは onReceive に置き換えられました。
     @available(*, deprecated, renamed: "onReceive",
@@ -156,6 +151,19 @@ public final class WebSocketChannelHandlers {
         get { onReceive }
         set { onReceive = newValue }
     }
+
+    /// メッセージ受信時に呼ばれるクロージャー
+    public var onReceive: ((WebSocketMessage) -> Void)?
+
+    // MARK: - 廃止された API
+
+    /// onDisconnectHandler は廃止されました。
+    @available(*, unavailable, message: "onDisconnectHandler は廃止されました。")
+    public var onDisconnectHandler: ((Error?) -> Void)?
+
+    /// onPongHandler は廃止されました。
+    @available(*, unavailable, message: "onPongHandler は廃止されました。")
+    public var onPongHandler: ((Data?) -> Void)?
 
     /// onSendHandler は廃止されました。
     @available(*, unavailable, message: "onSendHandler は廃止されました。")
@@ -169,15 +177,9 @@ public final class WebSocketChannelHandlers {
     @available(*, unavailable, message: "onPong は廃止されました。")
     public var onPong: ((Data?) -> Void)?
 
-    /// メッセージ受信時に呼ばれるクロージャー
-    public var onReceive: ((WebSocketMessage) -> Void)?
-
     /// メッセージ送信時に呼ばれるクロージャー
     @available(*, unavailable, message: "onSend は廃止されました。")
     public var onSend: ((WebSocketMessage) -> WebSocketMessage)?
-
-    /// 初期化します。
-    public init() {}
 }
 
 final class WebSocketChannelInternalHandlers {
