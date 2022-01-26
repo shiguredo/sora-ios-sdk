@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] MediaStream から MediaChannel にアクセスできるようにする
+    - @enm10k
 - [CHANGE] スポットライトレガシーを削除する
     - @miosakuma
 - [CHANGE] WebSocketChannel プロトコルを廃止する
