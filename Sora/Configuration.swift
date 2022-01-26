@@ -26,7 +26,7 @@ public struct Configuration {
 
     /// サーバーの URL
     @available(*, unavailable, message: "url は廃止されました。 urlCandidates を利用してください。")
-    public var url: URL?
+    public var url: Any?
 
     /// シグナリングに利用する URL の候補
     public var urlCandidates: [URL]
