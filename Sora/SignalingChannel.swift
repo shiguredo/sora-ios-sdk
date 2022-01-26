@@ -48,7 +48,6 @@ class SignalingChannelInternalHandlers {
 
 class SignalingChannel {
     var internalHandlers = SignalingChannelInternalHandlers()
-    var webSocketChannelHandlers = WebSocketChannelHandlers()
 
     var ignoreDisconnectWebSocket: Bool = false
     var dataChannelSignaling: Bool = false
@@ -62,27 +61,105 @@ class SignalingChannel {
         }
     }
 
-    var webSocketChannel: URLSessionWebSocketChannel
+    var webSocketChannel: URLSessionWebSocketChannel?
+    var webSocketChannelCandidates: [URLSessionWebSocketChannel] = []
 
     private var onConnectHandler: ((Error?) -> Void)?
 
+    private let queue: OperationQueue
+
+    var connectedUrl: URL?
+
     required init(configuration: Configuration) {
         self.configuration = configuration
-        webSocketChannel = URLSessionWebSocketChannel(url: configuration.url)
-        webSocketChannel.internalHandlers.onDisconnect = { [weak self] error in
-            if let self = self {
-                Logger.debug(type: .signalingChannel, message: "ignoreDisconnectWebSocket: \(self.ignoreDisconnectWebSocket)")
-                // ignoreDisconnectWebSocket == true の場合は、 WebSocketChannel 切断時に SignalingChannel を切断しない
-                if !self.ignoreDisconnectWebSocket {
-                    self.disconnect(error: error, reason: error != nil ? .webSocket : .noError)
+
+        // TODO: OperationQueue 追加に伴うメモリー・リークが起きないか確認する
+        let queue = OperationQueue()
+        // queue.name = "" // TODO: name は必要?
+        queue.maxConcurrentOperationCount = 1
+        queue.qualityOfService = .userInteractive
+        self.queue = queue
+    }
+
+    private func unique(urls: [URL]) -> [URL] {
+        var uniqueUrls: [URL] = []
+        for url in urls {
+            var contains = false
+            for uniqueUrl in uniqueUrls {
+                if url.absoluteString == uniqueUrl.absoluteString {
+                    contains = true
+                    break
+                }
+            }
+
+            if !contains {
+                uniqueUrls.append(url)
+            }
+        }
+
+        return uniqueUrls
+    }
+
+    private func setUpWebSocketChannel(url: URL) -> URLSessionWebSocketChannel {
+        let ws = URLSessionWebSocketChannel(url: url)
+
+        // 接続時
+        ws.internalHandlers.onConnect = { [weak self] webSocketChannel in
+            guard let weakSelf = self else {
+                return
+            }
+
+            // 最初に接続に成功した WebSocket 以外は無視する
+            guard weakSelf.webSocketChannel == nil else {
+                return
+            }
+
+            Logger.info(type: .signalingChannel, message: "connected to \(String(describing: ws.host))")
+            weakSelf.webSocketChannel = webSocketChannel
+            weakSelf.connectedUrl = ws.url
+
+            // 採用された WebSocket 以外を切断してから webSocketChannelCandidates を破棄する
+            weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
+
+            weakSelf.webSocketChannelCandidates.forEach {
+                Logger.debug(type: .signalingChannel, message: "closeing connection to \(String(describing: $0.host))")
+                $0.disconnect(error: nil)
+            }
+
+            weakSelf.webSocketChannelCandidates.removeAll()
+            weakSelf.state = .connected
+
+            if weakSelf.onConnectHandler != nil {
+                Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
+                weakSelf.onConnectHandler!(nil)
+            }
+        }
+
+        // 切断時
+        ws.internalHandlers.onDisconnectWithError = { [weak self] ws, error in
+            guard let weakSelf = self else {
+                return
+            }
+            Logger.info(type: .signalingChannel, message: "disconnected from \(String(describing: ws.host))")
+
+            // 接続に失敗した WebSocket が候補に残っている場合取り除く
+            weakSelf.webSocketChannelCandidates.removeAll { $0.url.absoluteURL == ws.url.absoluteURL }
+
+            if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
+                Logger.info(type: .signalingChannel, message: "No WebSocket connection")
+                if !weakSelf.ignoreDisconnectWebSocket {
+                    weakSelf.disconnect(error: error, reason: .webSocket)
                 }
             }
         }
 
-        webSocketChannel.internalHandlers.onReceive = { [weak self] message in
+        ws.handlers = configuration.webSocketChannelHandlers
+        // メッセージ受信時
+        ws.internalHandlers.onReceive = { [weak self] message in
             self?.handle(message: message)
         }
-        webSocketChannel.handlers = configuration.webSocketChannelHandlers
+
+        return ws
     }
 
     func connect(handler: @escaping (Error?) -> Void) {
@@ -96,29 +173,41 @@ class SignalingChannel {
         onConnectHandler = handler
         state = .connecting
 
-        webSocketChannel.connect { error in
-            if self.onConnectHandler != nil {
-                Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
-                self.onConnectHandler!(error)
-                self.onConnectHandler = nil
-            }
-
-            if let error = error {
-                Logger.debug(type: .signalingChannel,
-                             message: "connecting failed (\(error))")
-                self.disconnect(error: error, reason: .webSocket)
-                return
-            }
-            Logger.debug(type: .signalingChannel, message: "connected")
-            self.state = .connected
+        let urlCandidates = unique(urls: configuration.urlCandidates)
+        Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
+        for url in urlCandidates {
+            let ws = setUpWebSocketChannel(url: url)
+            Logger.info(type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
+            ws.connect(delegateQueue: queue)
+            webSocketChannelCandidates.append(ws)
         }
+    }
+
+    func redirect(location: String) {
+        Logger.debug(type: .signalingChannel, message: "try redirecting to \(location)")
+        state = .connecting
+
+        // 切断
+        webSocketChannel?.disconnect(error: nil)
+        webSocketChannel = nil
+        connectedUrl = nil
+
+        // 接続
+        guard let newUrl = URL(string: location) else {
+            let message = "invalid message: \(location)"
+            Logger.error(type: .signalingChannel, message: message)
+            disconnect(error: SoraError.signalingChannelError(reason: message), reason: DisconnectReason.signalingFailure)
+            return
+        }
+
+        let ws = setUpWebSocketChannel(url: newUrl)
+        ws.connect(delegateQueue: queue)
     }
 
     func disconnect(error: Error?, reason: DisconnectReason) {
         switch state {
         case .disconnecting, .disconnected:
             break
-
         default:
             Logger.debug(type: .signalingChannel, message: "try disconnecting")
             if let error = error {
@@ -127,7 +216,8 @@ class SignalingChannel {
             }
 
             state = .disconnecting
-            webSocketChannel.disconnect(error: error)
+            webSocketChannel?.disconnect(error: nil)
+            webSocketChannelCandidates.forEach { $0.disconnect(error: nil) }
             state = .disconnected
 
             Logger.debug(type: .signalingChannel, message: "call onDisconnect")
@@ -136,14 +226,19 @@ class SignalingChannel {
             if onConnectHandler != nil {
                 Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
                 onConnectHandler!(error)
-                onConnectHandler = nil
             }
 
+            connectedUrl = nil
             Logger.debug(type: .signalingChannel, message: "did disconnect")
         }
     }
 
     func send(message: Signaling) {
+        guard let ws = webSocketChannel else {
+            Logger.info(type: .signalingChannel, message: "failed to unwrap webSocketChannel")
+            return
+        }
+
         Logger.debug(type: .signalingChannel, message: "send message")
         let message = internalHandlers.onSend?(message) ?? message
         let encoder = JSONEncoder()
@@ -151,7 +246,7 @@ class SignalingChannel {
             let data = try encoder.encode(message)
             let str = String(data: data, encoding: .utf8)!
             Logger.debug(type: .signalingChannel, message: str)
-            webSocketChannel.send(message: .text(str))
+            ws.send(message: .text(str))
         } catch {
             Logger.debug(type: .signalingChannel,
                          message: "JSON encoding failed")
@@ -159,7 +254,12 @@ class SignalingChannel {
     }
 
     func send(text: String) {
-        webSocketChannel.send(message: .text(text))
+        guard let ws = webSocketChannel else {
+            Logger.info(type: .signalingChannel, message: "failed to unwrap webSocketChannel")
+            return
+        }
+
+        ws.send(message: .text(text))
     }
 
     func handle(message: WebSocketMessage) {

@@ -102,6 +102,11 @@ public final class MediaChannel {
     /// クライアントの設定
     public let configuration: Configuration
 
+    /// 接続中の URL
+    public var connectedUrl: URL? {
+        signalingChannel.connectedUrl
+    }
+
     /// メディアチャンネルの内部で利用している RTCPeerConnection
     public var native: RTCPeerConnection {
         peerChannel.context.nativeChannel

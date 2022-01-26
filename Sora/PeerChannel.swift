@@ -215,6 +215,10 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
 
     private var connectedAtLeastOnce: Bool = false
 
+    // type: redirect のために SDP を保存しておく
+    // 値が設定されている場合2回目の type: connect メッセージ送信とみなし、 redirect 中であると判断する
+    private var sdp: String?
+
     init(channel: PeerChannel) {
         self.channel = channel
 
@@ -239,7 +243,6 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
 
         Logger.debug(type: .peerChannel, message: "try connecting")
-        Logger.debug(type: .peerChannel, message: "try connecting to signaling channel")
 
         webRTCConfiguration = channel.configuration.webRTCConfiguration
         nativeChannel = NativePeerChannelFactory.default
@@ -262,7 +265,15 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled || configuration.spotlightEnabled == .enabled
 
         signalingChannel.connect { [weak self] error in
-            self?.sendConnectMessage(error: error)
+            guard let weakSelf = self else {
+                return
+            }
+
+            if let sdp = weakSelf.sdp {
+                weakSelf.sendConnectMessage(with: sdp, error: error, redirect: true)
+            } else {
+                weakSelf.sendConnectMessage(error: error)
+            }
         }
     }
 
@@ -285,6 +296,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
                     Logger.debug(type: .peerChannel,
                                  message: "failed to create offer SDP (\(error.localizedDescription))")
                 } else {
+                    self.sdp = sdp
                     Logger.debug(type: .peerChannel,
                                  message: "did create offer SDP")
                 }
@@ -295,7 +307,7 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-    func sendConnectMessage(with sdp: String?, error: Error?) {
+    func sendConnectMessage(with sdp: String?, error: Error?, redirect: Bool? = nil) {
         if error != nil {
             Logger.error(type: .peerChannel,
                          message: "failed connecting to signaling channel (\(error!.localizedDescription))")
@@ -351,7 +363,8 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             webRTCVersion: webRTCVersion,
             environment: DeviceInfo.current.description,
             dataChannelSignaling: configuration.dataChannelSignaling,
-            ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket
+            ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
+            redirect: redirect
         )
 
         Logger.debug(type: .peerChannel, message: "send connect")
@@ -762,12 +775,16 @@ class BasicPeerChannelContext: NSObject, RTCPeerConnectionDelegate {
             channel.switchedToDataChannel = true
             signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
             if signalingChannel.ignoreDisconnectWebSocket {
-                signalingChannel.webSocketChannel.disconnect(error: nil)
+                if let webSocketChannel = signalingChannel.webSocketChannel {
+                    webSocketChannel.disconnect(error: nil)
+                }
             }
 
             if let mediaChannel = channel.mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
                 onDataChannel(mediaChannel)
             }
+        case let .redirect(redirect):
+            signalingChannel.redirect(location: redirect.location)
         default:
             break
         }
