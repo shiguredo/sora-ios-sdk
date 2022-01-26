@@ -127,6 +127,9 @@ class BasicMediaStream: MediaStream {
     var creationTime: Date
 
     var mediaChannel: MediaChannel? {
+        // MediaChannel は必ず存在するが、 MediaChannel と PeerChannel の循環参照を避けるために、 PeerChannel は MediaChannel を弱参照で保持している
+        // mediaChannel を force unwrapping することも検討したが、エラーによる切断処理中なども安全である確信が持てなかったため、
+        // SDK 側で force unwrapping することは避ける
         peerChannel.mediaChannel
     }
 
