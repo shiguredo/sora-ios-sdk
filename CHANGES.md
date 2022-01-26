@@ -24,6 +24,8 @@
     - @enm10k
 - [CHANGE] サポートする iOS のバージョンを13以上に変更する
     - @enm10k
+- [FIX] CameraVideoCapturer で force unwrapping していた箇所を修正する
+    - @enm10k
     
 ## 2021.3.1
 
