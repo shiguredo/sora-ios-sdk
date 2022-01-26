@@ -83,7 +83,7 @@ public final class CameraVideoCapturer {
     /// CameraVideoCapturer の起動には、 capturer と近い設定のフォーマットとフレームレートが利用されます。
     /// また、起動された CameraVideoCapturer には capturer の保持する MediaStream が設定されます。
     public static func flip(_ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)) {
-        guard capturer.format != nil else {
+        guard let format = capturer.format else {
             completionHandler(SoraError.cameraError(reason: "format should not be nil"))
             return
         }
@@ -95,7 +95,7 @@ public final class CameraVideoCapturer {
             return
         }
 
-        let dimension = CMVideoFormatDescriptionGetDimensions(capturer.format!.formatDescription)
+        let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
         guard let format = CameraVideoCapturer.format(width: dimension.width,
                                                       height: dimension.height,
                                                       for: flip.device)

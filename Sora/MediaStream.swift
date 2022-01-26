@@ -62,6 +62,9 @@ public protocol MediaStream: AnyObject {
     /// 接続開始時刻
     var creationTime: Date { get }
 
+    /// メディアチャンネル
+    var mediaChannel: MediaChannel? { get }
+
     // MARK: - 映像と音声の可否
 
     /**
@@ -122,6 +125,13 @@ class BasicMediaStream: MediaStream {
     var videoTrackId: String = ""
     var audioTrackId: String = ""
     var creationTime: Date
+
+    var mediaChannel: MediaChannel? {
+        // MediaChannel は必ず存在するが、 MediaChannel と PeerChannel の循環参照を避けるために、 PeerChannel は MediaChannel を弱参照で保持している
+        // mediaChannel を force unwrapping することも検討したが、エラーによる切断処理中なども安全である確信が持てなかったため、
+        // SDK 側で force unwrapping することは避ける
+        peerChannel.mediaChannel
+    }
 
     var videoFilter: VideoFilter?
 

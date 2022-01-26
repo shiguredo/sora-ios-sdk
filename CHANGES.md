@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] MediaStream から MediaChannel にアクセスできるようにする
+    - @enm10k
 - [ADD] 複数シグナリング URL の指定に対応する
     - `Configuration.url` を廃止して `Configuration.urlCandidates` を追加する
     - `MediaChannel.connectedUrl` を追加する
@@ -31,6 +33,8 @@
 - [CHANGE] Starscream を削除して、 URLSessionWebSocketTask をデフォルトで使用する
     - @enm10k
 - [CHANGE] サポートする iOS のバージョンを13以上に変更する
+    - @enm10k
+- [FIX] CameraVideoCapturer で force unwrapping していた箇所を修正する
     - @enm10k
     
 ## 2021.3.1
