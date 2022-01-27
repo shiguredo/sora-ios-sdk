@@ -73,9 +73,8 @@ class SignalingChannel {
     required init(configuration: Configuration) {
         self.configuration = configuration
 
-        // TODO: OperationQueue 追加に伴うメモリー・リークが起きないか確認する
         let queue = OperationQueue()
-        // queue.name = "" // TODO: name は必要?
+        queue.name = "jp.shiguredo.sora-ios-sdk.websocket-delegate"
         queue.maxConcurrentOperationCount = 1
         queue.qualityOfService = .userInteractive
         self.queue = queue
