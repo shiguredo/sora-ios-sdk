@@ -48,6 +48,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         urlSession?.invalidateAndCancel()
 
+        // メモリー・リークを防ぐために空の Handlers を設定する
+        internalHandlers = WebSocketChannelInternalHandlers()
+
         Logger.debug(type: .webSocketChannel, message: "[\(host)] disconnected")
     }
 
