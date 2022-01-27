@@ -222,11 +222,6 @@ class SignalingChannel {
             Logger.debug(type: .signalingChannel, message: "call onDisconnect")
             internalHandlers.onDisconnect?(error, reason)
 
-            if onConnectHandler != nil {
-                Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
-                onConnectHandler!(error)
-            }
-
             connectedUrl = nil
             Logger.debug(type: .signalingChannel, message: "did disconnect")
         }
