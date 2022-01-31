@@ -168,7 +168,6 @@ public final class Sora {
                         handler: @escaping (_ mediaChannel: MediaChannel?,
                                             _ error: Error?) -> Void) -> ConnectionTask
     {
-        Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
         mediaChan.internalHandlers.onDisconnect = { [weak self, weak mediaChan] error in
             guard let weakSelf = self else {

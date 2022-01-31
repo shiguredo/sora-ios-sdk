@@ -130,6 +130,9 @@ public enum Signaling {
     /// "switch" シグナリング
     case switched(SignalingSwitched)
 
+    /// "redirect" シグナリング
+    case redirect(SignalingRedirect)
+
     /// :nodoc:
     public static func decode(_ data: Data) -> Result<Signaling, Error> {
         do {
@@ -171,6 +174,8 @@ public enum Signaling {
             return "push"
         case .switched:
             return "switched"
+        case .redirect:
+            return "redirect"
         }
     }
 }
@@ -362,6 +367,9 @@ public struct SignalingConnect {
 
     /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
+
+    /// type: redicret 受信後の再接続
+    public var redirect: Bool?
 }
 
 /**
@@ -496,6 +504,14 @@ public struct SignalingPush {
 public struct SignalingSwitched {
     /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
+}
+
+/**
+ "redirect" シグナリングメッセージを表します。
+ */
+public struct SignalingRedirect {
+    /// redirect する URL
+    public var location: String
 }
 
 /**
@@ -790,6 +806,8 @@ extension Signaling: Codable {
             self = .reOffer(try SignalingReOffer(from: decoder))
         case "switched":
             self = .switched(try SignalingSwitched(from: decoder))
+        case "redirect":
+            self = .redirect(try SignalingRedirect(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
@@ -906,6 +924,7 @@ extension SignalingConnect: Codable {
         case environment
         case data_channel_signaling
         case ignore_disconnect_websocket
+        case redirect
     }
 
     enum VideoCodingKeys: String, CodingKey {
@@ -939,6 +958,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(environment, forKey: .environment)
         try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
+        try container.encodeIfPresent(redirect, forKey: .redirect)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {
@@ -1272,5 +1292,17 @@ extension SignalingSwitched: Decodable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ignoreDisconnectWebSocket = try container.decode(Bool.self, forKey: .ignore_disconnect_websocket)
+    }
+}
+
+/// :nodoc:
+extension SignalingRedirect: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case location
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        location = try container.decode(String.self, forKey: .location)
     }
 }

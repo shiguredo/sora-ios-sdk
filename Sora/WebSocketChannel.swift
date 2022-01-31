@@ -141,21 +141,8 @@ public enum WebSocketMessage {
  WebSocket チャネルのイベントハンドラです。
  */
 public final class WebSocketChannelHandlers {
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onDisconnect",
-               message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((Error?) -> Void)? {
-        get { onDisconnect }
-        set { onDisconnect = newValue }
-    }
-
-    /// このプロパティは onPong に置き換えられました。
-    @available(*, deprecated, renamed: "onPong",
-               message: "このプロパティは onPong に置き換えられました。")
-    public var onPongHandler: ((Data?) -> Void)? {
-        get { onPong }
-        set { onPong = newValue }
-    }
+    /// 初期化します。
+    public init() {}
 
     /// このプロパティは onReceive に置き換えられました。
     @available(*, deprecated, renamed: "onReceive",
@@ -165,27 +152,40 @@ public final class WebSocketChannelHandlers {
         set { onReceive = newValue }
     }
 
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onSend",
-               message: "このプロパティは onSend に置き換えられました。")
-    public var onSendHandler: ((WebSocketMessage) -> WebSocketMessage)? {
-        get { onSend }
-        set { onSend = newValue }
-    }
-
-    /// 接続解除時に呼ばれるクロージャー
-    public var onDisconnect: ((Error?) -> Void)?
-
-    /// pong の送信時に呼ばれるクロージャー
-    public var onPong: ((Data?) -> Void)?
-
     /// メッセージ受信時に呼ばれるクロージャー
     public var onReceive: ((WebSocketMessage) -> Void)?
 
-    /// メッセージ送信時に呼ばれるクロージャー
-    public var onSend: ((WebSocketMessage) -> WebSocketMessage)?
+    // MARK: - 廃止された API
 
-    /// 初期化します。
+    /// onDisconnectHandler は廃止されました。
+    @available(*, unavailable, message: "onDisconnectHandler は廃止されました。")
+    public var onDisconnectHandler: ((Error?) -> Void)?
+
+    /// onPongHandler は廃止されました。
+    @available(*, unavailable, message: "onPongHandler は廃止されました。")
+    public var onPongHandler: ((Data?) -> Void)?
+
+    /// onSendHandler は廃止されました。
+    @available(*, unavailable, message: "onSendHandler は廃止されました。")
+    public var onSendHandler: ((WebSocketMessage) -> WebSocketMessage)?
+
+    /// 接続解除時に呼ばれるクロージャー
+    @available(*, unavailable, message: "onDisconnect は廃止されました。")
+    public var onDisconnect: ((Error?) -> Void)?
+
+    /// pong の送信時に呼ばれるクロージャー
+    @available(*, unavailable, message: "onPong は廃止されました。")
+    public var onPong: ((Data?) -> Void)?
+
+    /// メッセージ送信時に呼ばれるクロージャー
+    @available(*, unavailable, message: "onSend は廃止されました。")
+    public var onSend: ((WebSocketMessage) -> WebSocketMessage)?
+}
+
+final class WebSocketChannelInternalHandlers {
+    public var onConnect: ((URLSessionWebSocketChannel) -> Void)?
+    public var onDisconnectWithError: ((URLSessionWebSocketChannel, Error) -> Void)?
+    public var onReceive: ((WebSocketMessage) -> Void)?
     public init() {}
 }
 
