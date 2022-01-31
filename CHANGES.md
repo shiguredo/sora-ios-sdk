@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] WebRTC 98.4758.0.0 に上げる
+    - @miosakuma
 - [UPDATE] MediaStream から MediaChannel にアクセスできるようにする
     - @enm10k
 - [ADD] 複数シグナリング URL の指定に対応する
