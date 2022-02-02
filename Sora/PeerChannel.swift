@@ -83,6 +83,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
+    // MARK: - Properties
+
     var internalHandlers = PeerChannelInternalHandlers()
     let configuration: Configuration
     let signalingChannel: SignalingChannel
@@ -123,7 +125,28 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // type: redirect のために SDP を保存しておく
     // 値が設定されている場合2回目の type: connect メッセージ送信とみなし、 redirect 中であると判断する
     private var sdp: String?
-    
+
+    // MARK: - Public methods
+
+    required init(configuration: Configuration, signalingChannel: SignalingChannel, mediaChannel: MediaChannel?) {
+        self.signalingChannel = signalingChannel
+        self.mediaChannel = mediaChannel
+        self.configuration = configuration
+        webRTCConfiguration = configuration.webRTCConfiguration
+
+        lock = Lock()
+        super.init()
+        lock.context = self
+
+        signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
+            self?.disconnect(error: error, reason: reason)
+        }
+
+        signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
+            self?.handle(signaling: signaling)
+        }
+    }
+
     func connect(handler: @escaping (Error?) -> Void) {
         if state == .connecting || state == .connected {
             handler(SoraError.connectionBusy(reason:
@@ -165,36 +188,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-    func sendConnectMessage(error: Error?) {
-        if let error = error {
-            Logger.error(type: .peerChannel,
-                         message: "failed connecting to signaling channel (\(error.localizedDescription))")
-            onConnectHandler?(error)
-            onConnectHandler = nil
-            return
-        }
-
-        if configuration.isSender {
-            Logger.debug(type: .peerChannel, message: "try creating offer SDP")
-            NativePeerChannelFactory.default
-                .createClientOfferSDP(configuration: webRTCConfiguration,
-                                      constraints: webRTCConfiguration.constraints)
-            { sdp, sdpError in
-                if let error = sdpError {
-                    Logger.debug(type: .peerChannel,
-                                 message: "failed to create offer SDP (\(error.localizedDescription))")
-                } else {
-                    self.sdp = sdp
-                    Logger.debug(type: .peerChannel,
-                                 message: "did create offer SDP")
-                }
-                self.sendConnectMessage(with: sdp, error: error)
-            }
-        } else {
-            sendConnectMessage(with: nil, error: nil)
-        }
-    }
-
     func add(stream: MediaStream) {
         streams.append(stream)
         Logger.debug(type: .peerChannel, message: "call onAddStream")
@@ -222,32 +215,35 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         iceCandidates = iceCandidates.filter { each in each == iceCandidate }
     }
 
-    fileprivate func terminateAllStreams() {
-        for stream in streams {
-            stream.terminate()
-        }
-        streams.removeAll()
-        // Do not call `handlers.onRemoveStreamHandler` here
-        // This method is meant to be called only when disconnection cleanup
-    }
+    // MARK: - Private methods
 
-    required init(configuration: Configuration, signalingChannel: SignalingChannel, mediaChannel: MediaChannel?) {
-        self.signalingChannel = signalingChannel
-        self.mediaChannel = mediaChannel
-        self.configuration = configuration
-        self.webRTCConfiguration = configuration.webRTCConfiguration
-        
-        lock = Lock()
-        super.init()
-        lock.context = self
-
-        
-        signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
-            self?.disconnect(error: error, reason: reason)
+    private func sendConnectMessage(error: Error?) {
+        if let error = error {
+            Logger.error(type: .peerChannel,
+                         message: "failed connecting to signaling channel (\(error.localizedDescription))")
+            onConnectHandler?(error)
+            onConnectHandler = nil
+            return
         }
 
-        signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
-            self?.handle(signaling: signaling)
+        if configuration.isSender {
+            Logger.debug(type: .peerChannel, message: "try creating offer SDP")
+            NativePeerChannelFactory.default
+                .createClientOfferSDP(configuration: webRTCConfiguration,
+                                      constraints: webRTCConfiguration.constraints)
+            { sdp, sdpError in
+                if let error = sdpError {
+                    Logger.debug(type: .peerChannel,
+                                 message: "failed to create offer SDP (\(error.localizedDescription))")
+                } else {
+                    self.sdp = sdp
+                    Logger.debug(type: .peerChannel,
+                                 message: "did create offer SDP")
+                }
+                self.sendConnectMessage(with: sdp, error: error)
+            }
+        } else {
+            sendConnectMessage(with: nil, error: nil)
         }
     }
 
@@ -462,10 +458,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
+    private func terminateAllStreams() {
+        for stream in streams {
+            stream.terminate()
+        }
+        streams.removeAll()
+        // Do not call `handlers.onRemoveStreamHandler` here
+        // This method is meant to be called only when disconnection cleanup
+    }
+
     private func createAnswer(isSender: Bool,
-                      offer: String,
-                      constraints: RTCMediaConstraints,
-                      handler: @escaping (String?, Error?) -> Void)
+                              offer: String,
+                              constraints: RTCMediaConstraints,
+                              handler: @escaping (String?, Error?) -> Void)
     {
         Logger.debug(type: .peerChannel, message: "try create answer")
         Logger.debug(type: .peerChannel, message: offer)
@@ -527,7 +532,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-   private func createAndSendAnswer(offer: SignalingOffer) {
+    private func createAndSendAnswer(offer: SignalingOffer) {
         Logger.debug(type: .peerChannel, message: "try sending answer")
         offerEncodings = offer.encodings
 
