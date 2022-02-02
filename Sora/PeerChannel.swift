@@ -214,6 +214,74 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     func remove(iceCandidate: ICECandidate) {
         iceCandidates = iceCandidates.filter { each in each == iceCandidate }
     }
+　
+    
+    func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
+        Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
+
+        guard let dataChannel = dataChannelInstances["signaling"] else {
+            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+            return
+        }
+        lock.lock()
+        createAnswer(isSender: false,
+                     offer: reOffer,
+                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+            guard error == nil else {
+                Logger.error(type: .peerChannel,
+                             message: "failed to create re-answer: error => (\(error!.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create re-answer"),
+                                reason: .signalingFailure)
+                return
+            }
+
+            let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+
+            var data: Data?
+            do {
+                data = try JSONEncoder().encode(reAnswer)
+            } catch {
+                Logger.error(type: .peerChannel,
+                             message: "failed to encode re-answer: error => (\(error.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to encode re-answer message to json"),
+                                reason: .signalingFailure)
+                return
+            }
+
+            if let data = data {
+                let ok = dataChannel.send(data)
+                if !ok {
+                    Logger.error(type: .peerChannel,
+                                 message: "failed to send re-answer message over DataChannel")
+                    self.lock.unlock()
+                    self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer message over DataChannel"),
+                                    reason: .signalingFailure)
+                    return
+                }
+            }
+
+            if self.configuration.isSender {
+                self.updateSenderOfferEncodings()
+            }
+
+            Logger.debug(type: .peerChannel, message: "call onUpdate")
+            self.internalHandlers.onUpdate?(answer!)
+
+            self.lock.unlock()
+        }
+    }
+
+    func disconnect(error: Error?, reason: DisconnectReason) {
+        switch state {
+        case .closed:
+            break
+        default:
+            Logger.debug(type: .peerChannel, message: "wait to disconnect")
+            lock.waitDisconnect(error: error, reason: reason)
+        }
+    }
 
     // MARK: - Private methods
 
@@ -614,63 +682,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-    func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
-        Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
-
-        guard let dataChannel = dataChannelInstances["signaling"] else {
-            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
-            return
-        }
-        lock.lock()
-        createAnswer(isSender: false,
-                     offer: reOffer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
-            guard error == nil else {
-                Logger.error(type: .peerChannel,
-                             message: "failed to create re-answer: error => (\(error!.localizedDescription)")
-                self.lock.unlock()
-                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create re-answer"),
-                                reason: .signalingFailure)
-                return
-            }
-
-            let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
-
-            var data: Data?
-            do {
-                data = try JSONEncoder().encode(reAnswer)
-            } catch {
-                Logger.error(type: .peerChannel,
-                             message: "failed to encode re-answer: error => (\(error.localizedDescription)")
-                self.lock.unlock()
-                self.disconnect(error: SoraError.peerChannelError(reason: "failed to encode re-answer message to json"),
-                                reason: .signalingFailure)
-                return
-            }
-
-            if let data = data {
-                let ok = dataChannel.send(data)
-                if !ok {
-                    Logger.error(type: .peerChannel,
-                                 message: "failed to send re-answer message over DataChannel")
-                    self.lock.unlock()
-                    self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer message over DataChannel"),
-                                    reason: .signalingFailure)
-                    return
-                }
-            }
-
-            if self.configuration.isSender {
-                self.updateSenderOfferEncodings()
-            }
-
-            Logger.debug(type: .peerChannel, message: "call onUpdate")
-            self.internalHandlers.onUpdate?(answer!)
-
-            self.lock.unlock()
-        }
-    }
-
     private func handle(signaling: Signaling) {
         Logger.debug(type: .mediaStream, message: "handle signaling => \(signaling.typeName())")
         switch signaling {
@@ -748,16 +759,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             onConnectHandler = nil
         }
         lock.unlock()
-    }
-
-    func disconnect(error: Error?, reason: DisconnectReason) {
-        switch state {
-        case .closed:
-            break
-        default:
-            Logger.debug(type: .peerChannel, message: "wait to disconnect")
-            lock.waitDisconnect(error: error, reason: reason)
-        }
     }
 
     private func basicDisconnect(error: Error?, reason: DisconnectReason) {
