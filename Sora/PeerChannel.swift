@@ -214,8 +214,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     func remove(iceCandidate: ICECandidate) {
         iceCandidates = iceCandidates.filter { each in each == iceCandidate }
     }
-　
-    
+
     func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
         Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
 
@@ -327,7 +326,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "did connect to signaling channel")
 
-        var role: SignalingRole!
+        var role: SignalingRole
         var multistream = configuration.multistreamEnabled || configuration.spotlightEnabled == .enabled
         switch configuration.role {
         case .publisher, .sendonly:
