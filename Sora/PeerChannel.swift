@@ -458,15 +458,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-    private func terminateAllStreams() {
-        for stream in streams {
-            stream.terminate()
-        }
-        streams.removeAll()
-        // Do not call `handlers.onRemoveStreamHandler` here
-        // This method is meant to be called only when disconnection cleanup
-    }
-
     private func createAnswer(isSender: Bool,
                               offer: String,
                               constraints: RTCMediaConstraints,
@@ -781,7 +772,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         if configuration.isSender {
             terminateSenderStream()
         }
-        terminateAllStreams()
+
+        for stream in streams {
+            stream.terminate()
+        }
+        streams.removeAll()
+
         nativeChannel.close()
 
         signalingChannel.disconnect(error: error, reason: reason)
