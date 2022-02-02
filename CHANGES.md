@@ -36,6 +36,9 @@
     - @enm10k
 - [CHANGE] サポートする iOS のバージョンを13以上に変更する
     - @enm10k
+- [CHANGE] `MediaChannel.native` の型を `RTCPeerConnection` から `RTCPeerConnection?` に変更する
+    - PeerChannel で force unwrapping している箇所を修正する際に、併せて修正した
+    - @enm10k
 - [FIX] CameraVideoCapturer で force unwrapping していた箇所を修正する
     - @enm10k
     
