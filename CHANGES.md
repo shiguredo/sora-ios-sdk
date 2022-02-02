@@ -38,6 +38,8 @@
     - @enm10k
 - [FIX] CameraVideoCapturer で force unwrapping していた箇所を修正する
     - @enm10k
+- [FIX] VideoView に debugMode = true を設定した際にメモリー・リークが発生する問題を修正する
+    - @szktty @enm10k
     
 ## 2021.3.1
 

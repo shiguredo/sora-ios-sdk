@@ -273,9 +273,9 @@ class VideoViewContentView: UIView {
                 }
 
                 frameCount = 0
-                debugMonitor = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-                    DispatchQueue.main.async {
-                        self.updateDebugInfo()
+                debugMonitor = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    DispatchQueue.main.async { [weak self] in
+                        self?.updateDebugInfo()
                     }
                 }
             } else {
