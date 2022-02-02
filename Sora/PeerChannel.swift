@@ -100,13 +100,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     weak var mediaChannel: MediaChannel?
 
     var state: PeerChannelConnectionState {
-        let state = nativeChannel == nil ? RTCPeerConnectionState.new : nativeChannel.connectionState
-        return PeerChannelConnectionState(state)
+        guard let nativeChannel = nativeChannel else {
+            return PeerChannelConnectionState(RTCPeerConnectionState.new)
+        }
+
+        return PeerChannelConnectionState(nativeChannel.connectionState)
     }
 
-    // connect() の成功後は必ずセットされるので nil チェックを省略する
-    // connect() 実行前は nil なのでアクセスしないこと
-    var nativeChannel: RTCPeerConnection!
+    var nativeChannel: RTCPeerConnection?
 
     var webRTCConfiguration: WebRTCConfiguration
     var clientId: String?
@@ -379,6 +380,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func initializeSenderStream() {
+        guard let nativeChannel = nativeChannel else {
+            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            return
+        }
+
         Logger.debug(type: .peerChannel,
                      message: "initialize sender stream")
 
@@ -530,6 +536,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                               constraints: RTCMediaConstraints,
                               handler: @escaping (String?, Error?) -> Void)
     {
+        guard let nativeChannel = nativeChannel else {
+            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            return
+        }
+
         Logger.debug(type: .peerChannel, message: "try create answer")
         Logger.debug(type: .peerChannel, message: offer)
 
@@ -542,6 +553,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 handler(nil, error)
                 return
             }
+
+            guard let nativeChannel = self.nativeChannel else {
+                Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+                return
+            }
+
             Logger.debug(type: .peerChannel, message: "did set remote description")
             Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
 
@@ -551,17 +568,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             }
 
             Logger.debug(type: .peerChannel, message: "try creating native answer")
-            self.nativeChannel.answer(for: constraints) { answer, error in
+            nativeChannel.answer(for: constraints) { answer, error in
                 guard error == nil else {
                     Logger.debug(type: .peerChannel,
                                  message: "failed creating native answer (\(error!.localizedDescription)")
                     handler(nil, error)
                     return
                 }
+
+                guard let nativeChannel = self.nativeChannel else {
+                    Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+                    return
+                }
+
                 Logger.debug(type: .peerChannel, message: "did create answer")
 
                 Logger.debug(type: .peerChannel, message: "try setting local description")
-                self.nativeChannel.setLocalDescription(answer!) { error in
+                nativeChannel.setLocalDescription(answer!) { error in
                     guard error == nil else {
                         Logger.debug(type: .peerChannel,
                                      message: "failed setting local description")
@@ -581,9 +604,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func updateSenderOfferEncodings() {
+        guard let nativeChannel = nativeChannel else {
+            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            return
+        }
+
         guard let oldEncodings = offerEncodings else {
             return
         }
+
         Logger.debug(type: .peerChannel, message: "update sender offer encodings")
         for sender in nativeChannel.senders {
             sender.updateOfferEncodings(oldEncodings)
@@ -591,6 +620,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func createAndSendAnswer(offer: SignalingOffer) {
+        guard let nativeChannel = nativeChannel else {
+            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            return
+        }
+
         Logger.debug(type: .peerChannel, message: "try sending answer")
         offerEncodings = offer.encodings
 
@@ -703,7 +737,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         case let .ping(ping):
             let pong = SignalingPong()
             if ping.statisticsEnabled == true {
-                nativeChannel.statistics { report in
+                nativeChannel?.statistics { report in
                     var json: [String: Any] = ["type": "pong"]
                     let stats = Statistics(contentsOf: report)
                     json["stats"] = stats.jsonObject
@@ -748,9 +782,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "media streams = \(streams.count)")
         Logger.debug(type: .peerChannel,
-                     message: "native senders = \(nativeChannel.senders.count)")
+                     message: "native senders = \(nativeChannel?.senders.count ?? 0)")
         Logger.debug(type: .peerChannel,
-                     message: "native receivers = \(nativeChannel.receivers.count)")
+                     message: "native receivers = \(nativeChannel?.receivers.count ?? 0)")
 
         if onConnectHandler != nil {
             Logger.debug(type: .peerChannel, message: "call connect(handler:)")
@@ -778,7 +812,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
         streams.removeAll()
 
-        nativeChannel.close()
+        nativeChannel?.close()
 
         signalingChannel.disconnect(error: error, reason: reason)
 

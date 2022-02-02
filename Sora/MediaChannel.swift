@@ -108,7 +108,7 @@ public final class MediaChannel {
     }
 
     /// メディアチャンネルの内部で利用している RTCPeerConnection
-    public var native: RTCPeerConnection {
+    public var native: RTCPeerConnection? {
         peerChannel.nativeChannel
     }
 
