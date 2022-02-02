@@ -160,7 +160,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
 
         switch dataChannel.label {
         case "stats":
-            peerChannel.context.nativeChannel.statistics {
+            peerChannel.nativeChannel?.statistics {
                 // NOTE: stats の型を Signaling.swift に定義していない
                 let reports = Statistics(contentsOf: $0).jsonObject
                 let json: [String: Any] = ["type": "stats",
@@ -186,7 +186,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         case "signaling":
             do {
                 let reOffer = try JSONDecoder().decode(SignalingReOffer.self, from: data)
-                peerChannel.context.createAndSendReAnswerOnDataChannel(forReOffer: reOffer.sdp)
+                peerChannel.createAndSendReAnswerOnDataChannel(forReOffer: reOffer.sdp)
             } catch {
                 Logger.error(type: .dataChannel, message: "failed to decode SignalingReOffer")
             }
