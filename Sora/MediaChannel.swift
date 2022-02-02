@@ -429,6 +429,19 @@ public final class MediaChannel {
             handlers.onDisconnect?(error)
         }
     }
+
+    public func sendMessage(label: String, data: Data) -> Error? {
+        guard peerChannel.switchedToDataChannel else {
+            return SoraError.messagingError(reason: "DataChannel is not open yet")
+        }
+
+        guard let dc = peerChannel.dataChannels[label] else {
+            return SoraError.messagingError(reason: "no DataChannel found: label => \(label)")
+        }
+        let result = dc.send(data)
+
+        return result ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
+    }
 }
 
 extension MediaChannel: CustomStringConvertible {

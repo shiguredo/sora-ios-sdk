@@ -142,7 +142,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             return
         }
 
-        guard let dc = peerChannel.dataChannelInstances[dataChannel.label] else {
+        guard let dc = peerChannel.dataChannels[dataChannel.label] else {
             Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is unavailable")
             return
         }
@@ -228,6 +228,6 @@ class DataChannel {
             Logger.error(type: .dataChannel, message: "failed to compress message")
             return false
         }
-        return native.sendData(RTCDataBuffer(data: data, isBinary: false))
+        return native.sendData(RTCDataBuffer(data: data, isBinary: true))
     }
 }

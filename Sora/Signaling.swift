@@ -368,6 +368,9 @@ public struct SignalingConnect {
     /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
 
+    /// メッセージング機能で利用する DataChannel
+    public var dataChannels: Encodable?
+
     /// type: redicret 受信後の再接続
     public var redirect: Bool?
 }
@@ -924,6 +927,7 @@ extension SignalingConnect: Codable {
         case environment
         case data_channel_signaling
         case ignore_disconnect_websocket
+        case data_channels
         case redirect
     }
 
@@ -959,6 +963,8 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
         try container.encodeIfPresent(redirect, forKey: .redirect)
+        let dataChannelsEnc = container.superEncoder(forKey: .data_channels)
+        try dataChannels?.encode(to: dataChannelsEnc)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {

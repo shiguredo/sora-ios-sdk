@@ -92,8 +92,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     private(set) var streams: [MediaStream] = []
     private(set) var iceCandidates: [ICECandidate] = []
 
-    var dataChannels: [String] = []
-    var dataChannelInstances: [String: DataChannel] = [:]
+    var connectDataChannels: Encodable?
+    var dataChannels: [String: DataChannel] = [:]
     var switchedToDataChannel: Bool = false
     var signalingOfferMessageDataChannels: [[String: Any]] = []
 
@@ -219,7 +219,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
         Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
 
-        guard let dataChannel = dataChannelInstances["signaling"] else {
+        guard let dataChannel = dataChannels["signaling"] else {
             Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
             return
         }
@@ -372,6 +372,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             environment: DeviceInfo.current.description,
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
+            dataChannels: configuration.dataChannels,
             redirect: redirect
         )
 
@@ -889,7 +890,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func sendMessageOverDataChannel(message: Signaling) {
-        guard let dataChannel = dataChannelInstances["signaling"] else {
+        guard let dataChannel = dataChannels["signaling"] else {
             Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
             return
         }
@@ -1046,8 +1047,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
 
         let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self)
-        dataChannels += [dataChannel.label]
-        dataChannelInstances[dataChannel.label] = dc
+        dataChannels[dataChannel.label] = dc
     }
 }
 
