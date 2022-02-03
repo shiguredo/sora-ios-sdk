@@ -434,7 +434,7 @@ public final class MediaChannel {
         guard peerChannel.switchedToDataChannel else {
             return SoraError.messagingError(reason: "DataChannel is not open yet")
         }
-        
+
         guard label.starts(with: "#") else {
             return SoraError.messagingError(reason: "label should start with #")
         }

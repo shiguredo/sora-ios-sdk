@@ -70,7 +70,7 @@ extension SoraError: LocalizedError {
             return "PeerChannel error (\(reason))"
         case let .cameraError(reason: reason):
             return "Camera error: \(reason)"
-        case .messagingError(reason: let reason):
+        case let .messagingError(reason: reason):
             return "Messaging error: \(reason)"
         }
     }
