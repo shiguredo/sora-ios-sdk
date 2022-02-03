@@ -9,8 +9,13 @@
 - FIX
     - バグ修正
 
-## develop
+## 2022.1.0
 
+- [UPDATE] システム条件を変更する
+    - macOS 12.2 以降
+    - Xcode 13.2
+    - Swift 5.5.2
+    - @miosakuma
 - [UPDATE] WebRTC 98.4758.0.0 に上げる
     - @miosakuma
 - [UPDATE] MediaStream から MediaChannel にアクセスできるようにする
