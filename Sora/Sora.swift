@@ -1,57 +1,55 @@
-import Foundation
 import AVFoundation
+import Foundation
 import WebRTC
 
 /// `Sora` オブジェクトのイベントハンドラです。
 public final class SoraHandlers {
-    
     /// このプロパティは onConnect に置き換えられました。
     @available(*, deprecated, renamed: "onConnect",
-    message: "このプロパティは onConnect に置き換えられました。")
+               message: "このプロパティは onConnect に置き換えられました。")
     public var onConnectHandler: ((MediaChannel?, Error?) -> Void)? {
         get { onConnect }
         set { onConnect = newValue }
     }
-    
+
     /// このプロパティは onDisconnect に置き換えられました。
     @available(*, deprecated, renamed: "onDisconnect",
-    message: "このプロパティは onDisconnect に置き換えられました。")
+               message: "このプロパティは onDisconnect に置き換えられました。")
     public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)? {
-           get { onDisconnect }
-           set { onDisconnect = newValue }
-       }
-    
+        get { onDisconnect }
+        set { onDisconnect = newValue }
+    }
+
     /// このプロパティは onAddMediaChannel に置き換えられました。
     @available(*, deprecated, renamed: "onAddMediaChannel",
-    message: "このプロパティは onAddMediaChannel に置き換えられました。")
+               message: "このプロパティは onAddMediaChannel に置き換えられました。")
     public var onAddMediaChannelHandler: ((MediaChannel) -> Void)? {
-           get { onAddMediaChannel }
-           set { onAddMediaChannel = newValue }
-       }
-    
+        get { onAddMediaChannel }
+        set { onAddMediaChannel = newValue }
+    }
+
     /// このプロパティは onRemoveMediaChannel に置き換えられました。
     @available(*, deprecated, renamed: "onRemoveMediaChannel",
-    message: "このプロパティは onRemoveMediaChannel に置き換えられました。")
+               message: "このプロパティは onRemoveMediaChannel に置き換えられました。")
     public var onRemoveMediaChannelHandler: ((MediaChannel) -> Void)? {
-           get { onRemoveMediaChannel }
-           set { onRemoveMediaChannel = newValue }
-       }
-    
+        get { onRemoveMediaChannel }
+        set { onRemoveMediaChannel = newValue }
+    }
+
     /// 接続成功時に呼ばれるクロージャー
     public var onConnect: ((MediaChannel?, Error?) -> Void)?
-    
+
     /// 接続解除時に呼ばれるクロージャー
     public var onDisconnect: ((MediaChannel, Error?) -> Void)?
-    
+
     /// メディアチャネルが追加されたときに呼ばれるクロージャー
     public var onAddMediaChannel: ((MediaChannel) -> Void)?
-    
+
     /// メディアチャネルが除去されたときに呼ばれるクロージャー
     public var onRemoveMediaChannel: ((MediaChannel) -> Void)?
 
     /// 初期化します。
     public init() {}
-    
 }
 
 /**
@@ -59,20 +57,19 @@ public final class SoraHandlers {
  `Sora` オブジェクトを使用してサーバーへの接続を行います。
  */
 public final class Sora {
-    
     // MARK: - SDK の操作
-    
+
     private static let isInitialized: Bool = {
         initialize()
         return true
     }()
-    
+
     private static func initialize() {
         Logger.debug(type: .sora, message: "initialize SDK")
         RTCInitializeSSL()
         RTCEnableMetrics()
     }
-    
+
     /**
      SDK の終了処理を行います。
      アプリケーションの終了と同時に SDK の使用を終了する場合、
@@ -83,42 +80,33 @@ public final class Sora {
         RTCShutdownInternalTracer()
         RTCCleanupSSL()
     }
-    
+
     /**
      ログレベル。指定したレベルより高いログは出力されません。
      デフォルトは `info` です。
      */
     public static var logLevel: LogLevel {
         get {
-            return Logger.shared.level
+            Logger.shared.level
         }
         set {
             Logger.shared.level = newValue
         }
     }
-    
-    /// スポットライトレガシー機能を有効化する
-    @available(*, deprecated,
-    message: "Sora のスポットライトレガシー機能は 2021 年 12 月のリリースにて廃止予定です。")
-    public static func useSpotlightLegacy() {
-        isSpotlightLegacyEnabled = true
-    }
-    
+
     // MARK: - プロパティ
-    
+
     /// 接続中のメディアチャネルのリスト
     public private(set) var mediaChannels: [MediaChannel] = []
-    
+
     /// イベントハンドラ
-    public let handlers: SoraHandlers = SoraHandlers()
-    
-    internal static var isSpotlightLegacyEnabled: Bool = false
-    
+    public let handlers = SoraHandlers()
+
     // MARK: - インスタンスの生成と取得
-    
+
     /// シングルトンインスタンス
-    public static let shared: Sora = Sora()
-    
+    public static let shared = Sora()
+
     /**
      初期化します。
      大抵の用途ではシングルトンインスタンスで問題なく、
@@ -140,9 +128,9 @@ public final class Sora {
         // The following line will NEVER fail.
         if !initialized { fatalError() }
     }
-    
+
     // MARK: - メディアチャネルの管理
-    
+
     func add(mediaChannel: MediaChannel) {
         DispatchQueue.global().sync {
             if !mediaChannels.contains(mediaChannel) {
@@ -152,7 +140,7 @@ public final class Sora {
             }
         }
     }
-    
+
     func remove(mediaChannel: MediaChannel) {
         DispatchQueue.global().sync {
             if mediaChannels.contains(mediaChannel) {
@@ -162,12 +150,12 @@ public final class Sora {
             }
         }
     }
-    
+
     // MARK: - 接続
-    
+
     /**
      サーバーに接続します。
-     
+
      - parameter configuration: クライアントの設定
      - parameter webRTCConfiguration: WebRTC の設定
      - parameter handler: 接続試行後に呼ばれるクロージャー。
@@ -178,8 +166,8 @@ public final class Sora {
     public func connect(configuration: Configuration,
                         webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
                         handler: @escaping (_ mediaChannel: MediaChannel?,
-        _ error: Error?) -> Void) -> ConnectionTask {
-        Logger.debug(type: .sora, message: "connecting \(configuration.url.absoluteString)")
+                                            _ error: Error?) -> Void) -> ConnectionTask
+    {
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
         mediaChan.internalHandlers.onDisconnect = { [weak self, weak mediaChan] error in
             guard let weakSelf = self else {
@@ -215,9 +203,9 @@ public final class Sora {
             weakSelf.handlers.onConnect?(mediaChan, nil)
         }
     }
-    
+
     // MARK: - 音声ユニットの操作
-    
+
     /**
      * 音声ユニットの手動による初期化の可否。
      * ``false`` をセットした場合、音声トラックの生成時に音声ユニットが自動的に初期化されます。
@@ -227,13 +215,13 @@ public final class Sora {
      */
     public var usesManualAudio: Bool {
         get {
-            return RTCAudioSession.sharedInstance().useManualAudio
+            RTCAudioSession.sharedInstance().useManualAudio
         }
         set {
             RTCAudioSession.sharedInstance().useManualAudio = newValue
         }
     }
-    
+
     /**
      * 音声ユニットの使用の可否。
      * このプロパティは ``usesManualAudio`` が ``true`` の場合のみ有効です。
@@ -248,13 +236,13 @@ public final class Sora {
      */
     public var audioEnabled: Bool {
         get {
-            return RTCAudioSession.sharedInstance().isAudioEnabled
+            RTCAudioSession.sharedInstance().isAudioEnabled
         }
         set {
             RTCAudioSession.sharedInstance().isAudioEnabled = newValue
         }
     }
-    
+
     /**
      * ``AVAudioSession`` の設定を変更する際に使います。
      * WebRTC で使用中のスレッドをロックします。
@@ -303,7 +291,7 @@ public final class Sora {
         block()
         session.unlockForConfiguration()
     }
-    
+
     /**
      * 音声モードを変更します。
      * このメソッドは **接続完了後** に実行してください。
@@ -317,7 +305,7 @@ public final class Sora {
             let session = RTCAudioSession.sharedInstance()
             session.lockForConfiguration()
             switch mode {
-            case .default(category: let category, output: let output):
+            case let .default(category: category, output: output):
                 if output == .speaker {
                     options = [options, .defaultToSpeaker]
                 }
@@ -326,7 +314,7 @@ public final class Sora {
             case .videoChat:
                 try session.setCategory(.playAndRecord, options: options)
                 try session.setMode(.videoChat)
-            case .voiceChat(output: let output):
+            case let .voiceChat(output: output):
                 if output == .speaker {
                     options = [options, .defaultToSpeaker]
                 }
@@ -338,25 +326,25 @@ public final class Sora {
             }
             session.unlockForConfiguration()
             return .success(())
-        } catch let error {
+        } catch {
             return .failure(error)
         }
     }
-    
+
     // MARK: - libwebrtc のログ出力
-    
+
     private static var webRTCCallbackLogger: RTCCallbackLogger = {
         let logger = RTCCallbackLogger()
         logger.severity = .none
         return logger
     }()
-    
+
     private static let webRTCLoggingDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter
     }()
-    
+
     /**
      * libwebrtc のログレベルを指定します。
      * ログは `RTCSetMinDebugLogLevel()` でも指定可能ですが、 `RTCSetMinDebugLogLevel()` ではログの時刻が表示されません。
@@ -388,7 +376,6 @@ public final class Sora {
             print("\(webRTCLoggingDateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
     }
-    
 }
 
 /**
@@ -396,31 +383,29 @@ public final class Sora {
  `cancel()` で接続をキャンセル可能です。
  */
 public final class ConnectionTask {
-    
     /**
      接続状態を表します。
      */
     public enum State {
-        
         /// 接続試行中
         case connecting
-        
+
         /// 接続済み
         case completed
-        
+
         /// キャンセル済み
         case canceled
     }
-    
+
     weak var peerChannel: PeerChannel?
-    
+
     /// 接続状態
     public private(set) var state: State
-    
+
     init() {
         state = .connecting
     }
-    
+
     /**
      * 接続試行をキャンセルします。
      * すでに接続済みであれば何もしません。
@@ -433,26 +418,24 @@ public final class ConnectionTask {
             state = .canceled
         }
     }
-    
+
     func complete() {
         if state != .completed {
             Logger.debug(type: .mediaChannel, message: "connection task completed")
             state = .completed
         }
     }
-    
 }
 
 /// :nodoc:
 extension RTCAudioSession {
-    
     func setCategory(_ category: AVAudioSession.Category,
-                     options: AVAudioSession.CategoryOptions = []) throws {
+                     options: AVAudioSession.CategoryOptions = []) throws
+    {
         try setCategory(category.rawValue, with: options)
     }
-    
+
     func setMode(_ mode: AVAudioSession.Mode) throws {
         try setMode(mode.rawValue)
     }
-    
 }

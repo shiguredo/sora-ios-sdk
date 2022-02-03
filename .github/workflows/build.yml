@@ -12,10 +12,10 @@ on:
 
 jobs:
   build:
-    runs-on: macOS-latest
+    runs-on: macos-11
     env:
-      XCODE: /Applications/Xcode_12.4.app
-      XCODE_SDK: iphoneos14.4
+      XCODE: /Applications/Xcode_13.1.app
+      XCODE_SDK: iphoneos15.0
     steps:
     - uses: actions/checkout@v2
     - name: Select Xcode Version
@@ -24,8 +24,16 @@ jobs:
       run: xcodebuild -version
     - name: Show CocoaPods Version
       run: pod --version
+    - name: Restore Pods
+      uses: actions/cache@v2
+      with:
+        path: Pods
+        key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-
     - name: Install Dependences
       run: |
+        rm Podfile && mv Podfile.dev Podfile
         pod repo update
         pod install
     - name: Build Xcode Project
@@ -41,6 +49,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
+    - name: Check uncommitted unformatted code
+      run: |
+        ./lint-format.sh
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]

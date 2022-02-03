@@ -9,6 +9,46 @@
 - FIX
     - バグ修正
 
+## 2022.1.0
+
+- [UPDATE] システム条件を変更する
+    - macOS 12.2 以降
+    - Xcode 13.2
+    - Swift 5.5.2
+    - @miosakuma
+- [UPDATE] WebRTC 98.4758.0.0 に上げる
+    - @miosakuma
+- [UPDATE] MediaStream から MediaChannel にアクセスできるようにする
+    - @enm10k
+- [ADD] 複数シグナリング URL の指定に対応する
+    - `Configuration.url` を廃止して `Configuration.urlCandidates` を追加する
+    - `MediaChannel.connectedUrl` を追加する
+    - @enm10k
+- [ADD] type: rediret に対応する
+    - @enm10k
+- [CHANGE] スポットライトレガシーを削除する
+    - @miosakuma
+- [CHANGE] WebSocketChannel プロトコルを廃止する
+    - `Configuration.webSocketChannelType` を廃止する
+    - `Configuration.allowsURLSessionWebSocketChannel` を廃止する
+    - `WebSocketChannelHandlers.onDisconnect` を廃止する
+    - `WebSocketChannelHandlers.onPong` を廃止する
+    - `WebSocketChannelHandlers.onSend` を廃止する
+    - `MediaChannel.webSocketChannel` を廃止する
+    - `WebSocketChannelHandlers` を廃止する
+    - @enm10k
+- [CHANGE] Starscream を削除して、 URLSessionWebSocketTask をデフォルトで使用する
+    - @enm10k
+- [CHANGE] サポートする iOS のバージョンを13以上に変更する
+    - @enm10k
+- [CHANGE] `MediaChannel.native` の型を `RTCPeerConnection` から `RTCPeerConnection?` に変更する
+    - PeerChannel で force unwrapping している箇所を修正する際に、併せて修正した
+    - @enm10k
+- [FIX] CameraVideoCapturer で force unwrapping していた箇所を修正する
+    - @enm10k
+- [FIX] VideoView に debugMode = true を設定した際にメモリー・リークが発生する問題を修正する
+    - @szktty @enm10k
+    
 ## 2021.3.1
 
 - [FIX] RTCPeerConnectionState が .failed に遷移した際の切断処理中にクラッシュする問題を修正する
