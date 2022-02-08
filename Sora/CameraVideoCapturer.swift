@@ -438,7 +438,8 @@ public struct CameraSettings: CustomStringConvertible {
 
      - parameter resolution: 解像度
      - parameter frameRate: フレームレート
-     - parameter stopWhenDone: `true` であれば接続解除時にカメラを停止する
+     - parameter position: 配信開始時のカメラの位置
+     - parameter isEnabled: カメラの起動の有無
      */
     public init(resolution: Resolution = .hd720p, frameRate: Int = 30, position: AVCaptureDevice.Position = .front, isEnabled: Bool = true) {
         self.resolution = resolution
