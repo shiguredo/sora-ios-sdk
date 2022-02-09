@@ -9,6 +9,13 @@
 - FIX
     - バグ修正
 
+## develop
+
+- [ADD] メッセージング機能に対応する
+    - @enm10k
+- [CHANGE] DataChannel 経由で受信したメッセージのうち label が signaling, push, notify のものは `MediaChannelHandlers.onReceiveSignaling` が呼ばれるように修正する
+    - @enm10k
+
 ## 2022.1.0
 
 - [UPDATE] システム条件を変更する
