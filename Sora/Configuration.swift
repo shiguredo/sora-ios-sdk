@@ -154,6 +154,7 @@ public struct Configuration {
     /// `true` の場合、接続確立後のシグナリングを DataChannel 経由で行います。
     public var dataChannelSignaling: Bool?
 
+    /// メッセージング機能で利用する DataChannel の設定
     public var dataChannels: [SignalingConnectDataChannel]?
 
     /// DataChannel 経由のシグナリングを利用している際に、 WebSocket が切断されても Sora との接続を継続するためのフラグ。

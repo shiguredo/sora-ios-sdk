@@ -430,6 +430,7 @@ public final class MediaChannel {
         }
     }
 
+    /// DataChannel を利用してメッセージを送信します
     public func sendMessage(label: String, data: Data) -> Error? {
         guard peerChannel.switchedToDataChannel else {
             return SoraError.messagingError(reason: "DataChannel is not open yet")

@@ -255,19 +255,43 @@ public struct SignalingNotifyMetadata {
     public var metadata: Any?
 }
 
+/// メッセージの方向
 public enum MessagingDirection: String, Encodable {
+    /// 送受信
     case sendrecv
+
+    /// 送信のみ
     case sendonly
+
+    /// 受信のみ
     case recvonly
 }
 
+/**
+  type: connect に含まれる data_channels
+ */
 public struct SignalingConnectDataChannel {
+    /// ラベル
     public var label: String
+
+    /// メッセージの方向
     public var direction: MessagingDirection
+
+    /// プロトコル
     public var `protocol`: String?
+
+    /// メッセージの圧縮の可否
     public var compress: Bool?
+
+    /// メッセージの送信を試行する時間
+    /// maxPacketLifeTime と maxRetransmits のいずれか片方のみ設定可能
     public var maxPacketLifeTime: UInt16?
+
+    /// メッセージの最大再送回数
+    /// maxPacketLifeTime と maxRetransmits のいずれか片方のみ設定可能
     public var maxRetransmits: UInt16?
+
+    /// メッセージの順序保証の有無
     public var ordered: Bool?
 
     public init(label: String, direction: MessagingDirection) {
@@ -815,6 +839,7 @@ extension SignalingRole: Codable {
     }
 }
 
+/// :nodoc:
 extension SignalingConnectDataChannel: Encodable {
     enum CodingKeys: String, CodingKey {
         case label
