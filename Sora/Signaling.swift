@@ -294,6 +294,7 @@ public struct SignalingConnectDataChannel {
     /// メッセージの順序保証の有無
     public var ordered: Bool?
 
+    /// 初期化します
     public init(label: String, direction: MessagingDirection) {
         self.label = label
         self.direction = direction
