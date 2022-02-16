@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] WebRTC 99.4844.1.0 に上げる
+    - @miosakuma
 - [ADD] メッセージング機能に対応する
     - @enm10k
 - [CHANGE] DataChannel 経由で受信したメッセージのうち label が signaling, push, notify のものは `MediaChannelHandlers.onReceiveSignaling` が呼ばれるように修正する
