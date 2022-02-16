@@ -182,11 +182,12 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             }
 
         case "signaling", "push", "notify":
-            do {
-                let signaling = try JSONDecoder().decode(Signaling.self, from: data)
+            switch Signaling.decode(data) {
+            case let .success(signaling):
                 peerChannel.handleSiganlingOverDataChannel(signaling)
-            } catch {
-                Logger.error(type: .dataChannel, message: "failed to handle siganling message")
+            case let .failure(error):
+                Logger.error(type: .dataChannel,
+                             message: "decode failed (\(error.localizedDescription)) => ")
             }
         case "e2ee":
             Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
