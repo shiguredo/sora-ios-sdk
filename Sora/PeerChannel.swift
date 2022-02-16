@@ -778,7 +778,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         internalHandlers.onReceiveSignaling?(signaling)
     }
 
-    func handleSiganlingOverDataChannel(_ signaling: Signaling) {
+    func handleSignalingOverDataChannel(_ signaling: Signaling) {
         Logger.debug(type: .mediaStream, message: "handle signaling over DataChannel => \(signaling.typeName())")
         switch signaling {
         case let .reOffer(reOffer):
@@ -787,7 +787,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             // 処理は不要
             break
         default:
-            Logger.error(type: .peerChannel, message: "unexpected siganling type => \(signaling.typeName())")
+            Logger.error(type: .peerChannel, message: "unexpected signaling type => \(signaling.typeName())")
         }
 
         Logger.debug(type: .peerChannel, message: "call onReceiveSignaling")

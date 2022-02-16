@@ -184,7 +184,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             case "signaling", "push", "notify":
                 switch Signaling.decode(data) {
                 case let .success(signaling):
-                    peerChannel.handleSiganlingOverDataChannel(signaling)
+                    peerChannel.handleSignalingOverDataChannel(signaling)
                 case let .failure(error):
                     Logger.error(type: .dataChannel,
                                  message: "decode failed (\(error.localizedDescription)) => ")
