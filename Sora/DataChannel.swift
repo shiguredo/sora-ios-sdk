@@ -155,7 +155,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         if let message = String(data: data, encoding: .utf8) {
             Logger.info(type: .dataChannel, message: "received data channel message: \(String(describing: message))")
         }
-        
+
         // Sora から送られてきたメッセージ
         if !dataChannel.label.starts(with: "#") {
             switch dataChannel.label {
