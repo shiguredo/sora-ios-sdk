@@ -720,6 +720,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .mediaStream, message: "handle signaling over WebSocket => \(signaling.typeName())")
         switch signaling {
         case let .offer(offer):
+            signalingChannel.setConnectedUrl()
+
             clientId = offer.clientId
             connectionId = offer.connectionId
             if let dataChannels = offer.dataChannels {

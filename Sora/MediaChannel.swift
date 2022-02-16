@@ -102,6 +102,11 @@ public final class MediaChannel {
     /// クライアントの設定
     public let configuration: Configuration
 
+    /// 最初に type: connect メッセージを送信した URL
+    public var contactUrl: URL? {
+        signalingChannel.contactUrl
+    }
+
     /// 接続中の URL
     public var connectedUrl: URL? {
         signalingChannel.connectedUrl
