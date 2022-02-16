@@ -429,6 +429,24 @@ public final class MediaChannel {
             handlers.onDisconnect?(error)
         }
     }
+
+    /// DataChannel を利用してメッセージを送信します
+    public func sendMessage(label: String, data: Data) -> Error? {
+        guard peerChannel.switchedToDataChannel else {
+            return SoraError.messagingError(reason: "DataChannel is not open yet")
+        }
+
+        guard label.starts(with: "#") else {
+            return SoraError.messagingError(reason: "label should start with #")
+        }
+
+        guard let dc = peerChannel.dataChannels[label] else {
+            return SoraError.messagingError(reason: "no DataChannel found: label => \(label)")
+        }
+        let result = dc.send(data)
+
+        return result ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
+    }
 }
 
 extension MediaChannel: CustomStringConvertible {

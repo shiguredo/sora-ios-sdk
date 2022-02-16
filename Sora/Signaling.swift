@@ -229,23 +229,11 @@ public enum SpotlightRid {
  */
 @available(*, unavailable,
            message: "SignalingMetadata を利用して、メタデータをデコードする方法は廃止されました。 Any? を任意の型にキャストしてデコードしてください。")
-public struct SignalingMetadata {
-    /// シグナリングに含まれるメタデータの JSON デコーダー
-    public var decoder: Decoder
-}
+public struct SignalingMetadata {}
 
 @available(*, unavailable, renamed: "SignalingNotifyMetadata",
            message: "SignalingClientMetadata は SignalingNotifyMetadata に置き換えられました。")
-public struct SignalingClientMetadata {
-    /// クライアント ID
-    public var clientId: String?
-
-    /// 接続 ID
-    public var connectionId: String?
-
-    /// メタデータ
-    public var metadata: SignalingMetadata
-}
+public struct SignalingClientMetadata {}
 
 /**
  シグナリングに含まれる、同チャネルに接続中のクライアントに関するメタデータ (任意のデータ) を表します。
@@ -265,6 +253,52 @@ public struct SignalingNotifyMetadata {
 
     /// メタデータ
     public var metadata: Any?
+}
+
+/// メッセージの方向
+public enum MessagingDirection: String, Encodable {
+    /// 送受信
+    case sendrecv
+
+    /// 送信のみ
+    case sendonly
+
+    /// 受信のみ
+    case recvonly
+}
+
+/**
+  type: connect に含まれる data_channels
+ */
+public struct SignalingConnectDataChannel {
+    /// ラベル
+    public var label: String
+
+    /// メッセージの方向
+    public var direction: MessagingDirection
+
+    /// プロトコル
+    public var `protocol`: String?
+
+    /// メッセージの圧縮の可否
+    public var compress: Bool?
+
+    /// メッセージの送信を試行する時間
+    /// maxPacketLifeTime と maxRetransmits のいずれか片方のみ設定可能
+    public var maxPacketLifeTime: UInt16?
+
+    /// メッセージの最大再送回数
+    /// maxPacketLifeTime と maxRetransmits のいずれか片方のみ設定可能
+    public var maxRetransmits: UInt16?
+
+    /// メッセージの順序保証の有無
+    public var ordered: Bool?
+
+    /// 初期化します
+    public init(label: String, direction: MessagingDirection) {
+        self.label = label
+        self.direction = direction
+    }
 }
 
 /**
@@ -367,6 +401,9 @@ public struct SignalingConnect {
 
     /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
+
+    /// メッセージング機能で利用する DataChannel
+    public var dataChannels: [SignalingConnectDataChannel]?
 
     /// type: redicret 受信後の再接続
     public var redirect: Bool?
@@ -520,22 +557,7 @@ public struct SignalingRedirect {
  廃止されました。
  */
 @available(*, unavailable, message: "SignalingNotifyEventType は廃止されました。")
-public enum SignalingNotifyEventType {
-    /// "connection.created"
-    case connectionCreated
-
-    /// "connection.updated"
-    case connectionUpdated
-
-    /// "connection.destroyed"
-    case connectionDestroyed
-
-    /// "spotlight.changed"
-    case spotlightChanged
-
-    /// "network.status"
-    case networkStatus
-}
+public enum SignalingNotifyEventType {}
 
 /// "notify" シグナリングメッセージを表します。
 ///
@@ -631,69 +653,7 @@ public struct SignalingNotify {
  SignalingNotify を利用してください。
  */
 @available(*, unavailable, message: "SignalingNotifyConnection は廃止されました。  SignalingNotify を利用してください。")
-public struct SignalingNotifyConnection {
-    // MARK: イベント情報
-
-    /// イベントの種別
-    public var eventType: Any
-
-    // MARK: 接続情報
-
-    /// ロール
-    public var role: SignalingRole
-
-    /// クライアント ID
-    public var clientId: String?
-
-    /// 接続 ID
-    public var connectionId: String?
-
-    /// 音声の可否
-    public var audioEnabled: Bool?
-
-    /// 映像の可否
-    public var videoEnabled: Bool?
-
-    /// メタデータ
-    public var metadata: Any?
-
-    /// シグナリング接続時にクライアントが指定した値
-    public var authnMetadata: Any?
-
-    /// Sora の認証ウェブフックの戻り値で指定された値
-    public var authzMetadata: Any?
-
-    /// メタデータのリスト
-    public var metadataList: [SignalingNotifyMetadata]?
-
-    // メタデータのリスト
-    public var data: [SignalingNotifyMetadata]?
-
-    // MARK: 接続状態
-
-    /// 接続時間 (分)
-    public var connectionTime: Int
-
-    /// 接続中のクライアントの数
-    public var connectionCount: Int
-
-    /// 接続中のパブリッシャーの数
-    @available(*, deprecated, message: "このプロパティは channelSendonlyConnections と channelSendrecvConnections に置き換えられました。")
-    public var publisherCount: Int?
-
-    /// 接続中のサブスクライバーの数
-    @available(*, deprecated, message: "このプロパティは channelRecvonlyConnections と channelSendrecvConnections に置き換えられました。")
-    public var subscriberCount: Int?
-
-    /// 接続中の送信専用接続の数
-    public var channelSendonlyConnections: Int?
-
-    /// 接続中の受信専用接続の数
-    public var channelRecvonlyConnections: Int?
-
-    /// 接続中の送受信可能接続の数
-    public var channelSendrecvConnections: Int?
-}
+public struct SignalingNotifyConnection {}
 
 /**
  "notify" シグナリングメッセージのうち、 `spotlight.changed` イベントを表します。
@@ -701,25 +661,7 @@ public struct SignalingNotifyConnection {
  SignalingNotify を利用してください。
  */
 @available(*, unavailable, message: "SignalingNotifySpotlightChanged は廃止されました。 SignalingNotify を利用してください。")
-public struct SignalingNotifySpotlightChanged {
-    /// クライアント ID
-    public var clientId: String?
-
-    /// 接続 ID
-    public var connectionId: String?
-
-    /// スポットライト ID
-    public var spotlightId: String
-
-    /// 固定の有無
-    public var isFixed: Bool?
-
-    /// 音声の可否
-    public var audioEnabled: Bool?
-
-    /// 映像の可否
-    public var videoEnabled: Bool?
-}
+public struct SignalingNotifySpotlightChanged {}
 
 /**
  "notify" シグナリングメッセージのうち、 "network.status" イベントを表します。
@@ -727,10 +669,7 @@ public struct SignalingNotifySpotlightChanged {
  SignalingNotify を利用してください。
  */
 @available(*, unavailable, message: "SignalingNotifyNetworkStatus は廃止されました。 SignalingNotify を利用してください。")
-public struct SignalingNotifyNetworkStatus {
-    /// ネットワークの不安定度
-    public var unstableLevel: Int
-}
+public struct SignalingNotifyNetworkStatus {}
 
 /**
  "ping" シグナリングメッセージを表します。
@@ -902,6 +841,30 @@ extension SignalingRole: Codable {
 }
 
 /// :nodoc:
+extension SignalingConnectDataChannel: Encodable {
+    enum CodingKeys: String, CodingKey {
+        case label
+        case direction
+        case `protocol`
+        case compress
+        case max_packet_life_time
+        case max_retransmits
+        case ordered
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(label, forKey: .label)
+        try container.encode(direction, forKey: .direction)
+        try container.encodeIfPresent(`protocol`, forKey: .protocol)
+        try container.encodeIfPresent(compress, forKey: .compress)
+        try container.encodeIfPresent(maxPacketLifeTime, forKey: .max_packet_life_time)
+        try container.encodeIfPresent(maxRetransmits, forKey: .max_retransmits)
+        try container.encodeIfPresent(ordered, forKey: .ordered)
+    }
+}
+
+/// :nodoc:
 extension SignalingConnect: Codable {
     enum CodingKeys: String, CodingKey {
         case role
@@ -924,6 +887,7 @@ extension SignalingConnect: Codable {
         case environment
         case data_channel_signaling
         case ignore_disconnect_websocket
+        case data_channels
         case redirect
     }
 
@@ -959,6 +923,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
         try container.encodeIfPresent(redirect, forKey: .redirect)
+        try container.encodeIfPresent(dataChannels, forKey: .data_channels)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {

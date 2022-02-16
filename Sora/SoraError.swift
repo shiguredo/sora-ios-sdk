@@ -34,6 +34,9 @@ public enum SoraError: Error {
 
     /// カメラに関するエラー
     case cameraError(reason: String)
+
+    /// メッセージング機能のエラー
+    case messagingError(reason: String)
 }
 
 /// :nodoc:
@@ -67,6 +70,8 @@ extension SoraError: LocalizedError {
             return "PeerChannel error (\(reason))"
         case let .cameraError(reason: reason):
             return "Camera error: \(reason)"
+        case let .messagingError(reason: reason):
+            return "Messaging error: \(reason)"
         }
     }
 }

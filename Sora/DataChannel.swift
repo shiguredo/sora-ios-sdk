@@ -142,7 +142,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             return
         }
 
-        guard let dc = peerChannel.dataChannelInstances[dataChannel.label] else {
+        guard let dc = peerChannel.dataChannels[dataChannel.label] else {
             Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is unavailable")
             return
         }
@@ -181,19 +181,20 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                 }
             }
 
-        case "push", "notify":
-            break
-        case "signaling":
+        case "signaling", "push", "notify":
             do {
-                let reOffer = try JSONDecoder().decode(SignalingReOffer.self, from: data)
-                peerChannel.createAndSendReAnswerOnDataChannel(forReOffer: reOffer.sdp)
+                let signaling = try JSONDecoder().decode(Signaling.self, from: data)
+                peerChannel.handleSiganlingOverDataChannel(signaling)
             } catch {
-                Logger.error(type: .dataChannel, message: "failed to decode SignalingReOffer")
+                Logger.error(type: .dataChannel, message: "failed to handle siganling message")
             }
         case "e2ee":
             Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
         default:
-            Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
+            // label が # から始まるメッセージング機能の場合、ログの出力は不要
+            if !dataChannel.label.starts(with: "#") {
+                Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
+            }
         }
 
         if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
@@ -228,6 +229,6 @@ class DataChannel {
             Logger.error(type: .dataChannel, message: "failed to compress message")
             return false
         }
-        return native.sendData(RTCDataBuffer(data: data, isBinary: false))
+        return native.sendData(RTCDataBuffer(data: data, isBinary: true))
     }
 }
