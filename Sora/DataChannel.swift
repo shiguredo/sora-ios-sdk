@@ -152,51 +152,49 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             return
         }
 
-        guard let message = String(data: data, encoding: .utf8) else {
-            Logger.error(type: .dataChannel, message: "failed to convert data to message")
-            return
+        if let message = String(data: data, encoding: .utf8) {
+            Logger.info(type: .dataChannel, message: "received data channel message: \(String(describing: message))")
         }
-        Logger.info(type: .dataChannel, message: "received data channel message: \(String(describing: message))")
 
-        switch dataChannel.label {
-        case "stats":
-            peerChannel.nativeChannel?.statistics {
-                // NOTE: stats の型を Signaling.swift に定義していない
-                let reports = Statistics(contentsOf: $0).jsonObject
-                let json: [String: Any] = ["type": "stats",
-                                           "reports": reports]
+        // Sora から送られてきたメッセージ
+        if !dataChannel.label.starts(with: "#") {
+            switch dataChannel.label {
+            case "stats":
+                peerChannel.nativeChannel?.statistics {
+                    // NOTE: stats の型を Signaling.swift に定義していない
+                    let reports = Statistics(contentsOf: $0).jsonObject
+                    let json: [String: Any] = ["type": "stats",
+                                               "reports": reports]
 
-                var data: Data?
-                do {
-                    data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
-                } catch {
-                    Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
-                }
+                    var data: Data?
+                    do {
+                        data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+                    } catch {
+                        Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
+                    }
 
-                if let data = data {
-                    let ok = dc.send(data)
-                    if !ok {
-                        Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
+                    if let data = data {
+                        let ok = dc.send(data)
+                        if !ok {
+                            Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
+                        }
                     }
                 }
-            }
 
-        case "signaling", "push", "notify":
-            do {
-                let signaling = try JSONDecoder().decode(Signaling.self, from: data)
-                peerChannel.handleSiganlingOverDataChannel(signaling)
-            } catch {
-                Logger.error(type: .dataChannel, message: "failed to handle siganling message")
-            }
-        case "e2ee":
-            Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
-        default:
-            // label が # から始まるメッセージング機能の場合、ログの出力は不要
-            if !dataChannel.label.starts(with: "#") {
+            case "signaling", "push", "notify":
+                switch Signaling.decode(data) {
+                case let .success(signaling):
+                    peerChannel.handleSignalingOverDataChannel(signaling)
+                case let .failure(error):
+                    Logger.error(type: .dataChannel,
+                                 message: "decode failed (\(error.localizedDescription)) => ")
+                }
+            case "e2ee":
+                Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
+            default:
                 Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
             }
         }
-
         if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
             handler(mediaChannel, dataChannel.label, data)
         }
