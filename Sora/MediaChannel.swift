@@ -102,6 +102,16 @@ public final class MediaChannel {
     /// クライアントの設定
     public let configuration: Configuration
 
+    /**
+     最初に type: connect メッセージを送信した URL (デバッグ用)
+
+     Sora から type: redirect メッセージを受信した場合、 contactUrl と connectedUrl には異なる値がセットされます
+     type: redirect メッセージを受信しなかった場合、 contactUrl と connectedUrl には同じ値がセットされます
+     */
+    public var contactUrl: URL? {
+        signalingChannel.contactUrl
+    }
+
     /// 接続中の URL
     public var connectedUrl: URL? {
         signalingChannel.connectedUrl

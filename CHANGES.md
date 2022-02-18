@@ -13,7 +13,13 @@
 
 - [ADD] メッセージング機能に対応する
     - @enm10k
+- [ADD] `MediaChannel.contactUrl` を追加する
+    - `MediaChannel.contactUrl` は、最初に type: connect メッセージを送信した Sora のシグナリング URL
+    - @enm10k
 - [CHANGE] DataChannel 経由で受信したメッセージのうち label が signaling, push, notify のものは `MediaChannelHandlers.onReceiveSignaling` が呼ばれるように修正する
+    - @enm10k
+- [CHANGE] `MediaChannel.connectedUrl`を更新するタイミングを修正する
+    - type: connect を送信するタイミングで `MediaChannel.connectedUrl` を更新していたが、 type: offer を受信したタイミングで値を更新するように修正
     - @enm10k
 
 ## 2022.1.0

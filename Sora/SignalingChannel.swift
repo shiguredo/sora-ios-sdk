@@ -68,6 +68,10 @@ class SignalingChannel {
 
     private let queue: OperationQueue
 
+    // 最初に type: connect を送信した URL
+    var contactUrl: URL?
+
+    // type: offer を Sora から受信したタイミングで設定する
     var connectedUrl: URL?
 
     required init(configuration: Configuration) {
@@ -115,8 +119,9 @@ class SignalingChannel {
 
             Logger.info(type: .signalingChannel, message: "connected to \(String(describing: ws.host))")
             weakSelf.webSocketChannel = webSocketChannel
-            weakSelf.connectedUrl = ws.url
-
+            if weakSelf.contactUrl == nil {
+                weakSelf.contactUrl = ws.url
+            }
             // 採用された WebSocket 以外を切断してから webSocketChannelCandidates を破棄する
             weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
 
@@ -189,7 +194,6 @@ class SignalingChannel {
         // 切断
         webSocketChannel?.disconnect(error: nil)
         webSocketChannel = nil
-        connectedUrl = nil
 
         // 接続
         guard let newUrl = URL(string: location) else {
@@ -222,6 +226,7 @@ class SignalingChannel {
             Logger.debug(type: .signalingChannel, message: "call onDisconnect")
             internalHandlers.onDisconnect?(error, reason)
 
+            contactUrl = nil
             connectedUrl = nil
             Logger.debug(type: .signalingChannel, message: "did disconnect")
         }
@@ -277,5 +282,12 @@ class SignalingChannel {
                              message: "decode failed (\(error.localizedDescription)) => \(text)")
             }
         }
+    }
+
+    func setConnectedUrl() {
+        guard let ws = webSocketChannel else {
+            return
+        }
+        connectedUrl = ws.url
     }
 }
