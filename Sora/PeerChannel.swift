@@ -92,7 +92,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     private(set) var streams: [MediaStream] = []
     private(set) var iceCandidates: [ICECandidate] = []
 
-    var connectDataChannels: Encodable?
     var dataChannels: [String: DataChannel] = [:]
     var switchedToDataChannel: Bool = false
     var signalingOfferMessageDataChannels: [[String: Any]] = []
@@ -315,7 +314,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             environment: DeviceInfo.current.description,
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
-            dataChannels: configuration.dataChannels,
             redirect: redirect
         )
 

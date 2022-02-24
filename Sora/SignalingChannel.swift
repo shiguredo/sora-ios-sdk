@@ -242,7 +242,21 @@ class SignalingChannel {
         let message = internalHandlers.onSend?(message) ?? message
         let encoder = JSONEncoder()
         do {
-            let data = try encoder.encode(message)
+            var data = try encoder.encode(message)
+
+            // type: connect の data_channels を設定する
+            // Signaling.encode(to:) では Any を扱えなかったため、文字列に変換する直前に値を設定している
+            switch message {
+            case .connect:
+                if configuration.dataChannels != nil {
+                    var jsonObject = (try JSONSerialization.jsonObject(with: data, options: [])) as! [String: Any]
+                    jsonObject["data_channels"] = configuration.dataChannels
+                    data = try JSONSerialization.data(withJSONObject: jsonObject, options: [])
+                }
+            default:
+                break
+            }
+
             let str = String(data: data, encoding: .utf8)!
             Logger.debug(type: .signalingChannel, message: str)
             ws.send(message: .text(str))

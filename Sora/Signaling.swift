@@ -268,40 +268,6 @@ public enum MessagingDirection: String, Encodable {
 }
 
 /**
-  type: connect に含まれる data_channels
- */
-public struct SignalingConnectDataChannel {
-    /// ラベル
-    public var label: String
-
-    /// メッセージの方向
-    public var direction: MessagingDirection
-
-    /// プロトコル
-    public var `protocol`: String?
-
-    /// メッセージの圧縮の可否
-    public var compress: Bool?
-
-    /// メッセージの送信を試行する時間
-    /// maxPacketLifeTime と maxRetransmits のいずれか片方のみ設定可能
-    public var maxPacketLifeTime: UInt16?
-
-    /// メッセージの最大再送回数
-    /// maxPacketLifeTime と maxRetransmits のいずれか片方のみ設定可能
-    public var maxRetransmits: UInt16?
-
-    /// メッセージの順序保証の有無
-    public var ordered: Bool?
-
-    /// 初期化します
-    public init(label: String, direction: MessagingDirection) {
-        self.label = label
-        self.direction = direction
-    }
-}
-
-/**
  "connect" シグナリングメッセージを表します。
  このメッセージはシグナリング接続の確立後、最初に送信されます。
  */
@@ -401,9 +367,6 @@ public struct SignalingConnect {
 
     /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
-
-    /// メッセージング機能で利用する DataChannel
-    public var dataChannels: [SignalingConnectDataChannel]?
 
     /// type: redicret 受信後の再接続
     public var redirect: Bool?
@@ -841,30 +804,6 @@ extension SignalingRole: Codable {
 }
 
 /// :nodoc:
-extension SignalingConnectDataChannel: Encodable {
-    enum CodingKeys: String, CodingKey {
-        case label
-        case direction
-        case `protocol`
-        case compress
-        case max_packet_life_time
-        case max_retransmits
-        case ordered
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(label, forKey: .label)
-        try container.encode(direction, forKey: .direction)
-        try container.encodeIfPresent(`protocol`, forKey: .protocol)
-        try container.encodeIfPresent(compress, forKey: .compress)
-        try container.encodeIfPresent(maxPacketLifeTime, forKey: .max_packet_life_time)
-        try container.encodeIfPresent(maxRetransmits, forKey: .max_retransmits)
-        try container.encodeIfPresent(ordered, forKey: .ordered)
-    }
-}
-
-/// :nodoc:
 extension SignalingConnect: Codable {
     enum CodingKeys: String, CodingKey {
         case role
@@ -923,7 +862,6 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
         try container.encodeIfPresent(redirect, forKey: .redirect)
-        try container.encodeIfPresent(dataChannels, forKey: .data_channels)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {

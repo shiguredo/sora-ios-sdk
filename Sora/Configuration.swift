@@ -155,7 +155,7 @@ public struct Configuration {
     public var dataChannelSignaling: Bool?
 
     /// メッセージング機能で利用する DataChannel の設定
-    public var dataChannels: [SignalingConnectDataChannel]?
+    public var dataChannels: Any?
 
     /// DataChannel 経由のシグナリングを利用している際に、 WebSocket が切断されても Sora との接続を継続するためのフラグ。
     /// 詳細: https://sora-doc.shiguredo.jp/DATA_CHANNEL_SIGNALING#07c227
