@@ -255,18 +255,6 @@ public struct SignalingNotifyMetadata {
     public var metadata: Any?
 }
 
-/// メッセージの方向
-public enum MessagingDirection: String, Encodable {
-    /// 送受信
-    case sendrecv
-
-    /// 送信のみ
-    case sendonly
-
-    /// 受信のみ
-    case recvonly
-}
-
 /**
  "connect" シグナリングメッセージを表します。
  このメッセージはシグナリング接続の確立後、最初に送信されます。
