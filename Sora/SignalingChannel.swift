@@ -119,7 +119,8 @@ class SignalingChannel {
 
             // 最初に接続に成功した WebSocket 以外は無視する
             guard weakSelf.webSocketChannel == nil else {
-                // TODO: ここでも候補から削除した方が良い?
+                // ここで、無視した WebSocket を webSocketChannelCandidates から削除したくなるが、
+                // 最初に接続が成功した際に、 webSocketChannelCandidates をクリアする処理が実行されるため削除は不要
                 return
             }
 
@@ -128,15 +129,14 @@ class SignalingChannel {
             weakSelf.webSocketChannel = webSocketChannel
             weakSelf.connectedUrl = ws.url
 
-            // 採用された WebSocket 以外を切断してから webSocketChannelCandidates を破棄する
+            // 採用された WebSocket 以外を切断してから webSocketChannelCandidates をクリアする
             weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
             weakSelf.webSocketChannelCandidates.forEach {
                 Logger.debug(type: .signalingChannel, message: "closeing connection to \(String(describing: $0.host))")
                 $0.disconnect(error: nil)
             }
-
-            // 候補を破棄する
             weakSelf.webSocketChannelCandidates.removeAll()
+
             weakSelf.state = .connected
 
             if weakSelf.onConnectHandler != nil {
