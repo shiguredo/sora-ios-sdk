@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] WebRTC 99.4844.1.0 に上げる
+    - @miosakuma
 - [ADD] メッセージング機能に対応する
     - @enm10k
 - [ADD] `MediaChannel.contactUrl` を追加する
