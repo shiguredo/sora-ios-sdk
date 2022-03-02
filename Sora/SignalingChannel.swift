@@ -141,13 +141,19 @@ class SignalingChannel {
             }
             Logger.info(type: .signalingChannel, message: "disconnected from \(String(describing: ws.host))")
 
-            // 接続に失敗した WebSocket が候補に残っている場合取り除く
-            weakSelf.webSocketChannelCandidates.removeAll { $0.url.absoluteURL == ws.url.absoluteURL }
-
-            if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
-                Logger.info(type: .signalingChannel, message: "No WebSocket connection")
+            if weakSelf.state == .connected {
                 if !weakSelf.ignoreDisconnectWebSocket {
                     weakSelf.disconnect(error: error, reason: .webSocket)
+                }
+            } else {
+                // 接続に失敗した WebSocket が候補に残っている場合取り除く
+                weakSelf.webSocketChannelCandidates.removeAll { $0.url.absoluteURL == ws.url.absoluteURL }
+
+                if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
+                    Logger.info(type: .signalingChannel, message: "failed to connect to Sora")
+                    if !weakSelf.ignoreDisconnectWebSocket {
+                        weakSelf.disconnect(error: error, reason: .webSocket)
+                    }
                 }
             }
         }
