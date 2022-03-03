@@ -65,8 +65,12 @@ class SignalingChannel {
     var webSocketChannel: URLSessionWebSocketChannel?
 
     // SignalingChannel で利用する WebSocket の候補
-    // WebSocket が接続に失敗した場合、候補から削除されます
-    // また、 SignalingChannel で利用する WebSocket が決定した場合は空になります
+    //
+    // WebSocket が接続に失敗した場合、候補から削除される
+    // SignalingChannel で利用する WebSocket が決定する前に候補が無くなった場合、
+    // Sora への接続に失敗しているため、切断処理が必要
+    //
+    // また、 SignalingChannel で利用する WebSocket が決定した場合にも空になる
     var webSocketChannelCandidates: [URLSessionWebSocketChannel] = []
 
     private var onConnectHandler: ((Error?) -> Void)?
@@ -119,8 +123,10 @@ class SignalingChannel {
 
             // 最初に接続に成功した WebSocket 以外は無視する
             guard weakSelf.webSocketChannel == nil else {
-                // ここで、無視した WebSocket を webSocketChannelCandidates から削除したくなるが、
-                // 最初に接続が成功した際に、 webSocketChannelCandidates をクリアする処理が実行されるため削除は不要
+                // (接続に失敗した WebSocket と同様に、) 無視した WebSocket を webSocketChannelCandidates から削除することを検討したが、不要と判断した
+                //
+                // 最初の WebSocket が接続に成功した際に webSocketChannelCandidates をクリアするため、
+                // 既に webSocketChannelCandidates が空になっていることが理由
                 return
             }
 
