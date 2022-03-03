@@ -66,9 +66,9 @@ class SignalingChannel {
 
     // SignalingChannel で利用する WebSocket の候補
     //
-    // WebSocket が接続に失敗した場合、候補から削除される
+    // 接続に失敗した WebSocket は候補から削除される
     // SignalingChannel で利用する WebSocket が決定する前に候補が無くなった場合、
-    // Sora への接続に失敗しているため、切断処理が必要
+    // Sora への接続に失敗しているため、 MediaChannel の接続処理を終了する必要がある
     //
     // また、 SignalingChannel で利用する WebSocket が決定した場合にも空になる
     var webSocketChannelCandidates: [URLSessionWebSocketChannel] = []
