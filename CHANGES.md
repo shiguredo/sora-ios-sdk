@@ -24,6 +24,13 @@
     - type: connect を送信するタイミングで `MediaChannel.connectedUrl` を更新していたが、 type: offer を受信したタイミングで値を更新するように修正
     - @enm10k
 
+## 2022.1.1
+
+- [FIX] Sora との接続確立後に WebSocket のエラーが発生した場合、 エラーが正しく伝搬されず、終了処理が実行されないため修正する
+    - 接続確立後に WebSocket のエラーが発生した場合、 Sora との接続を切断して終了処理を行うのが正しい処理です
+    - 詳細な仕様は https://sora-doc.shiguredo.jp/SORA_CLIENT に記載されています
+    - @enm10k
+
 ## 2022.1.0
 
 - [UPDATE] システム条件を変更する

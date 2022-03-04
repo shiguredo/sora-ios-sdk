@@ -61,11 +61,24 @@ class SignalingChannel {
         }
     }
 
+    // SignalingChannel で利用する WebSocket
     var webSocketChannel: URLSessionWebSocketChannel?
+
+    // SignalingChannel で利用する WebSocket の候補
+    //
+    // 接続に失敗した WebSocket は候補から削除される
+    // SignalingChannel で利用する WebSocket が決定する前に候補が無くなった場合、
+    // Sora への接続に失敗しているため、 MediaChannel の接続処理を終了する必要がある
+    //
+    // また、 SignalingChannel で利用する WebSocket が決定した場合にも空になる
     var webSocketChannelCandidates: [URLSessionWebSocketChannel] = []
 
     private var onConnectHandler: ((Error?) -> Void)?
 
+    // WebSocket の接続を複数同時に試行する際の排他制御を行うためのキュー
+    //
+    // このキューの並行性を1に設定した上で URLSession の delegateQueue に設定することで、
+    // URLSession のコールバックが同時に発火することを防ぎます
     private let queue: OperationQueue
 
     // 最初に type: connect を送信した URL
@@ -106,7 +119,7 @@ class SignalingChannel {
     private func setUpWebSocketChannel(url: URL) -> URLSessionWebSocketChannel {
         let ws = URLSessionWebSocketChannel(url: url)
 
-        // 接続時
+        // 接続成功時
         ws.internalHandlers.onConnect = { [weak self] webSocketChannel in
             guard let weakSelf = self else {
                 return
@@ -114,23 +127,27 @@ class SignalingChannel {
 
             // 最初に接続に成功した WebSocket 以外は無視する
             guard weakSelf.webSocketChannel == nil else {
+                // (接続に失敗した WebSocket と同様に、) 無視した WebSocket を webSocketChannelCandidates から削除することを検討したが、不要と判断した
+                //
+                // 最初の WebSocket が接続に成功した際に webSocketChannelCandidates をクリアするため、
+                // 既に webSocketChannelCandidates が空になっていることが理由
                 return
             }
 
+            // 接続に成功した WebSocket を SignalingChannel に設定する
             Logger.info(type: .signalingChannel, message: "connected to \(String(describing: ws.host))")
             weakSelf.webSocketChannel = webSocketChannel
             if weakSelf.contactUrl == nil {
                 weakSelf.contactUrl = ws.url
             }
-            // 採用された WebSocket 以外を切断してから webSocketChannelCandidates を破棄する
+            // 採用された WebSocket 以外を切断してから webSocketChannelCandidates をクリアする
             weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
-
             weakSelf.webSocketChannelCandidates.forEach {
                 Logger.debug(type: .signalingChannel, message: "closeing connection to \(String(describing: $0.host))")
                 $0.disconnect(error: nil)
             }
-
             weakSelf.webSocketChannelCandidates.removeAll()
+
             weakSelf.state = .connected
 
             if weakSelf.onConnectHandler != nil {
@@ -139,20 +156,33 @@ class SignalingChannel {
             }
         }
 
-        // 切断時
+        // エラー発生時
         ws.internalHandlers.onDisconnectWithError = { [weak self] ws, error in
             guard let weakSelf = self else {
                 return
             }
             Logger.info(type: .signalingChannel, message: "disconnected from \(String(describing: ws.host))")
 
-            // 接続に失敗した WebSocket が候補に残っている場合取り除く
-            weakSelf.webSocketChannelCandidates.removeAll { $0.url.absoluteURL == ws.url.absoluteURL }
-
-            if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
-                Logger.info(type: .signalingChannel, message: "No WebSocket connection")
+            if weakSelf.state == .connected {
+                // SignalingChannel で利用する WebSocket が決定した後に、 WebSocket のエラーが発生した場合の処理
+                // ignoreDisconnectWebSocket の値をチェックして SDK の接続処理を終了する
                 if !weakSelf.ignoreDisconnectWebSocket {
                     weakSelf.disconnect(error: error, reason: .webSocket)
+                }
+            } else {
+                // SignalingChannel で利用する WebSocket が決定する前に、 WebSocket のエラーが発生した場合の処理
+                // state が .disconnecting, .disconnected の場合もここを通るが、既に SignalingChannel の切断を開始しているため、考慮は不要
+
+                // 接続に失敗した WebSocket が候補に残っている場合取り除く
+                weakSelf.webSocketChannelCandidates.removeAll { $0.url.absoluteURL == ws.url.absoluteURL }
+
+                // 候補が無くなり、かつ SignalingChannel で利用する WebSocket が決まっていない場合、
+                // Sora への接続に失敗したので SDK の接続処理を終了する
+                if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
+                    Logger.info(type: .signalingChannel, message: "failed to connect to Sora")
+                    if !weakSelf.ignoreDisconnectWebSocket {
+                        weakSelf.disconnect(error: error, reason: .webSocket)
+                    }
                 }
             }
         }
