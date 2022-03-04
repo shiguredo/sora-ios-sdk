@@ -9,7 +9,9 @@
 - FIX
     - バグ修正
 
-## hotfix/change-condition-to-relay-websocket-error
+## develop
+
+## 2022.1.1
 
 - [FIX] Sora との接続確立後に WebSocket のエラーが発生した場合、 エラーが正しく伝搬されず、終了処理が実行されないため修正する
     - 接続確立後に WebSocket のエラーが発生した場合、 Sora との接続を切断して終了処理を行うのが正しい処理です
