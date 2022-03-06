@@ -465,6 +465,9 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
         } else {
             cameraVideoCapturer.stream?.send(videoFrame: frame)
         }
+
+        let frameBuffer = VideoFrameBuffer(nativeFrame: nativeFrame, sampleBuffer: nil)
+        VideoCameraInputNode.onCapture(nativeFrame)
     }
 }
 
