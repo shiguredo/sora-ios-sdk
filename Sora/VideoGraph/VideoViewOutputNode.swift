@@ -15,14 +15,10 @@ public class VideoViewOutputNode: VideoOutputNode {
         guard let videoView = videoView else {
             return buffer
         }
-        guard let frame = buffer else {
-            return nil
-        }
         print("# render \(videoView)")
-        let newFrame = VideoFrame.native(capturer: nil, frame: frame.nativeFrame!)
         DispatchQueue.main.async {
-            videoView.render(videoFrame: newFrame)
+            videoView.render(videoFrame: buffer?.frame)
         }
-        return frame
+        return buffer
     }
 }

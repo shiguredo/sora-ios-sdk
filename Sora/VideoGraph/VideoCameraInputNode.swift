@@ -12,14 +12,13 @@ public class VideoCameraInputNode: VideoInputNode {
         sharedNodes.remove(node)
     }
 
-    static func onCapture(_ frame: RTCVideoFrame) {
+    static func onCapture(_ buffer: VideoFrameBuffer) {
         NSLog("onCapture, nodes \(VideoCameraInputNode.sharedNodes.count)")
         for node in VideoCameraInputNode.sharedNodes {
             print("\(node) isRunning \(node.isRunning)")
             guard node.isRunning else {
                 return
             }
-            let buffer = VideoFrameBuffer(nativeFrame: frame, sampleBuffer: nil)
             node.queue.async {
                 print("# oncapture: supply frame")
                 node.graph?.supplyFrameBuffer(buffer, by: node)
