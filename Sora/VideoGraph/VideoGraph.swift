@@ -77,15 +77,15 @@ public final class VideoGraph {
         }
     }
 
-    func supplyFrame(_ frame: VideoFrameBuffer, by node: VideoInputNode) {
+    func supplyFrameBuffer(_ buffer: VideoFrameBuffer, by node: VideoInputNode) {
         print("VideoGraph: supply frame, is running \(isRunning)")
         guard isRunning else {
             return
         }
-        renderFrame(frame, with: node)
+        processFrameBuffer(buffer, with: node)
     }
 
-    func renderFrame(_ frame: VideoFrameBuffer?, with node: VideoNode) {
+    func processFrameBuffer(_ buffer: VideoFrameBuffer?, with node: VideoNode) {
         guard isRunning else {
             return
         }
@@ -98,23 +98,23 @@ public final class VideoGraph {
 
         if desc.connections.isEmpty {
             print("# renderFrame, last node, \(node)")
-            _ = node.renderFrame(frame)
+            _ = node.processFrameBuffer(buffer)
         } else {
             for conn in desc.connections {
                 context.queue.async {
                     print("# render frame, next node")
-                    self.renderFrame(frame, connection: conn, in: context)
+                    self.processFrameBuffer(buffer, connection: conn, in: context)
                 }
             }
         }
     }
 
-    func renderFrame(_ frame: VideoFrameBuffer?, connection: NodeConnection, in context: Context) {
+    func processFrameBuffer(_ buffer: VideoFrameBuffer?, connection: NodeConnection, in context: Context) {
         // TODO: format
         print("VideoGraph: renderFrame, source \(connection.source.node), \(connection.destination.node)")
-        let newFrame = connection.source.node.renderFrame(frame)
+        let newFrame = connection.source.node.processFrameBuffer(buffer)
         // TODO: ここでフォーマット
-        renderFrame(newFrame, with: connection.destination.node)
+        processFrameBuffer(newFrame, with: connection.destination.node)
     }
 
     class NodeDescription: NSObject {
