@@ -4,14 +4,14 @@ import WebRTC
 public protocol VideoNodeProtocol {
     func prepare()
     func start()
-    func renderFrame(_ frame: VideoFrameBuffer?) -> VideoFrameBuffer?
+    func processFrameBuffer(_ frame: VideoFrameBuffer?) -> VideoFrameBuffer?
 }
 
 open class VideoNode: NSObject, VideoNodeProtocol {
     public private(set) var isRunning = false
     weak var graph: VideoGraph?
 
-    public override init() {}
+    override public init() {}
 
     open func prepare() {
         NSLog("\(self) prepare")
@@ -26,7 +26,7 @@ open class VideoNode: NSObject, VideoNodeProtocol {
         isRunning = false
     }
 
-    open func renderFrame(_ frame: VideoFrameBuffer?) -> VideoFrameBuffer? {
-        frame
+    open func processFrameBuffer(_ buffer: VideoFrameBuffer?) -> VideoFrameBuffer? {
+        buffer
     }
 }

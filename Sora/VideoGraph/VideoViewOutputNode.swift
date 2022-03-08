@@ -10,12 +10,12 @@ public class VideoViewOutputNode: VideoOutputNode {
         videoView.start()
     }
 
-    override public func renderFrame(_ frame: VideoFrameBuffer?) -> VideoFrameBuffer? {
-        print("VideoViewOutputNode: frame \(frame)")
+    override public func processFrameBuffer(_ buffer: VideoFrameBuffer?) -> VideoFrameBuffer? {
+        print("VideoViewOutputNode: frame \(buffer)")
         guard let videoView = videoView else {
-            return frame
+            return buffer
         }
-        guard let frame = frame else {
+        guard let frame = buffer else {
             return nil
         }
         print("# render \(videoView)")

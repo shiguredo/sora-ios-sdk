@@ -22,7 +22,7 @@ public class VideoCameraInputNode: VideoInputNode {
             let buffer = VideoFrameBuffer(nativeFrame: frame, sampleBuffer: nil)
             node.queue.async {
                 print("# oncapture: supply frame")
-                node.graph?.supplyFrame(buffer, by: node)
+                node.graph?.supplyFrameBuffer(buffer, by: node)
             }
         }
     }
