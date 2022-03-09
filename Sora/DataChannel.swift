@@ -160,7 +160,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         if !dataChannel.label.starts(with: "#") {
             switch dataChannel.label {
             case "stats":
-                peerChannel.nativeChannel?.statistics {
+                peerChannel.statistics {
                     // NOTE: stats の型を Signaling.swift に定義していない
                     let reports = Statistics(contentsOf: $0).jsonObject
                     let json: [String: Any] = ["type": "stats",
