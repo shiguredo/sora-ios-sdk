@@ -19,10 +19,9 @@ public class VideoCameraInputNode: VideoInputNode {
             guard node.isRunning else {
                 return
             }
-            node.queue.async {
-                print("# oncapture: supply frame")
-                node.graph?.supplyFrameBuffer(buffer, by: node)
-            }
+
+            print("# oncapture: supply frame")
+            node.graph?.supplyFrameBuffer(buffer, from: node)
         }
     }
 

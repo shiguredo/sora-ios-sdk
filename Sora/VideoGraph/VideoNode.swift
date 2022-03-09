@@ -2,9 +2,11 @@ import Foundation
 import WebRTC
 
 public protocol VideoNodeProtocol {
-    func prepare()
-    func start()
-    func processFrameBuffer(_ frame: VideoFrameBuffer?) -> VideoFrameBuffer?
+    func prepare() async
+    func start() async
+    func stop() async
+    func reset() async
+    func processFrameBuffer(_ frame: VideoFrameBuffer?) async -> VideoFrameBuffer?
 }
 
 open class VideoNode: NSObject, VideoNodeProtocol {
@@ -13,20 +15,22 @@ open class VideoNode: NSObject, VideoNodeProtocol {
 
     override public init() {}
 
-    open func prepare() {
+    open func prepare() async {
         NSLog("\(self) prepare")
     }
 
-    open func start() {
+    open func start() async {
         NSLog("\(self) start")
         isRunning = true
     }
 
-    open func stop() {
+    open func stop() async {
         isRunning = false
     }
 
-    open func processFrameBuffer(_ buffer: VideoFrameBuffer?) -> VideoFrameBuffer? {
+    open func reset() async {}
+
+    open func processFrameBuffer(_ buffer: VideoFrameBuffer?) async -> VideoFrameBuffer? {
         buffer
     }
 }

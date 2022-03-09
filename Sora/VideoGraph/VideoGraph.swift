@@ -18,7 +18,7 @@ public final class VideoGraph {
 
     private var isReady = false
 
-    private var runningContexts: [Context] = []
+    private var rootContexts: [Context] = []
 
     public private(set) var cameraInputNode: VideoCameraInputNode
 
@@ -29,6 +29,9 @@ public final class VideoGraph {
 
     deinit {
         VideoCameraInputNode.unregister(cameraInputNode)
+        Task {
+            await reset()
+        }
     }
 
     public func attach(_ node: VideoNode) {
@@ -53,75 +56,87 @@ public final class VideoGraph {
         nodeConnections.append(connection)
     }
 
-    public func prepare() {
-        for root in rootNodeDescriptions {
-            let context = Context(graph: self, root: root)
-            runningContexts.append(context)
-            context.queue.async {
-                root.node.prepare()
+    public func prepare() async {
+        await withTaskGroup(of: Void.self) { group in
+            for node in attachedNodes {
+                group.addTask {
+                    await node.prepare()
+                }
             }
+            await group.waitForAll()
         }
         isReady = true
     }
 
-    public func start() {
+    public func start() async {
         if !isReady {
-            prepare()
+            await prepare()
         }
 
-        isRunning = true
-        for context in runningContexts {
-            context.queue.async {
-                context.root.node.start()
+        await withTaskGroup(of: Void.self) { group in
+            for node in attachedNodes {
+                group.addTask {
+                    await node.start()
+                }
             }
+            await group.waitForAll()
+        }
+        isRunning = true
+    }
+
+    public func reset() async {
+        await withTaskGroup(of: Void.self) { group in
+            for node in attachedNodes {
+                group.addTask {
+                    await node.reset()
+                }
+            }
+            await group.waitForAll()
         }
     }
 
-    func supplyFrameBuffer(_ buffer: VideoFrameBuffer, by node: VideoInputNode) {
+    public func supplyFrameBuffer(_ buffer: VideoFrameBuffer, from node: VideoInputNode) {
         print("VideoGraph: supply frame, is running \(isRunning)")
-        guard isRunning else {
-            return
-        }
-        processFrameBuffer(buffer, with: node)
-    }
-
-    func processFrameBuffer(_ buffer: VideoFrameBuffer?, with node: VideoNode) {
         guard isRunning else {
             return
         }
         guard let desc = attachedNodeDescriptions[node] else {
             return
         }
-        guard let context = runningContexts.first(where: { $0.root.node == node }) else {
-            return
-        }
 
-        if desc.connections.isEmpty {
-            print("# renderFrame, last node, \(node)")
-            _ = node.processFrameBuffer(buffer)
-        } else {
+        Task {
             for conn in desc.connections {
-                context.queue.async {
-                    print("# render frame, next node")
-                    self.processFrameBuffer(buffer, connection: conn, in: context)
-                }
+                let context = Context(parent: nil, graph: self, nodeDescription: desc)
+                self.processFrameBuffer(buffer, with: conn.destination.node, in: context)
             }
         }
     }
 
-    func processFrameBuffer(_ buffer: VideoFrameBuffer?, connection: NodeConnection, in context: Context) {
-        // TODO: format
-        print("VideoGraph: renderFrame, source \(connection.source.node), \(connection.destination.node)")
-        let newFrame = connection.source.node.processFrameBuffer(buffer)
-        // TODO: ここでフォーマット
-        processFrameBuffer(newFrame, with: connection.destination.node)
+    func processFrameBuffer(_ buffer: VideoFrameBuffer?, with node: VideoNode, in context: Context) {
+        guard isRunning else {
+            return
+        }
+        guard let desc = attachedNodeDescriptions[node] else {
+            return
+        }
+
+        Task {
+            let nextBuffer = await node.processFrameBuffer(buffer)
+            for conn in desc.connections {
+                // TODO: ここでフォーマット
+                let nextContext = Context(parent: context, graph: self, nodeDescription: desc)
+                self.processFrameBuffer(nextBuffer, with: conn.destination.node, in: nextContext)
+            }
+        }
     }
 
     class NodeDescription: NSObject {
         var node: VideoNode
 
-        // source, destination 両方
+        // source -> destination
         var connections: [NodeConnection] = []
+
+        // destination -> source
         var inverseConnections: [NodeConnection] = []
 
         var isRoot: Bool {
@@ -154,14 +169,23 @@ public final class VideoGraph {
     }
 
     public class Context {
-        public var graph: VideoGraph
-        public var queue: DispatchQueue
-        var root: NodeDescription
+        public var parent: Context?
+        public var isRoot: Bool {
+            parent == nil
+        }
 
-        init(graph: VideoGraph, root: NodeDescription) {
+        public var graph: VideoGraph
+
+        public var node: VideoNode {
+            nodeDescription.node
+        }
+
+        var nodeDescription: NodeDescription
+
+        init(parent: Context?, graph: VideoGraph, nodeDescription: NodeDescription) {
+            self.parent = parent
             self.graph = graph
-            self.root = root
-            queue = DispatchQueue(label: "VideoGraph.Context")
+            self.nodeDescription = nodeDescription
         }
     }
 }
