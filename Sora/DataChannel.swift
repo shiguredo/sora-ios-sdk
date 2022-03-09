@@ -220,6 +220,10 @@ class DataChannel {
         delegate.compress
     }
 
+    var readyState: RTCDataChannelState {
+        native.readyState
+    }
+
     func send(_ data: Data) -> Bool {
         Logger.debug(type: .dataChannel, message: "\(String(describing: type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())")
 

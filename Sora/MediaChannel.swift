@@ -453,6 +453,12 @@ public final class MediaChannel {
         guard let dc = peerChannel.dataChannels[label] else {
             return SoraError.messagingError(reason: "no DataChannel found: label => \(label)")
         }
+
+        let readyState = dc.readyState
+        guard readyState == .open else {
+            return SoraError.messagingError(reason: "readyState of the DataChannel is not open: label => \(label), readyState => \(readyState)")
+        }
+
         let result = dc.send(data)
 
         return result ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
