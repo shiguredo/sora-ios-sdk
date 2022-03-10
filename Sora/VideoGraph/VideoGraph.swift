@@ -41,6 +41,30 @@ public final class VideoGraph {
         }
     }
 
+    public func detach(_ node: VideoNode) {
+        guard let desc = attachedNodeDescriptions[node] else {
+            return
+        }
+
+        attachedNodeDescriptions[node] = nil
+        node.graph = nil
+
+        // 関連するすべての接続を削除する
+        nodeConnections = nodeConnections.filter {
+            $0.source == desc || $0.destination == desc
+        }
+        for conn in desc.connections {
+            conn.destination.inverseConnections = conn.destination.inverseConnections.filter {
+                $0.source == desc
+            }
+        }
+        for conn in desc.inverseConnections {
+            conn.source.connections = conn.source.connections.filter {
+                $0.destination == desc
+            }
+        }
+    }
+
     public func connect(_ source: VideoNode, to destination: VideoNode, format: VideoFrameFormat? = nil) {
         guard let sourceDesc = attachedNodeDescriptions[source] else {
             // TODO: warning
