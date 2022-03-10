@@ -11,7 +11,7 @@ public protocol VideoNodeProtocol {
 
 open class VideoNode: NSObject, VideoNodeProtocol {
     public private(set) var isRunning = false
-    weak var graph: VideoGraph?
+    public weak var graph: VideoGraph?
 
     override public init() {}
 
