@@ -151,7 +151,7 @@ public final class VideoGraph {
             if connection.source == self {
                 connections.append(connection)
             } else {
-                inverseConnections.append(connection)
+                connection.destination.inverseConnections.append(connection)
             }
         }
     }
