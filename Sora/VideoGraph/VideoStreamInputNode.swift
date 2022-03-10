@@ -1,8 +1,32 @@
 import Foundation
+import WebRTC
 
-// ストリームのレンダラーとしてセットする
 public class VideoStreamInputNode: VideoInputNode {
-    public weak var stream: MediaStream?
+    public private(set) weak var stream: MediaStream?
+
+    public init(_ stream: MediaStream) {
+        self.stream = stream
+        super.init()
+        stream.addVideoStreamInputNode(self)
+    }
+
+    deinit {
+        stream?.removeVideoStreamInputNode(self)
+    }
 }
 
-// extension VideoStreamInputNode: VideoRenderer {}
+extension VideoStreamInputNode: RTCVideoRenderer {
+    public func setSize(_ size: CGSize) {
+        // TODO
+    }
+
+    public func renderFrame(_ frame: RTCVideoFrame?) {
+        let buffer: VideoFrameBuffer
+        if let frame = frame {
+            buffer = .rtcFrame(frame)
+        } else {
+            buffer = .empty
+        }
+        graph?.supplyFrameBuffer(buffer, from: self)
+    }
+}

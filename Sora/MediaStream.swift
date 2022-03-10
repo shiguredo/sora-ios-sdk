@@ -114,6 +114,10 @@ public protocol MediaStream: AnyObject {
      ストリームの終了処理を行います。
      */
     func terminate()
+
+    /// :nodoc:
+    func addVideoStreamInputNode(_ node: VideoStreamInputNode)
+    func removeVideoStreamInputNode(_ node: VideoStreamInputNode)
 }
 
 class BasicMediaStream: MediaStream {
@@ -261,5 +265,13 @@ class BasicMediaStream: MediaStream {
                                             didCapture: nativeFrame)
             }
         } else {}
+    }
+
+    func addVideoStreamInputNode(_ node: VideoStreamInputNode) {
+        nativeVideoTrack?.add(node)
+    }
+
+    func removeVideoStreamInputNode(_ node: VideoStreamInputNode) {
+        nativeVideoTrack?.remove(node)
     }
 }
