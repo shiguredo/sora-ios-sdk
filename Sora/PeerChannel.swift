@@ -505,31 +505,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "try setting remote description")
         let offer = RTCSessionDescription(type: .offer, sdp: offer)
         nativeChannel.setRemoteDescription(offer) { error in
-            guard error == nil else {
-                Logger.debug(type: .peerChannel,
-                             message: "failed setting remote description: (\(error!.localizedDescription)")
-                handler(nil, error)
-                return
-            }
-
-            guard let nativeChannel = self.nativeChannel else {
-                Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
-                return
-            }
-
-            Logger.debug(type: .peerChannel, message: "did set remote description")
-            Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
-
-            if isSender {
-                self.initializeSenderStream()
-                self.updateSenderOfferEncodings()
-            }
-
-            Logger.debug(type: .peerChannel, message: "try creating native answer")
-            nativeChannel.answer(for: constraints) { answer, error in
+            SoraDispatcher.async(on: .peerConnection) {
                 guard error == nil else {
                     Logger.debug(type: .peerChannel,
-                                 message: "failed creating native answer (\(error!.localizedDescription)")
+                                 message: "failed setting remote description: (\(error!.localizedDescription)")
                     handler(nil, error)
                     return
                 }
@@ -539,23 +518,50 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                     return
                 }
 
-                Logger.debug(type: .peerChannel, message: "did create answer")
+                Logger.debug(type: .peerChannel, message: "did set remote description")
+                Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
 
-                Logger.debug(type: .peerChannel, message: "try setting local description")
-                nativeChannel.setLocalDescription(answer!) { error in
-                    guard error == nil else {
-                        Logger.debug(type: .peerChannel,
-                                     message: "failed setting local description")
-                        handler(nil, error)
-                        return
+                if isSender {
+                    self.initializeSenderStream()
+                    self.updateSenderOfferEncodings()
+                }
+
+                Logger.debug(type: .peerChannel, message: "try creating native answer")
+                nativeChannel.answer(for: constraints) { answer, error in
+                    SoraDispatcher.async(on: .peerConnection) {
+                        guard error == nil else {
+                            Logger.debug(type: .peerChannel,
+                                         message: "failed creating native answer (\(error!.localizedDescription)")
+                            handler(nil, error)
+                            return
+                        }
+
+                        guard let nativeChannel = self.nativeChannel else {
+                            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+                            return
+                        }
+
+                        Logger.debug(type: .peerChannel, message: "did create answer")
+
+                        Logger.debug(type: .peerChannel, message: "try setting local description")
+                        nativeChannel.setLocalDescription(answer!) { error in
+                            SoraDispatcher.async(on: .peerConnection) {
+                                guard error == nil else {
+                                    Logger.debug(type: .peerChannel,
+                                                 message: "failed setting local description")
+                                    handler(nil, error)
+                                    return
+                                }
+                                Logger.debug(type: .peerChannel,
+                                             message: "did set local description")
+                                Logger.debug(type: .peerChannel,
+                                             message: "\(answer!.sdpDescription)")
+                                Logger.debug(type: .peerChannel,
+                                             message: "did create answer")
+                                handler(answer!.sdp, nil)
+                            }
+                        }
                     }
-                    Logger.debug(type: .peerChannel,
-                                 message: "did set local description")
-                    Logger.debug(type: .peerChannel,
-                                 message: "\(answer!.sdpDescription)")
-                    Logger.debug(type: .peerChannel,
-                                 message: "did create answer")
-                    handler(answer!.sdp, nil)
                 }
             }
         }
