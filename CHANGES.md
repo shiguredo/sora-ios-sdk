@@ -11,6 +11,8 @@
 
 ## develop
 
+## 2022.2.0
+
 - [UPDATE] WebRTC 99.4844.1.0 に上げる
     - @miosakuma
 - [ADD] メッセージング機能に対応する
