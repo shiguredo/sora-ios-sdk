@@ -28,8 +28,9 @@ open class VideoNode: NSObject, VideoNodeProtocol {
         NSLog("\(self) start")
     }
 
-    open func stop() async {
-    }
+    open func pause() async {}
+
+    open func stop() async {}
 
     open func reset() async {}
 
