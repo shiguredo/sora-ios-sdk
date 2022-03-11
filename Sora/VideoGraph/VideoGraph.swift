@@ -174,7 +174,15 @@ public final class VideoGraph {
         }
 
         Task {
-            let nextBuffer = await node.processFrameBuffer(buffer)
+            var nextBuffer = buffer
+            switch node.mode {
+            case .process:
+                nextBuffer = await node.processFrameBuffer(buffer)
+            case .passthrough:
+                break
+            case .block:
+                return
+            }
             for conn in desc.connections {
                 // TODO: ここでフォーマット
                 let nextContext = Context(parent: context, graph: self, nodeDescription: desc)
