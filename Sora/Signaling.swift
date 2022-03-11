@@ -229,23 +229,11 @@ public enum SpotlightRid {
  */
 @available(*, unavailable,
            message: "SignalingMetadata を利用して、メタデータをデコードする方法は廃止されました。 Any? を任意の型にキャストしてデコードしてください。")
-public struct SignalingMetadata {
-    /// シグナリングに含まれるメタデータの JSON デコーダー
-    public var decoder: Decoder
-}
+public struct SignalingMetadata {}
 
 @available(*, unavailable, renamed: "SignalingNotifyMetadata",
            message: "SignalingClientMetadata は SignalingNotifyMetadata に置き換えられました。")
-public struct SignalingClientMetadata {
-    /// クライアント ID
-    public var clientId: String?
-
-    /// 接続 ID
-    public var connectionId: String?
-
-    /// メタデータ
-    public var metadata: SignalingMetadata
-}
+public struct SignalingClientMetadata {}
 
 /**
  シグナリングに含まれる、同チャネルに接続中のクライアントに関するメタデータ (任意のデータ) を表します。
@@ -520,22 +508,7 @@ public struct SignalingRedirect {
  廃止されました。
  */
 @available(*, unavailable, message: "SignalingNotifyEventType は廃止されました。")
-public enum SignalingNotifyEventType {
-    /// "connection.created"
-    case connectionCreated
-
-    /// "connection.updated"
-    case connectionUpdated
-
-    /// "connection.destroyed"
-    case connectionDestroyed
-
-    /// "spotlight.changed"
-    case spotlightChanged
-
-    /// "network.status"
-    case networkStatus
-}
+public enum SignalingNotifyEventType {}
 
 /// "notify" シグナリングメッセージを表します。
 ///
@@ -631,69 +604,7 @@ public struct SignalingNotify {
  SignalingNotify を利用してください。
  */
 @available(*, unavailable, message: "SignalingNotifyConnection は廃止されました。  SignalingNotify を利用してください。")
-public struct SignalingNotifyConnection {
-    // MARK: イベント情報
-
-    /// イベントの種別
-    public var eventType: Any
-
-    // MARK: 接続情報
-
-    /// ロール
-    public var role: SignalingRole
-
-    /// クライアント ID
-    public var clientId: String?
-
-    /// 接続 ID
-    public var connectionId: String?
-
-    /// 音声の可否
-    public var audioEnabled: Bool?
-
-    /// 映像の可否
-    public var videoEnabled: Bool?
-
-    /// メタデータ
-    public var metadata: Any?
-
-    /// シグナリング接続時にクライアントが指定した値
-    public var authnMetadata: Any?
-
-    /// Sora の認証ウェブフックの戻り値で指定された値
-    public var authzMetadata: Any?
-
-    /// メタデータのリスト
-    public var metadataList: [SignalingNotifyMetadata]?
-
-    // メタデータのリスト
-    public var data: [SignalingNotifyMetadata]?
-
-    // MARK: 接続状態
-
-    /// 接続時間 (分)
-    public var connectionTime: Int
-
-    /// 接続中のクライアントの数
-    public var connectionCount: Int
-
-    /// 接続中のパブリッシャーの数
-    @available(*, deprecated, message: "このプロパティは channelSendonlyConnections と channelSendrecvConnections に置き換えられました。")
-    public var publisherCount: Int?
-
-    /// 接続中のサブスクライバーの数
-    @available(*, deprecated, message: "このプロパティは channelRecvonlyConnections と channelSendrecvConnections に置き換えられました。")
-    public var subscriberCount: Int?
-
-    /// 接続中の送信専用接続の数
-    public var channelSendonlyConnections: Int?
-
-    /// 接続中の受信専用接続の数
-    public var channelRecvonlyConnections: Int?
-
-    /// 接続中の送受信可能接続の数
-    public var channelSendrecvConnections: Int?
-}
+public struct SignalingNotifyConnection {}
 
 /**
  "notify" シグナリングメッセージのうち、 `spotlight.changed` イベントを表します。
@@ -701,25 +612,7 @@ public struct SignalingNotifyConnection {
  SignalingNotify を利用してください。
  */
 @available(*, unavailable, message: "SignalingNotifySpotlightChanged は廃止されました。 SignalingNotify を利用してください。")
-public struct SignalingNotifySpotlightChanged {
-    /// クライアント ID
-    public var clientId: String?
-
-    /// 接続 ID
-    public var connectionId: String?
-
-    /// スポットライト ID
-    public var spotlightId: String
-
-    /// 固定の有無
-    public var isFixed: Bool?
-
-    /// 音声の可否
-    public var audioEnabled: Bool?
-
-    /// 映像の可否
-    public var videoEnabled: Bool?
-}
+public struct SignalingNotifySpotlightChanged {}
 
 /**
  "notify" シグナリングメッセージのうち、 "network.status" イベントを表します。
@@ -727,10 +620,7 @@ public struct SignalingNotifySpotlightChanged {
  SignalingNotify を利用してください。
  */
 @available(*, unavailable, message: "SignalingNotifyNetworkStatus は廃止されました。 SignalingNotify を利用してください。")
-public struct SignalingNotifyNetworkStatus {
-    /// ネットワークの不安定度
-    public var unstableLevel: Int
-}
+public struct SignalingNotifyNetworkStatus {}
 
 /**
  "ping" シグナリングメッセージを表します。
@@ -924,6 +814,7 @@ extension SignalingConnect: Codable {
         case environment
         case data_channel_signaling
         case ignore_disconnect_websocket
+        case data_channels
         case redirect
     }
 

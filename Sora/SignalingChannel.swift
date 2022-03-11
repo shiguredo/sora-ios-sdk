@@ -81,6 +81,10 @@ class SignalingChannel {
     // URLSession のコールバックが同時に発火することを防ぎます
     private let queue: OperationQueue
 
+    // 最初に type: connect を送信した URL
+    var contactUrl: URL?
+
+    // type: offer を Sora から受信したタイミングで設定する
     var connectedUrl: URL?
 
     required init(configuration: Configuration) {
@@ -133,8 +137,9 @@ class SignalingChannel {
             // 接続に成功した WebSocket を SignalingChannel に設定する
             Logger.info(type: .signalingChannel, message: "connected to \(String(describing: ws.host))")
             weakSelf.webSocketChannel = webSocketChannel
-            weakSelf.connectedUrl = ws.url
-
+            if weakSelf.contactUrl == nil {
+                weakSelf.contactUrl = ws.url
+            }
             // 採用された WebSocket 以外を切断してから webSocketChannelCandidates をクリアする
             weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
             weakSelf.webSocketChannelCandidates.forEach {
@@ -219,7 +224,6 @@ class SignalingChannel {
         // 切断
         webSocketChannel?.disconnect(error: nil)
         webSocketChannel = nil
-        connectedUrl = nil
 
         // 接続
         guard let newUrl = URL(string: location) else {
@@ -252,6 +256,7 @@ class SignalingChannel {
             Logger.debug(type: .signalingChannel, message: "call onDisconnect")
             internalHandlers.onDisconnect?(error, reason)
 
+            contactUrl = nil
             connectedUrl = nil
             Logger.debug(type: .signalingChannel, message: "did disconnect")
         }
@@ -267,7 +272,21 @@ class SignalingChannel {
         let message = internalHandlers.onSend?(message) ?? message
         let encoder = JSONEncoder()
         do {
-            let data = try encoder.encode(message)
+            var data = try encoder.encode(message)
+
+            // type: connect の data_channels を設定する
+            // Signaling.encode(to:) では Any を扱えなかったため、文字列に変換する直前に値を設定している
+            switch message {
+            case .connect:
+                if configuration.dataChannels != nil {
+                    var jsonObject = (try JSONSerialization.jsonObject(with: data, options: [])) as! [String: Any]
+                    jsonObject["data_channels"] = configuration.dataChannels
+                    data = try JSONSerialization.data(withJSONObject: jsonObject, options: [])
+                }
+            default:
+                break
+            }
+
             let str = String(data: data, encoding: .utf8)!
             Logger.debug(type: .signalingChannel, message: str)
             ws.send(message: .text(str))
@@ -307,5 +326,12 @@ class SignalingChannel {
                              message: "decode failed (\(error.localizedDescription)) => \(text)")
             }
         }
+    }
+
+    func setConnectedUrl() {
+        guard let ws = webSocketChannel else {
+            return
+        }
+        connectedUrl = ws.url
     }
 }

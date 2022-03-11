@@ -92,8 +92,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     private(set) var streams: [MediaStream] = []
     private(set) var iceCandidates: [ICECandidate] = []
 
-    var dataChannels: [String] = []
-    var dataChannelInstances: [String: DataChannel] = [:]
+    var dataChannels: [String: DataChannel] = [:]
     var switchedToDataChannel: Bool = false
     var signalingOfferMessageDataChannels: [[String: Any]] = []
 
@@ -144,7 +143,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
 
         signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
-            self?.handle(signaling: signaling)
+            self?.handleSignalingOverWebSocket(signaling)
         }
     }
 
@@ -214,63 +213,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     func remove(iceCandidate: ICECandidate) {
         iceCandidates = iceCandidates.filter { each in each == iceCandidate }
-    }
-
-    func createAndSendReAnswerOnDataChannel(forReOffer reOffer: String) {
-        Logger.debug(type: .peerChannel, message: "create and send re-answer on DataChannel")
-
-        guard let dataChannel = dataChannelInstances["signaling"] else {
-            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
-            return
-        }
-        lock.lock()
-        createAnswer(isSender: false,
-                     offer: reOffer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
-            guard error == nil else {
-                Logger.error(type: .peerChannel,
-                             message: "failed to create re-answer: error => (\(error!.localizedDescription)")
-                self.lock.unlock()
-                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create re-answer"),
-                                reason: .signalingFailure)
-                return
-            }
-
-            let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
-
-            var data: Data?
-            do {
-                data = try JSONEncoder().encode(reAnswer)
-            } catch {
-                Logger.error(type: .peerChannel,
-                             message: "failed to encode re-answer: error => (\(error.localizedDescription)")
-                self.lock.unlock()
-                self.disconnect(error: SoraError.peerChannelError(reason: "failed to encode re-answer message to json"),
-                                reason: .signalingFailure)
-                return
-            }
-
-            if let data = data {
-                let ok = dataChannel.send(data)
-                if !ok {
-                    Logger.error(type: .peerChannel,
-                                 message: "failed to send re-answer message over DataChannel")
-                    self.lock.unlock()
-                    self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer message over DataChannel"),
-                                    reason: .signalingFailure)
-                    return
-                }
-            }
-
-            if self.configuration.isSender {
-                self.updateSenderOfferEncodings()
-            }
-
-            Logger.debug(type: .peerChannel, message: "call onUpdate")
-            self.internalHandlers.onUpdate?(answer!)
-
-            self.lock.unlock()
-        }
     }
 
     func disconnect(error: Error?, reason: DisconnectReason) {
@@ -715,10 +657,69 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
-    private func handle(signaling: Signaling) {
-        Logger.debug(type: .mediaStream, message: "handle signaling => \(signaling.typeName())")
+    private func createAndSendReAnswerOverDataChannel(forReOffer reOffer: String) {
+        Logger.debug(type: .peerChannel, message: "create and send re-answer over DataChannel")
+
+        guard let dataChannel = dataChannels["signaling"] else {
+            Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+            return
+        }
+        lock.lock()
+        createAnswer(isSender: false,
+                     offer: reOffer,
+                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+            guard error == nil else {
+                Logger.error(type: .peerChannel,
+                             message: "failed to create re-answer: error => (\(error!.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to create re-answer"),
+                                reason: .signalingFailure)
+                return
+            }
+
+            let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+
+            var data: Data?
+            do {
+                data = try JSONEncoder().encode(reAnswer)
+            } catch {
+                Logger.error(type: .peerChannel,
+                             message: "failed to encode re-answer: error => (\(error.localizedDescription)")
+                self.lock.unlock()
+                self.disconnect(error: SoraError.peerChannelError(reason: "failed to encode re-answer message to json"),
+                                reason: .signalingFailure)
+                return
+            }
+
+            if let data = data {
+                let ok = dataChannel.send(data)
+                if !ok {
+                    Logger.error(type: .peerChannel,
+                                 message: "failed to send re-answer message over DataChannel")
+                    self.lock.unlock()
+                    self.disconnect(error: SoraError.peerChannelError(reason: "failed to send re-answer message over DataChannel"),
+                                    reason: .signalingFailure)
+                    return
+                }
+            }
+
+            if self.configuration.isSender {
+                self.updateSenderOfferEncodings()
+            }
+
+            Logger.debug(type: .peerChannel, message: "call onUpdate")
+            self.internalHandlers.onUpdate?(answer!)
+
+            self.lock.unlock()
+        }
+    }
+
+    private func handleSignalingOverWebSocket(_ signaling: Signaling) {
+        Logger.debug(type: .mediaStream, message: "handle signaling over WebSocket => \(signaling.typeName())")
         switch signaling {
         case let .offer(offer):
+            signalingChannel.setConnectedUrl()
+
             clientId = offer.clientId
             connectionId = offer.connectionId
             if let dataChannels = offer.dataChannels {
@@ -771,6 +772,22 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             signalingChannel.redirect(location: redirect.location)
         default:
             break
+        }
+
+        Logger.debug(type: .peerChannel, message: "call onReceiveSignaling")
+        internalHandlers.onReceiveSignaling?(signaling)
+    }
+
+    func handleSignalingOverDataChannel(_ signaling: Signaling) {
+        Logger.debug(type: .mediaStream, message: "handle signaling over DataChannel => \(signaling.typeName())")
+        switch signaling {
+        case let .reOffer(reOffer):
+            createAndSendReAnswerOverDataChannel(forReOffer: reOffer.sdp)
+        case .push, .notify:
+            // 処理は不要
+            break
+        default:
+            Logger.error(type: .peerChannel, message: "unexpected signaling type => \(signaling.typeName())")
         }
 
         Logger.debug(type: .peerChannel, message: "call onReceiveSignaling")
@@ -889,7 +906,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func sendMessageOverDataChannel(message: Signaling) {
-        guard let dataChannel = dataChannelInstances["signaling"] else {
+        guard let dataChannel = dataChannels["signaling"] else {
             Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
             return
         }
@@ -1046,8 +1063,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
 
         let dc = DataChannel(dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel, peerChannel: self)
-        dataChannels += [dataChannel.label]
-        dataChannelInstances[dataChannel.label] = dc
+        dataChannels[dataChannel.label] = dc
     }
 }
 

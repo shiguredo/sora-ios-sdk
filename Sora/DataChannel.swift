@@ -142,7 +142,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             return
         }
 
-        guard let dc = peerChannel.dataChannelInstances[dataChannel.label] else {
+        guard let dc = peerChannel.dataChannels[dataChannel.label] else {
             Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is unavailable")
             return
         }
@@ -152,50 +152,49 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             return
         }
 
-        guard let message = String(data: data, encoding: .utf8) else {
-            Logger.error(type: .dataChannel, message: "failed to convert data to message")
-            return
+        if let message = String(data: data, encoding: .utf8) {
+            Logger.info(type: .dataChannel, message: "received data channel message: \(String(describing: message))")
         }
-        Logger.info(type: .dataChannel, message: "received data channel message: \(String(describing: message))")
 
-        switch dataChannel.label {
-        case "stats":
-            peerChannel.nativeChannel?.statistics {
-                // NOTE: stats の型を Signaling.swift に定義していない
-                let reports = Statistics(contentsOf: $0).jsonObject
-                let json: [String: Any] = ["type": "stats",
-                                           "reports": reports]
+        // Sora から送られてきたメッセージ
+        if !dataChannel.label.starts(with: "#") {
+            switch dataChannel.label {
+            case "stats":
+                peerChannel.nativeChannel?.statistics {
+                    // NOTE: stats の型を Signaling.swift に定義していない
+                    let reports = Statistics(contentsOf: $0).jsonObject
+                    let json: [String: Any] = ["type": "stats",
+                                               "reports": reports]
 
-                var data: Data?
-                do {
-                    data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
-                } catch {
-                    Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
-                }
+                    var data: Data?
+                    do {
+                        data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+                    } catch {
+                        Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
+                    }
 
-                if let data = data {
-                    let ok = dc.send(data)
-                    if !ok {
-                        Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
+                    if let data = data {
+                        let ok = dc.send(data)
+                        if !ok {
+                            Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
+                        }
                     }
                 }
-            }
 
-        case "push", "notify":
-            break
-        case "signaling":
-            do {
-                let reOffer = try JSONDecoder().decode(SignalingReOffer.self, from: data)
-                peerChannel.createAndSendReAnswerOnDataChannel(forReOffer: reOffer.sdp)
-            } catch {
-                Logger.error(type: .dataChannel, message: "failed to decode SignalingReOffer")
+            case "signaling", "push", "notify":
+                switch Signaling.decode(data) {
+                case let .success(signaling):
+                    peerChannel.handleSignalingOverDataChannel(signaling)
+                case let .failure(error):
+                    Logger.error(type: .dataChannel,
+                                 message: "decode failed (\(error.localizedDescription)) => ")
+                }
+            case "e2ee":
+                Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
+            default:
+                Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
             }
-        case "e2ee":
-            Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
-        default:
-            Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
         }
-
         if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
             handler(mediaChannel, dataChannel.label, data)
         }
@@ -221,6 +220,10 @@ class DataChannel {
         delegate.compress
     }
 
+    var readyState: RTCDataChannelState {
+        native.readyState
+    }
+
     func send(_ data: Data) -> Bool {
         Logger.debug(type: .dataChannel, message: "\(String(describing: type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())")
 
@@ -228,6 +231,6 @@ class DataChannel {
             Logger.error(type: .dataChannel, message: "failed to compress message")
             return false
         }
-        return native.sendData(RTCDataBuffer(data: data, isBinary: false))
+        return native.sendData(RTCDataBuffer(data: data, isBinary: true))
     }
 }

@@ -102,6 +102,16 @@ public final class MediaChannel {
     /// クライアントの設定
     public let configuration: Configuration
 
+    /**
+     最初に type: connect メッセージを送信した URL (デバッグ用)
+
+     Sora から type: redirect メッセージを受信した場合、 contactUrl と connectedUrl には異なる値がセットされます
+     type: redirect メッセージを受信しなかった場合、 contactUrl と connectedUrl には同じ値がセットされます
+     */
+    public var contactUrl: URL? {
+        signalingChannel.contactUrl
+    }
+
     /// 接続中の URL
     public var connectedUrl: URL? {
         signalingChannel.connectedUrl
@@ -428,6 +438,30 @@ public final class MediaChannel {
             internalHandlers.onDisconnect?(error)
             handlers.onDisconnect?(error)
         }
+    }
+
+    /// DataChannel を利用してメッセージを送信します
+    public func sendMessage(label: String, data: Data) -> Error? {
+        guard peerChannel.switchedToDataChannel else {
+            return SoraError.messagingError(reason: "DataChannel is not open yet")
+        }
+
+        guard label.starts(with: "#") else {
+            return SoraError.messagingError(reason: "label should start with #")
+        }
+
+        guard let dc = peerChannel.dataChannels[label] else {
+            return SoraError.messagingError(reason: "no DataChannel found: label => \(label)")
+        }
+
+        let readyState = dc.readyState
+        guard readyState == .open else {
+            return SoraError.messagingError(reason: "readyState of the DataChannel is not open: label => \(label), readyState => \(readyState)")
+        }
+
+        let result = dc.send(data)
+
+        return result ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
     }
 }
 
