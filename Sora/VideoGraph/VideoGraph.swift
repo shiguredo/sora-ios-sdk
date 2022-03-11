@@ -97,17 +97,23 @@ public final class VideoGraph {
         nodeConnections.append(connection)
     }
 
-    public func prepare() async {
+    private func iterate(state: State, block: @escaping (VideoNode) async -> Void) async {
         await withTaskGroup(of: Void.self) { group in
             for node in attachedNodes {
                 group.addTask {
-                    await node.prepare()
-                    node.state = .ready
+                    await block(node)
+                    node.state = state
                 }
             }
             await group.waitForAll()
         }
-        state = .ready
+        self.state = state
+    }
+
+    public func prepare() async {
+        await iterate(state: .ready) {
+            await $0.prepare()
+        }
     }
 
     public func start() async {
@@ -115,30 +121,20 @@ public final class VideoGraph {
             await prepare()
         }
 
-        await withTaskGroup(of: Void.self) { group in
-            for node in attachedNodes {
-                group.addTask {
-                    await node.start()
-                    node.state = .running
-                }
-            }
-            await group.waitForAll()
+        await iterate(state: .running) {
+            await $0.start()
         }
-        state = .running
     }
     }
 
     public func reset() async {
-        await withTaskGroup(of: Void.self) { group in
-            for node in attachedNodes {
-                group.addTask {
-                    await node.reset()
-                    node.state = .notReady
-                }
-            }
-            await group.waitForAll()
+        guard state.isReady else {
+            return
         }
-        state = .notReady
+
+        await iterate(state: .notReady) {
+            await $0.reset()
+        }
     }
 
     public func supplyFrameBuffer(_ buffer: VideoFrameBuffer, from node: VideoInputNode) {
