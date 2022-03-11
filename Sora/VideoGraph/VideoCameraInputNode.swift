@@ -15,8 +15,8 @@ public class VideoCameraInputNode: VideoInputNode {
     static func onCapture(_ buffer: VideoFrameBuffer) {
         NSLog("onCapture, nodes \(VideoCameraInputNode.sharedNodes.count)")
         for node in VideoCameraInputNode.sharedNodes {
-            print("\(node) isRunning \(node.isRunning)")
-            guard node.isRunning else {
+            print("\(node) isRunning \(node.state.isRunning)")
+            guard node.state.isRunning else {
                 return
             }
 
