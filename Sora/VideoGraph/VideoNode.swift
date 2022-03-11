@@ -3,6 +3,7 @@ import WebRTC
 
 public protocol VideoNodeProtocol {
     var state: VideoGraph.State { get }
+    var mode: VideoNode.Mode { get }
     func prepare() async
     func start() async
     func pause() async
@@ -12,9 +13,22 @@ public protocol VideoNodeProtocol {
 }
 
 open class VideoNode: NSObject, VideoNodeProtocol {
+    // 映像フレームの処理方法
+    public enum Mode {
+        // 処理する
+        case process
+
+        // 処理せず次のノードにバッファを渡す
+        case passthrough
+
+        // 処理せず次のノードにバッファを渡さない
+        case block
+    }
+
 
     public weak var graph: VideoGraph?
     public internal(set) var state: VideoGraph.State = .notReady
+    public var mode: Mode = .process
 
     override public init() {
         super.init()
