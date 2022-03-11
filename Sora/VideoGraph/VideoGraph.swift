@@ -2,25 +2,6 @@ import Foundation
 import WebRTC
 
 public final class VideoGraph {
-    public enum State {
-        // prepare していない状態
-        case notReady
-
-        // prepare 済みの状態、 start 可能
-        case ready
-
-        // start 実行後
-        case running
-
-        public var isReady: Bool {
-            self == .ready
-        }
-
-        public var isRunning: Bool {
-            self == .running
-        }
-    }
-
     public var attachedNodes: [VideoNode] {
         Array(attachedNodeDescriptions.keys)
     }
@@ -33,7 +14,7 @@ public final class VideoGraph {
         Set(attachedNodeDescriptions.values.filter(\.isRoot))
     }
 
-    public private(set) var state: State = .notReady
+    public private(set) var isRunning = false
 
     private var rootContexts: [Context] = []
 
@@ -97,60 +78,70 @@ public final class VideoGraph {
         nodeConnections.append(connection)
     }
 
-    private func iterate(state: State, block: @escaping (VideoNode) async -> Void) async {
+    private func iterate(block: @escaping (VideoNode) async -> Void) async {
         await withTaskGroup(of: Void.self) { group in
             for node in attachedNodes {
                 group.addTask {
                     await block(node)
-                    node.state = state
                 }
             }
             await group.waitForAll()
         }
-        self.state = state
     }
 
     public func prepare() async {
-        await iterate(state: .ready) {
-            await $0.prepare()
+        await iterate {
+            if $0.state == .notReady {
+                await $0.prepare()
+                $0.state = .ready
+            }
         }
     }
 
     public func start() async {
-        if !state.isReady {
-            await prepare()
+        guard !isRunning else {
+            return
         }
 
-        await iterate(state: .running) {
-            await $0.start()
+        await iterate {
+            if $0.state == .ready {
+                await $0.start()
+                $0.state = .running
+            }
         }
+        isRunning = true
     }
 
     public func pause() async {
-        await iterate(state: .ready) {
-            await $0.pause()
+        await iterate {
+            if $0.state == .running {
+                await $0.pause()
+                $0.state = .ready
+            }
         }
     }
 
     public func stop() async {
-        await iterate(state: .notReady) {
-            await $0.stop()
+        await iterate {
+            if $0.state == .running {
+                await $0.stop()
+                $0.state = .notReady
+            }
         }
     }
 
     public func reset() async {
-        guard state.isReady else {
-            return
-        }
-
-        await iterate(state: .notReady) {
-            await $0.reset()
+        await iterate {
+            if $0.state == .running {
+                await $0.stop()
+                $0.state = .notReady
+            }
         }
     }
 
     public func supplyFrameBuffer(_ buffer: VideoFrameBuffer, from node: VideoInputNode) {
-        print("VideoGraph: supply frame, is running \(state.isRunning)")
-        guard state.isRunning else {
+        print("VideoGraph: supply frame, is running \(isRunning)")
+        guard isRunning else {
             return
         }
         guard let desc = attachedNodeDescriptions[node] else {
@@ -166,7 +157,7 @@ public final class VideoGraph {
     }
 
     func processFrameBuffer(_ buffer: VideoFrameBuffer?, with node: VideoNode, in context: Context) {
-        guard state.isRunning else {
+        guard isRunning else {
             return
         }
         guard let desc = attachedNodeDescriptions[node] else {

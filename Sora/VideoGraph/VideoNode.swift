@@ -2,8 +2,8 @@ import Foundation
 import WebRTC
 
 public protocol VideoNodeProtocol {
-    var state: VideoGraph.State { get }
     var mode: VideoNode.Mode { get }
+    var state: VideoNode.State { get }
     func prepare() async
     func start() async
     func pause() async
@@ -25,10 +25,28 @@ open class VideoNode: NSObject, VideoNodeProtocol {
         case block
     }
 
+    public enum State {
+        // prepare していない状態
+        case notReady
+
+        // prepare 済みの状態、 start 可能
+        case ready
+
+        // start 実行後
+        case running
+
+        public var isReady: Bool {
+            self == .ready
+        }
+
+        public var isRunning: Bool {
+            self == .running
+        }
+    }
 
     public weak var graph: VideoGraph?
-    public internal(set) var state: VideoGraph.State = .notReady
     public var mode: Mode = .process
+    public internal(set) var state: State = .notReady
 
     override public init() {
         super.init()
