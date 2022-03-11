@@ -24,11 +24,4 @@ public class VideoCameraInputNode: VideoInputNode {
             node.graph?.supplyFrameBuffer(buffer, from: node)
         }
     }
-
-    public private(set) var queue: DispatchQueue
-
-    override init() {
-        queue = DispatchQueue(label: "CameraVideoInputNode")
-        super.init()
-    }
 }
