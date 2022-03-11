@@ -125,6 +125,17 @@ public final class VideoGraph {
             await $0.start()
         }
     }
+
+    public func pause() async {
+        await iterate(state: .ready) {
+            await $0.pause()
+        }
+    }
+
+    public func stop() async {
+        await iterate(state: .notReady) {
+            await $0.stop()
+        }
     }
 
     public func reset() async {
