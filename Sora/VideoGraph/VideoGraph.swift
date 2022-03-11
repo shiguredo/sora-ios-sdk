@@ -2,6 +2,25 @@ import Foundation
 import WebRTC
 
 public final class VideoGraph {
+    public enum State {
+        // prepare していない状態
+        case notReady
+
+        // prepare 済みの状態、 start 可能
+        case ready
+
+        // start 実行後
+        case running
+
+        public var isReady: Bool {
+            self == .ready
+        }
+
+        public var isRunning: Bool {
+            self == .running
+        }
+    }
+
     public var attachedNodes: [VideoNode] {
         Array(attachedNodeDescriptions.keys)
     }
@@ -14,9 +33,7 @@ public final class VideoGraph {
         Set(attachedNodeDescriptions.values.filter(\.isRoot))
     }
 
-    public private(set) var isRunning = false
-
-    private var isReady = false
+    public private(set) var state: State = .notReady
 
     private var rootContexts: [Context] = []
 
@@ -85,15 +102,16 @@ public final class VideoGraph {
             for node in attachedNodes {
                 group.addTask {
                     await node.prepare()
+                    node.state = .ready
                 }
             }
             await group.waitForAll()
         }
-        isReady = true
+        state = .ready
     }
 
     public func start() async {
-        if !isReady {
+        if !state.isReady {
             await prepare()
         }
 
@@ -101,11 +119,13 @@ public final class VideoGraph {
             for node in attachedNodes {
                 group.addTask {
                     await node.start()
+                    node.state = .running
                 }
             }
             await group.waitForAll()
         }
-        isRunning = true
+        state = .running
+    }
     }
 
     public func reset() async {
@@ -113,15 +133,17 @@ public final class VideoGraph {
             for node in attachedNodes {
                 group.addTask {
                     await node.reset()
+                    node.state = .notReady
                 }
             }
             await group.waitForAll()
         }
+        state = .notReady
     }
 
     public func supplyFrameBuffer(_ buffer: VideoFrameBuffer, from node: VideoInputNode) {
-        print("VideoGraph: supply frame, is running \(isRunning)")
-        guard isRunning else {
+        print("VideoGraph: supply frame, is running \(state.isRunning)")
+        guard state.isRunning else {
             return
         }
         guard let desc = attachedNodeDescriptions[node] else {
@@ -137,7 +159,7 @@ public final class VideoGraph {
     }
 
     func processFrameBuffer(_ buffer: VideoFrameBuffer?, with node: VideoNode, in context: Context) {
-        guard isRunning else {
+        guard state.isRunning else {
             return
         }
         guard let desc = attachedNodeDescriptions[node] else {
