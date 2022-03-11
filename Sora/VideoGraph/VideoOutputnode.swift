@@ -1,3 +1,3 @@
 import Foundation
 
-public class VideoOutputNode: VideoNode {}
+open class VideoOutputNode: VideoIONode {}
