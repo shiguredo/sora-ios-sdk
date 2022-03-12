@@ -171,6 +171,31 @@
 			children = (
 			);
 			name = Frameworks;
+		9122B99C27CFFB19006598D7 /* VideoGraph */ = {
+			isa = PBXGroup;
+			children = (
+				918E933327DC7870001ED600 /* Samples */,
+				9122B9A327CFFC50006598D7 /* VideoCameraInputNode.swift */,
+				9122B9A127CFFBBA006598D7 /* VideoFrameBuffer.swift */,
+				9122B99D27CFFB2A006598D7 /* VideoGraph.swift */,
+				91D834AC27D1511D007C84CF /* VideoInputNode.swift */,
+				9191C83827DBA848000E0608 /* VideoIONode.swift */,
+				9122B99F27CFFB48006598D7 /* VideoNode.swift */,
+				9117BCBB27D29A64002FACAA /* VideoNodeProxy.swift */,
+				9160620727D248FD0040CA54 /* VideoOutputnode.swift */,
+				9117BCBD27D29A6F002FACAA /* VideoStreamInputNode.swift */,
+				9117BCBF27D29AC5002FACAA /* VideoStreamOutputNode.swift */,
+				9160620927D249160040CA54 /* VideoViewOutputNode.swift */,
+			);
+			path = VideoGraph;
+			sourceTree = "<group>";
+		};
+		918E933327DC7870001ED600 /* Samples */ = {
+			isa = PBXGroup;
+			children = (
+				918E933427DC78AE001ED600 /* VideoCIFilterNode.swift */,
+			);
+			path = Samples;
 			sourceTree = "<group>";
 		};
 		91BDC1D31F6285D10084DC3A /* Extensions */ = {
