@@ -104,6 +104,10 @@ public final class VideoGraph {
         }
 
         await iterate {
+            if $0.state == .notReady {
+                await $0.prepare()
+                $0.state = .ready
+            }
             if $0.state == .ready {
                 await $0.start()
                 $0.state = .running
@@ -132,8 +136,8 @@ public final class VideoGraph {
 
     public func reset() async {
         await iterate {
-            if $0.state == .running {
-                await $0.stop()
+            if $0.state == .ready {
+                await $0.reset()
                 $0.state = .notReady
             }
         }
