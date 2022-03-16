@@ -154,7 +154,7 @@ public final class VideoGraph {
 
         Task {
             for conn in desc.connections {
-                let context = Context(parent: nil, graph: self, nodeDescription: desc)
+                let context = Context(parent: nil, graph: self, sourceDescription: desc)
                 self.processFrameBuffer(buffer, with: conn.destination.node, in: context)
             }
         }
@@ -172,7 +172,7 @@ public final class VideoGraph {
             var nextBuffer = buffer
             switch node.mode {
             case .process:
-                nextBuffer = await node.processFrameBuffer(buffer)
+                nextBuffer = await node.processFrameBuffer(buffer, in: context)
             case .passthrough:
                 break
             case .block:
@@ -180,7 +180,7 @@ public final class VideoGraph {
             }
             for conn in desc.connections {
                 // TODO: ここでフォーマット
-                let nextContext = Context(parent: context, graph: self, nodeDescription: desc)
+                let nextContext = Context(parent: context, graph: self, sourceDescription: desc)
                 self.processFrameBuffer(nextBuffer, with: conn.destination.node, in: nextContext)
             }
         }
@@ -232,16 +232,16 @@ public final class VideoGraph {
 
         public var graph: VideoGraph
 
-        public var node: VideoNode {
-            nodeDescription.node
+        public var source: VideoNode {
+            sourceDescription.node
         }
 
-        var nodeDescription: NodeDescription
+        var sourceDescription: NodeDescription
 
-        init(parent: Context?, graph: VideoGraph, nodeDescription: NodeDescription) {
+        init(parent: Context?, graph: VideoGraph, sourceDescription: NodeDescription) {
             self.parent = parent
             self.graph = graph
-            self.nodeDescription = nodeDescription
+            self.sourceDescription = sourceDescription
         }
     }
 }

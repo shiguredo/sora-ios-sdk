@@ -9,7 +9,7 @@ public class VideoCIFilterNode: VideoNode {
         super.init()
     }
 
-    override public func processFrameBuffer(_ buffer: VideoFrameBuffer?) async -> VideoFrameBuffer? {
+    override public func processFrameBuffer(_ buffer: VideoFrameBuffer?, in context: VideoGraph.Context) async -> VideoFrameBuffer? {
         guard let buffer = buffer else {
             return nil
         }

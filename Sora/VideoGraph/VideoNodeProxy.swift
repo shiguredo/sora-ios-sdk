@@ -33,9 +33,9 @@ public class VideoNodeProxy: VideoNode {
         await node?.reset()
     }
 
-    override public func processFrameBuffer(_ buffer: VideoFrameBuffer?) async -> VideoFrameBuffer? {
+    override public func processFrameBuffer(_ buffer: VideoFrameBuffer?, in context: VideoGraph.Context) async -> VideoFrameBuffer? {
         if let node = node {
-            return await node.processFrameBuffer(buffer)
+            return await node.processFrameBuffer(buffer, in: context)
         } else {
             return buffer
         }
