@@ -12,7 +12,7 @@ public class VideoStreamOutputNode: VideoOutputNode {
         super.init()
     }
 
-    override public func processFrameBuffer(_ buffer: VideoFrameBuffer?) async -> VideoFrameBuffer? {
+    override public func processFrameBuffer(_ buffer: VideoFrameBuffer?, in context: VideoGraph.Context) async -> VideoFrameBuffer? {
         stream?.send(videoFrame: buffer?.frame)
         return buffer
     }

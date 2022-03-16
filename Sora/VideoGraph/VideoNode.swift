@@ -9,7 +9,7 @@ public protocol VideoNodeProtocol {
     func pause() async
     func stop() async
     func reset() async
-    func processFrameBuffer(_ frame: VideoFrameBuffer?) async -> VideoFrameBuffer?
+    func processFrameBuffer(_ frame: VideoFrameBuffer?, in context: VideoGraph.Context) async -> VideoFrameBuffer?
 }
 
 open class VideoNode: NSObject, VideoNodeProtocol {
@@ -66,7 +66,7 @@ open class VideoNode: NSObject, VideoNodeProtocol {
 
     open func reset() async {}
 
-    open func processFrameBuffer(_ buffer: VideoFrameBuffer?) async -> VideoFrameBuffer? {
+    open func processFrameBuffer(_ buffer: VideoFrameBuffer?, in context: VideoGraph.Context) async -> VideoFrameBuffer? {
         buffer
     }
 }
