@@ -4,6 +4,10 @@ import WebRTC
 public class VideoViewOutputNode: VideoOutputNode {
     public weak var videoView: VideoView?
 
+    public override init() {
+        super.init()
+    }
+    
     public init(_ videoView: VideoView) {
         self.videoView = videoView
         // TODO: ストリームを経由しないので、明示的に start() しないといけない

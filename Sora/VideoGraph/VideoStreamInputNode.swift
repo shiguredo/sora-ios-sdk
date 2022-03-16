@@ -4,6 +4,10 @@ import WebRTC
 public class VideoStreamInputNode: VideoInputNode {
     public private(set) weak var stream: MediaStream?
 
+    public override init() {
+        super.init()
+    }
+    
     public init(_ stream: MediaStream) {
         self.stream = stream
         super.init()
