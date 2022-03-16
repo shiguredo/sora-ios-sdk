@@ -489,6 +489,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
     }
 
+    private var inSetDescription = false
+
     private func createAnswer(isSender: Bool,
                               offer: String,
                               constraints: RTCMediaConstraints,
@@ -504,7 +506,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
         Logger.debug(type: .peerChannel, message: "try setting remote description")
         let offer = RTCSessionDescription(type: .offer, sdp: offer)
+        inSetDescription = true
         nativeChannel.setRemoteDescription(offer) { error in
+            self.inSetDescription = false
             SoraDispatcher.async(on: .peerConnection) {
                 guard error == nil else {
                     Logger.debug(type: .peerChannel,
@@ -527,7 +531,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 }
 
                 Logger.debug(type: .peerChannel, message: "try creating native answer")
+                self.inSetDescription = true
                 nativeChannel.answer(for: constraints) { answer, error in
+                    self.inSetDescription = false
                     SoraDispatcher.async(on: .peerConnection) {
                         guard error == nil else {
                             Logger.debug(type: .peerChannel,
@@ -544,7 +550,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                         Logger.debug(type: .peerChannel, message: "did create answer")
 
                         Logger.debug(type: .peerChannel, message: "try setting local description")
+                        self.inSetDescription = true
                         nativeChannel.setLocalDescription(answer!) { error in
+                            self.inSetDescription = false
                             SoraDispatcher.async(on: .peerConnection) {
                                 guard error == nil else {
                                     Logger.debug(type: .peerChannel,
@@ -839,6 +847,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     private func basicDisconnect(error: Error?, reason: DisconnectReason) {
         SoraDispatcher.async(on: .peerConnection) { [self] in
+            // setLocalDescription, setRemoteDescription の実行中であれば終わるまで待つ
+            while inSetDescription {}
+
             Logger.debug(type: .peerChannel, message: "try disconnecting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
             if let error = error {
                 Logger.error(type: .peerChannel,
