@@ -125,6 +125,14 @@ public final class CameraVideoCapturer {
         }
     }
 
+    public static func flip(_ capturer: CameraVideoCapturer) async -> Error? {
+        await withCheckedContinuation { continuation in
+            flip(capturer) { error in
+                continuation.resume(returning: error)
+            }
+        }
+    }
+    
     // MARK: プロパティ
 
     /// 出力先のストリーム
