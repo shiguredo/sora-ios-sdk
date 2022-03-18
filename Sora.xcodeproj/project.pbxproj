@@ -14,7 +14,6 @@
 		9106C27E1F31A3470019E3C7 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9106C27D1F31A3470019E3C7 /* Logger.swift */; };
 		910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */; };
 		910F2DB124D7F6EE007336A6 /* Statistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910F2DB024D7F6EE007336A6 /* Statistics.swift */; };
-		9117BCBC27D29A64002FACAA /* VideoNodeProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9117BCBB27D29A64002FACAA /* VideoNodeProxy.swift */; };
 		9117BCBE27D29A6F002FACAA /* VideoStreamInputNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9117BCBD27D29A6F002FACAA /* VideoStreamInputNode.swift */; };
 		9117BCC027D29AC5002FACAA /* VideoStreamOutputNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9117BCBF27D29AC5002FACAA /* VideoStreamOutputNode.swift */; };
 		9122B99E27CFFB2A006598D7 /* VideoGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9122B99D27CFFB2A006598D7 /* VideoGraph.swift */; };
@@ -95,7 +94,6 @@
 		9106C27D1F31A3470019E3C7 /* Logger.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		910EABE51F4FF88B00D81213 /* NativePeerChannelFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePeerChannelFactory.swift; sourceTree = "<group>"; };
 		910F2DB024D7F6EE007336A6 /* Statistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Statistics.swift; sourceTree = "<group>"; };
-		9117BCBB27D29A64002FACAA /* VideoNodeProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoNodeProxy.swift; sourceTree = "<group>"; };
 		9117BCBD27D29A6F002FACAA /* VideoStreamInputNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamInputNode.swift; sourceTree = "<group>"; };
 		9117BCBF27D29AC5002FACAA /* VideoStreamOutputNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamOutputNode.swift; sourceTree = "<group>"; };
 		9122B99D27CFFB2A006598D7 /* VideoGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoGraph.swift; sourceTree = "<group>"; };
@@ -181,7 +179,6 @@
 				91D834AC27D1511D007C84CF /* VideoInputNode.swift */,
 				9191C83827DBA848000E0608 /* VideoIONode.swift */,
 				9122B99F27CFFB48006598D7 /* VideoNode.swift */,
-				9117BCBB27D29A64002FACAA /* VideoNodeProxy.swift */,
 				9160620727D248FD0040CA54 /* VideoOutputnode.swift */,
 				9117BCBD27D29A6F002FACAA /* VideoStreamInputNode.swift */,
 				9117BCBF27D29AC5002FACAA /* VideoStreamOutputNode.swift */,
@@ -476,7 +473,6 @@
 				9174A8931F73F8CF00D586C4 /* VideoCodec.swift in Sources */,
 				91D834AD27D1511D007C84CF /* VideoInputNode.swift in Sources */,
 				9160620827D248FD0040CA54 /* VideoOutputnode.swift in Sources */,
-				9117BCBC27D29A64002FACAA /* VideoNodeProxy.swift in Sources */,
 				910EABE61F4FF88B00D81213 /* NativePeerChannelFactory.swift in Sources */,
 				910090501E58B5450099E00E /* VideoView.swift in Sources */,
 				91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */,
