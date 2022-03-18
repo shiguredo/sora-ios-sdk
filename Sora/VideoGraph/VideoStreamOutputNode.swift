@@ -1,7 +1,7 @@
 import Foundation
 
 public class VideoStreamOutputNode: VideoOutputNode {
-    public private(set) weak var stream: MediaStream?
+    public weak var stream: MediaStream?
 
     public override init() {
         super.init()
