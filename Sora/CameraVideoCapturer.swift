@@ -8,6 +8,13 @@ import WebRTC
  カメラの設定を変更したい場合は、 `change` を実行します。
  */
 public final class CameraVideoCapturer {
+    public enum Destination {
+        case stream
+        case videoGraph
+    }
+
+    public static var destination: Destination = .stream
+
     // MARK: インスタンスの取得
 
     /// 利用可能なデバイスのリスト
@@ -467,14 +474,17 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     }
 
     func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
-        let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
-        if let editedFrame = CameraVideoCapturer.handlers.onCapture?(cameraVideoCapturer, frame) {
-            cameraVideoCapturer.stream?.send(videoFrame: editedFrame)
-        } else {
-            cameraVideoCapturer.stream?.send(videoFrame: frame)
+        switch CameraVideoCapturer.destination {
+        case .stream:
+            let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
+            if let editedFrame = CameraVideoCapturer.handlers.onCapture?(cameraVideoCapturer, frame) {
+                cameraVideoCapturer.stream?.send(videoFrame: editedFrame)
+            } else {
+                cameraVideoCapturer.stream?.send(videoFrame: frame)
+            }
+        case .videoGraph:
+            VideoCameraInputNode.onCapture(.rtcFrame(nativeFrame))
         }
-
-        VideoCameraInputNode.onCapture(.rtcFrame(nativeFrame))
     }
 }
 

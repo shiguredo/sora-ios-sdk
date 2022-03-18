@@ -24,4 +24,14 @@ public class VideoCameraInputNode: VideoInputNode {
             node.graph?.supplyFrameBuffer(buffer, from: node)
         }
     }
+
+    override public func start() async {
+        await super.start()
+        CameraVideoCapturer.destination = .videoGraph
+    }
+
+    override public func stop() async {
+        await super.stop()
+        CameraVideoCapturer.destination = .stream
+    }
 }
