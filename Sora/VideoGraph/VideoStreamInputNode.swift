@@ -8,11 +8,6 @@ public class VideoStreamInputNode: VideoInputNode {
         super.init()
     }
     
-    public init(_ stream: MediaStream) {
-        self.stream = stream
-        super.init()
-    }
-
     deinit {
         stream?.removeVideoStreamInputNode(self)
     }

@@ -8,11 +8,6 @@ public class VideoNodeProxy: VideoNode {
         super.init()
     }
 
-    public init(_ node: VideoNode) {
-        self.node = node
-        super.init()
-    }
-
     override public func prepare() async {
         await node?.prepare()
     }
