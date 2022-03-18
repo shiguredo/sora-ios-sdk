@@ -483,7 +483,7 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
                 cameraVideoCapturer.stream?.send(videoFrame: frame)
             }
         case .videoGraph:
-            VideoCameraInputNode.onCapture(.rtcFrame(nativeFrame))
+            VideoCameraInputNode.onCapture(.native(nativeFrame))
         }
     }
 }

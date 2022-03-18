@@ -36,7 +36,7 @@ extension VideoStreamInputNode: RTCVideoRenderer {
     public func renderFrame(_ frame: RTCVideoFrame?) {
         let buffer: VideoFrameBuffer
         if let frame = frame {
-            buffer = .rtcFrame(frame)
+            buffer = .native(frame)
         } else {
             buffer = .empty
         }

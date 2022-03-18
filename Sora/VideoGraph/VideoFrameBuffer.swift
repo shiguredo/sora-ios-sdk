@@ -2,14 +2,14 @@ import Foundation
 import WebRTC
 
 public enum VideoFrameBuffer {
-    case rtcFrame(RTCVideoFrame)
+    case native(RTCVideoFrame)
     case sampleBuffer(CMSampleBuffer)
     case pixelBuffer(CVPixelBuffer)
     case empty
 
     public var pixelBuffer: CVPixelBuffer? {
         switch self {
-        case let .rtcFrame(frame):
+        case let .native(frame):
             return (frame.buffer as? RTCCVPixelBuffer)?.pixelBuffer
         case let .sampleBuffer(buffer):
             return CMSampleBufferGetImageBuffer(buffer)
@@ -22,7 +22,7 @@ public enum VideoFrameBuffer {
 
     public var frame: VideoFrame? {
         switch self {
-        case let .rtcFrame(frame):
+        case let .native(frame):
             return VideoFrame.native(capturer: nil, frame: frame)
         case let .sampleBuffer(buffer):
             return VideoFrame(from: buffer)
