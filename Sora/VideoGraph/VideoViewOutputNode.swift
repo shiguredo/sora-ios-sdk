@@ -1,6 +1,7 @@
 import Foundation
 import WebRTC
 
+// 渡されたバッファを映像ビューで描画するノード
 public class VideoViewOutputNode: VideoOutputNode {
     public weak var videoView: VideoView?
 

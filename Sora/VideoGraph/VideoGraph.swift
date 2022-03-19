@@ -1,6 +1,25 @@
 import Foundation
 import WebRTC
 
+// 映像ノードのグラフを管理するオブジェクト
+// グラフを使うと、映像の受信元・配信先の選択や映像の加工の流れを制御できる
+// 映像の加工処理はノードとして実装する
+//
+// ## 基本的な使い方
+// 入力ノード -> 任意のノード -> 出力ノードの順で接続する
+// 入力ノードは、カメラや受信ストリームから映像フレームのデータ (バッファ) を取得する
+// バッファは接続先のノードに渡される
+// 出力ノードは、前のノードで処理されたバッファを受け取って配信ストリームや映像ビューに出力する
+//
+// ## API の基本的な使い方
+// - VideoGraph オブジェクトを生成する
+// - attach() でグラフにノードを追加する
+// - connect() でノード同士を接続する
+// - start() で実行を開始する
+//
+// ## パフォーマンスについて
+// - フィルタを複数接続するとパフォーマンスが大きく低下する可能性がある。その場合は映像処理を GPU で行うようにするか、複数のノードに分散せずに一つのノードで処理するように実装を変更するとよい
+// - ノードは個別に無効にできる。一時的にのみ使うノードは、使うタイミングが来るまで処理をスルーする設定にしておくとよい
 public final class VideoGraph {
     public var attachedNodes: [VideoNode] {
         Array(attachedNodeDescriptions.keys)
@@ -18,6 +37,8 @@ public final class VideoGraph {
 
     private var rootContexts: [Context] = []
 
+    // カメラ入力ノード
+    // グラフを開始すると、カメラから配信ストリームへの映像の送信が停止する (二重に配信されてしまうため)
     public private(set) var cameraInputNode: VideoCameraInputNode
 
     public init() {
@@ -32,6 +53,7 @@ public final class VideoGraph {
         }
     }
 
+    // ノードを追加する
     public func attach(_ node: VideoNode) {
         if attachedNodeDescriptions[node] == nil {
             attachedNodeDescriptions[node] = NodeDescription(node)
@@ -39,6 +61,7 @@ public final class VideoGraph {
         }
     }
 
+    // ノードを削除する
     public func detach(_ node: VideoNode) {
         guard let desc = attachedNodeDescriptions[node] else {
             return
@@ -63,6 +86,7 @@ public final class VideoGraph {
         }
     }
 
+    // ノード同士を接続する
     public func connect(_ source: VideoNode, to destination: VideoNode, format: VideoFrameFormat? = nil) {
         guard let sourceDesc = attachedNodeDescriptions[source] else {
             // TODO: warning
@@ -143,6 +167,7 @@ public final class VideoGraph {
         }
     }
 
+    // ノードにバッファを供給する
     public func supplyFrameBuffer(_ buffer: VideoFrameBuffer, from node: VideoInputNode) {
         print("VideoGraph: supply frame, is running \(isRunning)")
         guard isRunning else {
@@ -224,6 +249,7 @@ public final class VideoGraph {
         }
     }
 
+    // グラフの実行中の情報
     public class Context {
         public var parent: Context?
         public var isRoot: Bool {
@@ -232,6 +258,7 @@ public final class VideoGraph {
 
         public var graph: VideoGraph
 
+        // 実行中のノード
         public var source: VideoNode {
             sourceDescription.node
         }

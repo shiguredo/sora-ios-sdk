@@ -3,6 +3,7 @@ import WebRTC
 
 // Core Image Filter を使うノードのサンプル
 public class VideoCIFilterNode: VideoNode {
+    // バッファに適用するフィルター
     public var filter: CIFilter?
 
     override public init() {

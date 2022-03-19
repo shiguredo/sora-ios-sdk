@@ -1,5 +1,7 @@
 import Foundation
 
+// 渡されたバッファを配信ストリームに出力するノード
+// このノードに接続すると映像を配信できる
 public class VideoStreamOutputNode: VideoOutputNode {
     public weak var stream: MediaStream?
 

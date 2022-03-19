@@ -1,6 +1,7 @@
 import Foundation
 import WebRTC
 
+// カメラから映像を取得し、グラフに渡すノード
 public class VideoCameraInputNode: VideoInputNode {
     private static var sharedNodes: [VideoCameraInputNode] = []
 

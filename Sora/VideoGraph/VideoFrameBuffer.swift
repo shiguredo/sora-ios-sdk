@@ -1,6 +1,9 @@
 import Foundation
 import WebRTC
 
+// 映像フレームのデータを保持するバッファ
+// データの内容は供給元によって異なるが、いずれのデータでも CVPixelBuffer を取得できる
+// 映像の処理は CVPixelBuffer を操作すればよい
 public enum VideoFrameBuffer {
     case native(RTCVideoFrame)
     case sampleBuffer(CMSampleBuffer)
