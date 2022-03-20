@@ -14,9 +14,14 @@ public class VideoStreamInputNode: VideoInputNode {
         stream?.removeVideoStreamInputNode(self)
     }
 
-    override public func prepare() async {
-        await super.prepare()
+    override public func start() async {
+        await super.start()
         stream?.addVideoStreamInputNode(self)
+    }
+
+    public func start(_ stream: MediaStream) async {
+        self.stream = stream
+        await start()
     }
 
     override public func reset() async {
