@@ -258,7 +258,7 @@ public final class VideoGraph {
 
         public var graph: VideoGraph
 
-        // 実行中のノード
+        // 直前の接続元のノード
         public var source: VideoNode {
             sourceDescription.node
         }
