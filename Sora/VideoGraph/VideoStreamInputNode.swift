@@ -4,7 +4,7 @@ import WebRTC
 // 受信ストリームが受信した映像をグラフに渡すノード
 public class VideoStreamInputNode: VideoInputNode {
     // 受信ストリーム
-    public private(set) weak var stream: MediaStream?
+    public weak var stream: MediaStream?
 
     public override init() {
         super.init()
