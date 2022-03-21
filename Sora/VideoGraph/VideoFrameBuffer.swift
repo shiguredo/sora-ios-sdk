@@ -5,11 +5,10 @@ import WebRTC
 // データの内容は供給元によって異なるが、いずれのデータでも CVPixelBuffer を取得できる
 // 映像の処理は CVPixelBuffer を操作すればよい
 public class VideoFrameBuffer {
-
     public enum Buffer {
-    case native(RTCVideoFrame)
-    case sampleBuffer(CMSampleBuffer)
-    case pixelBuffer(CVPixelBuffer)
+        case native(RTCVideoFrame)
+        case sampleBuffer(CMSampleBuffer)
+        case pixelBuffer(CVPixelBuffer)
     }
 
     public var buffer: Buffer?
@@ -70,7 +69,6 @@ public class VideoFrameBuffer {
     public init(_ buffer: CVPixelBuffer) {
         self.buffer = .pixelBuffer(buffer)
     }
-
 }
 
 public struct VideoFrameFormat {}
