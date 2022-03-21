@@ -5,10 +5,10 @@ import WebRTC
 public class VideoViewOutputNode: VideoOutputNode {
     public weak var videoView: VideoView?
 
-    public override init() {
+    override public init() {
         super.init()
     }
-    
+
     override public func start() async {
         await super.start()
 

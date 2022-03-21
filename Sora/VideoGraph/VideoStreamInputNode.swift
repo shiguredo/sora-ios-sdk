@@ -6,10 +6,10 @@ public class VideoStreamInputNode: VideoInputNode {
     // 受信ストリーム
     public weak var stream: MediaStream?
 
-    public override init() {
+    override public init() {
         super.init()
     }
-    
+
     deinit {
         stream?.removeVideoStreamInputNode(self)
     }

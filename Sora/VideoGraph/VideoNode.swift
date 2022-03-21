@@ -3,7 +3,6 @@ import WebRTC
 
 // 映像ノードが実装すべき API
 public protocol VideoNodeProtocol {
-
     // 映像フレームの処理方法
     var mode: VideoNode.Mode { get }
 
