@@ -68,8 +68,6 @@ public class VideoFrameBuffer {
     }
 }
 
-public struct VideoFrameFormat {}
-
 private extension RTCI420Buffer {
     var pixelBuffer: CVPixelBuffer? {
         typealias DescriptorType = MemoryLayout<CVPlanarPixelBufferInfo_YCbCrPlanar>

@@ -87,7 +87,7 @@ public final class VideoGraph {
     }
 
     // ノード同士を接続する
-    public func connect(_ source: VideoNode, to destination: VideoNode, format: VideoFrameFormat? = nil) {
+    public func connect(_ source: VideoNode, to destination: VideoNode) {
         guard let sourceDesc = attachedNodeDescriptions[source] else {
             // TODO: warning
             return
@@ -97,7 +97,7 @@ public final class VideoGraph {
             return
         }
 
-        let connection = NodeConnection(source: sourceDesc, destination: destDesc, format: format)
+        let connection = NodeConnection(source: sourceDesc, destination: destDesc)
         sourceDesc.add(connection)
         nodeConnections.append(connection)
     }
@@ -240,12 +240,10 @@ public final class VideoGraph {
     class NodeConnection: NSObject {
         var source: NodeDescription
         var destination: NodeDescription
-        var format: VideoFrameFormat?
 
-        init(source: NodeDescription, destination: NodeDescription, format: VideoFrameFormat?) {
+        init(source: NodeDescription, destination: NodeDescription) {
             self.source = source
             self.destination = destination
-            self.format = format
         }
     }
 
