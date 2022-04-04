@@ -155,17 +155,24 @@ public final class VideoGraph {
                 $0.state = .ready
             }
         }
+        isRunning = false
         Logger.debug(type: .videoGraph, message: "did pause")
     }
 
     public func stop() async {
         Logger.debug(type: .videoGraph, message: "try stop")
+        guard isRunning else {
+            Logger.debug(type: .videoGraph, message: "not running")
+            return
+        }
         await iterate {
             if $0.state == .running {
                 await $0.stop()
+                await $0.reset()
                 $0.state = .notReady
             }
         }
+        isRunning = false
         Logger.debug(type: .videoGraph, message: "did stop")
     }
 
