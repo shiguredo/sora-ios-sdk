@@ -14,6 +14,7 @@ public enum LogType {
     case cameraVideoCapturer
     case videoRenderer
     case videoView
+    case videoGraph
     case user(String)
     case configurationViewController
     case dataChannel
@@ -47,6 +48,8 @@ extension LogType: CustomStringConvertible {
             return "VideoRenderer"
         case .videoView:
             return "VideoView"
+        case .videoGraph:
+            return "VideoGraph"
         case let .user(name):
             return name
         case .configurationViewController:
@@ -183,6 +186,7 @@ public final class Logger {
         case connectionTimer
         case videoCapturer
         case videoRenderer
+        case videoGraph
         case configurationViewController
         case user
     }
@@ -191,7 +195,7 @@ public final class Logger {
 
     public var onOutputHandler: ((Log) -> Void)?
 
-    public var groups: [Group] = [.channels, .user]
+    public var groups: [Group] = [.channels, .videoGraph, .user]
 
     public static func fatal(type: LogType, message: String) {
         Logger.shared.output(log: Log(level: .fatal,
@@ -266,6 +270,13 @@ public final class Logger {
             case .videoRenderer:
                 switch log.type {
                 case .videoRenderer, .videoView:
+                    out = true
+                default:
+                    break
+                }
+            case .videoGraph:
+                switch log.type {
+                case .videoGraph:
                     out = true
                 default:
                     break

@@ -6,10 +6,12 @@ public class VideoCameraInputNode: VideoInputNode {
     private static var sharedNodes: [VideoCameraInputNode] = []
 
     static func register(_ node: VideoCameraInputNode) {
+        Logger.debug(type: .videoGraph, message: "activate VideoCameraInputNode")
         sharedNodes.append(node)
     }
 
     static func unregister(_ node: VideoCameraInputNode) {
+        Logger.debug(type: .videoGraph, message: "deactivate VideoCameraInputNode")
         sharedNodes.remove(node)
     }
 
@@ -28,11 +30,13 @@ public class VideoCameraInputNode: VideoInputNode {
 
     override public func start() async {
         await super.start()
+        Logger.debug(type: .videoGraph, message: "start VideoCameraInputNode")
         CameraVideoCapturer.destination = .videoGraph
     }
 
     override public func stop() async {
         await super.stop()
+        Logger.debug(type: .videoGraph, message: "stop VideoCameraInputNode")
         CameraVideoCapturer.destination = .stream
     }
 }

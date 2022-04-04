@@ -123,7 +123,9 @@ public final class VideoGraph {
     }
 
     public func start() async {
+        Logger.debug(type: .videoGraph, message: "try start")
         guard !isRunning else {
+            Logger.debug(type: .videoGraph, message: "already running")
             return
         }
 
@@ -138,27 +140,37 @@ public final class VideoGraph {
             }
         }
         isRunning = true
+        Logger.debug(type: .videoGraph, message: "did start")
     }
 
     public func pause() async {
+        Logger.debug(type: .videoGraph, message: "try pause")
+        guard isRunning else {
+            Logger.debug(type: .videoGraph, message: "not running")
+            return
+        }
         await iterate {
             if $0.state == .running {
                 await $0.pause()
                 $0.state = .ready
             }
         }
+        Logger.debug(type: .videoGraph, message: "did pause")
     }
 
     public func stop() async {
+        Logger.debug(type: .videoGraph, message: "try stop")
         await iterate {
             if $0.state == .running {
                 await $0.stop()
                 $0.state = .notReady
             }
         }
+        Logger.debug(type: .videoGraph, message: "did stop")
     }
 
     public func reset() async {
+        Logger.debug(type: .videoGraph, message: "reset")
         await iterate {
             if $0.state == .ready {
                 await $0.reset()
