@@ -6,7 +6,10 @@ public class VideoCIFilterNode: VideoNode {
     // バッファに適用するフィルター
     public var filter: CIFilter?
 
+    private var ciContext: CIContext
+
     override public init() {
+        ciContext = CIContext()
         super.init()
     }
 
@@ -33,8 +36,7 @@ public class VideoCIFilterNode: VideoNode {
         guard let filteredImage = filter.outputImage else {
             return buffer
         }
-        let context = CIContext(options: nil)
-        context.render(filteredImage, to: pixelBuffer)
+        ciContext.render(filteredImage, to: pixelBuffer)
         return buffer
     }
 }
