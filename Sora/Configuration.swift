@@ -37,6 +37,8 @@ public struct Configuration {
     /// クライアント ID
     public var clientId: String?
 
+    /// バンドル ID
+    public var bundleId: String?
     /// ロール
     public var role: Role
 

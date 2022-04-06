@@ -110,6 +110,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     var webRTCConfiguration: WebRTCConfiguration
     var clientId: String?
+    var bundleId: String?
     var connectionId: String?
 
     var onConnectHandler: ((Error?) -> Void)?
@@ -293,6 +294,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             role: role,
             channelId: configuration.channelId,
             clientId: configuration.clientId,
+            bundleId: configuration.bundleId,
             metadata: configuration.signalingConnectMetadata,
             notifyMetadata: configuration.signalingConnectNotifyMetadata,
             sdp: sdp,
@@ -721,6 +723,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             signalingChannel.setConnectedUrl()
 
             clientId = offer.clientId
+            bundleId = offer.bundleId
             connectionId = offer.connectionId
             if let dataChannels = offer.dataChannels {
                 signalingChannel.dataChannelSignaling = true

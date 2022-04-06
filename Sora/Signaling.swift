@@ -14,7 +14,9 @@ private func serializeMetadataList(_ data: Any?) -> [SignalingNotifyMetadata]? {
         if dict.keys.contains("client_id"), let clinetId = dict["client_id"] as? String? {
             signalingNotifyMetadata.clientId = clinetId
         }
-
+        if let bundleId = dict.keys.contains("bundle_id") as? String? {
+            signalingNotifyMetadata.bundleId = bundleId
+        }
         if dict.keys.contains("connection_id"), let connectionId = dict["connection_id"] as? String? {
             signalingNotifyMetadata.connectionId = connectionId
         }
@@ -242,6 +244,9 @@ public struct SignalingNotifyMetadata {
     /// クライアント ID
     public var clientId: String?
 
+    /// バンドル ID
+    public var bundleId: String?
+
     /// 接続 ID
     public var connectionId: String?
 
@@ -268,6 +273,9 @@ public struct SignalingConnect {
 
     /// クライアント ID
     public var clientId: String?
+
+    /// バンドル ID
+    public var bundleId: String?
 
     /// メタデータ
     public var metadata: Encodable?
@@ -418,6 +426,9 @@ public struct SignalingOffer {
     /// クライアント ID
     public let clientId: String
 
+    /// バンドル ID
+    public let bundleId: String?
+
     /// 接続 ID
     public let connectionId: String
 
@@ -529,6 +540,9 @@ public struct SignalingNotify {
 
     /// クライアント ID
     public var clientId: String?
+
+    /// バンドル ID
+    public var bundleId: String?
 
     /// 接続 ID
     public var connectionId: String?
@@ -797,6 +811,7 @@ extension SignalingConnect: Codable {
         case role
         case channel_id
         case client_id
+        case bundle_id
         case metadata
         case signaling_notify_metadata
         case sdp
@@ -837,6 +852,7 @@ extension SignalingConnect: Codable {
         try container.encode(role, forKey: .role)
         try container.encode(channelId, forKey: .channel_id)
         try container.encodeIfPresent(clientId, forKey: .client_id)
+        try container.encodeIfPresent(bundleId, forKey: .bundle_id)
         try container.encodeIfPresent(sdp, forKey: .sdp)
         let metadataEnc = container.superEncoder(forKey: .metadata)
         try metadata?.encode(to: metadataEnc)
@@ -956,6 +972,7 @@ extension SignalingOffer.Encoding: Codable {
 extension SignalingOffer: Codable {
     enum CodingKeys: String, CodingKey {
         case client_id
+        case bundle_id
         case connection_id
         case sdp
         case config
@@ -965,6 +982,7 @@ extension SignalingOffer: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         clientId = try container.decode(String.self, forKey: .client_id)
+        bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
         connectionId = try container.decode(String.self, forKey: .connection_id)
         sdp = try container.decode(String.self, forKey: .sdp)
         configuration =
@@ -1078,6 +1096,7 @@ extension SignalingNotify: Codable {
         case event_type
         case role
         case client_id
+        case bundle_id
         case connection_id
         case audio
         case video
@@ -1100,6 +1119,7 @@ extension SignalingNotify: Codable {
                                          forKey: .event_type)
         role = try container.decodeIfPresent(SignalingRole.self, forKey: .role)
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
+        bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
         connectionId = try container.decodeIfPresent(String.self,
                                                      forKey: .connection_id)
         audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
