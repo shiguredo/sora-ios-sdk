@@ -11,26 +11,26 @@ private func serializeMetadataList(_ data: Any?) -> [SignalingNotifyMetadata]? {
 
     let result = array.map { (dict: [String: Any]) -> SignalingNotifyMetadata in
         var signalingNotifyMetadata = SignalingNotifyMetadata()
-        if dict.keys.contains("client_id"), let clinetId = dict["client_id"] as? String? {
+        if let clinetId = dict["client_id"] as? String {
             signalingNotifyMetadata.clientId = clinetId
         }
-        if let bundleId = dict.keys.contains("bundle_id") as? String? {
+        if let bundleId = dict["bundle_id"] as? String {
             signalingNotifyMetadata.bundleId = bundleId
         }
-        if dict.keys.contains("connection_id"), let connectionId = dict["connection_id"] as? String? {
+        if let connectionId = dict["connection_id"] as? String {
             signalingNotifyMetadata.connectionId = connectionId
         }
 
-        if dict.keys.contains("authn_metadata") {
-            signalingNotifyMetadata.authnMetadata = dict["authn_metadata"]
+        if let authnMetadata = dict["authn_metadata"] {
+            signalingNotifyMetadata.authnMetadata = authnMetadata
         }
 
-        if dict.keys.contains("authz_metadata") {
-            signalingNotifyMetadata.authzMetadata = dict["authz_metadata"]
+        if let authzMetada = dict["authz_metadata"] {
+            signalingNotifyMetadata.authzMetadata = authzMetada
         }
 
-        if dict.keys.contains("metadata") {
-            signalingNotifyMetadata.metadata = dict["metadata"]
+        if let metadata = dict["metadata"] {
+            signalingNotifyMetadata.metadata = metadata
         }
 
         return signalingNotifyMetadata
@@ -55,33 +55,33 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
     switch signaling {
     case var .offer(message):
         // TODO: if json.keys.contains("key") を if let に書き換えたい
-        if json.keys.contains("metadata") {
-            message.metadata = json["metadata"]
+        if let metadata = json["metadata"] {
+            message.metadata = metadata
         }
         if let dataChannels = json["data_channels"] as? [[String: Any]] {
             message.dataChannels = dataChannels
         }
         return .offer(message)
     case var .push(message):
-        if json.keys.contains("data") {
-            message.data = json["data"]
+        if let data = json["data"] {
+            message.data = data
         }
         return .push(message)
     case var .notify(message):
-        if json.keys.contains("authn_metadata") {
-            message.authnMetadata = json["authn_metadata"]
+        if let authnMetadata = json["authn_metadata"] {
+            message.authnMetadata = authnMetadata
         }
-        if json.keys.contains("authz_metadata") {
-            message.authzMetadata = json["authz_metadata"]
+        if let authzMetadata = json["authz_metadata"] {
+            message.authzMetadata = authzMetadata
         }
-        if json.keys.contains("metadata") {
-            message.metadata = json["metadata"]
+        if let metadata = json["metadata"] {
+            message.metadata = metadata
         }
-        if json.keys.contains("metadata_list") {
-            message.metadataList = serializeMetadataList(json["metadata_list"])
+        if let metadataList = json["metadata_list"] {
+            message.metadataList = serializeMetadataList(metadataList)
         }
-        if json.keys.contains("data") {
-            message.data = serializeMetadataList(json["data"])
+        if let data = json["data"] {
+            message.data = serializeMetadataList(data)
         }
         return .notify(message)
     default:
