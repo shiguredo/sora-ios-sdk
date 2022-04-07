@@ -289,7 +289,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
         let webRTCVersion = "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
 
-        let simulcast = configuration.simulcastEnabled || configuration.spotlightEnabled == .enabled
+        let simulcast = configuration.simulcastEnabled
         let connect = SignalingConnect(
             role: role,
             channelId: configuration.channelId,
