@@ -28,6 +28,17 @@ Please read https://github.com/shiguredo/oss before use.
 
 Xcode と Swift のバージョンによっては、 CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
+## バージョン 2022.2.1 は暫定対処版です
+
+バージョン 2022.2.1 は CocoaPods を利用して Sora iOS SDK を利用している場合、App Store Connect に bitcode を有効にしてアップロードができない不具合に対処するために、依存ライブラリ (WebRTC) のバージョンを下げて提供した暫定対処版となります。
+以下の条件に当てはまらない方についてはバージョン 2022.2.0 の利用を推奨します。
+
+- Cocoa Pods を利用して Sora iOS SDK を利用しており、bitcode を有効にして App Store Connect にアップロードを行う必要がある
+
+詳細はドキュメントをご確認ください。
+- [Sora iOS SDK が CocoaPods を利用した時、 bitcode を有効にしてビルドしたバイナリが App Store Connect にアップロードできない](https://sora-ios-sdk.shiguredo.jp/notes#038191)
+
+
 ## サンプル
 
 - [クイックスタート](https://github.com/shiguredo/sora-ios-sdk-quickstart)
