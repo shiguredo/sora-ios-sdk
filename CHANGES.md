@@ -13,7 +13,7 @@
 
 ## 2022.2.1
 
-- [UPDATE] App Store Connect に bitcode 付きでバイナリをアップロードするとエラーになる問題の暫定回避策として、 WebRTC 97.4692.4.0 に下げる
+- [UPDATE] App Store Connect に bitcode を有効にしてバイナリをアップロードするとエラーになる問題の暫定回避策として、 WebRTC 97.4692.4.0 に下げる
     - @miosakuma
 
 ## 2022.2.0
