@@ -1,7 +1,7 @@
 /// :nodoc:
 public enum SDKInfo {
     // Sora iOS SDK のバージョンを定義する
-    public static let version = "2022.2.0"
+    public static let version = "2022.2.1"
 }
 
 /**
@@ -9,16 +9,16 @@ public enum SDKInfo {
  */
 public enum WebRTCInfo {
     /// WebRTC フレームワークのバージョン
-    public static let version = "M99"
+    public static let version = "M97"
 
     /// WebRTC フレームワークのコミットポジション
-    public static let commitPosition = "1"
+    public static let commitPosition = "4"
 
     /// WebRTC フレームワークのメンテナンスバージョン
     public static let maintenanceVersion = "0"
 
     /// WebRTC フレームワークのソースコードのリビジョン
-    public static let revision = "81f4af57823c28c903b61b273e6fc2b87787b11b"
+    public static let revision = "0941f936e6bf3d4fce05fec82b77518d40516007"
 
     /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
     public static var shortRevision: String {
