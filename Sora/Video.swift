@@ -4,18 +4,18 @@ import UIKit
 
 public struct Video<Background>: View where Background: View {
 
-    var stream: Binding<MediaStream?>
+    var stream: MediaStream?
     var videoView: Binding<VideoView>?
     var background: Background
 
     @ObservedObject var controller: VideoController
 
-    public init(_ stream: Binding<MediaStream?>,
+    public init(_ stream: MediaStream?,
                 videoView: Binding<VideoView>? = nil) where Background == EmptyView {
         self.init(stream, background: EmptyView())
     }
 
-    init(_ stream: Binding<MediaStream?>,
+    init(_ stream: MediaStream?,
          videoView: Binding<VideoView>? = nil,
          background: Background) {
         self.stream = stream
@@ -92,14 +92,14 @@ fileprivate struct RepresentedVideoView: UIViewRepresentable {
     }
 
     public func updateUIView(_ uiView: VideoView, context: Context) {
-        controller.stream.wrappedValue?.videoRenderer = uiView
+        controller.stream?.videoRenderer = uiView
     }
 
 }
 
 class VideoController: ObservableObject {
 
-    var stream: Binding<MediaStream?>
+    var stream: MediaStream?
 
     // init() で VideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく
     // Failed to bind EAGLDrawable: <CAEAGLLayer: 0x********> to GL_RENDERBUFFER 1
@@ -107,7 +107,7 @@ class VideoController: ObservableObject {
 
     @Published var isCleared: Bool = false
 
-    init(stream: Binding<MediaStream?>) {
+    init(stream: MediaStream?) {
         self.stream = stream
     }
 }
