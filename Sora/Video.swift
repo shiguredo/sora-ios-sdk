@@ -44,6 +44,18 @@ public struct Video<Background>: View where Background: View {
         return self
     }
 
+    public func videoAspectRatio(_ contentMode: ContentMode) -> Video<Background> {
+        var uiContentMode: UIView.ContentMode
+        switch contentMode {
+        case .fill:
+            uiContentMode = .scaleAspectFill
+        case .fit:
+            uiContentMode = .scaleAspectFit
+        }
+        controller.videoView.contentMode = uiContentMode
+        return self
+    }
+
     public func videoBackground<Background>(_ background: Background) -> Video<Background> where Background: View {
         var new = Video<Background>(stream, background: background)
         new.controller = controller
