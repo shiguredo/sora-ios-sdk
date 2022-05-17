@@ -4,18 +4,18 @@ import UIKit
 
 public struct Video<Background>: View where Background: View {
 
-    var stream: MediaStream?
-    var videoView: Binding<VideoView>?
-    var background: Background
+    private var stream: MediaStream?
+    private var videoView: Binding<VideoView>?
+    private var background: Background
 
-    @ObservedObject var controller: VideoController
+    @ObservedObject private var controller: VideoController
 
     public init(_ stream: MediaStream?,
                 videoView: Binding<VideoView>? = nil) where Background == EmptyView {
         self.init(stream, background: EmptyView())
     }
 
-    init(_ stream: MediaStream?,
+    public init(_ stream: MediaStream?,
          videoView: Binding<VideoView>? = nil,
          background: Background) {
         self.stream = stream
