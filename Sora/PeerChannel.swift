@@ -321,7 +321,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         signalingChannel.send(message: Signaling.connect(connect))
     }
 
-    private func initializeSenderStream() {
+    private func initializeSenderStream(mid: [String: String]? = nil) {
         guard let nativeChannel = nativeChannel else {
             Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
             return
@@ -340,70 +340,157 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         let stream = BasicMediaStream(peerChannel: self,
                                       nativeStream: nativeStream)
 
+        if let mid = mid {
+            Logger.info(type: .peerChannel, message: "mid => \(mid)")
+            if let audioMid = mid["audio"] {
+                guard let audioTransceiver = (nativeChannel.transceivers.first { $0.mid == audioMid }) else {
+                    disconnect(error: SoraError.peerChannelError(reason: "transceiver for audio not found"),
+                               reason: .signalingFailure)
+                    return
+                }
+
+                var error: NSError?
+                audioTransceiver.setDirection(RTCRtpTransceiverDirection.sendOnly, error: &error)
+                guard error == nil else {
+                    disconnect(error: SoraError.peerChannelError(reason: "failed to set direction to transceiver for audio"),
+                               reason: .signalingFailure)
+                    return
+                }
+
+                audioTransceiver.sender.streamIds = [nativeStream.streamId]
+
+                if let audioTrack = nativeStream.audioTracks.first {
+                    audioTransceiver.sender.track = audioTrack
+                }
+            }
+
+            if let videoMid = mid["video"] {
+                guard let videoTransceiver = (nativeChannel.transceivers.first { $0.mid == videoMid }) else {
+                    disconnect(error: SoraError.peerChannelError(reason: "transceiver for video not found"),
+                               reason: .signalingFailure)
+                    return
+                }
+
+                var error: NSError?
+                videoTransceiver.setDirection(RTCRtpTransceiverDirection.sendOnly, error: &error)
+                guard error == nil else {
+                    disconnect(error: SoraError.peerChannelError(reason: "failed to set direction to transceiver for video"),
+                               reason: .signalingFailure)
+                    return
+                }
+
+                videoTransceiver.sender.streamIds = [nativeStream.streamId]
+                if let videoTrack = nativeStream.videoTracks.first {
+                    videoTransceiver.sender.track = videoTrack
+                }
+            }
+        } else {
+            // mid なし
+            if let track = stream.nativeVideoTrack {
+                nativeChannel.add(track,
+                                  streamIds: [stream.nativeStream.streamId])
+            }
+            if let track = stream.nativeAudioTrack {
+                nativeChannel.add(track,
+                                  streamIds: [stream.nativeStream.streamId])
+            }
+        }
+
+        // マイクの初期化
+        if configuration.audioEnabled {
+            initializeAudioInput()
+        }
+
+        // カメラの初期化
         if configuration.videoEnabled, configuration.cameraSettings.isEnabled {
-            let position = configuration.cameraSettings.position
+            initializeCameraVideoCapture(stream: stream)
+        }
 
-            // position に対応した CameraVideoCapturer を取得する
-            let capturer: CameraVideoCapturer
-            switch position {
-            case .front:
-                guard let front = CameraVideoCapturer.front else {
-                    Logger.error(type: .peerChannel, message: "front camera is not found")
+        add(stream: stream)
+        Logger.debug(type: .peerChannel,
+                     message: "create publisher stream (id: \(configuration.publisherStreamId))")
+    }
+
+    private func initializeAudioInput() {
+        if isAudioInputInitialized {
+            Logger.debug(type: .peerChannel,
+                         message: "audio input is already initialized")
+        } else {
+            Logger.debug(type: .peerChannel,
+                         message: "initialize audio input")
+
+            // カテゴリをマイク用途のものに変更する
+            // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
+            Logger.debug(type: .peerChannel,
+                         message: "change audio session category (playAndRecord)")
+            RTCAudioSessionConfiguration.webRTC().category =
+                AVAudioSession.Category.playAndRecord.rawValue
+
+            RTCAudioSession.sharedInstance().initializeInput { error in
+                if let error = error {
+                    Logger.debug(type: .peerChannel,
+                                 message: "failed to initialize audio input => \(error.localizedDescription)")
                     return
                 }
-                capturer = front
-            case .back:
-                guard let back = CameraVideoCapturer.back else {
-                    Logger.error(type: .peerChannel, message: "back camera is not found")
+                self.isAudioInputInitialized = true
+                Logger.debug(type: .peerChannel,
+                             message: "audio input is initialized => category \(RTCAudioSession.sharedInstance().category)")
+            }
+        }
+    }
+
+    private func initializeCameraVideoCapture(stream: MediaStream) {
+        let position = configuration.cameraSettings.position
+
+        // position に対応した CameraVideoCapturer を取得する
+        let capturer: CameraVideoCapturer
+        switch position {
+        case .front:
+            guard let front = CameraVideoCapturer.front else {
+                Logger.error(type: .peerChannel, message: "front camera is not found")
+                return
+            }
+            capturer = front
+        case .back:
+            guard let back = CameraVideoCapturer.back else {
+                Logger.error(type: .peerChannel, message: "back camera is not found")
+                return
+            }
+            capturer = back
+        case .unspecified:
+            Logger.error(type: .peerChannel, message: "CameraSettings.position should not be .unspecified")
+            return
+        @unknown default:
+            guard let device = CameraVideoCapturer.device(for: position) else {
+                Logger.error(type: .peerChannel, message: "device is not found for position")
+                return
+            }
+            capturer = CameraVideoCapturer(device: device)
+        }
+
+        // デバイスに対応したフォーマットとフレームレートを取得する
+        guard let format = CameraVideoCapturer.format(width: configuration.cameraSettings.resolution.width,
+                                                      height: configuration.cameraSettings.resolution.height,
+                                                      for: capturer.device)
+        else {
+            Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable format rate is not found")
+            return
+        }
+
+        guard let frameRate = CameraVideoCapturer.maxFrameRate(configuration.cameraSettings.frameRate, for: format) else {
+            Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable frame rate is not found")
+            return
+        }
+
+        if CameraVideoCapturer.current != nil, CameraVideoCapturer.current!.isRunning {
+            // CameraVideoCapturer.current を停止してから capturer を start する
+            CameraVideoCapturer.current!.stop { (error: Error?) in
+                guard error == nil else {
+                    Logger.debug(type: .peerChannel,
+                                 message: "CameraVideoCapturer.stop failed =>  \(error!)")
                     return
                 }
-                capturer = back
-            case .unspecified:
-                Logger.error(type: .peerChannel, message: "CameraSettings.position should not be .unspecified")
-                return
-            @unknown default:
-                guard let device = CameraVideoCapturer.device(for: position) else {
-                    Logger.error(type: .peerChannel, message: "device is not found for position")
-                    return
-                }
-                capturer = CameraVideoCapturer(device: device)
-            }
 
-            // デバイスに対応したフォーマットとフレームレートを取得する
-            guard let format = CameraVideoCapturer.format(width: configuration.cameraSettings.resolution.width,
-                                                          height: configuration.cameraSettings.resolution.height,
-                                                          for: capturer.device)
-            else {
-                Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable format rate is not found")
-                return
-            }
-
-            guard let frameRate = CameraVideoCapturer.maxFrameRate(configuration.cameraSettings.frameRate, for: format) else {
-                Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable frame rate is not found")
-                return
-            }
-
-            if CameraVideoCapturer.current != nil, CameraVideoCapturer.current!.isRunning {
-                // CameraVideoCapturer.current を停止してから capturer を start する
-                CameraVideoCapturer.current!.stop { (error: Error?) in
-                    guard error == nil else {
-                        Logger.debug(type: .peerChannel,
-                                     message: "CameraVideoCapturer.stop failed =>  \(error!)")
-                        return
-                    }
-
-                    capturer.start(format: format, frameRate: frameRate) { error in
-                        guard error == nil else {
-                            Logger.debug(type: .peerChannel,
-                                         message: "CameraVideoCapturer.start failed =>  \(error!)")
-                            return
-                        }
-                        Logger.debug(type: .peerChannel,
-                                     message: "set CameraVideoCapturer to sender stream")
-                        capturer.stream = stream
-                    }
-                }
-            } else {
                 capturer.start(format: format, frameRate: frameRate) { error in
                     guard error == nil else {
                         Logger.debug(type: .peerChannel,
@@ -415,47 +502,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                     capturer.stream = stream
                 }
             }
-        }
-
-        if configuration.audioEnabled {
-            if isAudioInputInitialized {
-                Logger.debug(type: .peerChannel,
-                             message: "audio input is already initialized")
-            } else {
-                Logger.debug(type: .peerChannel,
-                             message: "initialize audio input")
-
-                // カテゴリをマイク用途のものに変更する
-                // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
-                Logger.debug(type: .peerChannel,
-                             message: "change audio session category (playAndRecord)")
-                RTCAudioSessionConfiguration.webRTC().category =
-                    AVAudioSession.Category.playAndRecord.rawValue
-
-                RTCAudioSession.sharedInstance().initializeInput { error in
-                    if let error = error {
-                        Logger.debug(type: .peerChannel,
-                                     message: "failed to initialize audio input => \(error.localizedDescription)")
-                        return
-                    }
-                    self.isAudioInputInitialized = true
+        } else {
+            capturer.start(format: format, frameRate: frameRate) { error in
+                guard error == nil else {
                     Logger.debug(type: .peerChannel,
-                                 message: "audio input is initialized => category \(RTCAudioSession.sharedInstance().category)")
+                                 message: "CameraVideoCapturer.start failed =>  \(error!)")
+                    return
                 }
+                Logger.debug(type: .peerChannel,
+                             message: "set CameraVideoCapturer to sender stream")
+                capturer.stream = stream
             }
         }
-
-        if let track = stream.nativeVideoTrack {
-            nativeChannel.add(track,
-                              streamIds: [stream.nativeStream.streamId])
-        }
-        if let track = stream.nativeAudioTrack {
-            nativeChannel.add(track,
-                              streamIds: [stream.nativeStream.streamId])
-        }
-        add(stream: stream)
-        Logger.debug(type: .peerChannel,
-                     message: "create publisher stream (id: \(configuration.publisherStreamId))")
     }
 
     /** `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
@@ -476,6 +534,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     private func createAnswer(isSender: Bool,
                               offer: String,
                               constraints: RTCMediaConstraints,
+                              initialOffer: Bool = false,
+                              mid: [String: String]? = nil,
                               handler: @escaping (String?, Error?) -> Void)
     {
         guard let nativeChannel = nativeChannel else {
@@ -505,8 +565,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
 
             if isSender {
-                self.initializeSenderStream()
-                self.updateSenderOfferEncodings()
+                if initialOffer {
+                    self.initializeSenderStream(mid: mid)
+                } else {
+                    self.updateSenderOfferEncodings()
+                }
             }
 
             Logger.debug(type: .peerChannel, message: "try creating native answer")
@@ -582,7 +645,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         createAnswer(isSender: configuration.isSender,
                      offer: offer.sdp,
-                     constraints: webRTCConfiguration.nativeConstraints) { sdp, error in
+                     constraints: webRTCConfiguration.nativeConstraints,
+                     initialOffer: true,
+                     mid: offer.mid) { sdp, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create answer (\(error!.localizedDescription))")

@@ -435,6 +435,9 @@ public struct SignalingOffer {
 
     /// データ・チャンネルの設定
     public var dataChannels: [[String: Any]]?
+
+    /// mid
+    public let mid: [String: String]?
 }
 
 /**
@@ -960,6 +963,7 @@ extension SignalingOffer: Codable {
         case sdp
         case config
         case encodings
+        case mid
     }
 
     public init(from decoder: Decoder) throws {
@@ -973,6 +977,7 @@ extension SignalingOffer: Codable {
         encodings =
             try container.decodeIfPresent([Encoding].self,
                                           forKey: .encodings)
+        mid = try container.decodeIfPresent([String: String].self, forKey: .mid)
     }
 
     public func encode(to encoder: Encoder) throws {
