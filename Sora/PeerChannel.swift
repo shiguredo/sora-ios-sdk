@@ -534,6 +534,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     private func createAnswer(isSender: Bool,
                               offer: String,
                               constraints: RTCMediaConstraints,
+                              initialOffer: Bool = false,
                               mid: [String: String]? = nil,
                               handler: @escaping (String?, Error?) -> Void)
     {
@@ -564,8 +565,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
 
             if isSender {
-                self.initializeSenderStream(mid: mid)
-                self.updateSenderOfferEncodings()
+                if initialOffer {
+                    self.initializeSenderStream(mid: mid)
+                } else {
+                    self.updateSenderOfferEncodings()
+                }
             }
 
             Logger.debug(type: .peerChannel, message: "try creating native answer")
@@ -642,6 +646,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         createAnswer(isSender: configuration.isSender,
                      offer: offer.sdp,
                      constraints: webRTCConfiguration.nativeConstraints,
+                     initialOffer: true,
                      mid: offer.mid) { sdp, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
