@@ -6,7 +6,6 @@ import UIKit
  ストリームの映像を描画する SwiftUI ビューです。
  */
 public struct Video<Background>: View where Background: View {
-
     private var stream: MediaStream?
     private var background: Background
 
@@ -58,7 +57,7 @@ public struct Video<Background>: View where Background: View {
         return self
     }
 
-    ///映像のアスペクト比を指定します。
+    /// 映像のアスペクト比を指定します。
     public func videoAspect(_ contentMode: ContentMode) -> Video<Background> {
         var uiContentMode: UIView.ContentMode
         switch contentMode {
@@ -115,7 +114,7 @@ public struct Video<Background>: View where Background: View {
     }
 }
 
-fileprivate struct RepresentedVideoView: UIViewRepresentable {
+private struct RepresentedVideoView: UIViewRepresentable {
     typealias UIViewType = VideoView
 
     @ObservedObject private var controller: VideoController
@@ -125,17 +124,15 @@ fileprivate struct RepresentedVideoView: UIViewRepresentable {
     }
 
     public func makeUIView(context: Context) -> VideoView {
-        return controller.videoView
+        controller.videoView
     }
 
     public func updateUIView(_ uiView: VideoView, context: Context) {
         controller.stream?.videoRenderer = uiView
     }
-
 }
 
 class VideoController: ObservableObject {
-
     var stream: MediaStream?
 
     // init() で VideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく

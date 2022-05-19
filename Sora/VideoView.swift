@@ -18,10 +18,8 @@ public enum VideoViewConnectionMode {
 // Video (SwiftUI 用) で使う
 /// :nodoc:
 public struct VideoViewHandlers {
-
     public var onChange: ((CGSize) -> Void)?
     public var onRender: ((VideoFrame?) -> Void)?
-
 }
 
 /**
