@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] WebRTC 102.5005.7.1 に上げる
+    - @miosakuma
 - [UPDATE] mid に対応する
     - @enm10k
 
