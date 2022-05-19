@@ -26,6 +26,7 @@ public struct VideoViewHandlers {
 
 /**
  VideoRenderer プロトコルのデフォルト実装となる UIView です。
+ SwiftUI で映像を描画するには `Video` を利用してください。
 
  MediaStream.videoRenderer にセットすることで、その MediaStream
  に流れている映像をそのまま画面に表示する事ができます。

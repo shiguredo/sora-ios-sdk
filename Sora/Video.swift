@@ -2,6 +2,9 @@ import Foundation
 import SwiftUI
 import UIKit
 
+/**
+ ストリームの映像を描画する SwiftUI ビューです。
+ */
 public struct Video<Background>: View where Background: View {
 
     private var stream: MediaStream?
@@ -9,16 +12,28 @@ public struct Video<Background>: View where Background: View {
 
     @ObservedObject private var controller: VideoController
 
+    /**
+     ビューを初期化します。
+
+     - parameter stream: 描画される映像ストリーム。 nil の場合は何も描画されません
+     */
     public init(_ stream: MediaStream?) where Background == EmptyView {
         self.init(stream, background: EmptyView())
     }
 
+    /**
+     ビューを初期化します。
+
+     - parameter stream: 描画される映像ストリーム nil の場合は何も描画されません
+     - paramater background: 映像のクリア時に表示する背景ビュー
+     */
     public init(_ stream: MediaStream?, background: Background) {
         self.stream = stream
         self.background = background
         controller = VideoController(stream: stream)
     }
 
+    /// :nodoc:
     public var body: some View {
         ZStack {
             background
@@ -28,16 +43,22 @@ public struct Video<Background>: View where Background: View {
         }
     }
 
+    /**
+     デバッグモードを有効にします。
+     有効にすると、映像の上部に解像度とフレームレートを表示します。
+     */
     public func debugMode(_ flag: Bool) -> Video<Background> {
         controller.videoView.debugMode = flag
         return self
     }
 
+    /// 映像ソース停止時の処理を指定します。
     public func connectionMode(_ mode: VideoViewConnectionMode) -> Video<Background> {
         controller.videoView.connectionMode = mode
         return self
     }
 
+    ///映像のアスペクト比を指定します。
     public func videoAspect(_ contentMode: ContentMode) -> Video<Background> {
         var uiContentMode: UIView.ContentMode
         switch contentMode {
@@ -50,12 +71,16 @@ public struct Video<Background>: View where Background: View {
         return self
     }
 
+    /// 映像のクリア時に表示する背景ビューを指定します。
     public func videoBackground<Background>(_ background: Background) -> Video<Background> where Background: View {
         var new = Video<Background>(stream, background: background)
         new.controller = controller
         return new
     }
 
+    /**
+     映像の描画を停止します。
+     */
     public func videoStop(_ flag: Bool) -> Video<Background> {
         if flag {
             controller.videoView.stop()
@@ -65,6 +90,10 @@ public struct Video<Background>: View where Background: View {
         return self
     }
 
+    /**
+     画面を背景ビューに切り替えます。
+     このメソッドは描画停止時のみ有効です。
+     */
     public func videoClear(_ flag: Bool) -> Video<Background> {
         if flag {
             controller.videoView.clear()
@@ -73,11 +102,13 @@ public struct Video<Background>: View where Background: View {
         return self
     }
 
+    /// 映像のサイズの変更時に実行されるブロックを指定します。
     public func videoOnChange(perform: @escaping (CGSize) -> Void) -> Video<Background> {
         controller.videoView.handlers.onChange = perform
         return self
     }
 
+    /// 映像フレームの描画時に実行されるブロックを指定します。
     public func videoOnRender(perform: @escaping (VideoFrame?) -> Void) -> Video<Background> {
         controller.videoView.handlers.onRender = perform
         return self
