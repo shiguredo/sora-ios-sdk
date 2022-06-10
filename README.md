@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![libwebrtc](https://img.shields.io/badge/libwebrtc-m97.4692-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/4692
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-102.5005.7.6-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5005
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -21,8 +21,8 @@ Please read https://github.com/shiguredo/oss before use.
 - iOS 13 以降
 - アーキテクチャ arm64, x86_64 (シミュレーターの動作は未保証)
 - macOS 12.2 以降
-- Xcode 13.2
-- Swift 5.5.2
+- Xcode 13.4
+- Swift 5.6.1
 - CocoaPods 1.11.2 以降
 - WebRTC SFU Sora 2021.2 以降
 

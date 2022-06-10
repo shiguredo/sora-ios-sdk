@@ -11,6 +11,17 @@
 
 ## develop
 
+## 2022.3.0
+
+- [UPDATE] システム条件を変更する
+    - Xcode 13.4
+    - Swift 5.6.1
+    - @miosakuma
+- [UPDATE] WebRTC 102.5005.7.6 に上げる
+    - @miosakuma
+- [UPDATE] mid に対応する
+    - @enm10k
+
 ## 2022.2.1
 
 - [UPDATE] App Store Connect に bitcode を有効にしてバイナリをアップロードするとエラーになる問題の暫定回避策として、 WebRTC 97.4692.4.0 に下げる
