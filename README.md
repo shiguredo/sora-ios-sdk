@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![libwebrtc](https://img.shields.io/badge/libwebrtc-m97.4692-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/4692
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-102.5005.7.6-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5005
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -21,23 +21,12 @@ Please read https://github.com/shiguredo/oss before use.
 - iOS 13 以降
 - アーキテクチャ arm64, x86_64 (シミュレーターの動作は未保証)
 - macOS 12.2 以降
-- Xcode 13.2
-- Swift 5.5.2
+- Xcode 13.4
+- Swift 5.6.1
 - CocoaPods 1.11.2 以降
 - WebRTC SFU Sora 2021.2 以降
 
 Xcode と Swift のバージョンによっては、 CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
-
-## バージョン 2022.2.1 は暫定対処版です
-
-バージョン 2022.2.1 は CocoaPods を利用して Sora iOS SDK を利用している場合、App Store Connect に bitcode を有効にしてアップロードができない不具合に対処するために、依存ライブラリ (WebRTC) のバージョンを下げて提供した暫定対処版となります。
-以下の条件に当てはまらない方についてはバージョン 2022.2.0 の利用を推奨します。
-
-- Cocoa Pods を利用して Sora iOS SDK を利用しており、bitcode を有効にして App Store Connect にアップロードを行う必要がある
-
-詳細はドキュメントをご確認ください。
-- [Sora iOS SDK が CocoaPods を利用した時、 bitcode を有効にしてビルドしたバイナリが App Store Connect にアップロードできない](https://sora-ios-sdk.shiguredo.jp/notes#038191)
-
 
 ## サンプル
 

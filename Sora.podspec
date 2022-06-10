@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "Sora"
-  s.version      = "2022.2.1"
+  s.version      = "2022.3.0"
   s.summary      = "Sora iOS SDK"
   s.description  = <<-DESC
                    A library to develop Sora client applications.
