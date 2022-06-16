@@ -19,7 +19,9 @@
     - @miosakuma
 - [UPDATE] WebRTC 102.5005.7.6 に上げる
     - @miosakuma
-- [UPDATE] mid に対応する
+- [CHANGE] mid に対応する
+    - 併せて、 mid を必須にする
+    - この修正の結果、 type: offer に mid が含まれない場合は、エラーになります
     - @enm10k
 
 ## 2022.2.1

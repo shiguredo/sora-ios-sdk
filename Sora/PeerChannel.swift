@@ -385,15 +385,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 }
             }
         } else {
-            // mid なし
-            if let track = stream.nativeVideoTrack {
-                nativeChannel.add(track,
-                                  streamIds: [stream.nativeStream.streamId])
-            }
-            if let track = stream.nativeAudioTrack {
-                nativeChannel.add(track,
-                                  streamIds: [stream.nativeStream.streamId])
-            }
+            // mid なしの場合はエラーにする
+            Logger.error(type: .peerChannel, message: "mid not found")
+            disconnect(error: SoraError.peerChannelError(reason: "mid not found"),
+                       reason: .signalingFailure)
+            return
         }
 
         // マイクの初期化
