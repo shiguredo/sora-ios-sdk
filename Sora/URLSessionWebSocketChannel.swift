@@ -22,11 +22,30 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     }
 
     func connect(delegateQueue: OperationQueue?) {
+        
+        let configuration = URLSessionConfiguration.default
+        configuration.connectionProxyDictionary = [
+            kCFNetworkProxiesHTTPEnable: 1,
+            kCFNetworkProxiesHTTPProxy: "squid.example.com",
+            kCFNetworkProxiesHTTPPort: 3128,
+            
+            // 以下がないと https の通信にはプロキシーが利用されなかった
+            // 以下の問題がある
+            // - kCFNetworkProxiesHTTPS ... から始まるキーが iOS では利用できない
+            // -  kCFStreamPropertyHTTPS ... から始まるキーは deprecated になっている
+            kCFStreamPropertyHTTPSProxyHost: "squid.example.com",
+            kCFStreamPropertyHTTPSProxyPort: 3128,
+        ]
+        
         Logger.debug(type: .webSocketChannel, message: "[\(host)] connecting")
-        urlSession = URLSession(configuration: .default,
+        urlSession = URLSession(configuration: configuration,
                                 delegate: self,
                                 delegateQueue: delegateQueue)
+        
+        Logger.info(type: .webSocketChannel, message: "proxy: \(String(describing: urlSession?.configuration.connectionProxyDictionary.debugDescription))")
+        
         webSocketTask = urlSession?.webSocketTask(with: url)
+        
         webSocketTask?.resume()
         receive()
     }
@@ -133,7 +152,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         guard !isClosing else {
             return
         }
-
         Logger.debug(type: .webSocketChannel, message: "[\(host)] \(#function)")
         if let onConnect = internalHandlers.onConnect {
             onConnect(self)
@@ -171,6 +189,18 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
             let error = SoraError.webSocketClosed(statusCode: statusCode,
                                                   reason: reasonString)
             disconnect(error: error)
+        }
+    }
+    
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        Logger.debug(type: .webSocketChannel, message: "[\(host)] \(#function) didReceive: challenge=\(challenge.protectionSpace.host):\(challenge.protectionSpace.port), \(challenge.protectionSpace.authenticationMethod)")
+        
+        switch challenge.protectionSpace.authenticationMethod {
+        case NSURLAuthenticationMethodHTTPBasic:
+            let credential = URLCredential(user: "hoge", password: "fuga", persistence: URLCredential.Persistence.forSession)
+            completionHandler(.useCredential, credential)
+        default:
+            completionHandler(.performDefaultHandling, nil)
         }
     }
 }
