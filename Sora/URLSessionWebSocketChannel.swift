@@ -33,9 +33,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
             // URLSession のキャッシュを消すべく試行錯誤したが改善することができなかった
             //
             // *1 ... 確認時に使用した tshark のコマンド: tshark -V -Y 'http.request.method == "CONNECT"'
-            configuration.urlCache = nil
-            configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-            configuration.urlCredentialStorage = nil
 
             configuration.connectionProxyDictionary = [
                 kCFNetworkProxiesHTTPEnable: 1,
@@ -210,20 +207,46 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         }
     }
 
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        Logger.debug(type: .webSocketChannel, message: "[\(host)] \(#function) didReceive: challenge=\(challenge.protectionSpace.host):\(challenge.protectionSpace.port), \(challenge.protectionSpace.authenticationMethod)")
+    // TODO: エラー発生時にプロキシの設定を出力する
+    func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        // コードを短くするために変数を定義
+        let ps = challenge.protectionSpace
+        let previousFailureCount = challenge.previousFailureCount
 
-        switch challenge.protectionSpace.authenticationMethod {
-        case NSURLAuthenticationMethodHTTPBasic:
-            guard let username = proxy?.username, let password = proxy?.password else {
-                completionHandler(.performDefaultHandling, nil)
-                return
-            }
+        // 既に失敗している場合はチャレンジを中止する
+        guard previousFailureCount == 0 else {
+            let message = "[\(host)] \(#function): Basic authentication failed."
+            Logger.info(type: .webSocketChannel, message: message)
+            completionHandler(.cancelAuthenticationChallenge, nil)
 
-            let credential = URLCredential(user: username, password: password, persistence: URLCredential.Persistence.forSession)
-            completionHandler(.useCredential, credential)
-        default:
-            completionHandler(.performDefaultHandling, nil)
+            // WebSocket 接続完了前のエラーなので webSocketError ではなく signalingChannelError として扱っている
+            // webSocketError の場合、条件によっては Sora に type: disconnect を送信する必要があるが、今回は接続完了前なので不要
+            disconnect(error: SoraError.signalingChannelError(reason: message))
+            return
         }
+
+        Logger.debug(type: .webSocketChannel, message: "[\(host)] \(#function): challenge=\(ps.host):\(ps.port), \(ps.authenticationMethod) previousFailureCount: \(previousFailureCount)")
+
+        // Basic 認証のみに対応している
+        // それ以外の認証方法は .performDefaultHandling で処理を続ける
+        guard ps.authenticationMethod == NSURLAuthenticationMethodHTTPBasic else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        // username と password をチェック
+        guard let username = proxy?.username, let password = proxy?.password else {
+            let message = "[\(host)] \(#function): Basic authentication required, but authentication information is insufficient."
+            Logger.info(type: .webSocketChannel, message: message)
+            completionHandler(.cancelAuthenticationChallenge, nil)
+
+            // WebSocket 接続完了前のエラーなので webSocketError ではなく signalingChannelError として扱っている
+            // webSocketError の場合、条件によっては Sora に type: disconnect を送信する必要があるが、今回は接続完了前なので不要
+            disconnect(error: SoraError.signalingChannelError(reason: message))
+            return
+        }
+
+        let credential = URLCredential(user: username, password: password, persistence: .forSession)
+        completionHandler(.useCredential, credential)
     }
 }

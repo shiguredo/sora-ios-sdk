@@ -19,6 +19,7 @@ public struct Proxy {
 
     /// username
     /// プロキシに認証がかかっている場合に指定する
+    /// TODO: username と password を別の型にまとめて non-optional にしたい
     var username: String?
 
     /// password
