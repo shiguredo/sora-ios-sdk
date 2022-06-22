@@ -8,6 +8,32 @@ private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
 
 /**
+ プロキシに関する設定です
+ */
+public struct Proxy {
+    /// プロキシのホスト
+    var host: String
+
+    /// ポート
+    var port: Int
+
+    /// username
+    /// プロキシに認証がかかっている場合に指定する
+    var username: String?
+
+    /// password
+    /// プロキシに認証がかかっている場合に指定する
+    var password: String?
+
+    public init(host: String, port: Int, username: String? = nil, password: String? = nil) {
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+    }
+}
+
+/**
  クライアントに関する設定です。
  */
 public struct Configuration {
@@ -160,6 +186,9 @@ public struct Configuration {
     /// DataChannel 経由のシグナリングを利用している際に、 WebSocket が切断されても Sora との接続を継続するためのフラグ。
     /// 詳細: https://sora-doc.shiguredo.jp/DATA_CHANNEL_SIGNALING#07c227
     public var ignoreDisconnectWebSocket: Bool?
+
+    /// プロキシに関する設定
+    public var proxy: Proxy?
 
     // MARK: - イベントハンドラ
 
