@@ -10,7 +10,7 @@ private let defaultPublisherAudioTrackId: String = "mainAudio"
 /**
  プロキシに関する設定です
  */
-public struct Proxy {
+public struct Proxy: CustomStringConvertible {
     /// プロキシのホスト
     var host: String
 
@@ -19,7 +19,6 @@ public struct Proxy {
 
     /// username
     /// プロキシに認証がかかっている場合に指定する
-    /// TODO: username と password を別の型にまとめて non-optional にしたい
     var username: String?
 
     /// password
@@ -29,8 +28,15 @@ public struct Proxy {
     public init(host: String, port: Int, username: String? = nil, password: String? = nil) {
         self.host = host
         self.port = port
+
+        // TODO: username と password の片方が設定された場合、エラーにする?
+        // もしくは、片方のみ設定出来ない API を検討する
         self.username = username
         self.password = password
+    }
+
+    public var description: String {
+        "host=\(host) port=\(port) username=\(username ?? "") password=\(String(repeating: "*", count: password?.count ?? 0))"
     }
 }
 

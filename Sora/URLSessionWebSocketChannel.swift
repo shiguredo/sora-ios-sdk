@@ -27,17 +27,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         let configuration = URLSessionConfiguration.ephemeral
 
         if let proxy = proxy {
-            // TODO: Basic 認証が1回成功すると、結果が一定時間キャッシュされている模様
-            // 具体的には urlSession(_:didReceive:completionHandler:) が authenticationMethod: NSURLAuthenticationMethodHTTPBasic で呼ばれなくなる
-            // ただ、サーバー側で tshark を使って (*1) 確認したところ、 CONNECT メッセージに Proxy-Authorization ヘッダーは付与されている
-            // URLSession のキャッシュを消すべく試行錯誤したが改善することができなかった
-            //
-            // *1 ... 確認時に使用した tshark のコマンド: tshark -V -Y 'http.request.method == "CONNECT"'
-
             configuration.connectionProxyDictionary = [
-                kCFNetworkProxiesHTTPEnable: 1,
                 kCFNetworkProxiesHTTPProxy: proxy.host,
                 kCFNetworkProxiesHTTPPort: proxy.port,
+                kCFNetworkProxiesHTTPEnable: 1,
 
                 // NOTE: `kCFStreamPropertyHTTPS` から始まるキーは deprecated になっているが、
                 // それらを置き換える形で導入されたと思われる `kCFNetworkProxiesHTTPS` は、2022年6月時点で macOS からしか利用できない
@@ -49,6 +42,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                 // "HTTPSProxy", "HTTPSPort" などの文字列をキーの代わりに指定して Xcode の警告を消すことも可能
                 kCFStreamPropertyHTTPSProxyHost: proxy.host,
                 kCFStreamPropertyHTTPSProxyPort: proxy.port,
+
+                // NOTE: kCFNetworkProxiesHTTPSProxy に相当するキーが `kCFStreamPropertyHTTPS` から始まるキーとして存在しなかったので、直接文字列で指定する
+                // https://developer.apple.com/documentation/cfnetwork
+                "HTTPSEnable": 1,
             ]
 
             Logger.info(type: .webSocketChannel, message: "proxy: \(String(describing: configuration.connectionProxyDictionary.debugDescription))")
@@ -207,7 +204,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         }
     }
 
-    // TODO: エラー発生時にプロキシの設定を出力する
     func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         // コードを短くするために変数を定義
         let ps = challenge.protectionSpace
@@ -215,7 +211,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
         // 既に失敗している場合はチャレンジを中止する
         guard previousFailureCount == 0 else {
-            let message = "[\(host)] \(#function): Basic authentication failed."
+            let message = "[\(host)] \(#function): Basic authentication failed. proxy => \(String(describing: proxy))"
             Logger.info(type: .webSocketChannel, message: message)
             completionHandler(.cancelAuthenticationChallenge, nil)
 
@@ -236,7 +232,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
         // username と password をチェック
         guard let username = proxy?.username, let password = proxy?.password else {
-            let message = "[\(host)] \(#function): Basic authentication required, but authentication information is insufficient."
+            let message = "[\(host)] \(#function): Basic authentication required, but authentication information is insufficient. proxy => \(String(describing: proxy))"
             Logger.info(type: .webSocketChannel, message: message)
             completionHandler(.cancelAuthenticationChallenge, nil)
 
