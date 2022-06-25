@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] WebRTC 103.5060.4.0 に上げる
+    - @miosakuma
 - [ADD] Sora の bundle_id に対応する
     - `Configuration.bundleId` を追加する
     - @enm10k
