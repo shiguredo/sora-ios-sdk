@@ -11,6 +11,12 @@
 
 ## develop
 
+## 2022.4.0
+
+- [UPDATE] システム条件を変更する
+    - macOS 12.3 以降
+    - WebRTC SFU Sora 2022.1 以降
+    - @miosakuma
 - [UPDATE] WebRTC 103.5060.4.0 に上げる
     - @miosakuma
 - [ADD] Sora の bundle_id に対応する
