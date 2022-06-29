@@ -11,6 +11,24 @@
 
 ## develop
 
+## 2022.4.0
+
+- [UPDATE] システム条件を変更する
+    - macOS 12.3 以降
+    - WebRTC SFU Sora 2022.1 以降
+    - @miosakuma
+- [UPDATE] WebRTC 103.5060.4.0 に上げる
+    - @miosakuma
+- [ADD] Sora の bundle_id に対応する
+    - `Configuration.bundleId` を追加する
+    - @enm10k
+- [CHANGE] mid を必須にする
+    - この修正の結果、 type: offer に mid が含まれない場合は、エラーになります
+    - @enm10k
+- [CHANGE] `Configuration.spotlightEnabled == .enabled` の際に、自動的にサイマルキャストを有効化しない
+    - サイマルキャストを有効化する場合は明示的に `Configuration.simulcastEnabled == true` を設定してください
+    - @enm10k
+
 ## 2022.3.0
 
 - [UPDATE] システム条件を変更する
@@ -20,7 +38,6 @@
 - [UPDATE] WebRTC 102.5005.7.6 に上げる
     - @miosakuma
 - [UPDATE] mid に対応する
-    - @enm10k
 
 ## 2022.2.1
 
