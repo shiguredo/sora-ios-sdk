@@ -25,10 +25,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
     func connect(delegateQueue: OperationQueue?) {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpAdditionalHeaders = ["User-Agent": SDKInfo.userAgent]
 
         if let proxy = proxy {
-            configuration.httpAdditionalHeaders?["User-Agent"] = proxy.agent
             configuration.connectionProxyDictionary = [
                 kCFNetworkProxiesHTTPProxy: proxy.host,
                 kCFNetworkProxiesHTTPPort: proxy.port,

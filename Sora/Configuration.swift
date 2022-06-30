@@ -26,9 +26,9 @@ public struct Proxy: CustomStringConvertible {
     var password: String?
 
     /// エージェント
-    var agent: String = SDKInfo.userAgent
+    var agent: String = "Sora iOS SDK \(SDKInfo.version)"
 
-    public init(host: String, port: Int, agent: String? = nil, username: String? = nil, password: String? = nil) {
+    public init(host: String, port: Int, username: String? = nil, password: String? = nil) {
         self.host = host
         self.port = port
 
@@ -36,10 +36,6 @@ public struct Proxy: CustomStringConvertible {
         // もしくは、片方のみ設定出来ない API を検討する
         self.username = username
         self.password = password
-
-        if let agent = agent {
-            self.agent = agent
-        }
     }
 
     public var description: String {

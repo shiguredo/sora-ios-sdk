@@ -285,6 +285,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             multistream = true
         }
 
+        let soraClient = "Sora iOS SDK \(SDKInfo.version)"
+
         let webRTCVersion = "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
 
         let simulcast = configuration.simulcastEnabled || configuration.spotlightEnabled == .enabled
@@ -308,7 +310,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             spotlightUnfocusRid: configuration.spotlightUnfocusRid,
             simulcastEnabled: simulcast,
             simulcastRid: configuration.simulcastRid,
-            soraClient: SDKInfo.userAgent,
+            soraClient: soraClient,
             webRTCVersion: webRTCVersion,
             environment: DeviceInfo.current.description,
             dataChannelSignaling: configuration.dataChannelSignaling,
