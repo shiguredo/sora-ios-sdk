@@ -56,12 +56,23 @@ class NativePeerChannelFactory {
 
     func createNativePeerChannel(configuration: WebRTCConfiguration,
                                  constraints: MediaConstraints,
+                                 proxy: Proxy? = nil,
                                  delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection?
     {
-        nativeFactory
-            .peerConnection(with: configuration.nativeValue,
-                            constraints: constraints.nativeValue,
-                            delegate: delegate)
+        if let proxy = proxy {
+            return nativeFactory.peerConnection(with: configuration.nativeValue,
+                                         constraints: constraints.nativeValue,
+                                         certificateVerifier: nil,
+                                         delegate: delegate,
+                                         proxyType: RTCProxyType.https,
+                                         proxyAgent: proxy.agent,
+                                         proxyHostname: proxy.host,
+                                         proxyPort: Int32(proxy.port),
+                                         proxyUsername: proxy.username ?? "",
+                                         proxyPassword: proxy.password ?? "")
+        } else {
+            return nativeFactory.peerConnection(with: configuration.nativeValue, constraints: constraints.nativeValue, delegate: delegate)
+        }
     }
 
     func createNativeStream(streamId: String) -> RTCMediaStream {

@@ -25,6 +25,9 @@ public struct Proxy: CustomStringConvertible {
     /// プロキシに認証がかかっている場合に指定する
     var password: String?
 
+    /// エージェント
+    var agent: String = "Sora iOS SDK \(SDKInfo.version)"
+
     public init(host: String, port: Int, username: String? = nil, password: String? = nil) {
         self.host = host
         self.port = port
