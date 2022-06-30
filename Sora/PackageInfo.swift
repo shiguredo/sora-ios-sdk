@@ -2,6 +2,7 @@
 public enum SDKInfo {
     // Sora iOS SDK のバージョンを定義する
     public static let version = "2022.3.0"
+    public static let userAgent = "Sora iOS SDK \(version)"
 }
 
 /**
