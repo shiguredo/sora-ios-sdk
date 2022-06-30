@@ -12,23 +12,23 @@ private let defaultPublisherAudioTrackId: String = "mainAudio"
  */
 public struct Proxy: CustomStringConvertible {
     /// プロキシのホスト
-    var host: String
+    let host: String
 
     /// ポート
-    var port: Int
+    let port: Int
 
     /// username
     /// プロキシに認証がかかっている場合に指定する
-    var username: String?
+    let username: String?
 
     /// password
     /// プロキシに認証がかかっている場合に指定する
-    var password: String?
+    let password: String?
 
     /// エージェント
     var agent: String = "Sora iOS SDK \(SDKInfo.version)"
 
-    public init(host: String, port: Int, username: String? = nil, password: String? = nil) {
+    public init(host: String, port: Int, agent: String? = nil, username: String? = nil, password: String? = nil) {
         self.host = host
         self.port = port
 
@@ -36,10 +36,14 @@ public struct Proxy: CustomStringConvertible {
         // もしくは、片方のみ設定出来ない API を検討する
         self.username = username
         self.password = password
+
+        if let agent = agent {
+            self.agent = agent
+        }
     }
 
     public var description: String {
-        "host=\(host) port=\(port) username=\(username ?? "") password=\(String(repeating: "*", count: password?.count ?? 0))"
+        "host=\(host) port=\(port) agent=\(agent) username=\(username ?? "") password=\(String(repeating: "*", count: password?.count ?? 0))"
     }
 }
 
