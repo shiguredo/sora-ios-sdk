@@ -13,6 +13,8 @@
 
 - [UPDATE] WebRTC 104.5112.8.0 に上げる
     - @miosakuma
+- [ADD] HTTP プロキシに対応する
+  - @enm10k
 
 ## 2022.4.0
 
