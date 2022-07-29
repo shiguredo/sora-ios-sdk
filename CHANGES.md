@@ -11,6 +11,9 @@
 
 ## develop
 
+- [UPDATE] WebRTC 104.5112.8.0 に上げる
+    - @miosakuma
+
 ## 2022.4.0
 
 - [CHANGE] mid を必須にする
