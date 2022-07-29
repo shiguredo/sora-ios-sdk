@@ -32,8 +32,6 @@ public struct Proxy: CustomStringConvertible {
         self.host = host
         self.port = port
 
-        // TODO: username と password の片方が設定された場合、エラーにする?
-        // もしくは、片方のみ設定出来ない API を検討する
         self.username = username
         self.password = password
 
