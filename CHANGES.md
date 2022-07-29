@@ -1,18 +1,38 @@
 # 変更履歴
 
+- CHANGE
+    - 下位互換のない変更
 - UPDATE
     - 下位互換がある変更
 - ADD
     - 下位互換がある追加
-- CHANGE
-    - 下位互換のない変更
 - FIX
     - バグ修正
 
 ## develop
 
+- [UPDATE] WebRTC 104.5112.8.0 に上げる
+    - @miosakuma
 - [ADD] HTTP プロキシに対応する
   - @enm10k
+
+## 2022.4.0
+
+- [CHANGE] mid を必須にする
+    - この修正の結果、 type: offer に mid が含まれない場合は、エラーになります
+    - @enm10k
+- [CHANGE] `Configuration.spotlightEnabled == .enabled` の際に、自動的にサイマルキャストを有効化しない
+    - サイマルキャストを有効化する場合は明示的に `Configuration.simulcastEnabled == true` を設定してください
+    - @enm10k
+- [UPDATE] システム条件を変更する
+    - macOS 12.3 以降
+    - WebRTC SFU Sora 2022.1.0 以降
+    - @miosakuma
+- [UPDATE] WebRTC 103.5060.4.0 に上げる
+    - @miosakuma
+- [ADD] Sora の bundle_id に対応する
+    - `Configuration.bundleId` を追加する
+    - @enm10k
 
 ## 2022.3.0
 
@@ -23,7 +43,6 @@
 - [UPDATE] WebRTC 102.5005.7.6 に上げる
     - @miosakuma
 - [UPDATE] mid に対応する
-    - @enm10k
 
 ## 2022.2.1
 
@@ -32,17 +51,17 @@
 
 ## 2022.2.0
 
+- [CHANGE] DataChannel 経由で受信したメッセージのうち label が signaling, push, notify のものは `MediaChannelHandlers.onReceiveSignaling` が呼ばれるように修正する
+    - @enm10k
+- [CHANGE] `MediaChannel.connectedUrl`を更新するタイミングを修正する
+    - type: connect を送信するタイミングで `MediaChannel.connectedUrl` を更新していたが、 type: offer を受信したタイミングで値を更新するように修正
+    - @enm10k
 - [UPDATE] WebRTC 99.4844.1.0 に上げる
     - @miosakuma
 - [ADD] メッセージング機能に対応する
     - @enm10k
 - [ADD] `MediaChannel.contactUrl` を追加する
     - `MediaChannel.contactUrl` は、最初に type: connect メッセージを送信した Sora のシグナリング URL
-    - @enm10k
-- [CHANGE] DataChannel 経由で受信したメッセージのうち label が signaling, push, notify のものは `MediaChannelHandlers.onReceiveSignaling` が呼ばれるように修正する
-    - @enm10k
-- [CHANGE] `MediaChannel.connectedUrl`を更新するタイミングを修正する
-    - type: connect を送信するタイミングで `MediaChannel.connectedUrl` を更新していたが、 type: offer を受信したタイミングで値を更新するように修正
     - @enm10k
 
 ## 2022.1.1
@@ -54,21 +73,6 @@
 
 ## 2022.1.0
 
-- [UPDATE] システム条件を変更する
-    - macOS 12.2 以降
-    - Xcode 13.2
-    - Swift 5.5.2
-    - @miosakuma
-- [UPDATE] WebRTC 98.4758.0.0 に上げる
-    - @miosakuma
-- [UPDATE] MediaStream から MediaChannel にアクセスできるようにする
-    - @enm10k
-- [ADD] 複数シグナリング URL の指定に対応する
-    - `Configuration.url` を廃止して `Configuration.urlCandidates` を追加する
-    - `MediaChannel.connectedUrl` を追加する
-    - @enm10k
-- [ADD] type: rediret に対応する
-    - @enm10k
 - [CHANGE] スポットライトレガシーを削除する
     - @miosakuma
 - [CHANGE] WebSocketChannel プロトコルを廃止する
@@ -87,6 +91,21 @@
 - [CHANGE] `MediaChannel.native` の型を `RTCPeerConnection` から `RTCPeerConnection?` に変更する
     - PeerChannel で force unwrapping している箇所を修正する際に、併せて修正した
     - @enm10k
+- [UPDATE] システム条件を変更する
+    - macOS 12.2 以降
+    - Xcode 13.2
+    - Swift 5.5.2
+    - @miosakuma
+- [UPDATE] WebRTC 98.4758.0.0 に上げる
+    - @miosakuma
+- [UPDATE] MediaStream から MediaChannel にアクセスできるようにする
+    - @enm10k
+- [ADD] 複数シグナリング URL の指定に対応する
+    - `Configuration.url` を廃止して `Configuration.urlCandidates` を追加する
+    - `MediaChannel.connectedUrl` を追加する
+    - @enm10k
+- [ADD] type: rediret に対応する
+    - @enm10k
 - [FIX] CameraVideoCapturer で force unwrapping していた箇所を修正する
     - @enm10k
 - [FIX] VideoView に debugMode = true を設定した際にメモリー・リークが発生する問題を修正する
@@ -102,6 +121,14 @@
 
 ## 2021.3.0
 
+- [CHANGE] PeerChannel, SignalingChannel protocol を削除する
+    - `Configuration.peerChannelType` を廃止
+    - `Configuration.signalingChannelType` を廃止
+    - `Configuration.peerChannelHandlers` を廃止
+    - `Configuration.signalingChannelHandlers` を廃止
+    - `MediaChannel.native` を追加
+    - `MediaChannel.webSocketChannel` を追加
+    - @szktty @enm10k
 - [UPDATE] システム条件を変更する
     - macOS 12.0 以降
     - Xcode 13.1
@@ -114,14 +141,6 @@
     - `Configuration.dataChannelSignaling` を追加
     - `Configuration.ignoreDisconnectWebSocket` を追加
     - @szktty @enm10k
-- [CHANGE] PeerChannel, SignalingChannel protocol を削除する
-    - `Configuration.peerChannelType` を廃止
-    - `Configuration.signalingChannelType` を廃止
-    - `Configuration.peerChannelHandlers` を廃止
-    - `Configuration.signalingChannelHandlers` を廃止
-    - `MediaChannel.native` を追加
-    - `MediaChannel.webSocketChannel` を追加
-    - @szktty @enm10k
 - [FIX] Sora 接続時に audioEnabled = false を設定すると answer 生成に失敗してしまう問題についてのワークアラウンドを削除する
     - @miosakuma
 
@@ -132,6 +151,18 @@
 
 ## 2021.2
 
+- [CHANGE] 接続開始時のカメラ・デバイスを指定可能にする
+    - `Configuration.cameraSettings.position` に `.front` または `.back` を設定して、接続開始時のカメラ・デバイスを指定します
+    - この修正に伴い、以下の API が変更されました
+        - `CameraVideoCapturer` の API を破壊的に変更
+        - `CameraVideoCapturer.Settings` を `CameraSettings` にリネーム
+        - `VideoCapturerHandlers` を `CameraVideoCapturerHandlers` にリネーム
+        - `VideoCapturer` を廃止
+        - `VideoCapturerDevice` を廃止
+        - `CameraPosition` を廃止
+        - `Configuration.videoCapturerDevice` を廃止
+        - `MediaStream.videoCapturer` を廃止
+    - @szktty @enm10k
 - [UPDATE] Swift Package Manager に対応する
     - @miosakuma @enm10k
 - [UPDATE] WebRTC 93.4577.8.0 に上げる
@@ -148,18 +179,6 @@
 - [UPDATE] SoraDispatcher を追加する
     - libwebrtc 内部で利用されているディスパッチ・キューをラップし、 SDK のユーザーから利用しやすくした
     - @szktty @enm10k
-- [CHANGE] 接続開始時のカメラ・デバイスを指定可能にする
-    - `Configuration.cameraSettings.position` に `.front` または `.back` を設定して、接続開始時のカメラ・デバイスを指定します
-    - この修正に伴い、以下の API が変更されました
-        - `CameraVideoCapturer` の API を破壊的に変更
-        - `CameraVideoCapturer.Settings` を `CameraSettings` にリネーム
-        - `VideoCapturerHandlers` を `CameraVideoCapturerHandlers` にリネーム
-        - `VideoCapturer` を廃止
-        - `VideoCapturerDevice` を廃止
-        - `CameraPosition` を廃止
-        - `Configuration.videoCapturerDevice` を廃止
-        - `MediaStream.videoCapturer` を廃止
-    - @szktty @enm10k
 - [FIX] 接続、切断の検知に RTCPeerConnectionState を参照する
     - @enm10k
 - [FIX] 接続終了後に MediaChannel のメモリが解放されずに残り続ける事象を修正する
@@ -167,20 +186,6 @@
 
 ## 2021.1
 
-- [UPDATE] システム条件を変更する
-    - Xcode 12.5
-    - Swift 5.4
-    - CocoaPods 1.10.1
-    - @miosakuma
-- [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
-    - @szktty @enm10k
-- [UPDATE] WebRTC 91.4472.9.1 に上げる
-    - @enm10k
-- [UPDATE] AV1 に対応する
-    - @enm10k
-- [ADD] libwebrtc のログレベルを設定する API を追加
-    - `Sora.setWebRTCLogLevel(_:)`
-    - @szktty
 - [CHANGE] スポットライトに関する API を変更する
     - Sora のスポットライトレガシー機能を利用するための API を `Sora.useSpotlightLegacy()` に変更
     - `Configuration.activeSpeakerLimit` を非推奨にして、 `Configuration.spotlightNumber` に変更
@@ -208,6 +213,20 @@
     - @szktty
 - [CHANGE] DeviceModel を廃止し、 hw.machine の結果を表示する
     - @enm10k
+- [UPDATE] システム条件を変更する
+    - Xcode 12.5
+    - Swift 5.4
+    - CocoaPods 1.10.1
+    - @miosakuma
+- [UPDATE] サイマルキャストで VP8 / H.264 (ハードウェアアクセラレーション含む) に対応する
+    - @szktty @enm10k
+- [UPDATE] WebRTC 91.4472.9.1 に上げる
+    - @enm10k
+- [UPDATE] AV1 に対応する
+    - @enm10k
+- [ADD] libwebrtc のログレベルを設定する API を追加
+    - `Sora.setWebRTCLogLevel(_:)`
+    - @szktty
 - [FIX] SignalingNotify に漏れていたフィールドを追加する
     - `SignalingNotify.authnMetadata`
     - `SignalingNotify.authzMetadata`
@@ -238,20 +257,13 @@
 
 ## 2020.7
 
-- [UPDATE] WebRTC 86.4240.10.0 に上げる
-    - @szktty
 - [CHANGE] `AudioMode.swift` がターゲット含まれておらずビルドできなかった事象を修正する
+    - @szktty
+- [UPDATE] WebRTC 86.4240.10.0 に上げる
     - @szktty
 
 ## 2020.6
 
-- [UPDATE] システム条件を更新する
-    - Xcode 12.0
-    - Swift 5.3
-    - CocoaPods 1.9.3
-    - @szktty
-- [UPDATE] WebRTC M86 に対応する
-    - @szktty
 - [CHANGE] API: スポットライトに関する API
     - `Configuration.spotlight`: 非推奨
     - `Configuration.spotlightEnabled`: 追加
@@ -262,18 +274,18 @@
     - `AudioMode`: 追加
     - `AudioOutput`: 追加
     - @szktty
+- [UPDATE] システム条件を更新する
+    - Xcode 12.0
+    - Swift 5.3
+    - CocoaPods 1.9.3
+    - @szktty
+- [UPDATE] WebRTC M86 に対応する
+    - @szktty
 - [FIX] API: `Sora.connect()`: タイムアウト時にハンドラが実行されない事象を修正する
     - @szktty
 
 ## 2020.5
 
-- [UPDATE] システム条件を更新する
-    - Xcode 11.6
-    - Swift 5.2.4
-    - WebRTC SFU Sora 2020.1 以降
-    - @szktty
-- [UPDATE] WebRTC M84 に対応する
-    - @szktty
 - [CHANGE] シグナリング pong に統計情報を含める
     - @szktty
 - [CHANGE] API: 次のイベントハンドラのクラスにコンストラクタを追加する
@@ -285,6 +297,13 @@
     - ``VideoCapturerHandlers``
     - ``WebSocketChannelHandlers``
     - @itoyama @szktty
+- [UPDATE] システム条件を更新する
+    - Xcode 11.6
+    - Swift 5.2.4
+    - WebRTC SFU Sora 2020.1 以降
+    - @szktty
+- [UPDATE] WebRTC M84 に対応する
+    - @szktty
 - [FIX] API: `Sora.connect()`: 接続先ホストが存在しない場合にハンドラが実行されない事象を修正する
     - @szktty
 
@@ -332,13 +351,6 @@
 
 本バージョンよりバージョン表記を「リリース年.リリース回数」に変更する
 
-- [UPDATE] システム条件を更新する
-    - Xcode 11.3
-    - CocoaPods 1.8.4 以降
-    - WebRTC SFU Sora 19.10.3 以降
-    - @szktty
-- [UPDATE] WebRTC M79 に対応する
-    - @szktty
 - [CHANGE] Carthage の使用を止める
     - @szktty
 - [CHANGE] シグナリングに含める各種バージョン情報を変更する
@@ -359,6 +371,13 @@
     - @szktty
 - [CHANGE] API: `Role`: `publisher`, `subscriber`, `group`, `groupSub` を非推奨にする
     - @szktty
+- [UPDATE] システム条件を更新する
+    - Xcode 11.3
+    - CocoaPods 1.8.4 以降
+    - WebRTC SFU Sora 19.10.3 以降
+    - @szktty
+- [UPDATE] WebRTC M79 に対応する
+    - @szktty
 
 ## 2.6.0
 
@@ -378,18 +397,29 @@
 
 ## 2.4.1
 
-- [ADD] 対応アーキテクチャに x86_64 を追加する (シミュレーターの動作は未保証)
-    - @szktty
-- [ADD] シグナリングに SDK と端末の情報を含めるようにする
-    - @szktty
 - [CHANGE] 依存するライブラリを変更する (`Cartfile`)
     - sora-webrtc-ios 76.3.1 -> shiguredo-webrtc-ios 76.3.1
     - @szktty
 - [CHANGE] 対応アーキテクチャから armv7 を外する
     - @szktty
+- [ADD] 対応アーキテクチャに x86_64 を追加する (シミュレーターの動作は未保証)
+    - @szktty
+- [ADD] シグナリングに SDK と端末の情報を含めるようにする
+    - @szktty
 
 ## 2.4.0
 
+- [CHANGE] VAD 機能を削除する
+    - @szktty
+- [CHANGE] API: シグナリングに関する API の名前を変更する
+    - `SignalingMessage` -> `Signaling`
+    - `SignalingNotificationEventType` -> `SignalingNotifyEventType`
+    - `SignalingConnectMessage` -> `SignalingConnect`
+    - `SignalingOfferMessage` -> `SignalingOffer`
+    - `SignalingOfferMessage.Configuration` -> `SignalingOffer.Configuration`
+    - `SignalingPongMessage` -> `SignalingPong`
+    - `SignalingPushMessage` -> `SignalingPush`
+    - @szktty
 - [UPDATE] システム条件を更新する
     - Xcode 10.3
     - @szktty
@@ -435,27 +465,16 @@
     - @szktty
 - [ADD] API: `Signaling`: 追加する
     - @szktty
-- [CHANGE] VAD 機能を削除する
-    - @szktty
-- [CHANGE] API: シグナリングに関する API の名前を変更する
-    - `SignalingMessage` -> `Signaling`
-    - `SignalingNotificationEventType` -> `SignalingNotifyEventType`
-    - `SignalingConnectMessage` -> `SignalingConnect`
-    - `SignalingOfferMessage` -> `SignalingOffer`
-    - `SignalingOfferMessage.Configuration` -> `SignalingOffer.Configuration`
-    - `SignalingPongMessage` -> `SignalingPong`
-    - `SignalingPushMessage` -> `SignalingPush`
-    - @szktty
 
 ## 2.3.2
 
-- [ADD] API: シグナリング "notify" の "connection_id" プロパティに対応する
-    - @szktty
-- [ADD] API: ``SignalingNotifyMessage``: ``connectionId`` プロパティを追加する
-    - @szktty
 - [CHANGE] API: ``SDPSemantics``: ``case default`` を削除する
     - @szktty
 - [CHANGE] SDP セマンティクスのデフォルトを Unified Plan に変更する
+    - @szktty
+- [ADD] API: シグナリング "notify" の "connection_id" プロパティに対応する
+    - @szktty
+- [ADD] API: ``SignalingNotifyMessage``: ``connectionId`` プロパティを追加する
     - @szktty
 - [FIX] 接続状態によってシグナリング "notify" が無視される現象を修正する
     - @szktty
@@ -467,6 +486,10 @@
 
 ## 2.3.0
 
+- [CHANGE] マルチストリーム時に強制的に Plan B に設定していたのを止めた
+    - @szktty
+- [CHANGE] 未知のシグナリングメッセージを受信するら例外を発生するように変更する
+    - @szktty
 - [UPDATE] システム条件を更新する
     - WebRTC SFU Sora 19.04.0 以降
     - macOS 10.14.4 以降
@@ -476,10 +499,6 @@
 - [ADD] シグナリング "notify" の次のイベントに対応する
     - "spotlight.changed"
     - "network.status"
-    - @szktty
-- [CHANGE] マルチストリーム時に強制的に Plan B に設定していたのを止めた
-    - @szktty
-- [CHANGE] 未知のシグナリングメッセージを受信するら例外を発生するように変更する
     - @szktty
 
 ## 2.2.1
@@ -527,6 +546,8 @@
 
 ## 2.1.1
 
+- [CHANGE] API: ``MediaStream``: ``audioVolume`` プロパティを非推奨にする
+    - @szktty
 - [UPDATE] システム条件を更新する
     - macOS 10.13.2 以降
     - Xcode 9.3
@@ -535,8 +556,6 @@
     - WebRTC SFU Sora 18.02 以降
     - @szktty
 - [ADD] API: ``MediaStream``: ``remoteAudioVolume`` プロパティを追加する
-    - @szktty
-- [CHANGE] API: ``MediaStream``: ``audioVolume`` プロパティを非推奨にする
     - @szktty
 - [FIX] API: ``MediaStream``: 配信中に ``videoEnabled`` プロパティまたは ``audioEnabled`` プロパティで映像か音声を無効にすると、有効に戻しても他のクライアントに配信が再開されない現象を修正する
     - @szktty
@@ -563,16 +582,6 @@
 
 ## 2.0.3
 
-- [UPDATE] WebRTC M63 に対応する
-    - @szktty
-- [UPDATE] SDWebImage 4.2.2 に対応する
-    - @szktty
-- [ADD] API: ``WebSocketChannelHandlers``: ``onDisconnectHandler`` を追加する
-    - @szktty
-- [ADD] API: ``SignalingChannelHandlers``: ``onDisconnectHandler`` を追加する
-    - @szktty
-- [ADD] API: ``PeerChannelHandlers``: ``onDisconnectHandler`` を追加する
-    - @szktty
 - [CHANGE] API: ``SoraError``: WebSocket に関するエラーを次の二つに分割する
     - ``webSocketClosed(statusCode:reason:)``
     - ``webSocketError()``
@@ -584,6 +593,16 @@
 - [CHANGE] API: ``PeerChannelHandlers``: ``onFailureHandler`` を削除する
     - @szktty
 - [CHANGE] API: ``MediaChannelHandlers``: ``onFailureHandler`` を削除する
+    - @szktty
+- [UPDATE] WebRTC M63 に対応する
+    - @szktty
+- [UPDATE] SDWebImage 4.2.2 に対応する
+    - @szktty
+- [ADD] API: ``WebSocketChannelHandlers``: ``onDisconnectHandler`` を追加する
+    - @szktty
+- [ADD] API: ``SignalingChannelHandlers``: ``onDisconnectHandler`` を追加する
+    - @szktty
+- [ADD] API: ``PeerChannelHandlers``: ``onDisconnectHandler`` を追加する
     - @szktty
 - [FIX] API: ``MediaChannel``: ``PeerChannel`` の接続解除時に ``MediaChannel`` の状態が接続解除にならない現象を修正する
     - @szktty
@@ -614,6 +633,14 @@
 
 設計と API を大きく見直した。
 
+- [CHANGE] 依存するフレームワークから Unbox.framework を削除する
+    - @szktty
+- [CHANGE] WebRTC のネイティブ API (主にクラスやプロトコル名の接頭辞が ``RTC`` の API) を非公開にする
+    - @szktty
+- [CHANGE] 通信を行うオブジェクト (WebSocket 接続、シグナリング接続、ピア接続、メディアストリーム) をプロトコルに変更する (デフォルトの実装は ``private``)
+    - @szktty
+- [CHANGE] 内部で使用する WebSocket の API (SRWebSocket.framework の API) を非公開にする
+    - @szktty
 - [UPDATE] WebRTC M62 に対応する
     - @szktty
 - [UPDATE] アーキテクチャ armv7 に対応する
@@ -634,17 +661,62 @@
     - @szktty
 - [ADD] 映像フレームの編集を可能にする
     - @szktty
-- [CHANGE] 依存するフレームワークから Unbox.framework を削除する
-    - @szktty
-- [CHANGE] WebRTC のネイティブ API (主にクラスやプロトコル名の接頭辞が ``RTC`` の API) を非公開にする
-    - @szktty
-- [CHANGE] 通信を行うオブジェクト (WebSocket 接続、シグナリング接続、ピア接続、メディアストリーム) をプロトコルに変更する (デフォルトの実装は ``private``)
-    - @szktty
-- [CHANGE] 内部で使用する WebSocket の API (SRWebSocket.framework の API) を非公開にする
-    - @szktty
 
 ### API
 
+- [CHANGE] 次のクラス、構造体、列挙体、プロトコルを削除する
+    - ``Attendee``: 同等の機能を ``MediaChannel`` に実装する
+    - ``BuildInfo``: 同等の機能を ``WebRTCInfo`` に実装する
+    - ``Connection``: パブリッシャーとサブスクライバーをそれぞれ独立させたため削除する
+    - ``ConnectionController``: 同等の機能を削除する
+    - ``ConnectionController.Request``
+    - ``ConnectionController.Role``
+    - ``ConnectionController.StreamType``
+    - ``ConnectionError``: 同等の機能を ``SoraError`` に実装する
+    - ``Event``: 各イベントをイベントハンドラのみで扱うようにする
+    - ``Event.EventType``
+    - ``EventLog``: ロギング機能を削除する
+    - ``MediaConnection``: 同等の機能を ``MediaChannel`` に実装する
+    - ``MediaPublisher``: パブリッシャーを ``MediaChannel`` で扱うようにするため削除する
+    - ``MediaSubscriber``: サブスクライバーを ``MediaChannel`` で扱うようにするため削除する
+    - ``MediaOption``: 同等の機能を ``Configuration`` に実装する
+    - ``Message``: 同等の機能を ``SignalingMessage`` に実装する
+    - ``Message.MessageType``
+    - ``Messagable``
+    - ``PeerConnection``: 同等の機能を ``PeerChannel`` に定義する
+    - ``PeerConnectionEventHandlers``: 同等の機能を ``PeerChannelHandlers`` に実装する
+    - ``SignalingEventHandlers``: 同等の機能を ``SignalingChannelHandlers`` に実装する
+    - ``SignalingNotify``: 同等の機能を ``SignalingNotifyMessage`` に実装する
+    - ``SignalingSnapshot``: 同等の機能を ``SignalingSnapshotMessage`` に実装する
+    - ``VideoFrameHandle``: 同等の機能を ``VideoFrame`` に実装する
+    - ``WebSocketEventHandlers``: 同等の機能を ``WebSocketChannelHandlers`` に実装する
+    - @szktty
+- [CHANGE] ``Notification`` の使用を中止し、次の関連する構造体と列挙体を削除する
+    - ``Connection.NotificationKey``
+    - ``Connection.NotificationKey.UserInfo``
+    - ``MediaConnection.NotificationKey``
+    - ``MediaConnection.NotificationKey.UserInfo``
+    - ``MediaStream.NotificationKey``
+    - ``MediaStream.NotificationKey.UserInfo``
+    - @szktty
+- [CHANGE] ``AudioCodec``
+    - ``.Opus`` を ``.opus`` に変更する
+    - ``.PCMU`` を ``.pcmu`` に変更する
+    - @szktty
+- [CHANGE] ``MediaStream``
+    - クラスからプロトコルに変更し、 API を一新する
+- [CHANGE] ``VideoCodec``
+    - ``.VP8`` を ``.vp8`` に変更する
+    - ``.VP9`` を ``.vp9`` に変更する
+    - ``.H264`` を ``.h264`` に変更する
+    - @szktty
+- [CHANGE] ``VideoFrame``
+    - プロトコルから列挙体に変更し、 API を一新する
+    - @szktty
+- [CHANGE]] ``VideoRenderer``
+    - ``onChangedSize(_:)`` を ``onChange(size:)`` に変更する
+    - ``renderVideoFrame(_:)`` を ``render(videoFrame:)`` に変更する
+    - @szktty
 - [ADD] 次のクラスを追加する
     - ``CameraVideoCapturer``
     - ``CameraVideoCapturer.Settings``
@@ -699,59 +771,6 @@
 - [ADD] ``Role``
   - ``.group`` を追加する
     - @szktty
-- [CHANGE] 次のクラス、構造体、列挙体、プロトコルを削除する
-    - ``Attendee``: 同等の機能を ``MediaChannel`` に実装する
-    - ``BuildInfo``: 同等の機能を ``WebRTCInfo`` に実装する
-    - ``Connection``: パブリッシャーとサブスクライバーをそれぞれ独立させたため削除する
-    - ``ConnectionController``: 同等の機能を削除する
-    - ``ConnectionController.Request``
-    - ``ConnectionController.Role``
-    - ``ConnectionController.StreamType``
-    - ``ConnectionError``: 同等の機能を ``SoraError`` に実装する
-    - ``Event``: 各イベントをイベントハンドラのみで扱うようにする
-    - ``Event.EventType``
-    - ``EventLog``: ロギング機能を削除する
-    - ``MediaConnection``: 同等の機能を ``MediaChannel`` に実装する
-    - ``MediaPublisher``: パブリッシャーを ``MediaChannel`` で扱うようにするため削除する
-    - ``MediaSubscriber``: サブスクライバーを ``MediaChannel`` で扱うようにするため削除する
-    - ``MediaOption``: 同等の機能を ``Configuration`` に実装する
-    - ``Message``: 同等の機能を ``SignalingMessage`` に実装する
-    - ``Message.MessageType``
-    - ``Messagable``
-    - ``PeerConnection``: 同等の機能を ``PeerChannel`` に定義する
-    - ``PeerConnectionEventHandlers``: 同等の機能を ``PeerChannelHandlers`` に実装する
-    - ``SignalingEventHandlers``: 同等の機能を ``SignalingChannelHandlers`` に実装する
-    - ``SignalingNotify``: 同等の機能を ``SignalingNotifyMessage`` に実装する
-    - ``SignalingSnapshot``: 同等の機能を ``SignalingSnapshotMessage`` に実装する
-    - ``VideoFrameHandle``: 同等の機能を ``VideoFrame`` に実装する
-    - ``WebSocketEventHandlers``: 同等の機能を ``WebSocketChannelHandlers`` に実装する
-    - @szktty
-- [CHANGE] ``Notification`` の使用を中止し、次の関連する構造体と列挙体を削除する
-    - ``Connection.NotificationKey``
-    - ``Connection.NotificationKey.UserInfo``
-    - ``MediaConnection.NotificationKey``
-    - ``MediaConnection.NotificationKey.UserInfo``
-    - ``MediaStream.NotificationKey``
-    - ``MediaStream.NotificationKey.UserInfo``
-    - @szktty
-- [CHANGE] ``AudioCodec``
-    - ``.Opus`` を ``.opus`` に変更する
-    - ``.PCMU`` を ``.pcmu`` に変更する
-    - @szktty
-- [CHANGE] ``MediaStream``
-    - クラスからプロトコルに変更し、 API を一新する
-- [CHANGE] ``VideoCodec``
-    - ``.VP8`` を ``.vp8`` に変更する
-    - ``.VP9`` を ``.vp9`` に変更する
-    - ``.H264`` を ``.h264`` に変更する
-    - @szktty
-- [CHANGE] ``VideoFrame``
-    - プロトコルから列挙体に変更し、 API を一新する
-    - @szktty
-- [CHANGE]] ``VideoRenderer``
-    - ``onChangedSize(_:)`` を ``onChange(size:)`` に変更する
-    - ``renderVideoFrame(_:)`` を ``render(videoFrame:)`` に変更する
-    - @szktty
 
 ## 1.2.5
 
@@ -760,11 +779,11 @@
 
 ## 1.2.4
 
-- [UPDATE] armv7 に対応する
-    - @szktty
 - [CHANGE] API: MediaOption を struct に変更する
     - @szktty
 - [CHANGE] API: ConnectionController: ロールとストリーム種別の選択制限を削除する
+    - @szktty
+- [UPDATE] armv7 に対応する
     - @szktty
 - [FIX] API: マルチストリーム時、配信者のストリームが二重に生成されてしまう現象を修正する
     - @szktty
@@ -792,6 +811,14 @@
 
 ## 1.2.0
 
+- [CHANGE] API: VideoFrame
+    - ``var width``: ``Int32`` -> ``Int``
+    - ``var height``: ``Int32`` -> ``Int``
+    - ``var timestamp``: ``CMTime`` -> ``CMTime?``
+    - @szktty
+- [CHANGE] API: VideoFrameHandle: 次のプロパティ名を変更する
+    - ``case webRTC`` -> ``case WebRTC``
+    - @szktty
 - [UPDATE] WebRTC M60 に対応する
     - @szktty
 - [UPDATE] Bitcode に対応する
@@ -820,17 +847,35 @@
     - @szktty
 - [ADD] API: ConnectionController: スナップショットの項目を追加する
     - @szktty
-- [CHANGE] API: VideoFrame
-    - ``var width``: ``Int32`` -> ``Int``
-    - ``var height``: ``Int32`` -> ``Int``
-    - ``var timestamp``: ``CMTime`` -> ``CMTime?``
-    - @szktty
-- [CHANGE] API: VideoFrameHandle: 次のプロパティ名を変更する
-    - ``case webRTC`` -> ``case WebRTC``
-    - @szktty
 
 ## 1.1.0
 
+- [CHANGE] examples を削除
+    - @szktty
+- [CHANGE] ディレクトリ構造を変更し、プロジェクトのファイルをトップレベルに移動する
+    - @szktty
+- [CHANGE] API: PeerConnection: 接続状態に関わらず WebSocket のイベントハンドラを実行するようにする
+    - @szktty
+- [CHANGE] 次の不要なファイルを削除する
+    - ``JSON.swift``
+    - @szktty
+- [CHANGE] API: BuildInfo: 次のプロパティを削除する
+    - ``var VP9Enabled``
+    - @szktty
+- [CHANGE] API: Connection: 次のプロパティとメソッドを削除する
+    - ``var numberOfConnections``
+    - ``func onChangeNumberOfConnections(handler:)``
+    - @szktty
+- [CHANGE] API: ConnectionController: Cancel ボタンを Back ボタンに変更する
+    - @szktty
+- [CHANGE] API: MediaStreamRole: 削除する
+    - @szktty
+- [CHANGE] API: VideoFrame の型を変更する
+    - ``var width``: ``Int`` -> ``Int32``
+    - ``var height``: ``Int`` -> ``Int32``
+    - @szktty
+- [CHANGE] API: ConnectionController: VP9 の有効・無効を示すセルを削除する
+    - @szktty
 - [UPDATE] WebRTC M59 に対応する
     - @szktty
 - [ADD] CircleCI を利用する自動ビルドを追加
@@ -865,32 +910,6 @@
     - @szktty
 - [ADD] API: SignalingRole: 追加する
     - @szktty
-- [CHANGE] examples を削除
-    - @szktty
-- [CHANGE] ディレクトリ構造を変更し、プロジェクトのファイルをトップレベルに移動する
-    - @szktty
-- [CHANGE] API: PeerConnection: 接続状態に関わらず WebSocket のイベントハンドラを実行するようにする
-    - @szktty
-- [CHANGE] 次の不要なファイルを削除する
-    - ``JSON.swift``
-    - @szktty
-- [CHANGE] API: BuildInfo: 次のプロパティを削除する
-    - ``var VP9Enabled``
-    - @szktty
-- [CHANGE] API: Connection: 次のプロパティとメソッドを削除する
-    - ``var numberOfConnections``
-    - ``func onChangeNumberOfConnections(handler:)``
-    - @szktty
-- [CHANGE] API: ConnectionController: Cancel ボタンを Back ボタンに変更する
-    - @szktty
-- [CHANGE] API: MediaStreamRole: 削除する
-    - @szktty
-- [CHANGE] API: VideoFrame の型を変更する
-    - ``var width``: ``Int`` -> ``Int32``
-    - ``var height``: ``Int`` -> ``Int32``
-    - @szktty
-- [CHANGE] API: ConnectionController: VP9 の有効・無効を示すセルを削除する
-    - @szktty
 - [FIX] Sora サーバーの URL のプロトコルが ws または wss 以外であればエラーにする
     - @szktty
 - [FIX] 接続解除可能な状況でも ``connectionBusy`` のエラーが発生する現象を修正する
@@ -914,47 +933,6 @@
 
 ## 1.0.0
 
-- [UPDATE] WebRTC M57 に対応する
-    - @szktty
-- [UPDATE] API: MediaCapturer: 同一の RTCPeerConnectionFactory で再利用するようにする
-    - @szktty
-- [UPDATE] API: MediaCapturer: 映像トラック名と音声トラック名を自動生成するようにする
-    - @szktty
-- [UPDATE] API: VideoRenderer: 描画処理をメインスレッドで実行するようにする
-    - @szktty
-- [UPDATE] API: VideoView: UI の設計に Nib ファイルを利用するようにする
-    - @szktty
-- [UPDATE] API: VideoView: バックグラウンド (ビューがキーウィンドウに表示されていない) では描画処理を中止するようにする
-    - @szktty
-- [UPDATE] API: VideoView: 映像のアスペクト比を保持するようにする
-    - @szktty
-- [UPDATE] API: MediaConnection: MediaStream を複数保持するようにする
-    - @szktty
-- [ADD] マルチストリームに対応する
-    - @szktty
-- [ADD] シグナリング: "notify" に対応する
-    - @szktty
-- [ADD] API: MediaConnection: ``multistreamEnabled`` プロパティを追加する
-    - @szktty
-- [ADD] API: MediaPublisher: ``autofocusEnabled`` プロパティを追加する
-    - @szktty
-- [ADD] API: PeerConnection: RTCPeerConnection のラッパーとして追加する
-    - @szktty
-- [ADD] API: BuildInfo: 追加する
-    - @szktty
-- [ADD] API: ConnectionController: 追加する
-    - @szktty
-- [ADD] API: Connection: 次の API を追加する
-    - ``var numberOfConnections``
-    - ``func onChangeNumberOfConnections(handler:)``
-    - @szktty
-- [ADD] API: Connection, MediaConnection, MediaStream, PeerConnection: 次のイベントで (NotificationCenter による) 通知を行うようにする
-    - onConnect
-    - onDisconnect
-    - onFailure
-    - @szktty
-- [ADD] API: WebSocketEventHandlers, SignalingEventHandlers, PeerConnectionEventHandlers: イニシャライザーを追加する
-    - @szktty
 - [CHANGE] 対応アーキテクチャを arm64 のみにする
     - @szktty
 - [CHANGE] シグナリング: Sora の仕様変更に伴い、 "stats" への対応を廃止する
@@ -997,6 +975,47 @@
 - [CHANGE] API: SignalingFailed: 削除する
     - @szktty
 - [CHANGE] API: StatisticsReport: RTCStatsReport の変更 (名前が RTCLegacyStatsReport に変更された) に伴い削除する
+    - @szktty
+- [UPDATE] WebRTC M57 に対応する
+    - @szktty
+- [UPDATE] API: MediaCapturer: 同一の RTCPeerConnectionFactory で再利用するようにする
+    - @szktty
+- [UPDATE] API: MediaCapturer: 映像トラック名と音声トラック名を自動生成するようにする
+    - @szktty
+- [UPDATE] API: VideoRenderer: 描画処理をメインスレッドで実行するようにする
+    - @szktty
+- [UPDATE] API: VideoView: UI の設計に Nib ファイルを利用するようにする
+    - @szktty
+- [UPDATE] API: VideoView: バックグラウンド (ビューがキーウィンドウに表示されていない) では描画処理を中止するようにする
+    - @szktty
+- [UPDATE] API: VideoView: 映像のアスペクト比を保持するようにする
+    - @szktty
+- [UPDATE] API: MediaConnection: MediaStream を複数保持するようにする
+    - @szktty
+- [ADD] マルチストリームに対応する
+    - @szktty
+- [ADD] シグナリング: "notify" に対応する
+    - @szktty
+- [ADD] API: MediaConnection: ``multistreamEnabled`` プロパティを追加する
+    - @szktty
+- [ADD] API: MediaPublisher: ``autofocusEnabled`` プロパティを追加する
+    - @szktty
+- [ADD] API: PeerConnection: RTCPeerConnection のラッパーとして追加する
+    - @szktty
+- [ADD] API: BuildInfo: 追加する
+    - @szktty
+- [ADD] API: ConnectionController: 追加する
+    - @szktty
+- [ADD] API: Connection: 次の API を追加する
+    - ``var numberOfConnections``
+    - ``func onChangeNumberOfConnections(handler:)``
+    - @szktty
+- [ADD] API: Connection, MediaConnection, MediaStream, PeerConnection: 次のイベントで (NotificationCenter による) 通知を行うようにする
+    - onConnect
+    - onDisconnect
+    - onFailure
+    - @szktty
+- [ADD] API: WebSocketEventHandlers, SignalingEventHandlers, PeerConnectionEventHandlers: イニシャライザーを追加する
     - @szktty
 - [FIX] シグナリング: 音声コーデック Opus を指定するためのパラメーターの間違いを修正する
     - @szktty

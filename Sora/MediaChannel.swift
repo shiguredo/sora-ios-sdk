@@ -130,6 +130,13 @@ public final class MediaChannel {
     }
 
     /**
+        バンドル ID 。接続後にセットされます。
+     */
+    public var bundleId: String? {
+        peerChannel.bundleId
+    }
+
+    /**
      接続 ID 。接続後にセットされます。
      */
     public var connectionId: String? {
