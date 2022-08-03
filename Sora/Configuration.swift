@@ -28,6 +28,14 @@ public struct Proxy: CustomStringConvertible {
     /// エージェント
     var agent: String = "Sora iOS SDK \(SDKInfo.version)"
 
+    /**
+     初期化します。
+     - parameter host: プロキシのホスト名
+     - parameter port: プロキシのポート
+     - parameter agent: プロキシのエージェント
+     - parameter username: プロキシ認証に使用するユーザー名
+     - parameter password: プロキシ認証に使用するパスワード
+     */
     public init(host: String, port: Int, agent: String? = nil, username: String? = nil, password: String? = nil) {
         self.host = host
         self.port = port
@@ -40,6 +48,7 @@ public struct Proxy: CustomStringConvertible {
         }
     }
 
+    /// 文字列表現を返します。
     public var description: String {
         "host=\(host) port=\(port) agent=\(agent) username=\(username ?? "") password=\(String(repeating: "*", count: password?.count ?? 0))"
     }
