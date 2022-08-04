@@ -8,7 +8,7 @@ theme: apple
 min_acl: public
 sdk: iphoneos
 module: Sora
-module_version: 2022.4.0
+module_version: 2022.5.0
 swift_version: 5.6.1
 xcodebuild_arguments:
     - -parallelizeTargets
