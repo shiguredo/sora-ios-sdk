@@ -8,6 +8,53 @@ private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
 
 /**
+ プロキシに関する設定です
+ */
+public struct Proxy: CustomStringConvertible {
+    /// プロキシのホスト
+    let host: String
+
+    /// ポート
+    let port: Int
+
+    /// username
+    /// プロキシに認証がかかっている場合に指定する
+    let username: String?
+
+    /// password
+    /// プロキシに認証がかかっている場合に指定する
+    let password: String?
+
+    /// エージェント
+    var agent: String = "Sora iOS SDK \(SDKInfo.version)"
+
+    /**
+     初期化します。
+     - parameter host: プロキシのホスト名
+     - parameter port: プロキシのポート
+     - parameter agent: プロキシのエージェント
+     - parameter username: プロキシ認証に使用するユーザー名
+     - parameter password: プロキシ認証に使用するパスワード
+     */
+    public init(host: String, port: Int, agent: String? = nil, username: String? = nil, password: String? = nil) {
+        self.host = host
+        self.port = port
+
+        self.username = username
+        self.password = password
+
+        if let agent = agent {
+            self.agent = agent
+        }
+    }
+
+    /// 文字列表現を返します。
+    public var description: String {
+        "host=\(host) port=\(port) agent=\(agent) username=\(username ?? "") password=\(String(repeating: "*", count: password?.count ?? 0))"
+    }
+}
+
+/**
  クライアントに関する設定です。
  */
 public struct Configuration {
@@ -162,6 +209,9 @@ public struct Configuration {
     /// DataChannel 経由のシグナリングを利用している際に、 WebSocket が切断されても Sora との接続を継続するためのフラグ。
     /// 詳細: https://sora-doc.shiguredo.jp/DATA_CHANNEL_SIGNALING#07c227
     public var ignoreDisconnectWebSocket: Bool?
+
+    /// プロキシに関する設定
+    public var proxy: Proxy?
 
     // MARK: - イベントハンドラ
 

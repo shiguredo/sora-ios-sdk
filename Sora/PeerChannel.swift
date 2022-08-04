@@ -160,6 +160,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         nativeChannel = NativePeerChannelFactory.default
             .createNativePeerChannel(configuration: webRTCConfiguration,
                                      constraints: webRTCConfiguration.constraints,
+                                     proxy: configuration.proxy,
                                      delegate: self)
         guard nativeChannel != nil else {
             let message = "createNativePeerChannel failed"
