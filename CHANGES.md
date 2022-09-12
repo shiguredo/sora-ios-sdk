@@ -11,12 +11,18 @@
 
 ## develop
 
+- [CHANGE] bitcode を無効にする
+    - WebRTC 105.5195.0.0 より bitcode が廃止になりました。bitcode を無効にしてビルドをする必要があります
+    - @miosakuma
+- [UPDATE] WebRTC 105.5195.0.0 に上げる
+    - @miosakuma
+
 ## 2022.5.0
 
 - [UPDATE] WebRTC 104.5112.8.0 に上げる
     - @miosakuma
 - [ADD] HTTP プロキシに対応する
-  - @enm10k
+    - @enm10k
 
 ## 2022.4.0
 
@@ -112,7 +118,7 @@
     - @enm10k
 - [FIX] VideoView に debugMode = true を設定した際にメモリー・リークが発生する問題を修正する
     - @szktty @enm10k
-    
+
 ## 2021.3.1
 
 - [FIX] RTCPeerConnectionState が .failed に遷移した際の切断処理中にクラッシュする問題を修正する
@@ -771,7 +777,7 @@
     - ``WebSocketChannel``
     - @szktty
 - [ADD] ``Role``
-  - ``.group`` を追加する
+    - ``.group`` を追加する
     - @szktty
 
 ## 1.2.5
