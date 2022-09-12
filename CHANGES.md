@@ -11,8 +11,10 @@
 
 ## develop
 
-- [CHANGE] WebRTC 105.5195.0.0 に上げる
+- [CHANGE] bitcode を無効にする
     - WebRTC 105.5195.0.0 より bitcode が廃止になりました。bitcode を無効にしてビルドをする必要があります
+    - @miosakuma
+- [UPDATE] WebRTC 105.5195.0.0 に上げる
     - @miosakuma
 
 ## 2022.5.0
