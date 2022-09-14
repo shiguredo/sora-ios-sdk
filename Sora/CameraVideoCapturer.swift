@@ -383,6 +383,9 @@ public struct CameraSettings: CustomStringConvertible {
         /// HD 1080p, 1920x1080
         case hd1080p
 
+        /// UHD 1080p, 3840x2160
+        case uhd2160p
+
         /// 横方向のピクセル数を返します。
         public var width: Int32 {
             switch self {
@@ -390,6 +393,7 @@ public struct CameraSettings: CustomStringConvertible {
             case .vga480p: return 640
             case .hd720p: return 1280
             case .hd1080p: return 1920
+            case .uhd2160p: return 3840
             }
         }
 
@@ -400,6 +404,7 @@ public struct CameraSettings: CustomStringConvertible {
             case .vga480p: return 480
             case .hd720p: return 720
             case .hd1080p: return 1080
+            case .uhd2160p: return 2160
             }
         }
     }
