@@ -19,10 +19,10 @@ Please read https://github.com/shiguredo/oss before use.
 ## システム条件
 
 - iOS 13 以降
-- アーキテクチャ arm64, x86_64 (シミュレーターの動作は未保証)
-- macOS 12.3 以降
-- Xcode 13.4.1
-- Swift 5.6.1
+- アーキテクチャ arm64 (シミュレーターの動作は未保証)
+- macOS 12.6 以降
+- Xcode 14.0
+- Swift 5.7
 - CocoaPods 1.11.2 以降
 - WebRTC SFU Sora 2022.1.1 以降
 
