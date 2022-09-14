@@ -14,7 +14,14 @@
 - [CHANGE] bitcode を無効にする
     - WebRTC 105.5195.0.0 より bitcode が廃止になりました。bitcode を無効にしてビルドをする必要があります
     - @miosakuma
+- [CHANGE] 対応アーキテクチャから x86_64 を無効にする
+    - @miosakuma
 - [UPDATE] WebRTC 105.5195.0.0 に上げる
+    - @miosakuma
+- [UPDATE] システム条件を変更する
+    - macOS 12.6 以降
+    - Xcode 14.0
+    - Swift 5.7
     - @miosakuma
 
 ## 2022.5.0
