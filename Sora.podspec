@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   }
   s.source_files  = "Sora/**/*.swift"
   s.resources = ['Sora/*.xib']
-  s.dependency "WebRTC", '105.5195.0.0'
+  s.dependency "WebRTC", '109.5414.2.0'
   s.pod_target_xcconfig = {
     'ARCHS' => 'arm64',
     'ARCHS[config=Debug]' => '$(ARCHS_STANDARD)'
