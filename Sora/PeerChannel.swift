@@ -317,6 +317,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             environment: DeviceInfo.current.description,
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
+            audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
             redirect: redirect
         )
 
