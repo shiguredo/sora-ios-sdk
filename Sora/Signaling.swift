@@ -364,6 +364,9 @@ public struct SignalingConnect {
     /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
 
+    /// 音声ストリーミング機能で利用する言語コード
+    public var audioStreamingLanguageCode: String?
+
     /// type: redicret 受信後の再接続
     public var redirect: Bool?
 }
@@ -833,6 +836,7 @@ extension SignalingConnect: Codable {
         case data_channel_signaling
         case ignore_disconnect_websocket
         case data_channels
+        case audio_streaming_language_code
         case redirect
     }
 
@@ -868,6 +872,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(environment, forKey: .environment)
         try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
+        try container.encodeIfPresent(audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
         try container.encodeIfPresent(redirect, forKey: .redirect)
 
         if videoEnabled {

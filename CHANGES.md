@@ -13,6 +13,8 @@
 
 - [UPDATE] WebRTC 109.5414.2.0 に上げる
     - @miosakuma
+- [UPDATE] Configuration に audioStreamingLanguageCode を追加する
+    - @miosakuma
 - [FIX] m107.5304.4.1 の利用時、シグナリング時に EXEC_BAD_ACCESS が発生する事象を修正する
     - `RTCPeerConnection.offer()` に渡すブロック内で `RTCPeerConnection.close()` を呼んでいるのが原因だと思われるため、 async/await を使って offer() の終了を待ってから close() する
     - `RTCPeerConnection.offer()` の実行が非同期で行われるようになるが、 `NativePeerChannelFactory.createClientOfferSDP()` の用途では問題ない
