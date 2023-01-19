@@ -17,6 +17,7 @@
     - macOS 13.1 以降
     - Xcode 14.2
     - Swift 5.7.2
+    - WebRTC SFU Sora 2022.2.0 以降
     - @miosakuma
 - [ADD] Configuration に audioStreamingLanguageCode を追加する
     - @miosakuma
