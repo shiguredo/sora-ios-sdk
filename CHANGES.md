@@ -13,6 +13,11 @@
 
 - [UPDATE] WebRTC 109.5414.2.0 に上げる
     - @miosakuma
+- [UPDATE] システム条件を変更する
+    - macOS 13.1 以降
+    - Xcode 14.2
+    - Swift 5.7.2
+    - @miosakuma
 - [ADD] Configuration に audioStreamingLanguageCode を追加する
     - @miosakuma
 - [FIX] m107.5304.4.1 の利用時、シグナリング時に EXEC_BAD_ACCESS が発生する事象を修正する
