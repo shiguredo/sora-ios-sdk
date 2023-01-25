@@ -409,7 +409,7 @@ public struct CameraSettings: CustomStringConvertible {
 
      可能な限りここで指定された値が尊重されますが、
      例えばデバイス側が対応していない値が指定された場合などは、
-     ここで指定された値と異なる値が実際には使用される事があります。
+     ここで指定された値と異なる値が実際には使用されることがあります。
      */
     public var resolution: Resolution
 
@@ -418,7 +418,7 @@ public struct CameraSettings: CustomStringConvertible {
 
      可能な限りここで指定された値が尊重されますが、
      例えばデバイス側が対応していない値が指定された場合などは、
-     ここで指定された値と異なる値が実際には使用される事があります。
+     ここで指定された値と異なる値が実際には使用されることがあります。
      */
     public var frameRate: Int
 
