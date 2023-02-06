@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![libwebrtc](https://img.shields.io/badge/libwebrtc-109.5414-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5414)
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-111.5563-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5563)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
