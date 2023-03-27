@@ -9,16 +9,16 @@ public enum SDKInfo {
  */
 public enum WebRTCInfo {
     /// WebRTC フレームワークのバージョン
-    public static let version = "M111"
+    public static let version = "M112"
 
     /// WebRTC フレームワークのコミットポジション
-    public static let commitPosition = "0"
+    public static let commitPosition = "1"
 
     /// WebRTC フレームワークのメンテナンスバージョン
     public static let maintenanceVersion = "0"
 
     /// WebRTC フレームワークのソースコードのリビジョン
-    public static let revision = "6c032cb8356b0d3f717c4fcf50796241f2bba6c2"
+    public static let revision = "18a31880e3037f9938581c1210d2d73b9685f4aa"
 
     /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
     public static var shortRevision: String {
