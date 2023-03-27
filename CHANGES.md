@@ -11,7 +11,7 @@
 
 ## develop
 
-- [UPDATE] WebRTC 111.5563.0.0 に上げる
+- [UPDATE] WebRTC 112.5615.1.0 に上げる
     - @miosakuma
 - [UPDATE] システム条件を変更する
     - macOS 13.1 以降
