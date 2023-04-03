@@ -383,7 +383,7 @@ public struct CameraSettings: CustomStringConvertible {
         /// HD 1080p, 1920x1080
         case hd1080p
 
-        /// UHD 1080p, 3840x2160
+        /// UHD 2160p, 3840x2160
         case uhd2160p
 
         /// 横方向のピクセル数を返します。
