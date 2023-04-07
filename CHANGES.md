@@ -11,6 +11,25 @@
 
 ## develop
 
+## 2023.1.0
+
+- [UPDATE] WebRTC 112.5615.1.0 に上げる
+    - @miosakuma
+- [UPDATE] システム条件を変更する
+    - macOS 13.3 以降
+    - Xcode 14.3
+    - Swift 5.8
+    - WebRTC SFU Sora 2022.2.0 以降
+    - @miosakuma
+- [UPDATE] `CameraSettings` の `Resolution` に `uhd2160p`, `uhd3024p` を追加する
+    - @miosakuma
+- [ADD] `Configuration` に `audioStreamingLanguageCode` を追加する
+    - @miosakuma
+- [FIX] m107.5304.4.1 の利用時、シグナリング時に EXEC_BAD_ACCESS が発生する事象を修正する
+    - `RTCPeerConnection.offer()` に渡すブロック内で `RTCPeerConnection.close()` を呼んでいるのが原因だと思われるため、 async/await を使って offer() の終了を待ってから close() する
+    - `RTCPeerConnection.offer()` の実行が非同期で行われるようになるが、 `NativePeerChannelFactory.createClientOfferSDP()` の用途では問題ない
+    - @szktty
+
 ## 2022.6.0
 
 - [CHANGE] bitcode を無効にする

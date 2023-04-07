@@ -19,7 +19,7 @@ public enum VideoViewConnectionMode {
  VideoRenderer プロトコルのデフォルト実装となる UIView です。
 
  MediaStream.videoRenderer にセットすることで、その MediaStream
- に流れている映像をそのまま画面に表示する事ができます。
+ に流れている映像をそのまま画面に表示することができます。
 
  ## contentModeの設定
 

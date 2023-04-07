@@ -17,7 +17,7 @@ jobs:
       XCODE: /Applications/Xcode_13.4.1.app
       XCODE_SDK: iphoneos15.5
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Select Xcode Version
       run: sudo xcode-select -s '${{ env.XCODE }}/Contents/Developer'
     - name: Show Xcode Version
@@ -25,7 +25,7 @@ jobs:
     - name: Show CocoaPods Version
       run: pod --version
     - name: Restore Pods
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: Pods
         key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
@@ -55,13 +55,13 @@ jobs:
   release:
     if: contains(github.ref, 'tags/v')
     needs: [build]
-    runs-on: macOS-latest
+    runs-on: macos-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1.0.0
+      uses: actions/create-release@v1.1.4
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:

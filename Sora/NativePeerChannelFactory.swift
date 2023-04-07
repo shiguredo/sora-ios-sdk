@@ -148,11 +148,12 @@ class NativePeerChannelFactory {
                                               constraints: constraints)
         peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
         peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
-        peer2.offer(for: constraints.nativeValue) { sdp, error in
-            if let error = error {
-                handler(nil, error)
-            } else if let sdp = sdp {
+        Task {
+            do {
+                let sdp = try await peer2.offer(for: constraints.nativeValue)
                 handler(sdp.sdp, nil)
+            } catch {
+                handler(nil, error)
             }
             peer2.close()
         }

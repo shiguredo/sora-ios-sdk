@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![libwebrtc](https://img.shields.io/badge/libwebrtc-105.5195-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5195)
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-112.5615-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5615)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -20,11 +20,11 @@ Please read https://github.com/shiguredo/oss before use.
 
 - iOS 13 以降
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
-- macOS 12.6 以降
-- Xcode 14.0
-- Swift 5.7
-- CocoaPods 1.11.3 以降
-- WebRTC SFU Sora 2022.1.1 以降
+- macOS 13.3 以降
+- Xcode 14.3
+- Swift 5.8
+- CocoaPods 1.12.0 以降
+- WebRTC SFU Sora 2022.2.0 以降
 
 Xcode と Swift のバージョンによっては、 CocoaPods で取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
@@ -42,8 +42,8 @@ Xcode と Swift のバージョンによっては、 CocoaPods で取得でき�
 Apache License 2.0
 
 ```
-Copyright 2017-2022, SUZUKI Tetsuya (Original Author)
-Copyright 2017-2022, Shiguredo Inc.
+Copyright 2017-2023, SUZUKI Tetsuya (Original Author)
+Copyright 2017-2023, Shiguredo Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

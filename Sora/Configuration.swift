@@ -210,6 +210,9 @@ public struct Configuration {
     /// 詳細: https://sora-doc.shiguredo.jp/DATA_CHANNEL_SIGNALING#07c227
     public var ignoreDisconnectWebSocket: Bool?
 
+    /// 音声ストリーミング機能で利用する言語コード
+    public var audioStreamingLanguageCode: String?
+
     /// プロキシに関する設定
     public var proxy: Proxy?
 

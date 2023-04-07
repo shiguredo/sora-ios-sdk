@@ -8,12 +8,12 @@ theme: apple
 min_acl: public
 sdk: iphoneos
 module: Sora
-module_version: 2022.6.0
-swift_version: 5.7
+module_version: 2023.1.0
+swift_version: 5.8
 xcodebuild_arguments:
     - -parallelizeTargets
     - -sdk
-    - iphoneos16.0
+    - iphoneos16.4
     - -workspace
     - Sora.xcworkspace
     - -scheme
