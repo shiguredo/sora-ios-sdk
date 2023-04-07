@@ -11,6 +11,8 @@
 
 ## develop
 
+## 2023.1.0
+
 - [UPDATE] WebRTC 112.5615.1.0 に上げる
     - @miosakuma
 - [UPDATE] システム条件を変更する
