@@ -216,6 +216,9 @@ public struct Configuration {
     /// プロキシに関する設定
     public var proxy: Proxy?
 
+    /// 転送フィルターの設定
+    public var forwardingFilter: ForwardingFilter?
+
     // MARK: - イベントハンドラ
 
     /// WebSocket チャネルに関するイベントハンドラ
@@ -332,5 +335,60 @@ public struct Configuration {
         self.channelId = channelId
         self.role = role
         self.multistreamEnabled = multistreamEnabled
+    }
+}
+
+/**
+ 転送フィルターのルールのフィールドの設定です。
+ */
+public enum ForwardingFilterRuleField: String, Codable {
+    case connectionId = "connection_id"
+    case clientId = "client_id"
+    case kind
+}
+
+/**
+ 転送フィルターのルールの演算子の設定です。
+ */
+public enum ForwardingFilterRuleOperator: String, Codable {
+    case isIn = "is_in"
+    case isNotIn = "is_not_in"
+}
+
+/**
+ 転送フィルターのルールの設定です。
+ */
+public struct ForwardingFilterRule: Codable {
+    public let field: ForwardingFilterRuleField
+    public let `operator`: ForwardingFilterRuleOperator
+    public let values: [String]
+
+    public init(field: ForwardingFilterRuleField,
+        operator: ForwardingFilterRuleOperator,
+        values: [String]) {
+        self.field = field
+        self.operator = `operator`
+        self.values = values
+    }
+}
+
+/**
+ 転送フィルターのアクションの設定です。
+ */
+public enum ForwardingFilterAction: String, Codable {
+    case block
+    case allow
+}
+
+/**
+ 転送フィルターに関する設定です。
+ */
+public struct ForwardingFilter: Codable {
+    public let action: ForwardingFilterAction
+    public let rules: [[ForwardingFilterRule]]
+    
+    public init(action: ForwardingFilterAction, rules: [[ForwardingFilterRule]]) {
+        self.action = action
+        self.rules = rules
     }
 }

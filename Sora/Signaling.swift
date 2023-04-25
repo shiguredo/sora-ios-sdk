@@ -369,6 +369,9 @@ public struct SignalingConnect {
 
     /// type: redicret 受信後の再接続
     public var redirect: Bool?
+
+    /// 転送フィルターの設定
+    public var forwardingFilter: ForwardingFilter?
 }
 
 /**
@@ -838,6 +841,7 @@ extension SignalingConnect: Codable {
         case data_channels
         case audio_streaming_language_code
         case redirect
+        case forwarding_filter
     }
 
     enum VideoCodingKeys: String, CodingKey {
@@ -874,6 +878,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
         try container.encodeIfPresent(audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
         try container.encodeIfPresent(redirect, forKey: .redirect)
+        try container.encodeIfPresent(forwardingFilter, forKey: .forwarding_filter)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {

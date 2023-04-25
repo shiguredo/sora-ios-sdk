@@ -318,7 +318,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
             audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
-            redirect: redirect
+            redirect: redirect,
+            forwardingFilter: configuration.forwardingFilter
         )
 
         Logger.debug(type: .peerChannel, message: "send connect")
