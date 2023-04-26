@@ -6,6 +6,6 @@ platform :ios, '13.0'
 target 'Sora' do
   use_frameworks!
   pod 'WebRTC', '112.5615.1.0'
-  pod 'SwiftLint', '0.45.1'
-  pod 'SwiftFormat/CLI', '0.49.0'
+  pod 'SwiftLint', '0.51.0'
+  pod 'SwiftFormat/CLI', '0.51.6'
 end
