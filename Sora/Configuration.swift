@@ -364,8 +364,9 @@ public struct ForwardingFilterRule: Codable {
     public let values: [String]
 
     public init(field: ForwardingFilterRuleField,
-        operator: ForwardingFilterRuleOperator,
-        values: [String]) {
+                operator: ForwardingFilterRuleOperator,
+                values: [String])
+    {
         self.field = field
         self.operator = `operator`
         self.values = values
@@ -386,7 +387,7 @@ public enum ForwardingFilterAction: String, Codable {
 public struct ForwardingFilter: Codable {
     public let action: ForwardingFilterAction
     public let rules: [[ForwardingFilterRule]]
-    
+
     public init(action: ForwardingFilterAction, rules: [[ForwardingFilterRule]]) {
         self.action = action
         self.rules = rules

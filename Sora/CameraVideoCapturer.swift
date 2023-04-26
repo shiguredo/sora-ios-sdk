@@ -191,8 +191,7 @@ public final class CameraVideoCapturer {
 
         native.startCapture(with: device,
                             format: format,
-                            fps: frameRate)
-        { [self] (error: Error?) in
+                            fps: frameRate) { [self] (error: Error?) in
             guard error == nil else {
                 completionHandler(error)
                 return
