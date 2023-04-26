@@ -648,7 +648,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                      offer: offer.sdp,
                      constraints: webRTCConfiguration.nativeConstraints,
                      initialOffer: true,
-                     mid: offer.mid) { sdp, error in
+                     mid: offer.mid)
+        { sdp, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create answer (\(error!.localizedDescription))")
@@ -670,7 +671,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         createAnswer(isSender: false,
                      offer: offer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create update-answer (\(error!.localizedDescription)")
@@ -699,7 +701,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         createAnswer(isSender: false,
                      offer: reOffer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create re-answer (\(error!.localizedDescription)")
@@ -733,7 +736,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         createAnswer(isSender: false,
                      offer: reOffer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create re-answer: error => (\(error!.localizedDescription)")

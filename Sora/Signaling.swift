@@ -706,21 +706,21 @@ extension Signaling: Codable {
         let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "offer":
-            self = .offer(try SignalingOffer(from: decoder))
+            self = try .offer(SignalingOffer(from: decoder))
         case "update":
-            self = .update(try SignalingUpdate(from: decoder))
+            self = try .update(SignalingUpdate(from: decoder))
         case "notify":
-            self = .notify(try SignalingNotify(from: decoder))
+            self = try .notify(SignalingNotify(from: decoder))
         case "ping":
-            self = .ping(try SignalingPing(from: decoder))
+            self = try .ping(SignalingPing(from: decoder))
         case "push":
-            self = .push(try SignalingPush(from: decoder))
+            self = try .push(SignalingPush(from: decoder))
         case "re-offer":
-            self = .reOffer(try SignalingReOffer(from: decoder))
+            self = try .reOffer(SignalingReOffer(from: decoder))
         case "switched":
-            self = .switched(try SignalingSwitched(from: decoder))
+            self = try .switched(SignalingSwitched(from: decoder))
         case "redirect":
-            self = .redirect(try SignalingRedirect(from: decoder))
+            self = try .redirect(SignalingRedirect(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
