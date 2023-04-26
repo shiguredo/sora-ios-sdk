@@ -220,7 +220,7 @@ class BasicMediaStream: MediaStream {
             nativeAudioTrack?.source.volume
         }
         set {
-            guard let newValue = newValue else {
+            guard let newValue else {
                 return
             }
             if let track = nativeAudioTrack {

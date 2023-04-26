@@ -78,7 +78,7 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     func renderFrame(_ frame: RTCVideoFrame?) {
         DispatchQueue.main.async {
             if let renderer = self.videoRenderer {
-                if let frame = frame {
+                if let frame {
                     let frame = VideoFrame.native(capturer: nil, frame: frame)
                     renderer.render(videoFrame: frame)
                 } else {

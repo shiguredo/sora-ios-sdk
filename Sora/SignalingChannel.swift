@@ -243,7 +243,7 @@ class SignalingChannel {
             break
         default:
             Logger.debug(type: .signalingChannel, message: "try disconnecting")
-            if let error = error {
+            if let error {
                 Logger.error(type: .signalingChannel,
                              message: "error: \(error.localizedDescription)")
             }

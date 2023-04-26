@@ -384,7 +384,7 @@ public final class MediaChannel {
             weakSelf.connectionTimer.stop()
             connectionTask.complete()
 
-            if let error = error {
+            if let error {
                 Logger.error(type: .mediaChannel, message: "failed to connect")
                 weakSelf.internalDisconnect(error: error, reason: .signalingFailure)
                 handler(error)
@@ -426,7 +426,7 @@ public final class MediaChannel {
 
         default:
             Logger.debug(type: .mediaChannel, message: "try disconnecting")
-            if let error = error {
+            if let error {
                 Logger.error(type: .mediaChannel,
                              message: "error: \(error.localizedDescription)")
             }

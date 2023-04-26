@@ -72,10 +72,10 @@ extension ICEServerInfo: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(urls, forKey: .urls)
-        if let userName = userName {
+        if let userName {
             try container.encode(userName, forKey: .userName)
         }
-        if let credential = credential {
+        if let credential {
             try container.encode(credential, forKey: .credential)
         }
     }

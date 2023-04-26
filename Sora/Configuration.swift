@@ -43,7 +43,7 @@ public struct Proxy: CustomStringConvertible {
         self.username = username
         self.password = password
 
-        if let agent = agent {
+        if let agent {
             self.agent = agent
         }
     }

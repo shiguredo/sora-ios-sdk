@@ -237,12 +237,12 @@ public final class CameraVideoCapturer {
 
     /// 停止前と同じ設定でカメラを再起動します。
     public func restart(completionHandler: @escaping ((Error?) -> Void)) {
-        guard let format = format else {
+        guard let format else {
             completionHandler(SoraError.cameraError(reason: "failed to access format"))
             return
         }
 
-        guard let frameRate = frameRate else {
+        guard let frameRate else {
             completionHandler(SoraError.cameraError(reason: "failed to access frame rate"))
             return
         }
