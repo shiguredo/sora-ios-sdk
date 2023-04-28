@@ -369,6 +369,9 @@ public struct SignalingConnect {
 
     /// type: redicret 受信後の再接続
     public var redirect: Bool?
+
+    /// 転送フィルターの設定
+    public var forwardingFilter: ForwardingFilter?
 }
 
 /**
@@ -703,21 +706,21 @@ extension Signaling: Codable {
         let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "offer":
-            self = .offer(try SignalingOffer(from: decoder))
+            self = try .offer(SignalingOffer(from: decoder))
         case "update":
-            self = .update(try SignalingUpdate(from: decoder))
+            self = try .update(SignalingUpdate(from: decoder))
         case "notify":
-            self = .notify(try SignalingNotify(from: decoder))
+            self = try .notify(SignalingNotify(from: decoder))
         case "ping":
-            self = .ping(try SignalingPing(from: decoder))
+            self = try .ping(SignalingPing(from: decoder))
         case "push":
-            self = .push(try SignalingPush(from: decoder))
+            self = try .push(SignalingPush(from: decoder))
         case "re-offer":
-            self = .reOffer(try SignalingReOffer(from: decoder))
+            self = try .reOffer(SignalingReOffer(from: decoder))
         case "switched":
-            self = .switched(try SignalingSwitched(from: decoder))
+            self = try .switched(SignalingSwitched(from: decoder))
         case "redirect":
-            self = .redirect(try SignalingRedirect(from: decoder))
+            self = try .redirect(SignalingRedirect(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
@@ -838,6 +841,7 @@ extension SignalingConnect: Codable {
         case data_channels
         case audio_streaming_language_code
         case redirect
+        case forwarding_filter
     }
 
     enum VideoCodingKeys: String, CodingKey {
@@ -874,6 +878,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
         try container.encodeIfPresent(audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
         try container.encodeIfPresent(redirect, forKey: .redirect)
+        try container.encodeIfPresent(forwardingFilter, forKey: .forwarding_filter)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil {

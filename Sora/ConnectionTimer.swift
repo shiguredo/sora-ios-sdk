@@ -39,7 +39,7 @@ class ConnectionTimer {
     }
 
     public func run(timeout: Int? = nil, handler: @escaping () -> Void) {
-        if let timeout = timeout {
+        if let timeout {
             self.timeout = timeout
         }
         Logger.debug(type: .connectionTimer,

@@ -243,7 +243,7 @@ class SignalingChannel {
             break
         default:
             Logger.debug(type: .signalingChannel, message: "try disconnecting")
-            if let error = error {
+            if let error {
                 Logger.error(type: .signalingChannel,
                              message: "error: \(error.localizedDescription)")
             }
@@ -279,7 +279,7 @@ class SignalingChannel {
             switch message {
             case .connect:
                 if configuration.dataChannels != nil {
-                    var jsonObject = (try JSONSerialization.jsonObject(with: data, options: [])) as! [String: Any]
+                    var jsonObject = try (JSONSerialization.jsonObject(with: data, options: [])) as! [String: Any]
                     jsonObject["data_channels"] = configuration.dataChannels
                     data = try JSONSerialization.data(withJSONObject: jsonObject, options: [])
                 }

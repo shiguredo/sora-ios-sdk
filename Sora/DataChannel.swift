@@ -121,7 +121,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
 
         if dataChannel.readyState == .closed {
-            if let peerChannel = peerChannel {
+            if let peerChannel {
                 // DataChannel が切断されたタイミングで PeerChannel を切断する
                 // PeerChannel -> DataChannel の順に切断されるパターンも存在するが、
                 // PeerChannel.disconnect(error:reason:) 側で排他処理が実装されているため問題ない
@@ -137,7 +137,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label)")
 
-        guard let peerChannel = peerChannel else {
+        guard let peerChannel else {
             Logger.error(type: .dataChannel, message: "peerChannel is unavailable")
             return
         }
@@ -173,7 +173,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                         Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
                     }
 
-                    if let data = data {
+                    if let data {
                         let ok = dc.send(data)
                         if !ok {
                             Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
@@ -195,7 +195,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                 Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
             }
         }
-        if let mediaChannel = mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
+        if let mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
             handler(mediaChannel, dataChannel.label, data)
         }
     }

@@ -173,7 +173,7 @@ public final class Sora {
             guard let weakSelf = self else {
                 return
             }
-            guard let mediaChan = mediaChan else {
+            guard let mediaChan else {
                 return
             }
             weakSelf.remove(mediaChannel: mediaChan)
@@ -189,11 +189,11 @@ public final class Sora {
             guard let weakSelf = self else {
                 return
             }
-            guard let mediaChan = mediaChan else {
+            guard let mediaChan else {
                 return
             }
 
-            if let error = error {
+            if let error {
                 handler(nil, error)
                 weakSelf.handlers.onConnect?(nil, error)
                 return

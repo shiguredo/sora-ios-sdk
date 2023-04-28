@@ -72,7 +72,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             switch shouldDisconnect {
             case (true, let error, let reason):
                 shouldDisconnect = (false, nil, .unknown)
-                if let context = context {
+                if let context {
                     if context.state != .closed {
                         context.basicDisconnect(error: error, reason: reason)
                     }
@@ -99,7 +99,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     weak var mediaChannel: MediaChannel?
 
     var state: PeerChannelConnectionState {
-        guard let nativeChannel = nativeChannel else {
+        guard let nativeChannel else {
             return PeerChannelConnectionState(RTCPeerConnectionState.new)
         }
 
@@ -198,7 +198,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     func remove(streamId: String) {
         let stream = streams.first { stream in stream.streamId == streamId }
-        if let stream = stream {
+        if let stream {
             remove(stream: stream)
         }
     }
@@ -230,7 +230,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // MARK: - Private methods
 
     private func sendConnectMessage(error: Error?) {
-        if let error = error {
+        if let error {
             Logger.error(type: .peerChannel,
                          message: "failed connecting to signaling channel (\(error.localizedDescription))")
             onConnectHandler?(error)
@@ -318,7 +318,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             dataChannelSignaling: configuration.dataChannelSignaling,
             ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
             audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
-            redirect: redirect
+            redirect: redirect,
+            forwardingFilter: configuration.forwardingFilter
         )
 
         Logger.debug(type: .peerChannel, message: "send connect")
@@ -326,7 +327,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func initializeSenderStream(mid: [String: String]? = nil) {
-        guard let nativeChannel = nativeChannel else {
+        guard let nativeChannel else {
             Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
             return
         }
@@ -344,7 +345,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         let stream = BasicMediaStream(peerChannel: self,
                                       nativeStream: nativeStream)
 
-        if let mid = mid {
+        if let mid {
             Logger.info(type: .peerChannel, message: "mid => \(mid)")
             if let audioMid = mid["audio"] {
                 guard let audioTransceiver = (nativeChannel.transceivers.first { $0.mid == audioMid }) else {
@@ -427,7 +428,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 AVAudioSession.Category.playAndRecord.rawValue
 
             RTCAudioSession.sharedInstance().initializeInput { error in
-                if let error = error {
+                if let error {
                     Logger.debug(type: .peerChannel,
                                  message: "failed to initialize audio input => \(error.localizedDescription)")
                     return
@@ -538,7 +539,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                               mid: [String: String]? = nil,
                               handler: @escaping (String?, Error?) -> Void)
     {
-        guard let nativeChannel = nativeChannel else {
+        guard let nativeChannel else {
             Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
             return
         }
@@ -609,7 +610,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func updateSenderOfferEncodings() {
-        guard let nativeChannel = nativeChannel else {
+        guard let nativeChannel else {
             Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
             return
         }
@@ -625,7 +626,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     private func createAndSendAnswer(offer: SignalingOffer) {
-        guard let nativeChannel = nativeChannel else {
+        guard let nativeChannel else {
             Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
             return
         }
@@ -647,7 +648,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                      offer: offer.sdp,
                      constraints: webRTCConfiguration.nativeConstraints,
                      initialOffer: true,
-                     mid: offer.mid) { sdp, error in
+                     mid: offer.mid)
+        { sdp, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create answer (\(error!.localizedDescription))")
@@ -669,7 +671,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         createAnswer(isSender: false,
                      offer: offer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create update-answer (\(error!.localizedDescription)")
@@ -698,7 +701,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         createAnswer(isSender: false,
                      offer: reOffer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create re-answer (\(error!.localizedDescription)")
@@ -732,7 +736,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         createAnswer(isSender: false,
                      offer: reOffer,
-                     constraints: webRTCConfiguration.nativeConstraints) { answer, error in
+                     constraints: webRTCConfiguration.nativeConstraints)
+        { answer, error in
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create re-answer: error => (\(error!.localizedDescription)")
@@ -756,7 +761,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 return
             }
 
-            if let data = data {
+            if let data {
                 let ok = dataChannel.send(data)
                 if !ok {
                     Logger.error(type: .peerChannel,
@@ -831,7 +836,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 }
             }
 
-            if let mediaChannel = mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
+            if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
                 onDataChannel(mediaChannel)
             }
         case let .redirect(redirect):
@@ -879,7 +884,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     private func basicDisconnect(error: Error?, reason: DisconnectReason) {
         Logger.debug(type: .peerChannel, message: "try disconnecting: error => \(String(describing: error != nil ? error?.localizedDescription : "nil")), reason => \(reason)")
-        if let error = error {
+        if let error {
             Logger.error(type: .peerChannel,
                          message: "error: \(error.localizedDescription)")
         }
@@ -985,7 +990,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                          message: "failed to encode \(message.typeName()) message to json: error => (\(error.localizedDescription)")
         }
 
-        if let data = data {
+        if let data {
             let ok = dataChannel.send(data)
             if !ok {
                 Logger.error(type: .peerChannel, message: "failed to send \(message.typeName()) message over DataChannel")
@@ -1123,7 +1128,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }.first ?? nil
         let compress = dataChannelSetting?["compress"] as? Bool ?? false
 
-        guard let mediaChannel = mediaChannel else {
+        guard let mediaChannel else {
             Logger.warn(type: .peerChannel, message: "mediaChannel is unavailable")
             return
         }
