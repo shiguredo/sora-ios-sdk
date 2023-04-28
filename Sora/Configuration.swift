@@ -342,8 +342,13 @@ public struct Configuration {
  転送フィルターのルールのフィールドの設定です。
  */
 public enum ForwardingFilterRuleField: String, Codable {
+    /// connection_id
     case connectionId = "connection_id"
+
+    /// client_id
     case clientId = "client_id"
+
+    /// kind
     case kind
 }
 
@@ -351,7 +356,10 @@ public enum ForwardingFilterRuleField: String, Codable {
  転送フィルターのルールの演算子の設定です。
  */
 public enum ForwardingFilterRuleOperator: String, Codable {
+    /// is_in
     case isIn = "is_in"
+
+    /// is_not_in
     case isNotIn = "is_not_in"
 }
 
@@ -359,10 +367,22 @@ public enum ForwardingFilterRuleOperator: String, Codable {
  転送フィルターのルールの設定です。
  */
 public struct ForwardingFilterRule: Codable {
+    /// field
     public let field: ForwardingFilterRuleField
+
+    /// operator
     public let `operator`: ForwardingFilterRuleOperator
+
+    /// values
     public let values: [String]
 
+    /**
+     初期化します。
+
+     - parameter field: field
+     - parameter operator: operator
+     - parameter values: values
+     */
     public init(field: ForwardingFilterRuleField,
                 operator: ForwardingFilterRuleOperator,
                 values: [String])
@@ -377,7 +397,10 @@ public struct ForwardingFilterRule: Codable {
  転送フィルターのアクションの設定です。
  */
 public enum ForwardingFilterAction: String, Codable {
+    /// block
     case block
+
+    /// allow
     case allow
 }
 
@@ -385,9 +408,18 @@ public enum ForwardingFilterAction: String, Codable {
  転送フィルターに関する設定です。
  */
 public struct ForwardingFilter: Codable {
+    /// action
     public let action: ForwardingFilterAction
+
+    /// rules
     public let rules: [[ForwardingFilterRule]]
 
+    /**
+     初期化します。
+
+     - parameter action: action
+     - parameter rules: rules
+     */
     public init(action: ForwardingFilterAction, rules: [[ForwardingFilterRule]]) {
         self.action = action
         self.rules = rules
