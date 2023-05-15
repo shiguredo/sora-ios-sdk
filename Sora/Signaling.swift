@@ -412,6 +412,9 @@ public struct SignalingOffer {
         /// 映像解像度を送信前に下げる度合
         public let scaleResolutionDownBy: Double?
 
+        /// scalability mode
+        public let scalabilityMode: String?
+
         /// RTP エンコーディングに関するパラメーター
         public var rtpEncodingParameters: RTCRtpEncodingParameters {
             let params = RTCRtpEncodingParameters()
@@ -425,6 +428,7 @@ public struct SignalingOffer {
             if let value = scaleResolutionDownBy {
                 params.scaleResolutionDownBy = NSNumber(value: value)
             }
+            params.scalabilityMode = scalabilityMode
             return params
         }
     }
@@ -964,6 +968,7 @@ extension SignalingOffer.Encoding: Codable {
         case maxBitrate
         case maxFramerate
         case scaleResolutionDownBy
+        case scalabilityMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -974,6 +979,8 @@ extension SignalingOffer.Encoding: Codable {
         maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
         scaleResolutionDownBy = try container.decodeIfPresent(Double.self,
                                                               forKey: .scaleResolutionDownBy)
+        scalabilityMode = try container.decodeIfPresent(String.self,
+            forKey: .scalabilityMode)
     }
 
     public func encode(to encoder: Encoder) throws {

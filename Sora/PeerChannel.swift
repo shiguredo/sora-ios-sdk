@@ -1175,6 +1175,11 @@ extension RTCRtpSender {
                     oldEncoding.scaleResolutionDownBy = NSNumber(value: value)
                 }
 
+                if let value = encoding.scalabilityMode {
+                    Logger.debug(type: .peerChannel, message: "scalabilityMode: \(value)")
+                    oldEncoding.scalabilityMode = value;
+                }
+
                 break
             }
         }
