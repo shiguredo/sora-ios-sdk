@@ -1166,12 +1166,12 @@ extension RTCRtpSender {
                 }
 
                 if let value = encoding.maxBitrate {
-                    Logger.debug(type: .peerChannel, message: "maxBitrate: \(value))")
+                    Logger.debug(type: .peerChannel, message: "maxBitrate: \(value)")
                     oldEncoding.maxBitrateBps = NSNumber(value: value)
                 }
 
                 if let value = encoding.scaleResolutionDownBy {
-                    Logger.debug(type: .peerChannel, message: "scaleResolutionDownBy: \(value))")
+                    Logger.debug(type: .peerChannel, message: "scaleResolutionDownBy: \(value)")
                     oldEncoding.scaleResolutionDownBy = NSNumber(value: value)
                 }
 
