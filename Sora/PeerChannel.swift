@@ -568,9 +568,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             if isSender {
                 if initialOffer {
                     self.initializeSenderStream(mid: mid)
-                } else {
-                    self.updateSenderOfferEncodings()
                 }
+                self.updateSenderOfferEncodings()
             }
 
             Logger.debug(type: .peerChannel, message: "try creating native answer")
