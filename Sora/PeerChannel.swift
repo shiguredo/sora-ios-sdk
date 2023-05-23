@@ -1176,7 +1176,7 @@ extension RTCRtpSender {
 
                 if let value = encoding.scalabilityMode {
                     Logger.debug(type: .peerChannel, message: "scalabilityMode: \(value)")
-                    oldEncoding.scalabilityMode = value;
+                    oldEncoding.scalabilityMode = value
                 }
 
                 break

@@ -980,7 +980,7 @@ extension SignalingOffer.Encoding: Codable {
         scaleResolutionDownBy = try container.decodeIfPresent(Double.self,
                                                               forKey: .scaleResolutionDownBy)
         scalabilityMode = try container.decodeIfPresent(String.self,
-            forKey: .scalabilityMode)
+                                                        forKey: .scalabilityMode)
     }
 
     public func encode(to encoder: Encoder) throws {
