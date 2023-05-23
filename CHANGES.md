@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] WebRTC 114.5735.2.2 に上げる
+    - @szktty
 - [UPDATE] 転送フィルター機能を追加する
   - [ADD] `Configuration` に `forwardingFilter` を追加する
     - @szktty
