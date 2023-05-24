@@ -11,8 +11,12 @@
 
 ## develop
 
+- [UPDATE] WebRTC 114.5735.2.2 に上げる
+    - @szktty
 - [UPDATE] 転送フィルター機能を追加する
   - [ADD] `Configuration` に `forwardingFilter` を追加する
+    - @szktty
+- [CHANGE] サイマルキャストが VP9 / AV1 で動作しない事象を修正する
     - @szktty
 
 ## 2023.1.0
