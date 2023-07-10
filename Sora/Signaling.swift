@@ -906,15 +906,15 @@ extension SignalingConnect: Codable {
                 }
                 try videoContainer.encodeIfPresent(videoBitRate,
                                                    forKey: .bit_rate)
-                if let vp9Params = vp9Params {
+                if let vp9Params {
                     let vp9ParamsEnc = videoContainer.superEncoder(forKey: .vp9_params)
                     try vp9Params.encode(to: vp9ParamsEnc)
                 }
-                if let av1Params = av1Params {
+                if let av1Params {
                     let av1ParamsEnc = videoContainer.superEncoder(forKey: .av1_params)
                     try av1Params.encode(to: av1ParamsEnc)
                 }
-                if let h264Params = h264Params {
+                if let h264Params {
                     let h264ParamsEnc = videoContainer.superEncoder(forKey: .h264_params)
                     try h264Params.encode(to: h264ParamsEnc)
                 }
