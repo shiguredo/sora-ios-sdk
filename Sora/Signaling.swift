@@ -372,6 +372,15 @@ public struct SignalingConnect {
 
     /// 転送フィルターの設定
     public var forwardingFilter: ForwardingFilter?
+
+    /// VP9 向け映像コーデックパラメーター
+    public var vp9Params: Encodable?
+
+    /// AV1 向け映像コーデックパラメーター
+    public var av1Params: Encodable?
+
+    /// H264 向け映像コーデックパラメーター
+    public var h264Params: Encodable?
 }
 
 /**
@@ -851,6 +860,9 @@ extension SignalingConnect: Codable {
     enum VideoCodingKeys: String, CodingKey {
         case codec_type
         case bit_rate
+        case vp9_params
+        case av1_params
+        case h264_params
     }
 
     enum AudioCodingKeys: String, CodingKey {
@@ -894,6 +906,18 @@ extension SignalingConnect: Codable {
                 }
                 try videoContainer.encodeIfPresent(videoBitRate,
                                                    forKey: .bit_rate)
+                if let vp9Params = vp9Params {
+                    let vp9ParamsEnc = videoContainer.superEncoder(forKey: .vp9_params)
+                    try vp9Params.encode(to: vp9ParamsEnc)
+                }
+                if let av1Params = av1Params {
+                    let av1ParamsEnc = videoContainer.superEncoder(forKey: .av1_params)
+                    try av1Params.encode(to: av1ParamsEnc)
+                }
+                if let h264Params = h264Params {
+                    let h264ParamsEnc = videoContainer.superEncoder(forKey: .h264_params)
+                    try h264Params.encode(to: h264ParamsEnc)
+                }
             }
         } else {
             try container.encode(false, forKey: .video)

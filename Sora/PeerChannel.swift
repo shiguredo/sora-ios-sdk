@@ -319,7 +319,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
             audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
             redirect: redirect,
-            forwardingFilter: configuration.forwardingFilter
+            forwardingFilter: configuration.forwardingFilter,
+            vp9Params: configuration.videoVp9Params,
+            av1Params: configuration.videoAv1Params,
+            h264Params: configuration.videoH264Params
         )
 
         Logger.debug(type: .peerChannel, message: "send connect")

@@ -219,6 +219,15 @@ public struct Configuration {
     /// 転送フィルターの設定
     public var forwardingFilter: ForwardingFilter?
 
+    /// VP9 向け映像コーデックパラメーター
+    public var videoVp9Params: Encodable?
+
+    /// AV1 向け映像コーデックパラメーター
+    public var videoAv1Params: Encodable?
+
+    /// H264 向け映像コーデックパラメーター
+    public var videoH264Params: Encodable?
+
     // MARK: - イベントハンドラ
 
     /// WebSocket チャネルに関するイベントハンドラ
