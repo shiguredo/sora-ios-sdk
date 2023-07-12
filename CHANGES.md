@@ -16,6 +16,9 @@
 - [UPDATE] 転送フィルター機能を追加する
   - [ADD] `Configuration` に `forwardingFilter` を追加する
     - @szktty
+- [ADD] 映像コーデックパラメーターの設定を追加する
+    - `Configuration` に `videoVp9Params`, `videoAv1Params`, `videoH264Params` を追加する
+    - @miosakuma
 - [CHANGE] サイマルキャストが VP9 / AV1 で動作しない事象を修正する
     - @szktty
 
