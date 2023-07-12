@@ -11,6 +11,10 @@
 
 ## develop
 
+- [UPDATE] システム条件を変更する
+    - macOS 13.4.1 以降
+    - WebRTC SFU Sora 2023.1.0 以降
+    - @miosakuma
 - [UPDATE] WebRTC 114.5735.2.2 に上げる
     - @szktty
 - [ADD] 転送フィルター機能を追加する
