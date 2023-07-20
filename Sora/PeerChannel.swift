@@ -1,12 +1,6 @@
 import Foundation
 import WebRTC
 
-/**
- ピアチャネルのイベントハンドラです。
- */
-@available(*, unavailable, message: "MediaChannelHandlers を利用してください。")
-public class PeerChannelHandlers {}
-
 final class PeerChannelInternalHandlers {
     /// 接続解除時に呼ばれるクロージャー
     var onDisconnect: ((Error?, DisconnectReason) -> Void)?
@@ -274,15 +268,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         var role: SignalingRole
         var multistream = configuration.multistreamEnabled || configuration.spotlightEnabled == .enabled
         switch configuration.role {
-        case .publisher, .sendonly:
+        case .sendonly:
             role = .sendonly
-        case .subscriber, .recvonly:
+        case .recvonly:
             role = .recvonly
-        case .group, .sendrecv:
+        case .sendrecv:
             role = .sendrecv
-            multistream = true
-        case .groupSub:
-            role = .recvonly
             multistream = true
         }
 

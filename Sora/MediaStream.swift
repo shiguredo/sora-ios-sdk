@@ -14,22 +14,6 @@ public enum MediaStreamAudioVolume {
 
 /// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
-    /// このプロパティは onSwitchVideo に置き換えられました。
-    @available(*, deprecated, renamed: "onSwitchVideo",
-               message: "このプロパティは onSwitchVideo に置き換えられました。")
-    public var onSwitchVideoHandler: ((_ isEnabled: Bool) -> Void)? {
-        get { onSwitchVideo }
-        set { onSwitchVideo = newValue }
-    }
-
-    /// このプロパティは onSwitchAudio に置き換えられました。
-    @available(*, deprecated, renamed: "onSwitchAudio",
-               message: "このプロパティは onSwitchAudio に置き換えられました。")
-    public var onSwitchAudioHandler: ((_ isEnabled: Bool) -> Void)? {
-        get { onSwitchAudio }
-        set { onSwitchAudio = newValue }
-    }
-
     /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
     public var onSwitchVideo: ((_ isEnabled: Bool) -> Void)?
 

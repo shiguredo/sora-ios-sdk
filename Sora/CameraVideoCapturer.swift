@@ -141,13 +141,6 @@ public final class CameraVideoCapturer {
         device.position
     }
 
-    /// 使用中のカメラの位置に対応するデバイス
-    /// captureDevice に変更されました
-    @available(*, deprecated, renamed: "captureDevice")
-    public var currentCameraDevice: AVCaptureDevice? {
-        device
-    }
-
     /// 使用中のデバイス
     public var device: AVCaptureDevice
 
@@ -314,51 +307,6 @@ public final class CameraVideoCapturer {
                 completionHandler(nil)
             }
         }
-    }
-
-    // MARK: - 廃止された API
-
-    /// シングルトンインスタンス
-    /// shared は廃止されました。
-    @available(*, unavailable, message: "shared は廃止されました。")
-    public static var shared: CameraVideoCapturer?
-
-    /// 利用可能なデバイスのリスト
-    /// 名称が devices に変更されました
-    @available(*, unavailable, renamed: "devices")
-    public static var captureDevices: [AVCaptureDevice] { RTCCameraVideoCapturer.captureDevices() }
-
-    /// 指定したカメラ位置にマッチした最初のデバイスを返します。
-    /// 名称が device に変更されました
-    @available(*, unavailable, renamed: "device")
-    public static func captureDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-        nil
-    }
-
-    /// `true` であれば接続解除時にカメラを停止します。
-    /// 廃止されました。
-    @available(*, unavailable, message: "廃止されました")
-    public var canStop: Bool = false
-
-    /// :nodoc:
-    @available(*, unavailable, message: "suitableFrameRate は廃止されました。 maxFramerate を利用してください。")
-    public static func suitableFrameRate(for format: AVCaptureDevice.Format, frameRate: Int) -> Int? {
-        nil
-    }
-
-    /// カメラの設定
-    /// 廃止されました
-    @available(*, unavailable, message: "settings は廃止されました。")
-    public private(set) var settings: Any?
-
-    /// `true` であれば接続解除時にカメラを停止します。
-    @available(*, unavailable, message: "stopWhenDone は廃止されました。")
-    public private(set) var stopWhenDone: Bool = false
-
-    /// :nodoc:
-    @available(*, unavailable, message: "suitableFormat は廃止されました。 format を利用してください。")
-    public static func suitableFormat(for device: AVCaptureDevice, resolution: Any) -> AVCaptureDevice.Format? {
-        nil
     }
 }
 

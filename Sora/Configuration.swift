@@ -71,10 +71,6 @@ public struct Configuration {
         case disabled
     }
 
-    /// サーバーの URL
-    @available(*, unavailable, message: "url は廃止されました。 urlCandidates を利用してください。")
-    public var url: Any?
-
     /// シグナリングに利用する URL の候補
     public var urlCandidates: [URL]
 
@@ -95,8 +91,8 @@ public struct Configuration {
     /// :nodoc:
     var isMultistream: Bool {
         switch role {
-        case .group, .groupSub:
-            return true
+        /// case .group, .groupSub:
+        ///    return true
         default:
             return multistreamEnabled
         }
@@ -105,7 +101,7 @@ public struct Configuration {
     /// :nodoc:
     var isSender: Bool {
         switch role {
-        case .publisher, .group, .sendonly, .sendrecv:
+        case .sendonly, .sendrecv:
             return true
         default:
             return false
@@ -123,11 +119,6 @@ public struct Configuration {
 
     /// 映像ビットレート。デフォルトは無指定です。
     public var videoBitRate: Int?
-
-    /// 映像キャプチャーの種別。
-    /// 廃止されました。
-    @available(*, unavailable, message: "videoCapturerDevice は廃止されました。")
-    public var videoCapturerDevice: VideoCapturerDevice?
 
     /// カメラの設定
     public var cameraSettings = CameraSettings.default
@@ -156,30 +147,6 @@ public struct Configuration {
     /// スポットライトの可否
     /// 詳しくは Sora のスポットライト機能を参照してください。
     public var spotlightEnabled: Spotlight = .disabled
-
-    /// スポットライトの対象人数
-    @available(*, deprecated, renamed: "spotlightNumber",
-               message: "このプロパティは spotlightNumber に置き換えられました。")
-    public var spotlight: Int? {
-        get {
-            spotlightNumber
-        }
-        set {
-            spotlightNumber = newValue
-        }
-    }
-
-    /// スポットライトの対象人数
-    @available(*, deprecated, renamed: "spotlightNumber",
-               message: "このプロパティは spotlightNumber に置き換えられました。")
-    public var activeSpeakerLimit: Int? {
-        get {
-            spotlightNumber
-        }
-        set {
-            spotlightNumber = newValue
-        }
-    }
 
     /// スポットライトの対象人数
     public var spotlightNumber: Int?
@@ -233,43 +200,8 @@ public struct Configuration {
     /// WebSocket チャネルに関するイベントハンドラ
     public var webSocketChannelHandlers = WebSocketChannelHandlers()
 
-    /// シグナリングチャネルに関するイベントハンドラ
-    @available(*, unavailable, message: "廃止されました。 mediaChannelHandlers を利用してください。")
-    public var signalingChannelHandlers = SignalingChannelHandlers()
-
-    /// ピアチャネルに関するイベントハンドラ
-    @available(*, unavailable, message: "廃止されました。 mediaChannelHandlers を利用してください。")
-    public var peerChannelHandlers = PeerChannelHandlers()
-
     /// メディアチャネルに関するイベントハンドラ
     public var mediaChannelHandlers = MediaChannelHandlers()
-
-    // MARK: - 接続チャネルに関する設定
-
-    /**
-     生成されるシグナリングチャネルの型。
-     何も指定しなければデフォルトのシグナリングチャネルが生成されます。
-     */
-    @available(*, unavailable, message: "signalingChannelType は廃止されました。")
-    public var signalingChannelType: Any?
-
-    /**
-     生成される WebSocket チャネルの型。
-     何も指定しなければデフォルトの WebSocket チャネルが生成されます。
-     */
-    @available(*, unavailable, message: "webSocketChannelType は廃止されました。")
-    public var webSocketChannelType: WebSocketChannel.Type?
-
-    /**
-     生成されるピアチャネルの型。
-     何も指定しなければデフォルトのピアチャネルが生成されます。
-     */
-    @available(*, unavailable, message: "peerChannelType は廃止されました。")
-    public var peerChannelType: Any?
-
-    /// :nodoc:
-    @available(*, unavailable, message: "allowsURLSessionWebSocketChannel は廃止されました。")
-    public var allowsURLSessionWebSocketChannel: Bool = true
 
     // MARK: パブリッシャーに関する設定
 
@@ -284,30 +216,6 @@ public struct Configuration {
     /// パブリッシャーの音声トラックの ID です。
     /// 通常、指定する必要はありません。
     public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
-
-    // MARK: - インスタンスの生成
-
-    /**
-     このイニシャライザーは ``init(url:channelId:role:multistreamEnabled:)`` に置き換えられました。
-     以降はマルチストリームの可否を明示的に指定してください。
-     このイニシャライザーはマルチストリームを無効にして初期化します。
-
-     - parameter url: サーバーの URL
-     - parameter channelId: チャネル ID
-     - parameter role: ロール
-     */
-    ///
-    @available(*, deprecated, renamed: "init(url:channelId:role:multistreamEnabled:)",
-               message: "このイニシャライザーは init(url:channelId:role:multistreamEnabled:) に置き換えられました。")
-    public init(url: URL,
-                channelId: String,
-                role: Role)
-    {
-        urlCandidates = [url]
-        self.channelId = channelId
-        self.role = role
-        multistreamEnabled = false
-    }
 
     /**
      初期化します。

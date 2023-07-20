@@ -3,46 +3,6 @@ import WebRTC
 
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
-    /// このプロパティは onConnect に置き換えられました。
-    @available(*, deprecated, renamed: "onConnect",
-               message: "このプロパティは onConnect に置き換えられました。")
-    public var onConnectHandler: ((Error?) -> Void)? {
-        get { onConnect }
-        set { onConnect = newValue }
-    }
-
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onDisconnect",
-               message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((Error?) -> Void)? {
-        get { onDisconnect }
-        set { onDisconnect = newValue }
-    }
-
-    /// このプロパティは onAddStream に置き換えられました。
-    @available(*, deprecated, renamed: "onAddStream",
-               message: "このプロパティは onAddStream に置き換えられました。")
-    public var onAddStreamHandler: ((MediaStream) -> Void)? {
-        get { onAddStream }
-        set { onAddStream = newValue }
-    }
-
-    /// このプロパティは onRemoveStream に置き換えられました。
-    @available(*, deprecated, renamed: "onRemoveStream",
-               message: "このプロパティは onRemoveStream に置き換えられました。")
-    public var onRemoveStreamHandler: ((MediaStream) -> Void)? {
-        get { onRemoveStream }
-        set { onRemoveStream = newValue }
-    }
-
-    /// このプロパティは onReceiveSignaling に置き換えられました。
-    @available(*, deprecated, renamed: "onReceiveSignaling",
-               message: "このプロパティは onReceiveSignaling に置き換えられました。")
-    public var onReceiveSignalingHandler: ((Signaling) -> Void)? {
-        get { onReceiveSignaling }
-        set { onReceiveSignaling = newValue }
-    }
-
     /// 接続成功時に呼ばれるクロージャー
     public var onConnect: ((Error?) -> Void)?
 
@@ -193,10 +153,6 @@ public final class MediaChannel {
 
     /// シグナリングチャネル
     let signalingChannel: SignalingChannel
-
-    /// ウェブソケットチャンネル
-    @available(*, unavailable, message: "webSocketChannel は廃止されました。")
-    public var webSocketChannel: Any?
 
     /// ピアチャネル
     var peerChannel: PeerChannel {
@@ -364,9 +320,9 @@ public final class MediaChannel {
             }
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
-            case let .notify(message):
-                weakSelf.publisherCount = message.publisherCount
-                weakSelf.subscriberCount = message.subscriberCount
+            /// case let .notify(message):
+            /// weakSelf.publisherCount = message.publisherCount
+            /// weakSelf.subscriberCount = message.subscriberCount
             default:
                 break
             }
