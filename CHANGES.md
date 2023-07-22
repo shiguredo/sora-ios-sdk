@@ -12,8 +12,8 @@
 ## develop
 
 - [CHANGE] `@available(*, unavailable)` は廃止になるため削除する
-    - Swift 5.9 以降 `@available(*, unavailable)` が禁止されました
-    - Sora iOS SDK では廃止となったプロパティに対して `@available(*, unavailable)` を付与していましたが、削除しました
+    - Swift 5.9 以降 `@available(*, unavailable)` が禁止された
+    - Sora iOS SDK では廃止となったプロパティに対して `@available(*, unavailable)` を付与していたが、削除した
     - @torikizi
 - [UPDATE] システム条件を変更する
     - macOS 13.4.1 以降
