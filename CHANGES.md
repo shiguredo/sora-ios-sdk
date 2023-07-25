@@ -18,7 +18,7 @@
     - Swift 5.8.1
     - CocoaPods 1.12.1 以降
     - @miosakuma
-- [UPDATE] WebRTC 115.5790.6.0 に上げる
+- [UPDATE] WebRTC 115.5790.7.0 に上げる
     - @szktty @miosakuma
 - [ADD] 転送フィルター機能を追加する
     - `Configuration` に `forwardingFilter` を追加する
