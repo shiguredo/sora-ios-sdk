@@ -26,7 +26,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     func connect(delegateQueue: OperationQueue?) {
         let configuration = URLSessionConfiguration.ephemeral
 
-        if let proxy = proxy {
+        if let proxy {
             configuration.connectionProxyDictionary = [
                 kCFNetworkProxiesHTTPProxy: proxy.host,
                 kCFNetworkProxiesHTTPPort: proxy.port,
@@ -70,7 +70,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         isClosing = true
         Logger.debug(type: .webSocketChannel, message: "[\(host)] disconnecting")
 
-        if let error = error {
+        if let error {
             Logger.debug(type: .webSocketChannel,
                          message: "[\(host)] error: \(error.localizedDescription)")
             internalHandlers.onDisconnectWithError?(self, error)
@@ -105,7 +105,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                 return
             }
 
-            if let error = error {
+            if let error {
                 Logger.debug(type: .webSocketChannel, message: "[\(weakSelf.host)] failed to send message")
                 weakSelf.disconnect(error: error)
             }
@@ -171,7 +171,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     }
 
     func reason2string(reason: Data?) -> String? {
-        guard let reason = reason else {
+        guard let reason else {
             return nil
         }
 

@@ -11,7 +11,27 @@
 
 ## develop
 
-## 2023.1.0
+## 2023.2.0
+
+- [UPDATE] システム条件を変更する
+    - macOS 13.4.1 以降
+    - WebRTC SFU Sora 2023.2.0 以降
+    - Xcode 14.3.1
+    - Swift 5.8.1
+    - CocoaPods 1.12.1 以降
+    - @miosakuma
+- [UPDATE] WebRTC 115.5790.7.0 に上げる
+    - @szktty @miosakuma
+- [ADD] 転送フィルター機能を追加する
+    - `Configuration` に `forwardingFilter` を追加する
+    - @szktty
+- [ADD] 映像コーデックパラメーターの設定を追加する
+    - `Configuration` に `videoVp9Params`, `videoAv1Params`, `videoH264Params` を追加する
+    - @miosakuma
+- [ADD] サイマルキャストを VP9 / AV1 に対応する
+    - @szktty
+
+## 2023.2.0
 
 - [UPDATE] WebRTC 112.5615.1.0 に上げる
     - @miosakuma

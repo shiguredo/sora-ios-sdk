@@ -369,6 +369,18 @@ public struct SignalingConnect {
 
     /// type: redicret 受信後の再接続
     public var redirect: Bool?
+
+    /// 転送フィルターの設定
+    public var forwardingFilter: ForwardingFilter?
+
+    /// VP9 向け映像コーデックパラメーター
+    public var vp9Params: Encodable?
+
+    /// AV1 向け映像コーデックパラメーター
+    public var av1Params: Encodable?
+
+    /// H264 向け映像コーデックパラメーター
+    public var h264Params: Encodable?
 }
 
 /**
@@ -409,6 +421,9 @@ public struct SignalingOffer {
         /// 映像解像度を送信前に下げる度合
         public let scaleResolutionDownBy: Double?
 
+        /// scalability mode
+        public let scalabilityMode: String?
+
         /// RTP エンコーディングに関するパラメーター
         public var rtpEncodingParameters: RTCRtpEncodingParameters {
             let params = RTCRtpEncodingParameters()
@@ -422,6 +437,7 @@ public struct SignalingOffer {
             if let value = scaleResolutionDownBy {
                 params.scaleResolutionDownBy = NSNumber(value: value)
             }
+            params.scalabilityMode = scalabilityMode
             return params
         }
     }
@@ -703,21 +719,21 @@ extension Signaling: Codable {
         let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "offer":
-            self = .offer(try SignalingOffer(from: decoder))
+            self = try .offer(SignalingOffer(from: decoder))
         case "update":
-            self = .update(try SignalingUpdate(from: decoder))
+            self = try .update(SignalingUpdate(from: decoder))
         case "notify":
-            self = .notify(try SignalingNotify(from: decoder))
+            self = try .notify(SignalingNotify(from: decoder))
         case "ping":
-            self = .ping(try SignalingPing(from: decoder))
+            self = try .ping(SignalingPing(from: decoder))
         case "push":
-            self = .push(try SignalingPush(from: decoder))
+            self = try .push(SignalingPush(from: decoder))
         case "re-offer":
-            self = .reOffer(try SignalingReOffer(from: decoder))
+            self = try .reOffer(SignalingReOffer(from: decoder))
         case "switched":
-            self = .switched(try SignalingSwitched(from: decoder))
+            self = try .switched(SignalingSwitched(from: decoder))
         case "redirect":
-            self = .redirect(try SignalingRedirect(from: decoder))
+            self = try .redirect(SignalingRedirect(from: decoder))
         default:
             throw SoraError.unknownSignalingMessageType(type: type)
         }
@@ -838,11 +854,15 @@ extension SignalingConnect: Codable {
         case data_channels
         case audio_streaming_language_code
         case redirect
+        case forwarding_filter
     }
 
     enum VideoCodingKeys: String, CodingKey {
         case codec_type
         case bit_rate
+        case vp9_params
+        case av1_params
+        case h264_params
     }
 
     enum AudioCodingKeys: String, CodingKey {
@@ -874,9 +894,10 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
         try container.encodeIfPresent(audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
         try container.encodeIfPresent(redirect, forKey: .redirect)
+        try container.encodeIfPresent(forwardingFilter, forKey: .forwarding_filter)
 
         if videoEnabled {
-            if videoCodec != .default || videoBitRate != nil {
+            if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil || h264Params != nil {
                 var videoContainer = container
                     .nestedContainer(keyedBy: VideoCodingKeys.self,
                                      forKey: .video)
@@ -885,6 +906,18 @@ extension SignalingConnect: Codable {
                 }
                 try videoContainer.encodeIfPresent(videoBitRate,
                                                    forKey: .bit_rate)
+                if let vp9Params {
+                    let vp9ParamsEnc = videoContainer.superEncoder(forKey: .vp9_params)
+                    try vp9Params.encode(to: vp9ParamsEnc)
+                }
+                if let av1Params {
+                    let av1ParamsEnc = videoContainer.superEncoder(forKey: .av1_params)
+                    try av1Params.encode(to: av1ParamsEnc)
+                }
+                if let h264Params {
+                    let h264ParamsEnc = videoContainer.superEncoder(forKey: .h264_params)
+                    try h264Params.encode(to: h264ParamsEnc)
+                }
             }
         } else {
             try container.encode(false, forKey: .video)
@@ -959,6 +992,7 @@ extension SignalingOffer.Encoding: Codable {
         case maxBitrate
         case maxFramerate
         case scaleResolutionDownBy
+        case scalabilityMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -969,6 +1003,8 @@ extension SignalingOffer.Encoding: Codable {
         maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
         scaleResolutionDownBy = try container.decodeIfPresent(Double.self,
                                                               forKey: .scaleResolutionDownBy)
+        scalabilityMode = try container.decodeIfPresent(String.self,
+                                                        forKey: .scalabilityMode)
     }
 
     public func encode(to encoder: Encoder) throws {

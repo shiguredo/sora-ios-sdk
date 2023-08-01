@@ -43,7 +43,7 @@ public struct Proxy: CustomStringConvertible {
         self.username = username
         self.password = password
 
-        if let agent = agent {
+        if let agent {
             self.agent = agent
         }
     }
@@ -216,6 +216,18 @@ public struct Configuration {
     /// プロキシに関する設定
     public var proxy: Proxy?
 
+    /// 転送フィルターの設定
+    public var forwardingFilter: ForwardingFilter?
+
+    /// VP9 向け映像コーデックパラメーター
+    public var videoVp9Params: Encodable?
+
+    /// AV1 向け映像コーデックパラメーター
+    public var videoAv1Params: Encodable?
+
+    /// H264 向け映像コーデックパラメーター
+    public var videoH264Params: Encodable?
+
     // MARK: - イベントハンドラ
 
     /// WebSocket チャネルに関するイベントハンドラ
@@ -332,5 +344,93 @@ public struct Configuration {
         self.channelId = channelId
         self.role = role
         self.multistreamEnabled = multistreamEnabled
+    }
+}
+
+/**
+ 転送フィルターのルールのフィールドの設定です。
+ */
+public enum ForwardingFilterRuleField: String, Codable {
+    /// connection_id
+    case connectionId = "connection_id"
+
+    /// client_id
+    case clientId = "client_id"
+
+    /// kind
+    case kind
+}
+
+/**
+ 転送フィルターのルールの演算子の設定です。
+ */
+public enum ForwardingFilterRuleOperator: String, Codable {
+    /// is_in
+    case isIn = "is_in"
+
+    /// is_not_in
+    case isNotIn = "is_not_in"
+}
+
+/**
+ 転送フィルターのルールの設定です。
+ */
+public struct ForwardingFilterRule: Codable {
+    /// field
+    public let field: ForwardingFilterRuleField
+
+    /// operator
+    public let `operator`: ForwardingFilterRuleOperator
+
+    /// values
+    public let values: [String]
+
+    /**
+     初期化します。
+
+     - parameter field: field
+     - parameter operator: operator
+     - parameter values: values
+     */
+    public init(field: ForwardingFilterRuleField,
+                operator: ForwardingFilterRuleOperator,
+                values: [String])
+    {
+        self.field = field
+        self.operator = `operator`
+        self.values = values
+    }
+}
+
+/**
+ 転送フィルターのアクションの設定です。
+ */
+public enum ForwardingFilterAction: String, Codable {
+    /// block
+    case block
+
+    /// allow
+    case allow
+}
+
+/**
+ 転送フィルターに関する設定です。
+ */
+public struct ForwardingFilter: Codable {
+    /// action
+    public let action: ForwardingFilterAction
+
+    /// rules
+    public let rules: [[ForwardingFilterRule]]
+
+    /**
+     初期化します。
+
+     - parameter action: action
+     - parameter rules: rules
+     */
+    public init(action: ForwardingFilterAction, rules: [[ForwardingFilterRule]]) {
+        self.action = action
+        self.rules = rules
     }
 }

@@ -51,7 +51,7 @@ extension SoraError: LocalizedError {
             return "Connection is busy (\(reason))"
         case let .webSocketClosed(statusCode: statusCode, reason: reason):
             var desc = "WebSocket is closed (\(statusCode.intValue()) "
-            if let reason = reason {
+            if let reason {
                 desc.append(reason)
             } else {
                 desc.append("Unknown reason")

@@ -11,7 +11,7 @@ public enum Utilities {
         var chars: [String] = []
         chars.reserveCapacity(length)
         for _ in 0 ..< length {
-            let index = arc4random_uniform(UInt32(Utilities.randomBaseChars.count))
+            let index = UInt32.random(in: 0 ..< UInt32(Utilities.randomBaseChars.count))
             chars.append(randomBaseChars[Int(index)])
         }
         return chars.joined()

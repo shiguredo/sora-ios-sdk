@@ -59,7 +59,7 @@ class NativePeerChannelFactory {
                                  proxy: Proxy? = nil,
                                  delegate: RTCPeerConnectionDelegate?) -> RTCPeerConnection?
     {
-        if let proxy = proxy {
+        if let proxy {
             return nativeFactory.peerConnection(with: configuration.nativeValue,
                                                 constraints: constraints.nativeValue,
                                                 certificateVerifier: nil,
