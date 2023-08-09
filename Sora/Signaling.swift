@@ -1081,10 +1081,6 @@ extension SignalingNotify: Codable {
         connectionTime = try container.decodeIfPresent(Int.self, forKey: .minutes)
         connectionCount =
             try container.decodeIfPresent(Int.self, forKey: .channel_connections)
-        /// publisherCount =
-        ///    try container.decodeIfPresent(Int.self, forKey: .channel_upstream_connections)
-        /// subscriberCount =
-        ///    try container.decodeIfPresent(Int.self, forKey: .channel_downstream_connections)
         channelSendonlyConnections =
             try container.decodeIfPresent(Int.self, forKey: .channel_sendonly_connections)
         channelRecvonlyConnections =

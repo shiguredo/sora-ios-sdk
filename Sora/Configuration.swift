@@ -91,8 +91,6 @@ public struct Configuration {
     /// :nodoc:
     var isMultistream: Bool {
         switch role {
-        /// case .group, .groupSub:
-        ///    return true
         default:
             return multistreamEnabled
         }

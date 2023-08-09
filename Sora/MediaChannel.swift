@@ -320,9 +320,6 @@ public final class MediaChannel {
             }
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
-            /// case let .notify(message):
-            /// weakSelf.publisherCount = message.publisherCount
-            /// weakSelf.subscriberCount = message.subscriberCount
             default:
                 break
             }
