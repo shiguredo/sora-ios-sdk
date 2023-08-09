@@ -15,14 +15,17 @@
     - Swift 5.9 以降 `@available(*, unavailable)` が禁止された
     - Sora iOS SDK では廃止となったプロパティに対して `@available(*, unavailable)` を付与していたが、削除した
     - @torikizi
+
+## 2023.2.0
+
 - [UPDATE] システム条件を変更する
     - macOS 13.4.1 以降
-    - WebRTC SFU Sora 2023.1.0 以降
+    - WebRTC SFU Sora 2023.2.0 以降
     - Xcode 14.3.1
     - Swift 5.8.1
     - CocoaPods 1.12.1 以降
     - @miosakuma
-- [UPDATE] WebRTC 115.5790.6.0 に上げる
+- [UPDATE] WebRTC 115.5790.7.0 に上げる
     - @szktty @miosakuma
 - [ADD] 転送フィルター機能を追加する
     - `Configuration` に `forwardingFilter` を追加する

@@ -805,7 +805,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(forwardingFilter, forKey: .forwarding_filter)
 
         if videoEnabled {
-            if videoCodec != .default || videoBitRate != nil {
+            if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil || h264Params != nil {
                 var videoContainer = container
                     .nestedContainer(keyedBy: VideoCodingKeys.self,
                                      forKey: .video)
