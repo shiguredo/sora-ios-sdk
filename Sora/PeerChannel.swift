@@ -107,7 +107,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     var bundleId: String?
     var connectionId: String?
 
-    var onConnectHandler: ((Error?) -> Void)?
+    var onConnect: ((Error?) -> Void)?
 
     var isAudioInputInitialized: Bool = false
 
@@ -165,7 +165,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
         // このロックは finishConnecting() で解除される
         lock.lock()
-        onConnectHandler = handler
+        onConnect = handler
 
         // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
         // また、スポットライトはサイマルキャストを利用しているため、同様に設定が必要になる
@@ -227,8 +227,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         if let error {
             Logger.error(type: .peerChannel,
                          message: "failed connecting to signaling channel (\(error.localizedDescription))")
-            onConnectHandler?(error)
-            onConnectHandler = nil
+            onConnect?(error)
+            onConnect = nil
             return
         }
 
@@ -867,10 +867,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "native receivers = \(nativeChannel?.receivers.count ?? 0)")
 
-        if onConnectHandler != nil {
+        if onConnect != nil {
             Logger.debug(type: .peerChannel, message: "call connect(handler:)")
-            onConnectHandler!(nil)
-            onConnectHandler = nil
+            onConnect!(nil)
+            onConnect = nil
         }
         lock.unlock()
     }
@@ -900,10 +900,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "call onDisconnect")
         internalHandlers.onDisconnect?(error, reason)
 
-        if onConnectHandler != nil {
+        if onConnect != nil {
             Logger.debug(type: .peerChannel, message: "call connect(handler:)")
-            onConnectHandler!(error)
-            onConnectHandler = nil
+            onConnect!(error)
+            onConnect = nil
         }
 
         Logger.debug(type: .peerChannel, message: "did disconnect")
