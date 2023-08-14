@@ -6,16 +6,6 @@ import Foundation
  シグナリングメッセージで使われます。
  */
 public enum SignalingRole: String {
-    /// この列挙子は sendonly に置き換えられました。
-    @available(*, deprecated, renamed: "sendonly",
-               message: "この列挙子は sendonly に置き換えられました。")
-    case upstream
-
-    /// この列挙子は recvonly に置き換えられました。
-    @available(*, deprecated, renamed: "recvonly",
-               message: "この列挙子は recvonly に置き換えられました。")
-    case downstream
-
     /// 送信のみ
     case sendonly
 
@@ -29,8 +19,6 @@ public enum SignalingRole: String {
 /**
  シグナリングチャネルのイベントハンドラです。
  */
-@available(*, unavailable, message: "MediaChannelHandlers を利用してください。")
-public class SignalingChannelHandlers {}
 
 class SignalingChannelInternalHandlers {
     /// 接続解除時に呼ばれるクロージャー

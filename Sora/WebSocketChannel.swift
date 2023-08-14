@@ -144,42 +144,8 @@ public final class WebSocketChannelHandlers {
     /// 初期化します。
     public init() {}
 
-    /// このプロパティは onReceive に置き換えられました。
-    @available(*, deprecated, renamed: "onReceive",
-               message: "このプロパティは onReceive に置き換えられました。")
-    public var onMessageHandler: ((WebSocketMessage) -> Void)? {
-        get { onReceive }
-        set { onReceive = newValue }
-    }
-
     /// メッセージ受信時に呼ばれるクロージャー
     public var onReceive: ((WebSocketMessage) -> Void)?
-
-    // MARK: - 廃止された API
-
-    /// onDisconnectHandler は廃止されました。
-    @available(*, unavailable, message: "onDisconnectHandler は廃止されました。")
-    public var onDisconnectHandler: ((Error?) -> Void)?
-
-    /// onPongHandler は廃止されました。
-    @available(*, unavailable, message: "onPongHandler は廃止されました。")
-    public var onPongHandler: ((Data?) -> Void)?
-
-    /// onSendHandler は廃止されました。
-    @available(*, unavailable, message: "onSendHandler は廃止されました。")
-    public var onSendHandler: ((WebSocketMessage) -> WebSocketMessage)?
-
-    /// 接続解除時に呼ばれるクロージャー
-    @available(*, unavailable, message: "onDisconnect は廃止されました。")
-    public var onDisconnect: ((Error?) -> Void)?
-
-    /// pong の送信時に呼ばれるクロージャー
-    @available(*, unavailable, message: "onPong は廃止されました。")
-    public var onPong: ((Data?) -> Void)?
-
-    /// メッセージ送信時に呼ばれるクロージャー
-    @available(*, unavailable, message: "onSend は廃止されました。")
-    public var onSend: ((WebSocketMessage) -> WebSocketMessage)?
 }
 
 final class WebSocketChannelInternalHandlers {
@@ -188,14 +154,3 @@ final class WebSocketChannelInternalHandlers {
     public var onReceive: ((WebSocketMessage) -> Void)?
     public init() {}
 }
-
-/**
- WebSocket による通信を行うチャネルの機能を定義したプロトコルです。
- デフォルトの実装は非公開 (`internal`) であり、
- 通信処理のカスタマイズはイベントハンドラでのみ可能です。
- ソースコードは公開していますので、実装の詳細はそちらを参照してください。
-
- WebSocket チャネルはシグナリングチャネル `SignalingChannel` により使用されます。
- */
-@available(*, unavailable, message: "WebSocketChannel プロトコルは廃止されました。")
-public protocol WebSocketChannel: AnyObject {}

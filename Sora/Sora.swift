@@ -4,38 +4,6 @@ import WebRTC
 
 /// `Sora` オブジェクトのイベントハンドラです。
 public final class SoraHandlers {
-    /// このプロパティは onConnect に置き換えられました。
-    @available(*, deprecated, renamed: "onConnect",
-               message: "このプロパティは onConnect に置き換えられました。")
-    public var onConnectHandler: ((MediaChannel?, Error?) -> Void)? {
-        get { onConnect }
-        set { onConnect = newValue }
-    }
-
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onDisconnect",
-               message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)? {
-        get { onDisconnect }
-        set { onDisconnect = newValue }
-    }
-
-    /// このプロパティは onAddMediaChannel に置き換えられました。
-    @available(*, deprecated, renamed: "onAddMediaChannel",
-               message: "このプロパティは onAddMediaChannel に置き換えられました。")
-    public var onAddMediaChannelHandler: ((MediaChannel) -> Void)? {
-        get { onAddMediaChannel }
-        set { onAddMediaChannel = newValue }
-    }
-
-    /// このプロパティは onRemoveMediaChannel に置き換えられました。
-    @available(*, deprecated, renamed: "onRemoveMediaChannel",
-               message: "このプロパティは onRemoveMediaChannel に置き換えられました。")
-    public var onRemoveMediaChannelHandler: ((MediaChannel) -> Void)? {
-        get { onRemoveMediaChannel }
-        set { onRemoveMediaChannel = newValue }
-    }
-
     /// 接続成功時に呼ばれるクロージャー
     public var onConnect: ((MediaChannel?, Error?) -> Void)?
 

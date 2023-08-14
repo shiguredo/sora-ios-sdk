@@ -25,8 +25,6 @@ public struct DeviceInfo {
     public static var current: DeviceInfo = .init(device: UIDevice.current,
                                                   machineName: currentMachineName())
 
-    @available(*, unavailable, message: "model は廃止されました。")
-    public let model: String = ""
     public let machineName: String
 
     public var description: String {
