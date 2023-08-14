@@ -15,6 +15,10 @@
     - Swift 5.9 以降 `@available(*, unavailable)` が禁止された
     - Sora iOS SDK では廃止となったプロパティに対して `@available(*, unavailable)` を付与していたが、削除した
     - @torikizi
+- [CHANGE] 廃止された `onConnectHandler` を `onConnect` に置き換える
+    - すでに廃止済みの `onConnectHandler` が残っていたので、`onConnect` に置き換えた
+    - `PeerChannel.swift` と `SignalingChannel.swift` 以外はすでに `onConnect` に置き換えていた
+    - @torikizi
 
 ## 2023.2.0
 
