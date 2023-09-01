@@ -61,7 +61,7 @@ class SignalingChannel {
     // また、 SignalingChannel で利用する WebSocket が決定した場合にも空になる
     var webSocketChannelCandidates: [URLSessionWebSocketChannel] = []
 
-    private var onConnectHandler: ((Error?) -> Void)?
+    private var onConnect: ((Error?) -> Void)?
 
     // WebSocket の接続を複数同時に試行する際の排他制御を行うためのキュー
     //
@@ -138,9 +138,9 @@ class SignalingChannel {
 
             weakSelf.state = .connected
 
-            if weakSelf.onConnectHandler != nil {
+            if weakSelf.onConnect != nil {
                 Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
-                weakSelf.onConnectHandler!(nil)
+                weakSelf.onConnect!(nil)
             }
         }
 
@@ -192,7 +192,7 @@ class SignalingChannel {
         }
 
         Logger.debug(type: .signalingChannel, message: "try connecting")
-        onConnectHandler = handler
+        onConnect = handler
         state = .connecting
 
         let urlCandidates = unique(urls: configuration.urlCandidates)
