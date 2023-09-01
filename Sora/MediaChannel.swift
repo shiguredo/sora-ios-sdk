@@ -132,14 +132,7 @@ public final class MediaChannel {
 
     /// 同チャネルに接続中のクライアントの数。
     /// サーバーから通知を受信可能であり、かつ接続中にのみ取得可能です。
-    public var connectionCount: Int? {
-        switch (publisherCount, subscriberCount) {
-        case let (.some(pub), .some(sub)):
-            return pub + sub
-        default:
-            return nil
-        }
-    }
+    public private(set) var connectionCount: Int?
 
     /// 同チャネルに接続中のクライアントのうち、パブリッシャーの数。
     /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
@@ -320,6 +313,18 @@ public final class MediaChannel {
             }
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
+            case let .notify(message):
+                // connectionCount, channelRecvonlyConnections, channelSendonlyConnections, channelSendrecvConnections
+                // 全てに値が入っていた時のみプロパティを更新する
+                if let connectionCount = message.connectionCount,
+                   let sendonlyConnections = message.channelSendonlyConnections,
+                   let recvonlyConnections = message.channelRecvonlyConnections,
+                   let sendrecvConnections = message.channelSendrecvConnections
+                {
+                    weakSelf.publisherCount = sendonlyConnections + sendrecvConnections
+                    weakSelf.subscriberCount = recvonlyConnections + sendrecvConnections
+                    weakSelf.connectionCount = connectionCount
+                } else {}
             default:
                 break
             }
