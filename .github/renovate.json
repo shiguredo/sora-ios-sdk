@@ -9,5 +9,6 @@
     "group:recommended",
     "group:allNonMajor",
     "schedule:weekly"
-  ]
+  ],
+  "dependencyDashboard": false
 }
