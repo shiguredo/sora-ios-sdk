@@ -23,6 +23,8 @@
     - すでに廃止済みの `onConnectHandler` が残っていたので、`onConnect` に置き換えた
     - `PeerChannel.swift` と `SignalingChannel.swift` 以外はすでに `onConnect` に置き換えていた
     - @torikizi
+- [UPDATE] WebRTC 116.5845.6.1 に上げる
+    - @miosakuma
 - [FIX] `MediaChannel` の `connectionCount`, `publisherCount`, `subscriberCount` に値が設定されない不具合を修正する
     - Sora のシグナリングメッセージから channel_upstream_connections, channel_downstream_connections が廃止された契機で値が設定されなくなっていた
     - Sora のシグナリングメッセージ、channel_sendrecv_connections, channel_sendonly_connections, channel_recvonly_connections, channel_connections を元に値を設定するよう修正

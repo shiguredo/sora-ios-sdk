@@ -277,16 +277,16 @@ public final class Sora {
                 if output == .speaker {
                     options = [options, .defaultToSpeaker]
                 }
-                try session.setCategory(category, options: options)
+                try session.setCategory(category, with: options)
                 try session.setMode(.default)
             case .videoChat:
-                try session.setCategory(.playAndRecord, options: options)
+                try session.setCategory(.playAndRecord, with: options)
                 try session.setMode(.videoChat)
             case let .voiceChat(output: output):
                 if output == .speaker {
                     options = [options, .defaultToSpeaker]
                 }
-                try session.setCategory(.playAndRecord, options: options)
+                try session.setCategory(.playAndRecord, with: options)
                 try session.setMode(.voiceChat)
                 if output == .speaker {
                     try session.overrideOutputAudioPort(.speaker)
@@ -392,18 +392,5 @@ public final class ConnectionTask {
             Logger.debug(type: .mediaChannel, message: "connection task completed")
             state = .completed
         }
-    }
-}
-
-/// :nodoc:
-extension RTCAudioSession {
-    func setCategory(_ category: AVAudioSession.Category,
-                     options: AVAudioSession.CategoryOptions = []) throws
-    {
-        try setCategory(category.rawValue, with: options)
-    }
-
-    func setMode(_ mode: AVAudioSession.Mode) throws {
-        try setMode(mode.rawValue)
     }
 }
