@@ -497,6 +497,9 @@ public struct SignalingRedirect {
     public var location: String
 }
 
+/**
+ "notify" シグナリングメッセージを表します。
+ */
 public struct SignalingNotify {
     // MARK: イベント情報
 
