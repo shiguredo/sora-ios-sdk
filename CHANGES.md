@@ -11,6 +11,27 @@
 
 ## develop
 
+## 2023.3.0
+
+- [CHANGE] `@available(*, unavailable)` は廃止になるため削除する
+    - Swift 5.9 以降 `@available(*, unavailable)` が禁止された
+    - Sora iOS SDK では廃止となったプロパティに対して `@available(*, unavailable)` を付与していたが、削除した
+    - @torikizi
+- [CHANGE] `@available(*, deprecated, ... )` としていた非推奨項目を削除する
+    - 非推奨であった項目について削除に移行する
+    - 移行方法については https://sora-ios-sdk.shiguredo.jp/ の移行ドキュメントに記載されている
+    - @torikizi
+- [CHANGE] 廃止された `onConnectHandler` を `onConnect` に置き換える
+    - すでに廃止済みの `onConnectHandler` が残っていたので、`onConnect` に置き換えた
+    - `PeerChannel.swift` と `SignalingChannel.swift` 以外はすでに `onConnect` に置き換えていた
+    - @torikizi
+- [UPDATE] WebRTC 116.5845.6.1 に上げる
+    - @miosakuma
+- [FIX] `MediaChannel` の `connectionCount`, `publisherCount`, `subscriberCount` に値が設定されない不具合を修正する
+    - Sora のシグナリングメッセージから channel_upstream_connections, channel_downstream_connections が廃止された契機で値が設定されなくなっていた
+    - Sora のシグナリングメッセージ、channel_sendrecv_connections, channel_sendonly_connections, channel_recvonly_connections, channel_connections を元に値を設定するよう修正
+    - @miosakuma
+
 ## 2023.2.0
 
 - [UPDATE] システム条件を変更する
@@ -31,7 +52,7 @@
 - [ADD] サイマルキャストを VP9 / AV1 に対応する
     - @szktty
 
-## 2023.2.0
+## 2023.1.0
 
 - [UPDATE] WebRTC 112.5615.1.0 に上げる
     - @miosakuma

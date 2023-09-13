@@ -4,38 +4,6 @@ import WebRTC
 
 /// `Sora` オブジェクトのイベントハンドラです。
 public final class SoraHandlers {
-    /// このプロパティは onConnect に置き換えられました。
-    @available(*, deprecated, renamed: "onConnect",
-               message: "このプロパティは onConnect に置き換えられました。")
-    public var onConnectHandler: ((MediaChannel?, Error?) -> Void)? {
-        get { onConnect }
-        set { onConnect = newValue }
-    }
-
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onDisconnect",
-               message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((MediaChannel, Error?) -> Void)? {
-        get { onDisconnect }
-        set { onDisconnect = newValue }
-    }
-
-    /// このプロパティは onAddMediaChannel に置き換えられました。
-    @available(*, deprecated, renamed: "onAddMediaChannel",
-               message: "このプロパティは onAddMediaChannel に置き換えられました。")
-    public var onAddMediaChannelHandler: ((MediaChannel) -> Void)? {
-        get { onAddMediaChannel }
-        set { onAddMediaChannel = newValue }
-    }
-
-    /// このプロパティは onRemoveMediaChannel に置き換えられました。
-    @available(*, deprecated, renamed: "onRemoveMediaChannel",
-               message: "このプロパティは onRemoveMediaChannel に置き換えられました。")
-    public var onRemoveMediaChannelHandler: ((MediaChannel) -> Void)? {
-        get { onRemoveMediaChannel }
-        set { onRemoveMediaChannel = newValue }
-    }
-
     /// 接続成功時に呼ばれるクロージャー
     public var onConnect: ((MediaChannel?, Error?) -> Void)?
 
@@ -309,16 +277,16 @@ public final class Sora {
                 if output == .speaker {
                     options = [options, .defaultToSpeaker]
                 }
-                try session.setCategory(category, options: options)
+                try session.setCategory(category, with: options)
                 try session.setMode(.default)
             case .videoChat:
-                try session.setCategory(.playAndRecord, options: options)
+                try session.setCategory(.playAndRecord, with: options)
                 try session.setMode(.videoChat)
             case let .voiceChat(output: output):
                 if output == .speaker {
                     options = [options, .defaultToSpeaker]
                 }
-                try session.setCategory(.playAndRecord, options: options)
+                try session.setCategory(.playAndRecord, with: options)
                 try session.setMode(.voiceChat)
                 if output == .speaker {
                     try session.overrideOutputAudioPort(.speaker)
@@ -424,18 +392,5 @@ public final class ConnectionTask {
             Logger.debug(type: .mediaChannel, message: "connection task completed")
             state = .completed
         }
-    }
-}
-
-/// :nodoc:
-extension RTCAudioSession {
-    func setCategory(_ category: AVAudioSession.Category,
-                     options: AVAudioSession.CategoryOptions = []) throws
-    {
-        try setCategory(category.rawValue, with: options)
-    }
-
-    func setMode(_ mode: AVAudioSession.Mode) throws {
-        try setMode(mode.rawValue)
     }
 }

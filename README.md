@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![libwebrtc](https://img.shields.io/badge/libwebrtc-115.5790-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5790)
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-116.5845-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/5845)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -36,6 +36,18 @@ Xcode と Swift のバージョンによっては、 CocoaPods で取得でき�
 ## ドキュメント
 
 [Sora iOS SDK ドキュメント — Sora iOS SDK](https://sora-ios-sdk.shiguredo.jp/)
+
+## 有償での優先実装が可能な機能一覧
+
+**詳細は Discord またはメールにてお問い合わせください**
+
+- オープンソースでの公開が前提
+- 可能であれば企業名の公開
+    - 公開が難しい場合は `企業名非公開` と書かせていただきます
+
+### 機能
+
+- 音声出力先変更機能
 
 ## ライセンス
 

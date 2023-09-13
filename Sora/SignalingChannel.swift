@@ -6,16 +6,6 @@ import Foundation
  シグナリングメッセージで使われます。
  */
 public enum SignalingRole: String {
-    /// この列挙子は sendonly に置き換えられました。
-    @available(*, deprecated, renamed: "sendonly",
-               message: "この列挙子は sendonly に置き換えられました。")
-    case upstream
-
-    /// この列挙子は recvonly に置き換えられました。
-    @available(*, deprecated, renamed: "recvonly",
-               message: "この列挙子は recvonly に置き換えられました。")
-    case downstream
-
     /// 送信のみ
     case sendonly
 
@@ -29,8 +19,6 @@ public enum SignalingRole: String {
 /**
  シグナリングチャネルのイベントハンドラです。
  */
-@available(*, unavailable, message: "MediaChannelHandlers を利用してください。")
-public class SignalingChannelHandlers {}
 
 class SignalingChannelInternalHandlers {
     /// 接続解除時に呼ばれるクロージャー
@@ -73,7 +61,7 @@ class SignalingChannel {
     // また、 SignalingChannel で利用する WebSocket が決定した場合にも空になる
     var webSocketChannelCandidates: [URLSessionWebSocketChannel] = []
 
-    private var onConnectHandler: ((Error?) -> Void)?
+    private var onConnect: ((Error?) -> Void)?
 
     // WebSocket の接続を複数同時に試行する際の排他制御を行うためのキュー
     //
@@ -150,9 +138,9 @@ class SignalingChannel {
 
             weakSelf.state = .connected
 
-            if weakSelf.onConnectHandler != nil {
+            if weakSelf.onConnect != nil {
                 Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
-                weakSelf.onConnectHandler!(nil)
+                weakSelf.onConnect!(nil)
             }
         }
 
@@ -204,7 +192,7 @@ class SignalingChannel {
         }
 
         Logger.debug(type: .signalingChannel, message: "try connecting")
-        onConnectHandler = handler
+        onConnect = handler
         state = .connecting
 
         let urlCandidates = unique(urls: configuration.urlCandidates)

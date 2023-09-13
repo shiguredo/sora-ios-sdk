@@ -33,7 +33,6 @@
 		9174A8951F73F90B00D586C4 /* AudioCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8941F73F90B00D586C4 /* AudioCodec.swift */; };
 		9174A8971F73F93B00D586C4 /* ICETransportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8961F73F93B00D586C4 /* ICETransportPolicy.swift */; };
 		9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */; };
-		9174A89B1F73F9EE00D586C4 /* CameraPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */; };
 		91756E211F90A87500B70C53 /* ConnectionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91756E201F90A87500B70C53 /* ConnectionState.swift */; };
 		91756E221F90ADE900B70C53 /* PeerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A19B8B1F19366B00A76852 /* PeerChannel.swift */; };
 		9177FF9C1F2E2D1600B4FA1A /* VideoCapturer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */; };
@@ -49,7 +48,6 @@
 		91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */; };
 		91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FD95741DCA06F700047BA9 /* RTC+Description.swift */; };
 		AD7227122716B5F100001A23 /* DataChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7227112716B5F100001A23 /* DataChannel.swift */; };
-		C5D3C7421F7CEB18004660F5 /* VideoCapturerDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -101,7 +99,6 @@
 		9174A8941F73F90B00D586C4 /* AudioCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCodec.swift; sourceTree = "<group>"; };
 		9174A8961F73F93B00D586C4 /* ICETransportPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICETransportPolicy.swift; sourceTree = "<group>"; };
 		9174A8981F73F9A200D586C4 /* TLSSecurityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSSecurityPolicy.swift; sourceTree = "<group>"; };
-		9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPosition.swift; sourceTree = "<group>"; };
 		91756E201F90A87500B70C53 /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
 		9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoCapturer.swift; sourceTree = "<group>"; };
 		918A38F71F30F49500D047BA /* ICEServerInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICEServerInfo.swift; sourceTree = "<group>"; };
@@ -120,7 +117,6 @@
 		91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoFrame.swift; sourceTree = "<group>"; };
 		91FD95741DCA06F700047BA9 /* RTC+Description.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "RTC+Description.swift"; sourceTree = "<group>"; };
 		AD7227112716B5F100001A23 /* DataChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataChannel.swift; sourceTree = "<group>"; };
-		C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCapturerDevice.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -185,7 +181,6 @@
 				9174A88E1F7395CA00D586C4 /* AspectRatio.swift */,
 				9174A8941F73F90B00D586C4 /* AudioCodec.swift */,
 				910444CE253EC6F400EA06BE /* AudioMode.swift */,
-				9174A89A1F73F9EE00D586C4 /* CameraPosition.swift */,
 				915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */,
 				9173595D1F2CCEBF00806F8B /* Configuration.swift */,
 				91756E201F90A87500B70C53 /* ConnectionState.swift */,
@@ -212,7 +207,6 @@
 				3591D8EF27032233000AD514 /* SoraDispatcher.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
 				9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */,
-				C5D3C7411F7CEB18004660F5 /* VideoCapturerDevice.swift */,
 				9174A8921F73F8CF00D586C4 /* VideoCodec.swift */,
 				91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */,
 				91B1D6451D75E11F00112A4E /* VideoRenderer.swift */,
@@ -397,7 +391,6 @@
 				91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */,
 				915CEC901F821A90006E45E2 /* CameraVideoCapturer.swift in Sources */,
 				91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */,
-				9174A89B1F73F9EE00D586C4 /* CameraPosition.swift in Sources */,
 				916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */,
 				9174A8951F73F90B00D586C4 /* AudioCodec.swift in Sources */,
 				91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */,
@@ -428,7 +421,6 @@
 				9174A8991F73F9A200D586C4 /* TLSSecurityPolicy.swift in Sources */,
 				9128A4A91F2A6CB100AC6B1E /* MediaStream.swift in Sources */,
 				9141AB641F4204C0007C4D1C /* ConnectionTimer.swift in Sources */,
-				C5D3C7421F7CEB18004660F5 /* VideoCapturerDevice.swift in Sources */,
 				916B0B992553D9620035B5F9 /* AudioMode.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -594,7 +586,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2023.2.0;
+				MARKETING_VERSION = 2023.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -628,7 +620,7 @@
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MARKETING_VERSION = 2023.2.0;
+				MARKETING_VERSION = 2023.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";

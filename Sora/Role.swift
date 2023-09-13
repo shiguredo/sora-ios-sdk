@@ -4,26 +4,6 @@ import Foundation
  接続するクライアントのロールを表します。
  */
 public enum Role {
-    /// この列挙子は sendonly に置き換えられました。
-    @available(*, deprecated, renamed: "sendonly",
-               message: "この列挙子は sendonly に置き換えられました。")
-    case publisher
-
-    /// この列挙子は recvonly に置き換えられました。
-    @available(*, deprecated, renamed: "recvonly",
-               message: "この列挙子は recvonly に置き換えられました。")
-    case subscriber
-
-    /// この列挙子は sendrecv に置き換えられました。
-    @available(*, deprecated, renamed: "sendrecv",
-               message: "この列挙子は sendrecv に置き換えられました。")
-    case group
-
-    /// この列挙子は廃止されました。マルチストリームで recvonly を指定してください。
-    @available(*, deprecated,
-               message: "この列挙子は廃止されました。マルチストリームで recvonly を指定してください。")
-    case groupSub
-
     /// 送信のみ
     case sendonly
 
@@ -36,11 +16,7 @@ public enum Role {
 
 private var roleTable: PairTable<String, Role> =
     PairTable(name: "Role",
-              pairs: [("publisher", .publisher),
-                      ("subscriber", .subscriber),
-                      ("group", .group),
-                      ("groupSub", .groupSub),
-                      ("sendonly", .sendonly),
+              pairs: [("sendonly", .sendonly),
                       ("recvonly", .recvonly),
                       ("sendrecv", .sendrecv)])
 

@@ -224,20 +224,6 @@ public enum SpotlightRid {
 }
 
 /**
- シグナリングに含まれるメタデータ (任意のデータ) を表します。
- サーバーから受信するシグナリングにメタデータが含まれる場合は、
- `decoder` プロパティに JSON デコーダーがセットされます。
- 受信したメタデータを任意のデータ型に変換するには、このデコーダーを使ってください。
- */
-@available(*, unavailable,
-           message: "SignalingMetadata を利用して、メタデータをデコードする方法は廃止されました。 Any? を任意の型にキャストしてデコードしてください。")
-public struct SignalingMetadata {}
-
-@available(*, unavailable, renamed: "SignalingNotifyMetadata",
-           message: "SignalingClientMetadata は SignalingNotifyMetadata に置き換えられました。")
-public struct SignalingClientMetadata {}
-
-/**
  シグナリングに含まれる、同チャネルに接続中のクライアントに関するメタデータ (任意のデータ) を表します。
  */
 public struct SignalingNotifyMetadata {
@@ -309,30 +295,6 @@ public struct SignalingConnect {
 
     /// スポットライトの可否
     public var spotlightEnabled: Configuration.Spotlight
-
-    /// スポットライトの対象人数
-    @available(*, deprecated, renamed: "spotlightNumber",
-               message: "このプロパティは spotlightNumber に置き換えられました。")
-    public var spotlight: Int? {
-        get {
-            spotlightNumber
-        }
-        set {
-            spotlightNumber = newValue
-        }
-    }
-
-    /// スポットライトの対象人数
-    @available(*, deprecated, renamed: "spotlightNumber",
-               message: "このプロパティは spotlightNumber に置き換えられました。")
-    public var activeSpeakerLimit: Int? {
-        get {
-            spotlightNumber
-        }
-        set {
-            spotlightNumber = newValue
-        }
-    }
 
     /// スポットライトの対象人数
     public var spotlightNumber: Int?
@@ -535,20 +497,6 @@ public struct SignalingRedirect {
     public var location: String
 }
 
-/**
- "notify" シグナリングメッセージで通知されるイベントの種別です。
- 詳細は Sora のドキュメントを参照してください。
- 廃止されました。
- */
-@available(*, unavailable, message: "SignalingNotifyEventType は廃止されました。")
-public enum SignalingNotifyEventType {}
-
-/// "notify" シグナリングメッセージを表します。
-///
-/// type:notify の event_type ごとに struct を定義するのではなく、 type: notify に対して1つの struct を定義しています。
-/// そのため、アクセスする際は eventType をチェックする必要があります。
-///
-/// 上記の理由により、この struct では、 eventType 以外のパラメーターを Optional にする必要があります。
 public struct SignalingNotify {
     // MARK: イベント情報
 
@@ -598,14 +546,6 @@ public struct SignalingNotify {
     /// 接続中のクライアントの数
     public var connectionCount: Int?
 
-    /// 接続中のパブリッシャーの数
-    @available(*, deprecated, message: "このプロパティは channelSendonlyConnections と channelSendrecvConnections に置き換えられました。")
-    public var publisherCount: Int?
-
-    /// 接続中のサブスクライバーの数
-    @available(*, deprecated, message: "このプロパティは channelRecvonlyConnections と channelSendrecvConnections に置き換えられました。")
-    public var subscriberCount: Int?
-
     /// 接続中の送信専用接続の数
     public var channelSendonlyConnections: Int?
 
@@ -627,36 +567,6 @@ public struct SignalingNotify {
     /// TURN が利用しているトランスポート層のプロトコル
     public var turnTransportType: String?
 }
-
-/**
- "notify" シグナリングメッセージのうち、次のイベントを表します。
-
- - `connection.created`
- - `connection.updated`
- - `connection.destroyed`
-
- このメッセージは接続の確立後、チャネルへの接続数に変更があるとサーバーから送信されます。
- 廃止されました。
- SignalingNotify を利用してください。
- */
-@available(*, unavailable, message: "SignalingNotifyConnection は廃止されました。  SignalingNotify を利用してください。")
-public struct SignalingNotifyConnection {}
-
-/**
- "notify" シグナリングメッセージのうち、 `spotlight.changed` イベントを表します。
- 廃止されました。
- SignalingNotify を利用してください。
- */
-@available(*, unavailable, message: "SignalingNotifySpotlightChanged は廃止されました。 SignalingNotify を利用してください。")
-public struct SignalingNotifySpotlightChanged {}
-
-/**
- "notify" シグナリングメッセージのうち、 "network.status" イベントを表します。
- 廃止されました。
- SignalingNotify を利用してください。
- */
-@available(*, unavailable, message: "SignalingNotifyNetworkStatus は廃止されました。 SignalingNotify を利用してください。")
-public struct SignalingNotifyNetworkStatus {}
 
 /**
  "ping" シグナリングメッセージを表します。
@@ -810,9 +720,7 @@ extension SpotlightRid: Codable {
 /// :nodoc:
 private var roleTable: PairTable<String, SignalingRole> =
     PairTable(name: "SignalingRole",
-              pairs: [("upstream", .upstream),
-                      ("downstream", .downstream),
-                      ("sendonly", .sendonly),
+              pairs: [("sendonly", .sendonly),
                       ("recvonly", .recvonly),
                       ("sendrecv", .sendrecv)])
 
@@ -941,7 +849,7 @@ extension SignalingConnect: Codable {
         if simulcastEnabled {
             try container.encode(true, forKey: .simulcast)
             switch role {
-            case .downstream, .sendrecv, .recvonly:
+            case .sendrecv, .recvonly:
                 try container.encodeIfPresent(simulcastRid, forKey: .simulcast_rid)
             default:
                 break
@@ -1173,10 +1081,6 @@ extension SignalingNotify: Codable {
         connectionTime = try container.decodeIfPresent(Int.self, forKey: .minutes)
         connectionCount =
             try container.decodeIfPresent(Int.self, forKey: .channel_connections)
-        publisherCount =
-            try container.decodeIfPresent(Int.self, forKey: .channel_upstream_connections)
-        subscriberCount =
-            try container.decodeIfPresent(Int.self, forKey: .channel_downstream_connections)
         channelSendonlyConnections =
             try container.decodeIfPresent(Int.self, forKey: .channel_sendonly_connections)
         channelRecvonlyConnections =

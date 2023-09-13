@@ -3,46 +3,6 @@ import WebRTC
 
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
-    /// このプロパティは onConnect に置き換えられました。
-    @available(*, deprecated, renamed: "onConnect",
-               message: "このプロパティは onConnect に置き換えられました。")
-    public var onConnectHandler: ((Error?) -> Void)? {
-        get { onConnect }
-        set { onConnect = newValue }
-    }
-
-    /// このプロパティは onDisconnect に置き換えられました。
-    @available(*, deprecated, renamed: "onDisconnect",
-               message: "このプロパティは onDisconnect に置き換えられました。")
-    public var onDisconnectHandler: ((Error?) -> Void)? {
-        get { onDisconnect }
-        set { onDisconnect = newValue }
-    }
-
-    /// このプロパティは onAddStream に置き換えられました。
-    @available(*, deprecated, renamed: "onAddStream",
-               message: "このプロパティは onAddStream に置き換えられました。")
-    public var onAddStreamHandler: ((MediaStream) -> Void)? {
-        get { onAddStream }
-        set { onAddStream = newValue }
-    }
-
-    /// このプロパティは onRemoveStream に置き換えられました。
-    @available(*, deprecated, renamed: "onRemoveStream",
-               message: "このプロパティは onRemoveStream に置き換えられました。")
-    public var onRemoveStreamHandler: ((MediaStream) -> Void)? {
-        get { onRemoveStream }
-        set { onRemoveStream = newValue }
-    }
-
-    /// このプロパティは onReceiveSignaling に置き換えられました。
-    @available(*, deprecated, renamed: "onReceiveSignaling",
-               message: "このプロパティは onReceiveSignaling に置き換えられました。")
-    public var onReceiveSignalingHandler: ((Signaling) -> Void)? {
-        get { onReceiveSignaling }
-        set { onReceiveSignaling = newValue }
-    }
-
     /// 接続成功時に呼ばれるクロージャー
     public var onConnect: ((Error?) -> Void)?
 
@@ -172,14 +132,7 @@ public final class MediaChannel {
 
     /// 同チャネルに接続中のクライアントの数。
     /// サーバーから通知を受信可能であり、かつ接続中にのみ取得可能です。
-    public var connectionCount: Int? {
-        switch (publisherCount, subscriberCount) {
-        case let (.some(pub), .some(sub)):
-            return pub + sub
-        default:
-            return nil
-        }
-    }
+    public private(set) var connectionCount: Int?
 
     /// 同チャネルに接続中のクライアントのうち、パブリッシャーの数。
     /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
@@ -193,10 +146,6 @@ public final class MediaChannel {
 
     /// シグナリングチャネル
     let signalingChannel: SignalingChannel
-
-    /// ウェブソケットチャンネル
-    @available(*, unavailable, message: "webSocketChannel は廃止されました。")
-    public var webSocketChannel: Any?
 
     /// ピアチャネル
     var peerChannel: PeerChannel {
@@ -365,8 +314,17 @@ public final class MediaChannel {
             Logger.debug(type: .mediaChannel, message: "receive signaling")
             switch message {
             case let .notify(message):
-                weakSelf.publisherCount = message.publisherCount
-                weakSelf.subscriberCount = message.subscriberCount
+                // connectionCount, channelRecvonlyConnections, channelSendonlyConnections, channelSendrecvConnections
+                // 全てに値が入っていた時のみプロパティを更新する
+                if let connectionCount = message.connectionCount,
+                   let sendonlyConnections = message.channelSendonlyConnections,
+                   let recvonlyConnections = message.channelRecvonlyConnections,
+                   let sendrecvConnections = message.channelSendrecvConnections
+                {
+                    weakSelf.publisherCount = sendonlyConnections + sendrecvConnections
+                    weakSelf.subscriberCount = recvonlyConnections + sendrecvConnections
+                    weakSelf.connectionCount = connectionCount
+                } else {}
             default:
                 break
             }
