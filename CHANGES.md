@@ -13,6 +13,8 @@
 
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
+- [ADD] VideoCodec に H265 を追加する
+  - @enm10k
 
 ## 2023.3.1
 
