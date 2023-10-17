@@ -244,7 +244,8 @@ public final class Logger {
                      .nativePeerChannel,
                      .mediaChannel,
                      .mediaStream,
-                     .dataChannel:
+                     .dataChannel,
+                     .cameraVideoCapturer:
                     out = true
                 default:
                     break
