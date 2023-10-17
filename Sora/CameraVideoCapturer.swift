@@ -53,7 +53,7 @@ public final class CameraVideoCapturer {
     }
 
     /// 指定された設定に最も近い  AVCaptureDevice.Format? を返します。
-    public static func format(width: Int32, height: Int32, for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
+    public static func format(width: Int32, height: Int32, for device: AVCaptureDevice, frameRate: Int? = nil) -> AVCaptureDevice.Format? {
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
         var currentFormat: AVCaptureDevice.Format?
         var currentDiff = INT_MAX
@@ -64,6 +64,14 @@ public final class CameraVideoCapturer {
                 currentFormat = format
                 currentDiff = diff
             }
+
+            // 解像度が一致し、フレームレートもサポートされている場合はその format を返す
+            let fpsRanges = format.videoSupportedFrameRateRanges
+            if frameRate != nil && width == dimension.width && height == dimension.height &&
+                fpsRanges.contains(where: { Int($0.minFrameRate) <= frameRate! && frameRate! <= Int($0.maxFrameRate) }) {
+                return format
+            }
+
         }
         return currentFormat
     }
@@ -98,7 +106,8 @@ public final class CameraVideoCapturer {
         let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
         guard let format = CameraVideoCapturer.format(width: dimension.width,
                                                       height: dimension.height,
-                                                      for: flip.device)
+                                                      for: flip.device,
+                                                      frameRate: capturer.frameRate!)
         else {
             completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.format failed: suitable format is not found"))
             return
