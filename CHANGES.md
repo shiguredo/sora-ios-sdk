@@ -15,6 +15,8 @@
   - @enm10k
 - [ADD] VideoCodec に H265 を追加する
   - @enm10k
+- [UPDATE] 解像度に qHD (960x540) を追加する
+  - @enm10k
 
 ## 2023.3.1
 

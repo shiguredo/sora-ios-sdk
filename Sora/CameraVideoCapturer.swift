@@ -341,6 +341,9 @@ public struct CameraSettings: CustomStringConvertible {
         /// VGA, 640x480
         case vga480p
 
+        /// qHD540p, 960x540
+        case qhd540p
+
         /// HD 720p, 1280x720
         case hd720p
 
@@ -358,6 +361,7 @@ public struct CameraSettings: CustomStringConvertible {
             switch self {
             case .qvga240p: return 320
             case .vga480p: return 640
+            case .qhd540p: return 960
             case .hd720p: return 1280
             case .hd1080p: return 1920
             case .uhd2160p: return 3840
@@ -370,6 +374,7 @@ public struct CameraSettings: CustomStringConvertible {
             switch self {
             case .qvga240p: return 240
             case .vga480p: return 480
+            case .qhd540p: return 540
             case .hd720p: return 720
             case .hd1080p: return 1080
             case .uhd2160p: return 2160
