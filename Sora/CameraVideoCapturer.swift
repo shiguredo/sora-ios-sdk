@@ -53,19 +53,32 @@ public final class CameraVideoCapturer {
     }
 
     /// 指定された設定に最も近い  AVCaptureDevice.Format? を返します。
-    public static func format(width: Int32, height: Int32, for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
-        let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
-        var currentFormat: AVCaptureDevice.Format?
-        var currentDiff = INT_MAX
-        for format in formats {
+    public static func format(width: Int32, height: Int32, for device: AVCaptureDevice, frameRate: Int? = nil) -> AVCaptureDevice.Format? {
+        func calcDiff(_ targetWidth: Int32, _ targetHeight: Int32, _ format: AVCaptureDevice.Format) -> Int32 {
             let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-            let diff = abs(width - dimension.width) + abs(height - dimension.height)
-            if diff < currentDiff {
-                currentFormat = format
-                currentDiff = diff
-            }
+            return abs(targetWidth - dimension.width) + abs(targetHeight - dimension.height)
         }
-        return currentFormat
+
+        let supportedFormats = RTCCameraVideoCapturer.supportedFormats(for: device)
+
+        // 指定された解像度に近いフォーマットを絞り込む
+        guard let diff = supportedFormats.map({ calcDiff(width, height, $0) }).min() else {
+            return nil
+        }
+        let formats = supportedFormats.filter { calcDiff(width, height, $0) == diff }
+        guard !formats.isEmpty else {
+            return nil
+        }
+
+        // この関数の引数に frameRate が指定された場合、フレームレートも考慮する
+        guard let frameRate else {
+            return formats.first
+        }
+        return formats.filter {
+            $0.videoSupportedFrameRateRanges.contains(where: {
+                Int($0.minFrameRate) <= frameRate && frameRate <= Int($0.maxFrameRate)
+            })
+        }.first ?? formats.first
     }
 
     /// 指定された FPS 値をサポートしているレンジが存在すれば、その値を返します。
@@ -98,7 +111,8 @@ public final class CameraVideoCapturer {
         let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
         guard let format = CameraVideoCapturer.format(width: dimension.width,
                                                       height: dimension.height,
-                                                      for: flip.device)
+                                                      for: flip.device,
+                                                      frameRate: capturer.frameRate!)
         else {
             completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.format failed: suitable format is not found"))
             return

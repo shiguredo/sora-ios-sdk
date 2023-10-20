@@ -466,7 +466,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         // デバイスに対応したフォーマットとフレームレートを取得する
         guard let format = CameraVideoCapturer.format(width: configuration.cameraSettings.resolution.width,
                                                       height: configuration.cameraSettings.resolution.height,
-                                                      for: capturer.device)
+                                                      for: capturer.device,
+                                                      frameRate: configuration.cameraSettings.frameRate)
         else {
             Logger.error(type: .peerChannel, message: "CameraVideoCapturer.suitableFormat failed: suitable format rate is not found")
             return
