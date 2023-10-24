@@ -13,6 +13,9 @@
 
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
+
+## 2023.3.1
+
 - [FIX] AVCaptureDevice.Format の選択時にフレームレートを考慮するように修正する
   - フレームレートに 60 を設定しても、 AVFrameRateRange が 1-30 の AVCaptureDevice.Format が選択されてしまうケースがあった
   - 修正前は、カメラから同じ解像度の AVCaptureDevice.Format が複数取得された場合、最初に解像度が一致した AVCaptureDevice.Format を選択しており、フレームレートが考慮されていないという問題があった
