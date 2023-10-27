@@ -13,6 +13,8 @@
 
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
+- [UPDATE] WebRTC 119.6045.2.1 に上げる
+  - @miosakuma
 - [ADD] VideoCodec に H265 を追加する
   - @enm10k
 - [UPDATE] 解像度に qHD (960x540) を追加する
