@@ -13,6 +13,8 @@
 
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
+- [UPDATE] CocoaPods を v1.14.2 に更新する
+  - @enm10k
 
 ## 2023.3.1
 
