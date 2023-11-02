@@ -13,6 +13,14 @@
 
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
+- [UPDATE] WebRTC 119.6045.2.1 に上げる
+  - @miosakuma
+- [UPDATE] VideoView のバックエンドを RTCEAGLVideoView から RTCMTLVideoView に変更する
+  - WebRTC のアップデートに伴い RTCEAGLVideoView が deprecated になったことに伴う修正
+  - @miosakuma
+- [ADD] VideoCodec に H265 を追加する
+  - @enm10k
+- [UPDATE] 解像度に qHD (960x540) を追加する
 - [UPDATE] CocoaPods を v1.14.2 に更新する
   - @enm10k
 
