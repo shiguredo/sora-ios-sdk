@@ -324,10 +324,16 @@ public enum ForwardingFilterAction: String, Codable {
  */
 public struct ForwardingFilter: Codable {
     /// action
-    public let action: ForwardingFilterAction
+    public var action: ForwardingFilterAction
 
     /// rules
-    public let rules: [[ForwardingFilterRule]]
+    public var rules: [[ForwardingFilterRule]]
+
+    /// version
+    public var version: String?
+
+    /// metadata
+    public var metadata: String?
 
     /**
      初期化します。
@@ -335,7 +341,7 @@ public struct ForwardingFilter: Codable {
      - parameter action: action
      - parameter rules: rules
      */
-    public init(action: ForwardingFilterAction, rules: [[ForwardingFilterRule]]) {
+    public init(action: ForwardingFilterAction = .block, rules: [[ForwardingFilterRule]]) {
         self.action = action
         self.rules = rules
     }
