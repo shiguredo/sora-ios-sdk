@@ -333,7 +333,7 @@ public struct ForwardingFilter {
     public var version: String?
 
     /// metadata
-    public var metadata: Encodable? = nil
+    public var metadata: Encodable?
 
     /**
      初期化します。
@@ -362,7 +362,7 @@ extension ForwardingFilter: Encodable {
         try container.encode(action, forKey: .action)
         try container.encode(rules, forKey: .rules)
         try container.encodeIfPresent(version, forKey: .version)
-        
+
         // この if をつけないと、常に "metadata": {} が含まれてしまう
         if metadata != nil {
             let metadataEnc = container.superEncoder(forKey: .metadata)
