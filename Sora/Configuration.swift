@@ -322,7 +322,7 @@ public enum ForwardingFilterAction: String, Codable {
 /**
  転送フィルターに関する設定です。
  */
-public struct ForwardingFilter: Codable {
+public struct ForwardingFilter {
     /// action
     public var action: ForwardingFilterAction
 
@@ -333,7 +333,7 @@ public struct ForwardingFilter: Codable {
     public var version: String?
 
     /// metadata
-    public var metadata: String?
+    public var metadata: Encodable?
 
     /**
      初期化します。
@@ -344,5 +344,31 @@ public struct ForwardingFilter: Codable {
     public init(action: ForwardingFilterAction = .block, rules: [[ForwardingFilterRule]]) {
         self.action = action
         self.rules = rules
+    }
+}
+
+extension ForwardingFilter: Codable {
+    enum CodingKeys: String, CodingKey {
+        case action
+        case rules
+        case version
+        case metadata
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        action = try container.decode(ForwardingFilterAction.self, forKey: .action)
+        rules = try container.decode([[ForwardingFilterRule]].self, forKey: .rules)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+        // metadata はクライアントに通知されないので、デコードは不要
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(action, forKey: .action)
+        try container.encode(rules, forKey: .rules)
+        try container.encodeIfPresent(version, forKey: .version)
+        let metadataEnc = container.superEncoder(forKey: .metadata)
+        try metadata?.encode(to: metadataEnc)
     }
 }
