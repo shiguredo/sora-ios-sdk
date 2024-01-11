@@ -333,7 +333,7 @@ public struct ForwardingFilter {
     public var version: String?
 
     /// metadata
-    public var metadata: Encodable?
+    public var metadata: Encodable? = nil
 
     /**
      初期化します。
@@ -341,9 +341,11 @@ public struct ForwardingFilter {
      - parameter action: action
      - parameter rules: rules
      */
-    public init(action: ForwardingFilterAction = .block, rules: [[ForwardingFilterRule]]) {
+    public init(action: ForwardingFilterAction = .block, rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil) {
         self.action = action
         self.rules = rules
+        self.version = version
+        self.metadata = metadata
     }
 }
 
@@ -368,7 +370,11 @@ extension ForwardingFilter: Codable {
         try container.encode(action, forKey: .action)
         try container.encode(rules, forKey: .rules)
         try container.encodeIfPresent(version, forKey: .version)
-        let metadataEnc = container.superEncoder(forKey: .metadata)
-        try metadata?.encode(to: metadataEnc)
+        
+        // この if をつけないと、常に "metadata": {} が含まれてしまう
+        if metadata != nil {
+            let metadataEnc = container.superEncoder(forKey: .metadata)
+            try metadata?.encode(to: metadataEnc)
+        }
     }
 }

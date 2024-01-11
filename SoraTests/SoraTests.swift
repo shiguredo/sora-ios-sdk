@@ -3,20 +3,69 @@ import WebRTC
 import XCTest
 
 class SoraTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-    }
-
-    override func tearDown() {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-        super.tearDown()
-    }
-
-    func testPerformanceExample() {
-        // This is an example of a performance test case.
-        measure {
-            // Put the code you want to measure the time of here.
-        }
+    func testForwardingFilter() throws {
+        let forwardingFilter = ForwardingFilter(
+            action: .allow,
+            rules: [[
+                ForwardingFilterRule(
+                    field: .connectionId,
+                    operator: .isNotIn,
+                    values: ["ham"]
+                ),
+                ForwardingFilterRule(
+                    field: .connectionId,
+                    operator: .isIn,
+                    values: ["spam"]
+                ),
+            ],
+            [
+                ForwardingFilterRule(
+                    field: .connectionId,
+                    operator: .isNotIn,
+                    values: ["egg"]
+                ),
+            ]]
+        )
+        
+        let expected = """
+{
+  "action" : "allow",
+  "rules" : [
+    [
+      {
+        "field" : "connection_id",
+        "operator" : "is_not_in",
+        "values" : [
+          "ham"
+        ]
+      },
+      {
+        "field" : "connection_id",
+        "operator" : "is_in",
+        "values" : [
+          "spam"
+        ]
+      }
+    ],
+    [
+      {
+        "field" : "connection_id",
+        "operator" : "is_not_in",
+        "values" : [
+          "egg"
+        ]
+      }
+    ]
+  ]
+}
+"""
+        
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        let data = try encoder.encode(forwardingFilter)
+        let got = String(data: data, encoding: .utf8)!
+        
+        NSLog(got)
+        XCTAssert(expected == got)
     }
 }
