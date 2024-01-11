@@ -256,7 +256,7 @@ public struct Configuration {
 /**
  転送フィルターのルールのフィールドの設定です。
  */
-public enum ForwardingFilterRuleField: String, Codable {
+public enum ForwardingFilterRuleField: String, Encodable {
     /// connection_id
     case connectionId = "connection_id"
 
@@ -270,7 +270,7 @@ public enum ForwardingFilterRuleField: String, Codable {
 /**
  転送フィルターのルールの演算子の設定です。
  */
-public enum ForwardingFilterRuleOperator: String, Codable {
+public enum ForwardingFilterRuleOperator: String, Encodable {
     /// is_in
     case isIn = "is_in"
 
@@ -281,7 +281,7 @@ public enum ForwardingFilterRuleOperator: String, Codable {
 /**
  転送フィルターのルールの設定です。
  */
-public struct ForwardingFilterRule: Codable {
+public struct ForwardingFilterRule: Encodable {
     /// field
     public let field: ForwardingFilterRuleField
 
@@ -311,7 +311,7 @@ public struct ForwardingFilterRule: Codable {
 /**
  転送フィルターのアクションの設定です。
  */
-public enum ForwardingFilterAction: String, Codable {
+public enum ForwardingFilterAction: String, Encodable {
     /// block
     case block
 
@@ -349,20 +349,12 @@ public struct ForwardingFilter {
     }
 }
 
-extension ForwardingFilter: Codable {
+extension ForwardingFilter: Encodable {
     enum CodingKeys: String, CodingKey {
         case action
         case rules
         case version
         case metadata
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        action = try container.decode(ForwardingFilterAction.self, forKey: .action)
-        rules = try container.decode([[ForwardingFilterRule]].self, forKey: .rules)
-        version = try container.decodeIfPresent(String.self, forKey: .version)
-        // metadata はクライアントに通知されないので、デコードは不要
     }
 
     public func encode(to encoder: Encoder) throws {
