@@ -341,7 +341,7 @@ public struct ForwardingFilter {
      - parameter action: action
      - parameter rules: rules
      */
-    public init(action: ForwardingFilterAction = .block, rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil) {
+    public init(action: ForwardingFilterAction, rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil) {
         self.action = action
         self.rules = rules
         self.version = version
