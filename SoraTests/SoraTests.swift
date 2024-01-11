@@ -2,8 +2,17 @@
 import WebRTC
 import XCTest
 
+func assert(_ input: Encodable, _ jsonString: String) throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+    let data = try encoder.encode(input)
+    let result =  String(data: data, encoding: .utf8)!
+    NSLog(result)
+    XCTAssert(result == jsonString)
+}
+
 class SoraTests: XCTestCase {
-    func testForwardingFilter() throws {
+    func testEncodeForwardingFilter_必須項目のみ() throws {
         let forwardingFilter = ForwardingFilter(
             action: .allow,
             rules: [[
@@ -60,12 +69,45 @@ class SoraTests: XCTestCase {
 }
 """
         
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        let data = try encoder.encode(forwardingFilter)
-        let got = String(data: data, encoding: .utf8)!
+        try assert(forwardingFilter, expected)
+    }
+    
+    func testEncodeForwardingFilter_metadataがArray() throws {
+        let forwardingFilter = ForwardingFilter(
+            action: .allow,
+            rules: [[
+                ForwardingFilterRule(
+                    field: .connectionId,
+                    operator: .isNotIn,
+                    values: ["egg"]
+                ),
+            ]],
+            version: "5",
+            metadata: [1,2]
+        )
         
-        NSLog(got)
-        XCTAssert(expected == got)
+        let expected = """
+{
+  "action" : "allow",
+  "metadata" : [
+    1,
+    2
+  ],
+  "rules" : [
+    [
+      {
+        "field" : "connection_id",
+        "operator" : "is_not_in",
+        "values" : [
+          "egg"
+        ]
+      }
+    ]
+  ],
+  "version" : "5"
+}
+"""
+        
+        try assert(forwardingFilter, expected)
     }
 }
