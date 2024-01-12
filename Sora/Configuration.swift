@@ -256,7 +256,7 @@ public struct Configuration {
 /**
  転送フィルターのルールのフィールドの設定です。
  */
-public enum ForwardingFilterRuleField: String, Codable {
+public enum ForwardingFilterRuleField: String, Encodable {
     /// connection_id
     case connectionId = "connection_id"
 
@@ -270,7 +270,7 @@ public enum ForwardingFilterRuleField: String, Codable {
 /**
  転送フィルターのルールの演算子の設定です。
  */
-public enum ForwardingFilterRuleOperator: String, Codable {
+public enum ForwardingFilterRuleOperator: String, Encodable {
     /// is_in
     case isIn = "is_in"
 
@@ -281,7 +281,7 @@ public enum ForwardingFilterRuleOperator: String, Codable {
 /**
  転送フィルターのルールの設定です。
  */
-public struct ForwardingFilterRule: Codable {
+public struct ForwardingFilterRule: Encodable {
     /// field
     public let field: ForwardingFilterRuleField
 
@@ -311,7 +311,7 @@ public struct ForwardingFilterRule: Codable {
 /**
  転送フィルターのアクションの設定です。
  */
-public enum ForwardingFilterAction: String, Codable {
+public enum ForwardingFilterAction: String, Encodable {
     /// block
     case block
 
@@ -322,21 +322,53 @@ public enum ForwardingFilterAction: String, Codable {
 /**
  転送フィルターに関する設定です。
  */
-public struct ForwardingFilter: Codable {
+public struct ForwardingFilter {
     /// action
-    public let action: ForwardingFilterAction
+    public var action: ForwardingFilterAction?
 
     /// rules
-    public let rules: [[ForwardingFilterRule]]
+    public var rules: [[ForwardingFilterRule]]
+
+    /// version
+    public var version: String?
+
+    /// metadata
+    public var metadata: Encodable?
 
     /**
      初期化します。
 
-     - parameter action: action
+     - parameter action: action (オプショナル)
      - parameter rules: rules
+     - parameter version: version (オプショナル)
+     - parameter metadata: metadata (オプショナル)
      */
-    public init(action: ForwardingFilterAction, rules: [[ForwardingFilterRule]]) {
+    public init(action: ForwardingFilterAction? = nil, rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil) {
         self.action = action
         self.rules = rules
+        self.version = version
+        self.metadata = metadata
+    }
+}
+
+extension ForwardingFilter: Encodable {
+    enum CodingKeys: String, CodingKey {
+        case action
+        case rules
+        case version
+        case metadata
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(action, forKey: .action)
+        try container.encode(rules, forKey: .rules)
+        try container.encodeIfPresent(version, forKey: .version)
+
+        // この if をつけないと、常に "metadata": {} が含まれてしまう
+        if metadata != nil {
+            let metadataEnc = container.superEncoder(forKey: .metadata)
+            try metadata?.encode(to: metadataEnc)
+        }
     }
 }

@@ -21,8 +21,13 @@
 - [ADD] VideoCodec に H265 を追加する
   - @enm10k
 - [UPDATE] 解像度に qHD (960x540) を追加する
+  - @enm10k
 - [UPDATE] CocoaPods を v1.14.2 に更新する
   - @enm10k
+- [UPDATE] ForwardingFilter に version と metadata　を追加する
+  - @enm10k @miosakuma
+- [UPDATE] ForwardingFilter の action を未指定にできるようにする
+  - @miosakuma
 
 ## 2023.3.1
 
