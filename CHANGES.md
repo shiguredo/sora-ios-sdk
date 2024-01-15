@@ -1013,7 +1013,7 @@
   - @szktty
 - [ADD] API: SignalingRole: 追加する
   - @szktty
-- [FIX] Sora サーバーの URL のプロトコルが ws または wss 以外であればエラーにする
+- [FIX] Sora の URL のプロトコルが ws または wss 以外であればエラーにする
   - @szktty
 - [FIX] 接続解除可能な状況でも `connectionBusy` のエラーが発生する現象を修正する
   - @szktty
