@@ -28,6 +28,15 @@
   - @enm10k @miosakuma
 - [UPDATE] ForwardingFilter の action を未指定にできるようにする
   - @miosakuma
+- [FIX] NotificationMessage に項目を追加する
+  - session_id
+  - kind
+  - destination_connection_id
+  - source_connection_id
+  - recv_connection_id
+  - send_connection_id
+  - stream_id
+  - @miosakuma
 
 ## 2023.3.1
 

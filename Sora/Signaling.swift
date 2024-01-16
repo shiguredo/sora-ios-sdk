@@ -511,6 +511,9 @@ public struct SignalingNotify {
     /// ロール
     public var role: SignalingRole?
 
+    /// セッション ID
+    public var sessionId: String?
+
     /// クライアント ID
     public var clientId: String?
 
@@ -569,6 +572,24 @@ public struct SignalingNotify {
 
     /// TURN が利用しているトランスポート層のプロトコル
     public var turnTransportType: String?
+
+    /// 転送フィルターで block または allow となった対象 (audio または video)
+    public var kind: String?
+
+    /// 転送フィルターで block または allow となった送信先の接続 ID
+    public var destinationConnectionId: String?
+
+    /// 転送フィルターで block または allow となった送信元の接続 ID
+    public var sourceConnectionId: String?
+
+    /// RTP で RTP ストリーム停止となった送信先の接続 ID
+    public var recvConnectionId: String?
+
+    /// RTP で RTP ストリーム停止となった送信元の接続 ID
+    public var sendConnectionId: String?
+
+    /// RTP で RTP ストリーム再開となったストリームの ID
+    public var streamId: String?
 }
 
 /**
@@ -1052,6 +1073,7 @@ extension SignalingNotify: Codable {
     enum CodingKeys: String, CodingKey {
         case event_type
         case role
+        case session_id
         case client_id
         case bundle_id
         case connection_id
@@ -1068,6 +1090,12 @@ extension SignalingNotify: Codable {
         case fixed
         case unstable_level
         case turn_transport_type
+        case kind
+        case destination_connection_id
+        case source_connection_id
+        case recv_connection_id
+        case send_connection_id
+        case stream_id
     }
 
     public init(from decoder: Decoder) throws {
@@ -1075,6 +1103,7 @@ extension SignalingNotify: Codable {
         eventType = try container.decode(String.self,
                                          forKey: .event_type)
         role = try container.decodeIfPresent(SignalingRole.self, forKey: .role)
+        sessionId = try container.decodeIfPresent(String.self, forKey: .session_id)
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
         bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
         connectionId = try container.decodeIfPresent(String.self,
@@ -1098,6 +1127,18 @@ extension SignalingNotify: Codable {
             try container.decodeIfPresent(Int.self, forKey: .unstable_level)
         turnTransportType =
             try container.decodeIfPresent(String.self, forKey: .turn_transport_type)
+        kind =
+            try container.decodeIfPresent(String.self, forKey: .kind)
+        destinationConnectionId =
+            try container.decodeIfPresent(String.self, forKey: .destination_connection_id)
+        sourceConnectionId =
+            try container.decodeIfPresent(String.self, forKey: .source_connection_id)
+        recvConnectionId =
+            try container.decodeIfPresent(String.self, forKey: .recv_connection_id)
+        sendConnectionId =
+            try container.decodeIfPresent(String.self, forKey: .send_connection_id)
+        streamId =
+            try container.decodeIfPresent(String.self, forKey: .stream_id)
     }
 
     public func encode(to encoder: Encoder) throws {
