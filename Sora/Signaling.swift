@@ -582,13 +582,13 @@ public struct SignalingNotify {
     /// 転送フィルターで block または allow となった送信元の接続 ID
     public var sourceConnectionId: String?
 
-    /// RTP で RTP ストリーム停止となった送信先の接続 ID
+    /// 停止された RTP ストリームの送信先接続 ID
     public var recvConnectionId: String?
 
-    /// RTP で RTP ストリーム停止となった送信元の接続 ID
+    /// 停止された RTP ストリームの送信元接続 ID
     public var sendConnectionId: String?
 
-    /// RTP で RTP ストリーム再開となったストリームの ID
+    /// 再開された RTP ストリームの送信元接続 ID
     public var streamId: String?
 }
 
