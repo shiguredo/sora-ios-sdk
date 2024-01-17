@@ -11,6 +11,10 @@
 
 ## develop
 
+- [CHANGE] SignalingNotify の metadataList を削除する
+  - 2022.1.0 の Sora で metadata_list が廃止されたため
+  - SignalingNotify の data で値の取得が可能
+  - @miosakuma
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
 - [UPDATE] WebRTC 119.6045.2.1 に上げる
@@ -28,14 +32,14 @@
   - @enm10k @miosakuma
 - [UPDATE] ForwardingFilter の action を未指定にできるようにする
   - @miosakuma
-- [FIX] NotificationMessage に項目を追加する
-  - session_id
+- [FIX] SignalingNotify に項目を追加する
+  - sessionId
   - kind
-  - destination_connection_id
-  - source_connection_id
-  - recv_connection_id
-  - send_connection_id
-  - stream_id
+  - destinationConnectionId
+  - sourceConnectionId
+  - recvConnectionId
+  - sendConnectionId
+  - streamId
   - @miosakuma
 
 ## 2023.3.1

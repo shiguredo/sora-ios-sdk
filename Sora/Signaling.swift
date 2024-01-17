@@ -2,10 +2,10 @@ import Foundation
 import WebRTC
 
 /// :nodoc:
-private func serializeMetadataList(_ data: Any?) -> [SignalingNotifyMetadata]? {
+private func serializeData(_ data: Any?) -> [SignalingNotifyMetadata]? {
     guard let array = data as? [[String: Any]] else {
         Logger.info(type: .signaling,
-                    message: "downcast failed in serializeMetadataList. data: \(String(describing: data))")
+                    message: "downcast failed in serializeData. data: \(String(describing: data))")
         return nil
     }
 
@@ -77,11 +77,8 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
         if let metadata = json["metadata"] {
             message.metadata = metadata
         }
-        if let metadataList = json["metadata_list"] {
-            message.metadataList = serializeMetadataList(metadataList)
-        }
         if let data = json["data"] {
-            message.data = serializeMetadataList(data)
+            message.data = serializeData(data)
         }
         return .notify(message)
     default:
@@ -537,9 +534,6 @@ public struct SignalingNotify {
 
     /// Sora の認証ウェブフックの戻り値で指定された値
     public var authzMetadata: Any?
-
-    /// メタデータのリスト
-    public var metadataList: [SignalingNotifyMetadata]?
 
     /// メタデータのリスト
     public var data: [SignalingNotifyMetadata]?
