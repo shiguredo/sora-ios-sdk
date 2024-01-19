@@ -30,7 +30,7 @@
   - @enm10k
 - [UPDATE] ForwardingFilter に version と metadata　を追加する
   - @enm10k @miosakuma
-- [UPDATE] ForwardingFilter の action を未指定にできるようにする
+- [FIX] ForwardingFilter の action を未指定にできるようにする
   - @miosakuma
 - [FIX] SignalingNotify に項目を追加する
   - sessionId
