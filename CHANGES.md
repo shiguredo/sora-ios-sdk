@@ -17,7 +17,7 @@
   - @miosakuma
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
-- [UPDATE] WebRTC 119.6045.2.1 に上げる
+- [UPDATE] WebRTC 121.6167.4.0 に上げる
   - @miosakuma
 - [UPDATE] VideoView のバックエンドを RTCEAGLVideoView から RTCMTLVideoView に変更する
   - WebRTC のアップデートに伴い RTCEAGLVideoView が deprecated になったことに伴う修正
