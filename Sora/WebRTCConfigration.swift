@@ -37,6 +37,38 @@ public enum SDPSemantics {
 }
 
 /**
+ (リソースの逼迫により) 送信する映像の品質が劣化した場合の挙動です。
+ */
+public enum DegradationPreference {
+    /// リソースが逼迫しても何もしない
+    case disabled
+
+    /// バランスを取る
+    case balanced
+
+    /// フレームレートを維持する
+    case maintainFramerate
+
+    /// 解像度を維持する
+    case maintainResolution
+
+    // MARK: - ネイティブ
+
+    var nativeValue: RTCDegradationPreference {
+        switch self {
+        case .balanced:
+            return RTCDegradationPreference.balanced
+        case .disabled:
+            return RTCDegradationPreference.disabled
+        case .maintainFramerate:
+            return RTCDegradationPreference.maintainFramerate
+        case .maintainResolution:
+            return RTCDegradationPreference.maintainResolution
+        }
+    }
+}
+
+/**
  WebRTC に関する設定です。
  */
 public struct WebRTCConfiguration {
@@ -57,6 +89,9 @@ public struct WebRTCConfiguration {
 
     /// SDP でのマルチストリームの記述方式
     public var sdpSemantics: SDPSemantics = .unifiedPlan
+
+    /// (リソースの不足により) 送信する映像の品質が劣化した場合の挙動
+    public var senderDegradationPreference: DegradationPreference?
 
     // MARK: - インスタンスの生成
 
