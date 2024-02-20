@@ -37,19 +37,19 @@ public enum SDPSemantics {
 }
 
 /**
- (リソースの逼迫により) 送信する映像の品質が劣化した場合の挙動です。
+ (リソースの逼迫により) 送信する映像の品質が維持できない場合の挙動です。
  */
 public enum DegradationPreference {
-    /// リソースが逼迫しても何もしない
+    /// 何もしない
     case disabled
 
     /// バランスを取る
     case balanced
 
-    /// フレームレートを維持する
+    /// フレームレートの維持を優先する
     case maintainFramerate
 
-    /// 解像度を維持する
+    /// 解像度の維持を優先する
     case maintainResolution
 
     // MARK: - ネイティブ
@@ -90,7 +90,7 @@ public struct WebRTCConfiguration {
     /// SDP でのマルチストリームの記述方式
     public var sdpSemantics: SDPSemantics = .unifiedPlan
 
-    /// (リソースの不足により) 送信する映像の品質が劣化した場合の挙動
+    /// (リソースの逼迫により) 送信する映像の品質が維持できない場合の挙動
     public var degradationPreference: DegradationPreference?
 
     // MARK: - インスタンスの生成
