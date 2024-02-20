@@ -5,4 +5,4 @@
 --wrapparameters after-first
 --header strip
 
---disable redundantInit,sortedSwitchCases,strongOutlets,unusedArguments,wrapSwitchCases
+--disable redundantInit,sortedSwitchCases,strongOutlets,unusedArguments,wrapSwitchCases,preferForLoop
