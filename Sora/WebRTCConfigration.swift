@@ -91,7 +91,7 @@ public struct WebRTCConfiguration {
     public var sdpSemantics: SDPSemantics = .unifiedPlan
 
     /// (リソースの不足により) 送信する映像の品質が劣化した場合の挙動
-    public var senderDegradationPreference: DegradationPreference?
+    public var degradationPreference: DegradationPreference?
 
     // MARK: - インスタンスの生成
 
