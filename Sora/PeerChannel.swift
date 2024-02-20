@@ -413,7 +413,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
                 if let degradationPreference = configuration.webRTCConfiguration.senderDegradationPreference {
                     let parameters = videoTransceiver.sender.parameters
-                    parameters.degradationPreference = NSNumber.init(value: degradationPreference.nativeValue.rawValue)
+                    parameters.degradationPreference = NSNumber(value: degradationPreference.nativeValue.rawValue)
                     videoTransceiver.sender.parameters = parameters
                 }
 
