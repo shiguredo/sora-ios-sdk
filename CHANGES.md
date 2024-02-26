@@ -29,16 +29,16 @@
 - [UPDATE] VideoView のバックエンドを RTCEAGLVideoView から RTCMTLVideoView に変更する
   - WebRTC のアップデートに伴い RTCEAGLVideoView が deprecated になったことに伴う修正
   - @miosakuma
-- [ADD] VideoCodec に H265 を追加する
-  - @enm10k
-- [ADD] WebRTCConfiguration に degradationPreference を追加する
-  - @enm10k
 - [UPDATE] 解像度に qHD (960x540) を追加する
   - @enm10k
 - [UPDATE] CocoaPods を v1.15.2 に更新する
   - @enm10k @miosakuma
 - [UPDATE] ForwardingFilter に version と metadata　を追加する
   - @enm10k @miosakuma
+- [ADD] VideoCodec に H265 を追加する
+  - @enm10k
+- [ADD] WebRTCConfiguration に degradationPreference を追加する
+  - @enm10k
 - [FIX] ForwardingFilter の action を未指定にできるようにする
   - @miosakuma
 - [FIX] SignalingNotify に項目を追加する
