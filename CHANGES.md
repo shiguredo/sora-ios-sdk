@@ -15,6 +15,13 @@
   - 2022.1.0 の Sora で metadata_list が廃止されたため
   - SignalingNotify の data で値の取得が可能
   - @miosakuma
+- [UPDATE] システム条件を変更する
+  - macOS 14.3.1 以降
+  - WebRTC SFU Sora 2023.2.0 以降
+  - Xcode 15.2
+  - Swift 5.9.2
+  - CocoaPods 1.15.2 以降
+  - @miosakuma
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
 - [UPDATE] WebRTC 121.6167.4.0 に上げる
@@ -28,8 +35,8 @@
   - @enm10k
 - [UPDATE] 解像度に qHD (960x540) を追加する
   - @enm10k
-- [UPDATE] CocoaPods を v1.14.2 に更新する
-  - @enm10k
+- [UPDATE] CocoaPods を v1.15.2 に更新する
+  - @enm10k @miosakuma
 - [UPDATE] ForwardingFilter に version と metadata　を追加する
   - @enm10k @miosakuma
 - [FIX] ForwardingFilter の action を未指定にできるようにする
@@ -76,7 +83,7 @@
 
 - [UPDATE] システム条件を変更する
   - macOS 13.4.1 以降
-  - WebRTC SFU Sora 2023.2.0 以降
+  - WebRTC SFU Sora 2023.1.0 以降
   - Xcode 14.3.1
   - Swift 5.8.1
   - CocoaPods 1.12.1 以降
