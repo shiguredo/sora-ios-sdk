@@ -256,7 +256,7 @@ extension VideoView: VideoRenderer {
 // MARK: -
 
 class VideoViewContentView: UIView {
-    @IBOutlet private weak var nativeVideoView: RTCEAGLVideoView!
+    @IBOutlet private weak var nativeVideoView: RTCMTLVideoView!
     @IBOutlet private weak var debugInfoLabel: UILabel!
 
     fileprivate var currentVideoFrameSize: CGSize?
