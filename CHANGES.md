@@ -15,6 +15,9 @@
   - 2022.1.0 の Sora で metadata_list が廃止されたため
   - SignalingNotify の data で値の取得が可能
   - @miosakuma
+- [CHANGE] VideoView のバックエンドを RTCEAGLVideoView から RTCMTLVideoView に変更する
+  - WebRTC のアップデートに伴い RTCEAGLVideoView が deprecated になったことに伴う修正
+  - @miosakuma
 - [UPDATE] システム条件を変更する
   - macOS 14.3.1 以降
   - WebRTC SFU Sora 2023.2.0 以降
@@ -25,9 +28,6 @@
 - [UPDATE] CameraVideoCapturer のログを出力する
   - @enm10k
 - [UPDATE] WebRTC 121.6167.4.0 に上げる
-  - @miosakuma
-- [UPDATE] VideoView のバックエンドを RTCEAGLVideoView から RTCMTLVideoView に変更する
-  - WebRTC のアップデートに伴い RTCEAGLVideoView が deprecated になったことに伴う修正
   - @miosakuma
 - [UPDATE] 解像度に qHD (960x540) を追加する
   - @enm10k
