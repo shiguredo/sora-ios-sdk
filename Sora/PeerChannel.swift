@@ -1,6 +1,34 @@
 import Foundation
 import WebRTC
 
+/// :nodoc:
+extension RTCDegradationPreference: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .balanced: "balanced"
+        case .disabled: "disabled"
+        case .maintainFramerate: "maintain-framerate"
+        case .maintainResolution: "maintain-resolution"
+        default: "-"
+        }
+    }
+}
+
+/// :nodoc:
+extension RTCRtpParameters {
+    override open var description: String {
+        let degradationPreference = if let unwrapped = self.degradationPreference {
+            String(describing: RTCDegradationPreference(rawValue: unwrapped.intValue))
+        } else {
+            "-"
+        }
+
+        // RTCRtpParameters は他にもプロパティーを持つが、ここでは SDK で利用している値のみ出力する
+        // encodings もここに追加したい
+        return "\(transactionId) \(String(describing: degradationPreference))"
+    }
+}
+
 final class PeerChannelInternalHandlers {
     /// 接続解除時に呼ばれるクロージャー
     var onDisconnect: ((Error?, DisconnectReason) -> Void)?
@@ -382,6 +410,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 if let videoTrack = nativeStream.videoTracks.first {
                     videoTransceiver.sender.track = videoTrack
                 }
+
+                if let degradationPreference = configuration.webRTCConfiguration.degradationPreference {
+                    let parameters = videoTransceiver.sender.parameters
+                    parameters.degradationPreference = NSNumber(value: degradationPreference.nativeValue.rawValue)
+                    videoTransceiver.sender.parameters = parameters
+                }
+
+                Logger.debug(type: .peerChannel, message: "sender.parameters => \(String(describing: videoTransceiver.sender.parameters))")
             }
         } else {
             // mid なしの場合はエラーにする
