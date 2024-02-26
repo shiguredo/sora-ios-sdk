@@ -11,6 +11,8 @@
 
 ## develop
 
+## 2024.1.0
+
 - [CHANGE] SignalingNotify の metadataList を削除する
   - 2022.1.0 の Sora で metadata_list が廃止されたため
   - SignalingNotify の data で値の取得が可能
