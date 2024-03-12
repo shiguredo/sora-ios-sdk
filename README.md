@@ -37,6 +37,11 @@ Xcode と Swift のバージョンによっては、 CocoaPods で取得でき�
 
 [Sora iOS SDK ドキュメント — Sora iOS SDK](https://sora-ios-sdk.shiguredo.jp/)
 
+## 有償での優先実装
+
+- 帯域幅制限時に解像度またはフレームレートのどちらを維持するか指定できるようにする機能
+  - 企業名非公開
+
 ## 有償での優先実装が可能な機能一覧
 
 **詳細は Discord またはメールにてお問い合わせください**
