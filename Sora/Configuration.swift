@@ -26,7 +26,7 @@ public struct Proxy: CustomStringConvertible {
     let password: String?
 
     /// エージェント
-    var agent: String = "Sora iOS SDK \(SDKInfo.version)"
+    var agent: String = SDKInfo.versionString
 
     /**
      初期化します。

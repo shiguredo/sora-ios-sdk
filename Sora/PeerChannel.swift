@@ -305,9 +305,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             multistream = true
         }
 
-        let soraClient = "Sora iOS SDK \(SDKInfo.version)"
+        let soraClient = SDKInfo.versionString
 
-        let webRTCVersion = "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
+        let webRTCVersion = WebRTCInfo.versionString
 
         let simulcast = configuration.simulcastEnabled
         let connect = SignalingConnect(
