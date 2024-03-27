@@ -1,7 +1,9 @@
 /// :nodoc:
 public enum SDKInfo {
-    // Sora iOS SDK のバージョンを定義する
+    /// Sora iOS SDK のバージョンを定義する
     public static let version = "2024.1.0"
+    /// Sora iOS SDK のバージョン文字列
+    public static let versionString = "Sora iOS SDK \(version)"
 }
 
 /**
@@ -26,4 +28,6 @@ public enum WebRTCInfo {
             revision.startIndex, offsetBy: 7
         )])
     }
+    ///  libwebrtc のバージョン文字列
+    public static let versionString = "Shiguredo-build \(version) (\(version).\(commitPosition).\(maintenanceVersion) \(shortRevision))"
 }
