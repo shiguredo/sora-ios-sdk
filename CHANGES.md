@@ -11,8 +11,10 @@
 
 ## develop
 
-- [CHANGE] シグナリング `connect` メッセージの `libwebrtc` に含まれるバージョン文字列に branch-heads を追加する
-  - 送信される文字列は `Shiguredo-build M123 (M123.3.0 41b1493)` から、`Shiguredo-build M123 (M123.6312.3.0 41b1493)` に変更される
+- [CHANGE] シグナリング `connect` メッセージの `libwebrtc` に含まれるバージョン文字列を Android と揃える
+  - branch-heads を追加する
+  - () 内の libwebrtc バージョンについて最初の 1 文字を削る
+  - 送信される文字列は `Shiguredo-build M123 (M123.3.0 41b1493)` から、`Shiguredo-build M123 (123.6312.3.0 41b1493)` に変更される
   - @miosakuma
 - [UPDATE] WebRTC m123.6312.3.0 に上げる
   - @miosakuma
