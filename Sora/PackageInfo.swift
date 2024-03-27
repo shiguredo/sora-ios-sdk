@@ -28,6 +28,9 @@ public enum WebRTCInfo {
             revision.startIndex, offsetBy: 7
         )])
     }
+    /// WebRTC の branch-heads
+    public static let branchHeads = "6312"
+
     ///  libwebrtc のバージョン文字列
-    public static let versionString = "Shiguredo-build \(version) (\(version).\(commitPosition).\(maintenanceVersion) \(shortRevision))"
+    public static let versionString = "Shiguredo-build \(version) (\(version).\(branchHeads).\(commitPosition).\(maintenanceVersion) \(shortRevision))"
 }
