@@ -11,7 +11,14 @@
 
 ## develop
 
+- [CHANGE] シグナリング `connect` メッセージの `libwebrtc` に含まれるバージョン文字列に branch-heads を追加する
+  - 送信される文字列は `Shiguredo-build M123 (M123.3.0 41b1493)` から、`Shiguredo-build M123 (M123.6312.3.0 41b1493)` に変更される
+  - @miosakuma
 - [UPDATE] WebRTC m123.6312.3.0 に上げる
+  - @miosakuma
+- [UPDATE] SDKInfo, WebRTCInfo に versionString を追加し、バージョン文字列はここから取得するようにする
+  - 今まで Configration.swift, PeerChannel.swift などで独自で修正するようにしていたが、これからはバージョン文字列の編集は SDKInfo, WebRTCInfo で行う 
+  - 受け渡しをする文字列の編集バリエーションが増えた時もここで行うようにする
   - @miosakuma
 
 ## 2024.1.0
