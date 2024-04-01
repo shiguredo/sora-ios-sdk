@@ -11,7 +11,7 @@
 
 ## develop
 
-- [UPDATE] WebRTC m123.6312.3.0 に上げる
+- [UPDATE] WebRTC m122.6261.1.0 に上げる
   - @miosakuma
 
 ## 2024.1.0
