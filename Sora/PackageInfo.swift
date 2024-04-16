@@ -21,7 +21,7 @@ public enum WebRTCInfo {
     public static let revision = "6b419a0536b1a0ccfff3682f997c6f19bcbd9bd8"
 
     /// WebRTC の branch-heads
-    public static let branchHeads = "6261"
+    public static let branch = "6261"
 
     /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
     public static var shortRevision: String {
