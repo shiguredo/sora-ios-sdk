@@ -17,6 +17,11 @@
   - 送信される文字列は `Shiguredo-build M122 (M122.1.0 6b419a0)` から、`Shiguredo-build M122 (122.6261.1.0 6b419a0)` に変更される
 - [UPDATE] WebRTC m122.6261.1.0 に上げる
   - @miosakuma
+- [UPDATE] システム条件を変更する
+  - macOS 14.4.1 以降
+  - Xcode 15.3
+  - Swift 5.10
+  - @miosakuma
 
 ## 2024.1.0
 
