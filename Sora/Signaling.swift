@@ -148,33 +148,33 @@ public enum Signaling {
     public func typeName() -> String {
         switch self {
         case .connect:
-            return "connect"
+            "connect"
         case .offer:
-            return "offer"
+            "offer"
         case .answer:
-            return "answer"
+            "answer"
         case .update:
-            return "update"
+            "update"
         case .reOffer:
-            return "re-offer"
+            "re-offer"
         case .reAnswer:
-            return "re-answer"
+            "re-answer"
         case .candidate:
-            return "candidate"
+            "candidate"
         case .notify:
-            return "notify"
+            "notify"
         case .ping:
-            return "ping"
+            "ping"
         case .pong:
-            return "pong"
+            "pong"
         case .disconnect:
-            return "disconnect"
+            "disconnect"
         case .push:
-            return "push"
+            "push"
         case .switched:
-            return "switched"
+            "switched"
         case .redirect:
-            return "redirect"
+            "redirect"
         }
     }
 }

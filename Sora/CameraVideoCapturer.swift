@@ -15,22 +15,18 @@ public final class CameraVideoCapturer {
     public static var devices: [AVCaptureDevice] { RTCCameraVideoCapturer.captureDevices() }
 
     /// 前面のカメラに対応するデバイス
-    public private(set) static var front: CameraVideoCapturer? = {
-        if let device = device(for: .front) {
-            return CameraVideoCapturer(device: device)
-        } else {
-            return nil
-        }
-    }()
+    public private(set) static var front: CameraVideoCapturer? = if let device = device(for: .front) {
+        CameraVideoCapturer(device: device)
+    } else {
+        nil
+    }
 
     /// 背面のカメラに対応するデバイス
-    public private(set) static var back: CameraVideoCapturer? = {
-        if let device = device(for: .back) {
-            return CameraVideoCapturer(device: device)
-        } else {
-            return nil
-        }
-    }()
+    public private(set) static var back: CameraVideoCapturer? = if let device = device(for: .back) {
+        CameraVideoCapturer(device: device)
+    } else {
+        nil
+    }
 
     /// 起動中のデバイス
     public private(set) static var current: CameraVideoCapturer?
@@ -359,26 +355,26 @@ public struct CameraSettings: CustomStringConvertible {
         /// 横方向のピクセル数を返します。
         public var width: Int32 {
             switch self {
-            case .qvga240p: return 320
-            case .vga480p: return 640
-            case .qhd540p: return 960
-            case .hd720p: return 1280
-            case .hd1080p: return 1920
-            case .uhd2160p: return 3840
-            case .uhd3024p: return 4032
+            case .qvga240p: 320
+            case .vga480p: 640
+            case .qhd540p: 960
+            case .hd720p: 1280
+            case .hd1080p: 1920
+            case .uhd2160p: 3840
+            case .uhd3024p: 4032
             }
         }
 
         /// 縦方向のピクセル数を返します。
         public var height: Int32 {
             switch self {
-            case .qvga240p: return 240
-            case .vga480p: return 480
-            case .qhd540p: return 540
-            case .hd720p: return 720
-            case .hd1080p: return 1080
-            case .uhd2160p: return 2160
-            case .uhd3024p: return 3024
+            case .qvga240p: 240
+            case .vga480p: 480
+            case .qhd540p: 540
+            case .hd720p: 720
+            case .hd1080p: 1080
+            case .uhd2160p: 2160
+            case .uhd3024p: 3024
             }
         }
     }

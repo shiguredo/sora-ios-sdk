@@ -31,7 +31,7 @@ public enum SDPSemantics {
     var nativeValue: RTCSdpSemantics {
         switch self {
         case .unifiedPlan:
-            return RTCSdpSemantics.unifiedPlan
+            RTCSdpSemantics.unifiedPlan
         }
     }
 }
@@ -57,13 +57,13 @@ public enum DegradationPreference {
     var nativeValue: RTCDegradationPreference {
         switch self {
         case .balanced:
-            return RTCDegradationPreference.balanced
+            RTCDegradationPreference.balanced
         case .disabled:
-            return RTCDegradationPreference.disabled
+            RTCDegradationPreference.disabled
         case .maintainFramerate:
-            return RTCDegradationPreference.maintainFramerate
+            RTCDegradationPreference.maintainFramerate
         case .maintainResolution:
-            return RTCDegradationPreference.maintainResolution
+            RTCDegradationPreference.maintainResolution
         }
     }
 }

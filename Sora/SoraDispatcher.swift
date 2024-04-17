@@ -10,13 +10,13 @@ public enum SoraDispatcher {
 
     /// 指定されたキューを利用して、 block を非同期で実行します。
     public static func async(on queue: SoraDispatcher, block: @escaping () -> Void) {
-        let native: RTCDispatcherQueueType
-        switch queue {
-        case .camera:
-            native = .typeCaptureSession
-        case .audio:
-            native = .typeAudioSession
-        }
+        let native: RTCDispatcherQueueType =
+            switch queue {
+            case .camera:
+                .typeCaptureSession
+            case .audio:
+                .typeAudioSession
+            }
         RTCDispatcher.dispatchAsync(on: native, block: block)
     }
 }
