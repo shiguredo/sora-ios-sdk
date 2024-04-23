@@ -1,7 +1,7 @@
 /// :nodoc:
 public enum SDKInfo {
     // Sora iOS SDK のバージョンを定義する
-    public static let version = "2024.1.0"
+    public static let version = "2024.2.0"
 }
 
 /**
