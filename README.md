@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![libwebrtc](https://img.shields.io/badge/libwebrtc-121.6167-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/6167)
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-123.6312-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/6312)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -20,9 +20,9 @@ Please read https://github.com/shiguredo/oss before use.
 
 - iOS 13 以降
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
-- macOS 14.3.1 以降
-- Xcode 15.2
-- Swift 5.9.2
+- macOS 14.4.1 以降
+- Xcode 15.3
+- Swift 5.10
 - CocoaPods 1.15.2 以降
 - WebRTC SFU Sora 2023.2.0 以降
 
@@ -36,6 +36,11 @@ Xcode と Swift のバージョンによっては、 CocoaPods で取得でき�
 ## ドキュメント
 
 [Sora iOS SDK ドキュメント — Sora iOS SDK](https://sora-ios-sdk.shiguredo.jp/)
+
+## 有償での優先実装
+
+- 帯域幅制限時に解像度またはフレームレートのどちらを維持するか指定できるようにする機能
+  - 企業名非公開
 
 ## 有償での優先実装が可能な機能一覧
 
@@ -54,8 +59,8 @@ Xcode と Swift のバージョンによっては、 CocoaPods で取得でき�
 Apache License 2.0
 
 ```
+Copyright 2017-2024, Shiguredo Inc.
 Copyright 2017-2023, SUZUKI Tetsuya (Original Author)
-Copyright 2017-2023, Shiguredo Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
