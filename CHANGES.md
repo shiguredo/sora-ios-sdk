@@ -11,6 +11,8 @@
 
 ## develop
 
+## 2024.2.0
+
 - [CHANGE] シグナリング `connect` メッセージの `libwebrtc` に含まれるバージョン文字列を Android と揃える
   - branch-heads を追加する
   - () 内の libwebrtc バージョンについて最初の 1 文字を削る
