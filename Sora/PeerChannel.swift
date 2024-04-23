@@ -341,7 +341,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             forwardingFilter: configuration.forwardingFilter,
             vp9Params: configuration.videoVp9Params,
             av1Params: configuration.videoAv1Params,
-            h264Params: configuration.videoH264Params
+            h264Params: configuration.videoH264Params,
+            h265Params: configuration.videoH265Params
         )
 
         Logger.debug(type: .peerChannel, message: "send connect")

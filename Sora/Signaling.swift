@@ -340,6 +340,9 @@ public struct SignalingConnect {
 
     /// H264 向け映像コーデックパラメーター
     public var h264Params: Encodable?
+    
+    /// H265 向け映像コーデックパラメーター
+    public var h265Params: Encodable?
 }
 
 /**
@@ -789,6 +792,7 @@ extension SignalingConnect: Codable {
         case vp9_params
         case av1_params
         case h264_params
+        case h265_params
     }
 
     enum AudioCodingKeys: String, CodingKey {
@@ -843,6 +847,11 @@ extension SignalingConnect: Codable {
                 if let h264Params {
                     let h264ParamsEnc = videoContainer.superEncoder(forKey: .h264_params)
                     try h264Params.encode(to: h264ParamsEnc)
+                }
+                
+                if let h265Params {
+                    let h265ParamsEnc = videoContainer.superEncoder(forKey: .h265_params)
+                    try h265Params.encode(to: h265ParamsEnc)
                 }
             }
         } else {
