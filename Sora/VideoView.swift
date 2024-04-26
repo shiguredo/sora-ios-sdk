@@ -404,11 +404,10 @@ class VideoViewContentView: UIView {
     }
 
     private func updateDebugInfo() {
-        var info: String
-        if let size = currentVideoFrameSize {
-            info = "\(Int(size.width))x\(Int(size.height)) / "
+        var info = if let size = currentVideoFrameSize {
+            "\(Int(size.width))x\(Int(size.height)) / "
         } else {
-            info = ""
+            ""
         }
 
         info += "\(frameCount) fps"

@@ -57,9 +57,9 @@ public enum AudioOutput {
     var portOverride: AVAudioSession.PortOverride {
         switch self {
         case .default:
-            return .none
+            .none
         case .speaker:
-            return .speaker
+            .speaker
         }
     }
 }

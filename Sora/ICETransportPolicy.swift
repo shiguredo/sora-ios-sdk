@@ -25,9 +25,9 @@ extension ICETransportPolicy: CustomStringConvertible {
     public var description: String {
         switch self {
         case .relay:
-            return "relay"
+            "relay"
         case .all:
-            return "all"
+            "all"
         }
     }
 }
