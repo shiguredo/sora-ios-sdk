@@ -11,6 +11,11 @@
 
 ## develop
 
+- [ADD] サイマルキャストマルチコーデックに対応する
+  - @melpon
+- [UPDATE] WebRTC m122.6261.1.4 に上げる
+  - @melpon
+
 ## 2024.2.0
 
 - [CHANGE] シグナリング `connect` メッセージの `libwebrtc` に含まれるバージョン文字列を Android と揃える
