@@ -142,6 +142,9 @@ public struct Configuration {
     /// ロールが `.sendrecv` または `.recvonly` のときのみ有効です。
     public var simulcastRid: SimulcastRid?
 
+    /// サイマルキャストマルチコーデックの可否。`true` であればサイマルキャストマルチコーデックを有効にします。
+    public var simulcastMulticodecEnabled: Bool? = nil
+
     /// スポットライトの可否
     /// 詳しくは Sora のスポットライト機能を参照してください。
     public var spotlightEnabled: Spotlight = .disabled

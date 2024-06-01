@@ -308,6 +308,9 @@ public struct SignalingConnect {
     /// サイマルキャストでの映像の種類
     public var simulcastRid: SimulcastRid?
 
+    /// サイマルキャストマルチコーデックの可否
+    public var simulcastMulticodecEnabled: Bool?
+
     /// :nodoc:
     public var soraClient: String?
 
@@ -770,6 +773,7 @@ extension SignalingConnect: Codable {
         case spotlight_unfocus_rid
         case simulcast
         case simulcast_rid
+        case simulcast_multicodec
         case video
         case audio
         case sora_client
@@ -873,6 +877,8 @@ extension SignalingConnect: Codable {
                 break
             }
         }
+
+        try container.encodeIfPresent(simulcastMulticodecEnabled, forKey: .simulcast_multicodec)
 
         switch spotlightEnabled {
         case .enabled:

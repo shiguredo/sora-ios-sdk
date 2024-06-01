@@ -331,6 +331,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             spotlightUnfocusRid: configuration.spotlightUnfocusRid,
             simulcastEnabled: simulcast,
             simulcastRid: configuration.simulcastRid,
+            simulcastMulticodecEnabled: configuration.simulcastMulticodecEnabled,
             soraClient: soraClient,
             webRTCVersion: webRTCVersion,
             environment: DeviceInfo.current.description,
