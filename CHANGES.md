@@ -11,6 +11,9 @@
 
 ## develop
 
+- [UPDATE] WebRTC m125.6422.2.5 に上げる
+  - @miosakuma
+
 ## 2024.2.0
 
 - [CHANGE] シグナリング `connect` メッセージの `libwebrtc` に含まれるバージョン文字列を Android と揃える
