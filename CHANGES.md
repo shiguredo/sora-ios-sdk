@@ -13,6 +13,9 @@
 
 - [UPDATE] WebRTC m125.6422.2.5 に上げる
   - @miosakuma
+- [UPDATE] Podfile, Podfile.dev のソースリポジトリを変更する
+  - `https://github.com/CocoaPods/Specs.git` から `https://cdn.cocoapods.org/` に変更される
+  - @zztkm
 
 ## 2024.2.0
 
