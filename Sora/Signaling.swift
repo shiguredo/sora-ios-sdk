@@ -814,8 +814,8 @@ extension SignalingConnect: Codable {
             try metadata.encode(to: metadataEnc)
         }
         // この if 分岐をせずに superEncoder を呼び出すと、`"signaling_notify_metadata": {}` が含まれてしまう
-        let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
         if let notifyMetadata {
+            let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
             try notifyMetadata.encode(to: notifyEnc)
         }
         try container.encodeIfPresent(multistreamEnabled,
