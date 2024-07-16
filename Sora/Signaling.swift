@@ -807,13 +807,16 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(clientId, forKey: .client_id)
         try container.encodeIfPresent(bundleId, forKey: .bundle_id)
         try container.encodeIfPresent(sdp, forKey: .sdp)
-        // metadata と notifyMetadata は nil でない場合のみエンコードする
-        // この if 分岐をせずに superEncoder を呼び出すと、`"metadata": {}` が含まれてしまう
+
+        // try metadata?.encode(to: metadataEnc) で metadata が nil の時はエンコードが実行されないように実装しても、
+        // container.superEncoder(forKey: .metadata) の呼び出し時点で子要素の準備までしてしまっているので
+        // metadata が nil の場合でも、`"metadata": {}` になってしまう。
+        // これを回避するために metadata が nil でない場合のみ、container.superEncoder(forKey: .metadata) を呼び出して
+        // encode(to:) を実行するような実装にしている。
         if let metadata {
             let metadataEnc = container.superEncoder(forKey: .metadata)
             try metadata.encode(to: metadataEnc)
         }
-        // この if 分岐をせずに superEncoder を呼び出すと、`"signaling_notify_metadata": {}` が含まれてしまう
         if let notifyMetadata {
             let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
             try notifyMetadata.encode(to: notifyEnc)
