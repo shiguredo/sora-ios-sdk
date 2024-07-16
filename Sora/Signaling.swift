@@ -807,10 +807,17 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(clientId, forKey: .client_id)
         try container.encodeIfPresent(bundleId, forKey: .bundle_id)
         try container.encodeIfPresent(sdp, forKey: .sdp)
-        let metadataEnc = container.superEncoder(forKey: .metadata)
-        try metadata?.encode(to: metadataEnc)
+        // metadata と notifyMetadata は nil でない場合のみエンコードする
+        // この if 分岐をせずに superEncoder を呼び出すと、`"metadata": {}` が含まれてしまう
+        if let metadata {
+            let metadataEnc = container.superEncoder(forKey: .metadata)
+            try metadata.encode(to: metadataEnc)
+        }
+        // この if 分岐をせずに superEncoder を呼び出すと、`"signaling_notify_metadata": {}` が含まれてしまう
         let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
-        try notifyMetadata?.encode(to: notifyEnc)
+        if let notifyMetadata {
+            try notifyMetadata.encode(to: notifyEnc)
+        }
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
