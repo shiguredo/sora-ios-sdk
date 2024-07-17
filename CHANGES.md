@@ -17,6 +17,8 @@
   - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
   - https://blog.cocoapods.org/CocoaPods-1.8.0-beta/
   - @zztkm
+- [FIX] SignalingConnect の `metadata`, `signaling_notify_metadata` が nil の場合に {} として送信されてしまう問題を修正する
+  - @zztkm
 
 ## 2024.2.0
 
