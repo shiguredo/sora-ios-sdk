@@ -17,12 +17,12 @@
   - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
   - https://blog.cocoapods.org/CocoaPods-1.8.0-beta/
   - @zztkm
-- [ADD] `SignalingOffer` に `simulcast` を追加する
+- [UPDATE] `SignalingOffer` に `simulcast` を追加する
   - @zztkm
 - [FIX] SignalingConnect の `metadata`, `signaling_notify_metadata` が nil の場合に {} として送信されてしまう問題を修正する
   - @zztkm
 - [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` の値を type: offer の際に設定される simulcast の値で上書きする
-  - 認証ウェブフック成功時に払い出された `simulcast` の値を利用する
+  - 認証ウェブフック成功時に払い出された type: offer の `simulcast` の値が反映されない不具合への対応
   - @zztkm
 
 ## 2024.2.0
