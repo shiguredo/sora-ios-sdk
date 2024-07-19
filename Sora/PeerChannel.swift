@@ -828,7 +828,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 signalingOfferMessageDataChannels = dataChannels
             }
 
-            // offer.simaulcast が nil でない場合に WrapperVideoEncoderFactory.shared.simulcastEnabled を上書きする
+            // offer.simulcast が設定されている場合、WrapperVideoEncoderFactory.shared.simulcastEnabled を上書きする
             if let simulcast = offer.simulcast {
                 WrapperVideoEncoderFactory.shared.simulcastEnabled = simulcast
             }
