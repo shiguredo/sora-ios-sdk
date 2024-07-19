@@ -22,6 +22,7 @@
 - [FIX] SignalingConnect の `metadata`, `signaling_notify_metadata` が nil の場合に {} として送信されてしまう問題を修正する
   - @zztkm
 - [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` の値を type: offer の際に設定される simulcast の値で上書きする
+  - 認証ウェブフック成功時に払い出された `simulcast` の値を利用する
   - @zztkm
 
 ## 2024.2.0
