@@ -828,6 +828,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 signalingOfferMessageDataChannels = dataChannels
             }
 
+            // offer.simaulcast が nil でない場合に WrapperVideoEncoderFactory.shared.simulcastEnabled を上書きする
+            if let simulcast = offer.simulcast {
+                WrapperVideoEncoderFactory.shared.simulcastEnabled = simulcast
+            }
+
             createAndSendAnswer(offer: offer)
         case let .update(update):
             if configuration.isMultistream {

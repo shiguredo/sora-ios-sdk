@@ -427,6 +427,9 @@ public struct SignalingOffer {
 
     /// mid
     public let mid: [String: String]?
+
+    /// サイマルキャスト有効 / 無効フラグ
+    public let simulcast: Bool?
 }
 
 /**
@@ -958,6 +961,7 @@ extension SignalingOffer: Codable {
         case config
         case encodings
         case mid
+        case simulcast
     }
 
     public init(from decoder: Decoder) throws {
@@ -973,6 +977,7 @@ extension SignalingOffer: Codable {
             try container.decodeIfPresent([Encoding].self,
                                           forKey: .encodings)
         mid = try container.decodeIfPresent([String: String].self, forKey: .mid)
+        simulcast = try container.decodeIfPresent(Bool.self, forKey: .simulcast)
     }
 
     public func encode(to encoder: Encoder) throws {
