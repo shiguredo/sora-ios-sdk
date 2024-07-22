@@ -195,7 +195,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         lock.lock()
         onConnect = handler
 
-        // TODO (zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
+        // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
         // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
         WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
 
