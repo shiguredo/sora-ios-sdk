@@ -26,7 +26,7 @@
   - @zztkm
 - [FIX] `Configuration.spotlightEnabled` はサイマルキャストを有効化するための条件ではないのに、判定条件に加わっていた問題を修正する
   - `WrapperVideoEncoderFactory.shared.simulcastEnabled` の判定条件から `Configuration.spotlightEnabled` を削除する
-  - 本来は、<https://github.com/shiguredo/sora-ios-sdk/commit/44f3b81fd81694f3f670e3de568afc2a6bab5f9f> 時点で修正すべきだったが、漏れていたので修正
+  - <https://github.com/shiguredo/sora-ios-sdk/commit/44f3b81fd81694f3f670e3de568afc2a6bab5f9f> の修正漏れ
   - @zztkm
 
 ## 2024.2.0
