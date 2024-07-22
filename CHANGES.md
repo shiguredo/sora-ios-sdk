@@ -24,6 +24,9 @@
 - [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` の値を type: offer の際に設定される simulcast の値で上書きする
   - 認証ウェブフック成功時に払い出された type: offer の `simulcast` の値が反映されない不具合への対応
   - @zztkm
+- [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` の設定条件から `Configuration.spotlightEnabled` を削除する
+  - `Configuration.spotlightEnabled` はサイマルキャストを有効化するための条件ではないため削除する
+  - @zztkm
 
 ## 2024.2.0
 
