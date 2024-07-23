@@ -19,6 +19,9 @@
   - @zztkm
 - [UPDATE] `SignalingOffer` に `simulcast` を追加する
   - @zztkm
+- [UPDATE] GitHub Actions の定期実行をやめる
+  - build.yml の起動イベントから schedule を削除
+  - @zztkm
 - [FIX] SignalingConnect の `metadata`, `signaling_notify_metadata` が nil の場合に {} として送信されてしまう問題を修正する
   - @zztkm
 - [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` の値を type: offer の際に設定される simulcast の値で上書きする
