@@ -270,6 +270,7 @@ public struct SignalingConnect {
     public var sdp: String?
 
     /// マルチストリームの可否
+    @available(*, deprecated, message: "レガシーストリーム機能は 2025 年 6 月リリースの Sora にて廃止します。")
     public var multistreamEnabled: Bool?
 
     /// 映像の可否

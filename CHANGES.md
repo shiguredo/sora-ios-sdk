@@ -19,6 +19,9 @@
   - @zztkm
 - [UPDATE] `SignalingOffer` に `simulcast` を追加する
   - @zztkm
+- [UPDATE] multistreamEnabled を非推奨にする
+  - Sora のレガシーストリーム機能が 2025 年 6 月リリースにて廃止されるため
+  - @zztkm
 - [UPDATE] GitHub Actions の定期実行をやめる
   - build.yml の起動イベントから schedule を削除
   - @zztkm
