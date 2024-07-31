@@ -11,6 +11,9 @@
 
 ## develop
 
+- [CHANGE] `MediaChannelConfiguration` クラスを削除する
+  - MediaChannelConfiguration.swift には MediaChannelConfiguration クラスしかないのでファイルごと削除
+  - @zztkm
 - [UPDATE] WebRTC m127.6533.1.1 に上げる
   - @miosakuma
   - @zztkm
