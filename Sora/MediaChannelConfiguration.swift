@@ -1,5 +1,6 @@
 import Foundation
 
+@available(*, unavailable, message: "このクラスは廃止予定です。廃止後も利用したい場合はこのクラス定義をご自身のソースに組み込んで利用してください。")
 public class MediaChannelConfiguration {
     public static var maxBitRate = 5000
 
