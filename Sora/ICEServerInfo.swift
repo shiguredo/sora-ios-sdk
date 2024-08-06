@@ -9,8 +9,7 @@ public final class ICEServerInfo {
 
     /// URL のリスト
     ///
-    /// URL 構造体を使うと、IPv6 がパーセントエンコードされてしまい、
-    /// 接続に失敗してしまうため、String で保持します。
+    /// TURN URI はそのまま文字列として処理する
     public var urls: [String] = []
 
     /// ユーザー名
@@ -64,6 +63,9 @@ extension ICEServerInfo: Codable {
     public convenience init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let urls = try container.decode([String].self, forKey: .urls)
+        for url in urls {
+            Logger.debug(type: .signalingChannel, message: "kensaku: ICEServerInfo: \(url)")
+        }
         let userName = try container.decodeIfPresent(String.self, forKey: .userName)
         let credential = try container.decodeIfPresent(String.self, forKey: .credential)
         self.init(urls: urls,
