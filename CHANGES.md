@@ -35,6 +35,9 @@
   - `WrapperVideoEncoderFactory.shared.simulcastEnabled` の判定条件から `Configuration.spotlightEnabled` を削除する
   - <https://github.com/shiguredo/sora-ios-sdk/commit/44f3b81fd81694f3f670e3de568afc2a6bab5f9f> の修正漏れ
   - @zztkm
+- [FIX] URL 構造体が TURN URI に対応していないのに、URL に変換していたのを修正する
+  - 意図しないエスケープが発生しないようにした
+  - @zztkm
 
 ## 2024.2.0
 

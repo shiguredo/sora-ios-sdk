@@ -8,7 +8,9 @@ public final class ICEServerInfo {
     // MARK: プロパティ
 
     /// URL のリスト
-    public var urls: [URL] = []
+    ///
+    /// TURN URI はそのまま文字列として処理する
+    public var urls: [String] = []
 
     /// ユーザー名
     public var userName: String?
@@ -20,7 +22,7 @@ public final class ICEServerInfo {
     public var tlsSecurityPolicy: TLSSecurityPolicy = .secure
 
     var nativeValue: RTCIceServer {
-        RTCIceServer(urlStrings: urls.map { url in url.absoluteString },
+        RTCIceServer(urlStrings: urls,
                      username: userName,
                      credential: credential,
                      tlsCertPolicy: tlsSecurityPolicy.nativeValue)
@@ -29,7 +31,7 @@ public final class ICEServerInfo {
     // MARK: 初期化
 
     /// 初期化します。
-    public init(urls: [URL],
+    public init(urls: [String],
                 userName: String?,
                 credential: String?,
                 tlsSecurityPolicy: TLSSecurityPolicy)
@@ -60,7 +62,7 @@ extension ICEServerInfo: Codable {
 
     public convenience init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let urls = try container.decode([URL].self, forKey: .urls)
+        let urls = try container.decode([String].self, forKey: .urls)
         let userName = try container.decodeIfPresent(String.self, forKey: .userName)
         let credential = try container.decodeIfPresent(String.self, forKey: .credential)
         self.init(urls: urls,
