@@ -8,10 +8,6 @@
   - 下位互換がある追加
 - FIX
   - バグ修正
-- TEST
-  - テスト関連
-- DOC
-  - ドキュメント関連
 
 ## develop
 
@@ -21,14 +17,7 @@
 - [UPDATE] WebRTC m127.6533.1.1 に上げる
   - @miosakuma
   - @zztkm
-- [UPDATE] CocoaPods のソースリポジトリを GitHub から CDN に変更する
-  - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
-  - <https://blog.cocoapods.org/CocoaPods-1.8.0-beta/>
-  - @zztkm
 - [UPDATE] `SignalingOffer` に `simulcast` を追加する
-  - @zztkm
-- [UPDATE] GitHub Actions の定期実行をやめる
-  - build.yml の起動イベントから schedule を削除
   - @zztkm
 - [FIX] SignalingConnect の `metadata`, `signaling_notify_metadata` が nil の場合に {} として送信されてしまう問題を修正する
   - @zztkm
@@ -41,6 +30,16 @@
   - @zztkm
 - [FIX] URL 構造体が TURN URI に対応していないのに、URL に変換していたのを修正する
   - 意図しないエスケープが発生しないようにした
+  - @zztkm
+
+### misc
+
+- [UPDATE] GitHub Actions の定期実行をやめる
+  - build.yml の起動イベントから schedule を削除
+  - @zztkm
+- [UPDATE] CocoaPods のソースリポジトリを GitHub から CDN に変更する
+  - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
+  - <https://blog.cocoapods.org/CocoaPods-1.8.0-beta/>
   - @zztkm
 
 ## 2024.2.0
