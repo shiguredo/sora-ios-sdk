@@ -8,6 +8,10 @@
   - 下位互換がある追加
 - FIX
   - バグ修正
+- TEST
+  - テスト関連
+- DOC
+  - ドキュメント関連
 
 ## develop
 
@@ -19,7 +23,7 @@
   - @zztkm
 - [UPDATE] CocoaPods のソースリポジトリを GitHub から CDN に変更する
   - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
-  - https://blog.cocoapods.org/CocoaPods-1.8.0-beta/
+  - <https://blog.cocoapods.org/CocoaPods-1.8.0-beta/>
   - @zztkm
 - [UPDATE] `SignalingOffer` に `simulcast` を追加する
   - @zztkm
@@ -110,7 +114,7 @@
   - @torikizi
 - [CHANGE] `@available(*, deprecated, ... )` としていた非推奨項目を削除する
   - 非推奨であった項目について削除に移行する
-  - 移行方法については https://sora-ios-sdk.shiguredo.jp/ の移行ドキュメントに記載されている
+  - 移行方法については <https://sora-ios-sdk.shiguredo.jp/> の移行ドキュメントに記載されている
   - @torikizi
 - [CHANGE] 廃止された `onConnectHandler` を `onConnect` に置き換える
   - すでに廃止済みの `onConnectHandler` が残っていたので、`onConnect` に置き換えた
@@ -237,7 +241,7 @@
 
 - [FIX] Sora との接続確立後に WebSocket のエラーが発生した場合、 エラーが正しく伝搬されず、終了処理が実行されないため修正する
   - 接続確立後に WebSocket のエラーが発生した場合、 Sora との接続を切断して終了処理を行うのが正しい処理です
-  - 詳細な仕様は https://sora-doc.shiguredo.jp/SORA_CLIENT に記載されています
+  - 詳細な仕様は <https://sora-doc.shiguredo.jp/SORA_CLIENT> に記載されています
   - @enm10k
 
 ## 2022.1.0
