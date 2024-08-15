@@ -23,7 +23,7 @@ public enum VideoFrame {
     public var width: Int {
         switch self {
         case .native(capturer: _, frame: let frame):
-            return Int(frame.width)
+            Int(frame.width)
         }
     }
 
@@ -31,7 +31,7 @@ public enum VideoFrame {
     public var height: Int {
         switch self {
         case .native(capturer: _, frame: let frame):
-            return Int(frame.height)
+            Int(frame.height)
         }
     }
 
@@ -39,7 +39,7 @@ public enum VideoFrame {
     public var timestamp: CMTime? {
         switch self {
         case .native(capturer: _, frame: let frame):
-            return CMTimeMake(value: frame.timeStampNs, timescale: 1_000_000_000)
+            CMTimeMake(value: frame.timeStampNs, timescale: 1_000_000_000)
         }
     }
 

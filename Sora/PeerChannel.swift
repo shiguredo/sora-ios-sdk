@@ -840,7 +840,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             }
         case let .reOffer(reOffer):
             createAndSendReAnswer(forReOffer: reOffer.sdp)
-
         case let .ping(ping):
             let pong = SignalingPong()
             if ping.statisticsEnabled == true {

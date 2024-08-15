@@ -96,9 +96,9 @@ public extension Optional {
     func unwrap(ifNone: () throws -> Wrapped) rethrows -> Wrapped {
         switch self {
         case let .some(value):
-            return value
+            value
         case .none:
-            return try ifNone()
+            try ifNone()
         }
     }
 }

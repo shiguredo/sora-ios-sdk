@@ -180,7 +180,6 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                         }
                     }
                 }
-
             case "signaling", "push", "notify":
                 switch Signaling.decode(data) {
                 case let .success(signaling):

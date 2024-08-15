@@ -93,35 +93,35 @@ public enum WebSocketStatusCode {
     public func intValue() -> Int {
         switch self {
         case .normal:
-            return 1000
+            1000
         case .goingAway:
-            return 1001
+            1001
         case .protocolError:
-            return 1002
+            1002
         case .unhandledType:
-            return 1003
+            1003
         case .noStatusReceived:
-            return 1005
+            1005
         case .abnormal:
-            return 1006
+            1006
         case .invalidUTF8:
-            return 1007
+            1007
         case .policyViolated:
-            return 1008
+            1008
         case .messageTooBig:
-            return 1009
+            1009
         case .missingExtension:
-            return 1010
+            1010
         case .internalError:
-            return 1011
+            1011
         case .serviceRestart:
-            return 1012
+            1012
         case .tryAgainLater:
-            return 1013
+            1013
         case .tlsHandshake:
-            return 1015
+            1015
         case let .other(value):
-            return value
+            value
         }
     }
 }

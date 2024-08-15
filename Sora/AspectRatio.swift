@@ -8,9 +8,9 @@ public enum AspectRatio {
     public func height(forWidth width: CGFloat) -> CGFloat {
         switch self {
         case .standard:
-            return width / 4 * 3
+            width / 4 * 3
         case .wide:
-            return width / 16 * 9
+            width / 16 * 9
         }
     }
 
