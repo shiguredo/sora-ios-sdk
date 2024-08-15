@@ -37,6 +37,9 @@
 - [UPDATE] GitHub Actions の定期実行をやめる
   - build.yml の起動イベントから schedule を削除
   - @zztkm
+- [UPDATE] GitHub Actions の Xcode のバージョンを 15.4 にあげる
+  - 合わせて iOS の SDK を iphoneos17.5 にあげる
+  - @miosakuma
 - [UPDATE] CocoaPods のソースリポジトリを GitHub から CDN に変更する
   - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
   - <https://blog.cocoapods.org/CocoaPods-1.8.0-beta/>
