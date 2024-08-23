@@ -5,10 +5,10 @@ import WebRTC
  ストリームの音声のボリュームの定数のリストです。
  */
 public enum MediaStreamAudioVolume {
-    /// 最大値
+    /// 最小値
     public static let min: Double = 0
 
-    /// 最小値
+    /// 最大値
     public static let max: Double = 10
 }
 
