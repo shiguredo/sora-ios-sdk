@@ -44,6 +44,11 @@
   - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
   - <https://blog.cocoapods.org/CocoaPods-1.8.0-beta/>
   - @zztkm
+- [UPDATE] システム条件を変更する
+  - macOS 14.6.1 以降
+  - Xcode 15.4
+  - WebRTC SFU Sora 2024.1.0 以降
+  - @miosakuma
 
 ## 2024.2.0
 
