@@ -11,6 +11,49 @@
 
 ## develop
 
+## 2024.3.0
+
+**リリース日**: 2024-09-06
+
+- [CHANGE] `MediaChannelConfiguration` を非推奨にする
+  - SDK 内部では利用していないため
+  - @zztkm
+- [UPDATE] WebRTC m127.6533.1.1 に上げる
+  - @miosakuma
+  - @zztkm
+- [UPDATE] `SignalingOffer` に `simulcast` を追加する
+  - @zztkm
+- [FIX] SignalingConnect の `metadata`, `signaling_notify_metadata` が nil の場合に {} として送信されてしまう問題を修正する
+  - @zztkm
+- [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` の値を type: offer の際に設定される simulcast の値で上書きする
+  - 認証ウェブフック成功時に払い出された type: offer の `simulcast` の値が反映されない不具合への対応
+  - @zztkm
+- [FIX] `Configuration.spotlightEnabled` はサイマルキャストを有効化するための条件ではないのに、判定条件に加わっていた問題を修正する
+  - `WrapperVideoEncoderFactory.shared.simulcastEnabled` の判定条件から `Configuration.spotlightEnabled` を削除する
+  - <https://github.com/shiguredo/sora-ios-sdk/commit/44f3b81fd81694f3f670e3de568afc2a6bab5f9f> の修正漏れ
+  - @zztkm
+- [FIX] URL 構造体が TURN URI に対応していないのに、URL に変換していたのを修正する
+  - 意図しないエスケープが発生しないようにした
+  - @zztkm
+
+### misc
+
+- [UPDATE] GitHub Actions の定期実行をやめる
+  - build.yml の起動イベントから schedule を削除
+  - @zztkm
+- [UPDATE] GitHub Actions の Xcode のバージョンを 15.4 にあげる
+  - 合わせて iOS の SDK を iphoneos17.5 にあげる
+  - @miosakuma
+- [UPDATE] CocoaPods のソースリポジトリを GitHub から CDN に変更する
+  - CocoaPods 1.8 からソースリポジトリのデフォルトが `https://cdn.cocoapods.org/` になった
+  - <https://blog.cocoapods.org/CocoaPods-1.8.0-beta/>
+  - @zztkm
+- [UPDATE] システム条件を変更する
+  - macOS 14.6.1 以降
+  - Xcode 15.4
+  - WebRTC SFU Sora 2024.1.0 以降
+  - @miosakuma
+
 ## 2024.2.0
 
 - [CHANGE] シグナリング `connect` メッセージの `libwebrtc` に含まれるバージョン文字列を Android と揃える
@@ -82,7 +125,7 @@
   - @torikizi
 - [CHANGE] `@available(*, deprecated, ... )` としていた非推奨項目を削除する
   - 非推奨であった項目について削除に移行する
-  - 移行方法については https://sora-ios-sdk.shiguredo.jp/ の移行ドキュメントに記載されている
+  - 移行方法については <https://sora-ios-sdk.shiguredo.jp/> の移行ドキュメントに記載されている
   - @torikizi
 - [CHANGE] 廃止された `onConnectHandler` を `onConnect` に置き換える
   - すでに廃止済みの `onConnectHandler` が残っていたので、`onConnect` に置き換えた
@@ -209,7 +252,7 @@
 
 - [FIX] Sora との接続確立後に WebSocket のエラーが発生した場合、 エラーが正しく伝搬されず、終了処理が実行されないため修正する
   - 接続確立後に WebSocket のエラーが発生した場合、 Sora との接続を切断して終了処理を行うのが正しい処理です
-  - 詳細な仕様は https://sora-doc.shiguredo.jp/SORA_CLIENT に記載されています
+  - 詳細な仕様は <https://sora-doc.shiguredo.jp/SORA_CLIENT> に記載されています
   - @enm10k
 
 ## 2022.1.0

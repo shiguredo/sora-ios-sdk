@@ -427,6 +427,9 @@ public struct SignalingOffer {
 
     /// mid
     public let mid: [String: String]?
+
+    /// サイマルキャスト有効 / 無効フラグ
+    public let simulcast: Bool?
 }
 
 /**
@@ -807,10 +810,20 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(clientId, forKey: .client_id)
         try container.encodeIfPresent(bundleId, forKey: .bundle_id)
         try container.encodeIfPresent(sdp, forKey: .sdp)
-        let metadataEnc = container.superEncoder(forKey: .metadata)
-        try metadata?.encode(to: metadataEnc)
-        let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
-        try notifyMetadata?.encode(to: notifyEnc)
+
+        // try metadata?.encode(to: metadataEnc) で metadata が nil の時はエンコードが実行されないように実装しても、
+        // container.superEncoder(forKey: .metadata) の呼び出し時点で子要素の準備までしてしまっているので
+        // metadata が nil の場合でも、`"metadata": {}` になってしまう。
+        // これを回避するために metadata が nil でない場合のみ、container.superEncoder(forKey: .metadata) を呼び出して
+        // encode(to:) を実行するような実装にしている。
+        if let metadata {
+            let metadataEnc = container.superEncoder(forKey: .metadata)
+            try metadata.encode(to: metadataEnc)
+        }
+        if let notifyMetadata {
+            let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
+            try notifyMetadata.encode(to: notifyEnc)
+        }
         try container.encodeIfPresent(multistreamEnabled,
                                       forKey: .multistream)
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
@@ -948,6 +961,7 @@ extension SignalingOffer: Codable {
         case config
         case encodings
         case mid
+        case simulcast
     }
 
     public init(from decoder: Decoder) throws {
@@ -963,6 +977,7 @@ extension SignalingOffer: Codable {
             try container.decodeIfPresent([Encoding].self,
                                           forKey: .encodings)
         mid = try container.decodeIfPresent([String: String].self, forKey: .mid)
+        simulcast = try container.decodeIfPresent(Bool.self, forKey: .simulcast)
     }
 
     public func encode(to encoder: Encoder) throws {
