@@ -24,35 +24,35 @@ extension LogType: CustomStringConvertible {
     public var description: String {
         switch self {
         case .sora:
-            return "Sora"
+            "Sora"
         case .webSocketChannel:
-            return "WebSocketChannel"
+            "WebSocketChannel"
         case .signaling:
-            return "Signaling"
+            "Signaling"
         case .signalingChannel:
-            return "SignalingChannel"
+            "SignalingChannel"
         case .peerChannel:
-            return "PeerChannel"
+            "PeerChannel"
         case .nativePeerChannel:
-            return "NativePeerChannel"
+            "NativePeerChannel"
         case .connectionTimer:
-            return "ConnectionTimer"
+            "ConnectionTimer"
         case .mediaChannel:
-            return "MediaChannel"
+            "MediaChannel"
         case .mediaStream:
-            return "MediaStream"
+            "MediaStream"
         case .cameraVideoCapturer:
-            return "CameraVideoCapturer"
+            "CameraVideoCapturer"
         case .videoRenderer:
-            return "VideoRenderer"
+            "VideoRenderer"
         case .videoView:
-            return "VideoView"
+            "VideoView"
         case let .user(name):
-            return name
+            name
         case .configurationViewController:
-            return "ConfigurationViewController"
+            "ConfigurationViewController"
         case .dataChannel:
-            return "DataChannel"
+            "DataChannel"
         }
     }
 }
@@ -101,19 +101,19 @@ extension LogLevel {
     var value: Int {
         switch self {
         case .fatal:
-            return 6
+            6
         case .error:
-            return 5
+            5
         case .warn:
-            return 4
+            4
         case .info:
-            return 3
+            3
         case .debug:
-            return 2
+            2
         case .trace:
-            return 1
+            1
         case .off:
-            return 0
+            0
         }
     }
 }
@@ -123,19 +123,19 @@ extension LogLevel: CustomStringConvertible {
     public var description: String {
         switch self {
         case .fatal:
-            return "FATAL"
+            "FATAL"
         case .error:
-            return "ERROR"
+            "ERROR"
         case .warn:
-            return "WARN"
+            "WARN"
         case .info:
-            return "INFO"
+            "INFO"
         case .debug:
-            return "DEBUG"
+            "DEBUG"
         case .trace:
-            return "TRACE"
+            "TRACE"
         case .off:
-            return "OFF"
+            "OFF"
         }
     }
 }

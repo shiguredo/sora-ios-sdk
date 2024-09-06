@@ -7,9 +7,9 @@ enum ConnectionMonitor {
     var state: ConnectionState {
         switch self {
         case let .signalingChannel(chan):
-            return chan.state
+            chan.state
         case let .peerChannel(chan):
-            return ConnectionState(chan.state)
+            ConnectionState(chan.state)
         }
     }
 
