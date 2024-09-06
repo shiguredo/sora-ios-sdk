@@ -11,7 +11,11 @@
 
 ## develop
 
-- [CHANGE] MediaChannelConfiguration を非推奨にする
+## 2024.3.0
+
+**リリース日**: 2024-09-06
+
+- [CHANGE] `MediaChannelConfiguration` を非推奨にする
   - SDK 内部では利用していないため
   - @zztkm
 - [UPDATE] WebRTC m127.6533.1.1 に上げる
