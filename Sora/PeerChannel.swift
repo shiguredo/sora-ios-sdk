@@ -616,10 +616,38 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                     return
                 }
 
+                // answer sdp を加工する
+                var sdp = answer!.sdp
+                // TODO(zztkm): この実装だと stereo=1 がすでに付与されていても付与してしまうので修正する
+                // Chrome/Edge 向けのハック stereo=1 が CreateOffer では付与されないので、
+                // SDP を書き換えて stereo=1 を付与する
+                // https://github.com/w3c/webrtc-stats/issues/686
+                // https://github.com/w3c/webrtc-extensions/issues/63
+                // https://issues.webrtc.org/issues/41481053#comment18
+                if self.configuration.forceStereoOutput {
+                    Logger.debug(type: .peerChannel, message: "stereo=1 を付与する")
+                    let pattern = "minptime=\\d+"
+                    let regexp = try! NSRegularExpression(pattern: pattern)
+                    let replacementFunc: (String) -> String = { match in
+                        if !match.contains("stereo=1") {
+                            return "\(match);stereo=1"
+                        }
+                        return match
+                    }
+
+                    let matches = regexp.matches(in: sdp, range: NSRange(sdp.startIndex..., in: sdp))
+                    for match in matches.reversed() {
+                        let range = match.range
+                        let matchedString = (sdp as NSString).substring(with: range)
+                        let replacedString = replacementFunc(matchedString)
+                        sdp = (sdp as NSString).replacingCharacters(in: range, with: replacedString)
+                    }
+                }
+                let updatedAnswer = RTCSessionDescription(type: .answer, sdp: sdp)
                 Logger.debug(type: .peerChannel, message: "did create answer")
 
                 Logger.debug(type: .peerChannel, message: "try setting local description")
-                nativeChannel.setLocalDescription(answer!) { error in
+                nativeChannel.setLocalDescription(updatedAnswer) { error in
                     guard error == nil else {
                         Logger.debug(type: .peerChannel,
                                      message: "failed setting local description")
@@ -629,10 +657,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                     Logger.debug(type: .peerChannel,
                                  message: "did set local description")
                     Logger.debug(type: .peerChannel,
-                                 message: "\(answer!.sdpDescription)")
+                                 message: "\(updatedAnswer.sdpDescription)")
                     Logger.debug(type: .peerChannel,
                                  message: "did create answer")
-                    handler(answer!.sdp, nil)
+                    handler(updatedAnswer.sdp, nil)
                 }
             }
         }
@@ -688,36 +716,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 return
             }
 
-            var sdp = sdp!
-
-            // Chrome/Edge 向けのハック stereo=1 が CreateOffer では付与されないので、
-            // SDP を書き換えて stereo=1 を付与する
-            // https://github.com/w3c/webrtc-stats/issues/686
-            // https://github.com/w3c/webrtc-extensions/issues/63
-            // https://issues.webrtc.org/issues/41481053#comment18
-            if (self.configuration.forceStereoOutput) {
-                Logger.debug(type: .peerChannel, message: "stereo=1 を付与する")
-                let pattern = "minptime=\\d+"
-                let regexp = try! NSRegularExpression(pattern: pattern)
-                let replacementFunc: (String) -> String = { match in
-                    if !match.contains("stereo=1") {
-                        return "\(match);stereo=1"
-                    }
-                    return match
-                }
-
-                let matches = regexp.matches(in: sdp, range: NSRange(sdp.startIndex..., in: sdp))
-                for match in matches.reversed() {
-                    print("kensaku: match: \(match)")
-                    let range = match.range
-                    let matchedString = (sdp as NSString).substring(with: range)
-                    let replacedString = replacementFunc(matchedString)
-                    print("kensaku: replacedString: \(replacedString)")
-                    sdp = (sdp as NSString).replacingCharacters(in: range, with: replacedString)
-                }
-            }
-
-            let answer = SignalingAnswer(sdp: sdp)
+            let answer = SignalingAnswer(sdp: sdp!)
             self.signalingChannel.send(message: Signaling.answer(answer))
             self.lock.unlock()
             Logger.debug(type: .peerChannel, message: "did send answer")
