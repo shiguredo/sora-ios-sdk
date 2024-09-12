@@ -577,7 +577,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
         Logger.debug(type: .peerChannel, message: "try create answer")
         Logger.debug(type: .peerChannel, message: offer)
-
         Logger.debug(type: .peerChannel, message: "try setting remote description")
         let offer = RTCSessionDescription(type: .offer, sdp: offer)
         nativeChannel.setRemoteDescription(offer) { error in
@@ -689,7 +688,36 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 return
             }
 
-            let answer = SignalingAnswer(sdp: sdp!)
+            var sdp = sdp!
+
+            // Chrome/Edge 向けのハック stereo=1 が CreateOffer では付与されないので、
+            // SDP を書き換えて stereo=1 を付与する
+            // https://github.com/w3c/webrtc-stats/issues/686
+            // https://github.com/w3c/webrtc-extensions/issues/63
+            // https://issues.webrtc.org/issues/41481053#comment18
+            if (self.configuration.forceStereoOutput) {
+                Logger.debug(type: .peerChannel, message: "stereo=1 を付与する")
+                let pattern = "minptime=\\d+"
+                let regexp = try! NSRegularExpression(pattern: pattern)
+                let replacementFunc: (String) -> String = { match in
+                    if !match.contains("stereo=1") {
+                        return "\(match);stereo=1"
+                    }
+                    return match
+                }
+
+                let matches = regexp.matches(in: sdp, range: NSRange(sdp.startIndex..., in: sdp))
+                for match in matches.reversed() {
+                    print("kensaku: match: \(match)")
+                    let range = match.range
+                    let matchedString = (sdp as NSString).substring(with: range)
+                    let replacedString = replacementFunc(matchedString)
+                    print("kensaku: replacedString: \(replacedString)")
+                    sdp = (sdp as NSString).replacingCharacters(in: range, with: replacedString)
+                }
+            }
+
+            let answer = SignalingAnswer(sdp: sdp)
             self.signalingChannel.send(message: Signaling.answer(answer))
             self.lock.unlock()
             Logger.debug(type: .peerChannel, message: "did send answer")

@@ -215,6 +215,9 @@ public struct Configuration {
     /// 通常、指定する必要はありません。
     public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
 
+    /// ステレオ出力を許可するための設定です。
+    public var forceStereoOutput: Bool = false
+
     /**
      初期化します。
 
