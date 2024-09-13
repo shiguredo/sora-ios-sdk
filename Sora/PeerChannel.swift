@@ -626,23 +626,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 // https://issues.webrtc.org/issues/41481053#comment18
                 if self.configuration.forceStereoOutput {
                     Logger.debug(type: .peerChannel, message: "stereo=1 を付与する")
-                    let pattern = "minptime=\\d+(?!;stereo=1)"
+                    let pattern = "(\\bminptime=\\d+\\b(?!;stereo=1))"
+                    let replacementString = "$1;stereo=1"
                     let regexp = try! NSRegularExpression(pattern: pattern)
-                    let replacementFunc: (String) -> String = { match in
-                        print("kensaku: match str: \(match)")
-                        if !match.contains("stereo=1") {
-                            return "\(match);stereo=1"
-                        }
-                        return match
-                    }
-
-                    let matches = regexp.matches(in: sdp, range: NSRange(sdp.startIndex..., in: sdp))
-                    for match in matches.reversed() {
-                        let range = match.range
-                        let matchedString = (sdp as NSString).substring(with: range)
-                        let replacedString = replacementFunc(matchedString)
-                        sdp = (sdp as NSString).replacingCharacters(in: range, with: replacedString)
-                    }
+                    // NSRegularExpression が NSString に基づく API で、NSString は UTF-16 エンコーディングを
+                    // 使用するので、 length を utf16.count で取得している
+                    sdp = regexp.stringByReplacingMatches(in: sdp, range: NSRange(location: 0, length: sdp.utf16.count), withTemplate: replacementString)
                 }
                 let updatedAnswer = RTCSessionDescription(type: .answer, sdp: sdp)
                 Logger.debug(type: .peerChannel, message: "did create answer")
