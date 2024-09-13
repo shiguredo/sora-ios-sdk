@@ -626,9 +626,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 // https://issues.webrtc.org/issues/41481053#comment18
                 if self.configuration.forceStereoOutput {
                     Logger.debug(type: .peerChannel, message: "stereo=1 を付与する")
-                    let pattern = "minptime=\\d+"
+                    let pattern = "minptime=\\d+(?!;stereo=1)"
                     let regexp = try! NSRegularExpression(pattern: pattern)
                     let replacementFunc: (String) -> String = { match in
+                        print("kensaku: match str: \(match)")
                         if !match.contains("stereo=1") {
                             return "\(match);stereo=1"
                         }
