@@ -15,6 +15,13 @@ public enum VideoViewConnectionMode {
     case manual
 }
 
+// Video (SwiftUI 用) で使う
+/// :nodoc:
+public struct VideoViewHandlers {
+    public var onChange: ((CGSize) -> Void)?
+    public var onRender: ((VideoFrame?) -> Void)?
+}
+
 /**
  VideoRenderer プロトコルのデフォルト実装となる UIView です。
 
@@ -59,6 +66,8 @@ public class VideoView: UIView {
         self.addSubview(view)
         return view
     }()
+    
+    public var handlers = VideoViewHandlers()
 
     // MARK: - インスタンスの生成
 
@@ -206,11 +215,13 @@ extension VideoView: VideoRenderer {
     /// :nodoc:
     public func onChange(size: CGSize) {
         contentView.onVideoFrameSizeUpdated(size)
+        handlers.onChange?(size)
     }
 
     /// :nodoc:
     public func render(videoFrame: VideoFrame?) {
         if isRendering {
+            handlers.onRender?(videoFrame)
             contentView.render(videoFrame: videoFrame)
         }
     }
