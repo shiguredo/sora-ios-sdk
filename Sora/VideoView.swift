@@ -66,7 +66,7 @@ public class VideoView: UIView {
         self.addSubview(view)
         return view
     }()
-    
+
     public var handlers = VideoViewHandlers()
 
     // MARK: - インスタンスの生成
