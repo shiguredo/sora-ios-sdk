@@ -11,6 +11,12 @@
 
 ## develop
 
+- [UPDATE] WebRTC m129.6668.1.0 に上げる
+  - @miosakuma
+- [UPDATE] IPHONEOS_DEPLOYMENT_TARGET を 14.0 に上げる
+  - libwebrtc の変更への追従
+  - @miosakuma
+
 ## 2024.3.0
 
 **リリース日**: 2024-09-06
