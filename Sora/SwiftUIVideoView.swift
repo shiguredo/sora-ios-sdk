@@ -5,7 +5,7 @@ import UIKit
 /**
  ストリームの映像を描画する SwiftUI ビューです。
  */
-public struct Video<Background>: View where Background: View {
+public struct SwiftUIVideoView<Background>: View where Background: View {
     private var stream: MediaStream?
     private var background: Background
 
@@ -71,8 +71,6 @@ public struct Video<Background>: View where Background: View {
     }
 
     /// 映像のクリア時に表示する背景ビューを指定します。
-    /// TODO(zztkm): 以下の警告が出るので Swift 6 対応までに修正する
-    /// ジェネリックパラメータ 'Background' は、同じ名前を持つ外部スコープのジェネリックパラメータを隠します。これは Swift 6 言語モードのエラーです。
     public func videoBackground<Background>(_ background: Background) -> Video<Background> where Background: View {
         var new = Video<Background>(stream, background: background)
         new.controller = controller
@@ -120,7 +118,7 @@ public struct Video<Background>: View where Background: View {
  VideoView (UIKit) を SwiftUI view に統合するためのラッパーです。
  */
 private struct RepresentedVideoView: UIViewRepresentable {
-    typealias UIViewType = VideoView
+    typealias UIViewType = UIKitVideoView
 
     @ObservedObject private var controller: VideoController
 
