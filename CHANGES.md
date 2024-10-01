@@ -15,6 +15,7 @@
   - @miosakuma
 - [UPDATE] IPHONEOS_DEPLOYMENT_TARGET を 14.0 に上げる
   - libwebrtc の変更への追従
+    - https://webrtc.googlesource.com/src/+/9b81d2c954128831c62d8a0657c7f955b3c02d32
   - @miosakuma
 
 ## 2024.3.0
