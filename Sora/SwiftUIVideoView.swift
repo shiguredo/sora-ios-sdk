@@ -115,10 +115,10 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
 }
 
 /*
- UIKitVideoView を SwiftUIVideoView に統合するためのラッパーです。
+ VideoView を SwiftUIVideoView に統合するためのラッパーです。
  */
 private struct RepresentedVideoView: UIViewRepresentable {
-    typealias UIViewType = UIKitVideoView
+    typealias UIViewType = VideoView
 
     @ObservedObject private var controller: VideoController
 
@@ -126,11 +126,11 @@ private struct RepresentedVideoView: UIViewRepresentable {
         self.controller = controller
     }
 
-    public func makeUIView(context: Context) -> UIKitVideoView {
+    public func makeUIView(context: Context) -> VideoView {
         controller.videoView
     }
 
-    public func updateUIView(_ uiView: UIKitVideoView, context: Context) {
+    public func updateUIView(_ uiView: VideoView, context: Context) {
         controller.stream?.videoRenderer = uiView
     }
 }
@@ -138,9 +138,9 @@ private struct RepresentedVideoView: UIViewRepresentable {
 class VideoController: ObservableObject {
     var stream: MediaStream?
 
-    // init() で UIKitVideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく
+    // init() で VideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく
     // Failed to bind EAGLDrawable: <CAEAGLLayer: 0x********> to GL_RENDERBUFFER 1
-    lazy var videoView = UIKitVideoView()
+    lazy var videoView = VideoView()
 
     @Published var isCleared: Bool = false
 
