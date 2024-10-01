@@ -135,7 +135,7 @@ private struct RepresentedVideoView: UIViewRepresentable {
     }
 }
 
-class VideoController: ObservableObject {
+public class VideoController: ObservableObject {
     var stream: MediaStream?
 
     // init() で VideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく
