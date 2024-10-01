@@ -15,6 +15,8 @@
   - @miosakuma
 - [UPDATE] システム条件の iOS を 14.0 に上げる
   - IPHONEOS_DEPLOYMENT_TARGET を 14.0 に上げる
+  - SwiftPM の platforms の設定を 14.0 に上げる
+  - CocoaPods の platform の設定を 14.0 に上げる
   - libwebrtc の対象バージョンに追従した
     - https://webrtc.googlesource.com/src/+/9b81d2c954128831c62d8a0657c7f955b3c02d32
   - @miosakuma
