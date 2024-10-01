@@ -46,19 +46,19 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
      デバッグモードを有効にします。
      有効にすると、映像の上部に解像度とフレームレートを表示します。
      */
-    public func debugMode(_ flag: Bool) -> Video<Background> {
+    public func debugMode(_ flag: Bool) -> SwiftUIVideoView<Background> {
         controller.videoView.debugMode = flag
         return self
     }
 
     /// 映像ソース停止時の処理を指定します。
-    public func connectionMode(_ mode: VideoViewConnectionMode) -> Video<Background> {
+    public func connectionMode(_ mode: VideoViewConnectionMode) -> SwiftUIVideoView<Background> {
         controller.videoView.connectionMode = mode
         return self
     }
 
     /// 映像のアスペクト比を指定します。
-    public func videoAspect(_ contentMode: ContentMode) -> Video<Background> {
+    public func videoAspect(_ contentMode: ContentMode) -> SwiftUIVideoView<Background> {
         var uiContentMode: UIView.ContentMode
         switch contentMode {
         case .fill:
@@ -71,8 +71,8 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     }
 
     /// 映像のクリア時に表示する背景ビューを指定します。
-    public func videoBackground<Background>(_ background: Background) -> Video<Background> where Background: View {
-        var new = Video<Background>(stream, background: background)
+    public func videoBackground<Background>(_ background: Background) -> SwiftUIVideoView<Background> where Background: View {
+        var new = SwiftUIVideoView<Background>(stream, background: background)
         new.controller = controller
         return new
     }
@@ -80,7 +80,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     /**
      映像の描画を停止します。
      */
-    public func videoStop(_ flag: Bool) -> Video<Background> {
+    public func videoStop(_ flag: Bool) -> SwiftUIVideoView<Background> {
         if flag {
             controller.videoView.stop()
         } else if !controller.videoView.isRendering {
@@ -93,7 +93,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
      画面を背景ビューに切り替えます。
      このメソッドは描画停止時のみ有効です。
      */
-    public func videoClear(_ flag: Bool) -> Video<Background> {
+    public func videoClear(_ flag: Bool) -> SwiftUIVideoView<Background> {
         if flag {
             controller.videoView.clear()
             controller.isCleared = true
@@ -102,20 +102,20 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     }
 
     /// 映像のサイズの変更時に実行されるブロックを指定します。
-    public func videoOnChange(perform: @escaping (CGSize) -> Void) -> Video<Background> {
+    public func videoOnChange(perform: @escaping (CGSize) -> Void) -> SwiftUIVideoView<Background> {
         controller.videoView.handlers.onChange = perform
         return self
     }
 
     /// 映像フレームの描画時に実行されるブロックを指定します。
-    public func videoOnRender(perform: @escaping (VideoFrame?) -> Void) -> Video<Background> {
+    public func videoOnRender(perform: @escaping (VideoFrame?) -> Void) -> SwiftUIVideoView<Background> {
         controller.videoView.handlers.onRender = perform
         return self
     }
 }
 
 /*
- VideoView (UIKit) を SwiftUI view に統合するためのラッパーです。
+ UIKitVideoView を SwiftUIVideoView に統合するためのラッパーです。
  */
 private struct RepresentedVideoView: UIViewRepresentable {
     typealias UIViewType = UIKitVideoView
@@ -126,11 +126,11 @@ private struct RepresentedVideoView: UIViewRepresentable {
         self.controller = controller
     }
 
-    public func makeUIView(context: Context) -> VideoView {
+    public func makeUIView(context: Context) -> UIKitVideoView {
         controller.videoView
     }
 
-    public func updateUIView(_ uiView: VideoView, context: Context) {
+    public func updateUIView(_ uiView: UIKitVideoView, context: Context) {
         controller.stream?.videoRenderer = uiView
     }
 }
@@ -138,9 +138,9 @@ private struct RepresentedVideoView: UIViewRepresentable {
 class VideoController: ObservableObject {
     var stream: MediaStream?
 
-    // init() で VideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく
+    // init() で UIKitVideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく
     // Failed to bind EAGLDrawable: <CAEAGLLayer: 0x********> to GL_RENDERBUFFER 1
-    lazy var videoView = VideoView()
+    lazy var videoView = UIKitVideoView()
 
     @Published var isCleared: Bool = false
 
