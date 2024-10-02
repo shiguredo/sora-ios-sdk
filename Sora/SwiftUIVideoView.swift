@@ -90,14 +90,14 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
      映像の描画を停止します。
      TODO(zztkm): State で更新できるか確認する
      */
-    private func videoStop(_ flag: Bool) -> SwiftUIVideoView<Background> {
+    private func videoStop(_ flag: Bool) {
         print("kensaku: videoStop(\(flag))")
         if flag {
             controller.videoView.stop()
         } else if !controller.videoView.isRendering {
             controller.videoView.start()
         }
-        return self
+        print("kensaku: \(controller.videoView.isRendering)")
     }
 
     /**
