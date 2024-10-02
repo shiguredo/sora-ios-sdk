@@ -5,6 +5,7 @@ import UIKit
 /**
  ストリームの映像を描画する SwiftUI ビューです。
  */
+@available(iOS 14, *)
 public struct SwiftUIVideoView<Background>: View where Background: View {
     private var stream: MediaStream?
     private var background: Background
