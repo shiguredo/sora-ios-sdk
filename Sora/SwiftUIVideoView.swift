@@ -79,8 +79,10 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
 
     /**
      映像の描画を停止します。
+     TODO(zztkm): State で更新できるか確認する
      */
     public func videoStop(_ flag: Bool) -> SwiftUIVideoView<Background> {
+        print("kensaku: videoStop(\(flag))")
         if flag {
             controller.videoView.stop()
         } else if !controller.videoView.isRendering {
@@ -92,6 +94,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     /**
      画面を背景ビューに切り替えます。
      このメソッドは描画停止時のみ有効です。
+     TODO(zztkm): State で更新できるか確認する
      */
     public func videoClear(_ flag: Bool) -> SwiftUIVideoView<Background> {
         if flag {
@@ -135,7 +138,7 @@ private struct RepresentedVideoView: UIViewRepresentable {
     }
 }
 
-public class VideoController: ObservableObject {
+class VideoController: ObservableObject {
     var stream: MediaStream?
 
     // init() で VideoView を生成すると次のエラーが出るので、生成のタイミングを遅らせておく
