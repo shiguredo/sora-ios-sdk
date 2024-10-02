@@ -193,6 +193,7 @@ public class VideoView: UIView {
      描画の停止中は ``render(videoFrame:)`` が実行されません。
      */
     public func stop() {
+        print("call stop")
         isRendering = false
     }
 
