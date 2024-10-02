@@ -11,7 +11,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
 
     // TODO(zztkm): わかりやすいコメントを書く
     // 親 View で定義された stopVideo 変数と接続するための変数
-    @Binding private var stopVideo: Bool?
+    @Binding private var stopVideo: Bool
 
     @ObservedObject private var controller: VideoController
 
@@ -30,10 +30,10 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
      - parameter stream: 描画される映像ストリーム nil の場合は何も描画されません
      - paramater background: 映像のクリア時に表示する背景ビュー
      */
-    public init(_ stream: MediaStream?, background: Background, stopVideo: Binding<Bool>?) {
+    public init(_ stream: MediaStream?, background: Background, stopVideo: Binding<Bool>? = nil) {
         self.stream = stream
         self.background = background
-        self._stopVideo = stopVideo
+        self._stopVideo = stopVideo ?? .constant(false) // 指定がない場合は固定値 false を与える
         controller = VideoController(stream: stream)
     }
 
@@ -46,7 +46,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
                 .opacity(controller.isCleared ? 0 : 1)
         }
         .onChange(of: stopVideo, initial: true) { newValue in
-            videoStop(newValue)
+            self.videoStop(newValue)
         }
     }
 
