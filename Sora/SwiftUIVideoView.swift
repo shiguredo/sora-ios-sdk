@@ -34,7 +34,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     public init(_ stream: MediaStream?, background: Background, stopVideo: Binding<Bool>? = nil) {
         self.stream = stream
         self.background = background
-        self._stopVideo = stopVideo ?? .constant(false) // 指定がない場合は固定値 false を与える
+        _stopVideo = stopVideo ?? .constant(false) // 指定がない場合は固定値 false を与える
         controller = VideoController(stream: stream)
     }
 
@@ -47,7 +47,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
                 .opacity(controller.isCleared ? 0 : 1)
         }
         .onChange(of: stopVideo) { newValue in
-            self.videoStop(newValue)
+            videoStop(newValue)
         }
     }
 
