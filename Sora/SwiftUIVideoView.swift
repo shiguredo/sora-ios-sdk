@@ -89,12 +89,13 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     /**
      映像の描画を停止します。
      */
-    private func videoStop(_ flag: Bool) {
+    private func videoStop(_ flag: Bool) -> SwiftUIVideoView<Background> {
         if flag {
             controller.videoView.stop()
         } else if !controller.videoView.isRendering {
             controller.videoView.start()
         }
+        return self
     }
 
     /**
@@ -140,6 +141,7 @@ private struct RepresentedVideoView: UIViewRepresentable {
     }
 
     public func updateUIView(_ uiView: VideoView, context: Context) {
+        print("kensaku: calll updateUIView")
         controller.stream?.videoRenderer = uiView
     }
 }
