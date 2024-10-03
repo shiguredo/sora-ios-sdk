@@ -193,8 +193,9 @@ public class VideoView: UIView {
      描画の停止中は ``render(videoFrame:)`` が実行されません。
      */
     public func stop() {
-        print("call stop")
+        print("kensaku: call stop")
         isRendering = false
+        print("kensaku: isRendering is now \(isRendering)")
     }
 
     // MARK: - デバッグモード
