@@ -180,7 +180,9 @@ public class VideoView: UIView {
      映像フレームの描画を開始します。
      */
     public func start() {
+        print("kensaku: call start")
         if !isRendering {
+            print("kensaku: 描画開始")
             DispatchQueue.main.async {
                 self.bringSubviewToFront(self.contentView)
                 self.isRendering = true

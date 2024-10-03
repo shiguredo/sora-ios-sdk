@@ -88,7 +88,6 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
 
     /**
      映像の描画を停止します。
-     TODO(zztkm): State で更新できるか確認する
      */
     private func videoStop(_ flag: Bool) {
         if flag {
