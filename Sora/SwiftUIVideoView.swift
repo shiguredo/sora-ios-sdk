@@ -46,6 +46,9 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
             RepresentedVideoView(controller)
                 .opacity(controller.isCleared ? 0 : 1)
         }
+        .onAppear {
+            videoStop(stopVideo)
+        }
         .onChange(of: stopVideo) { newValue in
             videoStop(newValue)
         }
