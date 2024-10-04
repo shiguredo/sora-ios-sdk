@@ -21,6 +21,15 @@
     - https://webrtc.googlesource.com/src/+/9b81d2c954128831c62d8a0657c7f955b3c02d32
   - @miosakuma
 
+### misc
+
+- [UPDATE] システム条件を変更する
+  - iOS 14 以降
+  - Xcode 16.0
+  - macOS の条件を外す
+    - Xcode とほぼ同時更新なので一旦不要と判断
+  - @miosakuma
+
 ## 2024.3.0
 
 **リリース日**: 2024-09-06
