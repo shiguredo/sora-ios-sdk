@@ -21,16 +21,20 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
      ビューを初期化します。
 
      - parameter stream: 描画される映像ストリーム。 nil の場合は何も描画されません
+     - parameter isStop: 映像の描画を制御するフラグ (default: false)
+     - parameter isClear: 映像をクリアして背景 View を表示するためのフラグ (default: false)
      */
-    public init(_ stream: MediaStream?, isStop: Binding<Bool>? = nil) where Background == EmptyView {
-        self.init(stream, background: EmptyView(), isStop: isStop)
+    public init(_ stream: MediaStream?, isStop: Binding<Bool>? = nil, isClear: Binding<Bool>? = nil) where Background == EmptyView {
+        self.init(stream, background: EmptyView(), isStop: isStop, isClear: isClear)
     }
 
     /**
      ビューを初期化します。
 
      - parameter stream: 描画される映像ストリーム nil の場合は何も描画されません
-     - paramater background: 映像のクリア時に表示する背景ビュー
+     - parameter background: 映像のクリア時に表示する背景ビュー
+     - parameter isStop: 映像の描画を制御するフラグ (default: false)
+     - parameter isClear: 映像をクリアして背景 View を表示するためのフラグ (default: false)
      */
     public init(_ stream: MediaStream?, background: Background, isStop: Binding<Bool>? = nil, isClear: Binding<Bool>? = nil) {
         self.stream = stream
