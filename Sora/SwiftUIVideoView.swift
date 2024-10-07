@@ -153,6 +153,7 @@ private struct RepresentedVideoView: UIViewRepresentable {
     /// 引数の uiView を更新し、更新したあとに controller.stream?.videoRenderer に
     /// uiView をセットすることで、VideoView の挙動を制御することができます。
     public func updateUIView(_ uiView: VideoView, context: Context) {
+        var uiView = uiView
         // VideoView.clear() はVideoView.stop() が実行されたあとにのみ実行可能になる
         uiView = clear(stop(uiView))
         controller.stream?.videoRenderer = uiView
