@@ -43,14 +43,8 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
         ZStack {
             background
                 .opacity(controller.isCleared ? 1 : 0)
-            RepresentedVideoView(controller)
+            RepresentedVideoView(controller, stopVideo: $stopVideo)
                 .opacity(controller.isCleared ? 0 : 1)
-        }
-        .onAppear {
-            videoStop(stopVideo)
-        }
-        .onChange(of: stopVideo) { newValue in
-            videoStop(newValue)
         }
     }
 
@@ -134,9 +128,11 @@ private struct RepresentedVideoView: UIViewRepresentable {
     typealias UIViewType = VideoView
 
     @ObservedObject private var controller: VideoController
+    @Binding private var stopVideo: Bool
 
-    public init(_ controller: VideoController) {
+    public init(_ controller: VideoController, stopVideo: Binding<Bool>) {
         self.controller = controller
+        _stopVideo = stopVideo
     }
 
     public func makeUIView(context: Context) -> VideoView {
@@ -144,7 +140,13 @@ private struct RepresentedVideoView: UIViewRepresentable {
     }
 
     public func updateUIView(_ uiView: VideoView, context: Context) {
-        print("kensaku: calll updateUIView")
+        // uiView を更新し、更新したあとに controller.stream?.videoRenderer に
+        // uiView をセットすることで、VideoView の挙動を制御することができる
+        if stopVideo {
+            uiView.stop()
+        } else {
+            uiView.start()
+        }
         controller.stream?.videoRenderer = uiView
     }
 }
