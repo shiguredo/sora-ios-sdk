@@ -13,6 +13,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     // TODO(zztkm): わかりやすいコメントを書く
     // 親 View で定義された stopVideo 変数と接続するための変数
     @Binding private var isStop: Bool
+    @Binding private var isClear: Bool
 
     @ObservedObject private var controller: VideoController
 
@@ -21,8 +22,8 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
 
      - parameter stream: 描画される映像ストリーム。 nil の場合は何も描画されません
      */
-    public init(_ stream: MediaStream?, stopVideo: Binding<Bool>? = nil) where Background == EmptyView {
-        self.init(stream, background: EmptyView(), stopVideo: stopVideo)
+    public init(_ stream: MediaStream?, isStop: Binding<Bool>? = nil) where Background == EmptyView {
+        self.init(stream, background: EmptyView(), isStop: isStop)
     }
 
     /**
@@ -31,10 +32,12 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
      - parameter stream: 描画される映像ストリーム nil の場合は何も描画されません
      - paramater background: 映像のクリア時に表示する背景ビュー
      */
-    public init(_ stream: MediaStream?, background: Background, stopVideo: Binding<Bool>? = nil) {
+    public init(_ stream: MediaStream?, background: Background, isStop: Binding<Bool>? = nil, isClear: Binding<Bool>? = nil) {
         self.stream = stream
         self.background = background
-        _isStop = stopVideo ?? .constant(false) // 指定がない場合は固定値 false を与える
+        // 指定がない場合は固定値 false を与える
+        _isStop = isStop ?? .constant(false)
+        _isClear = isClear ?? .contains(false)
         controller = VideoController(stream: stream)
     }
 
@@ -43,7 +46,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
         ZStack {
             background
                 .opacity(controller.isCleared ? 1 : 0)
-            RepresentedVideoView(controller, stopVideo: $isStop)
+            RepresentedVideoView(controller, isStop: $isStop, isClear: $isClear)
                 .opacity(controller.isCleared ? 0 : 1)
         }
     }
@@ -129,25 +132,42 @@ private struct RepresentedVideoView: UIViewRepresentable {
 
     @ObservedObject private var controller: VideoController
     @Binding private var isStop: Bool
+    @Binding private var isClear: Bool
 
-    public init(_ controller: VideoController, stopVideo: Binding<Bool>) {
+    public init(_ controller: VideoController, isStop: Binding<Bool>, isClear: Binding<Bool>) {
         self.controller = controller
-        _isStop = stopVideo
+        _isStop = isStop
+        _isClear = isClear
     }
 
     public func makeUIView(context: Context) -> VideoView {
         controller.videoView
     }
 
+    /// VideoView を更新する処理です
+    ///
+    /// 引数の uiView を更新し、更新したあとに controller.stream?.videoRenderer に
+    /// uiView をセットすることで、VideoView の挙動を制御することができます。
     public func updateUIView(_ uiView: VideoView, context: Context) {
-        // uiView を更新し、更新したあとに controller.stream?.videoRenderer に
-        // uiView をセットすることで、VideoView の挙動を制御することができる
+        // VideoView.clear() はVideoView.stop() が実行されたあとにのみ実行可能になる
+        uiView = clear(stop(uiView))
+        controller.stream?.videoRenderer = uiView
+    }
+
+    private func stop(_ uiView: VideoView) -> VideoView {
         if isStop {
             uiView.stop()
         } else {
             uiView.start()
         }
-        controller.stream?.videoRenderer = uiView
+        return uiView
+    }
+
+    private func clear(_ uiView: VideoView) -> VideoView {
+        if isClear {
+            uiView.clear()
+        }
+        return uiView
     }
 }
 
