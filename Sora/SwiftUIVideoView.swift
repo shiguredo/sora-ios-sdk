@@ -41,7 +41,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
         self.background = background
         // 指定がない場合は固定値 false を与える
         _isStop = isStop ?? .constant(false)
-        _isClear = isClear ?? .contains(false)
+        _isClear = isClear ?? .constant(false)
         controller = VideoController(stream: stream)
     }
 
