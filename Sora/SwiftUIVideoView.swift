@@ -12,7 +12,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
 
     // TODO(zztkm): わかりやすいコメントを書く
     // 親 View で定義された stopVideo 変数と接続するための変数
-    @Binding private var stopVideo: Bool
+    @Binding private var isStop: Bool
 
     @ObservedObject private var controller: VideoController
 
@@ -34,7 +34,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     public init(_ stream: MediaStream?, background: Background, stopVideo: Binding<Bool>? = nil) {
         self.stream = stream
         self.background = background
-        _stopVideo = stopVideo ?? .constant(false) // 指定がない場合は固定値 false を与える
+        _isStop = stopVideo ?? .constant(false) // 指定がない場合は固定値 false を与える
         controller = VideoController(stream: stream)
     }
 
@@ -43,7 +43,7 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
         ZStack {
             background
                 .opacity(controller.isCleared ? 1 : 0)
-            RepresentedVideoView(controller, stopVideo: $stopVideo)
+            RepresentedVideoView(controller, stopVideo: $isStop)
                 .opacity(controller.isCleared ? 0 : 1)
         }
     }
@@ -128,11 +128,11 @@ private struct RepresentedVideoView: UIViewRepresentable {
     typealias UIViewType = VideoView
 
     @ObservedObject private var controller: VideoController
-    @Binding private var stopVideo: Bool
+    @Binding private var isStop: Bool
 
     public init(_ controller: VideoController, stopVideo: Binding<Bool>) {
         self.controller = controller
-        _stopVideo = stopVideo
+        _isStop = stopVideo
     }
 
     public func makeUIView(context: Context) -> VideoView {
@@ -142,7 +142,7 @@ private struct RepresentedVideoView: UIViewRepresentable {
     public func updateUIView(_ uiView: VideoView, context: Context) {
         // uiView を更新し、更新したあとに controller.stream?.videoRenderer に
         // uiView をセットすることで、VideoView の挙動を制御することができる
-        if stopVideo {
+        if isStop {
             uiView.stop()
         } else {
             uiView.start()
