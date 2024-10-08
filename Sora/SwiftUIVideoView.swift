@@ -105,7 +105,6 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     /**
      画面を背景ビューに切り替えます。
      このメソッドは描画停止時のみ有効です。
-     TODO(zztkm): State で更新できるか確認する
      */
     public func videoClear(_ flag: Bool) -> SwiftUIVideoView<Background> {
         if flag {
@@ -124,6 +123,24 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
     /// 映像フレームの描画時に実行されるブロックを指定します。
     public func videoOnRender(perform: @escaping (VideoFrame?) -> Void) -> SwiftUIVideoView<Background> {
         controller.videoView.handlers.onRender = perform
+        return self
+    }
+
+    /// 映像フレームの描画開始時に実行されるブロックを指定します。
+    public func videoOnStart(perform: @escaping () -> Void) -> SwiftUIVideoView<Background> {
+        controller.videoView.handlers.onDisconnect = perform
+        return self
+    }
+
+    /// 映像フレームの描画停止時に実行されるブロックを指定します。
+    public func videoOnStop(perform: @escaping () -> Void) -> SwiftUIVideoView<Background> {
+        controller.videoView.handlers.onAdded = perform
+        return self
+    }
+
+    /// 映像が backgroundView に切り替わったときに実行されるブロックを指定します。
+    public func videoOnClear(perform: @escaping () -> Void) -> SwiftUIVideoView<Background> {
+        controller.videoView.handlers.onClear = perform
         return self
     }
 }
@@ -159,6 +176,9 @@ private struct RepresentedVideoView: UIViewRepresentable {
         controller.stream?.videoRenderer = uiView
     }
 
+    /**
+     映像の描画を停止します。TODO(zztkm): method 名の検討 (stop start の toggle なので、stop はおかしいかも？
+     */
     private func stop(_ uiView: VideoView) -> VideoView {
         if isStop {
             uiView.stop()
@@ -168,6 +188,10 @@ private struct RepresentedVideoView: UIViewRepresentable {
         return uiView
     }
 
+    /**
+     画面を背景ビューに切り替えます。
+     このメソッドは描画停止時のみ有効です。
+     */
     private func clear(_ uiView: VideoView) -> VideoView {
         if isClear {
             uiView.clear()

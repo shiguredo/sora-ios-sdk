@@ -15,12 +15,19 @@ public enum VideoViewConnectionMode {
     case manual
 }
 
-// Video (SwiftUI 用) で使う
+// SwiftUIVideoView (SwiftUI 用) で使う
 /// :nodoc:
 public struct VideoViewHandlers {
+    /// 映像のサイズ変更時に実行される
     public var onChange: ((CGSize) -> Void)?
+    /// 映像フレーム描画時に実行される
     public var onRender: ((VideoFrame?) -> Void)?
-}
+    /// 映像フレームの描画開始時に実行される
+    public var onStart: (() -> Void)?
+    /// 映像フレームの描画停止時に実行される
+    public var onStop: (() -> Void)?
+    /// 映像が backgroundView に切り替わったときに実行される
+    public var onClear: (() -> Void)?
 
 /**
  VideoRenderer プロトコルのデフォルト実装となる UIView です。
@@ -173,6 +180,7 @@ public class VideoView: UIView {
                     self.bringSubviewToFront(self.defaultBackgroundView)
                 }
             }
+            handlers.onClear?()
         }
     }
 
@@ -180,13 +188,12 @@ public class VideoView: UIView {
      映像フレームの描画を開始します。
      */
     public func start() {
-        print("kensaku: call start")
         if !isRendering {
-            print("kensaku: 描画開始")
             DispatchQueue.main.async {
                 self.bringSubviewToFront(self.contentView)
                 self.isRendering = true
             }
+            handlers.onStart?()
         }
     }
 
@@ -195,9 +202,8 @@ public class VideoView: UIView {
      描画の停止中は ``render(videoFrame:)`` が実行されません。
      */
     public func stop() {
-        print("kensaku: call stop")
         isRendering = false
-        print("kensaku: isRendering is now \(isRendering)")
+        handlers.onStop?()
     }
 
     // MARK: - デバッグモード
