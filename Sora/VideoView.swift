@@ -174,6 +174,7 @@ public class VideoView: UIView {
      */
     public func clear() {
         if !isRendering {
+            handlers.onClear?()
             DispatchQueue.main.async {
                 if let bgView = self.backgroundView {
                     self.bringSubviewToFront(bgView)
@@ -181,7 +182,6 @@ public class VideoView: UIView {
                     self.bringSubviewToFront(self.defaultBackgroundView)
                 }
             }
-            handlers.onClear?()
         }
     }
 
@@ -190,11 +190,11 @@ public class VideoView: UIView {
      */
     public func start() {
         if !isRendering {
+            handlers.onStart?()
             DispatchQueue.main.async {
                 self.bringSubviewToFront(self.contentView)
                 self.isRendering = true
             }
-            handlers.onStart?()
         }
     }
 
