@@ -28,6 +28,7 @@ public struct VideoViewHandlers {
     public var onStop: (() -> Void)?
     /// 映像が backgroundView に切り替わったときに実行される
     public var onClear: (() -> Void)?
+}
 
 /**
  VideoRenderer プロトコルのデフォルト実装となる UIView です。
