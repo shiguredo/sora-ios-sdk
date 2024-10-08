@@ -22,12 +22,6 @@ public struct VideoViewHandlers {
     public var onChange: ((CGSize) -> Void)?
     /// 映像フレーム描画時に実行される
     public var onRender: ((VideoFrame?) -> Void)?
-    /// 映像フレームの描画開始時に実行される
-    public var onStart: (() -> Void)?
-    /// 映像フレームの描画停止時に実行される
-    public var onStop: (() -> Void)?
-    /// 映像が backgroundView に切り替わったときに実行される
-    public var onClear: (() -> Void)?
 }
 
 /**
@@ -174,7 +168,6 @@ public class VideoView: UIView {
      */
     public func clear() {
         if !isRendering {
-            handlers.onClear?()
             DispatchQueue.main.async {
                 if let bgView = self.backgroundView {
                     self.bringSubviewToFront(bgView)
@@ -190,7 +183,6 @@ public class VideoView: UIView {
      */
     public func start() {
         if !isRendering {
-            handlers.onStart?()
             DispatchQueue.main.async {
                 self.bringSubviewToFront(self.contentView)
                 self.isRendering = true
@@ -204,7 +196,6 @@ public class VideoView: UIView {
      */
     public func stop() {
         isRendering = false
-        handlers.onStop?()
     }
 
     // MARK: - デバッグモード
