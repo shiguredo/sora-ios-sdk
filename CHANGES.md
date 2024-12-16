@@ -18,11 +18,13 @@
   - SwiftPM の platforms の設定を v14 に上げる
   - CocoaPods の platform の設定を 14.0 に上げる
   - libwebrtc の対象バージョンに追従した
-    - https://webrtc.googlesource.com/src/+/9b81d2c954128831c62d8a0657c7f955b3c02d32
+    - <https://webrtc.googlesource.com/src/+/9b81d2c954128831c62d8a0657c7f955b3c02d32>
   - @miosakuma
 
 ### misc
 
+- [CHANGE] GitHub Actions の ubuntu-latest を ubuntu-24.04 に変更する
+  - @voluntas
 - [UPDATE] システム条件を変更する
   - iOS 14 以降
   - Xcode 16.0
