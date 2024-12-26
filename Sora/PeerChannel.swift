@@ -339,6 +339,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
             redirect: redirect,
             forwardingFilter: configuration.forwardingFilter,
+            forwardingFilters: configuration.forwardingFilters,
             vp9Params: configuration.videoVp9Params,
             av1Params: configuration.videoAv1Params,
             h264Params: configuration.videoH264Params

@@ -183,6 +183,9 @@ public struct Configuration {
 
     /// 転送フィルターの設定
     public var forwardingFilter: ForwardingFilter?
+    
+    /// リスト形式の転送フィルターの設定
+    public var forwardingFilters: [ForwardingFilter]?
 
     /// VP9 向け映像コーデックパラメーター
     public var videoVp9Params: Encodable?
@@ -323,6 +326,12 @@ public enum ForwardingFilterAction: String, Encodable {
  転送フィルターに関する設定です。
  */
 public struct ForwardingFilter {
+    /// name
+    public var name: String?
+
+    /// priority
+    public var priority: Int?
+
     /// action
     public var action: ForwardingFilterAction?
 
@@ -343,7 +352,9 @@ public struct ForwardingFilter {
      - parameter version: version (オプショナル)
      - parameter metadata: metadata (オプショナル)
      */
-    public init(action: ForwardingFilterAction? = nil, rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil) {
+    public init(name: String? = nil, priority: Int? = nil, action: ForwardingFilterAction? = nil, rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil) {
+        self.name = name
+        self.priority = priority
         self.action = action
         self.rules = rules
         self.version = version
@@ -353,6 +364,8 @@ public struct ForwardingFilter {
 
 extension ForwardingFilter: Encodable {
     enum CodingKeys: String, CodingKey {
+        case name
+        case priority
         case action
         case rules
         case version
@@ -361,6 +374,8 @@ extension ForwardingFilter: Encodable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(priority, forKey: .priority)
         try container.encodeIfPresent(action, forKey: .action)
         try container.encode(rules, forKey: .rules)
         try container.encodeIfPresent(version, forKey: .version)

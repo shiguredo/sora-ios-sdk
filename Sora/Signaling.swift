@@ -331,6 +331,9 @@ public struct SignalingConnect {
 
     /// 転送フィルターの設定
     public var forwardingFilter: ForwardingFilter?
+    
+    /// リスト形式の転送フィルターの設定
+    public var forwardingFilters: [ForwardingFilter]?
 
     /// VP9 向け映像コーデックパラメーター
     public var vp9Params: Encodable?
@@ -784,6 +787,7 @@ extension SignalingConnect: Codable {
         case audio_streaming_language_code
         case redirect
         case forwarding_filter
+        case forwarding_filters
     }
 
     enum VideoCodingKeys: String, CodingKey {
@@ -834,6 +838,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
         try container.encodeIfPresent(redirect, forKey: .redirect)
         try container.encodeIfPresent(forwardingFilter, forKey: .forwarding_filter)
+        try container.encodeIfPresent(forwardingFilters, forKey: .forwarding_filters)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil || h264Params != nil {
