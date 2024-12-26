@@ -641,7 +641,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     private func updateSenderOfferEncodings() {
         guard let nativeChannel else {
-            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
             return
         }
 
@@ -657,7 +657,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     private func createAndSendAnswer(offer: SignalingOffer) {
         guard let nativeChannel else {
-            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
             return
         }
 
