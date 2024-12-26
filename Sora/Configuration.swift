@@ -183,7 +183,7 @@ public struct Configuration {
 
     /// 転送フィルターの設定
     public var forwardingFilter: ForwardingFilter?
-    
+
     /// リスト形式の転送フィルターの設定
     public var forwardingFilters: [ForwardingFilter]?
 
