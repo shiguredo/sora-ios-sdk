@@ -330,6 +330,8 @@ public struct SignalingConnect {
     public var redirect: Bool?
 
     /// 転送フィルターの設定
+    ///
+    /// この項目は 2025 年 12 月リリース予定の Sora にて廃止されます
     public var forwardingFilter: ForwardingFilter?
 
     /// リスト形式の転送フィルターの設定
