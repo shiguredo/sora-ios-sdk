@@ -25,6 +25,19 @@
 - [ADD] シグナリング connect 時にリスト形式の転送フィルターを設定するための項目を追加する
   - `Configuration`, `SignalingConnect` に forwardingFilters を追加する
   - @zztkm
+- [ADD] SignalingOffer に項目を追加する
+  - 追加する項目
+    - `version`
+    - `simulcastMulticodec`
+    - `spotlight`
+    - `channelId`
+    - `sessionId`
+    - `audio`
+    - `audioCodecType`
+    - `audioBitRate`
+    - `video`
+    - `videoCodecType`
+    - `videoBitRate`
 
 ### misc
 
