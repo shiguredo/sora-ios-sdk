@@ -11,8 +11,8 @@ private func serializeData(_ data: Any?) -> [SignalingNotifyMetadata]? {
 
     let result = array.map { (dict: [String: Any]) -> SignalingNotifyMetadata in
         var signalingNotifyMetadata = SignalingNotifyMetadata()
-        if let clinetId = dict["client_id"] as? String {
-            signalingNotifyMetadata.clientId = clinetId
+        if let clientId = dict["client_id"] as? String {
+            signalingNotifyMetadata.clientId = clientId
         }
         if let bundleId = dict["bundle_id"] as? String {
             signalingNotifyMetadata.bundleId = bundleId
@@ -25,8 +25,8 @@ private func serializeData(_ data: Any?) -> [SignalingNotifyMetadata]? {
             signalingNotifyMetadata.authnMetadata = authnMetadata
         }
 
-        if let authzMetada = dict["authz_metadata"] {
-            signalingNotifyMetadata.authzMetadata = authzMetada
+        if let authzMetadata = dict["authz_metadata"] {
+            signalingNotifyMetadata.authzMetadata = authzMetadata
         }
 
         if let metadata = dict["metadata"] {
