@@ -437,9 +437,6 @@ public struct SignalingOffer {
     /// mid
     public let mid: [String: String]?
 
-    /// マルチストリーム
-    public let multistream: Bool?
-
     /// サイマルキャスト有効 / 無効フラグ
     public let simulcast: Bool?
 
@@ -999,7 +996,6 @@ extension SignalingOffer: Codable {
         case mid
         case simulcast
         case version
-        case multistream
         case simulcast_multicodec
         case spotlight
         case channel_id
@@ -1029,7 +1025,6 @@ extension SignalingOffer: Codable {
             try container.decodeIfPresent([Encoding].self,
                                           forKey: .encodings)
         mid = try container.decodeIfPresent([String: String].self, forKey: .mid)
-        multistream = try container.decodeIfPresent(Bool.self, forKey: .multistream)
         simulcast = try container.decodeIfPresent(Bool.self, forKey: .simulcast)
         simulcastMulticodec = try container.decodeIfPresent(Bool.self, forKey: .simulcast_multicodec)
         spotlight = try container.decodeIfPresent(Bool.self, forKey: .spotlight)

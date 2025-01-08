@@ -20,6 +20,20 @@
   - libwebrtc の対象バージョンに追従した
     - <https://webrtc.googlesource.com/src/+/9b81d2c954128831c62d8a0657c7f955b3c02d32>
   - @miosakuma
+- [ADD] SignalingOffer に項目を追加する
+  - 追加する項目
+    - `version`
+    - `simulcastMulticodec`
+    - `spotlight`
+    - `channelId`
+    - `sessionId`
+    - `audio`
+    - `audioCodecType`
+    - `audioBitRate`
+    - `video`
+    - `videoCodecType`
+    - `videoBitRate`
+  - @zztkm
 
 ### misc
 
