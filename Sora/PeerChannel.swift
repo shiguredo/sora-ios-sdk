@@ -578,7 +578,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
         Logger.debug(type: .peerChannel, message: "try create answer")
         Logger.debug(type: .peerChannel, message: offer)
-
         Logger.debug(type: .peerChannel, message: "try setting remote description")
         let offer = RTCSessionDescription(type: .offer, sdp: offer)
         nativeChannel.setRemoteDescription(offer) { error in
@@ -618,10 +617,28 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                     return
                 }
 
+                // answer sdp を加工する
+                var sdp = answer!.sdp
+                // TODO(zztkm): この実装だと stereo=1 がすでに付与されていても付与してしまうので修正する
+                // Chrome/Edge 向けのハック stereo=1 が CreateOffer では付与されないので、
+                // SDP を書き換えて stereo=1 を付与する
+                // https://github.com/w3c/webrtc-stats/issues/686
+                // https://github.com/w3c/webrtc-extensions/issues/63
+                // https://issues.webrtc.org/issues/41481053#comment18
+                if self.configuration.forceStereoOutput {
+                    Logger.debug(type: .peerChannel, message: "stereo=1 を付与する")
+                    let pattern = "(\\bminptime=\\d+\\b(?!;stereo=1))"
+                    let replacementString = "$1;stereo=1"
+                    let regexp = try! NSRegularExpression(pattern: pattern)
+                    // NSRegularExpression が NSString に基づく API で、NSString は UTF-16 エンコーディングを
+                    // 使用するので、 length を utf16.count で取得している
+                    sdp = regexp.stringByReplacingMatches(in: sdp, range: NSRange(location: 0, length: sdp.utf16.count), withTemplate: replacementString)
+                }
+                let updatedAnswer = RTCSessionDescription(type: .answer, sdp: sdp)
                 Logger.debug(type: .peerChannel, message: "did create answer")
 
                 Logger.debug(type: .peerChannel, message: "try setting local description")
-                nativeChannel.setLocalDescription(answer!) { error in
+                nativeChannel.setLocalDescription(updatedAnswer) { error in
                     guard error == nil else {
                         Logger.debug(type: .peerChannel,
                                      message: "failed setting local description")
@@ -631,10 +648,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                     Logger.debug(type: .peerChannel,
                                  message: "did set local description")
                     Logger.debug(type: .peerChannel,
-                                 message: "\(answer!.sdpDescription)")
+                                 message: "\(updatedAnswer.sdpDescription)")
                     Logger.debug(type: .peerChannel,
                                  message: "did create answer")
-                    handler(answer!.sdp, nil)
+                    handler(updatedAnswer.sdp, nil)
                 }
             }
         }
