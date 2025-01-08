@@ -401,6 +401,9 @@ public struct SignalingOffer {
         }
     }
 
+    /// チャネルID
+    public let channelId: String?
+
     /// クライアント ID
     public let clientId: String
 
@@ -410,8 +413,14 @@ public struct SignalingOffer {
     /// 接続 ID
     public let connectionId: String
 
+    /// セッションID
+    public let sessionId: String?
+
     /// SDP メッセージ
     public let sdp: String
+
+    /// version
+    public let version: String?
 
     /// クライアントが更新すべき設定
     public let configuration: Configuration?
@@ -428,8 +437,35 @@ public struct SignalingOffer {
     /// mid
     public let mid: [String: String]?
 
+    /// マルチストリーム
+    public let multistream: Bool?
+
     /// サイマルキャスト有効 / 無効フラグ
     public let simulcast: Bool?
+
+    /// サイマルキャストマルチコーデック
+    public let simulcastMulticodec: Bool?
+
+    /// スポットライト
+    public let spotlight: Bool?
+
+    /// audio
+    public let audio: Bool?
+
+    /// audio codec type
+    public let audioCodecType: String?
+
+    /// audio bit rate
+    public let audioBitRate: Int?
+
+    /// video
+    public let video: Bool?
+
+    /// video codec type
+    public let videoCodecType: String?
+
+    /// video bit rate
+    public let videoBitRate: Int?
 }
 
 /**
@@ -962,14 +998,30 @@ extension SignalingOffer: Codable {
         case encodings
         case mid
         case simulcast
+        case version
+        case multistream
+        case simulcast_multicodec
+        case spotlight
+        case channel_id
+        case session_id
+        case audio
+        case audio_codec_type
+        case audio_bit_rate
+        case video
+        case video_codec_type
+        case video_bit_rate
     }
 
     public init(from decoder: Decoder) throws {
+        // metadata, dataChannels は updateMetadata() で処理されるので、ここでは処理しない
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        channelId = try container.decodeIfPresent(String.self, forKey: .channel_id)
         clientId = try container.decode(String.self, forKey: .client_id)
         bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
         connectionId = try container.decode(String.self, forKey: .connection_id)
+        sessionId = try container.decodeIfPresent(String.self, forKey: .session_id)
         sdp = try container.decode(String.self, forKey: .sdp)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
         configuration =
             try container.decodeIfPresent(Configuration.self,
                                           forKey: .config)
@@ -977,7 +1029,16 @@ extension SignalingOffer: Codable {
             try container.decodeIfPresent([Encoding].self,
                                           forKey: .encodings)
         mid = try container.decodeIfPresent([String: String].self, forKey: .mid)
+        multistream = try container.decodeIfPresent(Bool.self, forKey: .multistream)
         simulcast = try container.decodeIfPresent(Bool.self, forKey: .simulcast)
+        simulcastMulticodec = try container.decodeIfPresent(Bool.self, forKey: .simulcast_multicodec)
+        spotlight = try container.decodeIfPresent(Bool.self, forKey: .spotlight)
+        audio = try container.decodeIfPresent(Bool.self, forKey: .audio)
+        audioCodecType = try container.decodeIfPresent(String.self, forKey: .audio_codec_type)
+        audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audio_bit_rate)
+        video = try container.decodeIfPresent(Bool.self, forKey: .video)
+        videoCodecType = try container.decodeIfPresent(String.self, forKey: .video_codec_type)
+        videoBitRate = try container.decodeIfPresent(Int.self, forKey: .video_bit_rate)
     }
 
     public func encode(to encoder: Encoder) throws {
