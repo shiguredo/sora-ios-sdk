@@ -339,6 +339,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
             redirect: redirect,
             forwardingFilter: configuration.forwardingFilter,
+            forwardingFilters: configuration.forwardingFilters,
             vp9Params: configuration.videoVp9Params,
             av1Params: configuration.videoAv1Params,
             h264Params: configuration.videoH264Params
@@ -641,7 +642,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     private func updateSenderOfferEncodings() {
         guard let nativeChannel else {
-            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
             return
         }
 
@@ -657,7 +658,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     private func createAndSendAnswer(offer: SignalingOffer) {
         guard let nativeChannel else {
-            Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+            Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
             return
         }
 
