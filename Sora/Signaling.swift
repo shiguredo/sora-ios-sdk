@@ -633,13 +633,13 @@ public struct SignalingNotify {
     public var streamId: String?
 
     /// 音声ストリーミング処理に失敗したコネクション ID
-    var failedConnectionId: String?
+    public var failedConnectionId: String?
 
     /// ICE コネクションステートの現在の状態
-    var currentState: String?
+    public var currentState: String?
 
     /// ICE コネクションステートの遷移前の状態
-    var previousState: String?
+    public var previousState: String?
 }
 
 /**
