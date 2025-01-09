@@ -62,6 +62,8 @@
   - Xcode の version を 16.2 に変更
   - SDK を iOS 18.2 に変更
   - @zztkm
+- [UPDATE] jazzy 設定の `xcodebuild_arguments` の iphoneos を 18.2 に変更する
+  - @zztkm
 
 ## 2024.3.0
 
