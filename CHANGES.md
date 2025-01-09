@@ -57,6 +57,11 @@
   - macOS の条件を外す
     - Xcode とほぼ同時更新なので一旦不要と判断
   - @miosakuma
+- [UPDATE] GitHub Actions のビルド環境を更新する
+  - runner を macos-15 に変更
+  - Xcode の version を 16.2 に変更
+  - SDK を iOS 18.2 に変更
+  - @zztkm
 
 ## 2024.3.0
 
