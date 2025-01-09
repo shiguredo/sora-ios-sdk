@@ -544,6 +544,9 @@ public struct SignalingNotify {
     /// イベントの種別
     public var eventType: String
 
+    /// タイムスタンプ
+    public var timestamp: String?
+
     // MARK: 接続情報
 
     /// ロール
@@ -560,6 +563,9 @@ public struct SignalingNotify {
 
     /// 接続 ID
     public var connectionId: String?
+
+    /// スポットライトでフォーカスされる配信数
+    public var spotlightNumber: Int?
 
     /// 音声の可否
     public var audioEnabled: Bool?
@@ -625,6 +631,15 @@ public struct SignalingNotify {
 
     /// 再開された RTP ストリームの送信元接続 ID
     public var streamId: String?
+
+    /// 音声ストリーミング処理に失敗したコネクション ID
+    public var failedConnectionId: String?
+
+    /// ICE コネクションステートの現在の状態
+    public var currentState: String?
+
+    /// ICE コネクションステートの遷移前の状態
+    public var previousState: String?
 }
 
 /**
@@ -1144,11 +1159,13 @@ extension SignalingPush: Codable {
 extension SignalingNotify: Codable {
     enum CodingKeys: String, CodingKey {
         case event_type
+        case timestamp
         case role
         case session_id
         case client_id
         case bundle_id
         case connection_id
+        case spotlight_number
         case audio
         case video
         case minutes
@@ -1168,18 +1185,25 @@ extension SignalingNotify: Codable {
         case recv_connection_id
         case send_connection_id
         case stream_id
+        case failed_connection_id
+        case current_state
+        case previous_state
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         eventType = try container.decode(String.self,
                                          forKey: .event_type)
+        timestamp = try container.decodeIfPresent(String.self,
+                                                  forKey: .timestamp)
         role = try container.decodeIfPresent(SignalingRole.self, forKey: .role)
         sessionId = try container.decodeIfPresent(String.self, forKey: .session_id)
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
         bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
         connectionId = try container.decodeIfPresent(String.self,
                                                      forKey: .connection_id)
+        spotlightNumber = try container.decodeIfPresent(Int.self,
+                                                        forKey: .spotlight_number)
         audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
         videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
         connectionTime = try container.decodeIfPresent(Int.self, forKey: .minutes)
@@ -1211,6 +1235,10 @@ extension SignalingNotify: Codable {
             try container.decodeIfPresent(String.self, forKey: .send_connection_id)
         streamId =
             try container.decodeIfPresent(String.self, forKey: .stream_id)
+        failedConnectionId =
+            try container.decodeIfPresent(String.self, forKey: .failed_connection_id)
+        currentState = try container.decodeIfPresent(String.self, forKey: .current_state)
+        previousState = try container.decodeIfPresent(String.self, forKey: .previous_state)
     }
 
     public func encode(to encoder: Encoder) throws {

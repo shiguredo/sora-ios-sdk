@@ -38,6 +38,14 @@
     - `video`
     - `videoCodecType`
     - `videoBitRate`
+- [ADD] SignalingNotify に項目を追加する
+  - 追加する項目
+    - `timestamp`
+    - `spotlightNumber`
+    - `failedConnectionId`
+    - `currentState`
+    - `previousState`
+  - @zztkm
 
 ### misc
 
