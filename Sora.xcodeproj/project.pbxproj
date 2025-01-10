@@ -627,7 +627,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MARKETING_VERSION = 2024.3.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -enable-experimental-feature DisableOutwardActorInference -enable-experimental-feature GlobalConcurrency -enable-experimental-feature InferSendableFromCaptures";
+				OTHER_SWIFT_FLAGS = "$(inherited) -enable-experimental-feature DisableOutwardActorInference -enable-experimental-feature GlobalConcurrency -enable-experimental-feature InferSendableFromCaptures -enable-experimental-feature ForwardTrailingClosures";
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -665,7 +665,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MARKETING_VERSION = 2024.3.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -enable-experimental-feature DisableOutwardActorInference -enable-experimental-feature GlobalConcurrency -enable-experimental-feature InferSendableFromCaptures";
+				OTHER_SWIFT_FLAGS = "$(inherited) -enable-experimental-feature DisableOutwardActorInference -enable-experimental-feature GlobalConcurrency -enable-experimental-feature InferSendableFromCaptures -enable-experimental-feature ForwardTrailingClosures";
 				PRODUCT_BUNDLE_IDENTIFIER = jp.shiguredo.sora.ios.sdk.Sora;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
