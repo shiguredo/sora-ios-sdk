@@ -11,8 +11,8 @@
 
 ## develop
 
-- [UPDATE] WebRTC m129.6668.1.0 に上げる
-  - @miosakuma
+- [UPDATE] WebRTC m132.6834.5.1 に上げる
+  - @miosakuma @zztkm
 - [UPDATE] システム条件の iOS を 14.0 に上げる
   - IPHONEOS_DEPLOYMENT_TARGET を 14.0 に上げる
   - SwiftPM の platforms の設定を v14 に上げる
