@@ -66,6 +66,8 @@
   - `swift_version` を 6.0.3 に変更
   - `xcodebuild_arguments` の iphoneos を 18.2 に変更
   - @zztkm
+- [ADD] canary.py を追加する
+  - @zztkm
 
 ## 2024.3.0
 
