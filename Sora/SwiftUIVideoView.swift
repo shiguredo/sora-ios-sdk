@@ -125,24 +125,6 @@ public struct SwiftUIVideoView<Background>: View where Background: View {
         controller.videoView.handlers.onRender = perform
         return self
     }
-
-    /// 映像フレームの描画開始時に実行されるブロックを指定します。
-    public func videoOnStart(perform: @escaping () -> Void) -> SwiftUIVideoView<Background> {
-        controller.videoView.handlers.onStart = perform
-        return self
-    }
-
-    /// 映像フレームの描画停止時に実行されるブロックを指定します。
-    public func videoOnStop(perform: @escaping () -> Void) -> SwiftUIVideoView<Background> {
-        controller.videoView.handlers.onStop = perform
-        return self
-    }
-
-    /// 映像が backgroundView に切り替わったときに実行されるブロックを指定します。
-    public func videoOnClear(perform: @escaping () -> Void) -> SwiftUIVideoView<Background> {
-        controller.videoView.handlers.onClear = perform
-        return self
-    }
 }
 
 /*
