@@ -11,6 +11,8 @@
 
 ## develop
 
+## 2025.1.0
+
 - [UPDATE] WebRTC m132.6834.5.1 に上げる
   - @miosakuma @zztkm
 - [UPDATE] システム条件の iOS を 14.0 に上げる
