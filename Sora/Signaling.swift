@@ -11,8 +11,8 @@ private func serializeData(_ data: Any?) -> [SignalingNotifyMetadata]? {
 
     let result = array.map { (dict: [String: Any]) -> SignalingNotifyMetadata in
         var signalingNotifyMetadata = SignalingNotifyMetadata()
-        if let clinetId = dict["client_id"] as? String {
-            signalingNotifyMetadata.clientId = clinetId
+        if let clientId = dict["client_id"] as? String {
+            signalingNotifyMetadata.clientId = clientId
         }
         if let bundleId = dict["bundle_id"] as? String {
             signalingNotifyMetadata.bundleId = bundleId
@@ -25,8 +25,8 @@ private func serializeData(_ data: Any?) -> [SignalingNotifyMetadata]? {
             signalingNotifyMetadata.authnMetadata = authnMetadata
         }
 
-        if let authzMetada = dict["authz_metadata"] {
-            signalingNotifyMetadata.authzMetadata = authzMetada
+        if let authzMetadata = dict["authz_metadata"] {
+            signalingNotifyMetadata.authzMetadata = authzMetadata
         }
 
         if let metadata = dict["metadata"] {
@@ -330,7 +330,12 @@ public struct SignalingConnect {
     public var redirect: Bool?
 
     /// 転送フィルターの設定
+    ///
+    /// この項目は 2025 年 12 月リリース予定の Sora にて廃止されます
     public var forwardingFilter: ForwardingFilter?
+
+    /// リスト形式の転送フィルターの設定
+    public var forwardingFilters: [ForwardingFilter]?
 
     /// VP9 向け映像コーデックパラメーター
     public var vp9Params: Encodable?
@@ -401,6 +406,9 @@ public struct SignalingOffer {
         }
     }
 
+    /// チャネルID
+    public let channelId: String?
+
     /// クライアント ID
     public let clientId: String
 
@@ -410,8 +418,14 @@ public struct SignalingOffer {
     /// 接続 ID
     public let connectionId: String
 
+    /// セッションID
+    public let sessionId: String?
+
     /// SDP メッセージ
     public let sdp: String
+
+    /// version
+    public let version: String?
 
     /// クライアントが更新すべき設定
     public let configuration: Configuration?
@@ -430,6 +444,30 @@ public struct SignalingOffer {
 
     /// サイマルキャスト有効 / 無効フラグ
     public let simulcast: Bool?
+
+    /// サイマルキャストマルチコーデック
+    public let simulcastMulticodec: Bool?
+
+    /// スポットライト
+    public let spotlight: Bool?
+
+    /// audio
+    public let audio: Bool?
+
+    /// audio codec type
+    public let audioCodecType: String?
+
+    /// audio bit rate
+    public let audioBitRate: Int?
+
+    /// video
+    public let video: Bool?
+
+    /// video codec type
+    public let videoCodecType: String?
+
+    /// video bit rate
+    public let videoBitRate: Int?
 }
 
 /**
@@ -506,6 +544,9 @@ public struct SignalingNotify {
     /// イベントの種別
     public var eventType: String
 
+    /// タイムスタンプ
+    public var timestamp: String?
+
     // MARK: 接続情報
 
     /// ロール
@@ -522,6 +563,9 @@ public struct SignalingNotify {
 
     /// 接続 ID
     public var connectionId: String?
+
+    /// スポットライトでフォーカスされる配信数
+    public var spotlightNumber: Int?
 
     /// 音声の可否
     public var audioEnabled: Bool?
@@ -587,6 +631,15 @@ public struct SignalingNotify {
 
     /// 再開された RTP ストリームの送信元接続 ID
     public var streamId: String?
+
+    /// 音声ストリーミング処理に失敗したコネクション ID
+    public var failedConnectionId: String?
+
+    /// ICE コネクションステートの現在の状態
+    public var currentState: String?
+
+    /// ICE コネクションステートの遷移前の状態
+    public var previousState: String?
 }
 
 /**
@@ -784,6 +837,7 @@ extension SignalingConnect: Codable {
         case audio_streaming_language_code
         case redirect
         case forwarding_filter
+        case forwarding_filters
     }
 
     enum VideoCodingKeys: String, CodingKey {
@@ -834,6 +888,7 @@ extension SignalingConnect: Codable {
         try container.encodeIfPresent(audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
         try container.encodeIfPresent(redirect, forKey: .redirect)
         try container.encodeIfPresent(forwardingFilter, forKey: .forwarding_filter)
+        try container.encodeIfPresent(forwardingFilters, forKey: .forwarding_filters)
 
         if videoEnabled {
             if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil || h264Params != nil {
@@ -962,14 +1017,29 @@ extension SignalingOffer: Codable {
         case encodings
         case mid
         case simulcast
+        case version
+        case simulcast_multicodec
+        case spotlight
+        case channel_id
+        case session_id
+        case audio
+        case audio_codec_type
+        case audio_bit_rate
+        case video
+        case video_codec_type
+        case video_bit_rate
     }
 
     public init(from decoder: Decoder) throws {
+        // metadata, dataChannels は updateMetadata() で処理されるので、ここでは処理しない
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        channelId = try container.decodeIfPresent(String.self, forKey: .channel_id)
         clientId = try container.decode(String.self, forKey: .client_id)
         bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
         connectionId = try container.decode(String.self, forKey: .connection_id)
+        sessionId = try container.decodeIfPresent(String.self, forKey: .session_id)
         sdp = try container.decode(String.self, forKey: .sdp)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
         configuration =
             try container.decodeIfPresent(Configuration.self,
                                           forKey: .config)
@@ -978,6 +1048,14 @@ extension SignalingOffer: Codable {
                                           forKey: .encodings)
         mid = try container.decodeIfPresent([String: String].self, forKey: .mid)
         simulcast = try container.decodeIfPresent(Bool.self, forKey: .simulcast)
+        simulcastMulticodec = try container.decodeIfPresent(Bool.self, forKey: .simulcast_multicodec)
+        spotlight = try container.decodeIfPresent(Bool.self, forKey: .spotlight)
+        audio = try container.decodeIfPresent(Bool.self, forKey: .audio)
+        audioCodecType = try container.decodeIfPresent(String.self, forKey: .audio_codec_type)
+        audioBitRate = try container.decodeIfPresent(Int.self, forKey: .audio_bit_rate)
+        video = try container.decodeIfPresent(Bool.self, forKey: .video)
+        videoCodecType = try container.decodeIfPresent(String.self, forKey: .video_codec_type)
+        videoBitRate = try container.decodeIfPresent(Int.self, forKey: .video_bit_rate)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1081,11 +1159,13 @@ extension SignalingPush: Codable {
 extension SignalingNotify: Codable {
     enum CodingKeys: String, CodingKey {
         case event_type
+        case timestamp
         case role
         case session_id
         case client_id
         case bundle_id
         case connection_id
+        case spotlight_number
         case audio
         case video
         case minutes
@@ -1105,18 +1185,25 @@ extension SignalingNotify: Codable {
         case recv_connection_id
         case send_connection_id
         case stream_id
+        case failed_connection_id
+        case current_state
+        case previous_state
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         eventType = try container.decode(String.self,
                                          forKey: .event_type)
+        timestamp = try container.decodeIfPresent(String.self,
+                                                  forKey: .timestamp)
         role = try container.decodeIfPresent(SignalingRole.self, forKey: .role)
         sessionId = try container.decodeIfPresent(String.self, forKey: .session_id)
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
         bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
         connectionId = try container.decodeIfPresent(String.self,
                                                      forKey: .connection_id)
+        spotlightNumber = try container.decodeIfPresent(Int.self,
+                                                        forKey: .spotlight_number)
         audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
         videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
         connectionTime = try container.decodeIfPresent(Int.self, forKey: .minutes)
@@ -1148,6 +1235,10 @@ extension SignalingNotify: Codable {
             try container.decodeIfPresent(String.self, forKey: .send_connection_id)
         streamId =
             try container.decodeIfPresent(String.self, forKey: .stream_id)
+        failedConnectionId =
+            try container.decodeIfPresent(String.self, forKey: .failed_connection_id)
+        currentState = try container.decodeIfPresent(String.self, forKey: .current_state)
+        previousState = try container.decodeIfPresent(String.self, forKey: .previous_state)
     }
 
     public func encode(to encoder: Encoder) throws {
