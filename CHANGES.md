@@ -38,6 +38,7 @@
     - `video`
     - `videoCodecType`
     - `videoBitRate`
+  - @zztkm
 - [ADD] SignalingNotify に項目を追加する
   - 追加する項目
     - `timestamp`
