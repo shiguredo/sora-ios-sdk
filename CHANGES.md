@@ -13,6 +13,8 @@
 
 ## 2025.1.0
 
+**リリース日**: 2025-01-21
+
 - [UPDATE] WebRTC m132.6834.5.1 に上げる
   - @miosakuma @zztkm
 - [UPDATE] システム条件の iOS を 14.0 に上げる
@@ -22,12 +24,7 @@
   - libwebrtc の対象バージョンに追従した
     - <https://webrtc.googlesource.com/src/+/9b81d2c954128831c62d8a0657c7f955b3c02d32>
   - @miosakuma
-- [ADD] `ForwardingFilter` に name と priority を追加する
-  - @zztkm
-- [ADD] シグナリング connect 時にリスト形式の転送フィルターを設定するための項目を追加する
-  - `Configuration`, `SignalingConnect` に forwardingFilters を追加する
-  - @zztkm
-- [ADD] SignalingOffer に項目を追加する
+- [UPDATE] SignalingOffer に項目を追加する
   - 追加する項目
     - `version`
     - `simulcastMulticodec`
@@ -41,7 +38,7 @@
     - `videoCodecType`
     - `videoBitRate`
   - @zztkm
-- [ADD] SignalingNotify に項目を追加する
+- [UPDATE] SignalingNotify に項目を追加する
   - 追加する項目
     - `timestamp`
     - `spotlightNumber`
@@ -49,6 +46,12 @@
     - `currentState`
     - `previousState`
   - @zztkm
+- [ADD] `ForwardingFilter` に name と priority を追加する
+  - @zztkm
+- [ADD] シグナリング connect 時にリスト形式の転送フィルターを設定するための項目を追加する
+  - `Configuration`, `SignalingConnect` に forwardingFilters を追加する
+  - @zztkm
+
 
 ### misc
 
