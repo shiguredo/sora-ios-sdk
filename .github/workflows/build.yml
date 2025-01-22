@@ -35,6 +35,7 @@ jobs:
         rm Podfile && mv Podfile.dev Podfile
         pod repo update
         pod install
+        nm ./Pods/WebRTC/WebRTC.xcframework/ios-arm64/WebRTC.framework/WebRTC | grep _kVTVideoEncoderSpecification_RequiredLowLatency >/dev/null 2>&1 && echo 'Non-public API' 2>/dev/null && exit 1; rm -rf Pods/ Podfile.lock Sora.xcworkspace/
     - name: Build Xcode Project
       run: |
         set -o pipefail && \
