@@ -11,6 +11,10 @@
 
 ## develop
 
+## 2025.1.1
+
+**リリース日**: 2025-01-23
+
 - [UPDATE] WebRTC m132.6834.5.2 に上げる
   - Apple 非公開 API を利用していたため、App Store Connect へのアップロードに失敗する問題に対応
   - @zztkm
