@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = "Sora"
-  s.version = "2025.1.0"
+  s.version = "2025.1.1-canary.0"
   s.summary = "Sora iOS SDK"
   s.description = <<-DESC
                    A library to develop Sora client applications.
@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   }
   s.source_files = "Sora/**/*.swift"
   s.resources = ['Sora/*.xib']
-  s.dependency "WebRTC", '132.6834.5.1'
+  s.dependency "WebRTC", '132.6834.5.2'
   s.pod_target_xcconfig = {
     'ARCHS' => 'arm64',
     'ARCHS[config=Debug]' => '$(ARCHS_STANDARD)'
