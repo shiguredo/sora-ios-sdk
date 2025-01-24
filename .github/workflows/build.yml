@@ -37,7 +37,6 @@ jobs:
         pod install
         if nm ./Pods/WebRTC/WebRTC.xcframework/ios-arm64/WebRTC.framework/WebRTC | grep _kVTVideoEncoderSpecification_RequiredLowLatency >/dev/null 2>&1; then
           echo 'Error: Non-public API detected in WebRTC framework.'
-          rm -rf Pods/ Podfile.lock
           exit 1
         fi
     - name: Build Xcode Project
