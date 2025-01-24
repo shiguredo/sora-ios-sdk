@@ -86,6 +86,9 @@ public struct Configuration {
     public var role: Role
 
     /// マルチストリームの可否
+    ///
+    /// レガシーストリーム機能は 2025 年 6 月リリースの Sora にて廃止します
+    /// そのため、multistreamEnabled は使用は非推奨です
     public var multistreamEnabled: Bool
 
     /// :nodoc:
@@ -219,6 +222,37 @@ public struct Configuration {
     /// パブリッシャーの音声トラックの ID です。
     /// 通常、指定する必要はありません。
     public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
+
+    /**
+     初期化します。
+
+     - parameter url: サーバーの URL
+     - parameter channelId: チャネル ID
+     - parameter role: ロール
+     */
+    public init(url: URL,
+                channelId: String,
+                role: Role)
+    {
+        urlCandidates = [url]
+        self.channelId = channelId
+        self.role = role
+    }
+
+    /**
+     初期化します。
+     - parameter urlCandidates: シグナリングに利用する URL の候補
+     - parameter channelId: チャネル ID
+     - parameter role: ロール
+     */
+    public init(urlCandidates: [URL],
+                channelId: String,
+                role: Role)
+    {
+        self.urlCandidates = urlCandidates
+        self.channelId = channelId
+        self.role = role
+    }
 
     /**
      初期化します。

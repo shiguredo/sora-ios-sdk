@@ -11,6 +11,11 @@
 
 ## develop
 
+- [UPDATE] multistreamEnabled を非推奨扱いにする
+  - multistreamEnabled の設定が不要なイニシャライザを `Configuration` に追加する
+  - ドキュメントコメントに非推奨扱いの旨を追加する
+  - @zztkm
+
 ## 2025.1.1
 
 **リリース日**: 2025-01-23
