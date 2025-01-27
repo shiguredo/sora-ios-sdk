@@ -88,7 +88,7 @@ public struct Configuration {
     /// マルチストリームの可否
     ///
     /// レガシーストリーム機能は 2025 年 6 月リリースの Sora にて廃止します
-    /// そのため、multistreamEnabled は使用は非推奨です
+    /// そのため、multistreamEnabled の使用は非推奨です
     public var multistreamEnabled: Bool?
 
     /// :nodoc:
