@@ -294,7 +294,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                      message: "did connect to signaling channel")
 
         var role: SignalingRole
-        var multistream = configuration.multistreamEnabled || configuration.spotlightEnabled == .enabled
+        var multistream = configuration.multistreamEnabled
+        if configuration.spotlightEnabled == .enabled {
+            multistream = true
+        }
         switch configuration.role {
         case .sendonly:
             role = .sendonly
