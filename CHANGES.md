@@ -11,6 +11,8 @@
 
 ## develop
 
+- [CHANGE] 設定に応じて multistreamEnabled の値を更新する処理を削除する
+  - @zztkm
 - [UPDATE] multistreamEnabled を非推奨扱いにする
   - multistreamEnabled の設定が不要なイニシャライザを `Configuration` に追加する
   - ドキュメントコメントに非推奨扱いの旨を追加する

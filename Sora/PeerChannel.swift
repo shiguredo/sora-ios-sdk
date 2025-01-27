@@ -293,35 +293,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "did connect to signaling channel")
 
-        var role: SignalingRole
-        var multistream = configuration.multistreamEnabled
-        if configuration.spotlightEnabled == .enabled {
-            multistream = true
-        }
-        switch configuration.role {
-        case .sendonly:
-            role = .sendonly
-        case .recvonly:
-            role = .recvonly
-        case .sendrecv:
-            role = .sendrecv
-            multistream = true
-        }
-
         let soraClient = "Sora iOS SDK \(SDKInfo.version)"
-
         let webRTCVersion = "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version.dropFirst()).\(WebRTCInfo.branch).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
 
         let simulcast = configuration.simulcastEnabled
         let connect = SignalingConnect(
-            role: role,
+            role: configuration.role,
             channelId: configuration.channelId,
             clientId: configuration.clientId,
             bundleId: configuration.bundleId,
             metadata: configuration.signalingConnectMetadata,
             notifyMetadata: configuration.signalingConnectNotifyMetadata,
             sdp: sdp,
-            multistreamEnabled: multistream,
+            multistreamEnabled: configuration.multistreamEnabled,
             videoEnabled: configuration.videoEnabled,
             videoCodec: configuration.videoCodec,
             videoBitRate: configuration.videoBitRate,
