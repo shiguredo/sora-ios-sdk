@@ -86,13 +86,16 @@ public struct Configuration {
     public var role: Role
 
     /// マルチストリームの可否
-    public var multistreamEnabled: Bool
+    ///
+    /// レガシーストリーム機能は 2025 年 6 月リリースの Sora にて廃止します
+    /// そのため、multistreamEnabled の使用は非推奨です
+    public var multistreamEnabled: Bool?
 
     /// :nodoc:
     var isMultistream: Bool {
         switch role {
         default:
-            return multistreamEnabled
+            return multistreamEnabled ?? true
         }
     }
 
@@ -226,12 +229,12 @@ public struct Configuration {
      - parameter url: サーバーの URL
      - parameter channelId: チャネル ID
      - parameter role: ロール
-     - parameter multistreamEnabled: マルチストリームの可否
+     - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
      */
     public init(url: URL,
                 channelId: String,
                 role: Role,
-                multistreamEnabled: Bool)
+                multistreamEnabled: Bool? = nil)
     {
         urlCandidates = [url]
         self.channelId = channelId
@@ -244,12 +247,12 @@ public struct Configuration {
      - parameter urlCandidates: シグナリングに利用する URL の候補
      - parameter channelId: チャネル ID
      - parameter role: ロール
-     - parameter multistreamEnabled: マルチストリームの可否
+     - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
      */
     public init(urlCandidates: [URL],
                 channelId: String,
                 role: Role,
-                multistreamEnabled: Bool)
+                multistreamEnabled: Bool? = nil)
     {
         self.urlCandidates = urlCandidates
         self.channelId = channelId
