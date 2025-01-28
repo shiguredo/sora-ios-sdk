@@ -11,7 +11,7 @@
 
 ## develop
 
-- [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する
+- [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する破壊的変更
   - Configration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
   - Configration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除
   - 結果、connect メッセージには Configration.multistreamEnabled に指定した値が送信される
