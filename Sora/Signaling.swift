@@ -388,6 +388,9 @@ public struct SignalingOffer {
         /// 映像解像度を送信前に下げる度合
         public let scaleResolutionDownBy: Double?
 
+        /// 解像度の
+        public let scaleResolutionDownTo: RTCResolutionRestriction?
+
         /// scalability mode
         public let scalabilityMode: String?
 
@@ -403,6 +406,9 @@ public struct SignalingOffer {
             }
             if let value = scaleResolutionDownBy {
                 params.scaleResolutionDownBy = NSNumber(value: value)
+            }
+            if let value = scaleResolutionDownTo {
+                params.scaleResolutionDownTo = value
             }
             params.scalabilityMode = scalabilityMode
             return params
@@ -981,6 +987,24 @@ extension SignalingOffer.Configuration: Codable {
     }
 }
 
+fileprivate struct ScaleResolutionDownTo {
+    fileprivate let maxWidth: Int
+    fileprivate let maxHeight: Int
+}
+
+extension ScaleResolutionDownTo: Codable {
+    enum CodingKeys: String, CodingKey {
+        case maxWidth
+        case maxHeight
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        maxWidth = try container.decode(Int.self, forKey: .maxWidth)
+        maxHeight = try container.decode(Int.self, forKey: .maxHeight)
+    }
+}
+
 /// :nodoc:
 extension SignalingOffer.Encoding: Codable {
     enum CodingKeys: String, CodingKey {
@@ -989,19 +1013,28 @@ extension SignalingOffer.Encoding: Codable {
         case maxBitrate
         case maxFramerate
         case scaleResolutionDownBy
+        case scaleResolutionDownTo
         case scalabilityMode
     }
-
+    
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         rid = try container.decodeIfPresent(String.self, forKey: .rid)
         active = try container.decodeIfPresent(Bool.self, forKey: .active) ?? true
         maxBitrate = try container.decodeIfPresent(Int.self, forKey: .maxBitrate)
         maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
-        scaleResolutionDownBy = try container.decodeIfPresent(Double.self,
-                                                              forKey: .scaleResolutionDownBy)
-        scalabilityMode = try container.decodeIfPresent(String.self,
-                                                        forKey: .scalabilityMode)
+        scaleResolutionDownBy = try container.decodeIfPresent(Double.self, forKey: .scaleResolutionDownBy)
+        
+        if let _scleResolutionDownTo  = try container.decodeIfPresent(ScaleResolutionDownTo.self, forKey: .scaleResolutionDownTo) {
+            let restriction = RTCResolutionRestriction()
+            restriction.maxWidth = NSNumber(value: _scleResolutionDownTo.maxWidth)
+            restriction.maxHeight = NSNumber(value: _scleResolutionDownTo.maxHeight)
+            scaleResolutionDownTo = restriction
+        } else {
+            scaleResolutionDownTo = nil
+        }
+        
+        scalabilityMode = try container.decodeIfPresent(String.self, forKey: .scalabilityMode)
     }
 
     public func encode(to encoder: Encoder) throws {

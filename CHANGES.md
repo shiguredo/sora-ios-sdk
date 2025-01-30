@@ -11,6 +11,8 @@
 
 ## develop
 
+- [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
+  - @zztkm
 - [UPDATE] WebRTC m132.6834.5.3 に上げる
   - @zztkm
 - [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する破壊的変更
