@@ -388,7 +388,7 @@ public struct SignalingOffer {
         /// 映像解像度を送信前に下げる度合
         public let scaleResolutionDownBy: Double?
 
-        /// 解像度の
+        /// エンコーディングを制限する最大の寸法
         public let scaleResolutionDownTo: RTCResolutionRestriction?
 
         /// scalability mode
@@ -987,7 +987,8 @@ extension SignalingOffer.Configuration: Codable {
     }
 }
 
-private struct ScaleResolutionDownTo {
+/// scaleResolutionDownTo を JSON デコードする専用の構造体
+fileprivate struct ScaleResolutionDownTo {
     fileprivate let maxWidth: Int
     fileprivate let maxHeight: Int
 }
