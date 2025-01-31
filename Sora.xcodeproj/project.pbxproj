@@ -48,6 +48,7 @@
 		91FA6F211D93CA9800D38DB4 /* VideoFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */; };
 		91FD95751DCA06F700047BA9 /* RTC+Description.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FD95741DCA06F700047BA9 /* RTC+Description.swift */; };
 		AD7227122716B5F100001A23 /* DataChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7227112716B5F100001A23 /* DataChannel.swift */; };
+		B3E5B61A2CAA4FF7005C39D2 /* SwiftUIVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3E5B6192CAA4FF7005C39D2 /* SwiftUIVideoView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -117,6 +118,7 @@
 		91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoFrame.swift; sourceTree = "<group>"; };
 		91FD95741DCA06F700047BA9 /* RTC+Description.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "RTC+Description.swift"; sourceTree = "<group>"; };
 		AD7227112716B5F100001A23 /* DataChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataChannel.swift; sourceTree = "<group>"; };
+		B3E5B6192CAA4FF7005C39D2 /* SwiftUIVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIVideoView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -206,6 +208,7 @@
 				9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */,
 				3591D8EF27032233000AD514 /* SoraDispatcher.swift */,
 				9145A58F1F0CB093002D6EC6 /* Utilities.swift */,
+				B3E5B6192CAA4FF7005C39D2 /* SwiftUIVideoView.swift */,
 				9177FF9B1F2E2D1600B4FA1A /* VideoCapturer.swift */,
 				9174A8921F73F8CF00D586C4 /* VideoCodec.swift */,
 				91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */,
@@ -385,6 +388,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B3E5B61A2CAA4FF7005C39D2 /* SwiftUIVideoView.swift in Sources */,
 				91554F431F179CFD00403C39 /* WebSocketChannel.swift in Sources */,
 				91756E221F90ADE900B70C53 /* PeerChannel.swift in Sources */,
 				910F2DB124D7F6EE007336A6 /* Statistics.swift in Sources */,
