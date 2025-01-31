@@ -987,7 +987,7 @@ extension SignalingOffer.Configuration: Codable {
     }
 }
 
-fileprivate struct ScaleResolutionDownTo {
+private struct ScaleResolutionDownTo {
     fileprivate let maxWidth: Int
     fileprivate let maxHeight: Int
 }
@@ -997,7 +997,7 @@ extension ScaleResolutionDownTo: Codable {
         case maxWidth
         case maxHeight
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         maxWidth = try container.decode(Int.self, forKey: .maxWidth)
@@ -1016,7 +1016,7 @@ extension SignalingOffer.Encoding: Codable {
         case scaleResolutionDownTo
         case scalabilityMode
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         rid = try container.decodeIfPresent(String.self, forKey: .rid)
@@ -1024,8 +1024,8 @@ extension SignalingOffer.Encoding: Codable {
         maxBitrate = try container.decodeIfPresent(Int.self, forKey: .maxBitrate)
         maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
         scaleResolutionDownBy = try container.decodeIfPresent(Double.self, forKey: .scaleResolutionDownBy)
-        
-        if let _scleResolutionDownTo  = try container.decodeIfPresent(ScaleResolutionDownTo.self, forKey: .scaleResolutionDownTo) {
+
+        if let _scleResolutionDownTo = try container.decodeIfPresent(ScaleResolutionDownTo.self, forKey: .scaleResolutionDownTo) {
             let restriction = RTCResolutionRestriction()
             restriction.maxWidth = NSNumber(value: _scleResolutionDownTo.maxWidth)
             restriction.maxHeight = NSNumber(value: _scleResolutionDownTo.maxHeight)
@@ -1033,7 +1033,7 @@ extension SignalingOffer.Encoding: Codable {
         } else {
             scaleResolutionDownTo = nil
         }
-        
+
         scalabilityMode = try container.decodeIfPresent(String.self, forKey: .scalabilityMode)
     }
 
