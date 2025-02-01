@@ -17,7 +17,7 @@
   - Configration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
   - Configration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除
   - 結果、connect メッセージには Configration.multistreamEnabled に指定した値が送信される
-  - 今後は Configration.role に .sendrecv を指定している場合または Configration.spotlightEnabled に .enabled を指定している場合に Confgration.multistreamEnabled に false を指定すると接続エラーになる 
+  - 今後は Configration.role に .sendrecv を指定している場合または Configration.spotlightEnabled に .enabled を指定している場合に Confgration.multistreamEnabled に false を指定すると接続エラーになる
   - @zztkm
 - [UPDATE] multistreamEnabled を非推奨扱いにする
   - multistreamEnabled の設定が不要なイニシャライザを `Configuration` に追加する
@@ -27,6 +27,8 @@
 ### misc
 
 - [CHANGE] フォーマッターを swift-format に移行する
+  - @zztkm
+- [UPDATE] GitHub Actions で format check をするのをやめる
   - @zztkm
 
 ## 2025.1.1
