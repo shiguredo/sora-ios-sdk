@@ -122,9 +122,9 @@ public final class MediaChannel {
     /// 接続中にのみ取得可能です。
     public var connectionTime: Int? {
         if let start = connectionStartTime {
-            return Int(Date().timeIntervalSince(start))
+            Int(Date().timeIntervalSince(start))
         } else {
-            return nil
+            nil
         }
     }
 

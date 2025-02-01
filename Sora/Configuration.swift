@@ -95,7 +95,7 @@ public struct Configuration {
     var isMultistream: Bool {
         switch role {
         default:
-            return multistreamEnabled ?? true
+            multistreamEnabled ?? true
         }
     }
 
@@ -103,9 +103,9 @@ public struct Configuration {
     var isSender: Bool {
         switch role {
         case .sendonly, .sendrecv:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 

@@ -24,9 +24,9 @@ public enum ConnectionState {
     var isDisconnected: Bool {
         switch self {
         case .disconnecting, .disconnected:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 

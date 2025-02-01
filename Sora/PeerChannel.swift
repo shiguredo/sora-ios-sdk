@@ -293,14 +293,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel,
                      message: "did connect to signaling channel")
 
-        var role: SignalingRole
-        switch configuration.role {
+        var role: SignalingRole = switch configuration.role {
         case .sendonly:
-            role = .sendonly
+            .sendonly
         case .recvonly:
-            role = .recvonly
+            .recvonly
         case .sendrecv:
-            role = .sendrecv
+            .sendrecv
         }
 
         let soraClient = "Sora iOS SDK \(SDKInfo.version)"
