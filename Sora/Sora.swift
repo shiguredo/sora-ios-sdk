@@ -20,10 +20,8 @@ public final class SoraHandlers {
     public init() {}
 }
 
-/**
- サーバーへのインターフェースです。
- `Sora` オブジェクトを使用してサーバーへの接続を行います。
- */
+/// サーバーへのインターフェースです。
+/// `Sora` オブジェクトを使用してサーバーへの接続を行います。
 public final class Sora {
     // MARK: - SDK の操作
 
@@ -131,11 +129,14 @@ public final class Sora {
      - parameter error: (接続失敗時のみ) エラー
      - returns: 接続試行中の状態
      */
-    public func connect(configuration: Configuration,
-                        webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
-                        handler: @escaping (_ mediaChannel: MediaChannel?,
-                                            _ error: Error?) -> Void) -> ConnectionTask
-    {
+    public func connect(
+        configuration: Configuration,
+        webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
+        handler: @escaping (
+            _ mediaChannel: MediaChannel?,
+            _ error: Error?
+        ) -> Void
+    ) -> ConnectionTask {
         let mediaChan = MediaChannel(manager: self, configuration: configuration)
         mediaChan.internalHandlers.onDisconnect = { [weak self, weak mediaChan] error in
             guard let weakSelf = self else {
@@ -153,7 +154,8 @@ public final class Sora {
         // ただ、 mediaChannels を weak array にすべきかもしれない
         add(mediaChannel: mediaChan)
 
-        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) { [weak self, weak mediaChan] error in
+        return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) {
+            [weak self, weak mediaChan] error in
             guard let weakSelf = self else {
                 return
             }
@@ -267,7 +269,12 @@ public final class Sora {
      * - parameter mode: 音声モード
      * - returns: 変更の成否
      */
-    public func setAudioMode(_ mode: AudioMode, options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]) -> Result<Void, Error> {
+    public func setAudioMode(
+        _ mode: AudioMode,
+        options: AVAudioSession.CategoryOptions = [
+            .allowBluetooth, .allowBluetoothA2DP, .allowAirPlay,
+        ]
+    ) -> Result<Void, Error> {
         do {
             var options = options
             let session = RTCAudioSession.sharedInstance()
@@ -341,15 +348,15 @@ public final class Sora {
                 return
             }
             let timestamp = Date()
-            print("\(webRTCLoggingDateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
+            print(
+                "\(webRTCLoggingDateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))"
+            )
         }
     }
 }
 
-/**
- サーバーへの接続試行中の状態を表します。
- `cancel()` で接続をキャンセル可能です。
- */
+/// サーバーへの接続試行中の状態を表します。
+/// `cancel()` で接続をキャンセル可能です。
 public final class ConnectionTask {
     /**
      接続状態を表します。

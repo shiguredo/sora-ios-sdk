@@ -1,10 +1,11 @@
 import Foundation
 
 /// :nodoc:
-public extension Array {
-    mutating func remove(_ element: Element,
-                         where predicate: (Element) -> Bool)
-    {
+extension Array {
+    public mutating func remove(
+        _ element: Element,
+        where predicate: (Element) -> Bool
+    ) {
         self = filter { other in
             !predicate(other)
         }
@@ -12,8 +13,8 @@ public extension Array {
 }
 
 /// :nodoc:
-public extension Array where Element: Equatable {
-    mutating func remove(_ element: Element) {
+extension Array where Element: Equatable {
+    public mutating func remove(_ element: Element) {
         remove(element) { other in element == other }
     }
 }

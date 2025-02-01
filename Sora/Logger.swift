@@ -59,20 +59,17 @@ extension LogType: CustomStringConvertible {
 
 // MARK: -
 
-/**
- ログレベルです。
- 上から下に向かってログの重要度が下がり、詳細度が上がります。
- `off` はログを出力しません。
-
- 6. `fatal`
- 5. `error`
- 4. `warn`
- 3. `info`
- 2. `debug`
- 1. `trace`
- 0. `off`
-
- */
+/// ログレベルです。
+/// 上から下に向かってログの重要度が下がり、詳細度が上がります。
+/// `off` はログを出力しません。
+///
+/// 6. `fatal`
+/// 5. `error`
+/// 4. `warn`
+/// 3. `info`
+/// 2. `debug`
+/// 1. `trace`
+/// 0. `off`
 public enum LogLevel {
     /// 致命的なエラー情報
     case fatal
@@ -166,11 +163,12 @@ extension Log: CustomStringConvertible {
     }()
 
     public var description: String {
-        String(format: "%@ %@ %@: %@",
-               Log.formatter.string(from: timestamp),
-               type.description,
-               level.description,
-               message)
+        String(
+            format: "%@ %@ %@: %@",
+            Log.formatter.string(from: timestamp),
+            type.description,
+            level.description,
+            message)
     }
 }
 
@@ -194,39 +192,51 @@ public final class Logger {
     public var groups: [Group] = [.channels, .user]
 
     public static func fatal(type: LogType, message: String) {
-        Logger.shared.output(log: Log(level: .fatal,
-                                      type: type,
-                                      message: message))
+        Logger.shared.output(
+            log: Log(
+                level: .fatal,
+                type: type,
+                message: message))
     }
 
     public static func error(type: LogType, message: String) {
-        Logger.shared.output(log: Log(level: .error,
-                                      type: type,
-                                      message: message))
+        Logger.shared.output(
+            log: Log(
+                level: .error,
+                type: type,
+                message: message))
     }
 
     public static func debug(type: LogType, message: String) {
-        Logger.shared.output(log: Log(level: .debug,
-                                      type: type,
-                                      message: message))
+        Logger.shared.output(
+            log: Log(
+                level: .debug,
+                type: type,
+                message: message))
     }
 
     public static func warn(type: LogType, message: String) {
-        Logger.shared.output(log: Log(level: .warn,
-                                      type: type,
-                                      message: message))
+        Logger.shared.output(
+            log: Log(
+                level: .warn,
+                type: type,
+                message: message))
     }
 
     public static func info(type: LogType, message: String) {
-        Logger.shared.output(log: Log(level: .info,
-                                      type: type,
-                                      message: message))
+        Logger.shared.output(
+            log: Log(
+                level: .info,
+                type: type,
+                message: message))
     }
 
     public static func trace(type: LogType, message: String) {
-        Logger.shared.output(log: Log(level: .trace,
-                                      type: type,
-                                      message: message))
+        Logger.shared.output(
+            log: Log(
+                level: .trace,
+                type: type,
+                message: message))
     }
 
     public var level: LogLevel = .info
@@ -238,14 +248,14 @@ public final class Logger {
             case .channels:
                 switch log.type {
                 case .sora,
-                     .webSocketChannel,
-                     .signalingChannel,
-                     .peerChannel,
-                     .nativePeerChannel,
-                     .mediaChannel,
-                     .mediaStream,
-                     .dataChannel,
-                     .cameraVideoCapturer:
+                    .webSocketChannel,
+                    .signalingChannel,
+                    .peerChannel,
+                    .nativePeerChannel,
+                    .mediaChannel,
+                    .mediaStream,
+                    .dataChannel,
+                    .cameraVideoCapturer:
                     out = true
                 default:
                     break

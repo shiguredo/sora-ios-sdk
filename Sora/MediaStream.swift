@@ -1,9 +1,7 @@
 import Foundation
 import WebRTC
 
-/**
- ストリームの音声のボリュームの定数のリストです。
- */
+/// ストリームの音声のボリュームの定数のリストです。
 public enum MediaStreamAudioVolume {
     /// 最小値
     public static let min: Double = 0
@@ -24,14 +22,12 @@ public final class MediaStreamHandlers {
     public init() {}
 }
 
-/**
- メディアストリームの機能を定義したプロトコルです。
- デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
- ソースコードは公開していますので、実装の詳細はそちらを参照してください。
-
- メディアストリームは映像と音声の送受信を行います。
- メディアストリーム 1 つにつき、 1 つの映像と 1 つの音声を送受信可能です。
- */
+/// メディアストリームの機能を定義したプロトコルです。
+/// デフォルトの実装は非公開 (`internal`) であり、カスタマイズはイベントハンドラでのみ可能です。
+/// ソースコードは公開していますので、実装の詳細はそちらを参照してください。
+///
+/// メディアストリームは映像と音声の送受信を行います。
+/// メディアストリーム 1 つにつき、 1 つの映像と 1 つの音声を送受信可能です。
 public protocol MediaStream: AnyObject {
     // MARK: - イベントハンドラ
 
@@ -140,15 +136,17 @@ class BasicMediaStream: MediaStream {
         willSet {
             guard let videoTrack = nativeVideoTrack else { return }
             guard let adapter = videoRendererAdapter else { return }
-            Logger.debug(type: .videoRenderer,
-                         message: "remove old video renderer \(adapter) from nativeVideoTrack")
+            Logger.debug(
+                type: .videoRenderer,
+                message: "remove old video renderer \(adapter) from nativeVideoTrack")
             videoTrack.remove(adapter)
         }
         didSet {
             guard let videoTrack = nativeVideoTrack else { return }
             guard let adapter = videoRendererAdapter else { return }
-            Logger.debug(type: .videoRenderer,
-                         message: "add new video renderer \(adapter) to nativeVideoTrack")
+            Logger.debug(
+                type: .videoRenderer,
+                message: "add new video renderer \(adapter) to nativeVideoTrack")
             videoTrack.add(adapter)
         }
     }
@@ -215,8 +213,9 @@ class BasicMediaStream: MediaStream {
                     volume = MediaStreamAudioVolume.max
                 }
                 track.source.volume = volume
-                Logger.debug(type: .mediaStream,
-                             message: "set audio volume \(volume)")
+                Logger.debug(
+                    type: .mediaStream,
+                    message: "set audio volume \(volume)")
             }
         }
     }
@@ -241,9 +240,11 @@ class BasicMediaStream: MediaStream {
             case let .native(capturer: capturer, frame: nativeFrame):
                 // RTCVideoSource.capturer(_:didCapture:) の最初の引数は
                 // 現在使われてないのでダミーでも可？ -> ダミーにしました
-                nativeVideoSource?.capturer(capturer ?? BasicMediaStream.dummyCapturer,
-                                            didCapture: nativeFrame)
+                nativeVideoSource?.capturer(
+                    capturer ?? BasicMediaStream.dummyCapturer,
+                    didCapture: nativeFrame)
             }
-        } else {}
+        } else {
+        }
     }
 }

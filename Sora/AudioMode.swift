@@ -1,18 +1,15 @@
 import AVFoundation
 import Foundation
 
-/**
- * 音声モード。
- *  ``AVAudioSession`` の音声モードと音声カテゴリを変更します。
- *  詳細な設定を行いたい場合は ``AVAudioSession`` を使用して下さい。
- *
- *  音声カテゴリのオプションは次の値が指定されます:
- *
- *  - ``allowBluetooth``
- *  - ``allowBluetoothA2DP``
- *  - ``allowAirPlay``
- *
- */
+/// 音声モード。
+///  ``AVAudioSession`` の音声モードと音声カテゴリを変更します。
+///  詳細な設定を行いたい場合は ``AVAudioSession`` を使用して下さい。
+///
+///  音声カテゴリのオプションは次の値が指定されます:
+///
+///  - ``allowBluetooth``
+///  - ``allowBluetoothA2DP``
+///  - ``allowAirPlay``
 public enum AudioMode {
     /**
      * デフォルト。
@@ -44,9 +41,7 @@ public enum AudioMode {
     case voiceChat(output: AudioOutput)
 }
 
-/**
- * 音声出力先
- */
+/// 音声出力先
 public enum AudioOutput {
     /// デフォルト。端末の状態に依存します。
     case `default`

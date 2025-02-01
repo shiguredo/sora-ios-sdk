@@ -1,6 +1,7 @@
-@testable import Sora
 import WebRTC
 import XCTest
+
+@testable import Sora
 
 class SoraTests: XCTestCase {
     override func setUp() {

@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- SDK に関するエラーを表します。
- */
+/// SDK に関するエラーを表します。
 public enum SoraError: Error {
     /// 接続試行中に処理がキャンセルされたことを示します。
     case connectionCancelled
