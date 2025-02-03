@@ -16,7 +16,7 @@ public enum WebRTCInfo {
     public static let commitPosition = "5"
 
     /// WebRTC フレームワークのメンテナンスバージョン
-    public static let maintenanceVersion = "3"
+    public static let maintenanceVersion = "7"
 
     /// WebRTC フレームワークのソースコードのリビジョン
     public static let revision = "afaf497805cbb502da89991c2dcd783201efdd08"
