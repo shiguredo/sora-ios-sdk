@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- WebSocket のステータスコードを表します。
- */
+/// WebSocket のステータスコードを表します。
 public enum WebSocketStatusCode {
     /// 1000
     case normal
@@ -126,9 +124,7 @@ public enum WebSocketStatusCode {
     }
 }
 
-/**
- WebSocket の通信で送受信されるメッセージを表します。
- */
+/// WebSocket の通信で送受信されるメッセージを表します。
 public enum WebSocketMessage {
     /// テキスト
     case text(String)
@@ -137,9 +133,7 @@ public enum WebSocketMessage {
     case binary(Data)
 }
 
-/**
- WebSocket チャネルのイベントハンドラです。
- */
+/// WebSocket チャネルのイベントハンドラです。
 public final class WebSocketChannelHandlers {
     /// 初期化します。
     public init() {}

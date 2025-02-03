@@ -1,9 +1,7 @@
 import Foundation
 import WebRTC
 
-/**
- ICE Candidate を表します。
- */
+/// ICE Candidate を表します。
 public final class ICECandidate: Equatable {
     // MARK: 比較
 

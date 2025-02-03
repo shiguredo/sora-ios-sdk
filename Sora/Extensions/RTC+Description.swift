@@ -49,8 +49,8 @@ extension RTCIceGatheringState: CustomStringConvertible {
 }
 
 /// :nodoc:
-public extension RTCSessionDescription {
-    var sdpDescription: String {
+extension RTCSessionDescription {
+    public var sdpDescription: String {
         let lines = sdp.components(separatedBy: .newlines)
             .filter { line in
                 !line.isEmpty

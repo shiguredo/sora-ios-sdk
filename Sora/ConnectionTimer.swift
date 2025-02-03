@@ -42,15 +42,17 @@ class ConnectionTimer {
         if let timeout {
             self.timeout = timeout
         }
-        Logger.debug(type: .connectionTimer,
-                     message: "run (timeout: \(self.timeout) seconds)")
+        Logger.debug(
+            type: .connectionTimer,
+            message: "run (timeout: \(self.timeout) seconds)")
 
         timer = Timer(timeInterval: TimeInterval(self.timeout), repeats: false) { _ in
             Logger.debug(type: .connectionTimer, message: "validate timeout")
             for monitor in self.monitors {
                 if monitor.state.isConnecting {
-                    Logger.debug(type: .connectionTimer,
-                                 message: "found timeout")
+                    Logger.debug(
+                        type: .connectionTimer,
+                        message: "found timeout")
                     for monitor in self.monitors {
                         if !monitor.state.isDisconnected {
                             monitor.disconnect()

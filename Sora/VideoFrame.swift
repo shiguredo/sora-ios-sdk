@@ -2,14 +2,11 @@ import CoreMedia
 import Foundation
 import WebRTC
 
-/**
- 映像フレームの種別です。
- 現在の実装では次の映像フレームに対応しています。
-
- - ネイティブの映像フレーム (`RTCVideoFrame`)
- - `CMSampleBuffer` (映像のみ、音声は非対応。 `RTCVideoFrame` に変換されます)
-
- */
+/// 映像フレームの種別です。
+/// 現在の実装では次の映像フレームに対応しています。
+///
+/// - ネイティブの映像フレーム (`RTCVideoFrame`)
+/// - `CMSampleBuffer` (映像のみ、音声は非対応。 `RTCVideoFrame` に変換されます)
 public enum VideoFrame {
     // MARK: - 定義
 
@@ -22,7 +19,7 @@ public enum VideoFrame {
     /// 映像フレームの幅
     public var width: Int {
         switch self {
-        case .native(capturer: _, frame: let frame):
+        case .native(capturer: _, let frame):
             return Int(frame.width)
         }
     }
@@ -30,7 +27,7 @@ public enum VideoFrame {
     /// 映像フレームの高さ
     public var height: Int {
         switch self {
-        case .native(capturer: _, frame: let frame):
+        case .native(capturer: _, let frame):
             return Int(frame.height)
         }
     }
@@ -38,7 +35,7 @@ public enum VideoFrame {
     /// 映像フレームの生成時刻
     public var timestamp: CMTime? {
         switch self {
-        case .native(capturer: _, frame: let frame):
+        case .native(capturer: _, let frame):
             return CMTimeMake(value: frame.timeStampNs, timescale: 1_000_000_000)
         }
     }
@@ -60,9 +57,10 @@ public enum VideoFrame {
         }
         let timeStamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
         let timeStampNs = Int64(timeStamp * 1_000_000_000)
-        let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer),
-                                  rotation: RTCVideoRotation._0,
-                                  timeStampNs: timeStampNs)
+        let frame = RTCVideoFrame(
+            buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer),
+            rotation: RTCVideoRotation._0,
+            timeStampNs: timeStampNs)
         self = .native(capturer: nil, frame: frame)
     }
 }

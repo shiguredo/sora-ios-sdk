@@ -1,12 +1,10 @@
 import Foundation
 import WebRTC
 
-/**
- 解像度やフレームレートなどの設定は `start` 実行時に指定します。
- カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
-
- カメラの設定を変更したい場合は、 `change` を実行します。
- */
+/// 解像度やフレームレートなどの設定は `start` 実行時に指定します。
+/// カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
+///
+/// カメラの設定を変更したい場合は、 `change` を実行します。
 public final class CameraVideoCapturer {
     // MARK: インスタンスの取得
 
@@ -53,8 +51,12 @@ public final class CameraVideoCapturer {
     }
 
     /// 指定された設定に最も近い  AVCaptureDevice.Format? を返します。
-    public static func format(width: Int32, height: Int32, for device: AVCaptureDevice, frameRate: Int? = nil) -> AVCaptureDevice.Format? {
-        func calcDiff(_ targetWidth: Int32, _ targetHeight: Int32, _ format: AVCaptureDevice.Format) -> Int32 {
+    public static func format(
+        width: Int32, height: Int32, for device: AVCaptureDevice, frameRate: Int? = nil
+    ) -> AVCaptureDevice.Format? {
+        func calcDiff(_ targetWidth: Int32, _ targetHeight: Int32, _ format: AVCaptureDevice.Format)
+            -> Int32
+        {
             let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             return abs(targetWidth - dimension.width) + abs(targetHeight - dimension.height)
         }
@@ -84,7 +86,9 @@ public final class CameraVideoCapturer {
     /// 指定された FPS 値をサポートしているレンジが存在すれば、その値を返します。
     /// 存在しない場合はサポートされているレンジの中で最大の値を返します。
     public static func maxFrameRate(_ frameRate: Int, for format: AVCaptureDevice.Format) -> Int? {
-        if format.videoSupportedFrameRateRanges.contains(where: { Int($0.minFrameRate) <= frameRate && frameRate <= Int($0.maxFrameRate) }) {
+        if format.videoSupportedFrameRateRanges.contains(where: {
+            Int($0.minFrameRate) <= frameRate && frameRate <= Int($0.maxFrameRate)
+        }) {
             return frameRate
         }
         return format.videoSupportedFrameRateRanges
@@ -95,31 +99,42 @@ public final class CameraVideoCapturer {
     /// 引数に指定された capturer を停止し、反対の position を持つ CameraVideoCapturer を起動します。
     /// CameraVideoCapturer の起動には、 capturer と近い設定のフォーマットとフレームレートが利用されます。
     /// また、起動された CameraVideoCapturer には capturer の保持する MediaStream が設定されます。
-    public static func flip(_ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)) {
+    public static func flip(
+        _ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)
+    ) {
         guard let format = capturer.format else {
             completionHandler(SoraError.cameraError(reason: "format should not be nil"))
             return
         }
 
         // 反対の position を持つ CameraVideoCapturer を取得します。
-        guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front) else {
+        guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front)
+        else {
             let name = capturer.device.position == .front ? "back" : "front"
             completionHandler(SoraError.cameraError(reason: "\(name) camera is not found"))
             return
         }
 
         let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-        guard let format = CameraVideoCapturer.format(width: dimension.width,
-                                                      height: dimension.height,
-                                                      for: flip.device,
-                                                      frameRate: capturer.frameRate!)
+        guard
+            let format = CameraVideoCapturer.format(
+                width: dimension.width,
+                height: dimension.height,
+                for: flip.device,
+                frameRate: capturer.frameRate!)
         else {
-            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.format failed: suitable format is not found"))
+            completionHandler(
+                SoraError.cameraError(
+                    reason: "CameraVideoCapturer.format failed: suitable format is not found"))
             return
         }
 
-        guard let frameRate = CameraVideoCapturer.maxFrameRate(capturer.frameRate!, for: format) else {
-            completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.maxFramerate failed: suitable frameRate is not found"))
+        guard let frameRate = CameraVideoCapturer.maxFrameRate(capturer.frameRate!, for: format)
+        else {
+            completionHandler(
+                SoraError.cameraError(
+                    reason:
+                        "CameraVideoCapturer.maxFramerate failed: suitable frameRate is not found"))
             return
         }
 
@@ -130,7 +145,8 @@ public final class CameraVideoCapturer {
             }
             flip.start(format: format, frameRate: frameRate) { error in
                 guard error == nil else {
-                    completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
+                    completionHandler(
+                        SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
                     return
                 }
                 flip.stream = capturer.stream
@@ -187,24 +203,28 @@ public final class CameraVideoCapturer {
      * `endGeneratingDeviceOrientationNotifications()` を使う際は
      * 必ず対に実行するように注意してください。
      */
-    public func start(format: AVCaptureDevice.Format,
-                      frameRate: Int,
-                      completionHandler: @escaping ((Error?) -> Void))
-    {
+    public func start(
+        format: AVCaptureDevice.Format,
+        frameRate: Int,
+        completionHandler: @escaping ((Error?) -> Void)
+    ) {
         guard isRunning == false else {
             completionHandler(SoraError.cameraError(reason: "isRunning should be false"))
             return
         }
 
-        native.startCapture(with: device,
-                            format: format,
-                            fps: frameRate)
-        { [self] (error: Error?) in
+        native.startCapture(
+            with: device,
+            format: format,
+            fps: frameRate
+        ) { [self] (error: Error?) in
             guard error == nil else {
                 completionHandler(error)
                 return
             }
-            Logger.debug(type: .cameraVideoCapturer, message: "succeeded to start \(device) with \(format), \(frameRate)fps")
+            Logger.debug(
+                type: .cameraVideoCapturer,
+                message: "succeeded to start \(device) with \(format), \(frameRate)fps")
 
             // start が成功した際の処理
             self.format = format
@@ -232,7 +252,9 @@ public final class CameraVideoCapturer {
         }
 
         native.stopCapture { [self] in
-            Logger.debug(type: .cameraVideoCapturer, message: "succeeded to stop \(String(describing: device))")
+            Logger.debug(
+                type: .cameraVideoCapturer,
+                message: "succeeded to stop \(String(describing: device))")
 
             // stop が成功した際の処理
             isRunning = false
@@ -261,9 +283,10 @@ public final class CameraVideoCapturer {
                     return
                 }
 
-                start(format: format,
-                      frameRate: frameRate)
-                { (error: Error?) in
+                start(
+                    format: format,
+                    frameRate: frameRate
+                ) { (error: Error?) in
                     guard error == nil else {
                         completionHandler(error)
                         return
@@ -274,9 +297,10 @@ public final class CameraVideoCapturer {
                 }
             }
         } else {
-            start(format: format,
-                  frameRate: frameRate)
-            { (error: Error?) in
+            start(
+                format: format,
+                frameRate: frameRate
+            ) { (error: Error?) in
                 guard error == nil else {
                     completionHandler(error)
                     return
@@ -289,7 +313,10 @@ public final class CameraVideoCapturer {
     }
 
     /// カメラを停止後、指定されたパラメーターで起動します。
-    public func change(format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil, completionHandler: @escaping ((Error?) -> Void)) {
+    public func change(
+        format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil,
+        completionHandler: @escaping ((Error?) -> Void)
+    ) {
         guard isRunning else {
             completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
             return
@@ -324,9 +351,7 @@ public final class CameraVideoCapturer {
     }
 }
 
-/**
- `CameraVideoCapturer` の設定を表すオブジェクトです。
- */
+/// `CameraVideoCapturer` の設定を表すオブジェクトです。
 public struct CameraSettings: CustomStringConvertible {
     /** デフォルトの設定。 */
     public static let `default` = CameraSettings()
@@ -420,7 +445,10 @@ public struct CameraSettings: CustomStringConvertible {
      - parameter position: 配信開始時のカメラの位置
      - parameter isEnabled: カメラの起動の有無
      */
-    public init(resolution: Resolution = .hd720p, frameRate: Int = 30, position: AVCaptureDevice.Position = .front, isEnabled: Bool = true) {
+    public init(
+        resolution: Resolution = .hd720p, frameRate: Int = 30,
+        position: AVCaptureDevice.Position = .front, isEnabled: Bool = true
+    ) {
         self.resolution = resolution
         self.frameRate = frameRate
         self.position = position
@@ -450,11 +478,14 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
 // MARK: -
 
 private var resolutionTable: PairTable<String, CameraSettings.Resolution> =
-    PairTable(name: "CameraVideoCapturer.Settings.Resolution",
-              pairs: [("qvga240p", .qvga240p),
-                      ("vga480p", .vga480p),
-                      ("hd720p", .hd720p),
-                      ("hd1080p", .hd1080p)])
+    PairTable(
+        name: "CameraVideoCapturer.Settings.Resolution",
+        pairs: [
+            ("qvga240p", .qvga240p),
+            ("vga480p", .vga480p),
+            ("hd720p", .hd720p),
+            ("hd1080p", .hd1080p),
+        ])
 
 /// :nodoc:
 extension CameraSettings.Resolution: Codable {
@@ -467,9 +498,7 @@ extension CameraSettings.Resolution: Codable {
     }
 }
 
-/**
- CameraVideoCapturer のイベントハンドラです。
- */
+/// CameraVideoCapturer のイベントハンドラです。
 public class CameraVideoCapturerHandlers {
     /// 生成された映像フレームを受け取ります。
     /// 返した映像フレームがストリームに渡されます。

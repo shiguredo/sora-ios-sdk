@@ -11,9 +11,10 @@ func currentMachineName() -> String {
     sysctlbyname(machineKeyPtr.baseAddress!, nil, &machineNameLen, nil, 0)
     let machineNamePtr = UnsafeMutableBufferPointer<Int8>
         .allocate(capacity: machineNameLen)
-    sysctlbyname(machineKeyPtr.baseAddress!,
-                 machineNamePtr.baseAddress!,
-                 &machineNameLen, nil, 0)
+    sysctlbyname(
+        machineKeyPtr.baseAddress!,
+        machineNamePtr.baseAddress!,
+        &machineNameLen, nil, 0)
     let machineName = String.init(cString: machineNamePtr.baseAddress!)
     machineKeyPtr.deallocate()
     machineNamePtr.deallocate()
@@ -22,8 +23,9 @@ func currentMachineName() -> String {
 
 /// :nodoc:
 public struct DeviceInfo {
-    public static var current: DeviceInfo = .init(device: UIDevice.current,
-                                                  machineName: currentMachineName())
+    public static var current: DeviceInfo = .init(
+        device: UIDevice.current,
+        machineName: currentMachineName())
 
     public let machineName: String
 

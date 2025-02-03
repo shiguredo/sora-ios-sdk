@@ -1,8 +1,6 @@
 import Foundation
 
-/**
- 接続するクライアントのロールを表します。
- */
+/// 接続するクライアントのロールを表します。
 public enum Role {
     /// 送信のみ
     case sendonly
@@ -15,10 +13,13 @@ public enum Role {
 }
 
 private var roleTable: PairTable<String, Role> =
-    PairTable(name: "Role",
-              pairs: [("sendonly", .sendonly),
-                      ("recvonly", .recvonly),
-                      ("sendrecv", .sendrecv)])
+    PairTable(
+        name: "Role",
+        pairs: [
+            ("sendonly", .sendonly),
+            ("recvonly", .recvonly),
+            ("sendrecv", .sendrecv),
+        ])
 
 /// :nodoc:
 extension Role: Codable {
