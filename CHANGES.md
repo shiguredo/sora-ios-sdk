@@ -13,6 +13,8 @@
 
 - [UPDATE] WebRTC m132.6834.5.7 に上げる
   - @zztkm
+- [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
+  - @zztkm
 - [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する破壊的変更
   - Configration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
   - Configration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除

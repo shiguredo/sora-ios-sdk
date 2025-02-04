@@ -1353,6 +1353,14 @@ extension RTCRtpSender {
                     oldEncoding.scaleResolutionDownBy = NSNumber(value: value)
                 }
 
+                if let value = encoding.scaleResolutionDownTo {
+                    Logger.debug(
+                        type: .peerChannel,
+                        message: "scaleResolutionDownTo: \(value.maxWidth)x\(value.maxHeight)")
+                    oldEncoding.scaleResolutionDownTo?.maxWidth = value.maxWidth
+                    oldEncoding.scaleResolutionDownTo?.maxHeight = value.maxHeight
+                }
+
                 if let value = encoding.scalabilityMode {
                     Logger.debug(type: .peerChannel, message: "scalabilityMode: \(value)")
                     oldEncoding.scalabilityMode = value
