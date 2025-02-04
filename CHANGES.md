@@ -32,6 +32,8 @@
   - @zztkm
 - [UPDATE] GitHub Actions で format check をするのをやめる
   - @zztkm
+- [UPDATE] SwiftLint の管理を CocoaPods から Swift Package Manager に移行する
+  - @zztkm
 
 ## 2025.1.1
 
