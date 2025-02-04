@@ -398,7 +398,8 @@ public struct SignalingOffer {
                 params.scaleResolutionDownBy = NSNumber(value: value)
             }
             if let value = scaleResolutionDownTo {
-                params.scaleResolutionDownTo = value
+                params.scaleResolutionDownTo?.maxWidth = value.maxWidth
+                params.scaleResolutionDownTo?.maxHeight = value.maxHeight
             }
             params.scalabilityMode = scalabilityMode
             return params
