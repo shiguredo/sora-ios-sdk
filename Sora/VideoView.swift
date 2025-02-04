@@ -1,9 +1,7 @@
 import UIKit
 import WebRTC
 
-/**
- VideoView における、映像ソースの停止時の処理を表します。
- */
+/// VideoView における、映像ソースの停止時の処理を表します。
 public enum VideoViewConnectionMode {
     /// サーバー及びストリームとの接続解除時に描画処理を停止します。
     case auto
@@ -15,23 +13,20 @@ public enum VideoViewConnectionMode {
     case manual
 }
 
-/**
- VideoRenderer プロトコルのデフォルト実装となる UIView です。
-
- MediaStream.videoRenderer にセットすることで、その MediaStream
- に流れている映像をそのまま画面に表示することができます。
-
- ## contentModeの設定
-
- VideoView は contentMode の設定に対応しており、 contentMode
- プロパティに任意の値を設定することで映像のレンダリングのされ方を変更することができます。
-
- - コード上からプログラム的に VideoView を生成した場合、デフォルト値は
- `scaleAspectFit` になります。
- - Storyboard や Interface Builder 経由で VideoView を生成した場合、
- Storyboard や Interface Builder 上で設定した Content Mode の値が使用されます。
-
- */
+/// VideoRenderer プロトコルのデフォルト実装となる UIView です。
+///
+/// MediaStream.videoRenderer にセットすることで、その MediaStream
+/// に流れている映像をそのまま画面に表示することができます。
+///
+/// ## contentModeの設定
+///
+/// VideoView は contentMode の設定に対応しており、 contentMode
+/// プロパティに任意の値を設定することで映像のレンダリングのされ方を変更することができます。
+///
+/// - コード上からプログラム的に VideoView を生成した場合、デフォルト値は
+/// `scaleAspectFit` になります。
+/// - Storyboard や Interface Builder 経由で VideoView を生成した場合、
+/// Storyboard や Interface Builder 上で設定した Content Mode の値が使用されます。
 public class VideoView: UIView {
     // キーウィンドウ外で RTCEAGLVideoView を生成すると次のエラーが発生するため、
     // contentView を Nib ファイルでセットせずに遅延プロパティで初期化する
@@ -41,14 +36,16 @@ public class VideoView: UIView {
     // エラーが発生するため、根本的な解決策ではないので注意
     private lazy var contentView: VideoViewContentView = {
         #if SWIFT_PACKAGE
-            guard let topLevel = Bundle.module
-                .loadNibNamed("VideoView", owner: self, options: nil)
+            guard
+                let topLevel = Bundle.module
+                    .loadNibNamed("VideoView", owner: self, options: nil)
             else {
                 fatalError("cannot load VideoView's nib file")
             }
         #else
-            guard let topLevel = Bundle(for: VideoView.self)
-                .loadNibNamed("VideoView", owner: self, options: nil)
+            guard
+                let topLevel = Bundle(for: VideoView.self)
+                    .loadNibNamed("VideoView", owner: self, options: nil)
             else {
                 fatalError("cannot load VideoView's nib file")
             }
@@ -118,10 +115,12 @@ public class VideoView: UIView {
 
     // backgroundView の未設定時、 clear() を実行すると表示される黒画面のビュー
     private lazy var defaultBackgroundView: UIView = {
-        let view = UIView(frame: CGRect(x: 0,
-                                        y: 0,
-                                        width: self.frame.width,
-                                        height: self.frame.height))
+        let view = UIView(
+            frame: CGRect(
+                x: 0,
+                y: 0,
+                width: self.frame.width,
+                height: self.frame.height))
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.backgroundColor = UIColor.black
         self.addSubview(view)
@@ -273,7 +272,8 @@ class VideoViewContentView: UIView {
                 }
 
                 frameCount = 0
-                debugMonitor = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                debugMonitor = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) {
+                    [weak self] _ in
                     DispatchQueue.main.async { [weak self] in
                         self?.updateDebugInfo()
                     }
@@ -344,7 +344,7 @@ class VideoViewContentView: UIView {
             }
 
             switch frame {
-            case .native(capturer: _, frame: let frame):
+            case .native(capturer: _, let frame):
                 nativeVideoView.isHidden = false
                 nativeVideoView.renderFrame(frame)
             }
@@ -379,9 +379,10 @@ class VideoViewContentView: UIView {
     private func updateNativeVideoViewSize(_ videoFrameSize: CGSize) {
         // 指定された映像のサイズ・現在の自分自身の描画領域のサイズ・描画モードの指定に合わせて、
         // RTCEAGLVideoView のサイズと位置を変更し、うまい具合に映像が描画されるようにする。
-        let adjustSize = viewSize(for: videoFrameSize,
-                                  containerSize: bounds.size,
-                                  mode: renderingContentMode)
+        let adjustSize = viewSize(
+            for: videoFrameSize,
+            containerSize: bounds.size,
+            mode: renderingContentMode)
 
         // setSize(_:) の呼び出しと nativeVideoView.frame の設定について
         // setSize(_:) は RTCVideoRenderer.h にて定義されているメソッドだが、
@@ -394,10 +395,11 @@ class VideoViewContentView: UIView {
         // したがって setSize(_:) は自分で nativeVideoView.frame を適切にセットした後に、手動で呼び出してやらないとならない。
         // nativeVideoView.frame のセットより先に setSize(_:) を呼び出すと、まだ自分自身のサイズが更新されていないにも関わらず delegate に対する通知が発生して挙動がおかしくなる
         nativeVideoView.frame =
-            CGRect(x: (bounds.size.width - adjustSize.width) / 2,
-                   y: (bounds.size.height - adjustSize.height) / 2,
-                   width: adjustSize.width,
-                   height: adjustSize.height)
+            CGRect(
+                x: (bounds.size.width - adjustSize.width) / 2,
+                y: (bounds.size.height - adjustSize.height) / 2,
+                width: adjustSize.width,
+                height: adjustSize.height)
         nativeVideoView.setSize(adjustSize)
         currentVideoFrameSize = videoFrameSize
         setNeedsDisplay()
@@ -421,7 +423,9 @@ class VideoViewContentView: UIView {
     }
 }
 
-private func viewSize(for videoFrameSize: CGSize, containerSize: CGSize, mode: UIView.ContentMode) -> CGSize {
+private func viewSize(for videoFrameSize: CGSize, containerSize: CGSize, mode: UIView.ContentMode)
+    -> CGSize
+{
     switch mode {
     case .scaleToFill:
         // scale to fill モードの場合はアスペクト比を尊重する必要が無いので、
@@ -429,23 +433,29 @@ private func viewSize(for videoFrameSize: CGSize, containerSize: CGSize, mode: U
         return containerSize
     case .scaleAspectFill:
         // scale aspect fill モードの場合は video frame を拡大して container size を埋めつくすように返せばよい。
-        let baseW = CGSize(width: containerSize.width,
-                           height: containerSize.width * (videoFrameSize.height / videoFrameSize.width))
-        let baseH = CGSize(width: containerSize.height * (videoFrameSize.width / videoFrameSize.height),
-                           height: containerSize.height)
-        return ([baseW, baseH].first { size in
-            size.width >= containerSize.width && size.height >= containerSize.height
-        }) ?? baseW
+        let baseW = CGSize(
+            width: containerSize.width,
+            height: containerSize.width * (videoFrameSize.height / videoFrameSize.width))
+        let baseH = CGSize(
+            width: containerSize.height * (videoFrameSize.width / videoFrameSize.height),
+            height: containerSize.height)
+        return
+            ([baseW, baseH].first { size in
+                size.width >= containerSize.width && size.height >= containerSize.height
+            }) ?? baseW
     default:
         // デフォルトは aspect fit モード。
         // 特別に対応しているモード以外はすべて aspect fit として扱います。
         // この場合は container size にちょうどフィットする中で最も大きいサイズを返せばよい。
-        let baseW = CGSize(width: containerSize.width,
-                           height: containerSize.width * (videoFrameSize.height / videoFrameSize.width))
-        let baseH = CGSize(width: containerSize.height * (videoFrameSize.width / videoFrameSize.height),
-                           height: containerSize.height)
-        return ([baseW, baseH].first { size in
-            size.width <= containerSize.width && size.height <= containerSize.height
-        }) ?? baseW
+        let baseW = CGSize(
+            width: containerSize.width,
+            height: containerSize.width * (videoFrameSize.height / videoFrameSize.width))
+        let baseH = CGSize(
+            width: containerSize.height * (videoFrameSize.width / videoFrameSize.height),
+            height: containerSize.height)
+        return
+            ([baseW, baseH].first { size in
+                size.width <= containerSize.width && size.height <= containerSize.height
+            }) ?? baseW
     }
 }

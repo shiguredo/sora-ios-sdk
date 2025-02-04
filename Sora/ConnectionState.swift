@@ -1,9 +1,7 @@
 import Foundation
 import WebRTC
 
-/**
- MediaChannel, SignalingChannel, WebSocketChannel の接続状態を表します。
- */
+/// MediaChannel, SignalingChannel, WebSocketChannel の接続状態を表します。
 public enum ConnectionState {
     /// 接続試行中
     case connecting
@@ -45,9 +43,7 @@ public enum ConnectionState {
     }
 }
 
-/**
- PeerChannel の接続状態を表します。
- */
+/// PeerChannel の接続状態を表します。
 enum PeerChannelConnectionState {
     case new
     case connecting

@@ -1,17 +1,18 @@
 import Foundation
 
 private let descriptionTable: PairTable<String, VideoCodec> =
-    PairTable(name: "VideoCodec",
-              pairs: [("default", .default),
-                      ("VP8", .vp8),
-                      ("VP9", .vp9),
-                      ("H264", .h264),
-                      ("H265", .h265),
-                      ("AV1", .av1)])
+    PairTable(
+        name: "VideoCodec",
+        pairs: [
+            ("default", .default),
+            ("VP8", .vp8),
+            ("VP9", .vp9),
+            ("H264", .h264),
+            ("H265", .h265),
+            ("AV1", .av1),
+        ])
 
-/**
- 映像コーデックを表します。
- */
+/// 映像コーデックを表します。
 public enum VideoCodec {
     /**
      サーバーが指定するデフォルトのコーデック。

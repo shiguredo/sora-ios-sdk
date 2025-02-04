@@ -1,9 +1,7 @@
 import Foundation
 import WebRTC
 
-/**
- メディア制約を表します。
- */
+/// メディア制約を表します。
 public struct MediaConstraints {
     /// 必須の制約
     public var mandatory: [String: String] = [:]
@@ -14,14 +12,13 @@ public struct MediaConstraints {
     // MARK: - ネイティブ
 
     var nativeValue: RTCMediaConstraints {
-        RTCMediaConstraints(mandatoryConstraints: mandatory,
-                            optionalConstraints: optional)
+        RTCMediaConstraints(
+            mandatoryConstraints: mandatory,
+            optionalConstraints: optional)
     }
 }
 
-/**
- SDP でのマルチストリームの記述方式です。
- */
+/// SDP でのマルチストリームの記述方式です。
 public enum SDPSemantics {
     /// Unified Plan
     case unifiedPlan
@@ -36,9 +33,7 @@ public enum SDPSemantics {
     }
 }
 
-/**
- (リソースの逼迫により) 送信する映像の品質が維持できない場合の挙動です。
- */
+/// (リソースの逼迫により) 送信する映像の品質が維持できない場合の挙動です。
 public enum DegradationPreference {
     /// 何もしない
     case disabled
@@ -68,9 +63,7 @@ public enum DegradationPreference {
     }
 }
 
-/**
- WebRTC に関する設定です。
- */
+/// WebRTC に関する設定です。
 public struct WebRTCConfiguration {
     // MARK: メディア制約に関する設定
 
@@ -113,10 +106,11 @@ public struct WebRTCConfiguration {
         config.sdpSemantics = sdpSemantics.nativeValue
 
         // AES-GCM を有効にする
-        config.cryptoOptions = RTCCryptoOptions(srtpEnableGcmCryptoSuites: true,
-                                                srtpEnableAes128Sha1_32CryptoCipher: false,
-                                                srtpEnableEncryptedRtpHeaderExtensions: false,
-                                                sframeRequireFrameEncryption: false)
+        config.cryptoOptions = RTCCryptoOptions(
+            srtpEnableGcmCryptoSuites: true,
+            srtpEnableAes128Sha1_32CryptoCipher: false,
+            srtpEnableEncryptedRtpHeaderExtensions: false,
+            sframeRequireFrameEncryption: false)
         return config
     }
 
@@ -124,8 +118,9 @@ public struct WebRTCConfiguration {
 }
 
 private var sdpSemanticsTable: PairTable<String, SDPSemantics> =
-    PairTable(name: "SDPSemantics",
-              pairs: [("unifiedPlan", .unifiedPlan)])
+    PairTable(
+        name: "SDPSemantics",
+        pairs: [("unifiedPlan", .unifiedPlan)])
 
 /// :nodoc:
 extension SDPSemantics: Codable {
@@ -147,10 +142,12 @@ extension MediaConstraints: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        mandatory = try container.decode([String: String].self,
-                                         forKey: .mandatory)
-        optional = try container.decode([String: String].self,
-                                        forKey: .optional)
+        mandatory = try container.decode(
+            [String: String].self,
+            forKey: .mandatory)
+        optional = try container.decode(
+            [String: String].self,
+            forKey: .optional)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -172,14 +169,18 @@ extension WebRTCConfiguration: Codable {
     public init(from decoder: Decoder) throws {
         self.init()
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        constraints = try container.decode(MediaConstraints.self,
-                                           forKey: .constraints)
-        iceServerInfos = try container.decode([ICEServerInfo].self,
-                                              forKey: .iceServerInfos)
-        iceTransportPolicy = try container.decode(ICETransportPolicy.self,
-                                                  forKey: .iceTransportPolicy)
-        sdpSemantics = try container.decode(SDPSemantics.self,
-                                            forKey: .sdpSemantics)
+        constraints = try container.decode(
+            MediaConstraints.self,
+            forKey: .constraints)
+        iceServerInfos = try container.decode(
+            [ICEServerInfo].self,
+            forKey: .iceServerInfos)
+        iceTransportPolicy = try container.decode(
+            ICETransportPolicy.self,
+            forKey: .iceTransportPolicy)
+        sdpSemantics = try container.decode(
+            SDPSemantics.self,
+            forKey: .sdpSemantics)
     }
 
     public func encode(to encoder: Encoder) throws {

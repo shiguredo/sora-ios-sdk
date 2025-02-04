@@ -4,9 +4,7 @@ public enum SDKInfo {
     public static let version = "2025.2.0-canary.1"
 }
 
-/**
- WebRTC フレームワークの情報を表します。
- */
+/// WebRTC フレームワークの情報を表します。
 public enum WebRTCInfo {
     /// WebRTC フレームワークのバージョン
     public static let version = "M132"
@@ -18,15 +16,18 @@ public enum WebRTCInfo {
     public static let commitPosition = "5"
 
     /// WebRTC フレームワークのメンテナンスバージョン
-    public static let maintenanceVersion = "3"
+    public static let maintenanceVersion = "7"
 
     /// WebRTC フレームワークのソースコードのリビジョン
     public static let revision = "afaf497805cbb502da89991c2dcd783201efdd08"
 
     /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
     public static var shortRevision: String {
-        String(revision[revision.startIndex ..< revision.index(
-            revision.startIndex, offsetBy: 7
-        )])
+        String(
+            revision[
+                revision
+                    .startIndex..<revision.index(
+                        revision.startIndex, offsetBy: 7
+                    )])
     }
 }

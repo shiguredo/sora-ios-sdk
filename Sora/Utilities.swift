@@ -3,15 +3,16 @@ import WebRTC
 
 /// :nodoc:
 public enum Utilities {
-    fileprivate static let randomBaseString = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ0123456789"
+    fileprivate static let randomBaseString =
+        "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ0123456789"
     fileprivate static let randomBaseChars =
         randomBaseString.map { c in String(c) }
 
     public static func randomString(length: Int = 8) -> String {
         var chars: [String] = []
         chars.reserveCapacity(length)
-        for _ in 0 ..< length {
-            let index = UInt32.random(in: 0 ..< UInt32(Utilities.randomBaseChars.count))
+        for _ in 0..<length {
+            let index = UInt32.random(in: 0..<UInt32(Utilities.randomBaseChars.count))
             chars.append(randomBaseChars[Int(index)])
         }
         return chars.joined()
@@ -26,10 +27,13 @@ public enum Utilities {
             seconds = 0
             self.handler = handler
             timer = Timer(timeInterval: 1, repeats: true) { _ in
-                let text = String(format: "%02d:%02d:%02d",
-                                  arguments: [self.seconds / (60 * 60),
-                                              self.seconds / 60,
-                                              self.seconds % 60])
+                let text = String(
+                    format: "%02d:%02d:%02d",
+                    arguments: [
+                        self.seconds / (60 * 60),
+                        self.seconds / 60,
+                        self.seconds % 60,
+                    ])
                 self.handler(text)
                 self.seconds += 1
             }
@@ -75,8 +79,9 @@ extension PairTable where T == String {
         let container = try decoder.singleValueContainer()
         let key = try container.decode(String.self)
         return try right(other: key).unwrap {
-            throw DecodingError.dataCorruptedError(in: container,
-                                                   debugDescription: "\(self.name) cannot decode '\(key)'")
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "\(self.name) cannot decode '\(key)'")
         }
     }
 
@@ -85,15 +90,17 @@ extension PairTable where T == String {
         if let key = left(other: value) {
             try container.encode(key)
         } else {
-            throw EncodingError.invalidValue(value,
-                                             EncodingError.Context(codingPath: [], debugDescription: "\(name) cannot encode \(value)"))
+            throw EncodingError.invalidValue(
+                value,
+                EncodingError.Context(
+                    codingPath: [], debugDescription: "\(name) cannot encode \(value)"))
         }
     }
 }
 
 /// :nodoc:
-public extension Optional {
-    func unwrap(ifNone: () throws -> Wrapped) rethrows -> Wrapped {
+extension Optional {
+    public func unwrap(ifNone: () throws -> Wrapped) rethrows -> Wrapped {
         switch self {
         case let .some(value):
             return value

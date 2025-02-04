@@ -1,10 +1,8 @@
 import AVFoundation
 import Foundation
 
-/**
- ストリームの方向を表します。
- シグナリングメッセージで使われます。
- */
+/// ストリームの方向を表します。
+/// シグナリングメッセージで使われます。
 public enum SignalingRole: String {
     /// 送信のみ
     case sendonly
@@ -44,8 +42,9 @@ class SignalingChannel {
 
     var state: ConnectionState = .disconnected {
         didSet {
-            Logger.trace(type: .signalingChannel,
-                         message: "changed state from \(oldValue) to \(state)")
+            Logger.trace(
+                type: .signalingChannel,
+                message: "changed state from \(oldValue) to \(state)")
         }
     }
 
@@ -123,7 +122,8 @@ class SignalingChannel {
             }
 
             // 接続に成功した WebSocket を SignalingChannel に設定する
-            Logger.info(type: .signalingChannel, message: "connected to \(String(describing: ws.host))")
+            Logger.info(
+                type: .signalingChannel, message: "connected to \(String(describing: ws.host))")
             weakSelf.webSocketChannel = webSocketChannel
             if weakSelf.contactUrl == nil {
                 weakSelf.contactUrl = ws.url
@@ -131,7 +131,9 @@ class SignalingChannel {
             // 採用された WebSocket 以外を切断してから webSocketChannelCandidates をクリアする
             weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
             weakSelf.webSocketChannelCandidates.forEach {
-                Logger.debug(type: .signalingChannel, message: "closeing connection to \(String(describing: $0.host))")
+                Logger.debug(
+                    type: .signalingChannel,
+                    message: "closeing connection to \(String(describing: $0.host))")
                 $0.disconnect(error: nil)
             }
             weakSelf.webSocketChannelCandidates.removeAll()
@@ -149,7 +151,9 @@ class SignalingChannel {
             guard let weakSelf = self else {
                 return
             }
-            Logger.info(type: .signalingChannel, message: "disconnected from \(String(describing: ws.host))")
+            Logger.info(
+                type: .signalingChannel, message: "disconnected from \(String(describing: ws.host))"
+            )
 
             if weakSelf.state == .connected {
                 // SignalingChannel で利用する WebSocket が決定した後に、 WebSocket のエラーが発生した場合の処理
@@ -162,11 +166,14 @@ class SignalingChannel {
                 // state が .disconnecting, .disconnected の場合もここを通るが、既に SignalingChannel の切断を開始しているため、考慮は不要
 
                 // 接続に失敗した WebSocket が候補に残っている場合取り除く
-                weakSelf.webSocketChannelCandidates.removeAll { $0.url.absoluteURL == ws.url.absoluteURL }
+                weakSelf.webSocketChannelCandidates.removeAll {
+                    $0.url.absoluteURL == ws.url.absoluteURL
+                }
 
                 // 候補が無くなり、かつ SignalingChannel で利用する WebSocket が決まっていない場合、
                 // Sora への接続に失敗したので SDK の接続処理を終了する
-                if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
+                if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil
+                {
                     Logger.info(type: .signalingChannel, message: "failed to connect to Sora")
                     if !weakSelf.ignoreDisconnectWebSocket {
                         weakSelf.disconnect(error: error, reason: .webSocket)
@@ -186,8 +193,10 @@ class SignalingChannel {
 
     func connect(handler: @escaping (Error?) -> Void) {
         if state.isConnecting {
-            handler(SoraError.connectionBusy(reason:
-                "SignalingChannel is already connected"))
+            handler(
+                SoraError.connectionBusy(
+                    reason:
+                        "SignalingChannel is already connected"))
             return
         }
 
@@ -199,7 +208,8 @@ class SignalingChannel {
         Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
         for url in urlCandidates {
             let ws = setUpWebSocketChannel(url: url, proxy: configuration.proxy)
-            Logger.info(type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
+            Logger.info(
+                type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
             ws.connect(delegateQueue: queue)
             webSocketChannelCandidates.append(ws)
         }
@@ -217,7 +227,9 @@ class SignalingChannel {
         guard let newUrl = URL(string: location) else {
             let message = "invalid message: \(location)"
             Logger.error(type: .signalingChannel, message: message)
-            disconnect(error: SoraError.signalingChannelError(reason: message), reason: DisconnectReason.signalingFailure)
+            disconnect(
+                error: SoraError.signalingChannelError(reason: message),
+                reason: DisconnectReason.signalingFailure)
             return
         }
 
@@ -232,8 +244,9 @@ class SignalingChannel {
         default:
             Logger.debug(type: .signalingChannel, message: "try disconnecting")
             if let error {
-                Logger.error(type: .signalingChannel,
-                             message: "error: \(error.localizedDescription)")
+                Logger.error(
+                    type: .signalingChannel,
+                    message: "error: \(error.localizedDescription)")
             }
 
             state = .disconnecting
@@ -267,7 +280,9 @@ class SignalingChannel {
             switch message {
             case .connect:
                 if configuration.dataChannels != nil {
-                    var jsonObject = try (JSONSerialization.jsonObject(with: data, options: [])) as! [String: Any]
+                    var jsonObject =
+                        try (JSONSerialization.jsonObject(with: data, options: []))
+                        as! [String: Any]
                     jsonObject["data_channels"] = configuration.dataChannels
                     data = try JSONSerialization.data(withJSONObject: jsonObject, options: [])
                 }
@@ -279,8 +294,9 @@ class SignalingChannel {
             Logger.debug(type: .signalingChannel, message: str)
             ws.send(message: .text(str))
         } catch {
-            Logger.debug(type: .signalingChannel,
-                         message: "JSON encoding failed")
+            Logger.debug(
+                type: .signalingChannel,
+                message: "JSON encoding failed")
         }
     }
 
@@ -310,8 +326,9 @@ class SignalingChannel {
                 Logger.debug(type: .signalingChannel, message: "call onReceiveSignaling")
                 internalHandlers.onReceive?(signaling)
             case let .failure(error):
-                Logger.error(type: .signalingChannel,
-                             message: "decode failed (\(error.localizedDescription)) => \(text)")
+                Logger.error(
+                    type: .signalingChannel,
+                    message: "decode failed (\(error.localizedDescription)) => \(text)")
             }
         }
     }

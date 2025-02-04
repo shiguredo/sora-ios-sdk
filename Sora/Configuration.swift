@@ -7,9 +7,7 @@ private let defaultPublisherStreamId: String = "mainStream"
 private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
 
-/**
- プロキシに関する設定です
- */
+/// プロキシに関する設定です
 public struct Proxy: CustomStringConvertible {
     /// プロキシのホスト
     let host: String
@@ -36,7 +34,10 @@ public struct Proxy: CustomStringConvertible {
      - parameter username: プロキシ認証に使用するユーザー名
      - parameter password: プロキシ認証に使用するパスワード
      */
-    public init(host: String, port: Int, agent: String? = nil, username: String? = nil, password: String? = nil) {
+    public init(
+        host: String, port: Int, agent: String? = nil, username: String? = nil,
+        password: String? = nil
+    ) {
         self.host = host
         self.port = port
 
@@ -54,9 +55,7 @@ public struct Proxy: CustomStringConvertible {
     }
 }
 
-/**
- クライアントに関する設定です。
- */
+/// クライアントに関する設定です。
 public struct Configuration {
     // MARK: - 接続に関する設定
 
@@ -231,11 +230,12 @@ public struct Configuration {
      - parameter role: ロール
      - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
      */
-    public init(url: URL,
-                channelId: String,
-                role: Role,
-                multistreamEnabled: Bool? = nil)
-    {
+    public init(
+        url: URL,
+        channelId: String,
+        role: Role,
+        multistreamEnabled: Bool? = nil
+    ) {
         urlCandidates = [url]
         self.channelId = channelId
         self.role = role
@@ -249,11 +249,12 @@ public struct Configuration {
      - parameter role: ロール
      - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
      */
-    public init(urlCandidates: [URL],
-                channelId: String,
-                role: Role,
-                multistreamEnabled: Bool? = nil)
-    {
+    public init(
+        urlCandidates: [URL],
+        channelId: String,
+        role: Role,
+        multistreamEnabled: Bool? = nil
+    ) {
         self.urlCandidates = urlCandidates
         self.channelId = channelId
         self.role = role
@@ -261,9 +262,7 @@ public struct Configuration {
     }
 }
 
-/**
- 転送フィルターのルールのフィールドの設定です。
- */
+/// 転送フィルターのルールのフィールドの設定です。
 public enum ForwardingFilterRuleField: String, Encodable {
     /// connection_id
     case connectionId = "connection_id"
@@ -275,9 +274,7 @@ public enum ForwardingFilterRuleField: String, Encodable {
     case kind
 }
 
-/**
- 転送フィルターのルールの演算子の設定です。
- */
+/// 転送フィルターのルールの演算子の設定です。
 public enum ForwardingFilterRuleOperator: String, Encodable {
     /// is_in
     case isIn = "is_in"
@@ -286,9 +283,7 @@ public enum ForwardingFilterRuleOperator: String, Encodable {
     case isNotIn = "is_not_in"
 }
 
-/**
- 転送フィルターのルールの設定です。
- */
+/// 転送フィルターのルールの設定です。
 public struct ForwardingFilterRule: Encodable {
     /// field
     public let field: ForwardingFilterRuleField
@@ -306,19 +301,18 @@ public struct ForwardingFilterRule: Encodable {
      - parameter operator: operator
      - parameter values: values
      */
-    public init(field: ForwardingFilterRuleField,
-                operator: ForwardingFilterRuleOperator,
-                values: [String])
-    {
+    public init(
+        field: ForwardingFilterRuleField,
+        operator: ForwardingFilterRuleOperator,
+        values: [String]
+    ) {
         self.field = field
         self.operator = `operator`
         self.values = values
     }
 }
 
-/**
- 転送フィルターのアクションの設定です。
- */
+/// 転送フィルターのアクションの設定です。
 public enum ForwardingFilterAction: String, Encodable {
     /// block
     case block
@@ -327,9 +321,7 @@ public enum ForwardingFilterAction: String, Encodable {
     case allow
 }
 
-/**
- 転送フィルターに関する設定です。
- */
+/// 転送フィルターに関する設定です。
 public struct ForwardingFilter {
     /// name
     public var name: String?
@@ -357,7 +349,10 @@ public struct ForwardingFilter {
      - parameter version: version (オプショナル)
      - parameter metadata: metadata (オプショナル)
      */
-    public init(name: String? = nil, priority: Int? = nil, action: ForwardingFilterAction? = nil, rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil) {
+    public init(
+        name: String? = nil, priority: Int? = nil, action: ForwardingFilterAction? = nil,
+        rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil
+    ) {
         self.name = name
         self.priority = priority
         self.action = action

@@ -2,8 +2,8 @@ import UIKit
 
 /// :nodoc:
 public enum AspectRatio {
-    case standard // 4:3
-    case wide // 16:9
+    case standard  // 4:3
+    case wide  // 16:9
 
     public func height(forWidth width: CGFloat) -> CGFloat {
         switch self {
@@ -24,9 +24,12 @@ public enum AspectRatio {
 }
 
 private var aspectRatioTable: PairTable<String, AspectRatio> =
-    PairTable(name: "AspectRatio",
-              pairs: [("standard", .standard),
-                      ("wide", .wide)])
+    PairTable(
+        name: "AspectRatio",
+        pairs: [
+            ("standard", .standard),
+            ("wide", .wide),
+        ])
 
 /// :nodoc:
 extension AspectRatio: Codable {

@@ -1,9 +1,7 @@
 import Foundation
 import WebRTC
 
-/**
- ICE サーバーの情報を表します。
- */
+/// ICE サーバーの情報を表します。
 public final class ICEServerInfo {
     // MARK: プロパティ
 
@@ -22,20 +20,22 @@ public final class ICEServerInfo {
     public var tlsSecurityPolicy: TLSSecurityPolicy = .secure
 
     var nativeValue: RTCIceServer {
-        RTCIceServer(urlStrings: urls,
-                     username: userName,
-                     credential: credential,
-                     tlsCertPolicy: tlsSecurityPolicy.nativeValue)
+        RTCIceServer(
+            urlStrings: urls,
+            username: userName,
+            credential: credential,
+            tlsCertPolicy: tlsSecurityPolicy.nativeValue)
     }
 
     // MARK: 初期化
 
     /// 初期化します。
-    public init(urls: [String],
-                userName: String?,
-                credential: String?,
-                tlsSecurityPolicy: TLSSecurityPolicy)
-    {
+    public init(
+        urls: [String],
+        userName: String?,
+        credential: String?,
+        tlsSecurityPolicy: TLSSecurityPolicy
+    ) {
         self.urls = urls
         self.userName = userName
         self.credential = credential
@@ -65,10 +65,11 @@ extension ICEServerInfo: Codable {
         let urls = try container.decode([String].self, forKey: .urls)
         let userName = try container.decodeIfPresent(String.self, forKey: .userName)
         let credential = try container.decodeIfPresent(String.self, forKey: .credential)
-        self.init(urls: urls,
-                  userName: userName,
-                  credential: credential,
-                  tlsSecurityPolicy: .secure)
+        self.init(
+            urls: urls,
+            userName: userName,
+            credential: credential,
+            tlsSecurityPolicy: .secure)
     }
 
     public func encode(to encoder: Encoder) throws {

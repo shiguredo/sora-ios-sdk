@@ -4,8 +4,9 @@ import WebRTC
 /// :nodoc:
 private func serializeData(_ data: Any?) -> [SignalingNotifyMetadata]? {
     guard let array = data as? [[String: Any]] else {
-        Logger.info(type: .signaling,
-                    message: "downcast failed in serializeData. data: \(String(describing: data))")
+        Logger.info(
+            type: .signaling,
+            message: "downcast failed in serializeData. data: \(String(describing: data))")
         return nil
     }
 
@@ -47,8 +48,9 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
         json = jsonObject as! [String: Any]
     } catch {
         // JSON のシリアライズが失敗した場合は、引数として渡された signaling をそのまま返し、処理を継続する
-        Logger.error(type: .signaling,
-                     message: "updateMetadata failed. error: \(error.localizedDescription), data: \(data)")
+        Logger.error(
+            type: .signaling,
+            message: "updateMetadata failed. error: \(error.localizedDescription), data: \(data)")
         return signaling
     }
 
@@ -86,9 +88,7 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
     }
 }
 
-/**
- シグナリングの種別です。
- */
+/// シグナリングの種別です。
 public enum Signaling {
     /// "connect" シグナリング
     case connect(SignalingConnect)
@@ -179,9 +179,7 @@ public enum Signaling {
     }
 }
 
-/**
- サイマルキャストでの映像の種類を表します。
- */
+/// サイマルキャストでの映像の種類を表します。
 public enum SimulcastRid {
     /// r0
     case r0
@@ -193,9 +191,7 @@ public enum SimulcastRid {
     case r2
 }
 
-/**
- スポットライトの映像の種類を表します 。
- */
+/// スポットライトの映像の種類を表します 。
 public enum SpotlightRid {
     /**
      SpotlightRid が設定されていない状態
@@ -220,9 +216,7 @@ public enum SpotlightRid {
     case r2
 }
 
-/**
- シグナリングに含まれる、同チャネルに接続中のクライアントに関するメタデータ (任意のデータ) を表します。
- */
+/// シグナリングに含まれる、同チャネルに接続中のクライアントに関するメタデータ (任意のデータ) を表します。
 public struct SignalingNotifyMetadata {
     /// クライアント ID
     public var clientId: String?
@@ -243,10 +237,8 @@ public struct SignalingNotifyMetadata {
     public var metadata: Any?
 }
 
-/**
- "connect" シグナリングメッセージを表します。
- このメッセージはシグナリング接続の確立後、最初に送信されます。
- */
+/// "connect" シグナリングメッセージを表します。
+/// このメッセージはシグナリング接続の確立後、最初に送信されます。
 public struct SignalingConnect {
     /// ロール
     public var role: SignalingRole
@@ -350,10 +342,8 @@ public struct SignalingConnect {
     public var h264Params: Encodable?
 }
 
-/**
- "offer" シグナリングメッセージを表します。
- このメッセージは SDK が "connect" を送信した後に、サーバーから送信されます。
- */
+/// "offer" シグナリングメッセージを表します。
+/// このメッセージは SDK が "connect" を送信した後に、サーバーから送信されます。
 public struct SignalingOffer {
     /**
      クライアントが更新すべき設定を表します。
@@ -479,74 +469,56 @@ public struct SignalingOffer {
     public let videoBitRate: Int?
 }
 
-/**
- "answer" シグナリングメッセージを表します。
- */
+/// "answer" シグナリングメッセージを表します。
 public struct SignalingAnswer {
     /// SDP メッセージ
     public let sdp: String
 }
 
-/**
- "candidate" シグナリングメッセージを表します。
- */
+/// "candidate" シグナリングメッセージを表します。
 public struct SignalingCandidate {
     /// ICE candidate
     public let candidate: ICECandidate
 }
 
-/**
- "update" シグナリングメッセージを表します。
- */
+/// "update" シグナリングメッセージを表します。
 public struct SignalingUpdate {
     /// SDP メッセージ
     public let sdp: String
 }
 
-/**
- "re-offer" メッセージ
- */
+/// "re-offer" メッセージ
 public struct SignalingReOffer {
     /// SDP メッセージ
     public let sdp: String
 }
 
-/**
- "re-answer" メッセージ
- */
+/// "re-answer" メッセージ
 public struct SignalingReAnswer {
     /// SDP メッセージ
     public let sdp: String
 }
 
-/**
- "push" シグナリングメッセージを表します。
- このメッセージは Sora のプッシュ API を使用して送信されたデータです。
- */
+/// "push" シグナリングメッセージを表します。
+/// このメッセージは Sora のプッシュ API を使用して送信されたデータです。
 public struct SignalingPush {
     /// プッシュ通知で送信される JSON データ
     public var data: Any? = {}
 }
 
-/**
- "switched" シグナリングメッセージを表します。
- */
+/// "switched" シグナリングメッセージを表します。
 public struct SignalingSwitched {
     /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
     public var ignoreDisconnectWebSocket: Bool?
 }
 
-/**
- "redirect" シグナリングメッセージを表します。
- */
+/// "redirect" シグナリングメッセージを表します。
 public struct SignalingRedirect {
     /// redirect する URL
     public var location: String
 }
 
-/**
- "notify" シグナリングメッセージを表します。
- */
+/// "notify" シグナリングメッセージを表します。
 public struct SignalingNotify {
     // MARK: イベント情報
 
@@ -651,29 +623,23 @@ public struct SignalingNotify {
     public var previousState: String?
 }
 
-/**
- "ping" シグナリングメッセージを表します。
- このメッセージはサーバーから送信されます。
- "ping" 受信後は一定時間内に "pong" を返さなければ、
- サーバーとの接続が解除されます。
- */
+/// "ping" シグナリングメッセージを表します。
+/// このメッセージはサーバーから送信されます。
+/// "ping" 受信後は一定時間内に "pong" を返さなければ、
+/// サーバーとの接続が解除されます。
 public struct SignalingPing {
     /// :nodoc:
     public var statisticsEnabled: Bool?
 }
 
-/**
- "pong" シグナリングメッセージを表します。
- このメッセージはサーバーから "ping" シグナリングメッセージを受信すると
- サーバーに送信されます。
- "ping" 受信後、一定時間内にこのメッセージを返さなければ、
- サーバーとの接続が解除されます。
- */
+/// "pong" シグナリングメッセージを表します。
+/// このメッセージはサーバーから "ping" シグナリングメッセージを受信すると
+/// サーバーに送信されます。
+/// "ping" 受信後、一定時間内にこのメッセージを返さなければ、
+/// サーバーとの接続が解除されます。
 public struct SignalingPong {}
 
-/**
- "disconnect" シグナリングメッセージを表します。
- */
+/// "disconnect" シグナリングメッセージを表します。
 public struct SignalingDisconnect {
     /// Sora との接続を切断する理由
     public var reason: String?
@@ -765,10 +731,13 @@ extension Signaling: Codable {
 }
 
 private var simulcastRidTable: PairTable<String, SimulcastRid> =
-    PairTable(name: "simulcastRid",
-              pairs: [("r0", .r0),
-                      ("r1", .r1),
-                      ("r2", .r2)])
+    PairTable(
+        name: "simulcastRid",
+        pairs: [
+            ("r0", .r0),
+            ("r1", .r1),
+            ("r2", .r2),
+        ])
 
 /// :nodoc:
 extension SimulcastRid: Codable {
@@ -782,12 +751,15 @@ extension SimulcastRid: Codable {
 }
 
 private var spotlightRidTable: PairTable<String, SpotlightRid> =
-    PairTable(name: "spotlightRid",
-              pairs: [("unspecified", .unspecified),
-                      ("none", .none),
-                      ("r0", .r0),
-                      ("r1", .r1),
-                      ("r2", .r2)])
+    PairTable(
+        name: "spotlightRid",
+        pairs: [
+            ("unspecified", .unspecified),
+            ("none", .none),
+            ("r0", .r0),
+            ("r1", .r1),
+            ("r2", .r2),
+        ])
 
 /// :nodoc:
 extension SpotlightRid: Codable {
@@ -802,10 +774,13 @@ extension SpotlightRid: Codable {
 
 /// :nodoc:
 private var roleTable: PairTable<String, SignalingRole> =
-    PairTable(name: "SignalingRole",
-              pairs: [("sendonly", .sendonly),
-                      ("recvonly", .recvonly),
-                      ("sendrecv", .sendrecv)])
+    PairTable(
+        name: "SignalingRole",
+        pairs: [
+            ("sendonly", .sendonly),
+            ("recvonly", .recvonly),
+            ("sendrecv", .sendrecv),
+        ])
 
 /// :nodoc:
 extension SignalingRole: Codable {
@@ -887,28 +862,36 @@ extension SignalingConnect: Codable {
             let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
             try notifyMetadata.encode(to: notifyEnc)
         }
-        try container.encodeIfPresent(multistreamEnabled,
-                                      forKey: .multistream)
+        try container.encodeIfPresent(
+            multistreamEnabled,
+            forKey: .multistream)
         try container.encodeIfPresent(soraClient, forKey: .sora_client)
         try container.encodeIfPresent(webRTCVersion, forKey: .libwebrtc)
         try container.encodeIfPresent(environment, forKey: .environment)
         try container.encodeIfPresent(dataChannelSignaling, forKey: .data_channel_signaling)
-        try container.encodeIfPresent(ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
-        try container.encodeIfPresent(audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
+        try container.encodeIfPresent(
+            ignoreDisconnectWebSocket, forKey: .ignore_disconnect_websocket)
+        try container.encodeIfPresent(
+            audioStreamingLanguageCode, forKey: .audio_streaming_language_code)
         try container.encodeIfPresent(redirect, forKey: .redirect)
         try container.encodeIfPresent(forwardingFilter, forKey: .forwarding_filter)
         try container.encodeIfPresent(forwardingFilters, forKey: .forwarding_filters)
 
         if videoEnabled {
-            if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil || h264Params != nil {
-                var videoContainer = container
-                    .nestedContainer(keyedBy: VideoCodingKeys.self,
-                                     forKey: .video)
+            if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil
+                || h264Params != nil
+            {
+                var videoContainer =
+                    container
+                    .nestedContainer(
+                        keyedBy: VideoCodingKeys.self,
+                        forKey: .video)
                 if videoCodec != .default {
                     try videoContainer.encode(videoCodec, forKey: .codec_type)
                 }
-                try videoContainer.encodeIfPresent(videoBitRate,
-                                                   forKey: .bit_rate)
+                try videoContainer.encodeIfPresent(
+                    videoBitRate,
+                    forKey: .bit_rate)
                 if let vp9Params {
                     let vp9ParamsEnc = videoContainer.superEncoder(forKey: .vp9_params)
                     try vp9Params.encode(to: vp9ParamsEnc)
@@ -928,14 +911,17 @@ extension SignalingConnect: Codable {
 
         if audioEnabled {
             if audioCodec != .default || audioBitRate != nil {
-                var audioContainer = container
-                    .nestedContainer(keyedBy: AudioCodingKeys.self,
-                                     forKey: .audio)
+                var audioContainer =
+                    container
+                    .nestedContainer(
+                        keyedBy: AudioCodingKeys.self,
+                        forKey: .audio)
                 if audioCodec != .default {
                     try audioContainer.encode(audioCodec, forKey: .codec_type)
                 }
-                try audioContainer.encodeIfPresent(audioBitRate,
-                                                   forKey: .bit_rate)
+                try audioContainer.encodeIfPresent(
+                    audioBitRate,
+                    forKey: .bit_rate)
             }
         } else {
             try container.encode(false, forKey: .audio)
@@ -976,10 +962,12 @@ extension SignalingOffer.Configuration: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        iceServerInfos = try container.decode([ICEServerInfo].self,
-                                              forKey: .iceServers)
-        iceTransportPolicy = try container.decode(ICETransportPolicy.self,
-                                                  forKey: .iceTransportPolicy)
+        iceServerInfos = try container.decode(
+            [ICEServerInfo].self,
+            forKey: .iceServers)
+        iceTransportPolicy = try container.decode(
+            ICETransportPolicy.self,
+            forKey: .iceTransportPolicy)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1024,8 +1012,9 @@ extension SignalingOffer.Encoding: Codable {
         active = try container.decodeIfPresent(Bool.self, forKey: .active) ?? true
         maxBitrate = try container.decodeIfPresent(Int.self, forKey: .maxBitrate)
         maxFramerate = try container.decodeIfPresent(Double.self, forKey: .maxFramerate)
-        scaleResolutionDownBy = try container.decodeIfPresent(Double.self, forKey: .scaleResolutionDownBy)
-
+        scaleResolutionDownBy = try container.decodeIfPresent(
+            Double.self,
+            forKey: .scaleResolutionDownBy)
         if let _scleResolutionDownTo = try container.decodeIfPresent(ScaleResolutionDownTo.self, forKey: .scaleResolutionDownTo) {
             let restriction = RTCResolutionRestriction()
             restriction.maxWidth = NSNumber(value: _scleResolutionDownTo.maxWidth)
@@ -1034,8 +1023,9 @@ extension SignalingOffer.Encoding: Codable {
         } else {
             scaleResolutionDownTo = nil
         }
-
-        scalabilityMode = try container.decodeIfPresent(String.self, forKey: .scalabilityMode)
+        scalabilityMode = try container.decodeIfPresent(
+            String.self,
+            forKey: .scalabilityMode)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1078,14 +1068,17 @@ extension SignalingOffer: Codable {
         sdp = try container.decode(String.self, forKey: .sdp)
         version = try container.decodeIfPresent(String.self, forKey: .version)
         configuration =
-            try container.decodeIfPresent(Configuration.self,
-                                          forKey: .config)
+            try container.decodeIfPresent(
+                Configuration.self,
+                forKey: .config)
         encodings =
-            try container.decodeIfPresent([Encoding].self,
-                                          forKey: .encodings)
+            try container.decodeIfPresent(
+                [Encoding].self,
+                forKey: .encodings)
         mid = try container.decodeIfPresent([String: String].self, forKey: .mid)
         simulcast = try container.decodeIfPresent(Bool.self, forKey: .simulcast)
-        simulcastMulticodec = try container.decodeIfPresent(Bool.self, forKey: .simulcast_multicodec)
+        simulcastMulticodec = try container.decodeIfPresent(
+            Bool.self, forKey: .simulcast_multicodec)
         spotlight = try container.decodeIfPresent(Bool.self, forKey: .spotlight)
         audio = try container.decodeIfPresent(Bool.self, forKey: .audio)
         audioCodecType = try container.decodeIfPresent(String.self, forKey: .audio_codec_type)
@@ -1229,18 +1222,22 @@ extension SignalingNotify: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        eventType = try container.decode(String.self,
-                                         forKey: .event_type)
-        timestamp = try container.decodeIfPresent(String.self,
-                                                  forKey: .timestamp)
+        eventType = try container.decode(
+            String.self,
+            forKey: .event_type)
+        timestamp = try container.decodeIfPresent(
+            String.self,
+            forKey: .timestamp)
         role = try container.decodeIfPresent(SignalingRole.self, forKey: .role)
         sessionId = try container.decodeIfPresent(String.self, forKey: .session_id)
         clientId = try container.decodeIfPresent(String.self, forKey: .client_id)
         bundleId = try container.decodeIfPresent(String.self, forKey: .bundle_id)
-        connectionId = try container.decodeIfPresent(String.self,
-                                                     forKey: .connection_id)
-        spotlightNumber = try container.decodeIfPresent(Int.self,
-                                                        forKey: .spotlight_number)
+        connectionId = try container.decodeIfPresent(
+            String.self,
+            forKey: .connection_id)
+        spotlightNumber = try container.decodeIfPresent(
+            Int.self,
+            forKey: .spotlight_number)
         audioEnabled = try container.decodeIfPresent(Bool.self, forKey: .audio)
         videoEnabled = try container.decodeIfPresent(Bool.self, forKey: .video)
         connectionTime = try container.decodeIfPresent(Int.self, forKey: .minutes)
@@ -1333,7 +1330,8 @@ extension SignalingSwitched: Decodable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        ignoreDisconnectWebSocket = try container.decode(Bool.self, forKey: .ignore_disconnect_websocket)
+        ignoreDisconnectWebSocket = try container.decode(
+            Bool.self, forKey: .ignore_disconnect_websocket)
     }
 }
 

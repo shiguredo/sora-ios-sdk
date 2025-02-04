@@ -2,12 +2,11 @@ import Foundation
 import WebRTC
 
 private var iceTransportPolicyTable: PairTable<ICETransportPolicy, RTCIceTransportPolicy> =
-    PairTable(name: "ICETransportPolicy",
-              pairs: [(.relay, .relay), (.all, .all)])
+    PairTable(
+        name: "ICETransportPolicy",
+        pairs: [(.relay, .relay), (.all, .all)])
 
-/**
- ICE 通信ポリシーを表します。
- */
+/// ICE 通信ポリシーを表します。
 public enum ICETransportPolicy {
     /// TURN サーバーを経由するメディアリレー候補のみを使用します。
     case relay
@@ -40,9 +39,11 @@ extension ICETransportPolicy: Codable {
         if value == "relay" {
             self = .relay
         } else {
-            throw DecodingError
-                .dataCorruptedError(in: container,
-                                    debugDescription: "invalid value")
+            throw
+                DecodingError
+                .dataCorruptedError(
+                    in: container,
+                    debugDescription: "invalid value")
         }
     }
 

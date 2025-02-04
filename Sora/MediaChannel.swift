@@ -30,24 +30,20 @@ public final class MediaChannelHandlers {
 
 // MARK: -
 
-/**
-
- 一度接続を行ったメディアチャネルは再利用できません。
- 同じ設定で接続を行いたい場合は、新しい接続を行う必要があります。
-
- ## 接続が解除されるタイミング
-
- メディアチャネルの接続が解除される条件を以下に示します。
- いずれかの条件が 1 つでも成立すると、メディアチャネルを含めたすべてのチャネル
- (シグナリングチャネル、ピアチャネル、 WebSocket チャネル) の接続が解除されます。
-
- - シグナリングチャネル (`SignalingChannel`) の接続が解除される。
- - WebSocket チャネル (`WebSocketChannel`) の接続が解除される。
- - ピアチャネル (`PeerChannel`) の接続が解除される。
- - サーバーから受信したシグナリング `ping` に対して `pong` を返さない。
-   これはピアチャネルの役目です。
-
- */
+/// 一度接続を行ったメディアチャネルは再利用できません。
+/// 同じ設定で接続を行いたい場合は、新しい接続を行う必要があります。
+///
+/// ## 接続が解除されるタイミング
+///
+/// メディアチャネルの接続が解除される条件を以下に示します。
+/// いずれかの条件が 1 つでも成立すると、メディアチャネルを含めたすべてのチャネル
+/// (シグナリングチャネル、ピアチャネル、 WebSocket チャネル) の接続が解除されます。
+///
+/// - シグナリングチャネル (`SignalingChannel`) の接続が解除される。
+/// - WebSocket チャネル (`WebSocketChannel`) の接続が解除される。
+/// - ピアチャネル (`PeerChannel`) の接続が解除される。
+/// - サーバーから受信したシグナリング `ping` に対して `pong` を返さない。
+///   これはピアチャネルの役目です。
 public final class MediaChannel {
     // MARK: - イベントハンドラ
 
@@ -106,8 +102,9 @@ public final class MediaChannel {
     /// 接続状態
     public private(set) var state: ConnectionState = .disconnected {
         didSet {
-            Logger.trace(type: .mediaChannel,
-                         message: "changed state from \(oldValue) to \(state)")
+            Logger.trace(
+                type: .mediaChannel,
+                message: "changed state from \(oldValue) to \(state)")
         }
     }
 
@@ -206,16 +203,18 @@ public final class MediaChannel {
         self.manager = manager
         self.configuration = configuration
         signalingChannel = SignalingChannel.init(configuration: configuration)
-        _peerChannel = PeerChannel.init(configuration: configuration,
-                                        signalingChannel: signalingChannel,
-                                        mediaChannel: self)
+        _peerChannel = PeerChannel.init(
+            configuration: configuration,
+            signalingChannel: signalingChannel,
+            mediaChannel: self)
         handlers = configuration.mediaChannelHandlers
 
-        _connectionTimer = ConnectionTimer(monitors: [
-            .signalingChannel(signalingChannel),
-            .peerChannel(_peerChannel!),
-        ],
-        timeout: configuration.connectionTimeout)
+        _connectionTimer = ConnectionTimer(
+            monitors: [
+                .signalingChannel(signalingChannel),
+                .peerChannel(_peerChannel!),
+            ],
+            timeout: configuration.connectionTimeout)
     }
 
     // MARK: - 接続
@@ -235,32 +234,37 @@ public final class MediaChannel {
      - parameter handler: 接続試行後に呼ばれるクロージャー
      - parameter error: (接続失敗時) エラー
      */
-    func connect(webRTCConfiguration: WebRTCConfiguration,
-                 timeout: Int = 30,
-                 handler: @escaping (_ error: Error?) -> Void) -> ConnectionTask
-    {
+    func connect(
+        webRTCConfiguration: WebRTCConfiguration,
+        timeout: Int = 30,
+        handler: @escaping (_ error: Error?) -> Void
+    ) -> ConnectionTask {
         let task = ConnectionTask()
         if state.isConnecting {
-            handler(SoraError.connectionBusy(reason:
-                "MediaChannel is already connected"))
+            handler(
+                SoraError.connectionBusy(
+                    reason:
+                        "MediaChannel is already connected"))
             task.complete()
             return task
         }
 
         DispatchQueue.global().async { [weak self] in
-            self?.basicConnect(connectionTask: task,
-                               webRTCConfiguration: webRTCConfiguration,
-                               timeout: timeout,
-                               handler: handler)
+            self?.basicConnect(
+                connectionTask: task,
+                webRTCConfiguration: webRTCConfiguration,
+                timeout: timeout,
+                handler: handler)
         }
         return task
     }
 
-    private func basicConnect(connectionTask: ConnectionTask,
-                              webRTCConfiguration: WebRTCConfiguration,
-                              timeout: Int,
-                              handler: @escaping (Error?) -> Void)
-    {
+    private func basicConnect(
+        connectionTask: ConnectionTask,
+        webRTCConfiguration: WebRTCConfiguration,
+        timeout: Int,
+        handler: @escaping (Error?) -> Void
+    ) {
         Logger.debug(type: .mediaChannel, message: "try connecting")
         _handler = handler
         state = .connecting
@@ -317,14 +321,15 @@ public final class MediaChannel {
                 // connectionCount, channelRecvonlyConnections, channelSendonlyConnections, channelSendrecvConnections
                 // 全てに値が入っていた時のみプロパティを更新する
                 if let connectionCount = message.connectionCount,
-                   let sendonlyConnections = message.channelSendonlyConnections,
-                   let recvonlyConnections = message.channelRecvonlyConnections,
-                   let sendrecvConnections = message.channelSendrecvConnections
+                    let sendonlyConnections = message.channelSendonlyConnections,
+                    let recvonlyConnections = message.channelRecvonlyConnections,
+                    let sendrecvConnections = message.channelSendrecvConnections
                 {
                     weakSelf.publisherCount = sendonlyConnections + sendrecvConnections
                     weakSelf.subscriberCount = recvonlyConnections + sendrecvConnections
                     weakSelf.connectionCount = connectionCount
-                } else {}
+                } else {
+                }
             default:
                 break
             }
@@ -385,8 +390,9 @@ public final class MediaChannel {
         default:
             Logger.debug(type: .mediaChannel, message: "try disconnecting")
             if let error {
-                Logger.error(type: .mediaChannel,
-                             message: "error: \(error.localizedDescription)")
+                Logger.error(
+                    type: .mediaChannel,
+                    message: "error: \(error.localizedDescription)")
             }
 
             if state == .connecting {
@@ -421,12 +427,16 @@ public final class MediaChannel {
 
         let readyState = dc.readyState
         guard readyState == .open else {
-            return SoraError.messagingError(reason: "readyState of the DataChannel is not open: label => \(label), readyState => \(readyState)")
+            return SoraError.messagingError(
+                reason:
+                    "readyState of the DataChannel is not open: label => \(label), readyState => \(readyState)"
+            )
         }
 
         let result = dc.send(data)
 
-        return result ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
+        return result
+            ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
     }
 }
 

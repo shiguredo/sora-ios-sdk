@@ -1,7 +1,9 @@
 import Foundation
 
 @available(iOS 13, *)
-class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionWebSocketDelegate {
+class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDelegate,
+    URLSessionWebSocketDelegate
+{
     let url: URL
     let proxy: Proxy?
     var handlers = WebSocketChannelHandlers()
@@ -48,13 +50,18 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                 "HTTPSEnable": 1,
             ]
 
-            Logger.info(type: .webSocketChannel, message: "proxy: \(String(describing: configuration.connectionProxyDictionary.debugDescription))")
+            Logger.info(
+                type: .webSocketChannel,
+                message:
+                    "proxy: \(String(describing: configuration.connectionProxyDictionary.debugDescription))"
+            )
         }
 
         Logger.debug(type: .webSocketChannel, message: "[\(host)] connecting")
-        urlSession = URLSession(configuration: configuration,
-                                delegate: self,
-                                delegateQueue: delegateQueue)
+        urlSession = URLSession(
+            configuration: configuration,
+            delegate: self,
+            delegateQueue: delegateQueue)
 
         webSocketTask = urlSession?.webSocketTask(with: url)
 
@@ -71,8 +78,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         Logger.debug(type: .webSocketChannel, message: "[\(host)] disconnecting")
 
         if let error {
-            Logger.debug(type: .webSocketChannel,
-                         message: "[\(host)] error: \(error.localizedDescription)")
+            Logger.debug(
+                type: .webSocketChannel,
+                message: "[\(host)] error: \(error.localizedDescription)")
             internalHandlers.onDisconnectWithError?(self, error)
         }
 
@@ -106,7 +114,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
             }
 
             if let error {
-                Logger.debug(type: .webSocketChannel, message: "[\(weakSelf.host)] failed to send message")
+                Logger.debug(
+                    type: .webSocketChannel, message: "[\(weakSelf.host)] failed to send message")
                 weakSelf.disconnect(error: error)
             }
         }
@@ -120,7 +129,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
             switch result {
             case let .success(message):
-                Logger.debug(type: .webSocketChannel, message: "[\(weakSelf.host)] receive message => \(message)")
+                Logger.debug(
+                    type: .webSocketChannel,
+                    message: "[\(weakSelf.host)] receive message => \(message)")
 
                 var newMessage: WebSocketMessage?
                 switch message {
@@ -133,12 +144,16 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                 }
 
                 if let message = newMessage {
-                    Logger.debug(type: .webSocketChannel, message: "[\(weakSelf.host)] call onReceive")
+                    Logger.debug(
+                        type: .webSocketChannel, message: "[\(weakSelf.host)] call onReceive")
                     weakSelf.handlers.onReceive?(message)
                     weakSelf.internalHandlers.onReceive?(message)
                 } else {
-                    Logger.debug(type: .webSocketChannel,
-                                 message: "[\(weakSelf.host)] received message is not string or binary (discarded)")
+                    Logger.debug(
+                        type: .webSocketChannel,
+                        message:
+                            "[\(weakSelf.host)] received message is not string or binary (discarded)"
+                    )
                     // discard
                 }
 
@@ -150,17 +165,19 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
                     return
                 }
 
-                Logger.debug(type: .webSocketChannel,
-                             message: "[\(weakSelf.host)] failed => \(error.localizedDescription)")
+                Logger.debug(
+                    type: .webSocketChannel,
+                    message: "[\(weakSelf.host)] failed => \(error.localizedDescription)")
                 weakSelf.disconnect(error: SoraError.webSocketError(error))
             }
         }
     }
 
-    func urlSession(_ session: URLSession,
-                    webSocketTask: URLSessionWebSocketTask,
-                    didOpenWithProtocol protocol: String?)
-    {
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
         guard !isClosing else {
             return
         }
@@ -178,11 +195,12 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         return String(data: reason, encoding: .utf8)
     }
 
-    func urlSession(_ session: URLSession,
-                    webSocketTask: URLSessionWebSocketTask,
-                    didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
-                    reason: Data?)
-    {
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
         guard !isClosing else {
             return
         }
@@ -198,20 +216,26 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
         if closeCode != .normalClosure {
             let statusCode = WebSocketStatusCode(rawValue: closeCode.rawValue)
-            let error = SoraError.webSocketClosed(statusCode: statusCode,
-                                                  reason: reasonString)
+            let error = SoraError.webSocketClosed(
+                statusCode: statusCode,
+                reason: reasonString)
             disconnect(error: error)
         }
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
         // コードを短くするために変数を定義
         let ps = challenge.protectionSpace
         let previousFailureCount = challenge.previousFailureCount
 
         // 既に失敗している場合はチャレンジを中止する
         guard previousFailureCount == 0 else {
-            let message = "[\(host)] \(#function): Basic authentication failed. proxy => \(String(describing: proxy))"
+            let message =
+                "[\(host)] \(#function): Basic authentication failed. proxy => \(String(describing: proxy))"
             Logger.info(type: .webSocketChannel, message: message)
             completionHandler(.cancelAuthenticationChallenge, nil)
 
@@ -221,7 +245,11 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
             return
         }
 
-        Logger.debug(type: .webSocketChannel, message: "[\(host)] \(#function): challenge=\(ps.host):\(ps.port), \(ps.authenticationMethod) previousFailureCount: \(previousFailureCount)")
+        Logger.debug(
+            type: .webSocketChannel,
+            message:
+                "[\(host)] \(#function): challenge=\(ps.host):\(ps.port), \(ps.authenticationMethod) previousFailureCount: \(previousFailureCount)"
+        )
 
         // Basic 認証のみに対応している
         // それ以外の認証方法は .performDefaultHandling で処理を続ける
@@ -232,7 +260,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
         // username と password をチェック
         guard let username = proxy?.username, let password = proxy?.password else {
-            let message = "[\(host)] \(#function): Basic authentication required, but authentication information is insufficient. proxy => \(String(describing: proxy))"
+            let message =
+                "[\(host)] \(#function): Basic authentication required, but authentication information is insufficient. proxy => \(String(describing: proxy))"
             Logger.info(type: .webSocketChannel, message: message)
             completionHandler(.cancelAuthenticationChallenge, nil)
 

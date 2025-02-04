@@ -25,16 +25,17 @@ private enum ZLibUtil {
         }
 
         var sourceBuffer = [UInt8](input)
-        let size = compression_encode_buffer(destinationBuffer, bufferSize,
-                                             &sourceBuffer, sourceBuffer.count,
-                                             nil,
-                                             COMPRESSION_ZLIB)
+        let size = compression_encode_buffer(
+            destinationBuffer, bufferSize,
+            &sourceBuffer, sourceBuffer.count,
+            nil,
+            COMPRESSION_ZLIB)
         if size == 0 {
             return nil
         }
 
-        var zipped = Data(capacity: size + 6) // ヘッダー: 2バイト, チェックサム: 4バイト
-        zipped.append(contentsOf: [0x78, 0x5E]) // ヘッダーを追加
+        var zipped = Data(capacity: size + 6)  // ヘッダー: 2バイト, チェックサム: 4バイト
+        zipped.append(contentsOf: [0x78, 0x5E])  // ヘッダーを追加
         zipped.append(destinationBuffer, count: size)
 
         let checksum = input.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> UInt32 in
@@ -67,10 +68,11 @@ private enum ZLibUtil {
         let checksum = Data(sourceBuffer.suffix(4))
         sourceBuffer.removeLast(4)
 
-        let size = compression_decode_buffer(destinationBuffer, bufferSize,
-                                             &sourceBuffer, sourceBuffer.count,
-                                             nil,
-                                             COMPRESSION_ZLIB)
+        let size = compression_decode_buffer(
+            destinationBuffer, bufferSize,
+            &sourceBuffer, sourceBuffer.count,
+            nil,
+            COMPRESSION_ZLIB)
 
         if size == 0 {
             return nil
@@ -118,7 +120,10 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
 
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
+        Logger.debug(
+            type: .dataChannel,
+            message:
+                "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
 
         if dataChannel.readyState == .closed {
             if let peerChannel {
@@ -131,7 +136,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     }
 
     func dataChannel(_ dataChannel: RTCDataChannel, didChangeBufferedAmount amount: UInt64) {
-        Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label), amount => \(amount)")
+        Logger.debug(
+            type: .dataChannel,
+            message: "\(#function): label => \(dataChannel.label), amount => \(amount)")
     }
 
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
@@ -143,7 +150,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         }
 
         guard let dc = peerChannel.dataChannels[dataChannel.label] else {
-            Logger.error(type: .dataChannel, message: "DataChannel for label: \(dataChannel.label) is unavailable")
+            Logger.error(
+                type: .dataChannel,
+                message: "DataChannel for label: \(dataChannel.label) is unavailable")
             return
         }
 
@@ -153,7 +162,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         }
 
         if let message = String(data: data, encoding: .utf8) {
-            Logger.info(type: .dataChannel, message: "received data channel message: \(String(describing: message))")
+            Logger.info(
+                type: .dataChannel,
+                message: "received data channel message: \(String(describing: message))")
         }
 
         // Sora から送られてきたメッセージ
@@ -163,20 +174,26 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                 peerChannel.nativeChannel?.statistics {
                     // NOTE: stats の型を Signaling.swift に定義していない
                     let reports = Statistics(contentsOf: $0).jsonObject
-                    let json: [String: Any] = ["type": "stats",
-                                               "reports": reports]
+                    let json: [String: Any] = [
+                        "type": "stats",
+                        "reports": reports,
+                    ]
 
                     var data: Data?
                     do {
-                        data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
+                        data = try JSONSerialization.data(
+                            withJSONObject: json, options: [.prettyPrinted])
                     } catch {
-                        Logger.error(type: .dataChannel, message: "failed to encode stats data to json")
+                        Logger.error(
+                            type: .dataChannel, message: "failed to encode stats data to json")
                     }
 
                     if let data {
                         let ok = dc.send(data)
                         if !ok {
-                            Logger.error(type: .dataChannel, message: "failed to send stats data over DataChannel")
+                            Logger.error(
+                                type: .dataChannel,
+                                message: "failed to send stats data over DataChannel")
                         }
                     }
                 }
@@ -186,13 +203,16 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
                 case let .success(signaling):
                     peerChannel.handleSignalingOverDataChannel(signaling)
                 case let .failure(error):
-                    Logger.error(type: .dataChannel,
-                                 message: "decode failed (\(error.localizedDescription)) => ")
+                    Logger.error(
+                        type: .dataChannel,
+                        message: "decode failed (\(error.localizedDescription)) => ")
                 }
             case "e2ee":
-                Logger.error(type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
+                Logger.error(
+                    type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")
             default:
-                Logger.error(type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
+                Logger.error(
+                    type: .dataChannel, message: "unknown data channel label: \(dataChannel.label)")
             }
         }
         if let mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
@@ -205,10 +225,17 @@ class DataChannel {
     let native: RTCDataChannel
     let delegate: BasicDataChannelDelegate
 
-    init(dataChannel: RTCDataChannel, compress: Bool, mediaChannel: MediaChannel?, peerChannel: PeerChannel?) {
-        Logger.info(type: .dataChannel, message: "initialize DataChannel: label => \(dataChannel.label), compress => \(compress)")
+    init(
+        dataChannel: RTCDataChannel, compress: Bool, mediaChannel: MediaChannel?,
+        peerChannel: PeerChannel?
+    ) {
+        Logger.info(
+            type: .dataChannel,
+            message:
+                "initialize DataChannel: label => \(dataChannel.label), compress => \(compress)")
         native = dataChannel
-        delegate = BasicDataChannelDelegate(compress: compress, mediaChannel: mediaChannel, peerChannel: peerChannel)
+        delegate = BasicDataChannelDelegate(
+            compress: compress, mediaChannel: mediaChannel, peerChannel: peerChannel)
         native.delegate = delegate
     }
 
@@ -225,7 +252,11 @@ class DataChannel {
     }
 
     func send(_ data: Data) -> Bool {
-        Logger.debug(type: .dataChannel, message: "\(String(describing: type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())")
+        Logger.debug(
+            type: .dataChannel,
+            message:
+                "\(String(describing: type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())"
+        )
 
         guard let data = compress ? ZLibUtil.zip(data) : data else {
             Logger.error(type: .dataChannel, message: "failed to compress message")

@@ -1,14 +1,15 @@
 import Foundation
 
 private let descriptionTable: PairTable<String, AudioCodec> =
-    PairTable(name: "AudioCodec",
-              pairs: [("default", .default),
-                      ("OPUS", .opus),
-                      ("PCMU", .pcmu)])
+    PairTable(
+        name: "AudioCodec",
+        pairs: [
+            ("default", .default),
+            ("OPUS", .opus),
+            ("PCMU", .pcmu),
+        ])
 
-/**
- 音声コーデックを表します。
- */
+/// 音声コーデックを表します。
 public enum AudioCodec {
     /**
      サーバーが指定するデフォルトのコーデック。

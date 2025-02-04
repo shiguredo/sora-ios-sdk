@@ -1,9 +1,7 @@
 import Foundation
 import WebRTC
 
-/**
- 映像の描画に必要な機能を定義したプロトコルです。
- */
+/// 映像の描画に必要な機能を定義したプロトコルです。
 public protocol VideoRenderer: AnyObject {
     /**
      映像のサイズが変更されたときに呼ばれます。
@@ -64,14 +62,16 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
 
     func setSize(_ size: CGSize) {
         if let renderer = videoRenderer {
-            Logger.debug(type: .videoRenderer,
-                         message: "set size \(size) for \(renderer)")
+            Logger.debug(
+                type: .videoRenderer,
+                message: "set size \(size) for \(renderer)")
             DispatchQueue.main.async {
                 renderer.onChange(size: size)
             }
         } else {
-            Logger.debug(type: .videoRenderer,
-                         message: "set size \(size) IGNORED, no renderer set")
+            Logger.debug(
+                type: .videoRenderer,
+                message: "set size \(size) IGNORED, no renderer set")
         }
     }
 
