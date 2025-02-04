@@ -1354,7 +1354,9 @@ extension RTCRtpSender {
                 }
 
                 if let value = encoding.scaleResolutionDownTo {
-                    Logger.debug(type: .peerChannel, message: "scaleResolutionDownTo: \(value.maxWidth)x\(value.maxHeight)")
+                    Logger.debug(
+                        type: .peerChannel,
+                        message: "scaleResolutionDownTo: \(value.maxWidth)x\(value.maxHeight)")
                     oldEncoding.scaleResolutionDownTo = value
                 }
 

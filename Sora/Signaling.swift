@@ -976,7 +976,7 @@ extension SignalingOffer.Configuration: Codable {
 }
 
 /// scaleResolutionDownTo を JSON デコードする専用の構造体
-fileprivate struct ScaleResolutionDownTo {
+private struct ScaleResolutionDownTo {
     fileprivate let maxWidth: Int
     fileprivate let maxHeight: Int
 }
@@ -1015,7 +1015,9 @@ extension SignalingOffer.Encoding: Codable {
         scaleResolutionDownBy = try container.decodeIfPresent(
             Double.self,
             forKey: .scaleResolutionDownBy)
-        if let _scleResolutionDownTo = try container.decodeIfPresent(ScaleResolutionDownTo.self, forKey: .scaleResolutionDownTo) {
+        if let _scleResolutionDownTo = try container.decodeIfPresent(
+            ScaleResolutionDownTo.self, forKey: .scaleResolutionDownTo)
+        {
             let restriction = RTCResolutionRestriction()
             restriction.maxWidth = NSNumber(value: _scleResolutionDownTo.maxWidth)
             restriction.maxHeight = NSNumber(value: _scleResolutionDownTo.maxHeight)
