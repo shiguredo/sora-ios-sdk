@@ -378,7 +378,7 @@ public struct SignalingOffer {
         /// 映像解像度を送信前に下げる度合
         public let scaleResolutionDownBy: Double?
 
-        /// エンコーディングを制限する最大の寸法
+        /// エンコーディングを制限する最大のサイズ
         public let scaleResolutionDownTo: RTCResolutionRestriction?
 
         /// scalability mode
