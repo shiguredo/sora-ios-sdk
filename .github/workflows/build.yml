@@ -32,7 +32,6 @@ jobs:
           ${{ runner.os }}-pods-
     - name: Install Dependences
       run: |
-        rm Podfile && mv Podfile.dev Podfile
         pod repo update
         pod install
         if nm ./Pods/WebRTC/WebRTC.xcframework/ios-arm64/WebRTC.framework/WebRTC | grep _kVTVideoEncoderSpecification_RequiredLowLatency >/dev/null 2>&1; then
