@@ -35,6 +35,7 @@
 - [UPDATE] SwiftLint の管理を CocoaPods から Swift Package Manager に移行する
   - @zztkm
 - [UPDATE] 開発用の依存管理を Swift Package Manager に移行したので Podfile.dev を削除する
+  - GitHub Actions でも Podfile.dev を利用していたので、利用しないように変更
   - @zztkm
 
 ## 2025.1.1
