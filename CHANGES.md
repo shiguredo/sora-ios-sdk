@@ -22,7 +22,7 @@
   - 今後は Configration.role に .sendrecv を指定している場合または Configration.spotlightEnabled に .enabled を指定している場合に Confgration.multistreamEnabled に false を指定すると接続エラーになる
   - @zztkm
 - [UPDATE] multistreamEnabled を非推奨扱いにする
-  - multistreamEnabled の設定が不要なイニシャライザを `Configuration` に追加する
+  - `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
   - ドキュメントコメントに非推奨扱いの旨を追加する
   - @zztkm
 
