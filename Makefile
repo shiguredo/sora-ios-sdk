@@ -4,7 +4,7 @@
 fmt:
 	swift format --in-place --recursive Sora SoraTests
 
-# フォーマットリント (swift-format)
+# swift-format lint
 fmt-lint:
 	swift format lint --strict --parallel --recursive Sora SoraTests
 
