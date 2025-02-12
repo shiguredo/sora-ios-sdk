@@ -610,7 +610,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
   }
 
-  /** `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。 */
+  /// `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。
   private func terminateSenderStream() {
     if configuration.videoEnabled || configuration.cameraSettings.isEnabled {
       // CameraVideoCapturer が起動中の場合は停止する
@@ -910,7 +910,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .mediaStream,
       message: "handle signaling over WebSocket => \(signaling.typeName())")
     switch signaling {
-    case let .offer(offer):
+    case .offer(let offer):
       signalingChannel.setConnectedUrl()
 
       clientId = offer.clientId
@@ -927,14 +927,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       createAndSendAnswer(offer: offer)
-    case let .update(update):
+    case .update(let update):
       if configuration.isMultistream {
         createAndSendUpdateAnswer(forOffer: update.sdp)
       }
-    case let .reOffer(reOffer):
+    case .reOffer(let reOffer):
       createAndSendReAnswer(forReOffer: reOffer.sdp)
 
-    case let .ping(ping):
+    case .ping(let ping):
       let pong = SignalingPong()
       if ping.statisticsEnabled == true {
         nativeChannel?.statistics { report in
@@ -956,7 +956,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       } else {
         signalingChannel.send(message: .pong(pong))
       }
-    case let .switched(switched):
+    case .switched(let switched):
       switchedToDataChannel = true
       signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
       if signalingChannel.ignoreDisconnectWebSocket {
@@ -968,7 +968,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
         onDataChannel(mediaChannel)
       }
-    case let .redirect(redirect):
+    case .redirect(let redirect):
       signalingChannel.redirect(location: redirect.location)
     default:
       break
@@ -983,7 +983,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .mediaStream,
       message: "handle signaling over DataChannel => \(signaling.typeName())")
     switch signaling {
-    case let .reOffer(reOffer):
+    case .reOffer(let reOffer):
       createAndSendReAnswerOverDataChannel(forReOffer: reOffer.sdp)
     case .push, .notify:
       // 処理は不要

@@ -66,11 +66,9 @@ public enum WebSocketStatusCode {
 
   // MARK: - インスタンスの生成
 
-  /**
-     初期化します。
-
-     - parameter rawValue: ステータスコード
-     */
+  /// 初期化します。
+  ///
+  /// - parameter rawValue: ステータスコード
   public init(rawValue: Int) {
     for pair in WebSocketStatusCode.table {
       if pair.1 == rawValue {
@@ -83,11 +81,9 @@ public enum WebSocketStatusCode {
 
   // MARK: 変換
 
-  /**
-     整数で表されるステータスコードを返します。
-
-     - returns: ステータスコード
-     */
+  /// 整数で表されるステータスコードを返します。
+  ///
+  /// - returns: ステータスコード
   public func intValue() -> Int {
     switch self {
     case .normal:

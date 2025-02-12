@@ -47,7 +47,7 @@ extension LogType: CustomStringConvertible {
       return "VideoRenderer"
     case .videoView:
       return "VideoView"
-    case let .user(name):
+    case .user(let name):
       return name
     case .configurationViewController:
       return "ConfigurationViewController"

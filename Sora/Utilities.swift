@@ -102,7 +102,7 @@ extension PairTable where T == String {
 extension Optional {
   public func unwrap(ifNone: () throws -> Wrapped) rethrows -> Wrapped {
     switch self {
-    case let .some(value):
+    case .some(let value):
       return value
     case .none:
       return try ifNone()

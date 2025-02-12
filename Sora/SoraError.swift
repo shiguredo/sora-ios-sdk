@@ -45,9 +45,9 @@ extension SoraError: LocalizedError {
       return "Connection is cancelled"
     case .connectionTimeout:
       return "Connection is timeout"
-    case let .connectionBusy(reason: reason):
+    case .connectionBusy(let reason):
       return "Connection is busy (\(reason))"
-    case let .webSocketClosed(statusCode: statusCode, reason: reason):
+    case .webSocketClosed(let statusCode, let reason):
       var desc = "WebSocket is closed (\(statusCode.intValue()) "
       if let reason {
         desc.append(reason)
@@ -56,19 +56,19 @@ extension SoraError: LocalizedError {
       }
       desc.append(")")
       return desc
-    case let .webSocketError(error):
+    case .webSocketError(let error):
       return "WebSocket error (\(error.localizedDescription))"
-    case let .signalingChannelError(reason: reason):
+    case .signalingChannelError(let reason):
       return "SignalingChannel error (\(reason))"
     case .invalidSignalingMessage:
       return "Invalid signaling message format"
-    case let .unknownSignalingMessageType(type: type):
+    case .unknownSignalingMessageType(let type):
       return "Unknown signaling message type \(type)"
-    case let .peerChannelError(reason: reason):
+    case .peerChannelError(let reason):
       return "PeerChannel error (\(reason))"
-    case let .cameraError(reason: reason):
+    case .cameraError(let reason):
       return "Camera error: \(reason)"
-    case let .messagingError(reason: reason):
+    case .messagingError(let reason):
       return "Messaging error: \(reason)"
     }
   }

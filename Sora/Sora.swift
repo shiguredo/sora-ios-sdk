@@ -36,21 +36,17 @@ public final class Sora {
     RTCEnableMetrics()
   }
 
-  /**
-     SDK の終了処理を行います。
-     アプリケーションの終了と同時に SDK の使用を終了する場合、
-     この関数を呼ぶ必要はありません。
-     */
+  /// SDK の終了処理を行います。
+  /// アプリケーションの終了と同時に SDK の使用を終了する場合、
+  /// この関数を呼ぶ必要はありません。
   public static func finish() {
     Logger.debug(type: .sora, message: "finish SDK")
     RTCShutdownInternalTracer()
     RTCCleanupSSL()
   }
 
-  /**
-     ログレベル。指定したレベルより高いログは出力されません。
-     デフォルトは `info` です。
-     */
+  /// ログレベル。指定したレベルより高いログは出力されません。
+  /// デフォルトは `info` です。
   public static var logLevel: LogLevel {
     get {
       Logger.shared.level
@@ -73,14 +69,12 @@ public final class Sora {
   /// シングルトンインスタンス
   public static let shared = Sora()
 
-  /**
-     初期化します。
-     大抵の用途ではシングルトンインスタンスで問題なく、
-     インスタンスを生成する必要はないでしょう。
-     メディアチャネルのリストをグループに分けたい、
-     または複数のイベントハンドラを使いたいなどの場合に
-     インスタンスを生成してください。
-     */
+  /// 初期化します。
+  /// 大抵の用途ではシングルトンインスタンスで問題なく、
+  /// インスタンスを生成する必要はないでしょう。
+  /// メディアチャネルのリストをグループに分けたい、
+  /// または複数のイベントハンドラを使いたいなどの場合に
+  /// インスタンスを生成してください。
   public init() {
     // This will guarantee that `Sora.initialize()` is called only once.
     // - It works even if user initialized `Sora` directly
@@ -119,16 +113,14 @@ public final class Sora {
 
   // MARK: - 接続
 
-  /**
-     サーバーに接続します。
-
-     - parameter configuration: クライアントの設定
-     - parameter webRTCConfiguration: WebRTC の設定
-     - parameter handler: 接続試行後に呼ばれるクロージャー。
-     - parameter mediaChannel: (接続成功時のみ) メディアチャネル
-     - parameter error: (接続失敗時のみ) エラー
-     - returns: 接続試行中の状態
-     */
+  /// サーバーに接続します。
+  ///
+  /// - parameter configuration: クライアントの設定
+  /// - parameter webRTCConfiguration: WebRTC の設定
+  /// - parameter handler: 接続試行後に呼ばれるクロージャー。
+  /// - parameter mediaChannel: (接続成功時のみ) メディアチャネル
+  /// - parameter error: (接続失敗時のみ) エラー
+  /// - returns: 接続試行中の状態
   public func connect(
     configuration: Configuration,
     webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
@@ -176,13 +168,11 @@ public final class Sora {
 
   // MARK: - 音声ユニットの操作
 
-  /**
-     * 音声ユニットの手動による初期化の可否。
-     * ``false`` をセットした場合、音声トラックの生成時に音声ユニットが自動的に初期化されます。
-     * (音声ユニットを使用するには ``audioEnabled`` に ``true`` をセットして初期化する必要があります)
-     * ``true`` をセットした場合、音声ユニットは自動的に初期化されません。
-     * デフォルトは ``false`` です。
-     */
+  /// 音声ユニットの手動による初期化の可否。
+  /// ``false`` をセットした場合、音声トラックの生成時に音声ユニットが自動的に初期化されます。
+  /// (音声ユニットを使用するには ``audioEnabled`` に ``true`` をセットして初期化する必要があります)
+  /// ``true`` をセットした場合、音声ユニットは自動的に初期化されません。
+  /// デフォルトは ``false`` です。
   public var usesManualAudio: Bool {
     get {
       RTCAudioSession.sharedInstance().useManualAudio
@@ -192,18 +182,16 @@ public final class Sora {
     }
   }
 
-  /**
-     * 音声ユニットの使用の可否。
-     * このプロパティは ``usesManualAudio`` が ``true`` の場合のみ有効です。
-     * デフォルトは ``false`` です。
-     *
-     * ``true`` をセットした場合、音声ユニットは必要に応じて初期化されます。
-     * ``false`` をセットした場合、すでに音声ユニットが初期化済みで起動されていれば、
-     * 音声ユニットを停止します。
-     *
-     * このプロパティを使用すると、音声ユニットの初期化によって
-     * AVPlayer などによる再生中の音声が中断されてしまうことを防げます。
-     */
+  /// 音声ユニットの使用の可否。
+  /// このプロパティは ``usesManualAudio`` が ``true`` の場合のみ有効です。
+  /// デフォルトは ``false`` です。
+  ///
+  /// ``true`` をセットした場合、音声ユニットは必要に応じて初期化されます。
+  /// ``false`` をセットした場合、すでに音声ユニットが初期化済みで起動されていれば、
+  /// 音声ユニットを停止します。
+  ///
+  /// このプロパティを使用すると、音声ユニットの初期化によって
+  /// AVPlayer などによる再生中の音声が中断されてしまうことを防げます。
   public var audioEnabled: Bool {
     get {
       RTCAudioSession.sharedInstance().isAudioEnabled
@@ -213,48 +201,46 @@ public final class Sora {
     }
   }
 
-  /**
-     * ``AVAudioSession`` の設定を変更する際に使います。
-     * WebRTC で使用中のスレッドをロックします。
-     * このメソッドは次のプロパティとメソッドの使用時に使ってください。
-     *
-     * - ``category``
-     * - ``categoryOptions``
-     * - ``mode``
-     * - ``secondaryAudioShouldBeSilencedHint``
-     * - ``currentRoute``
-     * - ``maximumInputNumberOfChannels``
-     * - ``maximumOutputNumberOfChannels``
-     * - ``inputGain``
-     * - ``inputGainSettable``
-     * - ``inputAvailable``
-     * - ``inputDataSources``
-     * - ``inputDataSource``
-     * - ``outputDataSources``
-     * - ``outputDataSource``
-     * - ``sampleRate``
-     * - ``preferredSampleRate``
-     * - ``inputNumberOfChannels``
-     * - ``outputNumberOfChannels``
-     * - ``outputVolume``
-     * - ``inputLatency``
-     * - ``outputLatency``
-     * - ``ioBufferDuration``
-     * - ``preferredIOBufferDuration``
-     * - ``setCategory(_:withOptions:)``
-     * - ``setMode(_:)``
-     * - ``setInputGain(_:)``
-     * - ``setPreferredSampleRate(_:)``
-     * - ``setPreferredIOBufferDuration(_:)``
-     * - ``setPreferredInputNumberOfChannels(_:)``
-     * - ``setPreferredOutputNumberOfChannels(_:)``
-     * - ``overrideOutputAudioPort(_:)``
-     * - ``setPreferredInput(_:)``
-     * - ``setInputDataSource(_:)``
-     * - ``setOutputDataSource(_:)``
-     *
-     * - parameter block: ロック中に実行されるクロージャー
-     */
+  /// ``AVAudioSession`` の設定を変更する際に使います。
+  /// WebRTC で使用中のスレッドをロックします。
+  /// このメソッドは次のプロパティとメソッドの使用時に使ってください。
+  ///
+  /// - ``category``
+  /// - ``categoryOptions``
+  /// - ``mode``
+  /// - ``secondaryAudioShouldBeSilencedHint``
+  /// - ``currentRoute``
+  /// - ``maximumInputNumberOfChannels``
+  /// - ``maximumOutputNumberOfChannels``
+  /// - ``inputGain``
+  /// - ``inputGainSettable``
+  /// - ``inputAvailable``
+  /// - ``inputDataSources``
+  /// - ``inputDataSource``
+  /// - ``outputDataSources``
+  /// - ``outputDataSource``
+  /// - ``sampleRate``
+  /// - ``preferredSampleRate``
+  /// - ``inputNumberOfChannels``
+  /// - ``outputNumberOfChannels``
+  /// - ``outputVolume``
+  /// - ``inputLatency``
+  /// - ``outputLatency``
+  /// - ``ioBufferDuration``
+  /// - ``preferredIOBufferDuration``
+  /// - ``setCategory(_:withOptions:)``
+  /// - ``setMode(_:)``
+  /// - ``setInputGain(_:)``
+  /// - ``setPreferredSampleRate(_:)``
+  /// - ``setPreferredIOBufferDuration(_:)``
+  /// - ``setPreferredInputNumberOfChannels(_:)``
+  /// - ``setPreferredOutputNumberOfChannels(_:)``
+  /// - ``overrideOutputAudioPort(_:)``
+  /// - ``setPreferredInput(_:)``
+  /// - ``setInputDataSource(_:)``
+  /// - ``setOutputDataSource(_:)``
+  ///
+  /// - parameter block: ロック中に実行されるクロージャー
   public func configureAudioSession(block: () -> Void) {
     let session = RTCAudioSession.sharedInstance()
     session.lockForConfiguration()
@@ -262,13 +248,11 @@ public final class Sora {
     session.unlockForConfiguration()
   }
 
-  /**
-     * 音声モードを変更します。
-     * このメソッドは **接続完了後** に実行してください。
-     *
-     * - parameter mode: 音声モード
-     * - returns: 変更の成否
-     */
+  /// 音声モードを変更します。
+  /// このメソッドは **接続完了後** に実行してください。
+  ///
+  /// - parameter mode: 音声モード
+  /// - returns: 変更の成否
   public func setAudioMode(
     _ mode: AudioMode,
     options: AVAudioSession.CategoryOptions = [
@@ -280,7 +264,7 @@ public final class Sora {
       let session = RTCAudioSession.sharedInstance()
       session.lockForConfiguration()
       switch mode {
-      case let .default(category: category, output: output):
+      case .default(let category, let output):
         if output == .speaker {
           options = [options, .defaultToSpeaker]
         }
@@ -289,7 +273,7 @@ public final class Sora {
       case .videoChat:
         try session.setCategory(.playAndRecord, with: options)
         try session.setMode(.videoChat)
-      case let .voiceChat(output: output):
+      case .voiceChat(let output):
         if output == .speaker {
           options = [options, .defaultToSpeaker]
         }
@@ -320,11 +304,9 @@ public final class Sora {
     return formatter
   }()
 
-  /**
-     * libwebrtc のログレベルを指定します。
-     * ログは `RTCSetMinDebugLogLevel()` でも指定可能ですが、 `RTCSetMinDebugLogLevel()` ではログの時刻が表示されません。
-     * 本メソッドでログレベルを指定すると、時刻を含むログを出力します。
-     */
+  /// libwebrtc のログレベルを指定します。
+  /// ログは `RTCSetMinDebugLogLevel()` でも指定可能ですが、 `RTCSetMinDebugLogLevel()` ではログの時刻が表示されません。
+  /// 本メソッドでログレベルを指定すると、時刻を含むログを出力します。
   public static func setWebRTCLogLevel(_ severity: RTCLoggingSeverity) {
     // RTCSetMinDebugLogLevel() でログレベルを指定すると
     // RTCCallbackLogger 以外のログも出力されてしまい、
@@ -358,9 +340,7 @@ public final class Sora {
 /// サーバーへの接続試行中の状態を表します。
 /// `cancel()` で接続をキャンセル可能です。
 public final class ConnectionTask {
-  /**
-     接続状態を表します。
-     */
+  /// 接続状態を表します。
   public enum State {
     /// 接続試行中
     case connecting
@@ -381,10 +361,8 @@ public final class ConnectionTask {
     state = .connecting
   }
 
-  /**
-     * 接続試行をキャンセルします。
-     * すでに接続済みであれば何もしません。
-     */
+  /// 接続試行をキャンセルします。
+  /// すでに接続済みであれば何もしません。
   public func cancel() {
     if state == .connecting {
       Logger.debug(type: .mediaChannel, message: "connection task cancelled")
