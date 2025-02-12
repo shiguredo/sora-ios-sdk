@@ -39,6 +39,10 @@
 - [UPDATE] 開発用の依存管理を Swift Package Manager に移行したので Podfile.dev を削除する
   - GitHub Actions でも Podfile.dev を利用していたので、利用しないように変更
   - @zztkm
+- [UPDATE] GitHub Actions で Lint を行うコマンドを Makefile に変更
+  - 今まで lint-format.sh で一括実行したところを Makefile に移行したので、GitHub Actions でも Makefile を利用するように変更
+  - lint-format.sh は利用しなくなったので削除
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
   - @zztkm

@@ -53,7 +53,8 @@ jobs:
             PROVISIONING_PROFILE=
     - name: Lint
       run: |
-        ./lint-format.sh
+        make fmt-lint
+        make lint
   slack_notify_succeeded:
     needs: [build]
     runs-on: ubuntu-24.04
