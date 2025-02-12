@@ -8,7 +8,7 @@ fmt:
 fmt-lint:
 	swift format lint --strict --parallel --recursive Sora SoraTests
 
-# Lint (SwiftLint)
+# SwiftLint
 lint:
 	swift package plugin --allow-writing-to-package-directory swiftlint --fix .
 	swift package plugin --allow-writing-to-package-directory swiftlint --strict .
