@@ -1,6 +1,6 @@
 .PHONY: fmt fmt-lint lint
 
-# フォーマット (swift-format)
+# swift-format
 fmt:
 	swift format --in-place --recursive Sora SoraTests
 
