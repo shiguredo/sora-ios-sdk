@@ -51,9 +51,11 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
-    - name: Lint
+    - name: Format Lint
       run: |
         make fmt-lint
+    - name: Lint
+      run: |
         make lint
   slack_notify_succeeded:
     needs: [build]
