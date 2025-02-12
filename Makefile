@@ -1,5 +1,8 @@
 .PHONY: fmt fmt-lint lint
 
+# すべてを実行
+all: fmt fmt-lint lint
+
 # swift-format
 fmt:
 	swift format --in-place --recursive Sora SoraTests
@@ -13,5 +16,3 @@ lint:
 	swift package plugin --allow-writing-to-package-directory swiftlint --fix .
 	swift package plugin --allow-writing-to-package-directory swiftlint --strict .
 
-# すべてを実行
-all: fmt-lint fmt lint
