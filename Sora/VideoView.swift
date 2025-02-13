@@ -119,33 +119,29 @@ public class VideoView: UIView {
     return view
   }()
 
-  /**
-     現在 VideoView が表示している映像の元々のフレームサイズを返します。
-
-     まだ VideoView が映像のフレームを一度も表示していない場合は `nil` を返します。
-
-     VideoView はこの映像のフレームサイズを元にして、自身の contentMode
-     に従ってフレームを変形させ、映像を画面に表示します。
-
-     - 例えば currentVideoFrameSize が VideoView.frame よりも小さく、
-     contentMode に `scaleAspectFit` が指定されている場合は、
-     contentMode の指定に従って元映像は引き伸ばされて、拡大表示される事になります。
-
-     このプロパティを使用することで、例えば元映像が横長の場合は横長なUIにし、
-     縦長の場合は縦長なUIにする、といった調整を行うことができます。
-
-     注意点として、このプロパティは直前の映像のフレームサイズを返すため、
-     既に映像は表示されていない場合でも、最後に表示していた映像フレームをサイズを返します。
-     */
+  /// 現在 VideoView が表示している映像の元々のフレームサイズを返します。
+  ///
+  /// まだ VideoView が映像のフレームを一度も表示していない場合は `nil` を返します。
+  ///
+  /// VideoView はこの映像のフレームサイズを元にして、自身の contentMode
+  /// に従ってフレームを変形させ、映像を画面に表示します。
+  ///
+  /// - 例えば currentVideoFrameSize が VideoView.frame よりも小さく、
+  /// contentMode に `scaleAspectFit` が指定されている場合は、
+  /// contentMode の指定に従って元映像は引き伸ばされて、拡大表示される事になります。
+  ///
+  /// このプロパティを使用することで、例えば元映像が横長の場合は横長なUIにし、
+  /// 縦長の場合は縦長なUIにする、といった調整を行うことができます。
+  ///
+  /// 注意点として、このプロパティは直前の映像のフレームサイズを返すため、
+  /// 既に映像は表示されていない場合でも、最後に表示していた映像フレームをサイズを返します。
   public var currentVideoFrameSize: CGSize? {
     contentView.currentVideoFrameSize
   }
 
-  /**
-     画面を ``backgroundView`` のビューに切り替えます。
-     ``backgroundView`` が指定されていなければ画面を黒で塗り潰します。
-     このメソッドは描画停止時のみ有効です。
-     */
+  /// 画面を ``backgroundView`` のビューに切り替えます。
+  /// ``backgroundView`` が指定されていなければ画面を黒で塗り潰します。
+  /// このメソッドは描画停止時のみ有効です。
   public func clear() {
     if !isRendering {
       DispatchQueue.main.async {
@@ -158,9 +154,7 @@ public class VideoView: UIView {
     }
   }
 
-  /**
-     映像フレームの描画を開始します。
-     */
+  /// 映像フレームの描画を開始します。
   public func start() {
     if !isRendering {
       DispatchQueue.main.async {
@@ -170,20 +164,14 @@ public class VideoView: UIView {
     }
   }
 
-  /**
-     映像フレームの描画を停止します。
-     描画の停止中は ``render(videoFrame:)`` が実行されません。
-     */
+  /// 映像フレームの描画を停止します。
+  /// 描画の停止中は ``render(videoFrame:)`` が実行されません。
   public func stop() {
     isRendering = false
   }
 
-  // MARK: - デバッグモード
-
-  /**
-     デバッグモードを有効にします。
-     有効にすると、映像の上部に解像度とフレームレートを表示します。
-     */
+  /// デバッグモードを有効にします。
+  /// 有効にすると、映像の上部に解像度とフレームレートを表示します。
   public var debugMode: Bool {
     get { contentView.debugMode }
     set { contentView.debugMode = newValue }

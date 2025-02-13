@@ -194,15 +194,13 @@ public final class CameraVideoCapturer {
 
   // MARK: カメラの操作
 
-  /**
-     * カメラを起動します。
-     *
-     * このメソッドを実行すると、 `UIDevice` の
-     * `beginGeneratingDeviceOrientationNotifications()` が実行されます。
-     * `beginGeneratingDeviceOrientationNotifications()` または
-     * `endGeneratingDeviceOrientationNotifications()` を使う際は
-     * 必ず対に実行するように注意してください。
-     */
+  /// カメラを起動します。
+  ///
+  /// このメソッドを実行すると、 `UIDevice` の
+  /// `beginGeneratingDeviceOrientationNotifications()` が実行されます。
+  /// `beginGeneratingDeviceOrientationNotifications()` または
+  /// `endGeneratingDeviceOrientationNotifications()` を使う際は
+  /// 必ず対に実行するように注意してください。
   public func start(
     format: AVCaptureDevice.Format,
     frameRate: Int,
@@ -236,15 +234,13 @@ public final class CameraVideoCapturer {
     }
   }
 
-  /**
-     * カメラを停止します。
-     *
-     * このメソッドを実行すると、 `UIDevice` の
-     * `endGeneratingDeviceOrientationNotifications()` が実行されます。
-     * `beginGeneratingDeviceOrientationNotifications()` または
-     * `endGeneratingDeviceOrientationNotifications()` を使う際は
-     * 必ず対に実行するように注意してください。
-     */
+  /// カメラを停止します。
+  ///
+  /// このメソッドを実行すると、 `UIDevice` の
+  /// `endGeneratingDeviceOrientationNotifications()` が実行されます。
+  /// `beginGeneratingDeviceOrientationNotifications()` または
+  /// `endGeneratingDeviceOrientationNotifications()` を使う際は
+  /// 必ず対に実行するように注意してください。
   public func stop(completionHandler: @escaping ((Error?) -> Void)) {
     guard isRunning else {
       completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
