@@ -316,17 +316,17 @@ class SignalingChannel {
     case .binary:
       Logger.debug(type: .signalingChannel, message: "discard binary message")
 
-    case let .text(text):
+    case .text(let text):
       guard let data = text.data(using: .utf8) else {
         Logger.error(type: .signalingChannel, message: "invalid encoding")
         return
       }
 
       switch Signaling.decode(data) {
-      case let .success(signaling):
+      case .success(let signaling):
         Logger.debug(type: .signalingChannel, message: "call onReceiveSignaling")
         internalHandlers.onReceive?(signaling)
-      case let .failure(error):
+      case .failure(let error):
         Logger.error(
           type: .signalingChannel,
           message: "decode failed (\(error.localizedDescription)) => \(text)")

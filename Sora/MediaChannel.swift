@@ -250,7 +250,7 @@ public final class MediaChannel {
       }
       Logger.debug(type: .mediaChannel, message: "receive signaling")
       switch message {
-      case let .notify(message):
+      case .notify(let message):
         // connectionCount, channelRecvonlyConnections, channelSendonlyConnections, channelSendrecvConnections
         // 全てに値が入っていた時のみプロパティを更新する
         if let connectionCount = message.connectionCount,

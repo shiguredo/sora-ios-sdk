@@ -96,10 +96,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
   func send(message: WebSocketMessage) {
     var nativeMessage: URLSessionWebSocketTask.Message!
     switch message {
-    case let .text(text):
+    case .text(let text):
       Logger.debug(type: .webSocketChannel, message: text)
       nativeMessage = .string(text)
-    case let .binary(data):
+    case .binary(let data):
       Logger.debug(type: .webSocketChannel, message: "[\(host)] \(data)")
       nativeMessage = .data(data)
     }
@@ -128,16 +128,16 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       }
 
       switch result {
-      case let .success(message):
+      case .success(let message):
         Logger.debug(
           type: .webSocketChannel,
           message: "[\(weakSelf.host)] receive message => \(message)")
 
         var newMessage: WebSocketMessage?
         switch message {
-        case let .string(string):
+        case .string(let string):
           newMessage = .text(string)
-        case let .data(data):
+        case .data(let data):
           newMessage = .binary(data)
         @unknown default:
           break
@@ -159,7 +159,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
         weakSelf.receive()
 
-      case let .failure(error):
+      case .failure(let error):
         // 余計なログを出力しないために、 disconnect の前にチェックする
         guard !weakSelf.isClosing else {
           return
