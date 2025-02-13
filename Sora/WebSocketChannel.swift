@@ -114,7 +114,7 @@ public enum WebSocketStatusCode {
       return 1013
     case .tlsHandshake:
       return 1015
-    case let .other(value):
+    case .other(let value):
       return value
     }
   }

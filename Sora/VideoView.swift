@@ -59,11 +59,8 @@ public class VideoView: UIView {
 
   // MARK: - インスタンスの生成
 
-  /**
-     初期化します。
-
-     - parameter frame: ビューのサイズ
-     */
+  /// 初期化します。
+  /// - parameter frame: ビューのサイズ
   override public init(frame: CGRect) {
     super.init(frame: frame)
     // init() ないし init(frame:) 経由でコードからVideoViewが生成された場合は、
@@ -71,11 +68,8 @@ public class VideoView: UIView {
     contentMode = .scaleAspectFit
   }
 
-  /**
-     コーダーを使用して初期化します。
-
-     - parameter coder: コーダー
-     */
+  /// コーダーを使用して初期化します。
+  /// - parameter coder: コーダー
   public required init?(coder: NSCoder) {
     super.init(coder: coder)
     // init?(coder:) 経由でVideoViewが生成された場合は、
@@ -85,9 +79,7 @@ public class VideoView: UIView {
 
   // MARK: - レイアウト
 
-  /**
-     レイアウトを調整します。
-     */
+  /// レイアウトを調整します。
   override public func layoutSubviews() {
     super.layoutSubviews()
     contentView.frame = bounds

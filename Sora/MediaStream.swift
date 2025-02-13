@@ -227,7 +227,7 @@ class BasicMediaStream: MediaStream {
       // フィルターを通す
       let frame = videoFilter?.filter(videoFrame: frame) ?? frame
       switch frame {
-      case let .native(capturer: let capturer, frame: let nativeFrame):
+      case let .native(capturer, nativeFrame):
         // RTCVideoSource.capturer(_:didCapture:) の最初の引数は
         // 現在使われてないのでダミーでも可？ -> ダミーにしました
         nativeVideoSource?.capturer(
