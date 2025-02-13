@@ -58,12 +58,10 @@ public final class MediaChannel {
   /// クライアントの設定
   public let configuration: Configuration
 
-  /**
-     最初に type: connect メッセージを送信した URL (デバッグ用)
-
-     Sora から type: redirect メッセージを受信した場合、 contactUrl と connectedUrl には異なる値がセットされます
-     type: redirect メッセージを受信しなかった場合、 contactUrl と connectedUrl には同じ値がセットされます
-     */
+  /// 最初に type: connect メッセージを送信した URL (デバッグ用)
+  ///
+  /// Sora から type: redirect メッセージを受信した場合、 contactUrl と connectedUrl には異なる値がセットされます
+  /// type: redirect メッセージを受信しなかった場合、 contactUrl と connectedUrl には同じ値がセットされます
   public var contactUrl: URL? {
     signalingChannel.contactUrl
   }
@@ -78,23 +76,17 @@ public final class MediaChannel {
     peerChannel.nativeChannel
   }
 
-  /**
-     クライアント ID 。接続後にセットされます。
-     */
+  /// クライアント ID 。接続後にセットされます。
   public var clientId: String? {
     peerChannel.clientId
   }
 
-  /**
-        バンドル ID 。接続後にセットされます。
-     */
+  /// バンドル ID 。接続後にセットされます。
   public var bundleId: String? {
     peerChannel.bundleId
   }
 
-  /**
-     接続 ID 。接続後にセットされます。
-     */
+  /// 接続 ID 。接続後にセットされます。
   public var connectionId: String? {
     peerChannel.connectionId
   }
@@ -156,12 +148,9 @@ public final class MediaChannel {
   public var streams: [MediaStream] {
     peerChannel.streams
   }
-
-  /**
-     最初のストリーム。
-     マルチストリームでは、必ずしも最初のストリームが 送信ストリームとは限りません。
-     送信ストリームが必要であれば `senderStream` を使用してください。
-     */
+  /// 最初のストリーム。
+  /// マルチストリームでは、必ずしも最初のストリームが 送信ストリームとは限りません。
+  /// 送信ストリームが必要であれば `senderStream` を使用してください。
   public var mainStream: MediaStream? {
     streams.first
   }
@@ -193,12 +182,10 @@ public final class MediaChannel {
 
   // MARK: - インスタンスの生成
 
-  /**
-     初期化します。
-
-     - parameter manager: `Sora` オブジェクト
-     - parameter configuration: クライアントの設定
-     */
+  /// 初期化します。
+  ///
+  /// - parameter manager: `Sora` オブジェクト
+  /// - parameter configuration: クライアントの設定
   init(manager: Sora, configuration: Configuration) {
     self.manager = manager
     self.configuration = configuration
@@ -226,14 +213,12 @@ public final class MediaChannel {
     _handler = nil
   }
 
-  /**
-     サーバーに接続します。
-
-     - parameter webRTCConfiguration: WebRTC の設定
-     - parameter timeout: タイムアウトまでの秒数
-     - parameter handler: 接続試行後に呼ばれるクロージャー
-     - parameter error: (接続失敗時) エラー
-     */
+  /// サーバーに接続します。
+  ///
+  /// - parameter webRTCConfiguration: WebRTC の設定
+  /// - parameter timeout: タイムアウトまでの秒数
+  /// - parameter handler: 接続試行後に呼ばれるクロージャー
+  /// - parameter error: (接続失敗時) エラー
   func connect(
     webRTCConfiguration: WebRTCConfiguration,
     timeout: Int = 30,
@@ -317,7 +302,7 @@ public final class MediaChannel {
       }
       Logger.debug(type: .mediaChannel, message: "receive signaling")
       switch message {
-      case let .notify(message):
+      case .notify(let message):
         // connectionCount, channelRecvonlyConnections, channelSendonlyConnections, channelSendrecvConnections
         // 全てに値が入っていた時のみプロパティを更新する
         if let connectionCount = message.connectionCount,
@@ -372,11 +357,9 @@ public final class MediaChannel {
     }
   }
 
-  /**
-     接続を解除します。
-
-     - parameter error: 接続解除の原因となったエラー
-     */
+  /// 接続を解除します。
+  ///
+  /// - parameter error: 接続解除の原因となったエラー
   public func disconnect(error: Error?) {
     // reason に .user を指定しているので、 disconnect は SDK 内部では利用しない
     internalDisconnect(error: error, reason: .user)

@@ -26,14 +26,12 @@ public struct Proxy: CustomStringConvertible {
   /// エージェント
   var agent: String = "Sora iOS SDK \(SDKInfo.version)"
 
-  /**
-     初期化します。
-     - parameter host: プロキシのホスト名
-     - parameter port: プロキシのポート
-     - parameter agent: プロキシのエージェント
-     - parameter username: プロキシ認証に使用するユーザー名
-     - parameter password: プロキシ認証に使用するパスワード
-     */
+  /// 初期化します。
+  /// - parameter host: プロキシのホスト名
+  /// - parameter port: プロキシのポート
+  /// - parameter agent: プロキシのエージェント
+  /// - parameter username: プロキシ認証に使用するユーザー名
+  /// - parameter password: プロキシ認証に使用するパスワード
   public init(
     host: String, port: Int, agent: String? = nil, username: String? = nil,
     password: String? = nil
@@ -59,9 +57,7 @@ public struct Proxy: CustomStringConvertible {
 public struct Configuration {
   // MARK: - 接続に関する設定
 
-  /**
-     スポットライトの設定
-     */
+  /// スポットライトの設定
   public enum Spotlight {
     /// 有効
     case enabled
@@ -108,10 +104,8 @@ public struct Configuration {
     }
   }
 
-  /**
-     接続試行中のタイムアウト (秒) 。
-     指定した時間内に接続が成立しなければ接続試行を中止します。
-     */
+  /// 接続試行中のタイムアウト (秒) 。
+  /// 指定した時間内に接続が成立しなければ接続試行を中止します。
   public var connectionTimeout: Int = 30
 
   /// 映像コーデック。デフォルトは `.default` です。
@@ -222,14 +216,11 @@ public struct Configuration {
   /// 通常、指定する必要はありません。
   public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
 
-  /**
-     初期化します。
-
-     - parameter url: サーバーの URL
-     - parameter channelId: チャネル ID
-     - parameter role: ロール
-     - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
-     */
+  /// 初期化します。
+  /// - parameter url: サーバーの URL
+  /// - parameter channelId: チャネル ID
+  /// - parameter role: ロール
+  /// - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
   public init(
     url: URL,
     channelId: String,
@@ -242,13 +233,11 @@ public struct Configuration {
     self.multistreamEnabled = multistreamEnabled
   }
 
-  /**
-     初期化します。
-     - parameter urlCandidates: シグナリングに利用する URL の候補
-     - parameter channelId: チャネル ID
-     - parameter role: ロール
-     - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
-     */
+  /// 初期化します。
+  /// - parameter urlCandidates: シグナリングに利用する URL の候補
+  /// - parameter channelId: チャネル ID
+  /// - parameter role: ロール
+  /// - parameter multistreamEnabled: マルチストリームの可否(デフォルトは指定なし)
   public init(
     urlCandidates: [URL],
     channelId: String,
@@ -294,13 +283,10 @@ public struct ForwardingFilterRule: Encodable {
   /// values
   public let values: [String]
 
-  /**
-     初期化します。
-
-     - parameter field: field
-     - parameter operator: operator
-     - parameter values: values
-     */
+  /// 初期化します。
+  /// - parameter field: field
+  /// - parameter operator: operator
+  /// - parameter values: values
   public init(
     field: ForwardingFilterRuleField,
     operator: ForwardingFilterRuleOperator,
@@ -341,14 +327,11 @@ public struct ForwardingFilter {
   /// metadata
   public var metadata: Encodable?
 
-  /**
-     初期化します。
-
-     - parameter action: action (オプショナル)
-     - parameter rules: rules
-     - parameter version: version (オプショナル)
-     - parameter metadata: metadata (オプショナル)
-     */
+  /// 初期化します。
+  /// - parameter action: action (オプショナル)
+  /// - parameter rules: rules
+  /// - parameter version: version (オプショナル)
+  /// - parameter metadata: metadata (オプショナル)
   public init(
     name: String? = nil, priority: Int? = nil, action: ForwardingFilterAction? = nil,
     rules: [[ForwardingFilterRule]], version: String? = nil, metadata: Encodable? = nil

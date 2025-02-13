@@ -194,15 +194,13 @@ public final class CameraVideoCapturer {
 
   // MARK: カメラの操作
 
-  /**
-     * カメラを起動します。
-     *
-     * このメソッドを実行すると、 `UIDevice` の
-     * `beginGeneratingDeviceOrientationNotifications()` が実行されます。
-     * `beginGeneratingDeviceOrientationNotifications()` または
-     * `endGeneratingDeviceOrientationNotifications()` を使う際は
-     * 必ず対に実行するように注意してください。
-     */
+  /// カメラを起動します。
+  ///
+  /// このメソッドを実行すると、 `UIDevice` の
+  /// `beginGeneratingDeviceOrientationNotifications()` が実行されます。
+  /// `beginGeneratingDeviceOrientationNotifications()` または
+  /// `endGeneratingDeviceOrientationNotifications()` を使う際は
+  /// 必ず対に実行するように注意してください。
   public func start(
     format: AVCaptureDevice.Format,
     frameRate: Int,
@@ -236,15 +234,13 @@ public final class CameraVideoCapturer {
     }
   }
 
-  /**
-     * カメラを停止します。
-     *
-     * このメソッドを実行すると、 `UIDevice` の
-     * `endGeneratingDeviceOrientationNotifications()` が実行されます。
-     * `beginGeneratingDeviceOrientationNotifications()` または
-     * `endGeneratingDeviceOrientationNotifications()` を使う際は
-     * 必ず対に実行するように注意してください。
-     */
+  /// カメラを停止します。
+  ///
+  /// このメソッドを実行すると、 `UIDevice` の
+  /// `endGeneratingDeviceOrientationNotifications()` が実行されます。
+  /// `beginGeneratingDeviceOrientationNotifications()` または
+  /// `endGeneratingDeviceOrientationNotifications()` を使う際は
+  /// 必ず対に実行するように注意してください。
   public func stop(completionHandler: @escaping ((Error?) -> Void)) {
     guard isRunning else {
       completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
@@ -353,12 +349,10 @@ public final class CameraVideoCapturer {
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。
 public struct CameraSettings: CustomStringConvertible {
-  /** デフォルトの設定。 */
+  /// デフォルトの設定。
   public static let `default` = CameraSettings()
 
-  /**
-     `CameraVideoCapturer` で使用する映像解像度を表すenumです。
-     */
+  /// `CameraVideoCapturer` で使用する映像解像度を表すenumです。
   public enum Resolution {
     /// QVGA, 320x240
     case qvga240p
@@ -408,22 +402,18 @@ public struct CameraSettings: CustomStringConvertible {
     }
   }
 
-  /**
-     希望する映像解像度。
-
-     可能な限りここで指定された値が尊重されますが、
-     例えばデバイス側が対応していない値が指定された場合などは、
-     ここで指定された値と異なる値が実際には使用されることがあります。
-     */
+  /// 希望する映像解像度。
+  ///
+  /// 可能な限りここで指定された値が尊重されますが、
+  /// 例えばデバイス側が対応していない値が指定された場合などは、
+  /// ここで指定された値と異なる値が実際には使用されることがあります。
   public var resolution: Resolution
 
-  /**
-     希望する映像フレームレート(Frames Per Second)。
-
-     可能な限りここで指定された値が尊重されますが、
-     例えばデバイス側が対応していない値が指定された場合などは、
-     ここで指定された値と異なる値が実際には使用されることがあります。
-     */
+  /// 希望する映像フレームレート(Frames Per Second)。
+  ///
+  /// 可能な限りここで指定された値が尊重されますが、
+  /// 例えばデバイス側が対応していない値が指定された場合などは、
+  /// ここで指定された値と異なる値が実際には使用されることがあります。
   public var frameRate: Int
 
   /// カメラの位置
@@ -437,14 +427,12 @@ public struct CameraSettings: CustomStringConvertible {
     "\(resolution), \(frameRate)fps"
   }
 
-  /**
-     初期化します。
-
-     - parameter resolution: 解像度
-     - parameter frameRate: フレームレート
-     - parameter position: 配信開始時のカメラの位置
-     - parameter isEnabled: カメラの起動の有無
-     */
+  /// 初期化します。
+  ///
+  /// - parameter resolution: 解像度
+  /// - parameter frameRate: フレームレート
+  /// - parameter position: 配信開始時のカメラの位置
+  /// - parameter isEnabled: カメラの起動の有無
   public init(
     resolution: Resolution = .hd720p, frameRate: Int = 30,
     position: AVCaptureDevice.Position = .front, isEnabled: Bool = true

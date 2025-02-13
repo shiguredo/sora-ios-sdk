@@ -6,9 +6,9 @@ enum ConnectionMonitor {
 
   var state: ConnectionState {
     switch self {
-    case let .signalingChannel(chan):
+    case .signalingChannel(let chan):
       return chan.state
-    case let .peerChannel(chan):
+    case .peerChannel(let chan):
       return ConnectionState(chan.state)
     }
   }
@@ -16,10 +16,10 @@ enum ConnectionMonitor {
   func disconnect() {
     let error = SoraError.connectionTimeout
     switch self {
-    case let .signalingChannel(chan):
+    case .signalingChannel(let chan):
       // タイムアウトはシグナリングのエラーと考える
       chan.disconnect(error: error, reason: .signalingFailure)
-    case let .peerChannel(chan):
+    case .peerChannel(let chan):
       // タイムアウトはシグナリングのエラーと考える
       chan.disconnect(error: error, reason: .signalingFailure)
     }

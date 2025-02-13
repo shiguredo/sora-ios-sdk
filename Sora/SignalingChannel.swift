@@ -130,11 +130,11 @@ class SignalingChannel {
       }
       // 採用された WebSocket 以外を切断してから webSocketChannelCandidates をクリアする
       weakSelf.webSocketChannelCandidates.removeAll { $0 == webSocketChannel }
-      weakSelf.webSocketChannelCandidates.forEach {
+      for candidate in weakSelf.webSocketChannelCandidates {
         Logger.debug(
           type: .signalingChannel,
-          message: "closeing connection to \(String(describing: $0.host))")
-        $0.disconnect(error: nil)
+          message: "closeing connection to \(String(describing: candidate.host))")
+        candidate.disconnect(error: nil)
       }
       weakSelf.webSocketChannelCandidates.removeAll()
 
@@ -250,7 +250,9 @@ class SignalingChannel {
 
       state = .disconnecting
       webSocketChannel?.disconnect(error: nil)
-      webSocketChannelCandidates.forEach { $0.disconnect(error: nil) }
+      for candidate in webSocketChannelCandidates {
+        candidate.disconnect(error: nil)
+      }
       state = .disconnected
 
       Logger.debug(type: .signalingChannel, message: "call onDisconnect")
@@ -314,17 +316,17 @@ class SignalingChannel {
     case .binary:
       Logger.debug(type: .signalingChannel, message: "discard binary message")
 
-    case let .text(text):
+    case .text(let text):
       guard let data = text.data(using: .utf8) else {
         Logger.error(type: .signalingChannel, message: "invalid encoding")
         return
       }
 
       switch Signaling.decode(data) {
-      case let .success(signaling):
+      case .success(let signaling):
         Logger.debug(type: .signalingChannel, message: "call onReceiveSignaling")
         internalHandlers.onReceive?(signaling)
-      case let .failure(error):
+      case .failure(let error):
         Logger.error(
           type: .signalingChannel,
           message: "decode failed (\(error.localizedDescription)) => \(text)")

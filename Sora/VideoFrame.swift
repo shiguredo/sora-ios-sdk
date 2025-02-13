@@ -42,15 +42,13 @@ public enum VideoFrame {
 
   // MARK: - 初期化
 
-  /**
-     初期化します。
-     指定されたサンプルバッファーからピクセル画像データを取得できなければ
-     `nil` を返します。
-
-     音声データを含むサンプルバッファーには対応していません。
-
-     - parameter sampleBuffer: ピクセルバッファーを含むサンプルバッファー
-     */
+  /// 初期化します。
+  /// 指定されたサンプルバッファーからピクセル画像データを取得できなければ
+  /// `nil` を返します。
+  ///
+  /// 音声データを含むサンプルバッファーには対応していません。
+  ///
+  /// - parameter sampleBuffer: ピクセルバッファーを含むサンプルバッファー
   public init?(from sampleBuffer: CMSampleBuffer) {
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
       return nil

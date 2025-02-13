@@ -88,9 +88,7 @@ public struct WebRTCConfiguration {
 
   // MARK: - インスタンスの生成
 
-  /**
-     初期化します。
-     */
+  /// 初期化します。
   public init() {
     iceServerInfos = []
   }

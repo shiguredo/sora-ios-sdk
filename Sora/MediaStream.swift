@@ -47,26 +47,20 @@ public protocol MediaStream: AnyObject {
 
   // MARK: - 映像と音声の可否
 
-  /**
-     映像の可否。
-     ``false`` をセットすると、サーバーへの映像の送受信を停止します。
-     ``true`` をセットすると送受信を再開します。
-     */
+  /// 映像の可否。
+  /// ``false`` をセットすると、サーバーへの映像の送受信を停止します。
+  /// ``true`` をセットすると送受信を再開します。
   var videoEnabled: Bool { get set }
 
-  /**
-     音声の可否。
-     ``false`` をセットすると、サーバーへの音声の送受信を停止します。
-     ``true`` をセットすると送受信を再開します。
-
-     サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
-     */
+  /// 音声の可否。
+  /// ``false`` をセットすると、サーバーへの音声の送受信を停止します。
+  /// ``true`` をセットすると送受信を再開します。
+  ///
+  /// サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
   var audioEnabled: Bool { get set }
 
-  /**
-     受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
-     このプロパティはロールがサブスクライバーの場合のみ有効です。
-     */
+  /// 受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
+  /// このプロパティはロールがサブスクライバーの場合のみ有効です。
   var remoteAudioVolume: Double? { get set }
 
   // MARK: 映像フレームの送信
@@ -77,22 +71,18 @@ public protocol MediaStream: AnyObject {
   /// 映像レンダラー。
   var videoRenderer: VideoRenderer? { get set }
 
-  /**
-     映像フレームをサーバーに送信します。
-     送信される映像フレームは映像フィルターを通して加工されます。
-     映像レンダラーがセットされていれば、加工後の映像フレームが
-     映像レンダラーによって描画されます。
-
-     - parameter videoFrame: 描画する映像フレーム。
-                             `nil` を指定すると空の映像フレームを送信します。
-     */
+  /// 映像フレームをサーバーに送信します。
+  /// 送信される映像フレームは映像フィルターを通して加工されます。
+  /// 映像レンダラーがセットされていれば、加工後の映像フレームが
+  /// 映像レンダラーによって描画されます。
+  ///
+  /// - parameter videoFrame: 描画する映像フレーム。
+  ///                         `nil` を指定すると空の映像フレームを送信します。
   func send(videoFrame: VideoFrame?)
 
   // MARK: 終了処理
 
-  /**
-     ストリームの終了処理を行います。
-     */
+  /// ストリームの終了処理を行います。
   func terminate()
 }
 
@@ -237,7 +227,7 @@ class BasicMediaStream: MediaStream {
       // フィルターを通す
       let frame = videoFilter?.filter(videoFrame: frame) ?? frame
       switch frame {
-      case let .native(capturer: capturer, frame: nativeFrame):
+      case .native(let capturer, let nativeFrame):
         // RTCVideoSource.capturer(_:didCapture:) の最初の引数は
         // 現在使われてないのでダミーでも可？ -> ダミーにしました
         nativeVideoSource?.capturer(

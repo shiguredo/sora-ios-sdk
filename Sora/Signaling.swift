@@ -55,7 +55,7 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
   }
 
   switch signaling {
-  case var .offer(message):
+  case .offer(var message):
     // TODO: if json.keys.contains("key") を if let に書き換えたい
     if let metadata = json["metadata"] {
       message.metadata = metadata
@@ -64,12 +64,12 @@ private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
       message.dataChannels = dataChannels
     }
     return .offer(message)
-  case var .push(message):
+  case .push(var message):
     if let data = json["data"] {
       message.data = data
     }
     return .push(message)
-  case var .notify(message):
+  case .notify(var message):
     if let authnMetadata = json["authn_metadata"] {
       message.authnMetadata = authnMetadata
     }
@@ -345,9 +345,7 @@ public struct SignalingConnect {
 /// "offer" シグナリングメッセージを表します。
 /// このメッセージは SDK が "connect" を送信した後に、サーバーから送信されます。
 public struct SignalingOffer {
-  /**
-     クライアントが更新すべき設定を表します。
-     */
+  /// クライアントが更新すべき設定を表します。
   public struct Configuration {
     /// ICE サーバーの情報のリスト
     public let iceServerInfos: [ICEServerInfo]
@@ -356,12 +354,10 @@ public struct SignalingOffer {
     public let iceTransportPolicy: ICETransportPolicy
   }
 
-  /**
-     RTP ペイロードに含まれる映像・音声エンコーディングの情報です。
-
-     次のリンクも参考にしてください。
-     https://w3c.github.io/webrtc-pc/#rtcrtpencodingparameters
-     */
+  /// RTP ペイロードに含まれる映像・音声エンコーディングの情報です。
+  ///
+  /// 次のリンクも参考にしてください。
+  /// https://w3c.github.io/webrtc-pc/#rtcrtpencodingparameters
   public struct Encoding {
     /// エンコーディングの有効・無効
     public let active: Bool
@@ -650,6 +646,8 @@ public struct SignalingDisconnect {
 
 // MARK: Codable
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension Signaling: Codable {
   enum MessageType: String {
@@ -702,27 +700,27 @@ extension Signaling: Codable {
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     switch self {
-    case let .connect(message):
+    case .connect(let message):
       try container.encode(MessageType.connect.rawValue, forKey: .type)
       try message.encode(to: encoder)
-    case let .offer(message):
+    case .offer(let message):
       try container.encode(MessageType.offer.rawValue, forKey: .type)
       try message.encode(to: encoder)
-    case let .answer(message):
+    case .answer(let message):
       try container.encode(MessageType.answer.rawValue, forKey: .type)
       try message.encode(to: encoder)
-    case let .candidate(message):
+    case .candidate(let message):
       try container.encode(MessageType.candidate.rawValue, forKey: .type)
       try message.encode(to: encoder)
-    case let .update(message):
+    case .update(let message):
       try container.encode(MessageType.update.rawValue, forKey: .type)
       try message.encode(to: encoder)
-    case let .reAnswer(message):
-      try container.encode(typeName(), forKey: .type)
+    case .reAnswer(let message):
+      try container.encode(MessageType.reAnswer.rawValue, forKey: .type)
       try message.encode(to: encoder)
     case .pong:
       try container.encode(MessageType.pong.rawValue, forKey: .type)
-    case let .disconnect(message):
+    case .disconnect(let message):
       try container.encode(MessageType.disconnect.rawValue, forKey: .type)
       try message.encode(to: encoder)
     default:
@@ -794,6 +792,8 @@ extension SignalingRole: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension SignalingConnect: Codable {
   enum CodingKeys: String, CodingKey {
@@ -1036,6 +1036,8 @@ extension SignalingOffer.Encoding: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension SignalingOffer: Codable {
   enum CodingKeys: String, CodingKey {
@@ -1188,6 +1190,8 @@ extension SignalingPush: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension SignalingNotify: Codable {
   enum CodingKeys: String, CodingKey {
@@ -1326,6 +1330,8 @@ extension SignalingDisconnect: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 extension SignalingSwitched: Decodable {
   enum CodingKeys: String, CodingKey {
     case ignore_disconnect_websocket
