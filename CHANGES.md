@@ -31,6 +31,9 @@
 - [CHANGE] フォーマッターを swift-format に移行する
   - SwiftFormat のための設定ファイルである .swiftformat と .swift-version を削除
   - フォーマット設定はデフォルトを採用したため、.swift-format は利用しない
+  - swift-format のデフォルト設定で、format lint を行った結果、警告が出た部分はすべて修正
+  - Signaling.swift に関しては、Lint ルールである `AlwaysUseLowerCamelCase` を無効化するためのコメントを追加
+    - シグナリングメッセージのキー名にスネークケースが採用されている項目があるため、この対応を行った
   - @zztkm
 - [UPDATE] GitHub Actions で format check をするのをやめる
   - @zztkm

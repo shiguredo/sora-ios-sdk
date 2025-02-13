@@ -650,6 +650,8 @@ public struct SignalingDisconnect {
 
 // MARK: Codable
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension Signaling: Codable {
   enum MessageType: String {
@@ -794,6 +796,8 @@ extension SignalingRole: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension SignalingConnect: Codable {
   enum CodingKeys: String, CodingKey {
@@ -1036,6 +1040,8 @@ extension SignalingOffer.Encoding: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension SignalingOffer: Codable {
   enum CodingKeys: String, CodingKey {
@@ -1188,6 +1194,8 @@ extension SignalingPush: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 /// :nodoc:
 extension SignalingNotify: Codable {
   enum CodingKeys: String, CodingKey {
@@ -1326,6 +1334,8 @@ extension SignalingDisconnect: Codable {
   }
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// JSON のキー名に合わせるためにスネークケースを使用しているので、ignore する
 extension SignalingSwitched: Decodable {
   enum CodingKeys: String, CodingKey {
     case ignore_disconnect_websocket
