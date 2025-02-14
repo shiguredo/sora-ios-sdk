@@ -35,16 +35,15 @@
   - JSON デコード処理に使う JSON のキー名を指定するための enum の定義については、`AlwaysUseLowerCamelCase` ルールを無効化するためのコメントを追加
     - シグナリングメッセージのキー名にスネークケースが採用されている項目があるため、この対応を行った
   - @zztkm
-- [UPDATE] GitHub Actions で format check をするのをやめる
-  - @zztkm
 - [UPDATE] SwiftLint の管理を CocoaPods から Swift Package Manager に移行する
   - @zztkm
-- [UPDATE] 開発用の依存管理を Swift Package Manager に移行したので Podfile.dev を削除する
-  - GitHub Actions でも Podfile.dev を利用していたので、利用しないように変更
+- [UPDATE] 開発用の依存管理を Swift Package Manager に移行したため Podfile.dev を削除する
+  - GitHub Actions で Podfile.dev を利用していたため、利用しないように変更
   - @zztkm
-- [UPDATE] GitHub Actions で Lint を行うコマンドを Makefile に変更
+- [UPDATE] GitHub Actions で Lint と Format Lint を行うコマンドを Makefile に変更
   - 今まで lint-format.sh で一括実行したところを Makefile に移行したので、GitHub Actions でも Makefile を利用するように変更
-  - lint-format.sh は利用しなくなったので削除
+  - @zztkm
+- [UPDATE] フォーマッターとリンターの実行を Makefile に移行したため、不要になった lint-format.sh を削除
   - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
