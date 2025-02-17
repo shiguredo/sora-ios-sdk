@@ -46,6 +46,7 @@
 - [UPDATE] フォーマッターとリンターの実行を Makefile に移行したため、不要になった lint-format.sh を削除
   - @zztkm
 - [UPDATE] 依存管理を CocoaPods から Swift Package Manager に移行したため Podfile を削除する
+  - GitHub Actions から CocoaPods 関連処理を削除
   - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
