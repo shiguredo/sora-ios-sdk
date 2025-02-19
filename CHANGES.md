@@ -11,7 +11,7 @@
 
 ## develop
 
-- [UPDATE] WebRTC m132.6834.5.7 に上げる
+- [UPDATE] WebRTC m133.6943.4.0 に上げる
   - @zztkm
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
   - @zztkm
