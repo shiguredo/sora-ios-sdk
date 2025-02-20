@@ -716,7 +716,7 @@ extension Signaling: Codable {
       try container.encode(MessageType.update.rawValue, forKey: .type)
       try message.encode(to: encoder)
     case .reAnswer(let message):
-      try container.encode(MessageType.reAnswer.rawValue, forKey: .type)
+      try container.encode(typeName(), forKey: .type)
       try message.encode(to: encoder)
     case .pong:
       try container.encode(MessageType.pong.rawValue, forKey: .type)
