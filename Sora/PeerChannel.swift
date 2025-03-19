@@ -927,6 +927,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       createAndSendAnswer(offer: offer)
+    // NOTE: シグナリング type: update は Sora 2022.1.0 で廃止された
+    // SDK では過去のバージョンとの互換性のために残しているが、いずれは削除する予定
     case .update(let update):
       if configuration.isMultistream {
         createAndSendUpdateAnswer(forOffer: update.sdp)
