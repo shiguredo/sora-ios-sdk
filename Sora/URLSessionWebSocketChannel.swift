@@ -84,6 +84,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       internalHandlers.onDisconnectWithError?(self, error)
     }
 
+    Logger.debug(type: .webSocketChannel, message: "[\(host)] canceling")
     webSocketTask?.cancel(with: .normalClosure, reason: nil)
     urlSession?.invalidateAndCancel()
 
@@ -201,9 +202,12 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
     reason: Data?
   ) {
+    Logger.debug(type: .webSocketChannel, message: "close frame received")
     guard !isClosing else {
       return
     }
+
+    Logger.debug(type: .webSocketChannel, message: "close frame received but not yet closing")
 
     var message = "[\(host)] \(#function) closeCode => \(closeCode)"
 
