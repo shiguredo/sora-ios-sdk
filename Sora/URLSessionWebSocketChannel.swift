@@ -195,13 +195,11 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
     reason: Data?
   ) {
-    Logger.debug(type: .webSocketChannel, message: "close frame received")
     guard !isClosing else {
       return
     }
 
-    Logger.debug(type: .webSocketChannel, message: "close frame received but not yet closing")
-
+    Logger.debug(type: .webSocketChannel, message: "close frame received")
     var message = "[\(host)] \(#function) closeCode => \(closeCode)"
 
     let reasonString = reason2string(reason: reason)
@@ -217,6 +215,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         statusCode: statusCode,
         reason: reasonString)
       disconnect(error: error)
+    } else {
+      // 正常処理の場合は error なしで disconnect する
+      disconnect(error: nil)
     }
   }
 
