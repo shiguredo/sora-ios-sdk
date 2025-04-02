@@ -98,10 +98,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     var nativeMessage: URLSessionWebSocketTask.Message!
     switch message {
     case .text(let text):
-      Logger.debug(type: .webSocketChannel, message: text)
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] sending text: \(text)]")
       nativeMessage = .string(text)
     case .binary(let data):
-      Logger.debug(type: .webSocketChannel, message: "[\(host)] \(data)")
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] sending binary: \(data)")
       nativeMessage = .data(data)
     }
     webSocketTask!.send(nativeMessage) { [weak self] error in
@@ -116,7 +116,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
       if let error {
         Logger.debug(
-          type: .webSocketChannel, message: "[\(weakSelf.host)] failed to send message")
+          type: .webSocketChannel,
+          message: "[\(weakSelf.host)] failed to send message: \(error.localizedDescription)")
         weakSelf.disconnect(error: error)
       }
     }
