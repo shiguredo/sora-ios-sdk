@@ -161,6 +161,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         weakSelf.receive()
 
       case .failure(let error):
+        // TODO(zztkm): Sora から切断されたときに、close frame を処理するメソッド呼び出しより前に failure が起こるのは想定外なので原因を調べる
+        // close frame 処理の参考: https://developer.apple.com/documentation/foundation/urlsessionwebsocketdelegate/3181188-urlsession
         // 余計なログを出力しないために、 disconnect の前にチェックする
         guard !weakSelf.isClosing else {
           return
