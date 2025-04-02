@@ -164,12 +164,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         }
 
         weakSelf.receive()
-
       case .failure(let error):
         // メッセージ受信に失敗以上のエラーは urlSession の didCompleteWithError で検知できるのでここではログを出して break する
         Logger.debug(
           type: .webSocketChannel, message: "[\(weakSelf.host)] message receive error: \(error)")
-        break
       }
     }
   }
