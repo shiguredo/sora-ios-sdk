@@ -69,6 +69,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     receive()
   }
 
+  /// WebSocket を切断するメソッド
+  ///
+  /// クライアントから切断する場合は error を nil にする
+  /// Sora から切断されたり、ネットワークエラーが起こったりした場合は error がセットされ、onDisconnectWithError コールバックが発火する
   func disconnect(error: Error?) {
     guard !isClosing else {
       return
@@ -162,6 +166,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         weakSelf.receive()
 
       case .failure(let error):
+        // メッセージ受信に失敗以上のエラーは urlSession の didCompleteWithError で検知できるのでここではログを出して break する
+        Logger.debug(
+          type: .webSocketChannel, message: "[\(weakSelf.host)] message receive error: \(error)")
         break
       }
     }
@@ -209,8 +216,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
     Logger.debug(type: .webSocketChannel, message: message)
 
-    // ステータスコード 1000 の場合でも error として上位層に伝搬させることにする (上位層が error 前提で組まれているためこのような方針にした)
-    // TODO(zztkm): 改修範囲が広くはなるが Sora から正常に Close Frame を受け取った場合は error とは区別して伝搬させたい
+    // 2025.2.x から、ステータスコード 1000 の場合でも error として上位層に伝搬させることにする (上位層が error 前提で組まれているためこのような方針にした)
+    // これは disconnect が error を渡さないと機能
+    // TODO(zztkm): 改修範囲が広くはなるが Sora から正常に Close Frame を受け取った場合は error とは区別して伝搬させる
     let statusCode = WebSocketStatusCode(rawValue: closeCode.rawValue)
     let error = SoraError.webSocketClosed(
       statusCode: statusCode,
@@ -272,6 +280,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
     // エラーが発生したときだけ disconnect 処理を投げる
+    // ここで検知されるエラーの原因例: インターネット切断、Sora がダウン
     guard let error = error else { return }
     Logger.debug(
       type: .webSocketChannel, message: "didCompleteWithError \(error.localizedDescription)")
