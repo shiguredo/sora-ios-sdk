@@ -271,4 +271,12 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     let credential = URLCredential(user: username, password: password, persistence: .forSession)
     completionHandler(.useCredential, credential)
   }
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    // エラーが発生したときだけ disconnect 処理を投げる
+    guard let error = error else { return }
+    Logger.debug(
+      type: .webSocketChannel, message: "didCompleteWithError \(error.localizedDescription)")
+    disconnect(error: error)
+  }
 }
