@@ -209,16 +209,13 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
     Logger.debug(type: .webSocketChannel, message: message)
 
-    if closeCode != .normalClosure {
-      let statusCode = WebSocketStatusCode(rawValue: closeCode.rawValue)
-      let error = SoraError.webSocketClosed(
-        statusCode: statusCode,
-        reason: reasonString)
-      disconnect(error: error)
-    } else {
-      // 正常処理の場合は error なしで disconnect する
-      disconnect(error: nil)
-    }
+    // ステータスコード 1000 の場合でも error として上位層に伝搬させることにする (上位層が error 前提で組まれているためこのような方針にした)
+    // TODO(zztkm): 改修範囲が広くはなるが Sora から正常に Close Frame を受け取った場合は error とは区別して伝搬させたい
+    let statusCode = WebSocketStatusCode(rawValue: closeCode.rawValue)
+    let error = SoraError.webSocketClosed(
+      statusCode: statusCode,
+      reason: reasonString)
+    disconnect(error: error)
   }
 
   func urlSession(
