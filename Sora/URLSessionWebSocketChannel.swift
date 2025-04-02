@@ -124,6 +124,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
   }
 
   func receive() {
+    Logger.debug(
+      type: .webSocketChannel, message: "[\(host)] \(String(describing: webSocketTask?.closeCode))]"
+    )
     if webSocketTask?.closeCode != URLSessionWebSocketTask.CloseCode.invalid {
       Logger.debug(type: .webSocketChannel, message: "[\(host)] already closed")
       return
