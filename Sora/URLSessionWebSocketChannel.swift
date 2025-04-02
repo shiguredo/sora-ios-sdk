@@ -124,6 +124,11 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
   }
 
   func receive() {
+    if webSocketTask?.closeCode != URLSessionWebSocketTask.CloseCode.invalid {
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] already closed")
+      return
+    }
+
     webSocketTask?.receive { [weak self] result in
       guard let weakSelf = self else {
         return
