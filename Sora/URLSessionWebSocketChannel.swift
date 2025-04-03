@@ -88,7 +88,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       internalHandlers.onDisconnectWithError?(self, error)
     }
 
-    Logger.debug(type: .webSocketChannel, message: "[\(host)] canceling")
     webSocketTask?.cancel(with: .normalClosure, reason: nil)
     urlSession?.invalidateAndCancel()
 
@@ -122,7 +121,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         Logger.debug(
           type: .webSocketChannel,
           message: "[\(weakSelf.host)] failed to send message: \(error.localizedDescription)")
-        weakSelf.disconnect(error: error)
+        weakSelf.disconnect(error: SoraError.webSocketError(error))
       }
     }
   }
@@ -282,6 +281,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     guard let error = error else { return }
     Logger.debug(
       type: .webSocketChannel, message: "didCompleteWithError \(error.localizedDescription)")
-    disconnect(error: error)
+    disconnect(error: SoraError.webSocketError(error))
   }
 }
