@@ -24,7 +24,7 @@
   - ドキュメントコメントに非推奨扱いの旨を追加する
   - @zztkm
 - [UPDATE] Sora から切断された場合の切断処理を改善する
-  - Sora から Close Frame を受けとった場合にステータスコードと理由を `MediaChannelHandlers.onDisconnect` で返すようになった
+  - Sora から Close Frame を受け取った場合にステータスコードと理由を `MediaChannelHandlers.onDisconnect` で返すようになった
   - ネットワークエラーや Sora がダウンした場合のエラー内容を `MediaChannelHandlers.onDisconnect` で返すようになった
   - いままでは WebSocket メッセージ受信失敗時のエラーである `The operation couldn’t be completed. Socket is not connected` というエラーしか返せていなかった状態が改善された
   - @zztkm
