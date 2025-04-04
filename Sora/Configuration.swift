@@ -81,9 +81,13 @@ public struct Configuration {
   public var role: Role
 
   /// マルチストリームの可否
-  ///
-  /// レガシーストリーム機能は 2025 年 6 月リリースの Sora にて廃止します
-  /// そのため、multistreamEnabled の使用は非推奨です
+  @available(
+    *, deprecated,
+    message: """
+      レガシーストリーム機能は 2025 年 6 月リリースの Sora にて廃止します。そのため multistreamEnabled の使用は非推奨です。
+      このプロパティは 2027 年中に廃止予定です。
+      """
+  )
   public var multistreamEnabled: Bool?
 
   /// :nodoc:
