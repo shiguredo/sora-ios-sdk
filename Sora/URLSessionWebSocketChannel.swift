@@ -101,7 +101,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     var nativeMessage: URLSessionWebSocketTask.Message!
     switch message {
     case .text(let text):
-      Logger.debug(type: .webSocketChannel, message: "[\(host)] sending text: \(text)]")
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] sending text: \(text)")
       nativeMessage = .string(text)
     case .binary(let data):
       Logger.debug(type: .webSocketChannel, message: "[\(host)] sending binary: \(data)")
