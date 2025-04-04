@@ -22,12 +22,14 @@
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
   - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
   - @zztkm
-- [UPDATE] Sora から切断された場合の切断処理を改善する
-  - Sora から Close Frame を受け取った場合にステータスコードと理由を `MediaChannelHandlers.onDisconnect` で返すようになった
-  - ネットワークエラーや Sora がダウンした場合のエラー内容を `MediaChannelHandlers.onDisconnect` で返すようになった
-  - いままでは WebSocket メッセージ受信失敗時のエラーである `The operation couldn’t be completed. Socket is not connected` というエラーしか返せていなかった状態が改善された
-  - @zztkm
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
+  - @zztkm
+- [FIX] Sora から切断された場合の切断処理を修正し適切なエラーを ``MediaChannelHandlers.onDisconnect`` で受け取ることができるようにする
+  - Sora iOS SDK 2025.1.1 までは Sora から Close Frame を受け取ったり、ネットワークエラーが起きたりしても、WebSocket メッセージ受信失敗に起因する ``SoraError.webSocketError`` しか受信できなかったが、以下の内容を受信できるようになった
+    - Sora から Close Frame を受け取った場合のステータスコードと理由
+      - ステータスコードが 1000 で正常に切断された場合も ``MediaChannelHandlers.onDisconnect`` で通知する
+    - ネットワークエラーや Sora がダウンした場合のエラー内容
+  - この変更によって ``MediaChannelHandlers.onDisconnect`` で受信するメッセージの内容は変わるが、コールバックが発火するタイミングに変更はない
   - @zztkm
 
 ### misc
