@@ -16,14 +16,13 @@
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
   - @zztkm
 - [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する破壊的変更
-  - Configration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
-  - Configration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除
-  - 結果、connect メッセージには Configration.multistreamEnabled に指定した値が送信される
-  - 今後は Configration.role に .sendrecv を指定している場合または Configration.spotlightEnabled に .enabled を指定している場合に Confgration.multistreamEnabled に false を指定すると接続エラーになる
+  - Configuration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
+  - Configuration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除
+  - 結果、connect メッセージには Configuration.multistreamEnabled に指定した値が送信される
+  - 今後は Configuration.role に .sendrecv を指定している場合または Configuration.spotlightEnabled に .enabled を指定している場合に Configuration.multistreamEnabled に false を指定すると接続エラーになる
   - @zztkm
-- [UPDATE] multistreamEnabled を非推奨扱いにする
-  - `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
-  - ドキュメントコメントに非推奨扱いの旨を追加する
+- [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
+  - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
   - @zztkm
 
 ### misc
@@ -1036,7 +1035,7 @@
   - `SignalingSnapshotMessage`
   - `SignalingUpdateOfferMessage`
   - `Snapshot`
-  - `WebRTCConfiuration`
+  - `WebRTCConfiguration`
   - `WebRTCInfo`
   - @szktty
 - [ADD] 次の列挙体を追加する
