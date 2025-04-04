@@ -214,7 +214,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     Logger.debug(type: .webSocketChannel, message: message)
 
     // 2025.2.x から、ステータスコード 1000 の場合でも error として上位層に伝搬させることにする (上位層が error 前提で組まれているためこのような方針にした)
-    // これは disconnect が error を渡さないと機能
     // TODO(zztkm): 改修範囲が広くはなるが Sora から正常に Close Frame を受け取った場合は error とは区別して伝搬させる
     let statusCode = WebSocketStatusCode(rawValue: closeCode.rawValue)
     let error = SoraError.webSocketClosed(
