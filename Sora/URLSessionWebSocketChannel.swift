@@ -69,6 +69,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     receive()
   }
 
+  /// WebSocket を切断するメソッド
+  ///
+  /// クライアントから切断する場合は error を nil にする
+  /// Sora から切断されたり、ネットワークエラーが起こったりした場合は error がセットされ、onDisconnectWithError コールバックが発火する
   func disconnect(error: Error?) {
     guard !isClosing else {
       return
@@ -97,10 +101,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     var nativeMessage: URLSessionWebSocketTask.Message!
     switch message {
     case .text(let text):
-      Logger.debug(type: .webSocketChannel, message: text)
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] sending text: \(text)")
       nativeMessage = .string(text)
     case .binary(let data):
-      Logger.debug(type: .webSocketChannel, message: "[\(host)] \(data)")
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] sending binary: \(data)")
       nativeMessage = .data(data)
     }
     webSocketTask!.send(nativeMessage) { [weak self] error in
@@ -115,8 +119,9 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
       if let error {
         Logger.debug(
-          type: .webSocketChannel, message: "[\(weakSelf.host)] failed to send message")
-        weakSelf.disconnect(error: error)
+          type: .webSocketChannel,
+          message: "[\(weakSelf.host)] failed to send message: \(error.localizedDescription)")
+        weakSelf.disconnect(error: SoraError.webSocketError(error))
       }
     }
   }
@@ -158,17 +163,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         }
 
         weakSelf.receive()
-
       case .failure(let error):
-        // 余計なログを出力しないために、 disconnect の前にチェックする
-        guard !weakSelf.isClosing else {
-          return
-        }
-
+        // メッセージ受信に失敗以上のエラーは urlSession の didCompleteWithError で検知できるのでここではログを出して break する
         Logger.debug(
-          type: .webSocketChannel,
-          message: "[\(weakSelf.host)] failed => \(error.localizedDescription)")
-        weakSelf.disconnect(error: SoraError.webSocketError(error))
+          type: .webSocketChannel, message: "[\(weakSelf.host)] message receive error: \(error)")
       }
     }
   }
@@ -205,6 +203,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       return
     }
 
+    Logger.debug(type: .webSocketChannel, message: "close frame received")
     var message = "[\(host)] \(#function) closeCode => \(closeCode)"
 
     let reasonString = reason2string(reason: reason)
@@ -214,13 +213,13 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
     Logger.debug(type: .webSocketChannel, message: message)
 
-    if closeCode != .normalClosure {
-      let statusCode = WebSocketStatusCode(rawValue: closeCode.rawValue)
-      let error = SoraError.webSocketClosed(
-        statusCode: statusCode,
-        reason: reasonString)
-      disconnect(error: error)
-    }
+    // 2025.2.x から、ステータスコード 1000 の場合でも error として上位層に伝搬させることにする (上位層が error 前提で組まれているためこのような方針にした)
+    // TODO(zztkm): 改修範囲が広くはなるが Sora から正常に Close Frame を受け取った場合は error とは区別して伝搬させる
+    let statusCode = WebSocketStatusCode(rawValue: closeCode.rawValue)
+    let error = SoraError.webSocketClosed(
+      statusCode: statusCode,
+      reason: reasonString)
+    disconnect(error: error)
   }
 
   func urlSession(
@@ -273,5 +272,14 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
     let credential = URLCredential(user: username, password: password, persistence: .forSession)
     completionHandler(.useCredential, credential)
+  }
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    // エラーが発生したときだけ disconnect 処理を投げる
+    // ここで検知されるエラーの原因例: インターネット切断、Sora がダウン
+    guard let error = error else { return }
+    Logger.debug(
+      type: .webSocketChannel, message: "didCompleteWithError \(error.localizedDescription)")
+    disconnect(error: SoraError.webSocketError(error))
   }
 }
