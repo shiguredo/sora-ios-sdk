@@ -24,6 +24,8 @@
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
   - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
   - @zztkm
+- [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
+  - @zztkm
 
 ### misc
 
@@ -43,8 +45,6 @@
   - 今まで lint-format.sh で一括実行したところを Makefile に移行したので、GitHub Actions でも Makefile を利用するように変更
   - @zztkm
 - [UPDATE] フォーマッターとリンターの実行を Makefile に移行したため、不要になった lint-format.sh を削除
-  - @zztkm
-- [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
   - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
