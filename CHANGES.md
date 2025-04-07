@@ -11,20 +11,27 @@
 
 ## develop
 
-- [UPDATE] WebRTC m132.6834.5.7 に上げる
-  - @zztkm
-- [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
-  - @zztkm
 - [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する破壊的変更
   - Configuration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
   - Configuration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除
   - 結果、connect メッセージには Configuration.multistreamEnabled に指定した値が送信される
   - 今後は Configuration.role に .sendrecv を指定している場合または Configuration.spotlightEnabled に .enabled を指定している場合に Configuration.multistreamEnabled に false を指定すると接続エラーになる
   - @zztkm
+- [UPDATE] WebRTC m132.6834.5.7 に上げる
+  - @zztkm
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
   - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
   - @zztkm
 - [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
+  - @zztkm
+- [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
+  - @zztkm
+- [FIX] Sora から切断された場合の切断処理を修正し適切なエラーを ``MediaChannelHandlers.onDisconnect`` で受け取ることができるようにする
+  - Sora iOS SDK 2025.1.1 までは Sora から Close Frame を受け取ったり、ネットワークエラーが起きたりしても、WebSocket メッセージ受信失敗に起因する ``SoraError.webSocketError`` しか受信できなかったが、以下の内容を受信できるようになった
+    - Sora から Close Frame を受け取った場合のステータスコードと理由
+      - ステータスコードが 1000 で正常に切断された場合も ``MediaChannelHandlers.onDisconnect`` で通知する
+    - ネットワークエラーや Sora がダウンした場合のエラー内容
+  - この変更によって ``MediaChannelHandlers.onDisconnect`` で受信するメッセージの内容は変わるが、コールバックが発火するタイミングに変更はない
   - @zztkm
 
 ### misc

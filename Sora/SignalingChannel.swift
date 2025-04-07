@@ -146,7 +146,8 @@ class SignalingChannel {
       }
     }
 
-    // エラー発生時
+    // WebSocket 切断時
+    // 正常に切断したときも error は nil にならない
     ws.internalHandlers.onDisconnectWithError = { [weak self] ws, error in
       guard let weakSelf = self else {
         return
