@@ -44,6 +44,8 @@
   - @zztkm
 - [UPDATE] フォーマッターとリンターの実行を Makefile に移行したため、不要になった lint-format.sh を削除
   - @zztkm
+- [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
   - @zztkm
