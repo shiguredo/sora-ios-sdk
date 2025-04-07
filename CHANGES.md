@@ -22,6 +22,8 @@
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
   - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
   - @zztkm
+- [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
+  - @zztkm
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
   - @zztkm
 - [FIX] Sora から切断された場合の切断処理を修正し適切なエラーを ``MediaChannelHandlers.onDisconnect`` で受け取ることができるようにする
