@@ -30,7 +30,7 @@ public final class MediaChannelHandlers {
   public var onDisconnect: ((Error?) -> Void)?
 
   /// 接続解除時に呼ばれるクロージャー
-  public var onDisconnect: ((SoraCloseEvent) -> Void)?
+  public var onClose: ((SoraCloseEvent) -> Void)?
 
   /// ストリームが追加されたときに呼ばれるクロージャー
   public var onAddStream: ((MediaStream) -> Void)?
