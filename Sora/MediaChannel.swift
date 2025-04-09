@@ -22,7 +22,15 @@ public final class MediaChannelHandlers {
   public var onConnect: ((Error?) -> Void)?
 
   /// 接続解除時に呼ばれるクロージャー
+  @available(
+    *, deprecated,
+    message:
+      "onDisconnect: ((SoraCloseEvent) -> Void)? に移行してください。この onDisconnect: ((Error?) -> Void)? は、2027 年中に削除予定です。"
+  )
   public var onDisconnect: ((Error?) -> Void)?
+
+  /// 接続解除時に呼ばれるクロージャー
+  public var onDisconnect: ((SoraCloseEvent) -> Void)?
 
   /// ストリームが追加されたときに呼ばれるクロージャー
   public var onAddStream: ((MediaStream) -> Void)?
