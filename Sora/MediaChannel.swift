@@ -426,7 +426,8 @@ public final class MediaChannel {
         if let soraError = error as? SoraError {
           switch soraError {
           case .webSocketClosed(let code, let reason):
-            return SoraCloseEvent.ok(code: code, reason: reason)
+            // 基本的に reason が nil なるケースはないはずだが、nil の場合は空文字列とする
+            return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
           default:
             return SoraCloseEvent.error(error)
           }
