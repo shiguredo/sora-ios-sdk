@@ -388,7 +388,7 @@ public final class MediaChannel {
     internalDisconnect(error: error, reason: .user)
   }
 
-  func internalDisconnect(error: Error?, reason: DisconnectReason, ) {
+  func internalDisconnect(error: Error?, reason: DisconnectReason) {
     switch state {
     case .disconnecting, .disconnected:
       break
