@@ -388,7 +388,7 @@ public final class MediaChannel {
     internalDisconnect(error: error, reason: .user)
   }
 
-  func internalDisconnect(error: Error?, reason: DisconnectReason) {
+  func internalDisconnect(error: Error?, reason: DisconnectReason, ) {
     switch state {
     case .disconnecting, .disconnected:
       break
@@ -414,11 +414,28 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "call onDisconnect")
       internalHandlers.onDisconnectLegacy?(error)
       handlers.onDisconnectLegacy?(error)
-      if let error {
-        handlers.onDisconnect?(SoraCloseEvent.error(error))
-      } else {
-        handlers.onDisconnect?(SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR"))
-      }
+
+      // クロージャを用いて、エラーの内容に応じた SoraCloseEvent を生成
+      // error が nil の場合はクライアントからの正常終了として .ok にする
+      // error が SoraError の場合はケースに応じて .ok と .error を切り替える
+      // error が SoraError の場合はクライアントが disconnect に渡した error のため、そのまま .error とする
+      let disconnectEvent: SoraCloseEvent = {
+        guard let error = error else {
+          return SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")
+        }
+        if let soraError = error as? SoraError {
+          switch soraError {
+          case .webSocketClosed(let code, let reason):
+            return SoraCloseEvent.ok(code: code, reason: reason)
+          default:
+            return SoraCloseEvent.error(error)
+          }
+        } else {
+          return SoraCloseEvent.error(error)
+        }
+      }()
+
+      handlers.onDisconnect?(disconnectEvent)
     }
   }
 
