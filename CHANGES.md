@@ -27,6 +27,8 @@
   - @zztkm
 - [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
   - @zztkm
+- [UPDATE] Sora との接続を終了した際のイベント情報を表す、SoraCloseEvent を追加する
+  - @zztkm
 - [UPDATE] `MediaChannelHandlers` に `onDisconnect: ((SoraCloseEvent) -> Void)?` を追加する
   - @zztkm
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
