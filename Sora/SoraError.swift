@@ -12,7 +12,10 @@ public enum SoraError: Error {
   /// 何らかの処理の実行中で、指定された処理を実行できないことを示します。
   case connectionBusy(reason: String)
 
-  /// ``WebSocketChannel`` が正常ではない状態で接続解除されたことを示します。
+  /// ``WebSocketChannel`` が接続解除されたことを示します。
+  /// 導入当初は Sora から受信したクローズフレームのステータスコードが 1000 以外のときにこの Error を返していたが
+  /// 2025.2.0 から、ステータスコードが 1000 のときも onDisconnect に切断理由を返すためにこの Error を使うようになった
+  /// また、この Error は onDisconnect では Error ではなく、SoraCloseEvent.ok(code, reason) としてユーザーに通知される
   case webSocketClosed(statusCode: WebSocketStatusCode, reason: String?)
 
   /// ``WebSocketChannel`` で発生したエラー
