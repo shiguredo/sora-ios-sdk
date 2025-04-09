@@ -53,6 +53,10 @@
   - @zztkm
 - [UPDATE] フォーマッターとリンターの実行を Makefile に移行したため、不要になった lint-format.sh を削除
   - @zztkm
+- [UPDATE] GitHub Actions のビルド環境を更新する
+  - Xcode の version を 16.3 に変更
+  - SDK を iOS 18.4 に変更
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
   - @zztkm
