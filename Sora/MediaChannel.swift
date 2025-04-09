@@ -1,6 +1,21 @@
 import Foundation
 import WebRTC
 
+/// SoraCloseEvent は、Sora の接続が切断された際のイベント情報を表します。
+///
+/// 接続が正常に切断された場合は、`.ok(code, reason)` ケースが使用され、
+/// 異常な切断やエラー発生時は、`.error(Error)` ケースが使用されます。
+public enum SoraCloseEvent {
+  /// 正常な接続切断を示します。
+  /// - Parameters:
+  ///   - code: 接続切断時に返されるコード。例えば、WebSocket の標準切断コード（例: 1000 等）など。
+  ///   - reason: 接続が正常に切断された理由の説明文字列。
+  case ok(code: Int, reason: String)
+  /// 異常な切断またはエラーが発生して切断した場合に利用されるケースです。
+  /// - Parameter error: エラー情報。
+  case error(Error)
+}
+
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
   /// 接続成功時に呼ばれるクロージャー
