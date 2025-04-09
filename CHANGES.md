@@ -17,7 +17,7 @@
   - 結果、connect メッセージには Configuration.multistreamEnabled に指定した値が送信される
   - 今後は Configuration.role に .sendrecv を指定している場合または Configuration.spotlightEnabled に .enabled を指定している場合に Configuration.multistreamEnabled に false を指定すると接続エラーになる
   - @zztkm
-- [CHANGE] `MediaCHannelHandlers` の `onDisconnect: ((Error?) -> Void)?` を `onDisconnectLegacy` という名前に変更し、非推奨にする
+- [CHANGE] `MediaChannelHandlers` の `onDisconnect: ((Error?) -> Void)?` を `onDisconnectLegacy` という名前に変更し、非推奨にする
   - `onDisconnect: ((SoraCloseEvent) -> Void)?` に移行するため、名前を変更した
   - @zztkm
 - [UPDATE] WebRTC m132.6834.5.7 に上げる
