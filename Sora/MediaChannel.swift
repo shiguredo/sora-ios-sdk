@@ -25,12 +25,12 @@ public final class MediaChannelHandlers {
   @available(
     *, deprecated,
     message:
-      "onDisconnect: ((SoraCloseEvent) -> Void)? に移行してください。この onDisconnect: ((Error?) -> Void)? は、2027 年中に削除予定です。"
+      "onDisconnect: ((SoraCloseEvent) -> Void)? に移行してください。onDisconnectLegacy: ((Error?) -> Void)? は、2027 年中に削除予定です。"
   )
-  public var onDisconnect: ((Error?) -> Void)?
+  public var onDisconnectLegacy: ((Error?) -> Void)?
 
   /// 接続解除時に呼ばれるクロージャー
-  public var onClose: ((SoraCloseEvent) -> Void)?
+  public var onDisconnect: ((SoraCloseEvent) -> Void)?
 
   /// ストリームが追加されたときに呼ばれるクロージャー
   public var onAddStream: ((MediaStream) -> Void)?
@@ -412,8 +412,8 @@ public final class MediaChannel {
       state = .disconnected
 
       Logger.debug(type: .mediaChannel, message: "call onDisconnect")
-      internalHandlers.onDisconnect?(error)
-      handlers.onDisconnect?(error)
+      internalHandlers.onDisconnectLegacy?(error)
+      handlers.onDisconnectLegacy?(error)
     }
   }
 
