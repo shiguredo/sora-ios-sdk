@@ -414,6 +414,11 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "call onDisconnect")
       internalHandlers.onDisconnectLegacy?(error)
       handlers.onDisconnectLegacy?(error)
+      if let error {
+        handlers.onDisconnect?(SoraCloseEvent.error(error))
+      } else {
+        handlers.onDisconnect?(SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR"))
+      }
     }
   }
 
