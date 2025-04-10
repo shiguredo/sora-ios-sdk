@@ -17,12 +17,19 @@
   - 結果、connect メッセージには Configuration.multistreamEnabled に指定した値が送信される
   - 今後は Configuration.role に .sendrecv を指定している場合または Configuration.spotlightEnabled に .enabled を指定している場合に Configuration.multistreamEnabled に false を指定すると接続エラーになる
   - @zztkm
+- [CHANGE] `MediaChannelHandlers` の `onDisconnect: ((Error?) -> Void)?` を `onDisconnectLegacy` という名前に変更し、非推奨にする
+  - `onDisconnect: ((SoraCloseEvent) -> Void)?` に移行するため、名前を変更した
+  - @zztkm
 - [UPDATE] WebRTC m132.6834.5.7 に上げる
   - @zztkm
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
   - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
   - @zztkm
 - [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
+  - @zztkm
+- [UPDATE] Sora との接続を終了した際のイベント情報を表す、SoraCloseEvent を追加する
+  - @zztkm
+- [UPDATE] `MediaChannelHandlers` に `onDisconnect: ((SoraCloseEvent) -> Void)?` を追加する
   - @zztkm
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
   - @zztkm

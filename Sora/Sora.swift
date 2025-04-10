@@ -130,7 +130,7 @@ public final class Sora {
     ) -> Void
   ) -> ConnectionTask {
     let mediaChan = MediaChannel(manager: self, configuration: configuration)
-    mediaChan.internalHandlers.onDisconnect = { [weak self, weak mediaChan] error in
+    mediaChan.internalHandlers.onDisconnectLegacy = { [weak self, weak mediaChan] error in
       guard let weakSelf = self else {
         return
       }

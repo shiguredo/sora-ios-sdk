@@ -1,13 +1,36 @@
 import Foundation
 import WebRTC
 
+/// SoraCloseEvent は、Sora の接続が切断された際のイベント情報を表します。
+///
+/// 接続が正常に切断された場合は、`.ok(code, reason)` ケースが使用され、
+/// 異常な切断やエラー発生時は、`.error(Error)` ケースが使用されます。
+public enum SoraCloseEvent {
+  /// 正常な接続切断を示します。
+  /// - Parameters:
+  ///   - code: 接続切断時に返されるコード。例えば、WebSocket の標準切断コード（例: 1000 等）など。
+  ///   - reason: 接続が正常に切断された理由の説明文字列。
+  case ok(code: Int, reason: String)
+  /// 異常な切断またはエラーが発生して切断した場合に利用されるケースです。
+  /// - Parameter error: エラー情報。
+  case error(Error)
+}
+
 /// メディアチャネルのイベントハンドラです。
 public final class MediaChannelHandlers {
   /// 接続成功時に呼ばれるクロージャー
   public var onConnect: ((Error?) -> Void)?
 
   /// 接続解除時に呼ばれるクロージャー
-  public var onDisconnect: ((Error?) -> Void)?
+  @available(
+    *, deprecated,
+    message:
+      "onDisconnect: ((SoraCloseEvent) -> Void)? に移行してください。onDisconnectLegacy: ((Error?) -> Void)? は、2027 年中に削除予定です。"
+  )
+  public var onDisconnectLegacy: ((Error?) -> Void)?
+
+  /// 接続解除時に呼ばれるクロージャー
+  public var onDisconnect: ((SoraCloseEvent) -> Void)?
 
   /// ストリームが追加されたときに呼ばれるクロージャー
   public var onAddStream: ((MediaStream) -> Void)?
@@ -389,8 +412,31 @@ public final class MediaChannel {
       state = .disconnected
 
       Logger.debug(type: .mediaChannel, message: "call onDisconnect")
-      internalHandlers.onDisconnect?(error)
-      handlers.onDisconnect?(error)
+      internalHandlers.onDisconnectLegacy?(error)
+      handlers.onDisconnectLegacy?(error)
+
+      // クロージャを用いて、エラーの内容に応じた SoraCloseEvent を生成
+      // error が nil の場合はクライアントからの正常終了として .ok にする
+      // error が SoraError の場合はケースに応じて .ok と .error を切り替える
+      // error が SoraError の場合はクライアントが disconnect に渡した error のため、そのまま .error とする
+      let disconnectEvent: SoraCloseEvent = {
+        guard let error = error else {
+          return SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")
+        }
+        if let soraError = error as? SoraError {
+          switch soraError {
+          case .webSocketClosed(let code, let reason):
+            // 基本的に reason が nil なるケースはないはずだが、nil の場合は空文字列とする
+            return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
+          default:
+            return SoraCloseEvent.error(error)
+          }
+        } else {
+          return SoraCloseEvent.error(error)
+        }
+      }()
+
+      handlers.onDisconnect?(disconnectEvent)
     }
   }
 
