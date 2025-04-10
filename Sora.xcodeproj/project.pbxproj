@@ -138,13 +138,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		9182018E1D58667600178E2B /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		91BDC1D31F6285D10084DC3A /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
@@ -159,7 +152,6 @@
 			children = (
 				91C7B08B1D54636A006F5FA2 /* Sora */,
 				91C7B0971D54636A006F5FA2 /* SoraTests */,
-				9182018E1D58667600178E2B /* Frameworks */,
 				91C7B08A1D54636A006F5FA2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -246,8 +238,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 91C7B09D1D54636A006F5FA2 /* Build configuration list for PBXNativeTarget "Sora" */;
 			buildPhases = (
-				913259AC274B71860018787C /* Run SwiftFormat */,
-				916E79682744E9B40075C37E /* Run SwiftLint */,
 				91C7B0841D54636A006F5FA2 /* Sources */,
 				91C7B0851D54636A006F5FA2 /* Frameworks */,
 				91C7B0861D54636A006F5FA2 /* Headers */,
@@ -340,45 +330,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		913259AC274B71860018787C /* Run SwiftFormat */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Run SwiftFormat";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if which \"${PODS_ROOT}/SwiftFormat/CommandLineTool/swiftformat\" >/dev/null; then\n  #\"${PODS_ROOT}/SwiftFormat/CommandLineTool/swiftformat\" \"$SRCROOT\"\n  echo\nelse\n  echo \"warning: SwiftFormat not installed, download from https://github.com/nicklockwood/SwiftFormat\"\nfi\n";
-		};
-		916E79682744E9B40075C37E /* Run SwiftLint */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Run SwiftLint";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if which \"${PODS_ROOT}/SwiftLint/swiftlint\" >/dev/null; then\n    ${PODS_ROOT}/SwiftLint/swiftlint --fix\n    ${PODS_ROOT}/SwiftLint/swiftlint\nelse\n    echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		91C7B0841D54636A006F5FA2 /* Sources */ = {
