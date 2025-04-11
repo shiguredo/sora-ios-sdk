@@ -994,7 +994,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 処理は不要
       break
     case .close(let close):
-      Logger.debug(type: .peerChannel, message: "close received: \(close.code), \(close.reason)")
+      // dataChannelSignalngClose に格納した値は basicDisconnect で利用される
       dataChannelSignalngClose = (code: close.code, reason: close.reason)
     default:
       Logger.error(
@@ -1053,8 +1053,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     signalingChannel.disconnect(error: error, reason: reason)
 
     Logger.debug(type: .peerChannel, message: "call onDisconnect")
-    /// dataChannelSignalngClose が nil でない、かつ reason が DisconnectReason.dataChannelClosed の場合は
-    /// SoraError.dataChannelClosed でラップして onDisconnect にわたす
+    /// DataChannel がクローズされ (reason == .dataChannelClosed)、
+    /// かつ事前に Sora から "close" メッセージを受信していた場合 (dataChannelSignalngClose != nil)、
+    /// MediaChannel にそのメッセージ内容を dataChannelClosed として通知する
     if let dataChannelSignalngClose = dataChannelSignalngClose,
       case .dataChannelClosed = reason
     {
