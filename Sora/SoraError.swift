@@ -39,7 +39,11 @@ public enum SoraError: Error {
   /// メッセージング機能のエラー
   case messagingError(reason: String)
 
-  /// DataChannel 経由のシグナリングで type: close を受け取った場合の切断を示します
+  /// DataChannel 経由のシグナリングで type: close を受信し、接続が解除されたことを示します。
+  ///
+  /// ラベルの説明
+  /// - statusCode: ステータスコード
+  /// - reason: 切断理由
   case dataChannelClosed(statusCode: Int, reason: String)
 }
 

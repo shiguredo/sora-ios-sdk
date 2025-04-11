@@ -1066,6 +1066,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     } else {
       internalHandlers.onDisconnect?(error, reason)
     }
+    // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
+    dataChannelSignalingClose = nil
 
     if onConnect != nil {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
