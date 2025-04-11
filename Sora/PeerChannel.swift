@@ -1054,7 +1054,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "call onDisconnect")
     /// DataChannel がクローズされ (reason == .dataChannelClosed)、
-    /// かつ事前に Sora から "close" メッセージを受信していた場合 (dataChannelSignalngClose != nil)、
+    /// かつ事前に Sora から "close" メッセージを受信していた場合 (dataChannelSignalingClose != nil)、
     /// MediaChannel にそのメッセージ内容を dataChannelClosed として通知する
     if let dataChannelSignalingClose = dataChannelSignalingClose,
       case .dataChannelClosed = reason
