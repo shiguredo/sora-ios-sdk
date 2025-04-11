@@ -428,6 +428,8 @@ public final class MediaChannel {
           case .webSocketClosed(let code, let reason):
             // 基本的に reason が nil なるケースはないはずだが、nil の場合は空文字列とする
             return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
+          case .dataChannelClosed(let code, let reason):
+            return SoraCloseEvent.ok(code: code, reason: reason)
           default:
             return SoraCloseEvent.error(error)
           }

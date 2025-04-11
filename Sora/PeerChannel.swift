@@ -146,6 +146,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private var connectedAtLeastOnce: Bool = false
 
+  /// DataChannel シグナリングで type: close メッセージを受信したときにメッセージ内容を保存するための変数
+  private var dataChannelSignalngClose: (code: Int, reason: String)?
+
   // type: redirect のために SDP を保存しておく
   // 値が設定されている場合2回目の type: connect メッセージ送信とみなし、 redirect 中であると判断する
   private var sdp: String?
@@ -990,6 +993,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .push, .notify:
       // 処理は不要
       break
+    case .close(let close):
+      Logger.debug(type: .peerChannel, message: "close received: \(close.code), \(close.reason)")
+      dataChannelSignalngClose = (code: close.code, reason: close.reason)
     default:
       Logger.error(
         type: .peerChannel, message: "unexpected signaling type => \(signaling.typeName())")
@@ -1047,7 +1053,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     signalingChannel.disconnect(error: error, reason: reason)
 
     Logger.debug(type: .peerChannel, message: "call onDisconnect")
-    internalHandlers.onDisconnect?(error, reason)
+    /// dataChannelSignalngClose が nil でない、かつ reason が DisconnectReason.dataChannelClosed の場合は
+    /// SoraError.dataChannelClosed でラップして onDisconnect にわたす
+    if let dataChannelSignalngClose = dataChannelSignalngClose,
+      case .dataChannelClosed = reason
+    {
+      internalHandlers.onDisconnect?(
+        SoraError.dataChannelClosed(
+          statusCode: dataChannelSignalngClose.code, reason: dataChannelSignalngClose.reason),
+        reason)
+    } else {
+      internalHandlers.onDisconnect?(error, reason)
+    }
 
     if onConnect != nil {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
