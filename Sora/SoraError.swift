@@ -38,6 +38,11 @@ public enum SoraError: Error {
 
   /// メッセージング機能のエラー
   case messagingError(reason: String)
+
+  /// DataChannel 経由のシグナリングで type: close を受信し、接続が解除されたことを示します。
+  /// - statusCode: ステータスコード
+  /// - reason: 切断理由
+  case dataChannelClosed(statusCode: Int, reason: String)
 }
 
 /// :nodoc:
@@ -73,6 +78,8 @@ extension SoraError: LocalizedError {
       return "Camera error: \(reason)"
     case .messagingError(let reason):
       return "Messaging error: \(reason)"
+    case .dataChannelClosed(let statusCode, let reason):
+      return "DataChannel is closed (\(statusCode) \(reason))"
     }
   }
 }

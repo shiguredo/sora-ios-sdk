@@ -416,7 +416,7 @@ public final class MediaChannel {
       handlers.onDisconnectLegacy?(error)
 
       // クロージャを用いて、エラーの内容に応じた SoraCloseEvent を生成
-      // error が nil の場合はクライアントからの正常終了として .ok にする
+      // error が nil の場合はクライアントからの正常終了 or DataChannel のみのシグナリング利用時の正常終了として .ok にする
       // error が SoraError の場合はケースに応じて .ok と .error を切り替える
       // error が SoraError の場合はクライアントが disconnect に渡した error のため、そのまま .error とする
       let disconnectEvent: SoraCloseEvent = {
@@ -428,6 +428,8 @@ public final class MediaChannel {
           case .webSocketClosed(let code, let reason):
             // 基本的に reason が nil なるケースはないはずだが、nil の場合は空文字列とする
             return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
+          case .dataChannelClosed(let code, let reason):
+            return SoraCloseEvent.ok(code: code, reason: reason)
           default:
             return SoraCloseEvent.error(error)
           }
