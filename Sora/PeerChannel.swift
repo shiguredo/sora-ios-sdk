@@ -985,7 +985,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   func handleSignalingOverDataChannel(_ signaling: Signaling) {
     Logger.debug(
-      type: .mediaStream,
+      type: .peerChannel,
       message: "handle signaling over DataChannel => \(signaling.typeName())")
     switch signaling {
     case .reOffer(let reOffer):
@@ -1050,30 +1050,32 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     nativeChannel?.close()
 
-    signalingChannel.disconnect(error: error, reason: reason)
-
-    Logger.debug(type: .peerChannel, message: "call onDisconnect")
-    /// DataChannel がクローズされ (reason == .dataChannelClosed)、
-    /// かつ事前に Sora から "close" メッセージを受信していた場合 (dataChannelSignalingClose != nil)、
-    /// MediaChannel にそのメッセージ内容を dataChannelClosed として通知する
+    var error = error
+    // DataChannel が正常にクローズされ (reason == .dataChannelClosed)、
+    // かつ事前に Sora から "close" メッセージを受信していた場合 (dataChannelSignalingClose != nil)、
+    // error を SoraError.dataChannelClosed にする
     if let dataChannelSignalingClose = dataChannelSignalingClose,
       case .dataChannelClosed = reason
     {
-      internalHandlers.onDisconnect?(
-        SoraError.dataChannelClosed(
-          statusCode: dataChannelSignalingClose.code, reason: dataChannelSignalingClose.reason),
-        reason)
-    } else {
-      internalHandlers.onDisconnect?(error, reason)
+      error = SoraError.dataChannelClosed(
+        statusCode: dataChannelSignalingClose.code, reason: dataChannelSignalingClose.reason
+      )
     }
-    // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
-    dataChannelSignalingClose = nil
+
+    // TODO(zztkm): signalingChannel.ignoreDisconnectWebSocket が true の場合はこの処理は不要かもしれない
+    signalingChannel.disconnect(error: error, reason: reason)
+
+    Logger.debug(type: .peerChannel, message: "call onDisconnect")
+    internalHandlers.onDisconnect?(error, reason)
 
     if onConnect != nil {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
       onConnect!(error)
       onConnect = nil
     }
+
+    // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
+    dataChannelSignalingClose = nil
 
     Logger.debug(type: .peerChannel, message: "did disconnect")
   }
