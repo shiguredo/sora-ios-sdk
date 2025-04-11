@@ -994,7 +994,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 処理は不要
       break
     case .close(let close):
-      // dataChannelSignalngClose に格納した値は basicDisconnect で利用される
+      // dataChannelSignalingClose に格納した値は basicDisconnect で利用される
       dataChannelSignalingClose = (code: close.code, reason: close.reason)
     default:
       Logger.error(
