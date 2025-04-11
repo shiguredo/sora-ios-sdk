@@ -132,6 +132,10 @@ public enum Signaling {
   /// "redirect" シグナリング
   case redirect(SignalingRedirect)
 
+  /// type: "close" は DataChannel シグナリング利用時に
+  /// `ignore_disconnect_websocket`: true かつ、`data_channel_signaling_close_message`: true の場合に受信する
+  case close(SignalingClose)
+
   /// :nodoc:
   public static func decode(_ data: Data) -> Result<Signaling, Error> {
     do {
@@ -175,6 +179,8 @@ public enum Signaling {
       return "switched"
     case .redirect:
       return "redirect"
+    case .close:
+      return "close"
     }
   }
 }
@@ -515,6 +521,15 @@ public struct SignalingRedirect {
   public var location: String
 }
 
+/// type: "close" シグナリングメッセージを表す
+/// Sora から受信するメッセージなのでエンコーダーは実装していない
+public struct SignalingClose {
+  /// ステータスコード
+  public var code: Int
+  /// 切断理由
+  public var reason: String
+}
+
 /// "notify" シグナリングメッセージを表します。
 public struct SignalingNotify {
   // MARK: イベント情報
@@ -692,6 +707,8 @@ extension Signaling: Codable {
       self = try .switched(SignalingSwitched(from: decoder))
     case "redirect":
       self = try .redirect(SignalingRedirect(from: decoder))
+    case "close":
+      self = try .close(SignalingClose(from: decoder))
     default:
       throw SoraError.unknownSignalingMessageType(type: type)
     }
@@ -1353,5 +1370,19 @@ extension SignalingRedirect: Decodable {
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     location = try container.decode(String.self, forKey: .location)
+  }
+}
+
+/// :nodoc:
+extension SignalingClose: Decodable {
+  enum CodingKeys: String, CodingKey {
+    case code
+    case reason
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    code = try container.decode(Int.self, forKey: .code)
+    reason = try container.decode(String.self, forKey: .reason)
   }
 }

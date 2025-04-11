@@ -33,6 +33,9 @@
   - @zztkm
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
   - @zztkm
+- [ADD] Sora から DataChannel シグナリングを切断する際に "type": "close" メッセージを受信する機能を追加する
+  - DataChannel シグナリングが有効、かつ ignore_disconnect_websocket が true、かつ Sora の設定で data_channel_signaling_close_message が有効な場合に受信することが可能
+  - @zztkm
 - [FIX] Sora から切断された場合の切断処理を修正し適切なエラーを ``MediaChannelHandlers.onDisconnect`` で受け取ることができるようにする
   - Sora iOS SDK 2025.1.1 までは Sora から Close Frame を受け取ったり、ネットワークエラーが起きたりしても、WebSocket メッセージ受信失敗に起因する ``SoraError.webSocketError`` しか受信できなかったが、以下の内容を受信できるようになった
     - Sora から Close Frame を受け取った場合のステータスコードと理由
