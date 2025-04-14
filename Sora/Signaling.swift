@@ -486,7 +486,7 @@ public struct SignalingCandidate {
 }
 
 /// "update" シグナリングメッセージを表します。
-/// type: "update" は Sora 2022.1.0 で廃止されたため、現在は利用していません。
+/// Sora 2022.1.0 で廃止されたため、現在は利用していません。
 public struct SignalingUpdate {
   /// SDP メッセージ
   public let sdp: String
