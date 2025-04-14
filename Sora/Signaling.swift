@@ -100,6 +100,7 @@ public enum Signaling {
   case answer(SignalingAnswer)
 
   /// "update" シグナリング
+  /// Sora 2022.1.0 で廃止されたため、現在は利用していません。
   case update(SignalingUpdate)
 
   /// "re-offer" シグナリング
@@ -485,6 +486,7 @@ public struct SignalingCandidate {
 }
 
 /// "update" シグナリングメッセージを表します。
+/// Sora 2022.1.0 で廃止されたため、現在は利用していません。
 public struct SignalingUpdate {
   /// SDP メッセージ
   public let sdp: String
