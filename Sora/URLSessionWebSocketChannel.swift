@@ -6,6 +6,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 {
   let url: URL
   let proxy: Proxy?
+  let caCertificate: SecCertificate?  // カスタム CA 証明書を設定する場合はここに設定する
   var handlers = WebSocketChannelHandlers()
   var internalHandlers = WebSocketChannelInternalHandlers()
   var isClosing = false
@@ -20,9 +21,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
   var urlSession: URLSession?
   var webSocketTask: URLSessionWebSocketTask?
 
-  init(url: URL, proxy: Proxy?) {
+  init(url: URL, proxy: Proxy?, caCertificate: SecCertificate?) {
     self.url = url
     self.proxy = proxy
+    self.caCertificate = caCertificate
   }
 
   func connect(delegateQueue: OperationQueue?) {
@@ -229,6 +231,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
   ) {
     // コードを短くするために変数を定義
     let ps = challenge.protectionSpace
+    let authMethod = ps.authenticationMethod
     let previousFailureCount = challenge.previousFailureCount
 
     // 既に失敗している場合はチャレンジを中止する
@@ -250,10 +253,120 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
         "[\(host)] \(#function): challenge=\(ps.host):\(ps.port), \(ps.authenticationMethod) previousFailureCount: \(previousFailureCount)"
     )
 
-    // Basic 認証のみに対応している
-    // それ以外の認証方法は .performDefaultHandling で処理を続ける
-    guard ps.authenticationMethod == NSURLAuthenticationMethodHTTPBasic else {
+    // 認証方式によって処理を分岐
+    switch authMethod {
+    case NSURLAuthenticationMethodServerTrust:
+      if let ca = caCertificate {
+        // カスタム CA が設定されている場合はそれを使用してサーバー証明書を検証
+        handleServerTrustChallenge(
+          challenge, completionHandler: completionHandler, caCertificate: ca)
+      } else {
+        // カスタム CA が設定されていない場合はデフォルト処理
+        completionHandler(.performDefaultHandling, nil)
+      }
+    case NSURLAuthenticationMethodHTTPBasic:
+      // basic 認証
+      handleBasicAuthenticationChallenge(challenge, completionHandler: completionHandler)
+
+    default:
+      Logger.debug(
+        type: .webSocketChannel,
+        message:
+          "[\(host)] \(#function): Unsupported or unhandled authentication method (\(authMethod)), performing default handling."
+      )
       completionHandler(.performDefaultHandling, nil)
+    }
+  }
+
+  private func handleServerTrustChallenge(
+    _ challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void,
+    caCertificate: SecCertificate
+  ) {
+    Logger.debug(type: .webSocketChannel, message: "handleServerTrustChallenge")
+    guard let serverTrust = challenge.protectionSpace.serverTrust else {
+      Logger.debug(type: .webSocketChannel, message: "handleServerTrustChallenge: no serverTrust")
+      completionHandler(.performDefaultHandling, nil)
+      return
+    }
+    // SecTrust オブジェクトにカスタム CA を信頼アンカーとして設定
+    let policy = SecPolicyCreateBasicX509()  // 基本的な X.509 ポリシーを使用
+    var ossStatus = SecTrustSetPolicies(serverTrust, policy)
+    guard ossStatus == errSecSuccess else {
+      Logger.warn(type: .webSocketChannel, message: "SecTrustSetPolicies failed")
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+    // カスタム CA を信頼アンカーとして追加
+    // ここで追加されたアンカー以外の証明書は無視される（システムの証明書も無視される
+    // https://developer.apple.com/documentation/security/sectrustsetanchorcertificatesonly(_:_:)
+    let anchorCertificates = [caCertificate]
+    ossStatus = SecTrustSetAnchorCertificates(serverTrust, anchorCertificates as CFArray)
+    if ossStatus != errSecSuccess {
+      Logger.warn(
+        type: .webSocketChannel, message: "SecTrustSetAnchorCertificates failed: \(ossStatus)")
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+
+    // システムの信頼ストアではなく、提供されたアンカーのみを使用するように強制
+    // これにより、カスタムCAによって署名されていること *のみ* を検証できる
+    let setOnlyStatus = SecTrustSetAnchorCertificatesOnly(serverTrust, true)
+    guard setOnlyStatus == errSecSuccess else {
+      // ログ出力はするが、致命的エラーとはしない場合もある
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "Warning: Could not set anchor certificates only: \(setOnlyStatus)")
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+
+    // ホスト名の検証ポリシーを追加（デフォルトで含まれている場合もあるが明示的に行うのが安全）
+    // 注意: wss:// スキームの場合、ポリシー作成時に "wss" ではなく "https" を使うことが多い
+    // または、ホスト名検証をSecTrustEvaluateの後で別途行う方法もある
+    //Logger.debug(type: .webSocketChannel, message: "\(host) を HTTPS サーバー名として検証")
+    //let sslpolicy = SecPolicyCreateSSL(true, host as CFString)
+    //let sslpolicyStatus = SecTrustSetPolicies(serverTrust, sslpolicy) // 必要に応じて
+    //guard sslpolicyStatus == errSecSuccess else {
+    //  Logger.warn(type: .webSocketChannel, message: "SecTrustSetPolicies failed: \(sslpolicyStatus)")
+    //  completionHandler(.cancelAuthenticationChallenge, nil)
+    //  return
+    //}
+
+    // サーバー証明書を評価
+    var error: CFError?
+    let trustResult = SecTrustEvaluateWithError(serverTrust, &error)
+
+    if trustResult {
+      // 信頼できると評価された場合はサーバーの証明書を使って認証情報を作成する
+      Logger.debug(type: .webSocketChannel, message: "Server trust evaluation succeeded")
+      completionHandler(.useCredential, URLCredential(trust: serverTrust))
+    } else {
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "Server trust evaluation failed: \(error?.localizedDescription ?? "Unknown error")"
+      )
+      completionHandler(.cancelAuthenticationChallenge, nil)
+    }
+
+  }
+
+  // --- Helper: Proxy Authentication ---
+  private func handleBasicAuthenticationChallenge(
+    _ challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    // 既存の Proxy Basic 認証ロジックを流用
+    let ps = challenge.protectionSpace
+    let previousFailureCount = challenge.previousFailureCount
+
+    // 既に失敗している場合はチャレンジを中止する
+    guard previousFailureCount == 0 else {
+      let message =
+        "[\(host)] \(#function): Proxy authentication failed (previous failure count: \(previousFailureCount)). Proxy => \(String(describing: proxy))"
+      Logger.info(type: .webSocketChannel, message: message)
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      disconnect(error: SoraError.signalingChannelError(reason: message))  // disconnect は適切か要確認
       return
     }
 
