@@ -852,10 +852,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     lock.lock()
 
     // debug 用 sleep.
-    // sleep している間にアプリ側で mediaChannel?.disconnect(error: nil) を走らせたい
-    print("kensaku: createAndSendReAnswer で createAnswerを呼ぶ前に disconect")
-    mediaChannel?.disconnect(error: nil)
-    sleep(5)
+    // この処理はメインスレッド以外で動いていて、sleep している間にアプリ側 (メインスレッド) で mediaChannel?.disconnect(error: nil) を走らせると crash する
+    print("kensaku:[\(Thread.current)] createAnswer が呼ばれる前に 10 秒間 sleep")
+    sleep(10)
+    print("kensaku:[\(Thread.current)] sleep 終了、createAnswer を呼ぶ")
 
     createAnswer(
       isSender: false,
