@@ -810,6 +810,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   private func createAndSendReAnswer(forReOffer reOffer: String) {
     Logger.debug(type: .peerChannel, message: "create and send re-answer")
     lock.lock()
+
     createAnswer(
       isSender: false,
       offer: reOffer,
@@ -849,6 +850,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
     lock.lock()
+
+    // debug 用 sleep.
+    // sleep している間にアプリ側で mediaChannel?.disconnect(error: nil) を走らせたい
+    print("kensaku: createAndSendReAnswer で createAnswerを呼ぶ前に disconect")
+    mediaChannel?.disconnect(error: nil)
+    sleep(5)
+
     createAnswer(
       isSender: false,
       offer: reOffer,
