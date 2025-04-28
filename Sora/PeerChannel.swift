@@ -821,13 +821,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func createAndSendReAnswer(forReOffer reOffer: String) {
     Logger.debug(type: .peerChannel, message: "create and send re-answer")
-    lock.lock()
+
+    Logger.debug(
+      type: .peerChannel, message: "kensaku:[\(Thread.current)] createAnswer が呼ばれる前に 10 秒間 sleep")
+    sleep(10)
+    Logger.debug(
+      type: .peerChannel, message: "kensaku:[\(Thread.current)] sleep 終了、createAnswer を呼ぶ")
 
     createAnswer(
       isSender: false,
       offer: reOffer,
       constraints: webRTCConfiguration.nativeConstraints
-    ) { answer, error in
+    ) { [weak self] answer, error in
+      guard let self else { return }
+      self.lock.lock()
+
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
@@ -874,13 +882,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       offer: reOffer,
       constraints: webRTCConfiguration.nativeConstraints
     ) { [weak self] answer, error in
+      self.lock.lock()
       guard let self else {
         Logger.debug(
           type: .peerChannel,
           message: "kensaku: self が nil のため、createAndSendReAnswerOverDataChannel 処理を終了")
         return
       }
-      self.lock.lock()
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
@@ -930,9 +938,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
       self.internalHandlers.onUpdate?(answer!)
-
       self.lock.unlock()
     }
+    Logger.debug(type: .peerChannel, message: "kensaku: createAnswer 終了")
   }
 
   private func handleSignalingOverWebSocket(_ signaling: Signaling) {
