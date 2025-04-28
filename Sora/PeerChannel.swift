@@ -71,14 +71,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     func waitDisconnect(error: Error?, reason: DisconnectReason) {
       if count == 0 {
+        Logger.debug(
+          type: .peerChannel, message: "kensaku: waitDisconnet call basicDisconnect (count: 0)")
         context?.basicDisconnect(error: error, reason: reason)
       } else {
+        Logger.debug(type: .peerChannel, message: "kensaku: waitDisconnet (count: \(count))")
         shouldDisconnect = (true, error, reason)
       }
     }
 
     func lock() {
       count += 1
+      Logger.debug(type: .peerChannel, message: "lock: count \(count)")
     }
 
     func unlock() {
@@ -86,6 +90,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         fatalError("count is already 0")
       }
       count -= 1
+      Logger.debug(type: .peerChannel, message: "unlock: count \(count)")
       if count == 0 {
         disconnect()
       }
@@ -97,6 +102,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         shouldDisconnect = (false, nil, .unknown)
         if let context {
           if context.state != .closed {
+            Logger.debug(
+              type: .peerChannel, message: "kensaku: lock.disconnect call basicDisconnect")
             context.basicDisconnect(error: error, reason: reason)
           }
         }
@@ -254,7 +261,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .closed:
       break
     default:
-      Logger.debug(type: .peerChannel, message: "wait to disconnect")
+      Logger.debug(type: .peerChannel, message: "kensaku: wait to disconnect")
       lock.waitDisconnect(error: error, reason: reason)
     }
   }
@@ -688,8 +695,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
         Logger.debug(type: .peerChannel, message: "did create answer")
 
+        guard let answer = answer else {
+          Logger.debug(type: .peerChannel, message: "answer is nil")
+          return
+        }
+
         Logger.debug(type: .peerChannel, message: "try setting local description")
-        nativeChannel.setLocalDescription(answer!) { error in
+        nativeChannel.setLocalDescription(answer) { error in
           guard error == nil else {
             Logger.debug(
               type: .peerChannel,
@@ -702,11 +714,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             message: "did set local description")
           Logger.debug(
             type: .peerChannel,
-            message: "\(answer!.sdpDescription)")
+            message: "\(answer.sdpDescription)")
           Logger.debug(
             type: .peerChannel,
             message: "did create answer")
-          handler(answer!.sdp, nil)
+          handler(answer.sdp, nil)
         }
       }
     }
@@ -853,10 +865,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // debug 用 sleep.
     // この処理はメインスレッド以外で動いていて、sleep している間にアプリ側 (メインスレッド) で mediaChannel?.disconnect(error: nil) を走らせると crash する
-    print("kensaku:[\(Thread.current)] createAnswer が呼ばれる前に 10 秒間 sleep")
+    Logger.debug(
+      type: .peerChannel, message: "kensaku:[\(Thread.current)] createAnswer が呼ばれる前に 10 秒間 sleep")
     sleep(10)
-    print("kensaku:[\(Thread.current)] sleep 終了、createAnswer を呼ぶ")
-
+    Logger.debug(
+      type: .peerChannel, message: "kensaku:[\(Thread.current)] sleep 終了、createAnswer を呼ぶ")
     createAnswer(
       isSender: false,
       offer: reOffer,
@@ -1056,7 +1069,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
     streams.removeAll()
 
+    Logger.debug(type: .peerChannel, message: "kensaku: nativeChannel?.close()")
     nativeChannel?.close()
+    nativeChannel = nil
 
     var error = error
     // DataChannel が正常にクローズされ (reason == .dataChannelClosed)、

@@ -408,7 +408,7 @@ public final class MediaChannel {
       state = .disconnecting
       connectionTimer.stop()
       peerChannel.disconnect(error: error, reason: reason)
-      Logger.debug(type: .mediaChannel, message: "did disconnect")
+      Logger.debug(type: .mediaChannel, message: "kensaku: did disconnect")
       state = .disconnected
 
       Logger.debug(type: .mediaChannel, message: "call onDisconnect")
