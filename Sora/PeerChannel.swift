@@ -882,13 +882,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       offer: reOffer,
       constraints: webRTCConfiguration.nativeConstraints
     ) { [weak self] answer, error in
-      self.lock.lock()
       guard let self else {
         Logger.debug(
           type: .peerChannel,
           message: "kensaku: self が nil のため、createAndSendReAnswerOverDataChannel 処理を終了")
         return
       }
+      self.lock.lock()
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
