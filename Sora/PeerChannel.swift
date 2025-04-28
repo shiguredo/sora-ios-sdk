@@ -861,7 +861,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
       return
     }
-    lock.lock()
 
     // debug 用 sleep.
     // この処理はメインスレッド以外で動いていて、sleep している間にアプリ側 (メインスレッド) で mediaChannel?.disconnect(error: nil) を走らせると crash する
@@ -874,7 +873,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       isSender: false,
       offer: reOffer,
       constraints: webRTCConfiguration.nativeConstraints
-    ) { answer, error in
+    ) { [weak self] answer, error in
+      guard let self else {
+        Logger.debug(
+          type: .peerChannel,
+          message: "kensaku: self が nil のため、createAndSendReAnswerOverDataChannel 処理を終了")
+        return
+      }
+      self.lock.lock()
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
