@@ -729,11 +729,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     private func createAndSendReAnswer(forReOffer reOffer: String) {
         Logger.debug(type: .peerChannel, message: "create and send re-answer")
-        lock.lock()
+
         createAnswer(isSender: false,
                      offer: reOffer,
                      constraints: webRTCConfiguration.nativeConstraints)
-        { answer, error in
+        { [weak self] answer, error in
+            guard let self else { return }
+            self.lock.lock()
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create re-answer (\(error!.localizedDescription)")
@@ -764,11 +766,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
             return
         }
-        lock.lock()
+
         createAnswer(isSender: false,
                      offer: reOffer,
                      constraints: webRTCConfiguration.nativeConstraints)
-        { answer, error in
+        { [weak self] answer, error in
+            guard let self else { return }
+            self.lock.lock()
             guard error == nil else {
                 Logger.error(type: .peerChannel,
                              message: "failed to create re-answer: error => (\(error!.localizedDescription)")
