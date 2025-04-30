@@ -733,8 +733,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         createAnswer(isSender: false,
                      offer: reOffer,
                      constraints: webRTCConfiguration.nativeConstraints)
-        { [weak self] answer, error in
-            guard let self else { return }
+        { answer, error in
             self.lock.lock()
             guard error == nil else {
                 Logger.error(type: .peerChannel,
@@ -770,8 +769,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         createAnswer(isSender: false,
                      offer: reOffer,
                      constraints: webRTCConfiguration.nativeConstraints)
-        { [weak self] answer, error in
-            guard let self else { return }
+        { answer, error in
             self.lock.lock()
             guard error == nil else {
                 Logger.error(type: .peerChannel,
