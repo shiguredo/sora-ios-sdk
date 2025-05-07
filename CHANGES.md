@@ -70,6 +70,8 @@
   - Xcode の version を 16.3 に変更
   - SDK を iOS 18.4 に変更
   - @zztkm
+- [UPDATE] CocoaPods の廃止対応のため、canary.py から Sora.podspec の更新処理を削除する
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
 
