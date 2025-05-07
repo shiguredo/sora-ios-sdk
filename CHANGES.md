@@ -11,6 +11,17 @@
 
 ## develop
 
+## 2025.1.2
+
+**リリース日**: 2025-05-07
+
+- [FIX] マルチストリーム利用時に SDP 再ハンドシェイク中に SDK が終了処理をした際に EXC_BAD_ACCESS (不正なメモリアクセス) によりクラッシュする問題を修正する
+  - SDP 再ハンドシェイク処理である `createAndSendReAnswer` と `createAndSendReAnswerOverDataChannel` で参照カウンタを加算する lock() の呼び出し位置を以下のように変更
+    - 変更前: createAnswer 呼び出し前
+    - 変更後: createAnswer の引数である handler (クロージャー) 内
+  - これにより、SDP 再ハンドシェイク中に SDK が終了処理をした際に不正なメモリアクセスが発生することがなくなった
+  - @zztkm
+
 ## 2025.1.1
 
 **リリース日**: 2025-01-23
