@@ -72,6 +72,11 @@
   - @zztkm
 - [UPDATE] CocoaPods の廃止対応のため、canary.py から Sora.podspec の更新処理を削除する
   - @zztkm
+- [UPDATE] フォーマッターの設定に合わせて canary.py で PackageInfo.swift に書き込む際のスペースを 4 から 2 に変更する
+  - @zztkm
+- [UPDATE] canary.py でファイルの読み書きを行う際の encoding を明示的に utf-8 に設定する
+  - Windows 環境で canary.py を実行した際に、予期せぬ文字化けが発生してしまうため修正を行った
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
 
