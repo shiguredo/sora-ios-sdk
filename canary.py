@@ -44,9 +44,7 @@ def update_packageinfo_version(packageinfo_content):
                     new_version = f"{major_minor_patch}-canary.{canary_number + 1}"
 
                 # PackageInfoのバージョン行を更新
-                updated_content.append(
-                    f'    public static let version = "{new_version}"'
-                )
+                updated_content.append(f'  public static let version = "{new_version}"')
                 sdk_version_updated = True
             else:
                 updated_content.append(line)
@@ -72,7 +70,7 @@ def write_file(filename, updated_content, dry_run):
         print(f"Dry run: The following changes would be written to {filename}:")
         print("\n".join(updated_content))
     else:
-        with open(filename, "w") as file:
+        with open(filename, "w", encoding="utf-8") as file:
             file.write("\n".join(updated_content) + "\n")
         print(f"{filename} updated.")
 
@@ -136,7 +134,7 @@ def main():
     args = parser.parse_args()
 
     # PackageInfoファイルを読み込んでバージョンを更新
-    with open(PACKAGEINFO_FILE, "r") as file:
+    with open(PACKAGEINFO_FILE, "r", encoding="utf-8") as file:
         packageinfo_content = file.readlines()
     updated_packageinfo_content, new_version = update_packageinfo_version(packageinfo_content)
     write_file(PACKAGEINFO_FILE, updated_packageinfo_content, args.dry_run)
