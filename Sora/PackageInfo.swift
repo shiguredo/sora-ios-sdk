@@ -1,7 +1,7 @@
 /// :nodoc:
 public enum SDKInfo {
   // Sora iOS SDK のバージョンを定義する
-  public static let version = "2025.2.0-canary.1"
+  public static let version = "2025.2.0-canary.2"
 }
 
 /// WebRTC フレームワークの情報を表します。
