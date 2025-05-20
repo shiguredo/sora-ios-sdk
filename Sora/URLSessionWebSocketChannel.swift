@@ -323,7 +323,8 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     let anchorCertificates = [customCACert]
     ossStatus = SecTrustSetAnchorCertificates(serverTrust, anchorCertificates as CFArray)
     if ossStatus != errSecSuccess {
-      Logger.warn(type: .webSocketChannel, message: "SecTrustSetAnchorCertificates failed: \(ossStatus)")
+      Logger.warn(
+        type: .webSocketChannel, message: "SecTrustSetAnchorCertificates failed: \(ossStatus)")
       completionHandler(.cancelAuthenticationChallenge, nil)
       return
     }
@@ -332,10 +333,12 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     // これにより、カスタムCAによって署名されていること *のみ* を検証できる
     let setOnlyStatus = SecTrustSetAnchorCertificatesOnly(serverTrust, true)
     guard setOnlyStatus == errSecSuccess else {
-        // ログ出力はするが、致命的エラーとはしない場合もある
-        Logger.warn(type: .webSocketChannel, message: "Warning: Could not set anchor certificates only: \(setOnlyStatus)")
-        completionHandler(.cancelAuthenticationChallenge, nil)
-        return
+      // ログ出力はするが、致命的エラーとはしない場合もある
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "Warning: Could not set anchor certificates only: \(setOnlyStatus)")
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
     }
 
     // ホスト名の検証ポリシーを追加（デフォルトで含まれている場合もあるが明示的に行うのが安全）
