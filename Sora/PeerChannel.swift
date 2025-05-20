@@ -809,12 +809,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func createAndSendReAnswer(forReOffer reOffer: String) {
     Logger.debug(type: .peerChannel, message: "create and send re-answer")
-    lock.lock()
+
     createAnswer(
       isSender: false,
       offer: reOffer,
       constraints: webRTCConfiguration.nativeConstraints
     ) { answer, error in
+      // 2025.1.1 までは lock() 呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
+      // この場合、 SDP 再ハンドシェイク時に SDP を local description に設定する際に EXC_BAD_ACCESS (不正なメモリアクセス) が発生し、
+      // アプリがクラッシュしてしまうことがあったが、lock() の呼び出しをクロージャー内にすることで、不正なメモリアクセスを防ぐことができるように
+      // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で lock() の位置を移動)
+      self.lock.lock()  // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
@@ -844,16 +849,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     Logger.debug(type: .peerChannel, message: "create and send re-answer over DataChannel")
 
     guard let dataChannel = dataChannels["signaling"] else {
-      Logger.debug(
-        type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+      Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
       return
     }
-    lock.lock()
+
     createAnswer(
       isSender: false,
       offer: reOffer,
       constraints: webRTCConfiguration.nativeConstraints
     ) { answer, error in
+      // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
+      self.lock.lock()
       guard error == nil else {
         Logger.error(
           type: .peerChannel,

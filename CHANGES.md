@@ -20,7 +20,7 @@
 - [CHANGE] `MediaChannelHandlers` の `onDisconnect: ((Error?) -> Void)?` を `onDisconnectLegacy` という名前に変更し、非推奨にする
   - `onDisconnect: ((SoraCloseEvent) -> Void)?` に移行するため、名前を変更した
   - @zztkm
-- [UPDATE] WebRTC m132.6834.5.7 に上げる
+- [UPDATE] WebRTC m136.7103.0.0 に上げる
   - @zztkm
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
   - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
@@ -70,8 +70,25 @@
   - Xcode の version を 16.3 に変更
   - SDK を iOS 18.4 に変更
   - @zztkm
+- [UPDATE] CocoaPods の廃止対応のため、canary.py から Sora.podspec の更新処理を削除する
+  - @zztkm
+- [UPDATE] フォーマッターの設定に合わせて canary.py で PackageInfo.swift に書き込む際のスペースを 4 から 2 に変更する
+  - @zztkm
+- [UPDATE] canary.py でファイルの読み書きを行う際の encoding を明示的に utf-8 に設定する
+  - Windows 環境で canary.py を実行した際に、予期せぬ文字化けが発生してしまうため修正を行った
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
+
+## 2025.1.2
+
+**リリース日**: 2025-05-07
+
+- [FIX] マルチストリーム利用時に SDP 再ハンドシェイク中に SDK が終了処理をした際に EXC_BAD_ACCESS (不正なメモリアクセス) によりクラッシュする問題を修正する
+  - SDP 再ハンドシェイク処理である `createAndSendReAnswer` と `createAndSendReAnswerOverDataChannel` で参照カウンタを加算する lock() の呼び出し位置を以下のように変更
+    - 変更前: createAnswer 呼び出し前
+    - 変更後: createAnswer の引数である handler (クロージャー) 内
+  - これにより、SDP 再ハンドシェイク中に SDK が終了処理をした際に不正なメモリアクセスが発生することがなくなった
   - @zztkm
 
 ## 2025.1.1
