@@ -31,6 +31,10 @@
   - @zztkm
 - [UPDATE] `MediaChannelHandlers` に `onDisconnect: ((SoraCloseEvent) -> Void)?` を追加する
   - @zztkm
+- [UPDATE] ステレオオーディオを受信するために Answer SDP を加工する処理を追加する
+  - `a=fmtp` の行に、`stereo=1` を追加することでステレオオーディオを再生することができる
+  - ただし、libwebrtc にステレオ再生のためのパッチがあてられていることを前提とする
+  - @zztkm
 - [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
   - @zztkm
 - [ADD] Sora から DataChannel シグナリングを切断する際に "type": "close" メッセージを受信する機能を追加する

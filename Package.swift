@@ -3,7 +3,7 @@
 import Foundation
 import PackageDescription
 
-let libwebrtcVersion = "m136.7103.0.0"
+let libwebrtcVersion = "m138.7204.0.0-ios-stereo-1"
 
 let package = Package(
     name: "Sora",
@@ -20,8 +20,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "WebRTC",
-            url: "https://github.com/shiguredo-webrtc-build/webrtc-build/releases/download/\(libwebrtcVersion)/WebRTC.xcframework.zip",
-            checksum: "4a44fbb76617638bb4bd972db07de298b30ebcd4aea422e3cca70845e1d34238"
+            url: "https://github.com/zztkm/webrtc-build/releases/download/\(libwebrtcVersion)/WebRTC.xcframework.zip",
+            checksum: "6cf925af6aadd8b97a8b76b5ce4594a3f0c1447732bbb479342bb7e3f735badc"
         ),
         .target(
             name: "Sora",
