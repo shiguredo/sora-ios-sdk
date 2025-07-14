@@ -20,7 +20,7 @@
 - [CHANGE] `MediaChannelHandlers` の `onDisconnect: ((Error?) -> Void)?` を `onDisconnectLegacy` という名前に変更し、非推奨にする
   - `onDisconnect: ((SoraCloseEvent) -> Void)?` に移行するため、名前を変更した
   - @zztkm
-- [UPDATE] WebRTC m138.7204.0.1 に上げる
+- [UPDATE] WebRTC m138.7204.0.3 に上げる
   - @zztkm
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
   - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
