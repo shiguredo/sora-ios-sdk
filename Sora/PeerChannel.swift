@@ -1349,7 +1349,7 @@ extension RTCRtpSender {
     Logger.debug(
       type: .peerChannel, message: "update offer encodings for sender => \(senderId)")
 
-    // paramaters はアクセスのたびにコピーされてしまうので、すべての parameters をセットし直す
+    // parameters はアクセスのたびにコピーされてしまうので、すべての parameters をセットし直す
     let newParameters = parameters  // コピーされる
     for oldEncoding in newParameters.encodings {
       Logger.debug(
@@ -1387,8 +1387,7 @@ extension RTCRtpSender {
           Logger.debug(
             type: .peerChannel,
             message: "scaleResolutionDownTo: \(value.maxWidth)x\(value.maxHeight)")
-          oldEncoding.scaleResolutionDownTo?.maxWidth = value.maxWidth
-          oldEncoding.scaleResolutionDownTo?.maxHeight = value.maxHeight
+          oldEncoding.scaleResolutionDownTo = value
         }
 
         if let value = encoding.scalabilityMode {
