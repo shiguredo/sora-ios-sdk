@@ -278,80 +278,144 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     }
   }
 
+  // カスタムCA証明書を使用したサーバー証明書の検証を行う
+  //
+  // 1. カスタム CA による証明書チェーンの検証
+  // 2. ホスト名の検証
+  // 3. 証明書の有効期限チェック
+  //
+  // 注意: このメソッドを使用すると、システムの信頼ストアは無視され、
+  // 指定されたカスタムCAのみが信頼される。
   private func handleServerTrustChallenge(
     _ challenge: URLAuthenticationChallenge,
     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void,
     caCertificate: SecCertificate
   ) {
-    Logger.debug(type: .webSocketChannel, message: "handleServerTrustChallenge")
+    Logger.debug(
+      type: .webSocketChannel,
+      message:
+        "handleServerTrustChallenge: Starting custom CA certificate validation for \(challenge.protectionSpace.host)"
+    )
+
     guard let serverTrust = challenge.protectionSpace.serverTrust else {
-      Logger.debug(type: .webSocketChannel, message: "handleServerTrustChallenge: no serverTrust")
+      Logger.warn(
+        type: .webSocketChannel,
+        message:
+          "handleServerTrustChallenge: No serverTrust object available for \(challenge.protectionSpace.host)"
+      )
       completionHandler(.performDefaultHandling, nil)
       return
     }
-    // SecTrust オブジェクトにカスタム CA を信頼アンカーとして設定
-    let policy = SecPolicyCreateBasicX509()  // 基本的な X.509 ポリシーを使用
-    var ossStatus = SecTrustSetPolicies(serverTrust, policy)
-    guard ossStatus == errSecSuccess else {
-      Logger.warn(type: .webSocketChannel, message: "SecTrustSetPolicies failed")
+
+    // 基本的なX.509ポリシーを設定
+    guard setupBasicX509Policy(for: serverTrust) else {
       completionHandler(.cancelAuthenticationChallenge, nil)
       return
     }
-    // カスタム CA を信頼アンカーとして追加
-    // ここで追加されたアンカー以外の証明書は無視される（システムの証明書も無視される
-    // https://developer.apple.com/documentation/security/sectrustsetanchorcertificatesonly(_:_:)
-    let anchorCertificates = [caCertificate]
-    ossStatus = SecTrustSetAnchorCertificates(serverTrust, anchorCertificates as CFArray)
-    if ossStatus != errSecSuccess {
-      Logger.warn(
-        type: .webSocketChannel, message: "SecTrustSetAnchorCertificates failed: \(ossStatus)")
+
+    // カスタムCAを信頼アンカーとして設定
+    guard setCustomCAAsAnchor(caCertificate, for: serverTrust) else {
       completionHandler(.cancelAuthenticationChallenge, nil)
       return
+    }
+
+    // ホスト名検証を有効化
+    guard enableHostnameVerification(for: serverTrust, host: host) else {
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+
+    // 証明書を評価
+    evaluateTrust(serverTrust, completionHandler: completionHandler)
+  }
+
+  private func setupBasicX509Policy(for serverTrust: SecTrust) -> Bool {
+    let policy = SecPolicyCreateBasicX509()
+    let osStatus = SecTrustSetPolicies(serverTrust, policy)
+
+    guard osStatus == errSecSuccess else {
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "SecTrustSetPolicies failed: \(osStatus)")
+      return false
+    }
+
+    return true
+  }
+
+  private func setCustomCAAsAnchor(_ caCertificate: SecCertificate, for serverTrust: SecTrust)
+    -> Bool
+  {
+    // カスタム CA を信頼アンカーとして追加
+    // ここで追加されたアンカー以外の証明書は無視される（システムの証明書も無視される）
+    // https://developer.apple.com/documentation/security/sectrustsetanchorcertificatesonly(_:_:)
+    let anchorCertificates = [caCertificate]
+    var osStatus = SecTrustSetAnchorCertificates(serverTrust, anchorCertificates as CFArray)
+
+    if osStatus != errSecSuccess {
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "SecTrustSetAnchorCertificates failed: \(osStatus)")
+      return false
     }
 
     // システムの信頼ストアではなく、提供されたアンカーのみを使用するように強制
     // これにより、カスタムCAによって署名されていること *のみ* を検証できる
-    let setOnlyStatus = SecTrustSetAnchorCertificatesOnly(serverTrust, true)
-    guard setOnlyStatus == errSecSuccess else {
-      // ログ出力はするが、致命的エラーとはしない場合もある
+    osStatus = SecTrustSetAnchorCertificatesOnly(serverTrust, true)
+
+    guard osStatus == errSecSuccess else {
       Logger.warn(
         type: .webSocketChannel,
-        message: "Warning: Could not set anchor certificates only: \(setOnlyStatus)")
-      completionHandler(.cancelAuthenticationChallenge, nil)
-      return
+        message: "Warning: Could not set anchor certificates only: \(osStatus)")
+      return false
     }
 
+    return true
+  }
+
+  private func enableHostnameVerification(for serverTrust: SecTrust, host: String) -> Bool {
     // ホスト名の検証ポリシーを追加（デフォルトで含まれている場合もあるが明示的に行うのが安全）
     // 注意: wss:// スキームの場合、ポリシー作成時に "wss" ではなく "https" を使うことが多い
-    // または、ホスト名検証をSecTrustEvaluateの後で別途行う方法もある
-    //Logger.debug(type: .webSocketChannel, message: "\(host) を HTTPS サーバー名として検証")
-    //let sslpolicy = SecPolicyCreateSSL(true, host as CFString)
-    //let sslpolicyStatus = SecTrustSetPolicies(serverTrust, sslpolicy) // 必要に応じて
-    //guard sslpolicyStatus == errSecSuccess else {
-    //  Logger.warn(type: .webSocketChannel, message: "SecTrustSetPolicies failed: \(sslpolicyStatus)")
-    //  completionHandler(.cancelAuthenticationChallenge, nil)
-    //  return
-    //}
+    let sslPolicy = SecPolicyCreateSSL(true, host as CFString)
+    let osStatus = SecTrustSetPolicies(serverTrust, sslPolicy)
 
-    // サーバー証明書を評価
+    guard osStatus == errSecSuccess else {
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "SecTrustSetPolicies (SSL) failed: \(osStatus)")
+      return false
+    }
+
+    Logger.info(
+      type: .webSocketChannel, message: "SSL policy with hostname verification enabled for: \(host)"
+    )
+    return true
+  }
+
+  private func evaluateTrust(
+    _ serverTrust: SecTrust,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
     var error: CFError?
     let trustResult = SecTrustEvaluateWithError(serverTrust, &error)
 
     if trustResult {
       // 信頼できると評価された場合はサーバーの証明書を使って認証情報を作成する
-      Logger.debug(type: .webSocketChannel, message: "Server trust evaluation succeeded")
+      Logger.info(
+        type: .webSocketChannel,
+        message: "Server trust evaluation succeeded - SSL/TLS connection is secure")
       completionHandler(.useCredential, URLCredential(trust: serverTrust))
     } else {
       Logger.warn(
         type: .webSocketChannel,
-        message: "Server trust evaluation failed: \(error?.localizedDescription ?? "Unknown error")"
+        message:
+          "Server trust evaluation failed: \(error?.localizedDescription ?? "Unknown error"). This may indicate an invalid certificate chain or hostname mismatch."
       )
       completionHandler(.cancelAuthenticationChallenge, nil)
     }
-
   }
 
-  // --- Helper: Proxy Authentication ---
+  // Proxy Authentication
   private func handleBasicAuthenticationChallenge(
     _ challenge: URLAuthenticationChallenge,
     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
@@ -395,4 +459,5 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       type: .webSocketChannel, message: "didCompleteWithError \(error.localizedDescription)")
     disconnect(error: SoraError.webSocketError(error))
   }
+
 }
