@@ -307,19 +307,13 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       return
     }
 
-    // 基本的なX.509ポリシーを設定
-    guard setupBasicX509Policy(for: serverTrust) else {
-      completionHandler(.cancelAuthenticationChallenge, nil)
-      return
-    }
-
     // カスタムCAを信頼アンカーとして設定
     guard setCustomCAAsAnchor(caCertificate, for: serverTrust) else {
       completionHandler(.cancelAuthenticationChallenge, nil)
       return
     }
 
-    // ホスト名検証を有効化
+    // SSL ポリシーでホスト名検証を有効化（基本的な X.509 検証も含まれる）
     guard enableHostnameVerification(for: serverTrust, host: host) else {
       completionHandler(.cancelAuthenticationChallenge, nil)
       return
@@ -327,20 +321,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
     // 証明書を評価
     evaluateTrust(serverTrust, completionHandler: completionHandler)
-  }
-
-  private func setupBasicX509Policy(for serverTrust: SecTrust) -> Bool {
-    let policy = SecPolicyCreateBasicX509()
-    let osStatus = SecTrustSetPolicies(serverTrust, policy)
-
-    guard osStatus == errSecSuccess else {
-      Logger.warn(
-        type: .webSocketChannel,
-        message: "SecTrustSetPolicies failed: \(osStatus)")
-      return false
-    }
-
-    return true
   }
 
   private func setCustomCAAsAnchor(_ caCertificate: SecCertificate, for serverTrust: SecTrust)
@@ -386,7 +366,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       return false
     }
 
-    Logger.info(
+    Logger.debug(
       type: .webSocketChannel, message: "SSL policy with hostname verification enabled for: \(host)"
     )
     return true
