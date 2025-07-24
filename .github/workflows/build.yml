@@ -21,28 +21,13 @@ jobs:
       run: sudo xcode-select -s '${{ env.XCODE }}/Contents/Developer'
     - name: Show Xcode Version
       run: xcodebuild -version
-    - name: Show CocoaPods Version
-      run: pod --version
-    - name: Restore Pods
-      uses: actions/cache@v4
-      with:
-        path: Pods
-        key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-pods-
-    - name: Install Dependences
-      run: |
-        pod repo update
-        pod install
-        if nm ./Pods/WebRTC/WebRTC.xcframework/ios-arm64/WebRTC.framework/WebRTC | grep _kVTVideoEncoderSpecification_RequiredLowLatency >/dev/null 2>&1; then
-          echo 'Error: Non-public API detected in WebRTC framework.'
-          exit 1
-        fi
+    - name: Resolve Package Dependencies
+      run: xcodebuild -resolvePackageDependencies -project Sora.xcodeproj
     - name: Build Xcode Project
       run: |
         set -o pipefail && \
           xcodebuild \
-            -workspace 'Sora.xcworkspace' \
+            -project 'Sora.xcodeproj' \
             -scheme 'Sora' \
             -sdk ${{ env.XCODE_SDK }} \
             -configuration Release \
@@ -51,6 +36,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
+    - name: Check WebRTC Non-public API
+      run: |
+        WEBRTC_FRAMEWORK=$(find build -name "WebRTC.framework" -path "*/WebRTC.xcframework/ios-arm64/*" | head -1)
+        if [ -n "$WEBRTC_FRAMEWORK" ] && nm "$WEBRTC_FRAMEWORK/WebRTC" | grep _kVTVideoEncoderSpecification_RequiredLowLatency >/dev/null 2>&1; then
+          echo 'Error: Non-public API detected in WebRTC framework.'
+          exit 1
+        fi
     - name: Format Lint
       run: |
         make fmt-lint

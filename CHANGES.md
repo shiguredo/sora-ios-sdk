@@ -77,6 +77,12 @@
 - [UPDATE] canary.py でファイルの読み書きを行う際の encoding を明示的に utf-8 に設定する
   - Windows 環境で canary.py を実行した際に、予期せぬ文字化けが発生してしまうため修正を行った
   - @zztkm
+- [UPDATE] GitHub Actions での CI から CocoaPods を削除し Swift Package Manager のみを利用するように変更する
+  - CocoaPods 関連のステップ（Show CocoaPods Version、Restore Pods、Install Dependences）を削除
+  - xcodebuild を -workspace から -project に変更
+  - WebRTC Non-public API チェックを Swift Package Manager のパスに変更
+  - Podfile を削除
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
 
