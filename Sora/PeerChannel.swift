@@ -911,7 +911,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 // 10秒スリープしてWebSocket経由の送信を失敗させる
                 Thread.sleep(forTimeInterval: 10.0)
             }
+            Logger.debug(type: .peerChannel, message: "Before calling createAndSendReAnswer from handleSignalingOverDataChannel")
             createAndSendReAnswer(forReOffer: reOffer.sdp)
+            Logger.debug(type: .peerChannel, message: "After calling createAndSendReAnswer from handleSignalingOverDataChannel")
         case .push, .notify:
             // 処理は不要
             break
