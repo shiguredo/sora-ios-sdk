@@ -66,7 +66,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // MARK: - Constants
 
     /// type: switched 受信後、WebSocket 切断までの待機時間（秒）
+    /// NOTE: `type: switched` と `type: re-offer` をほぼ同時に受信した際、 `type: re-answer` を WebSocket 経由で送信する前に
+    /// WebSocket を切断してしまい `type: re-answer` が送信できなくなる場合があったため、10 秒待ってから切断すれば
+    /// `type: re-answer` の送信は完了しているだろうと判断し、10 秒待つようにしている。
     private static let switchedDisconnectDelay: TimeInterval = 10.0
+
     final class Lock {
         weak var context: PeerChannel?
         var count: Int = 0
