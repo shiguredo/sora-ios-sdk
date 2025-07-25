@@ -748,7 +748,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 return
             }
 
+
             let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+            // iOS側はtype: switchedが送られてきていないと思い込んでいるため、
+            // WebSocket経由で送信を試みる（実際は失敗する）
             self.signalingChannel.send(message: message)
 
             if self.configuration.isSender {
@@ -871,6 +874,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 signalingChannel.send(message: .pong(pong))
             }
         case let .switched(switched):
+            // レースコンディション再現のため、switchedの処理を完全に無効化
+            /*
             switchedToDataChannel = true
             signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
             if signalingChannel.ignoreDisconnectWebSocket {
@@ -882,6 +887,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
                 onDataChannel(mediaChannel)
             }
+            */
         case let .redirect(redirect):
             signalingChannel.redirect(location: redirect.location)
         default:
@@ -896,7 +902,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .mediaStream, message: "handle signaling over DataChannel => \(signaling.typeName())")
         switch signaling {
         case let .reOffer(reOffer):
-            createAndSendReAnswerOverDataChannel(forReOffer: reOffer.sdp)
+            // iOS側はtype: switchedが送られてきていないと思い込んでいるため、
+            // DataChannel経由でre-offerを受信しても、WebSocket経由でre-answerを送信しようとする
+            // レースコンディション再現のため、WebSocketを切断してからre-answerを送信
+            if let webSocketChannel = signalingChannel.webSocketChannel {
+                Logger.debug(type: .peerChannel, message: "Disconnecting WebSocket before re-answer for race condition test (DataChannel)")
+                webSocketChannel.disconnect(error: nil)
+                
+                // 10秒スリープしてWebSocket経由の送信を失敗させる
+                Thread.sleep(forTimeInterval: 10.0)
+            }
+            createAndSendReAnswer(forReOffer: reOffer.sdp)
         case .push, .notify:
             // 処理は不要
             break
