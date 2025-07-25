@@ -752,7 +752,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
             // iOS側はtype: switchedが送られてきていないと思い込んでいるため、
             // WebSocket経由で送信を試みる（実際は失敗する）
+            Logger.debug(type: .peerChannel, message: "Before sending re-answer via WebSocket (connectionId: \(self.connectionId ?? "nil"))")
             self.signalingChannel.send(message: message)
+            Logger.debug(type: .peerChannel, message: "After sending re-answer via WebSocket (connectionId: \(self.connectionId ?? "nil"))")
 
             if self.configuration.isSender {
                 self.updateSenderOfferEncodings()
