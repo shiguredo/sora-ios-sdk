@@ -875,19 +875,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             }
         case let .switched(switched):
             // レースコンディション再現のため、switchedの処理を完全に無効化
-            /*
-            switchedToDataChannel = true
-            signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
-            if signalingChannel.ignoreDisconnectWebSocket {
-                if let webSocketChannel = signalingChannel.webSocketChannel {
-                    webSocketChannel.disconnect(error: nil)
-                }
-            }
-
-            if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
-                onDataChannel(mediaChannel)
-            }
-            */
+            // switchedToDataChannel = true
+            // signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
+            // if signalingChannel.ignoreDisconnectWebSocket {
+            //     if let webSocketChannel = signalingChannel.webSocketChannel {
+            //         webSocketChannel.disconnect(error: nil)
+            //     }
+            // }
+            // 
+            // if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
+            //     onDataChannel(mediaChannel)
+            // }
         case let .redirect(redirect):
             signalingChannel.redirect(location: redirect.location)
         default:
