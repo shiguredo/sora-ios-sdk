@@ -64,7 +64,7 @@ final class PeerChannelInternalHandlers {
 
 class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // MARK: - Constants
-    
+
     /// type: switched 受信後、WebSocket 切断までの待機時間（秒）
     private static let switchedDisconnectDelay: TimeInterval = 10.0
     final class Lock {
@@ -881,9 +881,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 if let webSocketChannel = signalingChannel.webSocketChannel {
                     // 指定秒数後に WebSocket を切断する
                     DispatchQueue.main.asyncAfter(deadline: .now() + Self.switchedDisconnectDelay) { [weak self] in
-                        guard let self = self else { return }
+                        guard let self else { return }
                         // switchedToDataChannel が true のままで、まだ接続中の場合のみ切断する
-                        if self.switchedToDataChannel && self.state != .closed {
+                        if switchedToDataChannel, state != .closed {
                             webSocketChannel.disconnect(error: nil)
                         }
                     }
