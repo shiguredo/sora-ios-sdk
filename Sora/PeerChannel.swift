@@ -874,6 +874,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 signalingChannel.send(message: .pong(pong))
             }
         case let .switched(switched):
+            Logger.debug(type: .peerChannel, message: "Received type: switched, but ignoring for race condition test")
             // レースコンディション再現のため、switchedの処理を完全に無効化
             // switchedToDataChannel = true
             // signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
@@ -910,9 +911,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 // 10秒スリープしてWebSocket経由の送信を失敗させる
                 Thread.sleep(forTimeInterval: 10.0)
             }
-            Logger.debug(type: .peerChannel, message: "Before calling createAndSendReAnswer from handleSignalingOverDataChannel")
             createAndSendReAnswer(forReOffer: reOffer.sdp)
-            Logger.debug(type: .peerChannel, message: "After calling createAndSendReAnswer from handleSignalingOverDataChannel")
         case .push, .notify:
             // 処理は不要
             break
