@@ -748,8 +748,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 return
             }
 
+
             let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+            // iOS側はtype: switchedが送られてきていないと思い込んでいるため、
+            // WebSocket経由で送信を試みる（実際は失敗する）
+            Logger.debug(type: .peerChannel, message: "Before sending re-answer via WebSocket (connectionId: \(self.connectionId ?? "nil"))")
             self.signalingChannel.send(message: message)
+            Logger.debug(type: .peerChannel, message: "After sending re-answer via WebSocket (connectionId: \(self.connectionId ?? "nil"))")
 
             if self.configuration.isSender {
                 self.updateSenderOfferEncodings()
@@ -871,17 +876,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 signalingChannel.send(message: .pong(pong))
             }
         case let .switched(switched):
-            switchedToDataChannel = true
-            signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
-            if signalingChannel.ignoreDisconnectWebSocket {
-                if let webSocketChannel = signalingChannel.webSocketChannel {
-                    webSocketChannel.disconnect(error: nil)
-                }
-            }
-
-            if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
-                onDataChannel(mediaChannel)
-            }
+            Logger.debug(type: .peerChannel, message: "Received type: switched, but ignoring for race condition test")
+            // レースコンディション再現のため、switchedの処理を完全に無効化
+            // switchedToDataChannel = true
+            // signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
+            // if signalingChannel.ignoreDisconnectWebSocket {
+            //     if let webSocketChannel = signalingChannel.webSocketChannel {
+            //         webSocketChannel.disconnect(error: nil)
+            //     }
+            // }
+            // 
+            // if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
+            //     onDataChannel(mediaChannel)
+            // }
         case let .redirect(redirect):
             signalingChannel.redirect(location: redirect.location)
         default:
@@ -896,7 +903,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .mediaStream, message: "handle signaling over DataChannel => \(signaling.typeName())")
         switch signaling {
         case let .reOffer(reOffer):
-            createAndSendReAnswerOverDataChannel(forReOffer: reOffer.sdp)
+            // iOS側はtype: switchedが送られてきていないと思い込んでいるため、
+            // DataChannel経由でre-offerを受信しても、WebSocket経由でre-answerを送信しようとする
+            // レースコンディション再現のため、WebSocketを切断してからre-answerを送信
+            if let webSocketChannel = signalingChannel.webSocketChannel {
+                Logger.debug(type: .peerChannel, message: "Disconnecting WebSocket before re-answer for race condition test (DataChannel)")
+                webSocketChannel.disconnect(error: nil)
+                
+                // 10秒スリープしてWebSocket経由の送信を失敗させる
+                Thread.sleep(forTimeInterval: 10.0)
+            }
+            Logger.debug(type: .peerChannel, message: "Before calling createAndSendReAnswer from handleSignalingOverDataChannel")
+            createAndSendReAnswer(forReOffer: reOffer.sdp)
+            Logger.debug(type: .peerChannel, message: "After calling createAndSendReAnswer from handleSignalingOverDataChannel")
         case .push, .notify:
             // 処理は不要
             break
