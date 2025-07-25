@@ -691,6 +691,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             }
 
             let answer = SignalingAnswer(sdp: sdp!)
+            // レースコンディション再現のため、answer送信直前にsleep（テスト用）
+            if self.signalingChannel.dataChannelSignaling {
+                print("Sleeping before sending answer to reproduce race condition")
+                sleep(2)  // WebSocket切断のための時間を稼ぐ
+                print("Attempting to send answer after sleep")
+            }
             self.signalingChannel.send(message: Signaling.answer(answer))
             self.lock.unlock()
             Logger.debug(type: .peerChannel, message: "did send answer")
@@ -841,6 +847,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                 WrapperVideoEncoderFactory.shared.simulcastEnabled = simulcast
             }
 
+            // レースコンディション再現のため、answer生成中にWebSocketを切断（テスト用）
+            if signalingChannel.dataChannelSignaling {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+                    if let webSocketChannel = self.signalingChannel.webSocketChannel {
+                        webSocketChannel.disconnect(error: nil)
+                        print("Disconnected WebSocket during answer processing for race condition test")
+                    }
+                }
+            }
             createAndSendAnswer(offer: offer)
         case let .update(update):
             if configuration.isMultistream {
