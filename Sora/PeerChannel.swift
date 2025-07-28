@@ -889,7 +889,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
                     // 参考: https://developer.apple.com/documentation/dispatch/dispatchqos/qosclass-swift.enum/background
                     DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + Self.switchedDisconnectDelay) { [weak self] in
                         guard let self else { return }
-                        // まだ接続中の場合のみ切断する
+                        // PeerChannel が切断状態の場合は、WebSocket Channel はすでに切断されており、
+                        // disconnect を呼び出す必要がないため、PeerChannel の状態をチェックしている。
                         if state != .closed {
                             webSocketChannel.disconnect(error: nil)
                         }

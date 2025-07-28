@@ -15,10 +15,9 @@
 
 **リリース日**: 2025-07-
 
-- [FIX] DataChannel のみでのシグナリング利用時に `type: switched` と `type: re-offer` をほぼ同時に受信した際、 `type: re-answer` を WebSocket 経由で送信する前に WebSocket を切断してしまい `type: re-answer` が送信できなくなる場合がある問題を修正する
-  - DataChannel への切り替え後でも、まだ WebSocket 経由で送信中のメッセージが存在する可能性を考慮し、余裕を持って切断するために 10 秒の待機時間を設けるようにした
-  - 切断前に接続状態（`state != .closed`）を確認する処理を追加し、既に切断されている場合は再度切断しないようにした
-  - この問題は Sora 側で `data_channel_signaling` と `ignore_disconnect_websocket` を true にした DataChannel のみでのシグナリング利用時に発生する可能性がある
+- [FIX] Sora の設定が、DataChannel 経由のシグナリング、かつ、WebSocket の切断を Sora への接続が切断したと判断しない設定の場合に、WebSocket 経由から DataChannel 経由へのシグナリング切替時に `type: switched` と `type: re-offer` をほぼ同時に受信した際、 `type: re-answer` を WebSocket 経由で送信する前に WebSocket を切断してしまい `type: re-answer` の送信に失敗することがある問題を修正する
+  - DataChannel 経由へのシグナリング切替後でも、まだ WebSocket 経由で送信中のメッセージが存在する可能性を考慮し、余裕を持って切断するために 10 秒の待機時間を設けるようにした
+  - WebSocket を切断する前に PeerChannel の接続状態を確認する処理を追加し、既に切断されている場合は WebSocket の切断処理を呼ばないようにした
 
 ## 2025.1.2
 
