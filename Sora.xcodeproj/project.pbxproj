@@ -24,7 +24,7 @@
 		916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9174A88E1F7395CA00D586C4 /* AspectRatio.swift */; };
 		9161AECA2410D75A00BA3E0E /* URLSessionWebSocketChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */; };
 		91629BF21F8E5099001193D0 /* Array+Base.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91629BF11F8E5098001193D0 /* Array+Base.swift */; };
-		91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */; };
+		91672C791F78F7FC002300E7 /* WebRTCConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91672C781F78F7FC002300E7 /* WebRTCConfiguration.swift */; };
 		916B0B992553D9620035B5F9 /* AudioMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910444CE253EC6F400EA06BE /* AudioMode.swift */; };
 		916BBF721F19EF5800846166 /* ICECandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916BBF711F19EF5800846166 /* ICECandidate.swift */; };
 		9173595E1F2CCEBF00806F8B /* Configuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9173595D1F2CCEBF00806F8B /* Configuration.swift */; };
@@ -90,7 +90,7 @@
 		915CEC8F1F821A90006E45E2 /* CameraVideoCapturer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraVideoCapturer.swift; sourceTree = "<group>"; };
 		9161AEC92410D75A00BA3E0E /* URLSessionWebSocketChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = URLSessionWebSocketChannel.swift; sourceTree = "<group>"; };
 		91629BF11F8E5098001193D0 /* Array+Base.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "Array+Base.swift"; sourceTree = "<group>"; };
-		91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCConfigration.swift; sourceTree = "<group>"; };
+		91672C781F78F7FC002300E7 /* WebRTCConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCConfiguration.swift; sourceTree = "<group>"; };
 		916BBF711F19EF5800846166 /* ICECandidate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ICECandidate.swift; sourceTree = "<group>"; };
 		9173595D1F2CCEBF00806F8B /* Configuration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
 		9174A88E1F7395CA00D586C4 /* AspectRatio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AspectRatio.swift; sourceTree = "<group>"; };
@@ -211,7 +211,7 @@
 				91FA6F201D93CA9800D38DB4 /* VideoFrame.swift */,
 				91B1D6451D75E11F00112A4E /* VideoRenderer.swift */,
 				9100904F1E58B5450099E00E /* VideoView.swift */,
-				91672C781F78F7FC002300E7 /* WebRTCConfigration.swift */,
+				91672C781F78F7FC002300E7 /* WebRTCConfiguration.swift */,
 				91554F421F179CFD00403C39 /* WebSocketChannel.swift */,
 				9100904D1E58B4470099E00E /* VideoView.xib */,
 				91BDC1D31F6285D10084DC3A /* Extensions */,
@@ -390,7 +390,7 @@
 				910F2DB124D7F6EE007336A6 /* Statistics.swift in Sources */,
 				91A19B8E1F19367700A76852 /* MediaChannel.swift in Sources */,
 				915CEC901F821A90006E45E2 /* CameraVideoCapturer.swift in Sources */,
-				91672C791F78F7FC002300E7 /* WebRTCConfigration.swift in Sources */,
+				91672C791F78F7FC002300E7 /* WebRTCConfiguration.swift in Sources */,
 				916134DD1F7B5EFF00ABDDAF /* AspectRatio.swift in Sources */,
 				9174A8951F73F90B00D586C4 /* AudioCodec.swift in Sources */,
 				91A19B8A1F19366000A76852 /* SignalingChannel.swift in Sources */,
