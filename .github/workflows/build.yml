@@ -7,7 +7,6 @@ on:
     - 'README.md'
     - 'CHANGES.md'
     - 'LICENSE'
-    - 'Sora.podspec'
 
 jobs:
   build:
