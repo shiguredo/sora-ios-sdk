@@ -220,7 +220,7 @@ public struct Configuration {
   /// 通常、指定する必要はありません。
   public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
 
-  /// Sora との接続に利用する CA 証明書のデータです。
+  /// Sora との接続に利用する CA 証明書です。
   /// この設定を行うと、指定した CA 証明書がサーバー証明書の検証に利用されます。
   public var caCertificate: SecCertificate?
 
