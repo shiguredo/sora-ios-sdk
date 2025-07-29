@@ -39,6 +39,11 @@
     - `close` の associated value の型である `SignalingClose` 構造体を追加した
   - `SoraError` に DataChannel シグナリングで "type": "close" を受信して接続が解除されたことを表すケースである `dataChannelClosed` を追加した
   - @zztkm
+- [ADD] `Configuration` に CA 証明書を指定するためのプロパティを追加する
+  - `Configuration.caCertificate: SecCertificate?` プロパティを追加
+  - CA 証明書を指定した場合、指定された証明書のみを使用して独自にサーバー証明書を検証する
+  - 証明書が指定されない場合(デフォルト)は、ATS が適用されて iOS 標準の信頼ストアの CA 証明書が使用される
+  - @zztkm
 - [FIX] Sora から切断された場合の切断処理を修正し適切なエラーを ``MediaChannelHandlers.onDisconnect`` で受け取ることができるようにする
   - Sora iOS SDK 2025.1.1 までは Sora から Close Frame を受け取ったり、ネットワークエラーが起きたりしても、WebSocket メッセージ受信失敗に起因する ``SoraError.webSocketError`` しか受信できなかったが、以下の内容を受信できるようになった
     - Sora から Close Frame を受け取った場合のステータスコードと理由
@@ -85,6 +90,15 @@
   - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
+
+## 2025.1.3
+
+**リリース日**: 2025-07-28
+
+- [FIX] Sora の設定が、DataChannel 経由のシグナリング、かつ、WebSocket の切断を Sora への接続が切断したと判断しない設定の場合に、WebSocket 経由から DataChannel 経由へのシグナリング切替時に `type: switched` と `type: re-offer` をほぼ同時に受信した際、 `type: re-answer` を WebSocket 経由で送信する前に WebSocket を切断してしまい `type: re-answer` の送信に失敗することがある問題を修正する
+  - DataChannel 経由へのシグナリング切替後でも、まだ WebSocket 経由で送信中のメッセージが存在する可能性を考慮し、余裕を持って切断するために 10 秒の待機時間を設けるようにした
+  - WebSocket を切断する前に PeerChannel の接続状態を確認する処理を追加し、既に切断されている場合は WebSocket の切断処理を呼ばないようにした
+  - @zztkm
 
 ## 2025.1.2
 
