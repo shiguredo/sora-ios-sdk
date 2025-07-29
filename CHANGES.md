@@ -84,9 +84,11 @@
   - @zztkm
 - [UPDATE] GitHub Actions での CI から CocoaPods を削除し Swift Package Manager のみを利用するように変更する
   - CocoaPods 関連のステップ（Show CocoaPods Version、Restore Pods、Install Dependences）を削除
-  - xcodebuild を -workspace から -project に変更
-  - WebRTC Non-public API チェックを Swift Package Manager のパスに変更
-  - Podfile を削除
+  - xcodebuild コマンドから -workspace オプションを削除し、-scheme のみを使用するように変更
+  - xcodebuild に -destination 'generic/platform=iOS' オプションを追加
+    - GitHub Actions では実機デバイスが存在しないので、特定のデバイスを指定するのではなく `generic/` をつけて iOS を汎用ターゲットとして指定した
+  - WebRTC Non-public API チェックを Swift Package Manager のビルド成果物のパスに変更
+  - 不要になったため Podfile、Gemfile、Sora.xcodeproj を削除
   - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
