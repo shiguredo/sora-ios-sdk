@@ -103,8 +103,10 @@ class SignalingChannel {
     return uniqueUrls
   }
 
-  private func setUpWebSocketChannel(url: URL, proxy: Proxy?) -> URLSessionWebSocketChannel {
-    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy)
+  private func setUpWebSocketChannel(url: URL, proxy: Proxy?, caCertificate: SecCertificate?)
+    -> URLSessionWebSocketChannel
+  {
+    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy, caCertificate: caCertificate)
 
     // 接続成功時
     ws.internalHandlers.onConnect = { [weak self] webSocketChannel in
@@ -207,7 +209,8 @@ class SignalingChannel {
     let urlCandidates = unique(urls: configuration.urlCandidates)
     Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
     for url in urlCandidates {
-      let ws = setUpWebSocketChannel(url: url, proxy: configuration.proxy)
+      let ws = setUpWebSocketChannel(
+        url: url, proxy: configuration.proxy, caCertificate: configuration.caCertificate)
       Logger.info(
         type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
       ws.connect(delegateQueue: queue)
@@ -233,7 +236,8 @@ class SignalingChannel {
       return
     }
 
-    let ws = setUpWebSocketChannel(url: newUrl, proxy: configuration.proxy)
+    let ws = setUpWebSocketChannel(
+      url: newUrl, proxy: configuration.proxy, caCertificate: configuration.caCertificate)
     ws.connect(delegateQueue: queue)
   }
 
