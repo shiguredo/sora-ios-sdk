@@ -77,6 +77,10 @@ class NativePeerChannelFactory {
         proxyPort: Int32(proxy.port),
         proxyUsername: proxy.username ?? "",
         proxyPassword: proxy.password ?? "")
+    } else if let certificateVerifier {
+      return nativeFactory.peerConnection(
+        with: configuration.nativeValue, constraints: constraints.nativeValue,
+        certificateVerifier: certificateVerifier, delegate: delegate)
     } else {
       return nativeFactory.peerConnection(
         with: configuration.nativeValue, constraints: constraints.nativeValue,
