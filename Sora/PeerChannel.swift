@@ -195,11 +195,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try connecting")
 
+    // 証明書検証の設定
+    let certificateVerifier = TURNTLSCertificateVerifier(caCertificate: configuration.caCertificate)
+    
     nativeChannel = NativePeerChannelFactory.default
       .createNativePeerChannel(
         configuration: webRTCConfiguration,
         constraints: webRTCConfiguration.constraints,
         proxy: configuration.proxy,
+        certificateVerifier: certificateVerifier,
         delegate: self)
     guard nativeChannel != nil else {
       let message = "createNativePeerChannel failed"
@@ -280,10 +284,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if configuration.isSender {
       Logger.debug(type: .peerChannel, message: "try creating offer SDP")
+      // TODO(zztkm): createClientOfferSDP に certificateV
       NativePeerChannelFactory.default
         .createClientOfferSDP(
           configuration: webRTCConfiguration,
-          constraints: webRTCConfiguration.constraints
+          constraints: webRTCConfiguration.constraints,
         ) { sdp, sdpError in
           if let error = sdpError {
             Logger.debug(

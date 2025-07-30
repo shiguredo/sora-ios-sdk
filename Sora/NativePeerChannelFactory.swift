@@ -62,13 +62,14 @@ class NativePeerChannelFactory {
     configuration: WebRTCConfiguration,
     constraints: MediaConstraints,
     proxy: Proxy? = nil,
+    certificateVerifier: RTCSSLCertificateVerifier? = nil,
     delegate: RTCPeerConnectionDelegate?
   ) -> RTCPeerConnection? {
     if let proxy {
       return nativeFactory.peerConnection(
         with: configuration.nativeValue,
         constraints: constraints.nativeValue,
-        certificateVerifier: nil,
+        certificateVerifier: certificateVerifier,
         delegate: delegate,
         proxyType: RTCProxyType.https,
         proxyAgent: proxy.agent,
@@ -151,6 +152,8 @@ class NativePeerChannelFactory {
     constraints: MediaConstraints,
     handler: @escaping (String?, Error?) -> Void
   ) {
+    // TODO(zztkm): createNativePeerChannel に certificateVerifier を渡す必要があるか確認する
+    // offer sdp を生成して close するだけだから特にいらない気もする
     let peer = createNativePeerChannel(
       configuration: configuration, constraints: constraints, delegate: nil)
 
