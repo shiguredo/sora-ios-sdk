@@ -197,7 +197,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // 証明書検証の設定
     let certificateVerifier = TURNTLSCertificateVerifier(caCertificate: configuration.caCertificate)
-    
+
     nativeChannel = NativePeerChannelFactory.default
       .createNativePeerChannel(
         configuration: webRTCConfiguration,
