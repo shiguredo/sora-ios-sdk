@@ -38,7 +38,7 @@ final class TURNTLSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
 
     // カスタム CA 証明書が指定されている場合は、それを使用して検証
     Logger.debug(
-      type: .peerChannel, message: "カスタム CA 証明書の設定: \(String(describing: caCertificate))")
+      type: .peerChannel, message: "TURNTLSCertificateVerifier.caCertificate: \(String(describing: caCertificate))")
     if let caCertificate = caCertificate {
       let anchorCertificates = [caCertificate] as CFArray
       SecTrustSetAnchorCertificates(trust, anchorCertificates)
