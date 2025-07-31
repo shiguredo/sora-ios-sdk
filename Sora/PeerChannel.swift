@@ -195,16 +195,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try connecting")
 
-    // 証明書検証の設定
-    if configuration.caCertificate != nil {
-      Logger.debug(
-        type: .peerChannel,
-        message: "kensaku: Configuration に CA 証明書が設定されています")
-    } else {
-      Logger.debug(
-        type: .peerChannel,
-        message: "kensaku: Configuration に CA 証明書が設定されていません (システム証明書ストアを使用)")
-    }
     let certificateVerifier = TURNTLSCertificateVerifier(caCertificate: configuration.caCertificate)
 
     nativeChannel = NativePeerChannelFactory.default
@@ -764,17 +754,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel, message: "ICE server infos => \(config.iceServerInfos)")
       Logger.debug(
         type: .peerChannel, message: "ICE transport policy => \(config.iceTransportPolicy)")
-
-      // TURN-TLS の使用をログ出力
-      for serverInfo in config.iceServerInfos {
-        for url in serverInfo.urls {
-          if url.hasPrefix("turns:") {
-            Logger.debug(
-              type: .peerChannel,
-              message: "kensaku: TURN-TLS サーバーが設定されています: \(url)")
-          }
-        }
-      }
 
       webRTCConfiguration.iceServerInfos = config.iceServerInfos
       webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
