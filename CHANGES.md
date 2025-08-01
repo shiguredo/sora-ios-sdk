@@ -92,6 +92,12 @@
     - `Sora.xcodeproj` があると、Package.swift の依存関係を参照しないため削除した
     - このリポジトリで CocoaPods を利用しなくなるため、Podfile と Gemfile を削除した
   - @zztkm
+- [UPDATE] jazzy の設定ファイルを更新する
+  - CocoaPods に依存しなくなったので、workspace を参照しないようにした
+  - `swift_build_tool` に `xcodebuild` を指定して、xcodebuild が使われるように設定した
+  - xcodebuild でのビルドのために `-destination 'generic/platform=iOS'` を追加した
+  - swift_version を指定してビルドする必要がないため `swift_version` は削除した
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
 
