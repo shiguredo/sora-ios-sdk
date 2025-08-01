@@ -93,10 +93,12 @@
     - このリポジトリで CocoaPods を利用しなくなるため、Podfile と Gemfile を削除した
   - @zztkm
 - [UPDATE] jazzy の設定ファイルを更新する
-  - CocoaPods に依存しなくなったので、workspace を参照しないようにした
   - `swift_build_tool` に `xcodebuild` を指定して、xcodebuild が使われるように設定した
-  - xcodebuild でのビルドのために `-destination 'generic/platform=iOS'` を追加した
-  - swift_version を指定してビルドする必要がないため `swift_version` は削除した
+  - CocoaPods 削除に合わせて `xcodebuild_arguments` の更新
+    - xcodebuild でのビルドのために `-destination 'generic/platform=iOS'` を追加した
+    - Sora.xcworkspace がなくなったため `-workspace` オプションを削除した
+    - xcodebuild 側で iOS 向け SDK を決定してくれるため、`-sdk` オプションを削除した
+    - xcodebuild 側で Swift のコンパイルが行われるため Swift のバージョン指定は不要と判断し `swift_version` オプションを削除した
   - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
