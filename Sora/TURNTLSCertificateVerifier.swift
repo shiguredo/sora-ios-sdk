@@ -19,9 +19,9 @@ final class TURNTLSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
   /// - parameter certificate: サーバーから受信した証明書データ
   /// - returns: 証明書が有効な場合は true、無効な場合は false
   func verify(_ certificate: Data) -> Bool {
-    Logger.debug(type: .peerChannel, message: "TURNTLSCertificateVerifier: start verify")
+    Logger.info(type: .peerChannel, message: "TURNTLSCertificateVerifier: start verify")
     guard let cert = SecCertificateCreateWithData(nil, certificate as CFData) else {
-      Logger.debug(
+      Logger.error(
         type: .peerChannel,
         message: "SecCertificateCreateWithData failed: \(certificate.base64EncodedString())")
       return false
@@ -32,7 +32,7 @@ final class TURNTLSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
     let status = SecTrustCreateWithCertificates(cert, policy, &trust)
 
     guard status == errSecSuccess, let trust = trust else {
-      Logger.debug(
+      Logger.error(
         type: .peerChannel, message: "SecTrustCreateWithCertificates failed: \(status)")
       return false
     }
