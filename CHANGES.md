@@ -100,6 +100,9 @@
     - xcodebuild 側で iOS 向け SDK を決定してくれるため、`-sdk` オプションを削除した
     - xcodebuild 側で Swift のコンパイルが行われるため Swift のバージョン指定は不要と判断し `swift_version` オプションを削除した
   - @zztkm
+- [UPDATE] CocoaPods でのライブラリ提供を廃止する
+  - `Sora.podspec` を削除した
+  - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
 
