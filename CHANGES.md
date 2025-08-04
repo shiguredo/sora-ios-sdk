@@ -44,8 +44,8 @@
   - @zztkm
 - [ADD] `Configuration` に CA 証明書を指定するためのプロパティを追加する
   - `Configuration.caCertificate: SecCertificate?` プロパティを追加
-  - CA 証明書を指定した場合、指定された証明書のみを使用して独自にサーバー証明書を検証する
-  - 証明書が指定されない場合(デフォルト)は、ATS が適用されて iOS 標準の信頼ストアの CA 証明書が使用される
+  - CA 証明書を指定した場合、WebSocket と TURN-TLS 通信においては指定された証明書のみを使用してサーバー証明書を検証する
+  - CA 証明書が指定されない場合は、WebSocket、TURN-TLS ともに iOS の信頼ストアが使用される
   - @zztkm
 - [FIX] Sora から切断された場合の切断処理を修正し適切なエラーを ``MediaChannelHandlers.onDisconnect`` で受け取ることができるようにする
   - Sora iOS SDK 2025.1.1 までは Sora から Close Frame を受け取ったり、ネットワークエラーが起きたりしても、WebSocket メッセージ受信失敗に起因する ``SoraError.webSocketError`` しか受信できなかったが、以下の内容を受信できるようになった
@@ -53,6 +53,12 @@
       - ステータスコードが 1000 で正常に切断された場合も ``MediaChannelHandlers.onDisconnect`` で通知する
     - ネットワークエラーや Sora がダウンした場合のエラー内容
   - この変更によって ``MediaChannelHandlers.onDisconnect`` で受信するメッセージの内容は変わるが、コールバックが発火するタイミングに変更はない
+  - @zztkm
+- [FIX] TURN-TLS におけるサーバー証明書の検証方法を、libwebrtc の組み込み証明書から iOS の信頼ストアを参照する方式に変更した
+  - 従来は libwebrtc に組み込まれた証明書を用いてサーバー証明書の検証を行っていたため、Let's Encrypt など、libwebrtc に含まれていない認証局（CA）で署名された証明書では検証に失敗し、TURN-TLS の接続が確立できなかった
+  - 本修正により、iOS の信頼ストアに登録された CA 証明書を使用して検証が行われるようになり、iOS デバイス上で信頼されている CA によって署名された証明書であれば、TURN-TLS 通信が可能になる
+  - 本修正による既存ユーザーへの影響はありません
+  - また、ユーザーが iOS に追加した独自の CA 証明書も TURN-TLS の検証に利用できるようになる
   - @zztkm
 
 ### misc
