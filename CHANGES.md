@@ -20,6 +20,9 @@
 - [CHANGE] `MediaChannelHandlers` の `onDisconnect: ((Error?) -> Void)?` を `onDisconnectLegacy` という名前に変更し、非推奨にする
   - `onDisconnect: ((SoraCloseEvent) -> Void)?` に移行するため、名前を変更した
   - @zztkm
+- [CHANGE] CocoaPods でのライブラリ提供を廃止する
+  - `Sora.podspec` を削除した
+  - @zztkm
 - [UPDATE] WebRTC m138.7204.0.3 に上げる
   - @zztkm
 - [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
@@ -99,9 +102,6 @@
     - Sora.xcworkspace がなくなったため `-workspace` オプションを削除した
     - xcodebuild 側で iOS 向け SDK を決定してくれるため、`-sdk` オプションを削除した
     - xcodebuild 側で Swift のコンパイルが行われるため Swift のバージョン指定は不要と判断し `swift_version` オプションを削除した
-  - @zztkm
-- [UPDATE] CocoaPods でのライブラリ提供を廃止する
-  - `Sora.podspec` を削除した
   - @zztkm
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした
