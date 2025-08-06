@@ -195,14 +195,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try connecting")
 
-    let certificateVerifier = TURNTLSCertificateVerifier(caCertificate: configuration.caCertificate)
-
     nativeChannel = NativePeerChannelFactory.default
       .createNativePeerChannel(
         configuration: webRTCConfiguration,
         constraints: webRTCConfiguration.constraints,
         proxy: configuration.proxy,
-        certificateVerifier: certificateVerifier,
         delegate: self)
     guard nativeChannel != nil else {
       let message = "createNativePeerChannel failed"
