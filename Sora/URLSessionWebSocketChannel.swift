@@ -275,20 +275,6 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     _ challenge: URLAuthenticationChallenge,
     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
   ) {
-    // 既存の Proxy Basic 認証ロジックを流用
-    let ps = challenge.protectionSpace
-    let previousFailureCount = challenge.previousFailureCount
-
-    // 既に失敗している場合はチャレンジを中止する
-    guard previousFailureCount == 0 else {
-      let message =
-        "[\(host)] \(#function): Proxy authentication failed (previous failure count: \(previousFailureCount)). Proxy => \(String(describing: proxy))"
-      Logger.info(type: .webSocketChannel, message: message)
-      completionHandler(.cancelAuthenticationChallenge, nil)
-      disconnect(error: SoraError.signalingChannelError(reason: message))  // disconnect は適切か要確認
-      return
-    }
-
     // username と password をチェック
     guard let username = proxy?.username, let password = proxy?.password else {
       let message =
