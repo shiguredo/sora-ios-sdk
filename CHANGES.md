@@ -100,7 +100,7 @@
   - @zztkm
 - [UPDATE] actions/checkout@v4 を @v5 に上げる
   - @torikizi
-- [UPDATE] deprecated になった actions/create-release の利用をやめて softprops/action-gh-release を利用する
+- [UPDATE] build.yml の `release:` は運用上利用していないため、削除する
   - @torikizi
 - [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
   - lint-format.sh で実行していたコマンドを個別に実行できるようにした

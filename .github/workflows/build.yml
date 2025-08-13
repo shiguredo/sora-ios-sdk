@@ -72,21 +72,3 @@ jobs:
           SLACK_TITLE: "FAILED"
           SLACK_ICON_EMOJI: ":japanese_ogre:"
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-  release:
-    if: contains(github.ref, 'tags/v')
-    needs: [build]
-    runs-on: macos-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
