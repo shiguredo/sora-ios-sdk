@@ -15,7 +15,7 @@ jobs:
       XCODE: /Applications/Xcode_16.3.app
       XCODE_SDK: iphoneos18.4
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Select Xcode Version
       run: sudo xcode-select -s '${{ env.XCODE }}/Contents/Developer'
     - name: Show Xcode Version
@@ -72,22 +72,3 @@ jobs:
           SLACK_TITLE: "FAILED"
           SLACK_ICON_EMOJI: ":japanese_ogre:"
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-  release:
-    if: contains(github.ref, 'tags/v')
-    needs: [build]
-    runs-on: macos-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Create Release
-      id: create_release
-      # TODO: https://github.com/softprops/action-gh-release への置き換えを検討する
-      uses: actions/create-release@v1.1.4
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
