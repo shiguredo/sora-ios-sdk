@@ -1,20 +1,17 @@
 import AVFoundation
 import Foundation
 
-/**
- * 音声モード。
- *  ``AVAudioSession`` の音声モードと音声カテゴリを変更します。
- *  詳細な設定を行いたい場合は ``AVAudioSession`` を使用して下さい。
- *
- *  音声カテゴリのオプションは次の値が指定されます:
- *
- *  - ``allowBluetooth``
- *  - ``allowBluetoothA2DP``
- *  - ``allowAirPlay``
- *
- */
+/// 音声モード。
+///  ``AVAudioSession`` の音声モードと音声カテゴリを変更します。
+///  詳細な設定を行いたい場合は ``AVAudioSession`` を使用して下さい。
+///
+///  音声カテゴリのオプションは次の値が指定されます:
+///
+///  - ``allowBluetooth``
+///  - ``allowBluetoothA2DP``
+///  - ``allowAirPlay``
 public enum AudioMode {
-    /**
+  /**
      * デフォルト。
      * ``AVAudioSession`` の音声モードを ``default`` に変更します。
      * 音声カテゴリを ``category`` の値に変更します。
@@ -24,42 +21,40 @@ public enum AudioMode {
      * - parameter category: 音声カテゴリ
      * - parameter output: 音声出力先
      */
-    case `default`(category: AVAudioSession.Category, output: AudioOutput)
+  case `default`(category: AVAudioSession.Category, output: AudioOutput)
 
-    /**
+  /**
      * ビデオチャット。
      * ``AVAudioSession`` の音声モードを ``videoChat`` に変更します。
      * 音声カテゴリを ``playAndRecord`` に変更します。
      * 音声はスピーカーから出力されます。
      */
-    case videoChat
+  case videoChat
 
-    /**
+  /**
      * ボイスチャット。
      * ``AVAudioSession`` の音声モードを ``voiceChat`` に変更します。
      * 音声カテゴリを ``playAndRecord`` に変更します。
      *
      * - parameter output: 音声出力先
      */
-    case voiceChat(output: AudioOutput)
+  case voiceChat(output: AudioOutput)
 }
 
-/**
- * 音声出力先
- */
+/// 音声出力先
 public enum AudioOutput {
-    /// デフォルト。端末の状態に依存します。
-    case `default`
+  /// デフォルト。端末の状態に依存します。
+  case `default`
 
-    /// スピーカー
-    case speaker
+  /// スピーカー
+  case speaker
 
-    var portOverride: AVAudioSession.PortOverride {
-        switch self {
-        case .default:
-            return .none
-        case .speaker:
-            return .speaker
-        }
+  var portOverride: AVAudioSession.PortOverride {
+    switch self {
+    case .default:
+      return .none
+    case .speaker:
+      return .speaker
     }
+  }
 }

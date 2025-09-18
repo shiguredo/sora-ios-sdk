@@ -3,7 +3,7 @@
 import Foundation
 import PackageDescription
 
-let file = "WebRTC-132.6834.5.2/WebRTC.xcframework.zip"
+let libwebrtcVersion = "m138.7204.0.3"
 
 let package = Package(
     name: "Sora",
@@ -12,11 +12,16 @@ let package = Package(
         .library(name: "Sora", targets: ["Sora"]),
         .library(name: "WebRTC", targets: ["WebRTC"]),
     ],
+    dependencies: [
+        // 開発用依存関係
+        // SwfitLint 公式で推奨されている SwfitLintPlugins を利用する
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.58.2")
+    ],
     targets: [
         .binaryTarget(
             name: "WebRTC",
-            url: "https://github.com/shiguredo/sora-ios-sdk-specs/releases/download/\(file)",
-            checksum: "d610c8be95e865ae5b2c89f6c724222bf6c473cfffdb055245fa595c8c6541c6"
+            url: "https://github.com/shiguredo-webrtc-build/webrtc-build/releases/download/\(libwebrtcVersion)/WebRTC.xcframework.zip",
+            checksum: "af14de48521d31282307f2864571e158ea55a8b876e82c3cacaf939d159ea0ce"
         ),
         .target(
             name: "Sora",

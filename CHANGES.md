@@ -11,11 +11,114 @@
 
 ## develop
 
+## 2025.2.0
+
+**リリース日**: 2025-09-18
+
+- [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する破壊的変更
+  - Configuration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
+  - Configuration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除
+  - 結果、connect メッセージには Configuration.multistreamEnabled に指定した値が送信される
+  - 今後は Configuration.role に .sendrecv を指定している場合または Configuration.spotlightEnabled に .enabled を指定している場合に Configuration.multistreamEnabled に false を指定すると接続エラーになる
+  - @zztkm
+- [CHANGE] `MediaChannelHandlers` の `onDisconnect: ((Error?) -> Void)?` を `onDisconnectLegacy` という名前に変更し、非推奨にする
+  - `onDisconnect: ((SoraCloseEvent) -> Void)?` に移行するため、名前を変更した
+  - @zztkm
+- [CHANGE] CocoaPods でのライブラリ提供を廃止する
+  - `Sora.podspec` を削除した
+  - @zztkm
+- [UPDATE] WebRTC m138.7204.0.3 に上げる
+  - @zztkm
+- [UPDATE] `Configuration.multistreamEnabled` を非推奨にする
+  - 合わせて `Configuration` のイニシャライザの multistreamEnabled をオプション引数にし、デフォルト値を nil に変更
+  - @zztkm
+- [UPDATE] WebRTCConfigration.swift を WebRTCConfiguration.swift にリネームする
+  - @zztkm
+- [UPDATE] Sora との接続を終了した際のイベント情報を表す、SoraCloseEvent を追加する
+  - @zztkm
+- [UPDATE] `MediaChannelHandlers` に `onDisconnect: ((SoraCloseEvent) -> Void)?` を追加する
+  - @zztkm
+- [ADD] サイマルキャストの映像のエンコーディングパラメーター `scaleResolutionDownTo` を追加する
+  - @zztkm
+- [ADD] Sora から DataChannel シグナリングを切断する際に "type": "close" メッセージを受信する機能を追加する
+  - DataChannel シグナリングが有効、かつ ignore_disconnect_websocket が true、かつ Sora の設定で data_channel_signaling_close_message が有効な場合に受信することが可能
+  - "type": "close" に対応するため、 `Signaling` のケースに `close` を追加した
+    - `close` の associated value の型である `SignalingClose` 構造体を追加した
+  - `SoraError` に DataChannel シグナリングで "type": "close" を受信して接続が解除されたことを表すケースである `dataChannelClosed` を追加した
+  - @zztkm
+- [FIX] Sora から切断された場合の切断処理を修正し適切なエラーを ``MediaChannelHandlers.onDisconnect`` で受け取ることができるようにする
+  - Sora iOS SDK 2025.1.1 までは Sora から Close Frame を受け取ったり、ネットワークエラーが起きたりしても、WebSocket メッセージ受信失敗に起因する ``SoraError.webSocketError`` しか受信できなかったが、以下の内容を受信できるようになった
+    - Sora から Close Frame を受け取った場合のステータスコードと理由
+      - ステータスコードが 1000 で正常に切断された場合も ``MediaChannelHandlers.onDisconnect`` で通知する
+    - ネットワークエラーや Sora がダウンした場合のエラー内容
+  - この変更によって ``MediaChannelHandlers.onDisconnect`` で受信するメッセージの内容は変わるが、コールバックが発火するタイミングに変更はない
+  - @zztkm
+
+### misc
+
+- [CHANGE] フォーマッターを swift-format に移行する
+  - SwiftFormat のための設定ファイルである .swiftformat と .swift-version を削除
+  - フォーマット設定はデフォルトを採用したため、.swift-format は利用しない
+  - swift-format のデフォルト設定で、format lint を行った結果、警告が出た部分はすべて修正
+  - JSON デコード処理に使う JSON のキー名を指定するための enum の定義については、`AlwaysUseLowerCamelCase` ルールを無効化するためのコメントを追加
+    - シグナリングメッセージのキー名にスネークケースが採用されている項目があるため、この対応を行った
+  - @zztkm
+- [UPDATE] システム条件を変更する
+  - CocoaPods 廃止に伴いシステム条件から削除
+  - WebRTC SFU Sora 2025.1.0 以降
+  - @zztkm
+- [UPDATE] SwiftLint の管理を CocoaPods から Swift Package Manager に移行する
+  - @zztkm
+- [UPDATE] 開発用の依存管理を Swift Package Manager に移行したため Podfile.dev を削除する
+  - GitHub Actions で Podfile.dev を利用していたため、利用しないように変更
+  - @zztkm
+- [UPDATE] GitHub Actions で Lint と Format Lint を行うコマンドを Makefile に変更
+  - 今まで lint-format.sh で一括実行したところを Makefile に移行したので、GitHub Actions でも Makefile を利用するように変更
+  - @zztkm
+- [UPDATE] フォーマッターとリンターの実行を Makefile に移行したため、不要になった lint-format.sh を削除
+  - @zztkm
+- [UPDATE] GitHub Actions のビルド環境を更新する
+  - Xcode の version を 16.3 に変更
+  - SDK を iOS 18.4 に変更
+  - @zztkm
+- [UPDATE] CocoaPods の廃止対応のため、canary.py から Sora.podspec の更新処理を削除する
+  - @zztkm
+- [UPDATE] フォーマッターの設定に合わせて canary.py で PackageInfo.swift に書き込む際のスペースを 4 から 2 に変更する
+  - @zztkm
+- [UPDATE] canary.py でファイルの読み書きを行う際の encoding を明示的に utf-8 に設定する
+  - Windows 環境で canary.py を実行した際に、予期せぬ文字化けが発生してしまうため修正を行った
+  - @zztkm
+- [UPDATE] GitHub Actions での CI で依存関係の解決を Swift Package Manager で行うようにする
+  - CocoaPods 関連のステップ（Show CocoaPods Version、Restore Pods、Install Dependences）を削除
+  - xcodebuild コマンドから -workspace オプションを削除し、-scheme のみを使用するように変更
+  - xcodebuild に -destination 'generic/platform=iOS' オプションを追加
+    - GitHub Actions では実機デバイスが存在しないので、特定のデバイスを指定するのではなく `generic/` をつけて iOS を汎用ターゲットとして指定した
+  - WebRTC Non-public API チェックを Swift Package Manager のビルド成果物のパスに変更
+  - 不要な Sora.xcodeproj、Podfile、Gemfile、を削除
+    - `Sora.xcodeproj` があると、Package.swift の依存関係を参照しないため削除した
+    - このリポジトリで CocoaPods を利用しなくなるため、Podfile と Gemfile を削除した
+  - @zztkm
+- [UPDATE] jazzy の設定ファイルを更新する
+  - `swift_build_tool` に `xcodebuild` を指定して、xcodebuild が使われるように設定した
+  - CocoaPods 削除に合わせて `xcodebuild_arguments` の更新
+    - xcodebuild でのビルドのために `-destination 'generic/platform=iOS'` を追加した
+    - Sora.xcworkspace がなくなったため `-workspace` オプションを削除した
+    - xcodebuild 側で iOS 向け SDK を決定してくれるため、`-sdk` オプションを削除した
+    - xcodebuild 側で Swift のコンパイルが行われるため Swift のバージョン指定は不要と判断し `swift_version` オプションを削除した
+  - @zztkm
+- [UPDATE] actions/checkout@v4 を @v5 に上げる
+  - @torikizi
+- [UPDATE] build.yml の `release` job は運用上利用していないため、削除する
+  - @torikizi
+- [ADD] swift-format と SwiftLint 実行用の Makefile を追加する
+  - lint-format.sh で実行していたコマンドを個別に実行できるようにした
+
 ## 2025.1.3
 
 **リリース日**: 2025-07-28
 
-- [FIX] Sora の設定が、DataChannel 経由のシグナリング、かつ、WebSocket の切断を Sora への接続が切断したと判断しない設定の場合に、WebSocket 経由から DataChannel 経由へのシグナリング切替時に `type: switched` と `type: re-offer` をほぼ同時に受信した際、 `type: re-answer` を WebSocket 経由で送信する前に WebSocket を切断してしまい `type: re-answer` の送信に失敗することがある問題を修正する
+- [FIX] Sora の設定が、DataChannel 経由のシグナリングの設定、かつ、WebSocket の切断を Sora への接続が切断したと判断しない設定の場合に、SDP 再交換に失敗することがある問題を修正する
+  - WebSocket 経由から DataChannel 経由へのシグナリング切替時に `type: switched` と `type: re-offer` をほぼ同時に受信した際、`type: re-answer` を WebSocket 経由で送信する前に WebSocket を切断してしまい `type: re-answer` の送信に失敗することがあるため
   - DataChannel 経由へのシグナリング切替後でも、まだ WebSocket 経由で送信中のメッセージが存在する可能性を考慮し、余裕を持って切断するために 10 秒の待機時間を設けるようにした
   - WebSocket を切断する前に PeerChannel の接続状態を確認する処理を追加し、既に切断されている場合は WebSocket の切断処理を呼ばないようにした
   - @zztkm
@@ -35,7 +138,7 @@
 
 **リリース日**: 2025-01-23
 
-- [UPDATE] WebRTC m132.6834.5.2 に上げる
+- [FIX] WebRTC m132.6834.5.2 に上げる
   - Apple 非公開 API を利用していたため、App Store Connect へのアップロードに失敗する問題に対応
   - @zztkm
 
@@ -1018,7 +1121,7 @@
   - `SignalingSnapshotMessage`
   - `SignalingUpdateOfferMessage`
   - `Snapshot`
-  - `WebRTCConfiuration`
+  - `WebRTCConfiguration`
   - `WebRTCInfo`
   - @szktty
 - [ADD] 次の列挙体を追加する

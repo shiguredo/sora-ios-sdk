@@ -7,50 +7,45 @@ on:
     - 'README.md'
     - 'CHANGES.md'
     - 'LICENSE'
-    - 'Sora.podspec'
 
 jobs:
   build:
     runs-on: macos-15
     env:
-      XCODE: /Applications/Xcode_16.2.app
-      XCODE_SDK: iphoneos18.2
+      XCODE: /Applications/Xcode_16.3.app
+      XCODE_SDK: iphoneos18.4
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Select Xcode Version
       run: sudo xcode-select -s '${{ env.XCODE }}/Contents/Developer'
     - name: Show Xcode Version
       run: xcodebuild -version
-    - name: Show CocoaPods Version
-      run: pod --version
-    - name: Restore Pods
-      uses: actions/cache@v4
-      with:
-        path: Pods
-        key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-pods-
-    - name: Install Dependences
-      run: |
-        rm Podfile && mv Podfile.dev Podfile
-        pod repo update
-        pod install
     - name: Build Xcode Project
       run: |
         set -o pipefail && \
           xcodebuild \
-            -workspace 'Sora.xcworkspace' \
             -scheme 'Sora' \
             -sdk ${{ env.XCODE_SDK }} \
             -configuration Release \
             -derivedDataPath build \
+            -destination 'generic/platform=iOS' \
             clean build \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
-    - name: Check uncommitted unformatted code
+    - name: Check WebRTC Non-public API
       run: |
-        ./lint-format.sh
+        WEBRTC_FRAMEWORK=$(find build -name "WebRTC.framework" -path "*/WebRTC.xcframework/ios-arm64/*" | head -1)
+        if [ -n "$WEBRTC_FRAMEWORK" ] && nm "$WEBRTC_FRAMEWORK/WebRTC" | grep _kVTVideoEncoderSpecification_RequiredLowLatency >/dev/null 2>&1; then
+          echo 'Error: Non-public API detected in WebRTC framework.'
+          exit 1
+        fi
+    - name: Format Lint
+      run: |
+        make fmt-lint
+    - name: Lint
+      run: |
+        make lint
   slack_notify_succeeded:
     needs: [build]
     runs-on: ubuntu-24.04
@@ -77,22 +72,3 @@ jobs:
           SLACK_TITLE: "FAILED"
           SLACK_ICON_EMOJI: ":japanese_ogre:"
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-  release:
-    if: contains(github.ref, 'tags/v')
-    needs: [build]
-    runs-on: macos-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Create Release
-      id: create_release
-      # TODO: https://github.com/softprops/action-gh-release への置き換えを検討する
-      uses: actions/create-release@v1.1.4
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
