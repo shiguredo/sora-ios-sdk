@@ -11,6 +11,10 @@
 
 ## develop
 
+## 2025.2.0
+
+**リリース日**: 2025-09-18
+
 - [CHANGE] connect メッセージの `multistream` を true 固定で送信する処理を削除する破壊的変更
   - Configuration.role に .sendrecv を指定している場合に multistream を true に更新する処理を削除
   - Configuration.spotlightEnabled に .enabled を指定している場合に multistream を true に更新する処理を削除
