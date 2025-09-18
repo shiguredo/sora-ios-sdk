@@ -59,6 +59,10 @@
   - JSON デコード処理に使う JSON のキー名を指定するための enum の定義については、`AlwaysUseLowerCamelCase` ルールを無効化するためのコメントを追加
     - シグナリングメッセージのキー名にスネークケースが採用されている項目があるため、この対応を行った
   - @zztkm
+- [UPDATE] システム条件を変更する
+  - CocoaPods 廃止に伴いシステム条件から削除
+  - WebRTC SFU Sora 2025.1.0 以降
+  - @zztkm
 - [UPDATE] SwiftLint の管理を CocoaPods から Swift Package Manager に移行する
   - @zztkm
 - [UPDATE] 開発用の依存管理を Swift Package Manager に移行したため Podfile.dev を削除する
