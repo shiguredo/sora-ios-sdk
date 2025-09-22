@@ -10,7 +10,7 @@ public enum WebRTCInfo {
   public static let version = "M140"
 
   /// WebRTC の branch-heads
-  public static let branch = "7204"
+  public static let branch = "7339"
 
   /// WebRTC フレームワークのコミットポジション
   public static let commitPosition = "2"
