@@ -13,6 +13,8 @@
 
 - [UPDATE] libwebrtc m140.7339.2.2 に上げる
   - @miosakuma
+- [ADD] MediaChannel に libwebrtc の統計情報を取得する `getStats` メソッドを追加する
+  - @t-miya
 
 ## 2025.2.0
 

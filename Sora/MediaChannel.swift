@@ -442,6 +442,25 @@ public final class MediaChannel {
     }
   }
 
+  /// libwebrtc の統計情報を取得します。
+  ///
+  /// - parameter handler: 統計情報取得後に呼ばれるクロージャー
+  public func getStats(handler: @escaping (Result<Statistics, Error>) -> Void) {
+    guard state == .connected else {
+      handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is not connected")))
+      return
+    }
+
+    guard let peerConnection = peerChannel.nativeChannel else {
+      handler(.failure(SoraError.peerChannelError(reason: "RTCPeerConnection is unavailable")))
+      return
+    }
+
+    peerConnection.statistics { report in
+      handler(.success(Statistics(contentsOf: report)))
+    }
+  }
+
   /// DataChannel を利用してメッセージを送信します
   public func sendMessage(label: String, data: Data) -> Error? {
     guard peerChannel.switchedToDataChannel else {
