@@ -443,6 +443,8 @@ public final class MediaChannel {
   }
 
   /// libwebrtc の統計情報を取得します。
+  /// 非同期取得中に切断された場合でも安全になるよう、コールバック内で
+  /// self の生存確認、state == .connected の再確認、peerChannel.nativeChannel が同一インスタンスかどうか、をチェックしています。
   ///
   /// - parameter handler: 統計情報取得後に呼ばれるクロージャー
   public func getStats(handler: @escaping (Result<Statistics, Error>) -> Void) {
@@ -456,7 +458,28 @@ public final class MediaChannel {
       return
     }
 
-    peerConnection.statistics { report in
+    // peerConnection.statistics クロージャはlibwebrtc 側のスレッドから遅れて呼ばれ、内部で MediaChannel をキャプチャします。
+    // ここで self を強参照すると、MediaChannel が切断・解放されたあとでもクロージャが解放されず、deinit が遅れたり循環参照が発生する恐れがあります。
+    // そのため [weak self] でキャプチャし、呼び出し時点で MediaChannel がまだ有効かどうかをチェックしています。
+    // self が解放済みなら MediaChannel is unavailable エラーを返すことで安全に処理を抜けます。
+    peerConnection.statistics { [weak self] report in
+      guard let self else {
+        handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is unavailable")))
+        return
+      }
+
+      guard self.state == .connected else {
+        handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is not connected")))
+        return
+      }
+
+      guard let currentPeerConnection = self.peerChannel.nativeChannel,
+        currentPeerConnection === peerConnection
+      else {
+        handler(.failure(SoraError.peerChannelError(reason: "RTCPeerConnection is unavailable")))
+        return
+      }
+
       handler(.success(Statistics(contentsOf: report)))
     }
   }
