@@ -449,12 +449,17 @@ public final class MediaChannel {
   /// - parameter handler: 統計情報取得後に呼ばれるクロージャー
   public func getStats(handler: @escaping (Result<Statistics, Error>) -> Void) {
     guard state == .connected else {
-      handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is not connected")))
+      let message = "MediaChannel is not connected (state: \(state))"
+      Logger.debug(type: .mediaChannel, message: message)
+      handler(.failure(SoraError.peerChannelError(reason: message)))
       return
     }
 
     guard let peerConnection = peerChannel.nativeChannel else {
-      handler(.failure(SoraError.peerChannelError(reason: "RTCPeerConnection is unavailable")))
+      let message =
+        "RTCPeerConnection is unavailable (state: \(state), nativeChannel: nil)"
+      Logger.debug(type: .mediaChannel, message: message)
+      handler(.failure(SoraError.peerChannelError(reason: message)))
       return
     }
 
@@ -469,14 +474,19 @@ public final class MediaChannel {
       }
 
       guard self.state == .connected else {
-        handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is not connected")))
+        let message = "MediaChannel is not connected (state: \(self.state))"
+        Logger.debug(type: .mediaChannel, message: message)
+        handler(.failure(SoraError.peerChannelError(reason: message)))
         return
       }
 
       guard let currentPeerConnection = self.peerChannel.nativeChannel,
         currentPeerConnection === peerConnection
       else {
-        handler(.failure(SoraError.peerChannelError(reason: "RTCPeerConnection is unavailable")))
+        let message =
+          "RTCPeerConnection is unavailable (state: \(self.state), nativeChannel changed)"
+        Logger.debug(type: .mediaChannel, message: message)
+        handler(.failure(SoraError.peerChannelError(reason: message)))
         return
       }
 
