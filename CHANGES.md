@@ -16,6 +16,12 @@
 - [ADD] MediaChannel に libwebrtc の統計情報を取得する `getStats` メソッドを追加する
   - @t-miya
 
+### misc
+
+- [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
+  - `getStats` メソッドの返り値である `Statistics` のドキュメントを生成するため
+  - @t-miya
+
 ## 2025.2.0
 
 **リリース日**: 2025-09-18
