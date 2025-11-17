@@ -19,6 +19,11 @@
 - [ADD] MediaChannel に libwebrtc の統計情報を取得する `getStats` メソッドを追加する
   - @t-miya
 
+### misc
+
+- [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
+  - @zztkm
+
 ## 2025.2.0
 
 **リリース日**: 2025-09-18
