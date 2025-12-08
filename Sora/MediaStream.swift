@@ -84,6 +84,11 @@ public protocol MediaStream: AnyObject {
 
   /// ストリームの終了処理を行います。
   func terminate()
+
+  // MARK: libwbrtc API
+  var nativeStream: RTCMediaStream { get }
+  var nativeVideoTrack: RTCVideoTrack? { get }
+  var nativeAudioTrack: RTCAudioTrack? { get }
 }
 
 class BasicMediaStream: MediaStream {
@@ -238,3 +243,4 @@ class BasicMediaStream: MediaStream {
     }
   }
 }
+
