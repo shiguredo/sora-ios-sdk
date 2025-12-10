@@ -63,6 +63,18 @@ public protocol MediaStream: AnyObject {
   /// このプロパティはロールがサブスクライバーの場合のみ有効です。
   var remoteAudioVolume: Double? { get set }
 
+  // MARK: 音声シンク
+
+  /// 受信音声を生 PCM で受け取るためのシンクの一覧。
+  /// このプロパティはロールがサブスクライバーの場合のみ有効です。
+  var audioTrackSinks: [RTCAudioTrackSink] { get }
+
+  /// 音声シンクを追加します。追加済みのシンクを再度追加した場合は無視します。
+  func addAudioTrackSink(_ sink: RTCAudioTrackSink)
+
+  /// 音声シンクを削除します。未追加のシンクを指定した場合は何もしません。
+  func removeAudioTrackSink(_ sink: RTCAudioTrackSink)
+
   // MARK: 映像フレームの送信
 
   /// 映像フィルター
@@ -215,6 +227,27 @@ class BasicMediaStream: MediaStream {
     }
   }
 
+  private var audioTrackSinksStorage: [RTCAudioTrackSink] = []
+
+  var audioTrackSinks: [RTCAudioTrackSink] {
+    audioTrackSinksStorage
+  }
+
+  func addAudioTrackSink(_ sink: RTCAudioTrackSink) {
+    if audioTrackSinksStorage.contains(where: { $0 === sink }) {
+      return
+    }
+    Logger.debug(type: .mediaStream, message: "add audio track sink \(sink)")
+    audioTrackSinksStorage.append(sink)
+    nativeAudioTrack?.add(sink)
+  }
+
+  func removeAudioTrackSink(_ sink: RTCAudioTrackSink) {
+    Logger.debug(type: .mediaStream, message: "remove audio track sink \(sink)")
+    nativeAudioTrack?.remove(sink)
+    audioTrackSinksStorage.removeAll { $0 === sink }
+  }
+
   init(peerChannel: PeerChannel, nativeStream: RTCMediaStream) {
     self.peerChannel = peerChannel
     self.nativeStream = nativeStream
@@ -223,6 +256,10 @@ class BasicMediaStream: MediaStream {
   }
 
   func terminate() {
+    audioTrackSinksStorage.forEach { sink in
+      nativeAudioTrack?.remove(sink)
+    }
+    audioTrackSinksStorage.removeAll()
     videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel.mediaChannel ?? nil)
   }
 
@@ -243,4 +280,3 @@ class BasicMediaStream: MediaStream {
     }
   }
 }
-
