@@ -256,7 +256,7 @@ class BasicMediaStream: MediaStream {
   }
 
   func terminate() {
-    audioTrackSinksStorage.forEach { sink in
+    for sink in audioTrackSinksStorage {
       nativeAudioTrack?.remove(sink)
     }
     audioTrackSinksStorage.removeAll()
