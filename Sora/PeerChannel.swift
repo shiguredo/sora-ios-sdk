@@ -244,6 +244,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   func remove(stream: MediaStream) {
     streams = streams.filter { each in each.streamId != stream.streamId }
+    // TODO(zztkm): ここで stream.terminate() を呼んで良いか確認する
+    stream.terminate()
     Logger.debug(type: .peerChannel, message: "call onRemoveStream")
     internalHandlers.onRemoveStream?(stream)
   }
