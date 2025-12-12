@@ -18,6 +18,15 @@
   - @t-miya
 - [ADD] MediaChannel に libwebrtc の統計情報を取得する `getStats` メソッドを追加する
   - @t-miya
+- [ADD] MediaStream に RTCAudioTrackSink を RTCAudioTrack と関連付ける / 関連付けを解除するためのメソッドを追加する
+  - 追加したメソッド
+    - `addAudioTrackSink(_ sink: RTCAudioTrackSink)`
+    - `removeAudioTrackSink(_ sink: RTCAudioTrackSink)`
+  - @zztkm
+- [ADD] MediaStream の保持する RTCAudioTrack に関連ついている RTCAudioTrackSink の一覧を取得するための読み取り専用プロパティを追加する
+  - 追加したプロパティ
+    - `audioTrackSinks: [RTCAudioTrackSink] { get }`
+  - @zztkm
 
 ### misc
 
