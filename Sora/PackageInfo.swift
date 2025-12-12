@@ -13,13 +13,13 @@ public enum WebRTCInfo {
   public static let branch = "7499"
 
   /// WebRTC フレームワークのコミットポジション
-  public static let commitPosition = "1"
+  public static let commitPosition = "2"
 
   /// WebRTC フレームワークのメンテナンスバージョン
-  public static let maintenanceVersion = "0"
+  public static let maintenanceVersion = "1"
 
   /// WebRTC フレームワークのソースコードのリビジョン
-  public static let revision = "a5751574a386ba0ba80b8c62201977f6aab6c225"
+  public static let revision = "1788a81407183acc98163a4e1507c5c63fb175cc"
 
   /// WebRTC フレームワークのソースコードのリビジョン (短縮版)
   public static var shortRevision: String {
