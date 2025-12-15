@@ -222,6 +222,8 @@ class BasicMediaStream: MediaStream {
 
   func addAudioTrackSink(_ sink: RTCAudioTrackSink) {
     Logger.debug(type: .mediaStream, message: "add audio track sink \(sink)")
+    // RTCAudioTrack 側で RTCAudioTrackSink 追加時の重複チェックを行うため
+    // iOS SDK 側では重複チェックを行わない。
     nativeAudioTrack?.add(sink)
   }
 
