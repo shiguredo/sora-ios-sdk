@@ -65,9 +65,6 @@ public protocol MediaStream: AnyObject {
 
   // MARK: 音声データ取得
 
-  /// この MediaStream に関連付いている RTCAudioTrackSink の一覧。
-  var audioTrackSinks: [RTCAudioTrackSink] { get }
-
   /// RTCAudioTrackSink を RTCAudioTrack に関連付けます。
   /// 追加済みのシンクを再度追加した場合は何もしません。
   func addAudioTrackSink(_ sink: RTCAudioTrackSink)
@@ -223,25 +220,14 @@ class BasicMediaStream: MediaStream {
     }
   }
 
-  private var audioTrackSinksStorage: [RTCAudioTrackSink] = []
-
-  var audioTrackSinks: [RTCAudioTrackSink] {
-    audioTrackSinksStorage
-  }
-
   func addAudioTrackSink(_ sink: RTCAudioTrackSink) {
-    if audioTrackSinksStorage.contains(where: { $0 === sink }) {
-      return
-    }
     Logger.debug(type: .mediaStream, message: "add audio track sink \(sink)")
-    audioTrackSinksStorage.append(sink)
     nativeAudioTrack?.add(sink)
   }
 
   func removeAudioTrackSink(_ sink: RTCAudioTrackSink) {
     Logger.debug(type: .mediaStream, message: "remove audio track sink \(sink)")
     nativeAudioTrack?.remove(sink)
-    audioTrackSinksStorage.removeAll { $0 === sink }
   }
 
   init(peerChannel: PeerChannel, nativeStream: RTCMediaStream) {
@@ -252,9 +238,6 @@ class BasicMediaStream: MediaStream {
   }
 
   func terminate() {
-    for sink in audioTrackSinksStorage {
-      nativeAudioTrack?.remove(sink)
-    }
     videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel.mediaChannel ?? nil)
   }
 

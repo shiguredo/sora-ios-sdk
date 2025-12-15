@@ -23,10 +23,6 @@
     - `addAudioTrackSink(_ sink: RTCAudioTrackSink)`
     - `removeAudioTrackSink(_ sink: RTCAudioTrackSink)`
   - @zztkm
-- [ADD] MediaStream の保持する RTCAudioTrack に関連ついている RTCAudioTrackSink の一覧を取得するための読み取り専用プロパティを追加する
-  - 追加したプロパティ
-    - `audioTrackSinks: [RTCAudioTrackSink] { get }`
-  - @zztkm
 
 ### misc
 
