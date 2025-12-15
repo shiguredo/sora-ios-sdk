@@ -124,10 +124,11 @@ public final class Sora {
   public func connect(
     configuration: Configuration,
     webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
-    handler: @escaping (
-      _ mediaChannel: MediaChannel?,
-      _ error: Error?
-    ) -> Void
+    handler:
+      @escaping (
+        _ mediaChannel: MediaChannel?,
+        _ error: Error?
+      ) -> Void
   ) -> ConnectionTask {
     let mediaChan = MediaChannel(manager: self, configuration: configuration)
     mediaChan.internalHandlers.onDisconnectLegacy = { [weak self, weak mediaChan] error in

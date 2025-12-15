@@ -63,6 +63,16 @@ public protocol MediaStream: AnyObject {
   /// このプロパティはロールがサブスクライバーの場合のみ有効です。
   var remoteAudioVolume: Double? { get set }
 
+  // MARK: 音声データ取得
+
+  /// RTCAudioTrackSink を RTCAudioTrack に関連付けます。
+  /// 追加済みのシンクを再度追加した場合は何もしません。
+  func addAudioTrackSink(_ sink: RTCAudioTrackSink)
+
+  /// RTCAudioTrackSink の関連付けを解除します。
+  /// 未追加の RTCAudioTrackSink を指定した場合は何もしません。
+  func removeAudioTrackSink(_ sink: RTCAudioTrackSink)
+
   // MARK: 映像フレームの送信
 
   /// 映像フィルター
@@ -208,6 +218,18 @@ class BasicMediaStream: MediaStream {
           message: "set audio volume \(volume)")
       }
     }
+  }
+
+  func addAudioTrackSink(_ sink: RTCAudioTrackSink) {
+    Logger.debug(type: .mediaStream, message: "add audio track sink \(sink)")
+    // RTCAudioTrack 側で RTCAudioTrackSink 追加時の重複チェックを行うため
+    // iOS SDK 側では重複チェックを行わない。
+    nativeAudioTrack?.add(sink)
+  }
+
+  func removeAudioTrackSink(_ sink: RTCAudioTrackSink) {
+    Logger.debug(type: .mediaStream, message: "remove audio track sink \(sink)")
+    nativeAudioTrack?.remove(sink)
   }
 
   init(peerChannel: PeerChannel, nativeStream: RTCMediaStream) {
