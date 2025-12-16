@@ -30,6 +30,9 @@
 
 - [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
   - @zztkm
+- [UPDATE] jazzy の設定ファイルを更新する
+  - `module_version` を 2025.3.0 に変更
+  - @zztkm
 
 ## 2025.2.0
 
