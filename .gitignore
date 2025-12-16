@@ -26,6 +26,7 @@ project.xcworkspace
 *.xcscmblueprint
 *.swp
 doc
+__pycahce__
 
 ## Obj-C/Swift specific
 *.hmap
