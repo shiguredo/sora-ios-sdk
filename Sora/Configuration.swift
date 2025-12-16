@@ -149,6 +149,8 @@ public struct Configuration {
 
   /// サイマルキャストで視聴する映像の種類。
   /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
+  ///
+  /// このプロパティは Sora 2025.2.0 以降で利用可能です。
   public var simulcastRequestRid: SimulcastRequestRid?
 
   /// スポットライトの可否
