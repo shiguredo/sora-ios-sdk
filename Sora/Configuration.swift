@@ -143,7 +143,7 @@ public struct Configuration {
   @available(
     *, deprecated,
     message: "2027 年 12 月リリース予定の Sora にて廃止予定です。",
-    renamed: "simulcastRequestRid: SimulcastRequestRid?"
+    renamed: "simulcastRequestRid"
   )
   public var simulcastRid: SimulcastRid?
 
