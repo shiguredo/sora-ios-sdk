@@ -140,7 +140,16 @@ public struct Configuration {
 
   /// サイマルキャストでの映像の種類。
   /// ロールが `.sendrecv` または `.recvonly` のときのみ有効です。
+  @available(
+    *, deprecated,
+    message: "2027 年 12 月リリース予定の Sora にて廃止予定です。",
+    renamed: "simulcastRequestRid: SimulcastRequestRid?"
+  )
   public var simulcastRid: SimulcastRid?
+
+  /// サイマルキャストで視聴する映像の種類。
+  /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
+  public var simulcastRequestRid: SimulcastRequestRid?
 
   /// スポットライトの可否
   /// 詳しくは Sora のスポットライト機能を参照してください。

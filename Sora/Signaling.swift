@@ -198,6 +198,21 @@ public enum SimulcastRid {
   case r2
 }
 
+/// サイマルキャストで視聴する映像の種類を表します。
+public enum SimulcastRequestRid {
+  /// 映像を受信しない
+  case none
+
+  /// r0
+  case r0
+
+  /// r1
+  case r1
+
+  /// r2
+  case r2
+}
+
 /// スポットライトの映像の種類を表します 。
 public enum SpotlightRid {
   /**
@@ -309,6 +324,9 @@ public struct SignalingConnect {
 
   /// サイマルキャストでの映像の種類
   public var simulcastRid: SimulcastRid?
+
+  /// サイマルキャストで視聴する映像の種類
+  public var simulcastRequestRid: SimulcastRequestRid?
 
   /// :nodoc:
   public var soraClient: String?
@@ -768,6 +786,27 @@ extension SimulcastRid: Codable {
   }
 }
 
+private var simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
+  PairTable(
+    name: "simulcastRequestRid",
+    pairs: [
+      ("none", .none),
+      ("r0", .r0),
+      ("r1", .r1),
+      ("r2", .r2),
+    ])
+
+/// :nodoc:
+extension SimulcastRequestRid: Codable {
+  public init(from decoder: Decoder) throws {
+    throw SoraError.invalidSignalingMessage
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    try simulcastRequestRidTable.encode(self, to: encoder)
+  }
+}
+
 private var spotlightRidTable: PairTable<String, SpotlightRid> =
   PairTable(
     name: "spotlightRid",
@@ -830,6 +869,7 @@ extension SignalingConnect: Codable {
     case spotlight_unfocus_rid
     case simulcast
     case simulcast_rid
+    case simulcast_request_rid
     case video
     case audio
     case sora_client
@@ -952,6 +992,8 @@ extension SignalingConnect: Codable {
       switch role {
       case .sendrecv, .recvonly:
         try container.encodeIfPresent(simulcastRid, forKey: .simulcast_rid)
+        try container.encodeIfPresent(
+          simulcastRequestRid, forKey: .simulcast_request_rid)
       default:
         break
       }
