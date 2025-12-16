@@ -30,6 +30,9 @@
 
 - [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
   - @zztkm
+- [ADD] libwebrtc の更新を行うためのスクリプト `update_libwebrtc.py` を追加する
+  - 現時点ではファイルの更新だけを行い、`git commit` や `git push` は行わない
+  - @zztkm
 
 ## 2025.2.0
 
