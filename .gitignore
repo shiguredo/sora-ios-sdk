@@ -26,6 +26,7 @@ project.xcworkspace
 *.xcscmblueprint
 *.swp
 doc
+WebRTC.xcframework.zip
 
 ## Obj-C/Swift specific
 *.hmap
