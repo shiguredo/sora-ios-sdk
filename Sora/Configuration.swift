@@ -139,7 +139,7 @@ public struct Configuration {
   public var simulcastEnabled: Bool = false
 
   /// サイマルキャストでの映像の種類。
-  /// ロールが `.sendrecv` または `.recvonly` のときのみ有効です。
+  /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
   @available(
     *, deprecated,
     message: "2027 年 12 月リリース予定の Sora にて廃止予定です。",
