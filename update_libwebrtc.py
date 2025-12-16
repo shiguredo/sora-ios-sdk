@@ -45,10 +45,10 @@ def parse_version(version: str) -> Tuple[str, str, str, str]:
     Returns:
         tuple: (major, branch, commit_position, maintenance_version)
     """
-    match = re.fullmatch(r"[mM](\d+)\.(\d+)\.(\d+)\.(\d+)", version.strip())
+    match = re.fullmatch(r"m(\d+)\.(\d+)\.(\d+)\.(\d+)", version.strip())
     if not match:
         raise UpdateError(
-            "libwebrtc version must look like m143.7499.1.0 (m<M>.<branch>.<commit>.<maint>)"
+            "libwebrtc version must look like m143.7499.1.0 (m.<branch>.<commit>.<maint>)"
         )
     return match.group(1), match.group(2), match.group(3), match.group(4)
 
