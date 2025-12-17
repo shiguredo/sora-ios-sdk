@@ -16,6 +16,9 @@
 - [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
   - `getStats` メソッドの返り値である `Statistics` のドキュメントを生成するため
   - @t-miya
+- [UPDATE] Configuration.simulcastRid を非推奨にする
+  - 移行先は `Configuration.simulcastRequestRid`
+  - @zztkm
 - [ADD] MediaChannel に libwebrtc の統計情報を取得する `getStats` メソッドを追加する
   - @t-miya
 - [ADD] RTCAudioTrack から音声データを受け取るためのコールバックプロトコルである RTCAudioTrackSink を追加する
@@ -24,6 +27,10 @@
   - 追加したメソッド
     - `addAudioTrackSink(_ sink: RTCAudioTrackSink)`
     - `removeAudioTrackSink(_ sink: RTCAudioTrackSink)`
+  - @zztkm
+- [ADD] シグナリング接続時に視聴するストリームの rid を指定する `Configuration.simulcastRequestRid: SimulcastRequestRid?` を追加する
+  - SimulcastRequestRid は none 、 r0 、 r1 、 r2 を指定できる
+  - role が sendrecv または recvonly の場合、かつ simulcast が true の場合にのみ有効
   - @zztkm
 
 ### misc

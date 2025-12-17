@@ -139,8 +139,21 @@ public struct Configuration {
   public var simulcastEnabled: Bool = false
 
   /// サイマルキャストでの映像の種類。
-  /// ロールが `.sendrecv` または `.recvonly` のときのみ有効です。
+  /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
+  ///
+  /// simulcastRequestRid と同時に設定された場合、Sora 2025.2.0 以降では simulcastRequestRid が優先されます。
+  @available(
+    *, deprecated,
+    message: "2027 年 12 月リリース予定の Sora にて廃止予定です。",
+    renamed: "simulcastRequestRid"
+  )
   public var simulcastRid: SimulcastRid?
+
+  /// サイマルキャストで視聴する映像の種類。
+  /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
+  ///
+  /// このプロパティは Sora 2025.2.0 以降で利用可能です。
+  public var simulcastRequestRid: SimulcastRequestRid?
 
   /// スポットライトの可否
   /// 詳しくは Sora のスポットライト機能を参照してください。
