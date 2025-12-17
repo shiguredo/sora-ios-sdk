@@ -140,6 +140,8 @@ public struct Configuration {
 
   /// サイマルキャストでの映像の種類。
   /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
+  ///
+  /// simulcastRequestRid と同時に設定された場合、Sora 2025.2.0 以降では simulcastRequestRid が優先されます。
   @available(
     *, deprecated,
     message: "2027 年 12 月リリース予定の Sora にて廃止予定です。",
