@@ -145,10 +145,10 @@ public struct Configuration {
   @available(
     *, deprecated,
     message: """
-       シグナリング接続時の simulcast_rid は 2027 年 12 月リリース予定の Sora にて
-       廃止予定であるため、このプロパティは非推奨です。
-       代わりに SimulcastRequestRid を使用してください。
-       """
+      シグナリング接続時の simulcast_rid は 2027 年 12 月リリース予定の Sora にて
+      廃止予定であるため、このプロパティは非推奨です。
+      代わりに SimulcastRequestRid を使用してください。
+      """
   )
   public var simulcastRid: SimulcastRid?
 
