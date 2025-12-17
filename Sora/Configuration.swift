@@ -144,8 +144,11 @@ public struct Configuration {
   /// simulcastRequestRid と同時に設定された場合、Sora 2025.2.0 以降では simulcastRequestRid が優先されます。
   @available(
     *, deprecated,
-    message: "2027 年 12 月リリース予定の Sora にて廃止予定です。",
-    renamed: "simulcastRequestRid"
+    message: """
+       シグナリング接続時の simulcast_rid は 2027 年 12 月リリース予定の Sora にて
+       廃止予定であるため、このプロパティは非推奨です。
+       代わりに SimulcastRequestRid を使用してください。
+       """
   )
   public var simulcastRid: SimulcastRid?
 
