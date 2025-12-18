@@ -156,7 +156,7 @@ public struct Configuration {
   /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
   ///
   /// このプロパティは Sora 2025.2.0 以降で利用可能です。
-  public var simulcastRequestRid: SimulcastRequestRid?
+  public var simulcastRequestRid: SimulcastRequestRid = .unspecified
 
   /// スポットライトの可否
   /// 詳しくは Sora のスポットライト機能を参照してください。
