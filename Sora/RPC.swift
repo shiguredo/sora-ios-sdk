@@ -1,0 +1,337 @@
+import Foundation
+
+/// RPC の ID を表す型。
+public enum RPCID: Hashable {
+  case int(Int)
+  case string(String)
+
+  init?(any value: Any) {
+    if let intValue = value as? Int {
+      self = .int(intValue)
+      return
+    }
+    // JSONSerialization は整数を NSNumber として返すことがあるためこちらも考慮する
+    if let numberValue = value as? NSNumber {
+      self = .int(numberValue.intValue)
+      return
+    }
+    if let stringValue = value as? String {
+      self = .string(stringValue)
+      return
+    }
+    return nil
+  }
+
+  var jsonValue: Any {
+    switch self {
+    case .int(let value):
+      return value
+    case .string(let value):
+      return value
+    }
+  }
+}
+
+/// RPC メソッドを表す。
+public enum RPCMethod: Equatable {
+  case requestSimulcastRid
+  case requestSpotlightRid
+  case resetSpotlightRid
+  case putSignalingNotifyMetadata
+  case putSignalingNotifyMetadataItem
+
+  public init?(_ rawValue: String) {
+    switch rawValue {
+    case "2025.2.0/RequestSimulcastRid":
+      self = .requestSimulcastRid
+    case "2025.2.0/RequestSpotlightRid":
+      self = .requestSpotlightRid
+    case "2025.2.0/ResetSpotlightRid":
+      self = .resetSpotlightRid
+    case "2025.2.0/PutSignalingNotifyMetadata":
+      self = .putSignalingNotifyMetadata
+    case "2025.2.0/PutSignalingNotifyMetadataItem":
+      self = .putSignalingNotifyMetadataItem
+    default:
+      return nil
+    }
+  }
+
+  public var rawValue: String {
+    switch self {
+    case .requestSimulcastRid:
+      return "2025.2.0/RequestSimulcastRid"
+    case .requestSpotlightRid:
+      return "2025.2.0/RequestSpotlightRid"
+    case .resetSpotlightRid:
+      return "2025.2.0/ResetSpotlightRid"
+    case .putSignalingNotifyMetadata:
+      return "2025.2.0/PutSignalingNotifyMetadata"
+    case .putSignalingNotifyMetadataItem:
+      return "2025.2.0/PutSignalingNotifyMetadataItem"
+    }
+  }
+}
+
+/// RPC エラー応答の詳細。
+public struct RPCErrorDetail {
+  public let code: Int
+  public let message: String
+  public let data: Any?
+}
+
+/// RPC 成功応答。
+public struct RPCResponse {
+  public let id: RPCID?
+  public let result: Any?
+}
+
+/// DataChannel 経由の RPC を扱うクラス。
+public final class RPCChannel {
+  /// pending 管理用の構造体
+  private struct Pending {
+    let completion: (Result<RPCResponse, SoraError>) -> Void
+    let timeoutWorkItem: DispatchWorkItem
+  }
+
+  private let dataChannel: DataChannel
+  private let queue = DispatchQueue(
+    label: "jp.shiguredo.sora-ios-sdk.rpc.channel", attributes: .concurrent)
+  private var nextId: Int = 1
+  private var pendings: [RPCID: Pending] = [:]
+
+  /// Sora から払い出されたメソッド一覧
+  let allowedMethods: [RPCMethod]
+  private let allowedMethodNames: Set<String>
+
+  /// Sora から払い出されたサイマルキャスト rid の一覧
+  let simulcastRpcRids: [String]
+
+  weak var mediaChannel: MediaChannel?
+
+  init?(
+    dataChannel: DataChannel, rpcMethods: [String], simulcastRpcRids: [String],
+    mediaChannel: MediaChannel?
+  ) {
+    guard !rpcMethods.isEmpty else {
+      return nil
+    }
+    self.dataChannel = dataChannel
+    let mapped = rpcMethods.compactMap { RPCMethod($0) }
+    self.allowedMethods = mapped
+    self.allowedMethodNames = Set(rpcMethods)
+    self.simulcastRpcRids = simulcastRpcRids
+    self.mediaChannel = mediaChannel
+  }
+
+  /// RPC が利用可能かを返す。
+  var isAvailable: Bool {
+    dataChannel.readyState == .open
+  }
+
+  /// RPC を送信する。
+  @discardableResult
+  func call(
+    method: RPCMethod,
+    params: Encodable? = nil,
+    expectsResponse: Bool = true,
+    timeout: TimeInterval = 5.0,
+    completion: ((Result<RPCResponse, SoraError>) -> Void)? = nil
+  ) -> Bool {
+    guard isAvailable else {
+      completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
+      return false
+    }
+
+    guard allowedMethodNames.contains(method.rawValue) else {
+      completion?(.failure(SoraError.rpcMethodNotAllowed(method: method.rawValue)))
+      return false
+    }
+
+    var payload: [String: Any] = [
+      "jsonrpc": "2.0",
+      "method": method.rawValue,
+    ]
+
+    if let params {
+      do {
+        payload["params"] = try encodeParams(params)
+      } catch {
+        completion?(.failure(SoraError.rpcEncodingError(reason: error.localizedDescription)))
+        return false
+      }
+    }
+
+    var identifier: RPCID?
+    if expectsResponse {
+      identifier = nextIdentifier()
+      payload["id"] = identifier?.jsonValue
+    }
+
+    guard JSONSerialization.isValidJSONObject(payload) else {
+      completion?(.failure(SoraError.rpcEncodingError(reason: "invalid JSON payload")))
+      return false
+    }
+
+    let data: Data
+    do {
+      data = try JSONSerialization.data(withJSONObject: payload, options: [])
+    } catch {
+      completion?(.failure(SoraError.rpcEncodingError(reason: error.localizedDescription)))
+      return false
+    }
+
+    Logger.debug(type: .dataChannel, message: "send rpc: \(payload)")
+    let sent = dataChannel.send(data)
+    if !sent {
+      completion?(.failure(SoraError.rpcTransportClosed(reason: "failed to send rpc message")))
+      return false
+    }
+
+    if expectsResponse, let identifier {
+      let workItem = DispatchWorkItem { [weak self] in
+        self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
+      }
+      let pending = Pending(
+        completion: { [weak self] result in
+          self?.notifyHandlers(result: result)
+          completion?(result)
+        },
+        timeoutWorkItem: workItem)
+
+      queue.async(flags: .barrier) { [weak self] in
+        self?.pendings[identifier] = pending
+      }
+      DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: workItem)
+    } else {
+      let response = RPCResponse(id: identifier, result: nil)
+      notifyHandlers(result: .success(response))
+      completion?(.success(response))
+    }
+
+    return true
+  }
+
+  /// DataChannel で受信したメッセージを処理する。
+  func handleMessage(_ data: Data) {
+    let object: Any
+    do {
+      object = try JSONSerialization.jsonObject(with: data, options: [])
+    } catch {
+      Logger.error(
+        type: .dataChannel, message: "rpc message decode failed: \(error.localizedDescription)")
+      return
+    }
+
+    guard let json = object as? [String: Any] else {
+      Logger.error(type: .dataChannel, message: "rpc message is not dictionary")
+      return
+    }
+
+    guard let version = json["jsonrpc"] as? String, version == "2.0" else {
+      Logger.error(type: .dataChannel, message: "rpc message is not json-rpc 2.0")
+      return
+    }
+
+    if let method = json["method"] as? String {
+      Logger.warn(type: .dataChannel, message: "rpc request is not supported: \(method)")
+      return
+    }
+
+    guard let idValue = json["id"], let identifier = RPCID(any: idValue) else {
+      Logger.warn(type: .dataChannel, message: "rpc response id is missing")
+      return
+    }
+
+    if let result = json["result"] {
+      let response = RPCResponse(id: identifier, result: result)
+      finishPending(id: identifier, result: .success(response))
+      return
+    }
+
+    if let error = json["error"] as? [String: Any],
+      let code = error["code"] as? Int,
+      let message = error["message"] as? String
+    {
+      let detail = RPCErrorDetail(code: code, message: message, data: error["data"])
+      finishPending(id: identifier, result: .failure(SoraError.rpcServerError(detail: detail)))
+      return
+    }
+
+    Logger.warn(type: .dataChannel, message: "rpc response is unknown format")
+  }
+
+  /// すべての pending を失敗扱いで終了する。
+  func invalidate(reason: SoraError) {
+    let snapshots: [RPCID: Pending] = queue.sync(flags: .barrier) {
+      let current = pendings
+      pendings.removeAll()
+      return current
+    }
+    for (_, pending) in snapshots {
+      pending.timeoutWorkItem.cancel()
+      pending.completion(.failure(reason))
+    }
+  }
+
+  private func nextIdentifier() -> RPCID {
+    queue.sync(flags: .barrier) {
+      defer { nextId += 1 }
+      return RPCID.int(nextId)
+    }
+  }
+
+  private func encodeParams(_ params: Encodable) throws -> Any {
+    let encoder = JSONEncoder()
+    let data = try encoder.encode(EncodableBox(params))
+    let object = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+    return object
+  }
+
+  private func finishPending(id: RPCID, result: Result<RPCResponse, SoraError>) {
+    let pending = queue.sync(flags: .barrier) { () -> Pending? in
+      let value = pendings[id]
+      pendings.removeValue(forKey: id)
+      return value
+    }
+
+    guard let pending else {
+      Logger.warn(type: .dataChannel, message: "rpc pending not found for id: \(id)")
+      return
+    }
+    pending.timeoutWorkItem.cancel()
+    pending.completion(result)
+  }
+
+  private func notifyHandlers(result: Result<RPCResponse, SoraError>) {
+    guard let mediaChannel else {
+      return
+    }
+    DispatchQueue.main.async {
+      switch result {
+      case .success(let response):
+        mediaChannel.handlers.onReceiveRPCResponse?(mediaChannel, response)
+      case .failure(let error):
+        if case .rpcServerError(let detail) = error {
+          mediaChannel.handlers.onReceiveRPCError?(mediaChannel, detail)
+        }
+      }
+    }
+  }
+}
+
+/// Encodable を JSONSerialization で扱える形にするラッパー。
+/// JSONSerialization は top-level に JSON オブジェクトを要求するため、単一値の場合もオブジェクトに包む。
+private struct EncodableBox: Encodable {
+  let encodeClosure: (Encoder) throws -> Void
+
+  init<T: Encodable>(_ value: T) {
+    encodeClosure = { encoder in
+      try value.encode(to: encoder)
+    }
+  }
+
+  func encode(to encoder: Encoder) throws {
+    try encodeClosure(encoder)
+  }
+}

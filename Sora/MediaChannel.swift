@@ -47,6 +47,12 @@ public final class MediaChannelHandlers {
   /// DataChannel のメッセージ受信時に呼ばれるクロージャー
   public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?
 
+  /// RPC のレスポンスを受信したときに呼ばれるクロージャー
+  public var onReceiveRPCResponse: ((MediaChannel, RPCResponse) -> Void)?
+
+  /// RPC のエラー応答を受信したときに呼ばれるクロージャー
+  public var onReceiveRPCError: ((MediaChannel, RPCErrorDetail) -> Void)?
+
   /// 初期化します。
   public init() {}
 }
@@ -154,6 +160,21 @@ public final class MediaChannel {
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
   public private(set) var subscriberCount: Int?
 
+  /// RPC を扱うチャネル
+  public var rpcChannel: RPCChannel? {
+    peerChannel.rpcChannel
+  }
+
+  /// RPC で利用可能なメソッド一覧
+  public var rpcMethods: [RPCMethod] {
+    peerChannel.rpcChannel?.allowedMethods ?? []
+  }
+
+  /// RPC で利用可能なサイマルキャスト rid
+  public var rpcSimulcastRids: [String] {
+    peerChannel.rpcChannel?.simulcastRpcRids ?? []
+  }
+
   // MARK: 接続チャネル
 
   /// シグナリングチャネル
@@ -225,6 +246,29 @@ public final class MediaChannel {
         .peerChannel(_peerChannel!),
       ],
       timeout: configuration.connectionTimeout)
+  }
+
+  // MARK: - RPC
+
+  /// RPC を送信する。
+  @discardableResult
+  public func callRPC(
+    method: RPCMethod,
+    params: Encodable? = nil,
+    expectsResponse: Bool = true,
+    timeout: TimeInterval = 5.0,
+    completion: ((Result<RPCResponse, SoraError>) -> Void)? = nil
+  ) -> Bool {
+    guard let rpcChannel else {
+      completion?(.failure(SoraError.rpcUnavailable(reason: "rpc channel is not available")))
+      return false
+    }
+    return rpcChannel.call(
+      method: method,
+      params: params,
+      expectsResponse: expectsResponse,
+      timeout: timeout,
+      completion: completion)
   }
 
   // MARK: - 接続

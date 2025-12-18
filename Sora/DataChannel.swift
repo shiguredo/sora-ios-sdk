@@ -207,6 +207,8 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
             type: .dataChannel,
             message: "decode failed (\(error.localizedDescription)) => ")
         }
+      case "rpc":
+        peerChannel.handleRPCMessage(data)
       case "e2ee":
         Logger.error(
           type: .dataChannel, message: "NOT IMPLEMENTED: label => \(dataChannel.label)")

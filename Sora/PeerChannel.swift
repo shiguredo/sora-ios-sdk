@@ -125,6 +125,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var dataChannels: [String: DataChannel] = [:]
   var switchedToDataChannel: Bool = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
+  var rpcAllowedMethods: [String] = []
+  var rpcSimulcastRids: [String] = []
+  var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
 
@@ -938,6 +941,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         signalingOfferMessageDataChannels = dataChannels
       }
 
+      if let rpcMethods = offer.rpcMethods {
+        rpcAllowedMethods = rpcMethods
+      } else {
+        rpcAllowedMethods = []
+      }
+
+      if let simulcastRpcRids = offer.simulcastRpcRids {
+        rpcSimulcastRids = simulcastRpcRids
+      } else {
+        rpcSimulcastRids = []
+      }
+
       // offer.simulcast が設定されている場合、WrapperVideoEncoderFactory.shared.simulcastEnabled を上書きする
       if let simulcast = offer.simulcast {
         WrapperVideoEncoderFactory.shared.simulcastEnabled = simulcast
@@ -1033,6 +1048,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     internalHandlers.onReceiveSignaling?(signaling)
   }
 
+  /// DataChannel の rpc で受信したメッセージを処理する。
+  func handleRPCMessage(_ data: Data) {
+    guard let rpcChannel else {
+      Logger.warn(type: .peerChannel, message: "rpcChannel is unavailable")
+      return
+    }
+    rpcChannel.handleMessage(data)
+  }
+
   private func finishConnecting() {
     Logger.debug(type: .peerChannel, message: "did connect")
     Logger.debug(
@@ -1063,6 +1087,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.error(
         type: .peerChannel,
         message: "error: \(error.localizedDescription)")
+    }
+
+    if let rpcChannel {
+      rpcChannel.invalidate(
+        reason: SoraError.rpcTransportClosed(reason: reason.description))
+      self.rpcChannel = nil
     }
 
     sendDisconnectMessageIfNeeded(reason: reason, error: error)
@@ -1363,6 +1393,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel,
       peerChannel: self)
     dataChannels[dataChannel.label] = dc
+
+    if label == "rpc" {
+      rpcChannel = RPCChannel(
+        dataChannel: dc,
+        rpcMethods: rpcAllowedMethods,
+        simulcastRpcRids: rpcSimulcastRids,
+        mediaChannel: mediaChannel)
+    }
   }
 }
 
