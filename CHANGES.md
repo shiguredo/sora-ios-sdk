@@ -30,6 +30,7 @@
   - @zztkm
 - [ADD] シグナリング接続時に視聴するストリームの rid を指定する `Configuration.simulcastRequestRid: SimulcastRequestRid` を追加する
   - rid を指定できる値の列挙型として SimulcastRequestRid を追加する
+    - デフォルト値の `unspecified` の場合はシグナリングパラメータに `simulcast_request_rid` を含めない
   - role が sendrecv または recvonly の場合、かつ simulcast が true の場合にのみ有効
   - @zztkm
 
