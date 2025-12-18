@@ -200,6 +200,9 @@ public enum SimulcastRid {
 
 /// サイマルキャストで視聴する映像の種類を表します。
 public enum SimulcastRequestRid {
+  /// 未指定
+  case unspecified
+
   /// 映像を受信しない
   case none
 
@@ -217,7 +220,7 @@ public enum SimulcastRequestRid {
 public enum SpotlightRid {
   /**
      SpotlightRid が設定されていない状態
-  
+
      変数の型を SpotlightRid? にした場合、 .none が Optional.none と SpotlightRid.none の
      どちらを指しているか分かりにくいという問題がありました。
      この問題を解決するため、変数に値が設定されていない状態を表す .unspecified を定義するとともに、
@@ -326,7 +329,7 @@ public struct SignalingConnect {
   public var simulcastRid: SimulcastRid?
 
   /// サイマルキャストで視聴する映像の種類
-  public var simulcastRequestRid: SimulcastRequestRid?
+  public var simulcastRequestRid: SimulcastRequestRid
 
   /// :nodoc:
   public var soraClient: String?
@@ -787,6 +790,8 @@ extension SimulcastRid: Codable {
 }
 
 private var simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
+  // .unspecified は simulcast_request_rid の値ではなく
+  // エンコードする必要がないため、テーブルに含めていない
   PairTable(
     name: "simulcastRequestRid",
     pairs: [
@@ -992,8 +997,9 @@ extension SignalingConnect: Codable {
       switch role {
       case .sendrecv, .recvonly:
         try container.encodeIfPresent(simulcastRid, forKey: .simulcast_rid)
-        try container.encodeIfPresent(
-          simulcastRequestRid, forKey: .simulcast_request_rid)
+        if simulcastRequestRid != .unspecified {
+          try container.encode(simulcastRequestRid, forKey: .simulcast_request_rid)
+        }
       default:
         break
       }
