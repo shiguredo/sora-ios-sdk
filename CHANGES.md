@@ -19,6 +19,13 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
+- [ADD] 音声のハードミュート有効化/無効化機能を追加する
+  - AudioDeviceModuleWrapper クラスを追加する
+    - RTCAudioDeviceModule の pauseRecording/resumeRecording を実行するためのラッパークラス
+    - インスタンスは NativePeerChannelFactory が保持する
+  - MediaChannel に setAudioHardMute(_:) を追加する
+    - 内部で NativePeerChannelFactory 経由で AudioDeviceModuleWrapper.setAudioHardMute(_:) を呼び出す
+  - @t-miya
 - [ADD] MediaChannel に libwebrtc の統計情報を取得する `getStats` メソッドを追加する
   - @t-miya
 - [ADD] RTCAudioTrack から音声データを受け取るためのコールバックプロトコルである RTCAudioTrackSink を追加する
