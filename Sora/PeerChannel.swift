@@ -1398,8 +1398,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       rpcChannel = RPCChannel(
         dataChannel: dc,
         rpcMethods: rpcAllowedMethods,
-        simulcastRpcRids: rpcSimulcastRids,
-        mediaChannel: mediaChannel)
+        simulcastRpcRids: rpcSimulcastRids)
     }
   }
 }

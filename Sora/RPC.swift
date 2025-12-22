@@ -107,11 +107,8 @@ public final class RPCChannel {
   /// Sora から払い出されたサイマルキャスト rid の一覧
   let simulcastRpcRids: [String]
 
-  weak var mediaChannel: MediaChannel?
-
   init?(
-    dataChannel: DataChannel, rpcMethods: [String], simulcastRpcRids: [String],
-    mediaChannel: MediaChannel?
+    dataChannel: DataChannel, rpcMethods: [String], simulcastRpcRids: [String]
   ) {
     guard !rpcMethods.isEmpty else {
       return nil
@@ -121,7 +118,6 @@ public final class RPCChannel {
     self.allowedMethods = mapped
     self.allowedMethodNames = Set(rpcMethods)
     self.simulcastRpcRids = simulcastRpcRids
-    self.mediaChannel = mediaChannel
   }
 
   /// RPC が利用可能かを返す。
@@ -193,10 +189,7 @@ public final class RPCChannel {
         self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
       }
       let pending = Pending(
-        completion: { [weak self] result in
-          self?.notifyHandlers(result: result)
-          completion?(result)
-        },
+        completion: { result in completion?(result) },
         timeoutWorkItem: workItem)
 
       queue.async(flags: .barrier) { [weak self] in
@@ -205,7 +198,6 @@ public final class RPCChannel {
       DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: workItem)
     } else {
       let response = RPCResponse(id: identifier, result: nil)
-      notifyHandlers(result: .success(response))
       completion?(.success(response))
     }
 
@@ -301,22 +293,6 @@ public final class RPCChannel {
     }
     pending.timeoutWorkItem.cancel()
     pending.completion(result)
-  }
-
-  private func notifyHandlers(result: Result<RPCResponse, SoraError>) {
-    guard let mediaChannel else {
-      return
-    }
-    DispatchQueue.main.async {
-      switch result {
-      case .success(let response):
-        mediaChannel.handlers.onReceiveRPCResponse?(mediaChannel, response)
-      case .failure(let error):
-        if case .rpcServerError(let detail) = error {
-          mediaChannel.handlers.onReceiveRPCError?(mediaChannel, detail)
-        }
-      }
-    }
   }
 }
 

@@ -47,12 +47,6 @@ public final class MediaChannelHandlers {
   /// DataChannel のメッセージ受信時に呼ばれるクロージャー
   public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?
 
-  /// RPC のレスポンスを受信したときに呼ばれるクロージャー
-  public var onReceiveRPCResponse: ((MediaChannel, RPCResponse) -> Void)?
-
-  /// RPC のエラー応答を受信したときに呼ばれるクロージャー
-  public var onReceiveRPCError: ((MediaChannel, RPCErrorDetail) -> Void)?
-
   /// 初期化します。
   public init() {}
 }
