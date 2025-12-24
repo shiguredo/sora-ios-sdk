@@ -41,15 +41,16 @@ public struct RPCErrorDetail {
 
 /// RPC 成功応答。
 public struct RPCResponse<Result> {
-  public let id: RPCID?
-  public let result: Result?
+  public let jsonrpc: String = "2.0"
+  public let id: RPCID
+  public let result: Result
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
 public final class RPCChannel {
   /// pending 管理用の構造体
   private struct Pending {
-    let completion: (Result<RPCResponse<Any>, SoraError>) -> Void
+    let completion: (Result<RPCResponse<Any>?, SoraError>) -> Void
     let timeoutWorkItem: DispatchWorkItem
   }
 
@@ -89,9 +90,9 @@ public final class RPCChannel {
   func call(
     method: RPCMethod,
     params: Encodable? = nil,
-    expectsResponse: Bool = true,
+    notification: Bool = false,
     timeout: TimeInterval = 5.0,
-    completion: ((Result<RPCResponse<Any>, SoraError>) -> Void)? = nil
+    completion: ((Result<RPCResponse<Any>?, SoraError>) -> Void)? = nil
   ) -> Bool {
     guard isAvailable else {
       completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
@@ -118,9 +119,9 @@ public final class RPCChannel {
     }
 
     var identifier: RPCID?
-    if expectsResponse {
+    if !notification {
       identifier = nextIdentifier()
-      payload["id"] = identifier?.jsonValue
+      payload["id"] = identifier.jsonValue
     }
 
     guard JSONSerialization.isValidJSONObject(payload) else {
@@ -143,7 +144,7 @@ public final class RPCChannel {
       return false
     }
 
-    if expectsResponse, let identifier {
+    if !notification, let identifier {
       let workItem = DispatchWorkItem { [weak self] in
         self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
       }
@@ -156,8 +157,7 @@ public final class RPCChannel {
       }
       DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: workItem)
     } else {
-      let response = RPCResponse<Any>(id: identifier, result: nil)
-      completion?(.success(response))
+      completion?(.success(nil))
     }
 
     return true
@@ -239,7 +239,7 @@ public final class RPCChannel {
     return object
   }
 
-  private func finishPending(id: RPCID, result: Result<RPCResponse<Any>, SoraError>) {
+  private func finishPending(id: RPCID, result: Result<RPCResponse<Any>?, SoraError>) {
     let pending = queue.sync(flags: .barrier) { () -> Pending? in
       let value = pendings[id]
       pendings.removeValue(forKey: id)
