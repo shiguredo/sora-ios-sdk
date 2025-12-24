@@ -1,5 +1,46 @@
 import Foundation
 
+/// RPC メソッドを表す。
+public enum RPCMethod: Equatable {
+  case requestSimulcastRid
+  case requestSpotlightRid
+  case resetSpotlightRid
+  case putSignalingNotifyMetadata
+  case putSignalingNotifyMetadataItem
+
+  public init?(_ rawValue: String) {
+    switch rawValue {
+    case "2025.2.0/RequestSimulcastRid":
+      self = .requestSimulcastRid
+    case "2025.2.0/RequestSpotlightRid":
+      self = .requestSpotlightRid
+    case "2025.2.0/ResetSpotlightRid":
+      self = .resetSpotlightRid
+    case "2025.2.0/PutSignalingNotifyMetadata":
+      self = .putSignalingNotifyMetadata
+    case "2025.2.0/PutSignalingNotifyMetadataItem":
+      self = .putSignalingNotifyMetadataItem
+    default:
+      return nil
+    }
+  }
+
+  public var rawValue: String {
+    switch self {
+    case .requestSimulcastRid:
+      return "2025.2.0/RequestSimulcastRid"
+    case .requestSpotlightRid:
+      return "2025.2.0/RequestSpotlightRid"
+    case .resetSpotlightRid:
+      return "2025.2.0/ResetSpotlightRid"
+    case .putSignalingNotifyMetadata:
+      return "2025.2.0/PutSignalingNotifyMetadata"
+    case .putSignalingNotifyMetadataItem:
+      return "2025.2.0/PutSignalingNotifyMetadataItem"
+    }
+  }
+}
+
 public protocol RPCMethodProtocol {
   associatedtype Params: Encodable
   associatedtype Result: Decodable
