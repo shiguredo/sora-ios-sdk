@@ -205,7 +205,9 @@ public enum ResetSpotlightRid: RPCMethodProtocol {
 public enum PutSignalingNotifyMetadata<Metadata: Codable>: RPCMethodProtocol {
   public typealias Params = PutSignalingNotifyMetadataParams<Metadata>
   public typealias Result = Metadata
-  public static let name = "2025.2.0/PutSignalingNotifyMetadata"
+  public static var name: String {
+    "2025.2.0/PutSignalingNotifyMetadata"
+  }
 }
 
 public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable>:
@@ -213,5 +215,7 @@ public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable
 {
   public typealias Params = PutSignalingNotifyMetadataItemParams<Value>
   public typealias Result = Metadata
-  public static let name = "2025.2.0/PutSignalingNotifyMetadataItem"
+  public static var name: String {
+    "2025.2.0/PutSignalingNotifyMetadataItem"
+  }
 }
