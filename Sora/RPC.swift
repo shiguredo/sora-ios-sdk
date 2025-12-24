@@ -32,47 +32,6 @@ public enum RPCID: Hashable {
   }
 }
 
-/// RPC メソッドを表す。
-public enum RPCMethod: Equatable {
-  case requestSimulcastRid
-  case requestSpotlightRid
-  case resetSpotlightRid
-  case putSignalingNotifyMetadata
-  case putSignalingNotifyMetadataItem
-
-  public init?(_ rawValue: String) {
-    switch rawValue {
-    case "2025.2.0/RequestSimulcastRid":
-      self = .requestSimulcastRid
-    case "2025.2.0/RequestSpotlightRid":
-      self = .requestSpotlightRid
-    case "2025.2.0/ResetSpotlightRid":
-      self = .resetSpotlightRid
-    case "2025.2.0/PutSignalingNotifyMetadata":
-      self = .putSignalingNotifyMetadata
-    case "2025.2.0/PutSignalingNotifyMetadataItem":
-      self = .putSignalingNotifyMetadataItem
-    default:
-      return nil
-    }
-  }
-
-  public var rawValue: String {
-    switch self {
-    case .requestSimulcastRid:
-      return "2025.2.0/RequestSimulcastRid"
-    case .requestSpotlightRid:
-      return "2025.2.0/RequestSpotlightRid"
-    case .resetSpotlightRid:
-      return "2025.2.0/ResetSpotlightRid"
-    case .putSignalingNotifyMetadata:
-      return "2025.2.0/PutSignalingNotifyMetadata"
-    case .putSignalingNotifyMetadataItem:
-      return "2025.2.0/PutSignalingNotifyMetadataItem"
-    }
-  }
-}
-
 /// RPC エラー応答の詳細。
 public struct RPCErrorDetail {
   public let code: Int
@@ -81,16 +40,16 @@ public struct RPCErrorDetail {
 }
 
 /// RPC 成功応答。
-public struct RPCResponse {
+public struct RPCResponse<Result> {
   public let id: RPCID?
-  public let result: Any?
+  public let result: Result?
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
 public final class RPCChannel {
   /// pending 管理用の構造体
   private struct Pending {
-    let completion: (Result<RPCResponse, SoraError>) -> Void
+    let completion: (Result<RPCResponse<Any>, SoraError>) -> Void
     let timeoutWorkItem: DispatchWorkItem
   }
 
@@ -132,7 +91,7 @@ public final class RPCChannel {
     params: Encodable? = nil,
     expectsResponse: Bool = true,
     timeout: TimeInterval = 5.0,
-    completion: ((Result<RPCResponse, SoraError>) -> Void)? = nil
+    completion: ((Result<RPCResponse<Any>, SoraError>) -> Void)? = nil
   ) -> Bool {
     guard isAvailable else {
       completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
@@ -197,7 +156,7 @@ public final class RPCChannel {
       }
       DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: workItem)
     } else {
-      let response = RPCResponse(id: identifier, result: nil)
+      let response = RPCResponse<Any>(id: identifier, result: nil)
       completion?(.success(response))
     }
 
@@ -236,7 +195,7 @@ public final class RPCChannel {
     }
 
     if let result = json["result"] {
-      let response = RPCResponse(id: identifier, result: result)
+      let response = RPCResponse<Any>(id: identifier, result: result)
       finishPending(id: identifier, result: .success(response))
       return
     }
@@ -280,7 +239,7 @@ public final class RPCChannel {
     return object
   }
 
-  private func finishPending(id: RPCID, result: Result<RPCResponse, SoraError>) {
+  private func finishPending(id: RPCID, result: Result<RPCResponse<Any>, SoraError>) {
     let pending = queue.sync(flags: .barrier) { () -> Pending? in
       let value = pendings[id]
       pendings.removeValue(forKey: id)
