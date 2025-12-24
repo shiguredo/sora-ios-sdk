@@ -120,8 +120,9 @@ public final class RPCChannel {
 
     var identifier: RPCID?
     if !notification {
-      identifier = nextIdentifier()
-      payload["id"] = identifier.jsonValue
+      let nextIdentifier = nextIdentifier()
+      identifier = nextIdentifier
+      payload["id"] = nextIdentifier.jsonValue
     }
 
     guard JSONSerialization.isValidJSONObject(payload) else {

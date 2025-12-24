@@ -254,7 +254,8 @@ public final class MediaChannel {
     guard let rpcMethod = RPCMethod(method.name) else {
       throw SoraError.rpcMethodNotAllowed(method: method.name)
     }
-    let response = try await withCheckedThrowingContinuation { continuation in
+    let response = try await withCheckedThrowingContinuation {
+      (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
       guard let rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
