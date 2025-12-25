@@ -184,6 +184,17 @@ public struct ResetSpotlightRidResult: Decodable {
   }
 }
 
+// NOTE: Sora の RPC メソッドを表す以下の型の命名について
+//
+// `2025.2.0/RequestSpotlightRid` と `2027.2.0/RequestSpotlightRid` のようにバージョン部分だけ
+// 違うメソッド名が増えた場合には、`RequestSimulcastRid_2025_2_0` のようにバージョン名を含む
+// 命名規則に移行する予定 (どういう命名規則にするかはそのとき決定する)。
+//
+// 移行方法
+// - 既存で提供している型のエイリアスを新しい命名規則で作成する
+// - 既存の型は deprecated にして、バージョン名を含む命名規則を適用した型への移行を促す
+// - 新規追加されたメソッドはバージョン名を含む命名規則で追加する
+
 public enum RequestSimulcastRid: RPCMethodProtocol {
   public typealias Params = RequestSimulcastRidParams
   public typealias Result = RequestSimulcastRidResult
