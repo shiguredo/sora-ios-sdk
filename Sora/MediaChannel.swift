@@ -155,16 +155,36 @@ public final class MediaChannel {
   public private(set) var subscriberCount: Int?
 
   /// RPC を扱うチャネル
+  /// - Note: RPC が利用不可の場合は nil を返します
   public var rpcChannel: RPCChannel? {
     peerChannel.rpcChannel
   }
 
   /// RPC で利用可能なメソッド一覧
+  ///
+  /// Sora サーバーから通知された RPC メソッドが列挙型として取得できます。
+  /// rpc メソッドを呼び出す前に、必要なメソッドがこの一覧に含まれているかを確認することを推奨します。
+  ///
+  /// - Returns: 利用可能な RPC メソッドの一覧。RPC が初期化されていない場合は空配列を返します
+  ///
+  /// # 使用例
+  /// ```swift
+  /// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
+  ///   let result = try await mediaChannel.rpc(
+  ///     method: RequestSimulcastRid.self,
+  ///     params: RequestSimulcastRidParams(rid: "r0")
+  ///   )
+  /// }
+  /// ```
   public var rpcMethods: [RPCMethod] {
     peerChannel.rpcChannel?.allowedMethods.compactMap { RPCMethod(name: $0) } ?? []
   }
 
-  /// RPC で利用可能なサイマルキャスト rid
+  /// RPC で利用可能なサイマルキャスト rid の一覧
+  ///
+  /// Sora サーバーから通知された、RPC で操作可能なサイマルキャスト rid が取得できます。
+  ///
+  /// - Returns: 利用可能なサイマルキャスト rid の一覧。RPC が初期化されていない場合は空配列を返します
   public var rpcSimulcastRids: [String] {
     peerChannel.rpcChannel?.simulcastRpcRids ?? []
   }
@@ -244,7 +264,41 @@ public final class MediaChannel {
 
   // MARK: - RPC
 
-  /// RPC をジェネリクスで送信する。
+  /// RPC メソッドを型安全に呼び出します
+  ///
+  /// このメソッドを使用して、Sora サーバーで定義された RPC メソッドを非同期で実行できます。
+  /// 呼び出す前に rpcMethods プロパティで該当メソッドが利用可能であることを確認してください。
+  ///
+  /// - Parameters:
+  ///   - method: 呼び出す RPC メソッドの型 (例: `RequestSimulcastRid.self`)
+  ///   - params: メソッドに渡すパラメータ。型安全に検証されます
+  ///   - isNotificationRequest: `true` の場合、レスポンスを待たずに送信します。デフォルトは `false`
+  ///   - timeout: レスポンスを待つ最大時間（秒）。デフォルトは 5.0 秒
+  ///
+  /// - Returns: メソッドの実行結果。isNotificationRequest が true の場合は nil を返します
+  ///
+  /// - Throws: 以下のエラーが発生することがあります
+  ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
+  ///   - `SoraError.rpcMethodNotAllowed`: 指定されたメソッドが利用不可
+  ///   - `SoraError.rpcTimeout`: レスポンスがタイムアウト時間内に返されなかった
+  ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
+  ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
+  ///
+  /// # 使用例
+  /// ```swift
+  /// do {
+  ///   let response = try await mediaChannel.rpc(
+  ///     method: RequestSimulcastRid.self,
+  ///     params: RequestSimulcastRidParams(rid: "r0")
+  ///   )
+  ///
+  ///   if let result = response?.result {
+  ///     print("Channel ID: \(result.channelId)")
+  ///   }
+  /// } catch {
+  ///   print("RPC call failed: \(error)")
+  /// }
+  /// ```
   public func rpc<M: RPCMethodProtocol>(
     method: M.Type,
     params: M.Params,

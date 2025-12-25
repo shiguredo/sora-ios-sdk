@@ -41,9 +41,15 @@ public struct RPCErrorDetail {
 
 /// RPC 成功応答。
 public struct RPCResponse<Result> {
-  public let jsonrpc: String = "2.0"
+  public let jsonrpc: String
   public let id: RPCID
   public let result: Result
+
+  public init(id: RPCID, result: Result) {
+    self.jsonrpc = "2.0"
+    self.id = id
+    self.result = result
+  }
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
@@ -60,7 +66,8 @@ public final class RPCChannel {
   private var nextId: Int = 1
   private var pendings: [RPCID: Pending] = [:]
 
-  /// Sora から払い出されたメソッド一覧
+  /// Sora から払い出されたメソッド一覧 (メソッド名の文字列リスト)
+  /// MediaChannel.rpcMethods で RPCMethod Enum に変換されます
   let allowedMethods: [String]
   private let allowedMethodNames: Set<String>
 

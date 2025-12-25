@@ -1,8 +1,16 @@
 import Foundation
 
+/// RPC メソッドを定義するためのプロトコル
+///
+/// 新しい RPC メソッドを SDK に追加する場合は、このプロトコルに準拠した型を定義してください。
+///
+/// - Note: 通常のユーザーは、このプロトコルを直接実装する必要はありません
 public protocol RPCMethodProtocol {
+  /// RPC メソッドのパラメータ型
   associatedtype Params: Encodable
+  /// RPC メソッドの戻り値型
   associatedtype Result: Decodable
+  /// RPC メソッド名 (例: "2025.2.0/RequestSimulcastRid")
   static var name: String { get }
 }
 
@@ -143,35 +151,72 @@ public struct ResetSpotlightRidResult: Decodable {
   }
 }
 
-// NOTE: Sora の RPC メソッドを表す以下の型の命名について
-//
-// `2025.2.0/RequestSpotlightRid` と `2027.2.0/RequestSpotlightRid` のようにバージョン部分だけ
-// 違うメソッド名が増えた場合には、`RequestSimulcastRid_2025_2_0` のようにバージョン名を含む
-// 命名規則に移行する予定 (どういう命名規則にするかはそのとき決定する)。
-//
-// 移行方法
-// - 既存で提供している型のエイリアスを新しい命名規則で作成する
-// - 既存の型は deprecated にして、バージョン名を含む命名規則を適用した型への移行を促す
-// - 新規追加されたメソッドはバージョン名を含む命名規則で追加する
+// MARK: - RPC メソッド型の命名規則について
 
+/// # RPC メソッド型の命名規則
+///
+/// ## 現在の命名規則
+/// 現在、RPC メソッド型は `RequestSimulcastRid`、`RequestSpotlightRid` のようにメソッド名のみで命名しています。
+/// メソッド名のバージョン情報（例：`2025.2.0`）は、型の `name` プロパティに格納されています。
+///
+/// ```swift
+/// public enum RequestSimulcastRid: RPCMethodProtocol {
+///   public static let name = "2025.2.0/RequestSimulcastRid"
+/// }
+/// ```
+///
+/// ## 将来の命名規則への移行計画
+/// 同じメソッド名でバージョンが異なる場合（例：`2025.2.0/RequestSpotlightRid` と `2027.2.0/RequestSpotlightRid`）が増えた際には、
+/// バージョン情報を型名に含める新しい命名規則に移行する予定です。
+///
+/// ### 新しい命名規則の例
+/// ```swift
+/// // 新しい命名規則の例（将来のバージョン）
+/// public enum RequestSpotlightRid_2025_2_0: RPCMethodProtocol { ... }
+/// public enum RequestSpotlightRid_2027_2_0: RPCMethodProtocol { ... }
+/// ```
+///
+/// ## 移行時のアプローチ
+/// 1. **既存の型はエイリアスを作成**
+///    - 既存の型は新しい命名規則の型のエイリアスとして提供します
+/// 2. **deprecated マーク**
+///    - 既存の型を `@deprecated` マークし、ユーザーに移行を促します
+/// 3. **新規メソッドは新しい命名規則で追加**
+///    - 将来追加されるメソッドは新しい命名規則で定義します
+///
+/// このアプローチにより、既存コードとの互換性を保ちながら、スムーズに移行できるようにしています。
+
+/// サイマルキャスト の rid をリクエストする RPC メソッド
+///
+/// 視聴するサイマルキャスト映像の解像度を指定する RPC メソッドです。
 public enum RequestSimulcastRid: RPCMethodProtocol {
   public typealias Params = RequestSimulcastRidParams
   public typealias Result = RequestSimulcastRidResult
   public static let name = "2025.2.0/RequestSimulcastRid"
 }
 
+/// スポットライト rid をリクエストする RPC メソッド
+///
+/// スポットライト機能で注目する接続を指定する RPC メソッドです。
 public enum RequestSpotlightRid: RPCMethodProtocol {
   public typealias Params = RequestSpotlightRidParams
   public typealias Result = RequestSpotlightRidResult
   public static let name = "2025.2.0/RequestSpotlightRid"
 }
 
+/// スポットライト rid をリセットする RPC メソッド
+///
+/// スポットライト機能の設定をリセットする RPC メソッドです。
 public enum ResetSpotlightRid: RPCMethodProtocol {
   public typealias Params = ResetSpotlightRidParams
   public typealias Result = ResetSpotlightRidResult
   public static let name = "2025.2.0/ResetSpotlightRid"
 }
 
+/// シグナリング通知メタデータを設定する RPC メソッド
+///
+/// シグナリング通知全体にメタデータを設定する RPC メソッドです。
+/// ジェネリック型パラメータで任意の型のメタデータを指定できます。
 public enum PutSignalingNotifyMetadata<Metadata: Codable>: RPCMethodProtocol {
   public typealias Params = PutSignalingNotifyMetadataParams<Metadata>
   public typealias Result = Metadata
@@ -180,6 +225,10 @@ public enum PutSignalingNotifyMetadata<Metadata: Codable>: RPCMethodProtocol {
   }
 }
 
+/// シグナリング通知メタデータのアイテムを設定する RPC メソッド
+///
+/// シグナリング通知メタデータの特定キーに値を設定する RPC メソッドです。
+/// ジェネリック型パラメータで値の型とレスポンスの型を指定できます。
 public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable>:
   RPCMethodProtocol
 {
@@ -190,7 +239,21 @@ public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable
   }
 }
 
-/// RPC メソッドを表す Enum
+/// RPC メソッドを型安全に表現する Enum
+///
+/// MediaChannel.rpcMethods で利用可能なメソッドをこの型として取得できます。
+/// このEnum を使用することで、コンパイル時にメソッド名の妥当性が検証されます。
+///
+/// # 使用例
+/// ```swift
+/// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
+///   let params = RequestSimulcastRidParams(rid: "r0")
+///   let response = try await mediaChannel.rpc(
+///     method: RequestSimulcastRid.self,
+///     params: params
+///   )
+/// }
+/// ```
 public enum RPCMethod {
   case requestSimulcastRid
   case requestSpotlightRid
@@ -207,8 +270,10 @@ public enum RPCMethod {
     case .resetSpotlightRid:
       return ResetSpotlightRid.name
     case .putSignalingNotifyMetadata:
+      // NOTE: ジェネリック型のメソッド名取得のため、ダミー型引数 <String> を使用
       return PutSignalingNotifyMetadata<String>.name
     case .putSignalingNotifyMetadataItem:
+      // NOTE: ジェネリック型のメソッド名取得のため、ダミー型引数 <String, String> を使用
       return PutSignalingNotifyMetadataItem<String, String>.name
     }
   }
