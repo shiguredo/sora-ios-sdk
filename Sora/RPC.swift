@@ -61,7 +61,7 @@ public final class RPCChannel {
   private var pendings: [RPCID: Pending] = [:]
 
   /// Sora から払い出されたメソッド一覧
-  let allowedMethods: [RPCMethod]
+  let allowedMethods: [String]
   private let allowedMethodNames: Set<String>
 
   /// Sora から払い出されたサイマルキャスト rid の一覧
@@ -74,8 +74,7 @@ public final class RPCChannel {
       return nil
     }
     self.dataChannel = dataChannel
-    let mapped = rpcMethods.compactMap { RPCMethod($0) }
-    self.allowedMethods = mapped
+    self.allowedMethods = rpcMethods
     self.allowedMethodNames = Set(rpcMethods)
     self.simulcastRpcRids = simulcastRpcRids
   }
@@ -88,7 +87,7 @@ public final class RPCChannel {
   /// RPC を送信する。
   @discardableResult
   func call(
-    method: RPCMethod,
+    methodName: String,
     params: Encodable? = nil,
     notification: Bool = false,
     timeout: TimeInterval = 5.0,
@@ -99,14 +98,14 @@ public final class RPCChannel {
       return false
     }
 
-    guard allowedMethodNames.contains(method.rawValue) else {
-      completion?(.failure(SoraError.rpcMethodNotAllowed(method: method.rawValue)))
+    guard allowedMethodNames.contains(methodName) else {
+      completion?(.failure(SoraError.rpcMethodNotAllowed(method: methodName)))
       return false
     }
 
     var payload: [String: Any] = [
       "jsonrpc": "2.0",
-      "method": method.rawValue,
+      "method": methodName,
     ]
 
     if let params {

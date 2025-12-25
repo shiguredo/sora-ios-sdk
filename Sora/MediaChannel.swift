@@ -160,7 +160,7 @@ public final class MediaChannel {
   }
 
   /// RPC で利用可能なメソッド一覧
-  public var rpcMethods: [RPCMethod] {
+  public var rpcMethods: [String] {
     peerChannel.rpcChannel?.allowedMethods ?? []
   }
 
@@ -251,9 +251,6 @@ public final class MediaChannel {
     notification: Bool = false,
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
-    guard let rpcMethod = RPCMethod(method.name) else {
-      throw SoraError.rpcMethodNotAllowed(method: method.name)
-    }
     let response = try await withCheckedThrowingContinuation {
       (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
       guard let rpcChannel else {
@@ -262,7 +259,7 @@ public final class MediaChannel {
         return
       }
       _ = rpcChannel.call(
-        method: rpcMethod,
+        methodName: method.name,
         params: params,
         notification: notification,
         timeout: timeout
