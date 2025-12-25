@@ -89,7 +89,7 @@ public final class RPCChannel {
   func call(
     methodName: String,
     params: Encodable? = nil,
-    notification: Bool = false,
+    isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0,
     completion: ((Result<RPCResponse<Any>?, SoraError>) -> Void)? = nil
   ) -> Bool {
@@ -118,7 +118,7 @@ public final class RPCChannel {
     }
 
     var identifier: RPCID?
-    if !notification {
+    if !isNotificationRequest {
       let nextIdentifier = nextIdentifier()
       identifier = nextIdentifier
       payload["id"] = nextIdentifier.jsonValue
@@ -144,7 +144,7 @@ public final class RPCChannel {
       return false
     }
 
-    if !notification, let identifier {
+    if !isNotificationRequest, let identifier {
       let workItem = DispatchWorkItem { [weak self] in
         self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
       }

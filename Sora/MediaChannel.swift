@@ -248,7 +248,7 @@ public final class MediaChannel {
   public func rpc<M: RPCMethodProtocol>(
     method: M.Type,
     params: M.Params,
-    notification: Bool = false,
+    isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
     let response = try await withCheckedThrowingContinuation {
@@ -261,7 +261,7 @@ public final class MediaChannel {
       _ = rpcChannel.call(
         methodName: method.name,
         params: params,
-        notification: notification,
+        isNotificationRequest: isNotificationRequest,
         timeout: timeout
       ) { result in
         continuation.resume(with: result)
