@@ -154,6 +154,21 @@ public final class MediaChannel {
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
   public private(set) var subscriberCount: Int?
 
+  /// RPC を扱うチャネル
+  public var rpcChannel: RPCChannel? {
+    peerChannel.rpcChannel
+  }
+
+  /// RPC で利用可能なメソッド一覧
+  public var rpcMethods: [RPCMethod] {
+    peerChannel.rpcChannel?.allowedMethods.compactMap { RPCMethod(name: $0) } ?? []
+  }
+
+  /// RPC で利用可能なサイマルキャスト rid
+  public var rpcSimulcastRids: [String] {
+    peerChannel.rpcChannel?.simulcastRpcRids ?? []
+  }
+
   // MARK: 接続チャネル
 
   /// シグナリングチャネル
@@ -225,6 +240,58 @@ public final class MediaChannel {
         .peerChannel(_peerChannel!),
       ],
       timeout: configuration.connectionTimeout)
+  }
+
+  // MARK: - RPC
+
+  /// RPC をジェネリクスで送信する。
+  public func rpc<M: RPCMethodProtocol>(
+    method: M.Type,
+    params: M.Params,
+    notification: Bool = false,
+    timeout: TimeInterval = 5.0
+  ) async throws -> RPCResponse<M.Result>? {
+    let response = try await withCheckedThrowingContinuation {
+      (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
+      guard let rpcChannel else {
+        continuation.resume(
+          throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
+        return
+      }
+      _ = rpcChannel.call(
+        methodName: method.name,
+        params: params,
+        notification: notification,
+        timeout: timeout
+      ) { result in
+        continuation.resume(with: result)
+      }
+    }
+    guard let response else {
+      return nil
+    }
+    return try decodeRPCResponse(response, method: method)
+  }
+
+  private func decodeRPCResponse<M: RPCMethodProtocol>(
+    _ response: RPCResponse<Any>,
+    method: M.Type
+  ) throws -> RPCResponse<M.Result> {
+    let decoded: M.Result
+    do {
+      decoded = try decodeRPCResult(response.result, as: M.Result.self)
+    } catch {
+      throw SoraError.rpcDecodingError(reason: error.localizedDescription)
+    }
+    return RPCResponse<M.Result>(id: response.id, result: decoded)
+  }
+
+  private func decodeRPCResult<T: Decodable>(_ result: Any, as type: T.Type) throws -> T {
+    let data = try JSONSerialization.data(
+      withJSONObject: result,
+      options: [.fragmentsAllowed])
+    let decoder = JSONDecoder()
+    return try decoder.decode(T.self, from: data)
   }
 
   // MARK: - 接続
