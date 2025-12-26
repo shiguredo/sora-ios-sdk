@@ -279,16 +279,6 @@ public final class MediaChannel {
     connectionStartTime = nil
     connectionTask.peerChannel = peerChannel
 
-    // NativePeerChannelFactory がシングルトンのため
-    // 前回切断時に音声ハードミュート状態の場合は状態が残ってしまうので
-    // 音声ハードミュートのリセットを行います
-    if configuration.audioEnabled {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "reset audio hard mute before connecting")
-      _ = NativePeerChannelFactory.default.audioDeviceModuleWrapper.resetHardMuteIfNeeded()
-    }
-
     signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
       guard let weakSelf = self else {
         return
@@ -551,6 +541,43 @@ public final class MediaChannel {
     }
 
     return NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute)
+  }
+
+  /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
+  /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Returns: 成功した場合は `true`、接続状態などの理由で処理しなかった場合は `false`
+  public func setAudioSoftMute(_ mute: Bool) -> Bool {
+    guard state == .connected else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "setAudioSoftMute failed, cause MediaChannel is not connected (state: \(state))")
+      return false
+    }
+
+    guard configuration.audioEnabled else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "setAudioSoftMute skipped because audioEnabled is false")
+      return false
+    }
+
+    guard let senderStream else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "setAudioSoftMute failed, cause senderStream is unavailable")
+      return false
+    }
+
+    guard senderStream.hasAudioTrack else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "setAudioSoftMute failed, cause senderStream has no AudioTrack")
+      return false
+    }
+
+    senderStream.audioEnabled = !mute
+    Logger.debug(type: .mediaChannel, message: "setAudioSoftMute mute=\(mute)")
+    return true
   }
 }
 

@@ -11,6 +11,9 @@
 
 ## develop
 
+- [CHANGE] MediaStream に `hasAudioTrack` を追加する
+  - `setAudioSoftMute` で AudioTrack の有無判定を行うため
+  - @t-miya
 - [UPDATE] libwebrtc m144.7559.0.1 に上げる
   - @miosakuma @zztkm
 - [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
@@ -19,7 +22,11 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
+- [ADD] MediaChannel に `setAudioSoftMute(_:)` を追加する
+  - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
+  - @t-miya
 - [ADD] 音声のハードミュート有効化/無効化機能を追加する
+  - iOS 端末のマイクインジケーターを消灯させる
   - AudioDeviceModuleWrapper クラスを追加する
     - RTCAudioDeviceModule の pauseRecording/resumeRecording を実行するためのラッパークラス
     - インスタンスは NativePeerChannelFactory が保持する
