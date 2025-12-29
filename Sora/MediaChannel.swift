@@ -526,17 +526,7 @@ public final class MediaChannel {
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `true`、接続状態などの理由で処理しなかった場合は `false`
   public func setAudioHardMute(_ mute: Bool) -> Bool {
-    guard state == .connected else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "setAudioHardMute failed, cause MediaChannel is not connected (state: \(state))")
-      return false
-    }
-
-    guard configuration.audioEnabled else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "setAudioHardMute skipped because audioEnabled is false")
+    guard canSwitchAudioMute() else {
       return false
     }
 
@@ -547,36 +537,49 @@ public final class MediaChannel {
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `true`、接続状態などの理由で処理しなかった場合は `false`
   public func setAudioSoftMute(_ mute: Bool) -> Bool {
-    guard state == .connected else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "setAudioSoftMute failed, cause MediaChannel is not connected (state: \(state))")
-      return false
-    }
-
-    guard configuration.audioEnabled else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "setAudioSoftMute skipped because audioEnabled is false")
-      return false
-    }
-
-    guard let senderStream else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "setAudioSoftMute failed, cause senderStream is unavailable")
-      return false
-    }
-
-    guard senderStream.hasAudioTrack else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "setAudioSoftMute failed, cause senderStream has no AudioTrack")
+    guard canSwitchAudioMute() else {
       return false
     }
 
     senderStream.audioEnabled = !mute
     Logger.debug(type: .mediaChannel, message: "setAudioSoftMute mute=\(mute)")
+    return true
+  }
+
+  // 音声ミュートの切り替えが可能かチェックします
+  private func canSwitchAudioMute() -> Bool {
+    // 接続中か
+    guard state == .connected else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "Switch audio mute failed, cause MediaChannel is not connected (state: \(state))")
+      return false
+    }
+
+    // 接続設定で音声を有効にしているか
+    guard configuration.audioEnabled else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "Switch audio mute failed, cause audioEnabled is false")
+      return false
+    }
+
+    // ストリームが存在するか
+    guard let senderStream else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "Switch audio mute failed, cause senderStream is unavailable")
+      return false
+    }
+
+    // ストリームに音声トラックが含まれているか
+    guard senderStream.hasAudioTrack else {
+      Logger.debug(
+        type: .mediaChannel,
+        message: "Switch audio mute failed, cause senderStream has no AudioTrack")
+      return false
+    }
+
     return true
   }
 }
