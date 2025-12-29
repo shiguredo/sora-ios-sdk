@@ -203,12 +203,12 @@ public final class RPCChannel {
     }
 
     if let method = json["method"] as? String {
-      Logger.warn(type: .dataChannel, message: "rpc request is not supported: \(method)")
+      Logger.error(type: .dataChannel, message: "rpc request is not supported: \(method)")
       return
     }
 
     guard let idValue = json["id"], let identifier = RPCID(any: idValue) else {
-      Logger.warn(type: .dataChannel, message: "rpc response id is missing")
+      Logger.error(type: .dataChannel, message: "rpc response id is missing")
       return
     }
 
