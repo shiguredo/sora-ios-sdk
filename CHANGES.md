@@ -11,8 +11,8 @@
 
 ## develop
 
-- [UPDATE] libwebrtc m144.7559.0.1 に上げる
-  - @miosakuma @zztkm
+- [UPDATE] libwebrtc m144.7559.2.1 に上げる
+  - @t-miya
 - [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
   - `getStats` メソッドの返り値である `Statistics` のドキュメントを生成するため
   - @t-miya
