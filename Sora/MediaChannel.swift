@@ -535,8 +535,9 @@ public final class MediaChannel {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
     }
 
-    if NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
-      return SoraError.mediaChannelError(reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+    if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+      return SoraError.mediaChannelError(
+        reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
     }
 
     return nil

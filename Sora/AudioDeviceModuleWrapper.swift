@@ -2,7 +2,7 @@ import Foundation
 import WebRTC
 
 /// RTCAudioDeviceModule の録音ポーズ/再開をラップするクラス
-final class AudioDeviceModuleWrapper {
+internal final class AudioDeviceModuleWrapper {
   private let audioDeviceModule: RTCAudioDeviceModule
   // ハードミュート処理を直列化するためのキュー
   private let queue = DispatchQueue(label: "jp.shiguredo.sora.audio.device.wrapper")
