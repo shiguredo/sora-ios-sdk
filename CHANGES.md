@@ -23,6 +23,7 @@
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
 - [ADD] MediaChannel に `setAudioSoftMute(_:)` を追加する
+  - 音声ソフトミュート機能のシンタックスシュガー
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
   - @t-miya
 - [ADD] 音声のハードミュート有効化/無効化機能を追加する

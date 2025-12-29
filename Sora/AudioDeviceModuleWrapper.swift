@@ -6,7 +6,6 @@ public final class AudioDeviceModuleWrapper {
   private let audioDeviceModule: RTCAudioDeviceModule
   // ハードミュート処理を直列化するためのキュー
   private let queue = DispatchQueue(label: "jp.shiguredo.sora.audio.device.wrapper")
-  private var isHardMuted: Bool = false
 
   public init(audioDeviceModule: RTCAudioDeviceModule) {
     self.audioDeviceModule = audioDeviceModule
@@ -23,17 +22,12 @@ public final class AudioDeviceModuleWrapper {
           type: .mediaChannel,
           message: "setAudioHardMute via RTCAudioDeviceModule mute=\(mute)")
       } else {
-        Logger.debug(
+        Logger.error(
           type: .mediaChannel,
           message: "setAudioHardMute via RTCAudioDeviceModule mute=\(mute) failed")
         return false
       }
 
-      Logger.debug(
-        type: .mediaChannel,
-        message: "setAudioHardMute via isAudioEnabled=\(!mute)")
-
-      isHardMuted = mute
       return true
     }
   }
