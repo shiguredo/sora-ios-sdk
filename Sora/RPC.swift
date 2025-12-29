@@ -144,25 +144,35 @@ public final class RPCChannel {
       return false
     }
 
-    Logger.debug(type: .dataChannel, message: "send rpc: \(payload)")
-    let sent = dataChannel.send(data)
-    if !sent {
-      completion?(.failure(SoraError.rpcTransportClosed(reason: "failed to send rpc message")))
-      return false
-    }
-
+    var pending: Pending?
     if !isNotificationRequest, let identifier {
       let workItem = DispatchWorkItem { [weak self] in
         self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
       }
-      let pending = Pending(
+      let createdPending = Pending(
         completion: { result in completion?(result) },
         timeoutWorkItem: workItem)
-
-      queue.async(flags: .barrier) { [weak self] in
-        self?.pendings[identifier] = pending
+      pending = createdPending
+      queue.sync(flags: .barrier) {
+        self.pendings[identifier] = createdPending
       }
-      DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: workItem)
+    }
+
+    Logger.debug(type: .dataChannel, message: "send rpc: \(payload)")
+    let sent = dataChannel.send(data)
+    if !sent {
+      if let identifier {
+        finishPending(
+          id: identifier,
+          result: .failure(SoraError.rpcTransportClosed(reason: "failed to send rpc message")))
+      } else {
+        completion?(.failure(SoraError.rpcTransportClosed(reason: "failed to send rpc message")))
+      }
+      return false
+    }
+
+    if !isNotificationRequest, let pending {
+      DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: pending.timeoutWorkItem)
     } else {
       completion?(.success(nil))
     }
