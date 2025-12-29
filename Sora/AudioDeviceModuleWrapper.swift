@@ -15,18 +15,16 @@ public final class AudioDeviceModuleWrapper {
   /// - Parameter mute: `true` で一時停止、`false` で再開
   /// - Returns: 成功した場合は `true`
   public func setAudioHardMute(_ mute: Bool) -> Bool {
-    public func setAudioHardMute(_ mute: Bool) -> Bool {
-      queue.sync {
-        let result = mute ? pauseRecordingInternal() : resumeRecordingInternal()
-        let success = result == 0
-        let message = "setAudioHardMute via RTCAudioDeviceModule mute=\(mute)"
-        if success {
-          Logger.debug(type: .mediaChannel, message: message)
-        } else {
-          Logger.error(type: .mediaChannel, message: "\(message) failed")
-        }
-        return success
+    queue.sync {
+      let result = mute ? pauseRecordingInternal() : resumeRecordingInternal()
+      let success = result == 0
+      let message = "setAudioHardMute via RTCAudioDeviceModule mute=\(mute)"
+      if success {
+        Logger.debug(type: .mediaChannel, message: message)
+      } else {
+        Logger.error(type: .mediaChannel, message: "\(message) failed")
       }
+      return success
     }
   }
 
