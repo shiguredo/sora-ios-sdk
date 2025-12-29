@@ -59,6 +59,11 @@ public protocol MediaStream: AnyObject {
   /// サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
   var audioEnabled: Bool { get set }
 
+  /// 音声トラックを保持している場合は ``true`` を返します。
+  ///
+  /// SDK 内部で利用する判定用のプロパティです。
+  var hasAudioTrack: Bool { get }
+
   /// 受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
   /// このプロパティはロールがサブスクライバーの場合のみ有効です。
   var remoteAudioVolume: Double? { get set }
@@ -195,6 +200,10 @@ class BasicMediaStream: MediaStream {
         videoRenderer?.onSwitch(audio: newValue)
       }
     }
+  }
+
+  var hasAudioTrack: Bool {
+    nativeAudioTrack != nil
   }
 
   var remoteAudioVolume: Double? {

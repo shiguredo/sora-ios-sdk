@@ -521,6 +521,53 @@ public final class MediaChannel {
     return result
       ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
   }
+
+  /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します
+  /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
+  public func setAudioHardMute(_ mute: Bool) -> Error? {
+    guard state == .connected else {
+      return SoraError.mediaChannelError(
+        reason: "MediaChannel is not connected (state: \(state))")
+    }
+
+    guard configuration.audioEnabled else {
+      return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
+    if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+      return SoraError.mediaChannelError(
+        reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+    }
+
+    return nil
+  }
+
+  /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
+  /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
+  public func setAudioSoftMute(_ mute: Bool) -> Error? {
+    guard state == .connected else {
+      return SoraError.mediaChannelError(
+        reason: "MediaChannel is not connected (state: \(state))")
+    }
+
+    guard configuration.audioEnabled else {
+      return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
+    guard let senderStream else {
+      return SoraError.mediaChannelError(reason: "senderStream is unavailable")
+    }
+
+    guard senderStream.hasAudioTrack else {
+      return SoraError.mediaChannelError(reason: "senderStream has no AudioTrack")
+    }
+
+    senderStream.audioEnabled = !mute
+    Logger.debug(type: .mediaChannel, message: "setAudioSoftMute mute=\(mute)")
+    return nil
+  }
 }
 
 extension MediaChannel: CustomStringConvertible {
