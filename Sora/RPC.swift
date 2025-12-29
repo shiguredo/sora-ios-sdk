@@ -172,7 +172,8 @@ public final class RPCChannel {
     }
 
     if !isNotificationRequest, let pending {
-      DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: pending.timeoutWorkItem)
+      DispatchQueue.global().asyncAfter(
+        deadline: .now() + timeout, execute: pending.timeoutWorkItem)
     } else {
       completion?(.success(nil))
     }
