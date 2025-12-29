@@ -1446,3 +1446,10 @@ extension SignalingClose: Decodable {
     reason = try container.decode(String.self, forKey: .reason)
   }
 }
+
+/// :nodoc:
+extension Array where Element == String {
+  func toSimulcastRequestRids() -> [SimulcastRequestRid] {
+    compactMap { simulcastRequestRidTable.right(other: $0) }
+  }
+}
