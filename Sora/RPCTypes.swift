@@ -110,6 +110,7 @@ public struct RequestSimulcastRidResult: Decodable {
     case senderConnectionId = "sender_connection_id"
   }
 }
+
 public struct RequestSpotlightRidResult: Decodable {
   public let channelId: String
   public let recvConnectionId: String
