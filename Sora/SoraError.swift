@@ -33,6 +33,9 @@ public enum SoraError: Error {
   /// ``PeerChannel`` で発生したエラー
   case peerChannelError(reason: String)
 
+  /// ``MediaChannel`` で発生したエラー
+  case mediaChannelError(reason: String)
+
   /// カメラに関するエラー
   case cameraError(reason: String)
 
@@ -74,6 +77,8 @@ extension SoraError: LocalizedError {
       return "Unknown signaling message type \(type)"
     case .peerChannelError(let reason):
       return "PeerChannel error (\(reason))"
+    case .mediaChannelError(let reason):
+      return "MediaChannel error (\(reason))"
     case .cameraError(let reason):
       return "Camera error: \(reason)"
     case .messagingError(let reason):

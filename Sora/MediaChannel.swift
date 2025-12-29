@@ -524,68 +524,48 @@ public final class MediaChannel {
 
   /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します
   /// - Parameter mute: `true` で有効化、`false` で無効化
-  /// - Returns: 成功した場合は `true`、接続状態などの理由で処理しなかった場合は `false`
-  public func setAudioHardMute(_ mute: Bool) -> Bool {
-    guard canSwitchAudioMute() else {
-      return false
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
+  public func setAudioHardMute(_ mute: Bool) -> Error? {
+    guard state == .connected else {
+      return SoraError.mediaChannelError(
+        reason: "MediaChannel is not connected (state: \(state))")
     }
 
-    return NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute)
+    guard configuration.audioEnabled else {
+      return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
+    if NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+      return SoraError.mediaChannelError(reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+    }
+
+    return nil
   }
 
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
   /// - Parameter mute: `true` で有効化、`false` で無効化
-  /// - Returns: 成功した場合は `true`、接続状態などの理由で処理しなかった場合は `false`
-  public func setAudioSoftMute(_ mute: Bool) -> Bool {
-    guard canSwitchAudioMute() else {
-      return false
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
+  public func setAudioSoftMute(_ mute: Bool) -> Error? {
+    guard state == .connected else {
+      return SoraError.mediaChannelError(
+        reason: "MediaChannel is not connected (state: \(state))")
     }
 
-    // senderStream が Nullable のためアンラップが必要
+    guard configuration.audioEnabled else {
+      return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
     guard let senderStream else {
-      return false
+      return SoraError.mediaChannelError(reason: "senderStream is unavailable")
+    }
+
+    guard senderStream.hasAudioTrack else {
+      return SoraError.mediaChannelError(reason: "senderStream has no AudioTrack")
     }
 
     senderStream.audioEnabled = !mute
     Logger.debug(type: .mediaChannel, message: "setAudioSoftMute mute=\(mute)")
-    return true
-  }
-
-  // 音声ミュートの切り替えが可能かチェックします
-  private func canSwitchAudioMute() -> Bool {
-    // 接続中か
-    guard state == .connected else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "Switch audio mute failed, cause MediaChannel is not connected (state: \(state))")
-      return false
-    }
-
-    // 接続設定で音声を有効にしているか
-    guard configuration.audioEnabled else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "Switch audio mute failed, cause audioEnabled is false")
-      return false
-    }
-
-    // ストリームが存在するか
-    guard let senderStream else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "Switch audio mute failed, cause senderStream is unavailable")
-      return false
-    }
-
-    // ストリームに音声トラックが含まれているか
-    guard senderStream.hasAudioTrack else {
-      Logger.debug(
-        type: .mediaChannel,
-        message: "Switch audio mute failed, cause senderStream has no AudioTrack")
-      return false
-    }
-
-    return true
+    return nil
   }
 }
 
