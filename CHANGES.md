@@ -11,9 +11,6 @@
 
 ## develop
 
-- [CHANGE] MediaStream に `hasAudioTrack` を追加する
-  - `setAudioSoftMute` で AudioTrack の有無判定を行うため
-  - @t-miya
 - [UPDATE] libwebrtc m144.7559.0.1 に上げる
   - @miosakuma @zztkm
 - [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
@@ -25,6 +22,7 @@
 - [ADD] MediaChannel に `setAudioSoftMute(_:)` を追加する
   - 音声ソフトミュート機能のシンタックスシュガー
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
+  - AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
   - @t-miya
 - [ADD] 音声のハードミュート有効化/無効化機能を追加する
   - iOS 端末のマイクインジケーターを消灯させる
