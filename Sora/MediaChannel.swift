@@ -541,6 +541,11 @@ public final class MediaChannel {
       return false
     }
 
+    // senderStream が Nullable のためアンラップが必要
+    guard let senderStream else {
+      return false
+    }
+
     senderStream.audioEnabled = !mute
     Logger.debug(type: .mediaChannel, message: "setAudioSoftMute mute=\(mute)")
     return true
