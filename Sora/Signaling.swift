@@ -810,7 +810,8 @@ private var simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
 /// :nodoc:
 extension SimulcastRequestRid: Codable {
   public init(from decoder: Decoder) throws {
-    throw SoraError.invalidSignalingMessage
+    // decode は RPC 機能で必要
+    self = try simulcastRequestRidTable.decode(from: decoder)
   }
 
   public func encode(to encoder: Encoder) throws {

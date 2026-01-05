@@ -24,10 +24,10 @@ public protocol RPCMethodProtocol {
 }
 
 public struct RequestSimulcastRidParams: Encodable {
-  public let rid: String
+  public let rid: SimulcastRequestRid
   public let senderConnectionId: String?
 
-  public init(rid: String, senderConnectionId: String? = nil) {
+  public init(rid: SimulcastRequestRid, senderConnectionId: String? = nil) {
     self.rid = rid
     self.senderConnectionId = senderConnectionId
   }
@@ -97,13 +97,13 @@ public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable 
 public struct RequestSimulcastRidResult: Decodable {
   public let channelId: String
   public let receiverConnectionId: String
-  public let rid: String
+  public let rid: SimulcastRequestRid
   public let senderConnectionId: String?
 
   public init(
     channelId: String,
     receiverConnectionId: String,
-    rid: String,
+    rid: SimulcastRequestRid,
     senderConnectionId: String?
   ) {
     self.channelId = channelId
