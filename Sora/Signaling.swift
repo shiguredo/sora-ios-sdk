@@ -475,6 +475,12 @@ public struct SignalingOffer {
   /// スポットライト
   public let spotlight: Bool?
 
+  /// RPC で利用可能なメソッド
+  public var rpcMethods: [String]?
+
+  /// RPC 経由で切り替えられるサイマルキャストの rid
+  public var simulcastRpcRids: [String]?
+
   /// audio
   public let audio: Bool?
 
@@ -1127,6 +1133,8 @@ extension SignalingOffer: Codable {
     case video
     case video_codec_type
     case video_bit_rate
+    case rpc_methods
+    case simulcast_rpc_rids
   }
 
   public init(from decoder: Decoder) throws {
@@ -1158,6 +1166,8 @@ extension SignalingOffer: Codable {
     video = try container.decodeIfPresent(Bool.self, forKey: .video)
     videoCodecType = try container.decodeIfPresent(String.self, forKey: .video_codec_type)
     videoBitRate = try container.decodeIfPresent(Int.self, forKey: .video_bit_rate)
+    rpcMethods = try container.decodeIfPresent([String].self, forKey: .rpc_methods)
+    simulcastRpcRids = try container.decodeIfPresent([String].self, forKey: .simulcast_rpc_rids)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -1434,5 +1444,12 @@ extension SignalingClose: Decodable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     code = try container.decode(Int.self, forKey: .code)
     reason = try container.decode(String.self, forKey: .reason)
+  }
+}
+
+/// :nodoc:
+extension Array where Element == String {
+  func toSimulcastRequestRids() -> [SimulcastRequestRid] {
+    compactMap { simulcastRequestRidTable.right(other: $0) }
   }
 }

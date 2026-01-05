@@ -42,6 +42,27 @@ public enum SoraError: Error {
   /// メッセージング機能のエラー
   case messagingError(reason: String)
 
+  /// RPC 機能が利用できない
+  case rpcUnavailable(reason: String)
+
+  /// 利用を許可されていない RPC メソッド
+  case rpcMethodNotAllowed(method: String)
+
+  /// RPC リクエストのエンコードに失敗
+  case rpcEncodingError(reason: String)
+
+  /// RPC レスポンスのデコードに失敗
+  case rpcDecodingError(reason: String)
+
+  /// RPC の送受信に利用する DataChannel が切断された
+  case rpcDataChannelClosed(reason: String)
+
+  /// RPC の応答がタイムアウトした
+  case rpcTimeout
+
+  /// RPC のエラー応答
+  case rpcServerError(detail: RPCErrorDetail)
+
   /// DataChannel 経由のシグナリングで type: close を受信し、接続が解除されたことを示します。
   /// - statusCode: ステータスコード
   /// - reason: 切断理由
@@ -83,6 +104,20 @@ extension SoraError: LocalizedError {
       return "Camera error: \(reason)"
     case .messagingError(let reason):
       return "Messaging error: \(reason)"
+    case .rpcUnavailable(let reason):
+      return "RPC unavailable: \(reason)"
+    case .rpcMethodNotAllowed(let method):
+      return "RPC method not allowed: \(method)"
+    case .rpcEncodingError(let reason):
+      return "RPC encoding error: \(reason)"
+    case .rpcDecodingError(let reason):
+      return "RPC decoding error: \(reason)"
+    case .rpcDataChannelClosed(let reason):
+      return "RPC DataChannel is closed: \(reason)"
+    case .rpcTimeout:
+      return "RPC response timeout"
+    case .rpcServerError(let detail):
+      return "RPC server error: \(detail.message) (\(detail.code))"
     case .dataChannelClosed(let statusCode, let reason):
       return "DataChannel is closed (\(statusCode) \(reason))"
     }

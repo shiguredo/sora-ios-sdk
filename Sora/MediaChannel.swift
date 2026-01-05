@@ -154,6 +154,36 @@ public final class MediaChannel {
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
   public private(set) var subscriberCount: Int?
 
+  /// RPC で利用可能なメソッド一覧
+  ///
+  /// Sora サーバーから通知された RPC メソッドが列挙型として取得できます。
+  /// rpc メソッドを呼び出す前に、必要なメソッドがこの一覧に含まれているかを確認することを推奨します。
+  ///
+  /// - Returns: 利用可能な RPC メソッドの一覧。RPC が初期化されていない場合は空配列を返します
+  ///
+  /// # 使用例
+  ///
+  /// ```swift
+  /// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
+  ///   let result = try await mediaChannel.rpc(
+  ///     method: RequestSimulcastRid.self,
+  ///     params: RequestSimulcastRidParams(rid: "r0")
+  ///   )
+  /// }
+  /// ```
+  public var rpcMethods: [RPCMethod] {
+    peerChannel.rpcChannel?.allowedMethods.compactMap { RPCMethod(name: $0) } ?? []
+  }
+
+  /// RPC で利用可能なサイマルキャスト rid の一覧
+  ///
+  /// Sora サーバーから通知された、RPC で操作可能なサイマルキャスト rid が取得できます。
+  ///
+  /// - Returns: 利用可能なサイマルキャスト rid の一覧。RPC が初期化されていない場合は空配列を返します
+  public var rpcSimulcastRids: [SimulcastRequestRid] {
+    peerChannel.rpcChannel?.simulcastRpcRids ?? []
+  }
+
   // MARK: 接続チャネル
 
   /// シグナリングチャネル
@@ -225,6 +255,94 @@ public final class MediaChannel {
         .peerChannel(_peerChannel!),
       ],
       timeout: configuration.connectionTimeout)
+  }
+
+  // MARK: - RPC
+
+  /// RPC メソッドを型安全に呼び出します
+  ///
+  /// このメソッドを使用して、Sora サーバーで定義された RPC メソッドを非同期で実行できます。
+  /// 呼び出す前に rpcMethods プロパティで該当メソッドが利用可能であることを確認してください。
+  ///
+  /// - Parameters:
+  ///   - method: 呼び出す RPC メソッドの型 (例: `RequestSimulcastRid.self`)
+  ///   - params: メソッドに渡すパラメータ。型安全に検証されます
+  ///   - isNotificationRequest: `true` の場合、送信後に Sora からのレスポンスを待ちません。デフォルトは `false`
+  ///   - timeout: レスポンスを待つ最大時間（秒）。デフォルトは 5.0 秒
+  ///
+  /// - Returns: メソッドの実行結果。isNotificationRequest が true の場合は nil を返します
+  ///
+  /// - Throws: 以下のエラーが発生することがあります
+  ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
+  ///   - `SoraError.rpcMethodNotAllowed`: 指定されたメソッドが利用不可
+  ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
+  ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
+  ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された
+  ///   - `SoraError.rpcTimeout`: レスポンスがタイムアウト時間内に返されなかった
+  ///   - `SoraError.rpcServerError`: Sora からエラーレスポンスがあった
+  ///
+  /// # 使用例
+  /// ```swift
+  /// do {
+  ///   let response = try await mediaChannel.rpc(
+  ///     method: RequestSimulcastRid.self,
+  ///     params: RequestSimulcastRidParams(rid: "r0")
+  ///   )
+  ///
+  ///   if let result = response?.result {
+  ///     print("Channel ID: \(result.channelId)")
+  ///   }
+  /// } catch {
+  ///   print("RPC call failed: \(error)")
+  /// }
+  /// ```
+  public func rpc<M: RPCMethodProtocol>(
+    method: M.Type,
+    params: M.Params,
+    isNotificationRequest: Bool = false,
+    timeout: TimeInterval = 5.0
+  ) async throws -> RPCResponse<M.Result>? {
+    let response = try await withCheckedThrowingContinuation {
+      (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
+      guard let rpcChannel = self.peerChannel.rpcChannel else {
+        continuation.resume(
+          throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
+        return
+      }
+      _ = rpcChannel.call(
+        methodName: method.name,
+        params: params,
+        isNotificationRequest: isNotificationRequest,
+        timeout: timeout
+      ) { result in
+        continuation.resume(with: result)
+      }
+    }
+    guard let response else {
+      return nil
+    }
+    return try decodeRPCResponse(response, method: method)
+  }
+
+  private func decodeRPCResponse<M: RPCMethodProtocol>(
+    _ response: RPCResponse<Any>,
+    method: M.Type
+  ) throws -> RPCResponse<M.Result> {
+    let decoded: M.Result
+    do {
+      decoded = try decodeRPCResult(response.result, as: M.Result.self)
+    } catch {
+      throw SoraError.rpcDecodingError(reason: error.localizedDescription)
+    }
+    return RPCResponse<M.Result>(id: response.id, result: decoded)
+  }
+
+  private func decodeRPCResult<T: Decodable>(_ result: Any, as type: T.Type) throws -> T {
+    let data = try JSONSerialization.data(
+      withJSONObject: result,
+      options: [.fragmentsAllowed])
+    let decoder = JSONDecoder()
+    return try decoder.decode(T.self, from: data)
   }
 
   // MARK: - 接続
