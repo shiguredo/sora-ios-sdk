@@ -209,7 +209,8 @@ public final class RPCChannel {
       // SDK から request / notification を送り、response を Sora から受け取る
       // 一方通行の通信が前提になっており、 request / notification が届いても
       // 処理できないためエラーにする
-      Logger.error(type: .dataChannel, message: "rpc request/notification is not supported: \(method)")
+      Logger.error(
+        type: .dataChannel, message: "rpc request/notification is not supported: \(method)")
       return
     }
 
