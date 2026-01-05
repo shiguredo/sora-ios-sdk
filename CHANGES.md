@@ -71,6 +71,9 @@
 - [UPDATE] jazzy の設定ファイルを更新する
   - `module_version` を 2025.3.0 に変更
   - @zztkm
+- [ADD] `Package.swift` に `testTarget` を追加する
+  - xcodebuild で test を実行するために target を追加
+  - @zztkm
 
 ## 2025.2.0
 
