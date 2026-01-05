@@ -154,12 +154,6 @@ public final class MediaChannel {
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
   public private(set) var subscriberCount: Int?
 
-  /// RPC を扱うチャネル
-  /// - Note: RPC が利用不可の場合は nil を返します
-  public var rpcChannel: RPCChannel? {
-    peerChannel.rpcChannel
-  }
-
   /// RPC で利用可能なメソッド一覧
   ///
   /// Sora サーバーから通知された RPC メソッドが列挙型として取得できます。
@@ -307,7 +301,9 @@ public final class MediaChannel {
   ) async throws -> RPCResponse<M.Result>? {
     let response = try await withCheckedThrowingContinuation {
       (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
-      guard let rpcChannel else {
+      // ローカル変数で参照を保持することで rpc メソッド呼び出し時点での
+      // rpcChannel インスタンス生存を保障する。
+      guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
         return
