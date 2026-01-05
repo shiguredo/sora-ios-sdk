@@ -267,7 +267,7 @@ public final class MediaChannel {
   /// - Parameters:
   ///   - method: 呼び出す RPC メソッドの型 (例: `RequestSimulcastRid.self`)
   ///   - params: メソッドに渡すパラメータ。型安全に検証されます
-  ///   - isNotificationRequest: `true` の場合、レスポンスを待たずに送信します。デフォルトは `false`
+  ///   - isNotificationRequest: `true` の場合、送信後に Sora からのレスポンスを待ちません。デフォルトは `false`
   ///   - timeout: レスポンスを待つ最大時間（秒）。デフォルトは 5.0 秒
   ///
   /// - Returns: メソッドの実行結果。isNotificationRequest が true の場合は nil を返します
