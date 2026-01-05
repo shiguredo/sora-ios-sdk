@@ -146,6 +146,7 @@ public final class RPCChannel {
 
     var pending: Pending?
     if !isNotificationRequest, let identifier {
+      // タイムアウト時に実行されるタスク
       let workItem = DispatchWorkItem { [weak self] in
         self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
       }
@@ -172,9 +173,11 @@ public final class RPCChannel {
     }
 
     if !isNotificationRequest, let pending {
+      // リクエストのタイムアウトをスケジュール
       DispatchQueue.global().asyncAfter(
         deadline: .now() + timeout, execute: pending.timeoutWorkItem)
     } else {
+      // notification の場合は即座に完了
       completion?(.success(nil))
     }
 
@@ -203,7 +206,10 @@ public final class RPCChannel {
     }
 
     if let method = json["method"] as? String {
-      Logger.error(type: .dataChannel, message: "rpc request is not supported: \(method)")
+      // SDK から request / notification を送り、response を Sora から受け取る
+      // 一方通行の通信が前提になっており、 request / notification が届いても
+      // 処理できないためエラーにする
+      Logger.error(type: .dataChannel, message: "rpc request/notification is not supported: \(method)")
       return
     }
 
