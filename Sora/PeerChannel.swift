@@ -1056,7 +1056,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     internalHandlers.onReceiveSignaling?(signaling)
   }
 
-  /// DataChannel の rpc で受信したメッセージを処理する。
+  /// DataChannel の RPC で受信したメッセージを処理する。
   func handleRPCMessage(_ data: Data) {
     guard let rpcChannel else {
       Logger.warn(type: .peerChannel, message: "rpcChannel is unavailable")
