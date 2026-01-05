@@ -124,13 +124,6 @@ public final class RPCChannel {
       }
     }
 
-    var identifier: RPCID?
-    if !isNotificationRequest {
-      let nextIdentifier = nextIdentifier()
-      identifier = nextIdentifier
-      payload["id"] = nextIdentifier.jsonValue
-    }
-
     guard JSONSerialization.isValidJSONObject(payload) else {
       completion?(.failure(SoraError.rpcEncodingError(reason: "invalid JSON payload")))
       return false
@@ -142,6 +135,13 @@ public final class RPCChannel {
     } catch {
       completion?(.failure(SoraError.rpcEncodingError(reason: error.localizedDescription)))
       return false
+    }
+
+    var identifier: RPCID?
+    if !isNotificationRequest {
+      let nextIdentifier = nextIdentifier()
+      identifier = nextIdentifier
+      payload["id"] = nextIdentifier.jsonValue
     }
 
     var pending: Pending?
