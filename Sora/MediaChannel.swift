@@ -275,9 +275,11 @@ public final class MediaChannel {
   /// - Throws: 以下のエラーが発生することがあります
   ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
   ///   - `SoraError.rpcMethodNotAllowed`: 指定されたメソッドが利用不可
-  ///   - `SoraError.rpcTimeout`: レスポンスがタイムアウト時間内に返されなかった
   ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
   ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
+  ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された
+  ///   - `SoraError.rpcTimeout`: レスポンスがタイムアウト時間内に返されなかった
+  ///   - `SoraError.rpcServerError`: Sora からエラーレスポンスがあった
   ///
   /// # 使用例
   /// ```swift
