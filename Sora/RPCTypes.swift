@@ -1,5 +1,14 @@
 import Foundation
 
+/// RPC メソッド名の定数定義
+private enum RPCMethodNames {
+  static let requestSimulcastRid = "2025.2.0/RequestSimulcastRid"
+  static let requestSpotlightRid = "2025.2.0/RequestSpotlightRid"
+  static let resetSpotlightRid = "2025.2.0/ResetSpotlightRid"
+  static let putSignalingNotifyMetadata = "2025.2.0/PutSignalingNotifyMetadata"
+  static let putSignalingNotifyMetadataItem = "2025.2.0/PutSignalingNotifyMetadataItem"
+}
+
 /// RPC メソッドを定義するためのプロトコル
 ///
 /// 新しい RPC メソッドを SDK に追加する場合は、このプロトコルに準拠した型を定義してください。
@@ -193,7 +202,7 @@ public struct ResetSpotlightRidResult: Decodable {
 public enum RequestSimulcastRid: RPCMethodProtocol {
   public typealias Params = RequestSimulcastRidParams
   public typealias Result = RequestSimulcastRidResult
-  public static let name = "2025.2.0/RequestSimulcastRid"
+  public static let name = RPCMethodNames.requestSimulcastRid
 }
 
 /// スポットライト rid をリクエストする RPC メソッド
@@ -202,7 +211,7 @@ public enum RequestSimulcastRid: RPCMethodProtocol {
 public enum RequestSpotlightRid: RPCMethodProtocol {
   public typealias Params = RequestSpotlightRidParams
   public typealias Result = RequestSpotlightRidResult
-  public static let name = "2025.2.0/RequestSpotlightRid"
+  public static let name = RPCMethodNames.requestSpotlightRid
 }
 
 /// スポットライト rid をリセットする RPC メソッド
@@ -211,7 +220,7 @@ public enum RequestSpotlightRid: RPCMethodProtocol {
 public enum ResetSpotlightRid: RPCMethodProtocol {
   public typealias Params = ResetSpotlightRidParams
   public typealias Result = ResetSpotlightRidResult
-  public static let name = "2025.2.0/ResetSpotlightRid"
+  public static let name = RPCMethodNames.resetSpotlightRid
 }
 
 /// シグナリング通知メタデータを設定する RPC メソッド
@@ -222,7 +231,7 @@ public enum PutSignalingNotifyMetadata<Metadata: Codable>: RPCMethodProtocol {
   public typealias Params = PutSignalingNotifyMetadataParams<Metadata>
   public typealias Result = Metadata
   public static var name: String {
-    "2025.2.0/PutSignalingNotifyMetadata"
+    RPCMethodNames.putSignalingNotifyMetadata
   }
 }
 
@@ -236,7 +245,7 @@ public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable
   public typealias Params = PutSignalingNotifyMetadataItemParams<Value>
   public typealias Result = Metadata
   public static var name: String {
-    "2025.2.0/PutSignalingNotifyMetadataItem"
+    RPCMethodNames.putSignalingNotifyMetadataItem
   }
 }
 
@@ -265,17 +274,15 @@ public enum RPCMethod {
   var name: String {
     switch self {
     case .requestSimulcastRid:
-      return RequestSimulcastRid.name
+      return RPCMethodNames.requestSimulcastRid
     case .requestSpotlightRid:
-      return RequestSpotlightRid.name
+      return RPCMethodNames.requestSpotlightRid
     case .resetSpotlightRid:
-      return ResetSpotlightRid.name
+      return RPCMethodNames.resetSpotlightRid
     case .putSignalingNotifyMetadata:
-      // NOTE: ジェネリック型のメソッド名取得のため、ダミー型引数 <String> を使用
-      return PutSignalingNotifyMetadata<String>.name
+      return RPCMethodNames.putSignalingNotifyMetadata
     case .putSignalingNotifyMetadataItem:
-      // NOTE: ジェネリック型のメソッド名取得のため、ダミー型引数 <String, String> を使用
-      return PutSignalingNotifyMetadataItem<String, String>.name
+      return RPCMethodNames.putSignalingNotifyMetadataItem
     }
   }
 
