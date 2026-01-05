@@ -943,6 +943,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
       if let rpcMethods = offer.rpcMethods {
         rpcAllowedMethods = rpcMethods
+        // 未知の RPC メソッドが含まれている場合はログ出力する
+        for method in rpcMethods {
+          if RPCMethod(name: method) == nil {
+            Logger.warn(
+              type: .peerChannel,
+              message: "unknown RPC method received from server: \(method)")
+          }
+        }
       } else {
         rpcAllowedMethods = []
       }
