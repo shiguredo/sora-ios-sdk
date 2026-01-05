@@ -956,7 +956,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       if let simulcastRpcRids = offer.simulcastRpcRids {
-        rpcSimulcastRids = simulcastRpcRids.toSimulcastRequestRids()
+        rpcSimulcastRids = simulcastRpcRids
       } else {
         rpcSimulcastRids = []
       }
