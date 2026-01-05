@@ -281,7 +281,10 @@ public final class RPCChannel {
 }
 
 /// Encodable を JSONSerialization で扱える形にするラッパー。
-/// JSONSerialization は top-level に JSON オブジェクトを要求するため、単一値の場合もオブジェクトに包む。
+///
+/// JSONSerialization は top-level に JSON オブジェクト（辞書またはペア）を要求するため、
+/// スカラー値（Int, String, Bool など）を直接エンコードすることができない。
+/// そのため、EncodableBox でラップする
 private struct EncodableBox: Encodable {
   let encodeClosure: (Encoder) throws -> Void
 
