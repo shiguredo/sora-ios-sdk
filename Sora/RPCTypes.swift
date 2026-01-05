@@ -227,6 +227,27 @@ public enum ResetSpotlightRid: RPCMethodProtocol {
 ///
 /// シグナリング通知全体にメタデータを設定する RPC メソッドです。
 /// ジェネリック型パラメータで任意の型のメタデータを指定できます。
+///
+/// # 使用例
+/// ```swift
+/// struct MyMetadata: Codable {
+///   let userId: String
+///   let sessionId: String
+/// }
+///
+/// do {
+///   let metadata = MyMetadata(userId: "user123", sessionId: "sess456")
+///   let result = try await mediaChannel.rpc(
+///     method: PutSignalingNotifyMetadata<MyMetadata>.self,
+///     params: PutSignalingNotifyMetadataParams(metadata: metadata)
+///   )
+///   if let metadata = result?.result {
+///     print("Set metadata: \(metadata)")
+///   }
+/// } catch {
+///   print("Failed to set metadata: \(error)")
+/// }
+/// ```
 public enum PutSignalingNotifyMetadata<Metadata: Codable>: RPCMethodProtocol {
   public typealias Params = PutSignalingNotifyMetadataParams<Metadata>
   public typealias Result = Metadata
@@ -239,6 +260,29 @@ public enum PutSignalingNotifyMetadata<Metadata: Codable>: RPCMethodProtocol {
 ///
 /// シグナリング通知メタデータの特定キーに値を設定する RPC メソッドです。
 /// ジェネリック型パラメータで値の型とレスポンスの型を指定できます。
+///
+/// # 使用例
+/// ```swift
+/// struct NotifyResponse: Decodable {
+///   let key: String
+///   let value: String
+/// }
+///
+/// do {
+///   let result = try await mediaChannel.rpc(
+///     method: PutSignalingNotifyMetadataItem<NotifyResponse, String>.self,
+///     params: PutSignalingNotifyMetadataItemParams(
+///       key: "status",
+///       value: "ready"
+///     )
+///   )
+///   if let response = result?.result {
+///     print("Set metadata item - key: \(response.key), value: \(response.value)")
+///   }
+/// } catch {
+///   print("Failed to set metadata item: \(error)")
+/// }
+/// ```
 public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable>:
   RPCMethodProtocol
 {
