@@ -301,8 +301,6 @@ public final class MediaChannel {
   ) async throws -> RPCResponse<M.Result>? {
     let response = try await withCheckedThrowingContinuation {
       (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
-      // ローカル変数で参照を保持することで rpc メソッド呼び出し時点での
-      // rpcChannel インスタンス生存を保障する。
       guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
