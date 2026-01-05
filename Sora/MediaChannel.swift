@@ -162,6 +162,7 @@ public final class MediaChannel {
   /// - Returns: 利用可能な RPC メソッドの一覧。RPC が初期化されていない場合は空配列を返します
   ///
   /// # 使用例
+  ///
   /// ```swift
   /// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
   ///   let result = try await mediaChannel.rpc(

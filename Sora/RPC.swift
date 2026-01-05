@@ -165,9 +165,9 @@ public final class RPCChannel {
       if let identifier {
         finishPending(
           id: identifier,
-          result: .failure(SoraError.rpcTransportClosed(reason: "failed to send rpc message")))
+          result: .failure(SoraError.rpcDataChannelClosed(reason: "failed to send rpc message")))
       } else {
-        completion?(.failure(SoraError.rpcTransportClosed(reason: "failed to send rpc message")))
+        completion?(.failure(SoraError.rpcDataChannelClosed(reason: "failed to send rpc message")))
       }
       return false
     }

@@ -52,7 +52,7 @@ public enum SoraError: Error {
   case rpcDecodingError(reason: String)
 
   /// RPC の送受信に利用する DataChannel が切断された
-  case rpcTransportClosed(reason: String)
+  case rpcDataChannelClosed(reason: String)
 
   /// RPC の応答がタイムアウトした
   case rpcTimeout
@@ -107,8 +107,8 @@ extension SoraError: LocalizedError {
       return "RPC encoding error: \(reason)"
     case .rpcDecodingError(let reason):
       return "RPC decoding error: \(reason)"
-    case .rpcTransportClosed(let reason):
-      return "RPC transport is closed: \(reason)"
+    case .rpcDataChannelClosed(let reason):
+      return "RPC DataChannel is closed: \(reason)"
     case .rpcTimeout:
       return "RPC response timeout"
     case .rpcServerError(let detail):

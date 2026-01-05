@@ -1091,7 +1091,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if let rpcChannel {
       rpcChannel.invalidate(
-        reason: SoraError.rpcTransportClosed(reason: reason.description))
+        reason: SoraError.rpcDataChannelClosed(reason: reason.description))
       self.rpcChannel = nil
     }
 

@@ -46,7 +46,7 @@
     - `rpcMethodNotAllowed(method: String)`
     - `rpcEncodingError(reason: String)`
     - `rpcDecodingError(reason: String)`
-    - `rpcTransportClosed(reason: String)`
+    - `rpcDataChannelClosed(reason: String)`
     - `rpcTimeout`
     - `rpcServerError(detail: RPCErrorDetail)`
   - @zztkm
