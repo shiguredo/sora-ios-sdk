@@ -1,6 +1,6 @@
 /// 映像の rid を表します。
 /// type: offer の simulcastRpcRids や RPC で利用される汎用 rid 型です。
-public enum Rid {
+public enum Rid: Equatable {
   /// 映像を受信しない
   case none
 
