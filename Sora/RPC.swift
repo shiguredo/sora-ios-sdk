@@ -72,10 +72,10 @@ public final class RPCChannel {
   private let allowedMethodNames: Set<String>
 
   /// Sora から払い出されたサイマルキャスト rid の一覧
-  let simulcastRpcRids: [SimulcastRequestRid]
+  let simulcastRpcRids: [Rid]
 
   init?(
-    dataChannel: DataChannel, rpcMethods: [String], simulcastRpcRids: [SimulcastRequestRid]
+    dataChannel: DataChannel, rpcMethods: [String], simulcastRpcRids: [Rid]
   ) {
     guard !rpcMethods.isEmpty else {
       return nil

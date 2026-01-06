@@ -23,11 +23,11 @@ public protocol RPCMethodProtocol {
   static var name: String { get }
 }
 
-public struct RequestSimulcastRidParams: Encodable {
-  public let rid: String
+public struct RequestSimulcastRidParams: Codable {
+  public let rid: Rid
   public let senderConnectionId: String?
 
-  public init(rid: String, senderConnectionId: String? = nil) {
+  public init(rid: Rid, senderConnectionId: String? = nil) {
     self.rid = rid
     self.senderConnectionId = senderConnectionId
   }
@@ -38,15 +38,15 @@ public struct RequestSimulcastRidParams: Encodable {
   }
 }
 
-public struct RequestSpotlightRidParams: Encodable {
+public struct RequestSpotlightRidParams: Codable {
   public let sendConnectionId: String?
-  public let spotlightFocusRid: String
-  public let spotlightUnfocusRid: String
+  public let spotlightFocusRid: Rid
+  public let spotlightUnfocusRid: Rid
 
   public init(
     sendConnectionId: String? = nil,
-    spotlightFocusRid: String,
-    spotlightUnfocusRid: String
+    spotlightFocusRid: Rid,
+    spotlightUnfocusRid: Rid
   ) {
     self.sendConnectionId = sendConnectionId
     self.spotlightFocusRid = spotlightFocusRid
@@ -97,13 +97,13 @@ public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable 
 public struct RequestSimulcastRidResult: Decodable {
   public let channelId: String
   public let receiverConnectionId: String
-  public let rid: String
+  public let rid: Rid
   public let senderConnectionId: String?
 
   public init(
     channelId: String,
     receiverConnectionId: String,
-    rid: String,
+    rid: Rid,
     senderConnectionId: String?
   ) {
     self.channelId = channelId
@@ -123,14 +123,14 @@ public struct RequestSimulcastRidResult: Decodable {
 public struct RequestSpotlightRidResult: Decodable {
   public let channelId: String
   public let recvConnectionId: String
-  public let spotlightFocusRid: String
-  public let spotlightUnfocusRid: String
+  public let spotlightFocusRid: Rid
+  public let spotlightUnfocusRid: Rid
 
   public init(
     channelId: String,
     recvConnectionId: String,
-    spotlightFocusRid: String,
-    spotlightUnfocusRid: String
+    spotlightFocusRid: Rid,
+    spotlightUnfocusRid: Rid
   ) {
     self.channelId = channelId
     self.recvConnectionId = recvConnectionId

@@ -30,5 +30,10 @@ let package = Package(
             exclude: ["Info.plist"],
             resources: [.process("VideoView.xib")]
         ),
+        .testTarget(
+            name: "SoraTests",
+            dependencies: ["Sora"],
+            path: "SoraTests"
+        ),
     ]
 )
