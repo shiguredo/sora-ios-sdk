@@ -46,9 +46,24 @@
     - デフォルト値の `unspecified` の場合はシグナリングパラメータに `simulcast_request_rid` を含めない
   - role が sendrecv または recvonly の場合、かつ simulcast が true の場合にのみ有効
   - @zztkm
+- [ADD] サイマルキャストの rid を表す汎用型 `Rid` 列挙型を追加する
+  - @zztkm
 - [ADD] RPC 機能を追加する
+  - RPC メソッドを表す列挙型 `RPCMethod` を追加する
+  - `SignalingOffer` に以下の項目を追加する
+    - `rpcMethods: [String]?`
+    - `simulcastRpcRids: [Rid]?` を追加する
   - `MediaChannel` に `rpc` メソッドを追加する
+  - `MediaChannel` に以下の項目を追加する
+    - `rpcMethods: [RPCMethod]`
+    - `rpcSimulcastRids: [Rid]`
   - RPC メソッドを定義するための `RPCMethodProtocol` プロトコルを追加する
+  - `RPCMethodProtocol` に準拠した型を追加する
+    - `RequestSimulcastRid`
+    - `RequestSpotlightRid`
+    - `ResetSpotlightRid`
+    - `PutSignalingNotifyMetadata`
+    - `PutSignalingNotifyMetadataItem`
   - RPC の ID を表す `RPCID` 列挙型を追加する
     - `int(Int)` と `string(String)` の 2 つのケースをサポート
   - RPC エラー応答の詳細を表す `RPCErrorDetail` 構造体を追加する
@@ -70,6 +85,9 @@
   - @zztkm
 - [UPDATE] jazzy の設定ファイルを更新する
   - `module_version` を 2025.3.0 に変更
+  - @zztkm
+- [ADD] `Package.swift` に `testTarget` を追加する
+  - xcodebuild で test を実行するために target を追加
   - @zztkm
 
 ## 2025.2.0

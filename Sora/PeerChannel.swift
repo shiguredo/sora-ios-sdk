@@ -126,7 +126,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var switchedToDataChannel: Bool = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
   var rpcAllowedMethods: [String] = []
-  var rpcSimulcastRids: [SimulcastRequestRid] = []
+  var rpcSimulcastRids: [Rid] = []
   var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
@@ -956,7 +956,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       if let simulcastRpcRids = offer.simulcastRpcRids {
-        rpcSimulcastRids = simulcastRpcRids.toSimulcastRequestRids()
+        rpcSimulcastRids = simulcastRpcRids
       } else {
         rpcSimulcastRids = []
       }
