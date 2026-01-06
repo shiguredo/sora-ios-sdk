@@ -31,4 +31,3 @@ class RidTests: XCTestCase {
     XCTAssertThrowsError(try decoder.decode(Rid.self, from: data))
   }
 }
-

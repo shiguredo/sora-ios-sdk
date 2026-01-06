@@ -1446,4 +1446,3 @@ extension SignalingClose: Decodable {
     reason = try container.decode(String.self, forKey: .reason)
   }
 }
-
