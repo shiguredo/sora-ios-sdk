@@ -15,7 +15,7 @@ let package = Package(
     dependencies: [
         // 開発用依存関係
         // SwfitLint 公式で推奨されている SwfitLintPlugins を利用する
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.58.2")
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.0")
     ],
     targets: [
         .binaryTarget(
