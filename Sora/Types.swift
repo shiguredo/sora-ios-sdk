@@ -1,4 +1,4 @@
-/// 映像の rid を表します。
+/// サイマルキャストの rid を表す汎用型
 public enum Rid: Equatable {
   /// 映像を受信しない
   case none
