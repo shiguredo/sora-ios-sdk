@@ -642,6 +642,7 @@ public final class MediaChannel {
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
+  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setAudioHardMute(_ mute: Bool) -> Error? {
     guard state == .connected else {
       return SoraError.mediaChannelError(
@@ -672,6 +673,7 @@ public final class MediaChannel {
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
+  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setAudioSoftMute(_ mute: Bool) -> Error? {
     guard state == .connected else {
       return SoraError.mediaChannelError(
@@ -707,6 +709,7 @@ public final class MediaChannel {
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
+  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setVideoSoftMute(_ mute: Bool) -> Error? {
     guard state == .connected else {
       return SoraError.mediaChannelError(
@@ -754,6 +757,7 @@ public final class MediaChannel {
   ///    ハードミュート前のソフトミュートの状態に関わらず無効化します
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setVideoHardMute(_ mute: Bool) async throws {
     guard state == .connected else {
       throw SoraError.mediaChannelError(reason: "MediaChannel is not connected (state: \(state))")
