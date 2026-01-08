@@ -126,7 +126,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var switchedToDataChannel: Bool = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
   var rpcAllowedMethods: [String] = []
-  var rpcSimulcastRids: [Rid] = []
   var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
@@ -955,12 +954,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         rpcAllowedMethods = []
       }
 
-      if let simulcastRpcRids = offer.simulcastRpcRids {
-        rpcSimulcastRids = simulcastRpcRids
-      } else {
-        rpcSimulcastRids = []
-      }
-
       // offer.simulcast が設定されている場合、WrapperVideoEncoderFactory.shared.simulcastEnabled を上書きする
       if let simulcast = offer.simulcast {
         WrapperVideoEncoderFactory.shared.simulcastEnabled = simulcast
@@ -1405,8 +1398,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     if label == "rpc" {
       rpcChannel = RPCChannel(
         dataChannel: dc,
-        rpcMethods: rpcAllowedMethods,
-        simulcastRpcRids: rpcSimulcastRids)
+        rpcMethods: rpcAllowedMethods)
     }
   }
 }
