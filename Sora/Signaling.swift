@@ -1131,7 +1131,6 @@ extension SignalingOffer: Codable {
     case video_codec_type
     case video_bit_rate
     case rpc_methods
-    case simulcast_rpc_rids
   }
 
   public init(from decoder: Decoder) throws {
