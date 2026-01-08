@@ -683,7 +683,11 @@ public final class MediaChannel {
   }
 
   /// MediaChannel の接続中に映像をソフトミュート有効化 / 無効化します
-  /// 接続時のロールが sendonly または sendrecv でないとエラーを返します
+  /// 前提条件として、
+  /// - 接続時設定で映像が有効になっている
+  /// - 接続時設定でロールが sendonly または sendrecv である
+  /// - 配信ストリームが存在するかつローカル映像トラックが存在する
+  ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
   public func setVideoSoftMute(_ mute: Bool) -> Error? {
@@ -719,6 +723,11 @@ public final class MediaChannel {
   /// `Configuration.cameraSettings.isEnabled == true` の場合のみ有効です。
   /// 内部でシリアルキューにより、操作を排他実行します。
   /// 同時に呼び出された場合はエラーになります。
+  ///
+  /// 前提条件として、
+  /// - 接続時設定で映像が有効になっている
+  /// - 接続時設定でロールが sendonly または sendrecv である
+  /// - 配信ストリームが存在するかつローカル映像トラックが存在する
   ///
   /// 映像ハードミュートは、黒塗りフレーム状態で停止させるため映像ソフトミュート用処理を併用します。
   /// そのため、以下の処理を内部で実行します。
