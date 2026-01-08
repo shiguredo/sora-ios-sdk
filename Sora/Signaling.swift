@@ -478,9 +478,6 @@ public struct SignalingOffer {
   /// RPC で利用可能なメソッド
   public var rpcMethods: [String]?
 
-  /// RPC 経由で切り替えられるサイマルキャストの rid
-  public var simulcastRpcRids: [Rid]?
-
   /// audio
   public let audio: Bool?
 
@@ -1167,7 +1164,6 @@ extension SignalingOffer: Codable {
     videoCodecType = try container.decodeIfPresent(String.self, forKey: .video_codec_type)
     videoBitRate = try container.decodeIfPresent(Int.self, forKey: .video_bit_rate)
     rpcMethods = try container.decodeIfPresent([String].self, forKey: .rpc_methods)
-    simulcastRpcRids = try container.decodeIfPresent([Rid].self, forKey: .simulcast_rpc_rids)
   }
 
   public func encode(to encoder: Encoder) throws {

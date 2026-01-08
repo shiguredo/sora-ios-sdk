@@ -175,15 +175,6 @@ public final class MediaChannel {
     peerChannel.rpcChannel?.allowedMethods.compactMap { RPCMethod(name: $0) } ?? []
   }
 
-  /// RPC で利用可能なサイマルキャスト rid の一覧
-  ///
-  /// Sora サーバーから通知された、RPC で操作可能なサイマルキャスト rid が取得できます。
-  ///
-  /// - Returns: 利用可能なサイマルキャスト rid の一覧。RPC が初期化されていない場合は空配列を返します
-  public var rpcSimulcastRids: [Rid] {
-    peerChannel.rpcChannel?.simulcastRpcRids ?? []
-  }
-
   // MARK: 接続チャネル
 
   /// シグナリングチャネル

@@ -52,11 +52,8 @@
   - RPC メソッドを表す列挙型 `RPCMethod` を追加する
   - `SignalingOffer` に以下の項目を追加する
     - `rpcMethods: [String]?`
-    - `simulcastRpcRids: [Rid]?` を追加する
   - `MediaChannel` に `rpc` メソッドを追加する
-  - `MediaChannel` に以下の項目を追加する
-    - `rpcMethods: [RPCMethod]`
-    - `rpcSimulcastRids: [Rid]`
+  - `MediaChannel` に `rpcMethods: [RPCMethod]` を追加する
   - RPC メソッドを定義するための `RPCMethodProtocol` プロトコルを追加する
   - `RPCMethodProtocol` に準拠した型を追加する
     - `RequestSimulcastRid`
