@@ -278,8 +278,3 @@ class BasicMediaStream: MediaStream {
     }
   }
 }
-
-public extension MediaStream {
-  var hasAudioTrack: Bool { false }
-  var hasVideoTrack: Bool { false }
-}
