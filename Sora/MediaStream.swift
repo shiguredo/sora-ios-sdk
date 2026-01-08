@@ -59,6 +59,11 @@ public protocol MediaStream: AnyObject {
   /// サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
   var audioEnabled: Bool { get set }
 
+  /// 映像トラックを保持している場合は ``true`` を返します。
+  ///
+  /// SDK 内部で利用する判定用のプロパティです。
+  var hasVideoTrack: Bool { get }
+
   /// 音声トラックを保持している場合は ``true`` を返します。
   ///
   /// SDK 内部で利用する判定用のプロパティです。
@@ -206,6 +211,10 @@ class BasicMediaStream: MediaStream {
     nativeAudioTrack != nil
   }
 
+  var hasVideoTrack: Bool {
+    nativeVideoTrack != nil
+  }
+
   var remoteAudioVolume: Double? {
     get {
       nativeAudioTrack?.source.volume
@@ -268,4 +277,9 @@ class BasicMediaStream: MediaStream {
     } else {
     }
   }
+}
+
+public extension MediaStream {
+  var hasAudioTrack: Bool { false }
+  var hasVideoTrack: Bool { false }
 }

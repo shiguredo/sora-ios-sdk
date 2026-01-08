@@ -24,6 +24,16 @@
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
   - AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
   - @t-miya
+- [ADD] MediaChannel に `setVideoSoftMute(_:)` を追加する
+  - 映像ソフトミュート機能のシンタックスシュガー
+  - 送信ストリームの VideoTrack を取得し、MediaStream.videoEnabled を切り替える
+  - VideoTrack の有無判定を行うため、 MediaStream に `hasVideoTrack` を追加する
+  - @t-miya
+- [ADD] MediaChannel に `setVideoHardMute(_:)` を追加する
+  - 映像ハードミュート機能のシンタックスシュガー
+  - CameraVideoCapturer を停止 / 再開し、カメラ入力を停止 / 再開する
+  - 映像ハードミュート時は、映像ソフトミュートも併用する
+  - @t-miya
 - [ADD] 音声のハードミュート有効化/無効化機能を追加する
   - iOS 端末のマイクインジケーターを消灯させる
   - AudioDeviceModuleWrapper クラスを追加する
