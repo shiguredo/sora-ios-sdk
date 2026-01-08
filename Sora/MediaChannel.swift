@@ -636,6 +636,10 @@ public final class MediaChannel {
   }
 
   /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します
+  /// 前提条件として、
+  /// - 接続時設定で音声が有効になっている
+  /// - 接続時設定でロールが sendonly または sendrecv である
+  ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
   public func setAudioHardMute(_ mute: Bool) -> Error? {
@@ -648,6 +652,10 @@ public final class MediaChannel {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
     }
 
+    guard configuration.isSender else {
+      return SoraError.mediaChannelError(reason: "role is not sender")
+    }
+
     if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
       return SoraError.mediaChannelError(
         reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
@@ -657,6 +665,11 @@ public final class MediaChannel {
   }
 
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
+  /// 前提条件として、
+  /// - 接続時設定で音声が有効になっている
+  /// - 接続時設定でロールが sendonly または sendrecv である
+  /// - 配信ストリームが存在するかつローカル音声トラックが存在する
+  ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
   public func setAudioSoftMute(_ mute: Bool) -> Error? {
@@ -667,6 +680,10 @@ public final class MediaChannel {
 
     guard configuration.audioEnabled else {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
+    guard configuration.isSender else {
+      return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
     guard let senderStream else {
