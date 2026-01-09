@@ -50,18 +50,24 @@ actor VideoHardMuteActor {
 
   // 現在のカメラキャプチャラーを取得します
   private func currentCameraVideoCapturer() async -> CameraVideoCapturer? {
-    await withCheckedContinuation { cont in
-      SoraDispatcher.async(on: .camera) { cont.resume(returning: CameraVideoCapturer.current) }
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        continuation.resume(returning: CameraVideoCapturer.current)
+      }
     }
   }
 
   // カメラキャプチャを停止します
   private func stopCameraVideoCapture(_ capturer: CameraVideoCapturer) async throws {
-    try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       SoraDispatcher.async(on: .camera) {
         // CameraVideoCapturer.stop はコールバック形式です
         capturer.stop { error in
-          if let error { cont.resume(throwing: error) } else { cont.resume(returning: ()) }
+          if let error {
+            continuation.resume(throwing: error)
+          } else {
+            continuation.resume(returning: ())
+          }
         }
       }
     }
@@ -72,13 +78,17 @@ actor VideoHardMuteActor {
     _ capturer: CameraVideoCapturer,
     senderStream: MediaStream
   ) async throws {
-    try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       SoraDispatcher.async(on: .camera) {
         // マルチストリームの場合、停止時と現在の送信ストリームが異なることがあるので再設定します
         capturer.stream = senderStream
         // CameraVideoCapturer.restart はコールバック形式です
         capturer.restart { error in
-          if let error { cont.resume(throwing: error) } else { cont.resume(returning: ()) }
+          if let error {
+            continuation.resume(throwing: error)
+          } else {
+            continuation.resume(returning: ())
+          }
         }
       }
     }
