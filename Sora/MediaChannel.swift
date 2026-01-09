@@ -224,9 +224,10 @@ public final class MediaChannel {
 
   private let manager: Sora
 
-  // 映像ハードミュートの同時呼び出しを防ぐためのキューです
-  // 同時に呼び出された場合は `SoraError.mediaChannelError` となります
-  private let videoHardMuteSerialQueue = VideoHardMuteSerialQueue()
+  // 映像ハードミュートの同時呼び出しを防ぐための Actor です
+  // CameraVideoCapturer.current を操作するため、 MediaChannel 間でも排他実行します
+  // また、CameraVideoCapturer.current はグローバルのため static にしています
+  private static let videoHardMuteActor = VideoHardMuteActor()
 
   // MARK: - インスタンスの生成
 
@@ -741,13 +742,15 @@ public final class MediaChannel {
 
   /// MediaChannel の接続中に映像をハードミュート有効化 / 無効化します
   ///
-  /// 内部でシリアルキューにより、操作を排他実行します。
-  /// 同時に呼び出された場合はキュー側で `SoraError.mediaChannelError` がスローされます
+  /// 内部で Actor により、操作を排他実行します。
+  /// 同時に呼び出された場合は Actor 側で `SoraError.mediaChannelError` がスローされます
   ///
-  /// 映像ハードミュートは、黒塗りフレーム状態で停止させるため映像ソフトミュート用処理を併用します
+  /// 映像ハードミュートは、黒塗りフレーム状態で停止させるためローカルトラックの停止を含みます
+  /// 事前に映像ソフトミュートを利用していた場合は状態が上書きされます
+  /// ハードミュート解除時に直前のソフトミュートの状態を復元するようなことはしません
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
-  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
+  /// - Throws: エラー時は `SoraError.cameraError` または `SoraError.mediaChannelError` がスローされます
   public func setVideoHardMute(_ mute: Bool) async throws {
     // 接続中か
     guard state == .connected else {
@@ -764,6 +767,12 @@ public final class MediaChannel {
       throw SoraError.mediaChannelError(reason: "role is not sender")
     }
 
+    // 接続設定でカメラ利用が有効になっているか
+    // 端末カメラではなく別ソース（外部入力や別キャプチャ経路）の場合は false になることがあり、機能としては未対応
+    guard configuration.cameraSettings.isEnabled else {
+      throw SoraError.mediaChannelError(reason: "cameraSettings.isEnabled is false")
+    }
+
     // 送信ストリームが有効か
     guard let senderStream else {
       throw SoraError.mediaChannelError(reason: "senderStream is unavailable")
@@ -777,10 +786,10 @@ public final class MediaChannel {
     if mute {
       // 黒塗りフレーム送出 -> ハードミュート有効化の順になるようにします
       senderStream.videoEnabled = false
-      try await videoHardMuteSerialQueue.set(mute: true, senderStream: senderStream)
+      try await Self.videoHardMuteActor.setMute(mute: true, senderStream: senderStream)
     } else {
       // ハードミュート無効化 -> 黒塗りフレーム送出解除の順になるようにします
-      try await videoHardMuteSerialQueue.set(mute: false, senderStream: senderStream)
+      try await Self.videoHardMuteActor.setMute(mute: false, senderStream: senderStream)
       senderStream.videoEnabled = true
     }
     Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")

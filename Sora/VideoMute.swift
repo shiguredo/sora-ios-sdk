@@ -1,94 +1,84 @@
 import Foundation
 
-// 映像ハードミュートの同時呼び出しを防ぐためのシリアルキュークラスです
-// MediaChannel.setVideoHardMute(_:) 内での使用を想定しています
-final class VideoHardMuteSerialQueue {
-  private let queue = DispatchQueue(label: "jp.shiguredo.sora.video.hardmute")
-
-  // 同時実行を防ぐための処理実行中フラグ
+// 映像ハードミュートの同時呼び出しによるレースコンディション防止を目的とした Actor です
+// MediaChannel.setVideoHardMute(_:) での使用を想定しています
+actor VideoHardMuteActor {
+  // 処理実行中フラグ
   private var isProcessing = false
+  // カメラ操作のためのキャプチャラー
   private var capturer: CameraVideoCapturer?
 
-  // queue 上で同時実行を防ぐ排他処理を行い、
-  // libwebrtc のカメラ用キュー（SoraDispatcher）でカメラ操作を行います
-  //
-  // 既に処理中の状態で実行された、またはキャプチャラーが無効な場合は SoraError.mediaChannelError がスローされます
-  func set(mute: Bool, senderStream: MediaStream) async throws {
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      queue.async { [self] in
-        guard !isProcessing else {
-          continuation.resume(
-            throwing: SoraError.mediaChannelError(
-              reason: "video hard mute operation is in progress"))
-          return
+  /// ハードミュートを有効化/無効化します
+  /// カメラキャプチャラーの操作には libwebrtc のカメラ用キュー（SoraDispatcher）を利用して呼ぶようにします
+  ///
+  /// - Parameters:
+  ///  - mute: `true` で有効化、`false` で無効化
+  ///  - senderStream: 送信ストリーム
+  /// - Throws:
+  ///   - 既に処理実行中、またはカメラキャプチャラーが無効な場合は `SoraError.mediaChannelError`
+  ///   - カメラ操作の失敗時は `SoraError.cameraError`
+  func setMute(mute: Bool, senderStream: MediaStream) async throws {
+    guard !isProcessing else {
+      throw SoraError.mediaChannelError(reason: "video hard mute operation is in progress")
+    }
+    isProcessing = true
+    defer { isProcessing = false }
+
+    // ミュートを有効化します
+    if mute {
+      guard let currentCapturer = await currentCameraVideoCapturer() else {
+        // 前回のハードミュートでキャプチャラーを保持している場合は冪等として成功扱いにします
+        if capturer != nil { return }
+        throw SoraError.mediaChannelError(reason: "CameraVideoCapturer is unavailable")
+      }
+      try await stopCameraVideoCapture(currentCapturer)
+      // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
+      capturer = currentCapturer
+      return
+    }
+
+    // ミュートを無効化します
+    // 現在のキャプチャラーが取得できる場合は既に再開済みとして成功扱いにします
+    let currentCapturer = await currentCameraVideoCapturer()
+    if currentCapturer != nil { return }
+    // 前回停止時のキャプチャラーが保持できていない場合エラー
+    guard let stored = capturer else {
+      throw SoraError.mediaChannelError(reason: "CameraVideoCapturer is unavailable")
+    }
+    try await restartCameraVideoCapture(stored, senderStream: senderStream)
+  }
+
+  // 現在のカメラキャプチャラーを取得します
+  private func currentCameraVideoCapturer() async -> CameraVideoCapturer? {
+    await withCheckedContinuation { cont in
+      SoraDispatcher.async(on: .camera) { cont.resume(returning: CameraVideoCapturer.current) }
+    }
+  }
+
+  // カメラキャプチャを停止します
+  private func stopCameraVideoCapture(_ capturer: CameraVideoCapturer) async throws {
+    try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+      SoraDispatcher.async(on: .camera) {
+        // CameraVideoCapturer.stop はコールバック形式です
+        capturer.stop { error in
+          if let error { cont.resume(throwing: error) } else { cont.resume(returning: ()) }
         }
+      }
+    }
+  }
 
-        // 同時実行を防ぐための処理中フラグです
-        isProcessing = true
-        // CameraVideoCapturer.current は stop 実行時に nil になるため
-        // restart 用にキャプチャラーを退避します
-        let storedCapturer = capturer
-
-        // キューの完了処理です。処理中フラグの無効化と continuation を完了します
-        // 状態更新を同一キューで直列化するため queue.async で実行します
-        // continuation.resume も同一キュー上で呼ぶようにしています
-        func finish(_ error: Error?, update: ((VideoHardMuteSerialQueue) -> Void)? = nil) {
-          queue.async { [self] in
-            update?(self)
-            isProcessing = false
-            if let error {
-              continuation.resume(throwing: error)
-            } else {
-              continuation.resume(returning: ())
-            }
-          }
-        }
-
-        // libwebrtc のカメラ用キューでカメラ操作を非同期実行します
-        SoraDispatcher.async(on: .camera) {
-          if mute {
-            // ミュート有効化
-            // 起動中のカメラがあれば停止します
-            guard let current = CameraVideoCapturer.current else {
-              // 前回のハードミュートでキャプチャラーを退避している場合は冪等として成功扱いにします
-              if storedCapturer != nil {
-                finish(nil)
-              } else {
-                // カメラが起動しておらず再開用キャプチャラーも無い場合は失敗にします
-                finish(SoraError.mediaChannelError(reason: "CameraVideoCapturer is unavailable"))
-              }
-              return
-            }
-
-            // CameraVideoCapturer.stop() により映像キャプチャを停止します
-            // CameraVideoCapturer.stop() は実行結果を Error? コールバックで返します
-            current.stop { error in
-              finish(error) { serialQueue in
-                // キャプチャラーは再開用として退避します
-                serialQueue.capturer = current
-              }
-            }
-            return
-          }
-
-          // 既にカメラが起動中であれば何もしません
-          if CameraVideoCapturer.current != nil {
-            finish(nil)
-            return
-          }
-
-          // 退避済みのキャプチャラーの存在チェック
-          guard let storedCapturer else {
-            finish(SoraError.mediaChannelError(reason: "CameraVideoCapturer is unavailable"))
-            return
-          }
-
-          // マルチストリームの場合、停止時と現在の送信ストリームが異なることがあるので再設定します
-          storedCapturer.stream = senderStream
-          // CameraVideoCapturer.restart() により映像キャプチャを再開
-          storedCapturer.restart { error in
-            finish(error)
-          }
+  // カメラキャプチャを再開します
+  private func restartCameraVideoCapture(
+    _ capturer: CameraVideoCapturer,
+    senderStream: MediaStream
+  ) async throws {
+    try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+      SoraDispatcher.async(on: .camera) {
+        // マルチストリームの場合、停止時と現在の送信ストリームが異なることがあるので再設定します
+        capturer.stream = senderStream
+        // CameraVideoCapturer.restart はコールバック形式です
+        capturer.restart { error in
+          if let error { cont.resume(throwing: error) } else { cont.resume(returning: ()) }
         }
       }
     }

@@ -30,7 +30,7 @@
   - @t-miya
 - [ADD] MediaChannel に映像ハードミュートを設定する `setVideoHardMute(_:)` を追加する
   - CameraVideoCapturer の `stop` と `restart` のラッパー
-    - ハードミュートの複数同時実行を防ぐためのシリアルキュークラス `VideoHardMuteSerialQueue` を追加する
+    - ハードミュートの複数同時実行を防ぐための Actor `VideoHardMuteActor` を追加する
   - 映像ソフトミュートも併用し、黒塗りフレームの状態で停止させる
   - @t-miya
 - [ADD] 音声のハードミュート有効化/無効化機能を追加する
