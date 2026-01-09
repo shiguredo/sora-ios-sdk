@@ -19,18 +19,15 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
-- [ADD] MediaChannel に `setAudioSoftMute(_:)` を追加する
-  - 音声ソフトミュート機能のシンタックスシュガー
+- [ADD] MediaChannel に音声ソフトミュートを設定する `setAudioSoftMute(_:)` を追加する
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
   - AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
   - @t-miya
-- [ADD] MediaChannel に `setVideoSoftMute(_:)` を追加する
-  - 映像ソフトミュート機能のシンタックスシュガー
+- [ADD] MediaChannel に映像ソフトミュートを設定する `setVideoSoftMute(_:)` を追加する
   - 送信ストリームの VideoTrack を取得し、MediaStream.videoEnabled を切り替える
   - VideoTrack の有無判定を行うため、 MediaStream に `hasVideoTrack` を追加する
   - @t-miya
-- [ADD] MediaChannel に `setVideoHardMute(_:)` を追加する
-  - 映像ハードミュート機能のシンタックスシュガー
+- [ADD] MediaChannel に映像ハードミュートを設定する `setVideoHardMute(_:)` を追加する
   - CameraVideoCapturer を停止 / 再開し、カメラ入力を停止 / 再開する
   - 映像ハードミュート時は、映像ソフトミュートも併用する
   - @t-miya
