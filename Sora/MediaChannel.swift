@@ -225,7 +225,7 @@ public final class MediaChannel {
   private let manager: Sora
 
   // 映像ハードミュートの同時呼び出しを防ぐためのキューです
-  // 同時に呼び出された場合はエラーになります
+  // 同時に呼び出された場合は `SoraError.mediaChannelError` となります
   private let videoHardMuteSerialQueue = VideoHardMuteSerialQueue()
 
   // MARK: - インスタンスの生成
@@ -636,27 +636,28 @@ public final class MediaChannel {
   }
 
   /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します
-  /// 前提条件として、
-  /// - 接続時設定で音声が有効になっている
-  /// - 接続時設定でロールが sendonly または sendrecv である
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
   /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setAudioHardMute(_ mute: Bool) -> Error? {
+    // 接続中か
     guard state == .connected else {
       return SoraError.mediaChannelError(
         reason: "MediaChannel is not connected (state: \(state))")
     }
 
+    // 接続設定で音声が有効になっているか
     guard configuration.audioEnabled else {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
     }
 
+    // 接続設定で配信側ロールになっているか
     guard configuration.isSender else {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
+    // 音声ハードミュートを切り替えます
     if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
       return SoraError.mediaChannelError(
         reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
@@ -666,72 +667,76 @@ public final class MediaChannel {
   }
 
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
-  /// 前提条件として、
-  /// - 接続時設定で音声が有効になっている
-  /// - 接続時設定でロールが sendonly または sendrecv である
-  /// - 配信ストリームが存在するかつローカル音声トラックが存在する
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
   /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setAudioSoftMute(_ mute: Bool) -> Error? {
+    // 接続中か
     guard state == .connected else {
       return SoraError.mediaChannelError(
         reason: "MediaChannel is not connected (state: \(state))")
     }
 
+    // 接続設定で音声が有効になっているか
     guard configuration.audioEnabled else {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
     }
 
+    // 接続設定で配信側ロールになっているか
     guard configuration.isSender else {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
+    // 送信ストリームが有効か
     guard let senderStream else {
       return SoraError.mediaChannelError(reason: "senderStream is unavailable")
     }
 
+    // ローカル音声トラックが存在するか
     guard senderStream.hasAudioTrack else {
       return SoraError.mediaChannelError(reason: "senderStream has no AudioTrack")
     }
 
+    // ローカル音声トラックの有効/無効を切り替えます
     senderStream.audioEnabled = !mute
     Logger.debug(type: .mediaChannel, message: "setAudioSoftMute mute=\(mute)")
     return nil
   }
 
   /// MediaChannel の接続中に映像をソフトミュート有効化 / 無効化します
-  /// 前提条件として、
-  /// - 接続時設定で映像が有効になっている
-  /// - 接続時設定でロールが sendonly または sendrecv である
-  /// - 配信ストリームが存在するかつローカル映像トラックが存在する
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
   /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setVideoSoftMute(_ mute: Bool) -> Error? {
+    // 接続中か
     guard state == .connected else {
       return SoraError.mediaChannelError(
         reason: "MediaChannel is not connected (state: \(state))")
     }
 
+    // 接続設定で映像が有効になっているか
     guard configuration.videoEnabled else {
       return SoraError.mediaChannelError(reason: "videoEnabled is false")
     }
 
+    // 接続設定で配信側ロールになっているか
     guard configuration.isSender else {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
+    // 送信ストリームが有効か
     guard let senderStream else {
       return SoraError.mediaChannelError(reason: "senderStream is unavailable")
     }
 
+    // ローカル映像トラックが存在するか
     guard senderStream.hasVideoTrack else {
       return SoraError.mediaChannelError(reason: "senderStream has no VideoTrack")
     }
 
+    // ローカル音声トラックの有効/無効を切り替えます
     senderStream.videoEnabled = !mute
     Logger.debug(type: .mediaChannel, message: "setVideoSoftMute mute=\(mute)")
     return nil
@@ -739,54 +744,45 @@ public final class MediaChannel {
 
   /// MediaChannel の接続中に映像をハードミュート有効化 / 無効化します
   ///
-  /// ハードミュートは、カメラ入力を停止 / 再開します。
-  /// `Configuration.cameraSettings.isEnabled == true` の場合のみ有効です。
   /// 内部でシリアルキューにより、操作を排他実行します。
-  /// 同時に呼び出された場合はエラーになります。
+  /// 同時に呼び出された場合はキュー側で `SoraError.mediaChannelError` がスローされます
   ///
-  /// 前提条件として、
-  /// - 接続時設定で映像が有効になっている
-  /// - 接続時設定でロールが sendonly または sendrecv である
-  /// - 配信ストリームが存在するかつローカル映像トラックが存在する
-  ///
-  /// 映像ハードミュートは、黒塗りフレーム状態で停止させるため映像ソフトミュート用処理を併用します。
-  /// そのため、以下の処理を内部で実行します。
-  ///
-  /// - `mute == true`: 映像ソフトミュートを有効化してから、カメラ入力を停止します
-  /// - `mute == false`: カメラ入力を再開してから、映像ソフトミュートを無効化します。
-  ///    ハードミュート前のソフトミュートの状態に関わらず無効化します
+  /// 映像ハードミュートは、黒塗りフレーム状態で停止させるため映像ソフトミュート用処理を併用します
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
   public func setVideoHardMute(_ mute: Bool) async throws {
+    // 接続中か
     guard state == .connected else {
       throw SoraError.mediaChannelError(reason: "MediaChannel is not connected (state: \(state))")
     }
 
+    // 接続設定で映像が有効になっているか
     guard configuration.videoEnabled else {
       throw SoraError.mediaChannelError(reason: "videoEnabled is false")
     }
 
-    guard configuration.cameraSettings.isEnabled else {
-      throw SoraError.mediaChannelError(reason: "cameraSettings.isEnabled is false")
-    }
-
+    // 接続設定で配信側ロールになっているか
     guard configuration.isSender else {
       throw SoraError.mediaChannelError(reason: "role is not sender")
     }
 
+    // 送信ストリームが有効か
     guard let senderStream else {
       throw SoraError.mediaChannelError(reason: "senderStream is unavailable")
     }
 
+    // ローカル映像トラックが存在するか
     guard senderStream.hasVideoTrack else {
       throw SoraError.mediaChannelError(reason: "senderStream has no VideoTrack")
     }
 
     if mute {
+      // 黒塗りフレーム送出 -> ハードミュート有効化の順になるようにします
       senderStream.videoEnabled = false
       try await videoHardMuteSerialQueue.set(mute: true, senderStream: senderStream)
     } else {
+      // ハードミュート無効化 -> 黒塗りフレーム送出解除の順になるようにします
       try await videoHardMuteSerialQueue.set(mute: false, senderStream: senderStream)
       senderStream.videoEnabled = true
     }
