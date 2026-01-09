@@ -638,8 +638,7 @@ public final class MediaChannel {
   /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
-  /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
-  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setAudioHardMute(_ mute: Bool) -> Error? {
     // 接続中か
     guard state == .connected else {
@@ -669,8 +668,7 @@ public final class MediaChannel {
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
-  /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
-  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setAudioSoftMute(_ mute: Bool) -> Error? {
     // 接続中か
     guard state == .connected else {
@@ -707,8 +705,7 @@ public final class MediaChannel {
   /// MediaChannel の接続中に映像をソフトミュート有効化 / 無効化します
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
-  /// - Returns: 成功した場合は `nil`、失敗した場合は `Error` を返します
-  /// - Throws: エラー時は `SoraError.mediaChannelError` がスローされます
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setVideoSoftMute(_ mute: Bool) -> Error? {
     // 接続中か
     guard state == .connected else {
