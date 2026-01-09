@@ -2,8 +2,6 @@ import Foundation
 
 // 映像ハードミュートの同時呼び出しを防ぐためのシリアルキュークラスです
 // MediaChannel.setVideoHardMute(_:) 内での使用を想定しています
-//
-// 既に処理が実行中または CameraVideoCapturer が無効な場合は `SoraError.mediaChannelError` がスローされます
 final class VideoHardMuteSerialQueue {
   private let queue = DispatchQueue(label: "jp.shiguredo.sora.video.hardmute")
 
@@ -13,10 +11,11 @@ final class VideoHardMuteSerialQueue {
 
   // queue 上で同時実行を防ぐ排他処理を行い、
   // libwebrtc のカメラ用キュー（SoraDispatcher）でカメラ操作を行います
+  //
+  // 既に処理中の状態で実行された、またはキャプチャラーが無効な場合は SoraError.mediaChannelError がスローされます
   func set(mute: Bool, senderStream: MediaStream) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       queue.async { [self] in
-        // 同時に呼び出された場合はエラーにします
         guard !isProcessing else {
           continuation.resume(
             throwing: SoraError.mediaChannelError(

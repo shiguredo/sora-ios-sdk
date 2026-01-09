@@ -21,15 +21,16 @@
   - @zztkm
 - [ADD] MediaChannel に音声ソフトミュートを設定する `setAudioSoftMute(_:)` を追加する
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
-  - AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
+    - デジタルサイレンスパケットが送られる状態となり、マイクからの音声は送出されない
+  - MediaChannel から AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
   - @t-miya
 - [ADD] MediaChannel に映像ソフトミュートを設定する `setVideoSoftMute(_:)` を追加する
   - 送信ストリームの VideoTrack を取得し、MediaStream.videoEnabled を切り替える
-  - VideoTrack の有無判定を行うため、 MediaStream に `hasVideoTrack` を追加する
+  - MediaChannel から VideoTrack の有無判定を行うため、 MediaStream に `hasVideoTrack` を追加する
   - @t-miya
 - [ADD] MediaChannel に映像ハードミュートを設定する `setVideoHardMute(_:)` を追加する
   - CameraVideoCapturer の `stop` と `restart` のラッパー
-    - ハードミュートの複数同時実行を防ぐためにシリアルキュー `VideoHardMuteSerialQueue` を追加する
+    - ハードミュートの複数同時実行を防ぐためのシリアルキュークラス `VideoHardMuteSerialQueue` を追加する
   - 映像ソフトミュートも併用し、黒塗りフレームの状態で停止させる
   - @t-miya
 - [ADD] 音声のハードミュート有効化/無効化機能を追加する

@@ -736,7 +736,7 @@ public final class MediaChannel {
       return SoraError.mediaChannelError(reason: "senderStream has no VideoTrack")
     }
 
-    // ローカル音声トラックの有効/無効を切り替えます
+    // ローカル映像トラックの有効/無効を切り替えます
     senderStream.videoEnabled = !mute
     Logger.debug(type: .mediaChannel, message: "setVideoSoftMute mute=\(mute)")
     return nil
