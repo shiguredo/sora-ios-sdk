@@ -89,10 +89,6 @@
 
 - [UPDATE] SwiftLint を 0.63.0 に上げる
   - @zztkm
-- [UPDATE] GitHub Actions のビルド環境を更新する
-  - Xcode の version を 16.4 に変更
-  - SDK を iOS 18.5 に変更
-  - @t-miya
 - [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
   - @zztkm
 - [UPDATE] jazzy の設定ファイルを更新する
