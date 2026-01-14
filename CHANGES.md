@@ -19,10 +19,19 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
-- [ADD] MediaChannel に `setAudioSoftMute(_:)` を追加する
-  - 音声ソフトミュート機能のシンタックスシュガー
+- [ADD] MediaChannel に音声ソフトミュートを設定する `setAudioSoftMute(_:)` を追加する
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
-  - AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
+    - デジタルサイレンスパケットが送られる状態となり、マイクからの音声は送出されない
+  - MediaChannel から AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
+  - @t-miya
+- [ADD] MediaChannel に映像ソフトミュートを設定する `setVideoSoftMute(_:)` を追加する
+  - 送信ストリームの VideoTrack を取得し、MediaStream.videoEnabled を切り替える
+  - MediaChannel から VideoTrack の有無判定を行うため、 MediaStream に `hasVideoTrack` を追加する
+  - @t-miya
+- [ADD] MediaChannel に映像ハードミュートを設定する `setVideoHardMute(_:)` を追加する
+  - CameraVideoCapturer の `stop` と `restart` のラッパー
+    - ハードミュートの複数同時実行を防ぐための Actor `VideoHardMuteActor` を追加する
+  - 映像ソフトミュートも併用し、黒塗りフレームの状態で停止させる
   - @t-miya
 - [ADD] 音声のハードミュート有効化/無効化機能を追加する
   - iOS 端末のマイクインジケーターを消灯させる
@@ -88,6 +97,11 @@
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
   - @zztkm
+- [FIX] GitHub Actions のビルド環境を更新する
+  - GitHub Actions でのビルドが通らなくなったため
+  - Xcode の version を 16.4 に変更
+  - SDK を iOS 18.5 に変更
+  - @t-miya
 
 ## 2025.2.0
 

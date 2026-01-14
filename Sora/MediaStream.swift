@@ -48,20 +48,29 @@ public protocol MediaStream: AnyObject {
   // MARK: - 映像と音声の可否
 
   /// 映像の可否。
-  /// ``false`` をセットすると、サーバーへの映像の送受信を停止します。
-  /// ``true`` をセットすると送受信を再開します。
+  /// `false` をセットすると、サーバーへの映像の送受信を停止します。
+  /// `true` をセットすると送受信を再開します。
   var videoEnabled: Bool { get set }
 
   /// 音声の可否。
-  /// ``false`` をセットすると、サーバーへの音声の送受信を停止します。
-  /// ``true`` をセットすると送受信を再開します。
+  /// `false` をセットすると、サーバーへの音声の送受信を停止します。
+  /// `true` をセットすると送受信を再開します。
   ///
   /// サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
   var audioEnabled: Bool { get set }
 
-  /// 音声トラックを保持している場合は ``true`` を返します。
+  /// 映像トラックを保持している場合は `true` を返します。
   ///
-  /// SDK 内部で利用する判定用のプロパティです。
+  /// 映像ミュート時に映像トラックが存在するかチェックするために使用されます。
+  /// ミュート時に実行する videoEnabled setter は返り値やエラーを返さないため、
+  /// 呼び出し側へエラーを通知するために必要となります。
+  var hasVideoTrack: Bool { get }
+
+  /// 音声トラックを保持している場合は `true` を返します。
+  ///
+  /// 音声ミュート時に音声トラックが存在するかチェックするために使用されます。
+  /// ミュート時に実行する audioEnabled setter は返り値やエラーを返さないため、
+  /// 呼び出し側へエラーを通知するために必要となります。
   var hasAudioTrack: Bool { get }
 
   /// 受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
@@ -204,6 +213,10 @@ class BasicMediaStream: MediaStream {
 
   var hasAudioTrack: Bool {
     nativeAudioTrack != nil
+  }
+
+  var hasVideoTrack: Bool {
+    nativeVideoTrack != nil
   }
 
   var remoteAudioVolume: Double? {
