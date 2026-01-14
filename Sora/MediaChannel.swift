@@ -640,18 +640,18 @@ public final class MediaChannel {
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setAudioHardMute(_ mute: Bool) -> Error? {
-    // 接続されているか
+    // 接続されていなければエラー
     guard state == .connected else {
       return SoraError.mediaChannelError(
         reason: "MediaChannel is not connected (state: \(state))")
     }
 
-    // 接続設定で音声が有効になっているか
+    // 接続設定で音声が有効になっていなければエラー
     guard configuration.audioEnabled else {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
     }
 
-    // 接続設定で配信側ロールになっているか
+    // 接続設定で配信側ロールになっていなければエラー
     guard configuration.isSender else {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
@@ -670,28 +670,28 @@ public final class MediaChannel {
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setAudioSoftMute(_ mute: Bool) -> Error? {
-    // 接続されているか
+    // 接続されていなければエラー
     guard state == .connected else {
       return SoraError.mediaChannelError(
         reason: "MediaChannel is not connected (state: \(state))")
     }
 
-    // 接続設定で音声が有効になっているか
+    // 接続設定で音声が有効になっていなければエラー
     guard configuration.audioEnabled else {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
     }
 
-    // 接続設定で配信側ロールになっているか
+    // 接続設定で配信側ロールになっていなければエラー
     guard configuration.isSender else {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
-    // 送信ストリームが有効か
+    // 送信ストリームが有効でなければエラー
     guard let senderStream else {
       return SoraError.mediaChannelError(reason: "senderStream is unavailable")
     }
 
-    // ローカル音声トラックが存在するか
+    // ローカル音声トラックが存在しなければエラー
     guard senderStream.hasAudioTrack else {
       return SoraError.mediaChannelError(reason: "senderStream has no AudioTrack")
     }
@@ -752,11 +752,11 @@ public final class MediaChannel {
     }
 
     if mute {
-      // 黒塗りフレーム送出 -> ハードミュート有効化の順になるようにします
+      // ソフトミュートによる黒塗りフレーム送出 -> ハードミュート有効化の順になるようにします
       senderStream.videoEnabled = false
       try await Self.videoHardMuteActor.setMute(mute: true, senderStream: senderStream)
     } else {
-      // ハードミュート無効化 -> 黒塗りフレーム送出解除の順になるようにします
+      // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(mute: false, senderStream: senderStream)
       senderStream.videoEnabled = true
     }
@@ -768,28 +768,28 @@ public final class MediaChannel {
   // チェックを全て通過した場合は .success で送信ストリームを返します
   // 問題があった場合は .failure で SoraError.mediaChannelError を返します
   private func requireSenderStreamForVideoMute() -> Result<MediaStream, Error> {
-    // 接続されているか
+    // 接続されていなければエラー
     guard state == .connected else {
       return .failure(
         SoraError.mediaChannelError(reason: "MediaChannel is not connected (state: \(state))"))
     }
 
-    // 接続設定で映像が有効になっているか
+    // 接続設定で映像が有効になっていなければエラー
     guard configuration.videoEnabled else {
       return .failure(SoraError.mediaChannelError(reason: "videoEnabled is false"))
     }
 
-    // 接続設定で配信側ロールになっているか
+    // 接続設定で配信側ロールになっていなければエラー
     guard configuration.isSender else {
       return .failure(SoraError.mediaChannelError(reason: "role is not sender"))
     }
 
-    // 送信ストリームが有効か
+    // 送信ストリームが有効になっていなければエラー
     guard let senderStream else {
       return .failure(SoraError.mediaChannelError(reason: "senderStream is unavailable"))
     }
 
-    // 送信ストリームに映像トラックが含まれているか
+    // 送信ストリームに映像トラックが含まれていなければエラー
     guard senderStream.hasVideoTrack else {
       return .failure(SoraError.mediaChannelError(reason: "senderStream has no VideoTrack"))
     }
