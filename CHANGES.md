@@ -87,6 +87,11 @@
 
 ### misc
 
+- [UPDATE] GitHub Actions のビルド環境を更新する
+  - macOS の version を 26 に変更
+  - Xcode の version を 26.2 に変更
+  - SDK を iOS 26.2 に変更
+  - @t-miya
 - [UPDATE] SwiftLint を 0.63.0 に上げる
   - @zztkm
 - [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
@@ -97,11 +102,6 @@
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
   - @zztkm
-- [FIX] GitHub Actions のビルド環境を更新する
-  - GitHub Actions でのビルドが通らなくなったため
-  - Xcode の version を 16.4 に変更
-  - SDK を iOS 18.5 に変更
-  - @t-miya
 
 ## 2025.2.0
 
