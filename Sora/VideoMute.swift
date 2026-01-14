@@ -9,7 +9,6 @@ actor VideoHardMuteActor {
   private var capturer: CameraVideoCapturer?
 
   /// ハードミュートを有効化/無効化します
-  /// カメラキャプチャラーの操作には libwebrtc のカメラ用キュー（SoraDispatcher）を利用して呼ぶようにします
   ///
   /// - Parameters:
   ///  - mute: `true` で有効化、`false` で無効化
@@ -27,7 +26,7 @@ actor VideoHardMuteActor {
     // ミュートを有効化します
     if mute {
       guard let currentCapturer = await currentCameraVideoCapturer() else {
-        // 前回のハードミュートでキャプチャラーを保持している場合は冪等として成功扱いにします
+        // 既にハードミュート済み(再開用キャプチャラーを保持)なら、冪等として何もしません
         if capturer != nil { return }
         throw SoraError.mediaChannelError(reason: "CameraVideoCapturer is unavailable")
       }
@@ -50,6 +49,7 @@ actor VideoHardMuteActor {
 
   // 現在のカメラキャプチャラーを取得します
   private func currentCameraVideoCapturer() async -> CameraVideoCapturer? {
+    // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して呼ぶようにします
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
         continuation.resume(returning: CameraVideoCapturer.current)
@@ -59,6 +59,7 @@ actor VideoHardMuteActor {
 
   // カメラキャプチャを停止します
   private func stopCameraVideoCapture(_ capturer: CameraVideoCapturer) async throws {
+    // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して呼ぶようにします
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       SoraDispatcher.async(on: .camera) {
         // CameraVideoCapturer.stop はコールバック形式です
@@ -78,6 +79,7 @@ actor VideoHardMuteActor {
     _ capturer: CameraVideoCapturer,
     senderStream: MediaStream
   ) async throws {
+    // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して呼ぶようにします
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       SoraDispatcher.async(on: .camera) {
         // マルチストリームの場合、停止時と現在の送信ストリームが異なることがあるので再設定します
