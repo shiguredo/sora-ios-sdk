@@ -101,6 +101,11 @@
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
   - @zztkm
+- [FIX] GitHub Actions のビルド環境を更新する
+  - GitHub Actions でのビルドが通らなくなったため
+  - Xcode の version を 16.4 に変更
+  - SDK を iOS 18.5 に変更
+  - @t-miya
 
 ## 2025.2.0
 
