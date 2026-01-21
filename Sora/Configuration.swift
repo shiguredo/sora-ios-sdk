@@ -139,7 +139,7 @@ public struct Configuration {
   ///
   /// `cameraSettings.isEnabled` が `true` の場合でも、このフラグが `false` であれば
   /// 接続時点ではカメラキャプチャを起動しません。
-  /// 後から `MediaChannel.setVideoHardMute(false)` などで必要に応じて開始できます。
+  /// 後から `MediaChannel.setVideoHardMute(false)` で必要に応じて開始できます。
   public var initialCameraEnabled: Bool = true
 
   /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。

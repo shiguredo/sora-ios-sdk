@@ -141,7 +141,9 @@ actor VideoHardMuteActor {
         // CameraVideoCapturer.start はコールバック形式です
         let capturer = CameraVideoCapturer(device: device)
         capturer.stream = senderStream
-        capturer.start(format: format, frameRate: frameRate) { error in
+        // start 完了まで capturer を確実に生存させるためにクロージャ側でも保持します。
+        // start 成功時は CameraVideoCapturer.current がセットされ、以後はそちらが保持します。
+        capturer.start(format: format, frameRate: frameRate) { [capturer] error in
           if let error {
             continuation.resume(throwing: error)
           } else {
