@@ -40,7 +40,7 @@ actor VideoHardMuteActor {
     // 現在のキャプチャラーが取得できる場合は既に再開済みとして成功扱いにします
     let currentCapturer = await currentCameraVideoCapturer()
     if currentCapturer != nil { return }
-    // 前回停止時のキャプチャラーが保持できていれば restart、なければ新規に start します
+    // 前回停止時のキャプチャラーが保持できていれば restart、なければ start します
     if let stored = capturer {
       try await restartCameraVideoCapture(stored, senderStream: senderStream)
       return
@@ -111,7 +111,8 @@ actor VideoHardMuteActor {
         switch cameraSettings.position {
         case .front:
           guard let front = CameraVideoCapturer.front else {
-            continuation.resume(throwing: SoraError.cameraError(reason: "front camera is not found"))
+            continuation.resume(
+              throwing: SoraError.cameraError(reason: "front camera is not found"))
             return
           }
           capturer = front
