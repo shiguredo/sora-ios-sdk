@@ -11,6 +11,9 @@
 
 ## develop
 
+- [UPDATE] VideoHardMuteActor での映像ハードミュート解除時にカメラキャプチャ未生成なら生成するようにする
+  - `Configuration.initialCameraEnabled` により接続時にカメラ初期化が行われていない場合の処理
+  - @t-miya
 - [UPDATE] libwebrtc m144.7559.2.1 に上げる
   - @t-miya
 - [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
@@ -19,6 +22,9 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
+- [ADD] Configuration に接続確立時にカメラ初期化を行わない設定 `initialCameraEnabled` を追加する
+  - 接続時に映像ハードミュートを行うために利用する
+  - @t-miya
 - [ADD] MediaChannel に音声ソフトミュートを設定する `setAudioSoftMute(_:)` を追加する
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
     - デジタルサイレンスパケットが送られる状態となり、マイクからの音声は送出されない

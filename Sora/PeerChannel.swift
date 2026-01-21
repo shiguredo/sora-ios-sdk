@@ -482,7 +482,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     // カメラの初期化
-    if configuration.videoEnabled, configuration.cameraSettings.isEnabled {
+    if configuration.videoEnabled, configuration.cameraSettings.isEnabled,
+      configuration.initialCameraEnabled
+    {
       initializeCameraVideoCapture(stream: stream)
     }
 
