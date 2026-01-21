@@ -11,8 +11,8 @@
 
 ## develop
 
-- [UPDATE] VideoHardMuteActor での映像ハードミュート解除時にカメラキャプチャ未生成なら生成するようにする
-  - `Configuration.initialCameraEnabled` により接続時にカメラ初期化が行われていない場合の処理
+- [UPDATE] VideoHardMuteActor での映像ハードミュート解除時にカメラキャプチャ未起動なら開始するようにする
+  - `Configuration.initialCameraEnabled` により接続時にカメラ初期化が行われていない場合の分岐
   - @t-miya
 - [UPDATE] libwebrtc m144.7559.2.1 に上げる
   - @t-miya

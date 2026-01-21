@@ -105,22 +105,37 @@ actor VideoHardMuteActor {
     // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して実行します
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       SoraDispatcher.async(on: .camera) {
-        // 接続時設定の position に対応した device を取得します
-        // 未指定 (.unspecified) 時はエラーとします
-        if cameraSettings.position == .unspecified {
+        // 接続時設定の position に対応した CameraVideoCapturer を取得します。
+        // `.front` / `.back` を優先して利用し、静的プロパティ経由で参照される状態と齟齬が出ないようにします。
+        let capturer: CameraVideoCapturer
+        switch cameraSettings.position {
+        case .front:
+          guard let front = CameraVideoCapturer.front else {
+            continuation.resume(throwing: SoraError.cameraError(reason: "front camera is not found"))
+            return
+          }
+          capturer = front
+        case .back:
+          guard let back = CameraVideoCapturer.back else {
+            continuation.resume(throwing: SoraError.cameraError(reason: "back camera is not found"))
+            return
+          }
+          capturer = back
+        case .unspecified:
           continuation.resume(
             throwing: SoraError.cameraError(
               reason: "CameraSettings.position should not be .unspecified"
             )
           )
           return
-        }
-
-        let device =
-          CameraVideoCapturer.device(for: cameraSettings.position)
-        guard let device else {
-          continuation.resume(throwing: SoraError.cameraError(reason: "camera device is not found"))
-          return
+        @unknown default:
+          guard let device = CameraVideoCapturer.device(for: cameraSettings.position) else {
+            continuation.resume(
+              throwing: SoraError.cameraError(reason: "camera device is not found for position")
+            )
+            return
+          }
+          capturer = CameraVideoCapturer(device: device)
         }
 
         guard
@@ -128,7 +143,7 @@ actor VideoHardMuteActor {
           let format = CameraVideoCapturer.format(
             width: cameraSettings.resolution.width,
             height: cameraSettings.resolution.height,
-            for: device,
+            for: capturer.device,
             frameRate: cameraSettings.frameRate),
           let frameRate = CameraVideoCapturer.maxFrameRate(cameraSettings.frameRate, for: format)
         else {
@@ -139,7 +154,6 @@ actor VideoHardMuteActor {
 
         // カメラキャプチャを開始します
         // CameraVideoCapturer.start はコールバック形式です
-        let capturer = CameraVideoCapturer(device: device)
         capturer.stream = senderStream
         // start 完了まで capturer を確実に生存させるためにクロージャ側でも保持します。
         // start 成功時は CameraVideoCapturer.current がセットされ、以後はそちらが保持します。
