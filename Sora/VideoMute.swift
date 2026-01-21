@@ -5,8 +5,8 @@ import Foundation
 actor VideoHardMuteActor {
   // 処理実行中フラグ
   private var isProcessing = false
-  // カメラ操作のためのキャプチャラー
-  private var capturer: CameraVideoCapturer?
+  // ハードミュートで stop したキャプチャを解除時に restart するための保持キャプチャラー
+  private var storedCapturer: CameraVideoCapturer?
 
   /// ハードミュートを有効化/無効化します
   ///
@@ -32,7 +32,7 @@ actor VideoHardMuteActor {
       }
       try await stopCameraVideoCapture(currentCapturer)
       // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
-      capturer = currentCapturer
+      storedCapturer = currentCapturer
       return
     }
 
@@ -41,8 +41,8 @@ actor VideoHardMuteActor {
     let currentCapturer = await currentCameraVideoCapturer()
     if currentCapturer != nil { return }
     // 前回停止時のキャプチャラーが保持できていれば restart、なければ start します
-    if let stored = capturer {
-      try await restartCameraVideoCapture(stored, senderStream: senderStream)
+    if let capturerForRestart = storedCapturer {
+      try await restartCameraVideoCapture(capturerForRestart, senderStream: senderStream)
       return
     }
     try await startCameraVideoCapture(cameraSettings: cameraSettings, senderStream: senderStream)
