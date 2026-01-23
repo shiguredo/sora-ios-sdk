@@ -504,6 +504,22 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel,
         message: "initialize audio input")
 
+      let session = RTCAudioSession.sharedInstance()
+
+      // 初期状態でマイクをミュートするかを設定します。
+      // 入力初期化後は変更できないため、 initializeInput の前に設定します。
+      do {
+        session.lockForConfiguration()
+        defer { session.unlockForConfiguration() }
+        try session.setInitialMicrophoneMute(configuration.initialAudioHardMute)
+      } catch {
+        Logger.debug(
+          type: .peerChannel,
+          message:
+            "failed to setInitialMicrophoneMute => \(error.localizedDescription)"
+        )
+      }
+
       // カテゴリをマイク用途のものに変更する
       // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
       Logger.debug(
@@ -512,7 +528,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       RTCAudioSessionConfiguration.webRTC().category =
         AVAudioSession.Category.playAndRecord.rawValue
 
-      RTCAudioSession.sharedInstance().initializeInput { error in
+      session.initializeInput { error in
         if let error {
           Logger.debug(
             type: .peerChannel,
