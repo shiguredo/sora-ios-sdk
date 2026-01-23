@@ -511,7 +511,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       do {
         session.lockForConfiguration()
         defer { session.unlockForConfiguration() }
-        try session.setInitialMicrophoneMute(configuration.initialAudioHardMute)
+        try session.setInitialMicrophoneMute(configuration.initialMicrophoneEnabled)
       } catch {
         Logger.debug(
           type: .peerChannel,
