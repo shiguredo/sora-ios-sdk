@@ -11,12 +11,13 @@
 
 ## develop
 
+- [UPDATE] PeerChannel.initializeAudioInput での音声入力初期化時にマイク入力をミュートするか設定するようにする
+  - `RTCAudioSession.setInitialMicrophoneMute` に `Configuration.initialMicrophoneEnabled` の否定値を渡す
+  - @t-miya
 - [UPDATE] libwebrtc m144.7559.2.2 に上げる
   - @t-miya
 - [UPDATE] VideoHardMuteActor での映像ハードミュート解除時にカメラキャプチャ未起動なら開始するようにする
   - `Configuration.initialCameraEnabled` により接続時にカメラ初期化が行われていない場合の分岐
-  - @t-miya
-- [UPDATE] libwebrtc m144.7559.2.1 に上げる
   - @t-miya
 - [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
   - `getStats` メソッドの返り値である `Statistics` のドキュメントを生成するため
@@ -24,6 +25,9 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
+- [ADD] Configuration に接続確立時のマイク入力を有効にするか設定できる `initialMicrophoneEnabled` を追加する
+  - 接続時に音声ハードミュートを行うために利用する
+  - @t-miya
 - [ADD] Configuration に接続確立時にカメラ初期化を行わない設定 `initialCameraEnabled` を追加する
   - 接続時に映像ハードミュートを行うために利用する
   - @t-miya

@@ -507,6 +507,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       let session = RTCAudioSession.sharedInstance()
 
       // 初期状態でマイクをミュートするかを設定します。
+      // setInitialMicrophoneMute はマイクミュートを有効にするか、initialMicrophoneEnabled は初期のマイクを有効にするか
+      // の設定のため、initialMicrophoneEnabled の否定値を渡します。
+      //
       // 入力初期化後は変更できないため、 initializeInput の前に設定します。
       let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
       if !session.setInitialMicrophoneMute(initialMicrophoneMute) {
