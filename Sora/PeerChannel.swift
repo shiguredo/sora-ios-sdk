@@ -513,7 +513,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 入力初期化後は変更できないため、 initializeInput の前に設定します。
       let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
       if !session.setInitialMicrophoneMute(initialMicrophoneMute) {
-        Logger.debug(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
+        Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
       }
 
       // カテゴリをマイク用途のものに変更する
