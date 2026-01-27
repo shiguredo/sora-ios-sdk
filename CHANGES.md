@@ -111,6 +111,9 @@
 - [UPDATE] jazzy の設定ファイルを更新する
   - `module_version` を 2025.3.0 に変更
   - @zztkm
+- [CHANGE] URLSessionWebSocketChannel の iOS 13 以上を指定する @available アトリビュートを削除する
+  - システム条件として iOS 14 以上となっているため不要
+  - @t-miya
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
   - @zztkm
