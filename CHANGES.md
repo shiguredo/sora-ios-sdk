@@ -19,6 +19,11 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
+- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
+  - 移行先は `MediaChannelHandlers.onReceiveSignalingText`
+  - @zztkm
+- [ADD] MediaChannel に シグナリング の JSON 文字列 を 受け取る `onReceiveSignalingText` を追加する
+  - @zztkm
 - [ADD] MediaChannel に音声ソフトミュートを設定する `setAudioSoftMute(_:)` を追加する
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
     - デジタルサイレンスパケットが送られる状態となり、マイクからの音声は送出されない
