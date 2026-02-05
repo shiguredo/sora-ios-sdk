@@ -3,25 +3,49 @@ repos:
     hooks:
       - id: swift-format-fix
         name: swift format fix
-        entry: swift format --in-place --recursive Sora SoraTests
+        entry: swift
         language: system
-        files: '^(Sora|SoraTests)/.*\\.swift$'
+        files: '(^|.*/)(Sora|SoraTests)/.*\.swift$'
+        pass_filenames: true
+        args: [format, --in-place]
         stages: [pre-commit]
       - id: swift-format-check
         name: swift format check
-        entry: swift format lint --strict --parallel --recursive Sora SoraTests
+        entry: swift
         language: system
-        files: '^(Sora|SoraTests)/.*\\.swift$'
+        files: '(^|.*/)(Sora|SoraTests)/.*\.swift$'
+        pass_filenames: true
+        args: [format, lint, --strict, --parallel]
         stages: [pre-commit]
       - id: swiftlint-fix
         name: SwiftLint fix
-        entry: swift package plugin --allow-writing-to-package-directory swiftlint --fix .
+        entry: swift
         language: system
-        files: '^(Sora|SoraTests)/.*\\.swift$'
+        files: '(^|.*/)(Sora|SoraTests)/.*\.swift$'
+        pass_filenames: true
+        args:
+          [
+            package,
+            plugin,
+            --allow-writing-to-package-directory,
+            swiftlint,
+            --fix,
+            --,
+          ]
         stages: [pre-commit]
       - id: swiftlint-check
         name: SwiftLint check
-        entry: swift package plugin --allow-writing-to-package-directory swiftlint --strict .
+        entry: swift
         language: system
-        files: '^(Sora|SoraTests)/.*\\.swift$'
+        files: '(^|.*/)(Sora|SoraTests)/.*\.swift$'
+        pass_filenames: true
+        args:
+          [
+            package,
+            plugin,
+            --allow-writing-to-package-directory,
+            swiftlint,
+            --strict,
+            --,
+          ]
         stages: [pre-commit]
