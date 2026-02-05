@@ -117,7 +117,11 @@
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
   - @zztkm
-- [ADD] prek の pre-commit フックで format と lint を実行する
+- [ADD] pre-commit を導入する
+  - .pre-commit-config.yaml ファイルを追加する
+  - 初期導入では hooks に format / lint をそれぞれ fix / check を追加し合計 4 つの hook を設定する
+  - ツールは prek を利用することを前提とする
+    - https://github.com/j178/prek
   - @zztkm
 - [FIX] GitHub Actions のビルド環境を更新する
   - macOS 15 での利用中に `error: iOS 18.4 Platform Not Installed.` となってしまったため

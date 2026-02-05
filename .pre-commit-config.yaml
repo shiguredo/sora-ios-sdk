@@ -3,33 +3,25 @@ repos:
     hooks:
       - id: swift-format-fix
         name: swift format fix
-        entry: /bin/bash -lc 'swift format --in-place --recursive Sora SoraTests'
+        entry: swift format --in-place --recursive Sora SoraTests
         language: system
         files: '^(Sora|SoraTests)/.*\\.swift$'
-        pass_filenames: false
-        always_run: true
         stages: [pre-commit]
       - id: swift-format-check
         name: swift format check
-        entry: /bin/bash -lc 'swift format lint --strict --parallel --recursive Sora SoraTests'
+        entry: swift format lint --strict --parallel --recursive Sora SoraTests
         language: system
         files: '^(Sora|SoraTests)/.*\\.swift$'
-        pass_filenames: false
-        always_run: true
         stages: [pre-commit]
       - id: swiftlint-fix
         name: SwiftLint fix
-        entry: /bin/bash -lc 'swift package plugin --allow-writing-to-package-directory swiftlint --fix .'
+        entry: swift package plugin --allow-writing-to-package-directory swiftlint --fix .
         language: system
         files: '^(Sora|SoraTests)/.*\\.swift$'
-        pass_filenames: false
-        always_run: true
         stages: [pre-commit]
       - id: swiftlint-check
         name: SwiftLint check
-        entry: /bin/bash -lc 'swift package plugin --allow-writing-to-package-directory swiftlint --strict .'
+        entry: swift package plugin --allow-writing-to-package-directory swiftlint --strict .
         language: system
         files: '^(Sora|SoraTests)/.*\\.swift$'
-        pass_filenames: false
-        always_run: true
         stages: [pre-commit]
