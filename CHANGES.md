@@ -117,6 +117,8 @@
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
   - @zztkm
+- [ADD] prek の pre-commit フックで format と lint を実行する
+  - @zztkm
 - [FIX] GitHub Actions のビルド環境を更新する
   - macOS 15 での利用中に `error: iOS 18.4 Platform Not Installed.` となってしまったため
   - Xcode の version を 16.4 に変更
