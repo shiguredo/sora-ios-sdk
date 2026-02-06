@@ -38,7 +38,15 @@ public final class MediaChannelHandlers {
   /// ストリームが除去されたときに呼ばれるクロージャー
   public var onRemoveStream: ((MediaStream) -> Void)?
 
-  /// シグナリング受信時に呼ばれるクロージャー
+  // TODO(zztkm): 将来的に onReceiveSignalingText を onReceiveSignaling に 置き換えたい
+  /// シグナリング 受信時に JSON 文字列で呼ばれるクロージャー
+  public var onReceiveSignalingText: ((String) -> Void)?
+
+  /// シグナリング 受信時に呼ばれるクロージャー
+  @available(
+    *, deprecated,
+    message: "JSON 文字列 を 受け取る onReceiveSignalingText へ 移行 してください。"
+  )
   public var onReceiveSignaling: ((Signaling) -> Void)?
 
   /// シグナリングが DataChannel 経由に切り替わったタイミングで呼ばれるクロージャー
@@ -430,6 +438,16 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "call onRemoveStream")
       weakSelf.internalHandlers.onRemoveStream?(stream)
       weakSelf.handlers.onRemoveStream?(stream)
+    }
+
+    peerChannel.internalHandlers.onReceiveSignalingText = { [weak self] text in
+      guard let weakSelf = self else {
+        return
+      }
+      Logger.debug(type: .mediaChannel, message: "receive signaling text")
+      Logger.debug(type: .mediaChannel, message: "call onReceiveSignalingText")
+      weakSelf.internalHandlers.onReceiveSignalingText?(text)
+      weakSelf.handlers.onReceiveSignalingText?(text)
     }
 
     peerChannel.internalHandlers.onReceiveSignaling = { [weak self] message in

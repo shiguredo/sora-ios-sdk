@@ -25,6 +25,11 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
+- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
+  - 移行先は `MediaChannelHandlers.onReceiveSignalingText`
+  - @zztkm
+- [ADD] MediaChannel に シグナリング の JSON 文字列 を 受け取る `onReceiveSignalingText` を追加する
+  - @zztkm
 - [ADD] Configuration に接続確立時のマイク入力を有効にするか設定できる `initialMicrophoneEnabled` を追加する
   - 接続時に音声ハードミュートを行うために利用する
   - @t-miya
