@@ -135,6 +135,19 @@ public struct Configuration {
   /// デフォルトは `true` です。
   public var audioEnabled: Bool = true
 
+  /// 接続確立時に端末カメラキャプチャを自動起動するかどうか。
+  ///
+  /// `cameraSettings.isEnabled` が `true` の場合でも、このフラグが `false` であれば
+  /// 接続時点ではカメラキャプチャを起動しません。
+  /// 後から `MediaChannel.setVideoHardMute(false)` で必要に応じて開始できます。
+  public var initialCameraEnabled: Bool = true
+
+  /// 接続確立時にマイクを有効にするかどうか。
+  ///
+  /// このフラグが `false` であれば接続時点ではマイク入力は無効となります。(ハードミュート相当)
+  /// 後から `MediaChannel.setAudioHardMute(false)` で必要に応じてマイクを有効にできます。
+  public var initialMicrophoneEnabled: Bool = true
+
   /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
   public var simulcastEnabled: Bool = false
 

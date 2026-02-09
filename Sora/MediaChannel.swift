@@ -731,10 +731,18 @@ public final class MediaChannel {
     if mute {
       // ソフトミュートによる黒塗りフレーム送出 -> ハードミュート有効化の順になるようにします
       senderStream.videoEnabled = false
-      try await Self.videoHardMuteActor.setMute(mute: true, senderStream: senderStream)
+      try await Self.videoHardMuteActor.setMute(
+        mute: true,
+        senderStream: senderStream,
+        cameraSettings: configuration.cameraSettings
+      )
     } else {
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
-      try await Self.videoHardMuteActor.setMute(mute: false, senderStream: senderStream)
+      try await Self.videoHardMuteActor.setMute(
+        mute: false,
+        senderStream: senderStream,
+        cameraSettings: configuration.cameraSettings
+      )
       senderStream.videoEnabled = true
     }
     Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")

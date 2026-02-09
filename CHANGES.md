@@ -11,7 +11,13 @@
 
 ## develop
 
-- [UPDATE] libwebrtc m144.7559.2.1 に上げる
+- [UPDATE] PeerChannel.initializeAudioInput での音声入力初期化時にマイク入力をミュートするか設定するようにする
+  - `RTCAudioSession.setInitialMicrophoneMute` に `Configuration.initialMicrophoneEnabled` の否定値を渡す
+  - @t-miya
+- [UPDATE] libwebrtc m144.7559.2.2 に上げる
+  - @t-miya
+- [UPDATE] VideoHardMuteActor での映像ハードミュート解除時にカメラキャプチャ未起動なら開始するようにする
+  - `Configuration.initialCameraEnabled` により接続時にカメラ初期化が行われていない場合の分岐
   - @t-miya
 - [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
   - `getStats` メソッドの返り値である `Statistics` のドキュメントを生成するため
@@ -19,6 +25,12 @@
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
   - @zztkm
+- [ADD] Configuration に接続確立時のマイク入力を有効にするか設定できる `initialMicrophoneEnabled` を追加する
+  - 接続時に音声ハードミュートを行うために利用する
+  - @t-miya
+- [ADD] Configuration に接続確立時にカメラ初期化を行わない設定 `initialCameraEnabled` を追加する
+  - 接続時に映像ハードミュートを行うために利用する
+  - @t-miya
 - [ADD] MediaChannel に音声ソフトミュートを設定する `setAudioSoftMute(_:)` を追加する
   - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
     - デジタルサイレンスパケットが送られる状態となり、マイクからの音声は送出されない
@@ -97,8 +109,17 @@
 - [UPDATE] jazzy の設定ファイルを更新する
   - `module_version` を 2025.3.0 に変更
   - @zztkm
+- [UPDATE] URLSessionWebSocketChannel の iOS 13 以上を指定する @available アトリビュートを削除する
+  - システム条件として iOS 14 以上となっているため不要
+  - @t-miya
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
+  - @zztkm
+- [ADD] pre-commit を導入する
+  - .pre-commit-config.yaml ファイルを追加する
+  - 初期導入では hooks に format / lint をそれぞれ fix / check を追加し合計 4 つの hook を設定する
+  - ツールは prek を利用することを前提とする
+    - https://github.com/j178/prek
   - @zztkm
 - [FIX] GitHub Actions のビルド環境を更新する
   - macOS 15 での利用中に `error: iOS 18.4 Platform Not Installed.` となってしまったため
