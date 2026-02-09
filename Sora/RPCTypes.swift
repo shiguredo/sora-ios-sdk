@@ -12,8 +12,6 @@ private enum RPCMethodNames {
 /// RPC メソッドを定義するためのプロトコル
 ///
 /// 新しい RPC メソッドを SDK に追加する場合は、このプロトコルに準拠した型を定義してください。
-///
-/// - Note: 通常のユーザーは、このプロトコルを直接実装する必要はありません
 public protocol RPCMethodProtocol {
   /// RPC メソッドのパラメータ型
   associatedtype Params: Encodable
