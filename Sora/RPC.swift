@@ -53,7 +53,7 @@ public struct RPCResponse<Result> {
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
-public final class RPCChannel {
+final class RPCChannel {
   /// pending 管理用の構造体
   private struct Pending {
     let completion: (Result<RPCResponse<Any>?, SoraError>) -> Void
