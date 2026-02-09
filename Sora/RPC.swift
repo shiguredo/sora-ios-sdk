@@ -65,6 +65,7 @@ public final class RPCChannel {
     label: "jp.shiguredo.sora-ios-sdk.rpc.channel", attributes: .concurrent)
   private var nextId: Int = 1
   private var pendings: [RPCID: Pending] = [:]
+  private let allowedMethodNames: Set<String>
 
   init?(
     dataChannel: DataChannel, rpcMethods: [String]
@@ -73,6 +74,7 @@ public final class RPCChannel {
       return nil
     }
     self.dataChannel = dataChannel
+    self.allowedMethodNames = Set(rpcMethods)
   }
 
   /// RPC が利用可能かを返す。
@@ -91,6 +93,10 @@ public final class RPCChannel {
   ) -> Bool {
     guard isAvailable else {
       completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
+      return false
+    }
+    guard allowedMethodNames.contains(methodName) else {
+      completion?(.failure(SoraError.rpcMethodNotAllowed(method: methodName)))
       return false
     }
 

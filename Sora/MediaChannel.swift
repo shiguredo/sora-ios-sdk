@@ -246,6 +246,7 @@ public final class MediaChannel {
   ///
   /// - Throws: 以下のエラーが発生することがあります
   ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
+  ///   - `SoraError.rpcMethodNotAllowed`: 指定した RPC メソッドの呼び出しが許可されていない
   ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
   ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
   ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された
