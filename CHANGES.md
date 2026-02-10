@@ -102,6 +102,8 @@
   - Xcode の version を 26.2 に変更
   - SDK を iOS 26.2 に変更
   - @t-miya
+- [UPDATE] SwiftLintPlugins を 0.63.2 に上げる
+  - @zztkm
 - [UPDATE] SwiftLint を 0.63.0 に上げる
   - @zztkm
 - [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
