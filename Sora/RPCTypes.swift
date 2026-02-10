@@ -159,40 +159,38 @@ public struct ResetSpotlightRidResult: Decodable {
   }
 }
 
-// MARK: - RPC メソッド型の命名規則について
-
-/// # RPC メソッド型の命名規則
-///
-/// ## 現在の命名規則
-/// 現在、RPC メソッド型は `RequestSimulcastRid`、`RequestSpotlightRid` のようにメソッド名のみで命名しています。
-/// メソッド名のバージョン情報（例：`2025.2.0`）は、型の `name` プロパティに格納されています。
-///
-/// ```swift
-/// public enum RequestSimulcastRid: RPCMethodProtocol {
-///   public static let name = "2025.2.0/RequestSimulcastRid"
-/// }
-/// ```
-///
-/// ## 将来の命名規則への移行計画
-/// 同じメソッド名でバージョンが異なる場合（例：`2025.2.0/RequestSpotlightRid` と `2027.2.0/RequestSpotlightRid`）が増えた際には、
-/// バージョン情報を型名に含める新しい命名規則に移行する予定です。
-///
-/// ### 新しい命名規則の例
-/// ```swift
-/// // 新しい命名規則の例（将来のバージョン）
-/// public enum RequestSpotlightRid_2025_2_0: RPCMethodProtocol { ... }
-/// public enum RequestSpotlightRid_2027_2_0: RPCMethodProtocol { ... }
-/// ```
-///
-/// ## 移行時のアプローチ
-/// 1. **既存の型はエイリアスを作成**
-///    - 既存の型は新しい命名規則の型のエイリアスとして提供します
-/// 2. **deprecated マーク**
-///    - 既存の型を `@deprecated` マークし、ユーザーに移行を促します
-/// 3. **新規メソッドは新しい命名規則で追加**
-///    - 将来追加されるメソッドは新しい命名規則で定義します
-///
-/// このアプローチにより、既存コードとの互換性を保ちながら、スムーズに移行できるようにしています。
+// # RPC メソッド型の命名規則
+//
+// ## 現在の命名規則
+// 現在、RPC メソッド型は `RequestSimulcastRid`、`RequestSpotlightRid` のようにメソッド名のみで命名しています。
+// メソッド名のバージョン情報（例：`2025.2.0`）は、型の `name` プロパティに格納されています。
+//
+// ```swift
+// public enum RequestSimulcastRid: RPCMethodProtocol {
+//   public static let name = "2025.2.0/RequestSimulcastRid"
+// }
+// ```
+//
+// ## 将来の命名規則への移行計画
+// 同じメソッド名でバージョンが異なる場合（例：`2025.2.0/RequestSpotlightRid` と `2027.2.0/RequestSpotlightRid`）が増えた際には、
+// バージョン情報を型名に含める新しい命名規則に移行する予定です。
+//
+// ### 新しい命名規則の例
+// ```swift
+// // 新しい命名規則の例（将来のバージョン）
+// public enum RequestSpotlightRid_2025_2_0: RPCMethodProtocol { ... }
+// public enum RequestSpotlightRid_2027_2_0: RPCMethodProtocol { ... }
+// ```
+//
+// ## 移行時のアプローチ
+// 1. **既存の型はエイリアスを作成**
+//    - 既存の型は新しい命名規則の型のエイリアスとして提供します
+// 2. **deprecated マーク**
+//    - 既存の型を `@deprecated` マークし、ユーザーに移行を促します
+// 3. **新規メソッドは新しい命名規則で追加**
+//    - 将来追加されるメソッドは新しい命名規則で定義します
+//
+// このアプローチにより、既存コードとの互換性を保ちながら、スムーズに移行できるようにしています。
 
 /// サイマルキャスト の rid をリクエストする RPC メソッド
 ///
