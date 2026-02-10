@@ -154,27 +154,6 @@ public final class MediaChannel {
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
   public private(set) var subscriberCount: Int?
 
-  /// RPC で利用可能なメソッド一覧
-  ///
-  /// Sora サーバーから通知された RPC メソッドが列挙型として取得できます。
-  /// rpc メソッドを呼び出す前に、必要なメソッドがこの一覧に含まれているかを確認することを推奨します。
-  ///
-  /// - Returns: 利用可能な RPC メソッドの一覧。RPC が初期化されていない場合は空配列を返します
-  ///
-  /// # 使用例
-  ///
-  /// ```swift
-  /// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
-  ///   let result = try await mediaChannel.rpc(
-  ///     method: RequestSimulcastRid.self,
-  ///     params: RequestSimulcastRidParams(rid: "r0")
-  ///   )
-  /// }
-  /// ```
-  public var rpcMethods: [RPCMethod] {
-    peerChannel.rpcChannel?.allowedMethods.compactMap { RPCMethod(name: $0) } ?? []
-  }
-
   // MARK: 接続チャネル
 
   /// シグナリングチャネル
@@ -257,8 +236,6 @@ public final class MediaChannel {
   /// RPC メソッドを型安全に呼び出します
   ///
   /// このメソッドを使用して、Sora サーバーで定義された RPC メソッドを非同期で実行できます。
-  /// 呼び出す前に rpcMethods プロパティで該当メソッドが利用可能であることを確認してください。
-  ///
   /// - Parameters:
   ///   - method: 呼び出す RPC メソッドの型 (例: `RequestSimulcastRid.self`)
   ///   - params: メソッドに渡すパラメータ。型安全に検証されます
@@ -269,7 +246,7 @@ public final class MediaChannel {
   ///
   /// - Throws: 以下のエラーが発生することがあります
   ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
-  ///   - `SoraError.rpcMethodNotAllowed`: 指定されたメソッドが利用不可
+  ///   - `SoraError.rpcMethodNotAllowed`: 指定した RPC メソッドが許可されていない
   ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
   ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
   ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された

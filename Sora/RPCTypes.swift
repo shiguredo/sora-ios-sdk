@@ -12,8 +12,6 @@ private enum RPCMethodNames {
 /// RPC メソッドを定義するためのプロトコル
 ///
 /// 新しい RPC メソッドを SDK に追加する場合は、このプロトコルに準拠した型を定義してください。
-///
-/// - Note: 通常のユーザーは、このプロトコルを直接実装する必要はありません
 public protocol RPCMethodProtocol {
   /// RPC メソッドのパラメータ型
   associatedtype Params: Encodable
@@ -290,57 +288,5 @@ public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable
   public typealias Result = Metadata
   public static var name: String {
     RPCMethodNames.putSignalingNotifyMetadataItem
-  }
-}
-
-/// RPC メソッドを型安全に表現する Enum
-///
-/// MediaChannel.rpcMethods で利用可能なメソッドをこの型として取得できます。
-/// このEnum を使用することで、コンパイル時にメソッド名の妥当性が検証されます。
-///
-/// # 使用例
-/// ```swift
-/// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
-///   let params = RequestSimulcastRidParams(rid: "r0")
-///   let response = try await mediaChannel.rpc(
-///     method: RequestSimulcastRid.self,
-///     params: params
-///   )
-/// }
-/// ```
-public enum RPCMethod {
-  case requestSimulcastRid
-  case requestSpotlightRid
-  case resetSpotlightRid
-  case putSignalingNotifyMetadata
-  case putSignalingNotifyMetadataItem
-
-  var name: String {
-    switch self {
-    case .requestSimulcastRid:
-      return RPCMethodNames.requestSimulcastRid
-    case .requestSpotlightRid:
-      return RPCMethodNames.requestSpotlightRid
-    case .resetSpotlightRid:
-      return RPCMethodNames.resetSpotlightRid
-    case .putSignalingNotifyMetadata:
-      return RPCMethodNames.putSignalingNotifyMetadata
-    case .putSignalingNotifyMetadataItem:
-      return RPCMethodNames.putSignalingNotifyMetadataItem
-    }
-  }
-
-  init?(name: String) {
-    let allMethods: [RPCMethod] = [
-      .requestSimulcastRid,
-      .requestSpotlightRid,
-      .resetSpotlightRid,
-      .putSignalingNotifyMetadata,
-      .putSignalingNotifyMetadataItem,
-    ]
-    guard let method = allMethods.first(where: { $0.name == name }) else {
-      return nil
-    }
-    self = method
   }
 }

@@ -53,7 +53,7 @@ public struct RPCResponse<Result> {
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
-public final class RPCChannel {
+final class RPCChannel {
   /// pending 管理用の構造体
   private struct Pending {
     let completion: (Result<RPCResponse<Any>?, SoraError>) -> Void
@@ -65,10 +65,6 @@ public final class RPCChannel {
     label: "jp.shiguredo.sora-ios-sdk.rpc.channel", attributes: .concurrent)
   private var nextId: Int = 1
   private var pendings: [RPCID: Pending] = [:]
-
-  /// Sora から払い出されたメソッド一覧 (メソッド名の文字列リスト)
-  /// MediaChannel.rpcMethods で RPCMethod Enum に変換されます
-  let allowedMethods: [String]
   private let allowedMethodNames: Set<String>
 
   init?(
@@ -78,7 +74,6 @@ public final class RPCChannel {
       return nil
     }
     self.dataChannel = dataChannel
-    self.allowedMethods = rpcMethods
     self.allowedMethodNames = Set(rpcMethods)
   }
 
@@ -100,7 +95,6 @@ public final class RPCChannel {
       completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
       return false
     }
-
     guard allowedMethodNames.contains(methodName) else {
       completion?(.failure(SoraError.rpcMethodNotAllowed(method: methodName)))
       return false
