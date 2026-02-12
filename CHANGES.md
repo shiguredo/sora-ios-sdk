@@ -112,6 +112,9 @@
 - [UPDATE] URLSessionWebSocketChannel の iOS 13 以上を指定する @available アトリビュートを削除する
   - システム条件として iOS 14 以上となっているため不要
   - @t-miya
+- [ADD] dependabot を導入する
+  - `.github/dependabot.yml` を追加する
+  - @voluntas
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
   - @zztkm
