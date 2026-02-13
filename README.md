@@ -16,6 +16,23 @@ Please read https://github.com/shiguredo/oss before use.
 
 利用前に https://github.com/shiguredo/oss をお読みください。
 
+## 特徴
+
+- [libwebrtc](https://webrtc.googlesource.com/src/) を利用した iOS SDK
+- [WebRTC 統計情報](https://www.w3.org/TR/webrtc-stats/) の取得に対応 (`MediaChannel.getStats`)
+- 回線が不安定な際に、解像度とフレームレートの優先度を指定する `DegradationPreference` に対応
+  - `.maintainFramerate` / `.maintainResolution` / `.balanced` / `.disabled` を指定可能
+- 映像コーデック `VP8` / `VP9` / `AV1` / `H.264` / `H.265` に対応
+  - `H.264` / `H.265` は Apple Video Toolbox によるハードウェアデコーダー/エンコーダーに対応
+- 音声トラックを無効にし、デジタルサイレンスパケットを送出するミュート(ソフトミュート)を利用できる
+- 映像トラックを無効にし、黒塗りの映像パケットを送出するミュート(ソフトミュート)を利用できる
+- 音声・映像のプライバシーインジケーターを消灯するミュート(ハードミュート)を利用できる能
+  - 接続時にハードミュート状態にできる
+- フロント / リアカメラ切り替えとキャプチャフォーマット変更に対応
+- 各種カメラ設定を利用できる
+  - 解像度・フレームレート・フロントカメラ優先
+- `RTCAudioTrackSink` を利用して受信音声データを PCM 形式で取得できる
+
 ## システム条件
 
 - iOS 14 以降
