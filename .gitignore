@@ -27,6 +27,7 @@ project.xcworkspace
 *.swp
 doc
 WebRTC.xcframework.zip
+.codex/
 
 ## Obj-C/Swift specific
 *.hmap
