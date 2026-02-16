@@ -246,27 +246,16 @@ final class RPCChannel {
     pending.completion(result)
   }
 
-  static func parseResponseID(_ value: Any) throws -> Int {
+  private static func parseResponseID(_ value: Any) throws -> Int {
     if let intValue = value as? Int {
       return intValue
     }
-    guard let numberValue = value as? NSNumber else {
-      throw SoraError.rpcDecodingError(reason: "response id の型が不正です: \(type(of: value))")
+    if let numberValue = value as? NSNumber {
+      return numberValue.intValue
+    } else {
+      throw SoraError.rpcDecodingError(
+        reason: "response id は Int または NSNumber である必要があります: \(type(of: value))")
     }
-    if CFGetTypeID(numberValue) == CFBooleanGetTypeID() {
-      throw SoraError.rpcDecodingError(reason: "response id に Bool は利用できません")
-    }
-    guard !CFNumberIsFloatType(numberValue) else {
-      throw SoraError.rpcDecodingError(reason: "response id は整数のみ利用できます: \(numberValue)")
-    }
-    let int64Value = numberValue.int64Value
-    guard NSNumber(value: int64Value) == numberValue else {
-      throw SoraError.rpcDecodingError(reason: "response id が Int の範囲外です: \(numberValue)")
-    }
-    guard let intValue = Int(exactly: int64Value) else {
-      throw SoraError.rpcDecodingError(reason: "response id が Int の範囲外です: \(numberValue)")
-    }
-    return intValue
   }
 }
 
