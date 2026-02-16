@@ -80,8 +80,7 @@
     - `ResetSpotlightRid`
     - `PutSignalingNotifyMetadata`
     - `PutSignalingNotifyMetadataItem`
-  - RPC の ID を表す `RPCID` 列挙型を追加する
-    - `int(Int)` と `string(String)` の 2 つのケースをサポート
+  - RPC の ID は `Int` として扱う
   - RPC エラー応答の詳細を表す `RPCErrorDetail` 構造体を追加する
   - RPC 成功応答を表す `RPCResponse<Result>` ジェネリック構造体を追加する
   - DataChannel 経由の RPC を扱う `RPCChannel` クラスを追加する
