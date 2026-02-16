@@ -254,7 +254,7 @@ final class RPCChannel {
       return numberValue.intValue
     } else {
       throw SoraError.rpcDecodingError(
-        reason: "response id は Int または NSNumber である必要があります: \(type(of: value))")
+        reason: "response id must be Int or NSNumber: \(type(of: value))")
     }
   }
 }
