@@ -4,11 +4,17 @@ import ReplayKit
 
 /// 画面キャプチャの設定です。
 public struct ScreenCaptureSettings {
-  /// ReplayKit のマイク入力を有効化するかどうか。
+  /// ReplayKit の `RPScreenRecorder.isMicrophoneEnabled` に対応する設定です。
+  /// `true` の場合、 ReplayKit 側でマイク入力を有効化します。
+  /// ただし現状の SDK は `RPSampleBufferType.video` のみ送信するため、
+  /// この設定を `true` にしても Sora へ音声は送信されません。
   /// 既定値は `false` です。
   public var isMicrophoneEnabled: Bool
 
-  /// ReplayKit のカメラ入力を有効化するかどうか。
+  /// ReplayKit の `RPScreenRecorder.isCameraEnabled` に対応する設定です。
+  /// `true` の場合、 ReplayKit のカメラプレビュー機能を利用できます。
+  /// ただし現状の SDK は画面の `RPSampleBufferType.video` のみ送信するため、
+  /// ReplayKit カメラ映像の合成や送信は行いません。
   /// 既定値は `false` です。
   public var isCameraEnabled: Bool
 
@@ -22,8 +28,8 @@ public struct ScreenCaptureSettings {
   /// 初期化します。
   ///
   /// - Parameters:
-  ///   - isMicrophoneEnabled: ReplayKit のマイク入力を有効化するかどうか
-  ///   - isCameraEnabled: ReplayKit のカメラ入力を有効化するかどうか
+  ///   - isMicrophoneEnabled: `RPScreenRecorder.isMicrophoneEnabled` に渡す値
+  ///   - isCameraEnabled: `RPScreenRecorder.isCameraEnabled` に渡す値
   ///   - videoSampleBufferTransformer: 映像フレーム送信前の加工処理
   ///   - onRuntimeError: 画面キャプチャ実行中エラーの通知コールバック
   public init(

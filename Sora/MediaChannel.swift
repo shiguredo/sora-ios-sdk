@@ -209,6 +209,9 @@ public final class MediaChannel {
 
   // ReplayKit を利用した画面キャプチャ制御です
   // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
+  // 生成後は MediaChannel のライフサイクルで保持します。
+  // stopScreenCapture / internalDisconnect から非同期停止を呼ぶため、
+  // 参照を途中で解放せずに同一インスタンスへ停止要求を集約します。
   private var screenCaptureController: ScreenCaptureController?
 
   // MARK: - インスタンスの生成
