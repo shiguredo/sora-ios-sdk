@@ -67,7 +67,9 @@ final class ScreenCaptureController: @unchecked Sendable {
   // 画面フレームを順序保証して送信するためのキュー
   private let sendVideoFrameQueue = DispatchQueue(
     label: "jp.shiguredo.sora.screenCapture.sendVideoFrameQueue")
-  // 画面フレーム送信を常に1件だけに限定するためのセマフォ
+  // 画面フレーム送信を常に 1 件だけに限定するためのセマフォ
+  // リアルタイム性を優先するため、処理待ちで遅延を増やさず、
+  // 処理中に到着したフレームは破棄してキュー滞留を防ぎます。
   private let sendVideoFrameSemaphore = DispatchSemaphore(value: 1)
   private let lock = NSLock()
 
@@ -256,7 +258,7 @@ final class ScreenCaptureController: @unchecked Sendable {
       return
     }
     sendVideoFrameQueue.async { [weak self] in
-      // sendVideoFrameSemaphore カウントを -1 して次のフレームを処理できるようにします
+      // sendVideoFrameSemaphore カウントを +1 して次のフレームを処理できるようにします
       defer { self?.sendVideoFrameSemaphore.signal() }
 
       // 非同期 stopCapture で captureState が変更される可能性があるためここでチェックします
