@@ -758,6 +758,9 @@ public final class MediaChannel {
 
   /// MediaChannel の接続中に ReplayKit を利用して画面キャプチャおよび映像配信を開始します
   ///
+  /// 同一 senderStream に対してカメラキャプチャが動作中の場合は開始できません。
+  /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
+  ///
   /// - Parameter settings: 画面キャプチャ設定
   /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます
   public func startScreenCapture(settings: ScreenCaptureSettings = .init()) async throws {
@@ -767,6 +770,14 @@ public final class MediaChannel {
       throw error
     case .success(let stream):
       senderStream = stream
+    }
+
+    // カメラキャプチャ動作中は開始できません
+    guard !(await isCameraVideoCaptureRunning(on: senderStream)) else {
+      throw SoraError.mediaChannelError(
+        reason:
+          "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+      )
     }
 
     let screenCaptureController = getOrCreateScreenCaptureController()
@@ -829,6 +840,23 @@ public final class MediaChannel {
     }
 
     return .success(senderStream)
+  }
+
+  // 指定した senderStream に対してカメラキャプチャが実行中かを返します
+  private func isCameraVideoCaptureRunning(on senderStream: MediaStream) async -> Bool {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        guard
+          let current = CameraVideoCapturer.current,
+          current.isRunning,
+          let currentSenderStream = current.stream
+        else {
+          continuation.resume(returning: false)
+          return
+        }
+        continuation.resume(returning: currentSenderStream === senderStream)
+      }
+    }
   }
 }
 
