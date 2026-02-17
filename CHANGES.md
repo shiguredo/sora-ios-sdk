@@ -11,6 +11,11 @@
 
 ## develop
 
+- [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
+  - MediaChannel に 画面キャプチャ開始 / 停止 API を追加する
+  - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+
 ### misc
 
 - [CHANGE] Slack 通知を rtCamp/action-slack-notify から shiguredo/github-actions の slack-notify に置き換える

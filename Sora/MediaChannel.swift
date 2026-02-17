@@ -207,6 +207,10 @@ public final class MediaChannel {
   // MediaChannel 間の排他実行を保証するため static にしています
   private static let videoHardMuteActor = VideoHardMuteActor()
 
+  // ReplayKit を利用した画面キャプチャ制御です
+  // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
+  private var screenCaptureController: ScreenCaptureController?
+
   // MARK: - インスタンスの生成
 
   /// 初期化します。
@@ -483,6 +487,11 @@ public final class MediaChannel {
       break
 
     default:
+      // 接続の終了時に画面キャプチャを停止します。
+      // 非同期で実行し、切断シーケンス自体はブロックしません。
+      // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
+      screenCaptureController?.stopCaptureForDisconnect()
+
       Logger.debug(type: .mediaChannel, message: "try disconnecting")
       if let error {
         Logger.error(
@@ -745,6 +754,47 @@ public final class MediaChannel {
       senderStream.videoEnabled = true
     }
     Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")
+  }
+
+  /// MediaChannel の接続中に ReplayKit を利用して画面キャプチャおよび映像配信を開始します
+  ///
+  /// - Parameter settings: 画面キャプチャ設定
+  /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます
+  public func startScreenCapture(settings: ScreenCaptureSettings = .init()) async throws {
+    let senderStream: MediaStream
+    switch requireSenderStreamForVideoMute() {
+    case .failure(let error):
+      throw error
+    case .success(let stream):
+      senderStream = stream
+    }
+
+    let screenCaptureController = getOrCreateScreenCaptureController()
+
+    try await screenCaptureController.startCapture(
+      settings: settings,
+      senderStream: senderStream
+    )
+    Logger.debug(type: .mediaChannel, message: "startScreenCapture")
+  }
+
+  /// ReplayKit を利用した画面キャプチャを停止します
+  public func stopScreenCapture() async {
+    await screenCaptureController?.stopCapture()
+    Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
+  }
+
+  // screenCaptureController インスタンスを取得します
+  // インスタンス未生成の場合は生成します
+  // スクリーンキャプチャ機能は必ず利用するとは限らないため必要時に生成しています
+  private func getOrCreateScreenCaptureController() -> ScreenCaptureController {
+    if let screenCaptureController {
+      return screenCaptureController
+    }
+
+    let screenCaptureController = ScreenCaptureController(mediaChannel: self)
+    self.screenCaptureController = screenCaptureController
+    return screenCaptureController
   }
 
   // 映像ミュートのための接続状況や接続設定のチェックを実行した上で送信ストリームを取得します
