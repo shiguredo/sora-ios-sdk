@@ -21,10 +21,14 @@ public protocol RPCMethodProtocol {
   static var name: String { get }
 }
 
+/// RequestSimulcastRid のパラメータ。
 public struct RequestSimulcastRidParams: Codable {
+  /// 要求する映像の rid。
   public let rid: Rid
+  /// 送信者のコネクション ID。
   public let senderConnectionId: String?
 
+  /// RequestSimulcastRid のパラメータを作成する。
   public init(rid: Rid, senderConnectionId: String? = nil) {
     self.rid = rid
     self.senderConnectionId = senderConnectionId
@@ -36,11 +40,16 @@ public struct RequestSimulcastRidParams: Codable {
   }
 }
 
+/// RequestSpotlightRid のパラメータ。
 public struct RequestSpotlightRidParams: Codable {
+  /// 送信者のコネクション ID。
   public let sendConnectionId: String?
+  /// 要求するスポットライトフォーカス時 rid。
   public let spotlightFocusRid: Rid
+  /// 要求するスポットライトアンフォーカス時 rid。
   public let spotlightUnfocusRid: Rid
 
+  /// RequestSpotlightRid のパラメータを作成する。
   public init(
     sendConnectionId: String? = nil,
     spotlightFocusRid: Rid,
@@ -58,9 +67,12 @@ public struct RequestSpotlightRidParams: Codable {
   }
 }
 
+/// ResetSpotlightRid のパラメータ。
 public struct ResetSpotlightRidParams: Encodable {
+  /// 送信者のコネクション ID。
   public let sendConnectionId: String?
 
+  /// ResetSpotlightRid のパラメータを作成する。
   public init(sendConnectionId: String? = nil) {
     self.sendConnectionId = sendConnectionId
   }
@@ -70,21 +82,30 @@ public struct ResetSpotlightRidParams: Encodable {
   }
 }
 
+/// PutSignalingNotifyMetadata のパラメータ。
 public struct PutSignalingNotifyMetadataParams<Metadata: Encodable>: Encodable {
+  /// 設定するメタデータ。
   public let metadata: Metadata
+  /// メタデータ更新時に push 通知するかどうか。
   public let push: Bool?
 
+  /// PutSignalingNotifyMetadata のパラメータを作成する。
   public init(metadata: Metadata, push: Bool? = nil) {
     self.metadata = metadata
     self.push = push
   }
 }
 
+/// PutSignalingNotifyMetadataItem のパラメータ。
 public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable {
+  /// 設定するメタデータのキー。
   public let key: String
+  /// 設定するメタデータの値。
   public let value: Value
+  /// メタデータ更新時に push 通知するかどうか。
   public let push: Bool?
 
+  /// PutSignalingNotifyMetadataItem のパラメータを作成する。
   public init(key: String, value: Value, push: Bool? = nil) {
     self.key = key
     self.value = value
@@ -92,12 +113,18 @@ public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable 
   }
 }
 
+/// RequestSimulcastRid の正常終了時の result。
 public struct RequestSimulcastRidResult: Decodable {
+  /// チャンネル ID。
   public let channelId: String
+  /// 受信者のコネクション ID。
   public let receiverConnectionId: String
+  /// 適用された rid。
   public let rid: Rid
+  /// 送信者のコネクション ID。
   public let senderConnectionId: String?
 
+  /// RequestSimulcastRid の結果を作成する。
   public init(
     channelId: String,
     receiverConnectionId: String,
@@ -118,12 +145,18 @@ public struct RequestSimulcastRidResult: Decodable {
   }
 }
 
+/// RequestSpotlightRid の正常終了時の result。
 public struct RequestSpotlightRidResult: Decodable {
+  /// チャンネル ID。
   public let channelId: String
+  /// 受信者のコネクション ID。
   public let recvConnectionId: String
+  /// 要求するスポットライトフォーカス時 rid。
   public let spotlightFocusRid: Rid
+  /// 要求するスポットライトアンフォーカス時 rid。
   public let spotlightUnfocusRid: Rid
 
+  /// RequestSpotlightRid の結果を作成する。
   public init(
     channelId: String,
     recvConnectionId: String,
@@ -144,10 +177,14 @@ public struct RequestSpotlightRidResult: Decodable {
   }
 }
 
+/// ResetSpotlightRid の正常終了時の result。
 public struct ResetSpotlightRidResult: Decodable {
+  /// チャンネル ID。
   public let channelId: String
+  /// 受信者のコネクション ID。
   public let recvConnectionId: String
 
+  /// ResetSpotlightRid の結果を作成する。
   public init(channelId: String, recvConnectionId: String) {
     self.channelId = channelId
     self.recvConnectionId = recvConnectionId
