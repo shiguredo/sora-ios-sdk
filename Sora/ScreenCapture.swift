@@ -82,6 +82,8 @@ final class ScreenCaptureController: @unchecked Sendable {
     let captureID = try beginStartCapture(settings: settings, senderStream: senderStream)
 
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      // MainActor への切り替え中に stopCapture が先行する可能性がありますが、
+      // completionHandler 側で captureID を照合して旧世代の start 完了を無効化します。
       Task { @MainActor in
         self.recorder.isMicrophoneEnabled = settings.isMicrophoneEnabled
         self.recorder.isCameraEnabled = settings.isCameraEnabled
@@ -264,6 +266,7 @@ final class ScreenCaptureController: @unchecked Sendable {
       }
 
       guard let videoFrame = VideoFrame(from: sampleBufferToSend) else {
+        Logger.debug(type: .mediaChannel, message: "failed to create VideoFrame from sampleBuffer")
         return
       }
 
