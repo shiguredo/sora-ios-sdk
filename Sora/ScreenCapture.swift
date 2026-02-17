@@ -174,6 +174,8 @@ final class ScreenCaptureController: @unchecked Sendable {
       case .stopped:
         captureID += 1
         activeCaptureID = captureID
+        // start の世代に紐づく設定をここで確定します。
+        // 後続世代の start が走った場合は captureID で旧世代コールバックを無効化します。
         self.settings = settings
         self.senderStream = senderStream
         captureState = .starting
