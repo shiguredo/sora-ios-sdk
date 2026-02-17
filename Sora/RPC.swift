@@ -2,21 +2,21 @@ import Foundation
 
 /// RPC エラー応答の詳細。
 public struct RPCErrorDetail {
-  /// JSON-RPC のエラーコード。
+  /// JSON-RPC 2.0 のエラーコード。
   public let code: Int
-  /// エラーの説明メッセージ。
+  /// エラーメッセージ。
   public let message: String
-  /// 追加のエラー情報。
+  /// エラーに関する追加情報。
   public let data: Any?
 }
 
 /// RPC 成功応答。
 public struct RPCResponse<Result> {
-  /// JSON-RPC のバージョン。
+  /// JSON-RPC プロトコルのバージョン。
   public let jsonrpc: String
   /// リクエストと対応する ID。
   public let id: Int
-  /// RPC 呼び出しの結果。
+  /// リクエストが正常終了した場合の結果情報。
   public let result: Result
 
   /// RPC 成功応答を作成する。
