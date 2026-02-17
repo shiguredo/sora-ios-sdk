@@ -44,9 +44,9 @@ public struct RequestSimulcastRidParams: Codable {
 public struct RequestSpotlightRidParams: Codable {
   /// 送信者のコネクション ID。
   public let sendConnectionId: String?
-  /// フォーカス時の rid。
+  /// 要求するスポットライトフォーカス時 rid。
   public let spotlightFocusRid: Rid
-  /// アンフォーカス時の rid。
+  /// 要求するスポットライトアンフォーカス時 rid。
   public let spotlightUnfocusRid: Rid
 
   /// RequestSpotlightRid のパラメータを作成する。
@@ -151,9 +151,9 @@ public struct RequestSpotlightRidResult: Decodable {
   public let channelId: String
   /// 受信者のコネクション ID。
   public let recvConnectionId: String
-  /// フォーカス時の rid。
+  /// 要求するスポットライトフォーカス時 rid。
   public let spotlightFocusRid: Rid
-  /// アンフォーカス時の rid。
+  /// 要求するスポットライトアンフォーカス時 rid。
   public let spotlightUnfocusRid: Rid
 
   /// RequestSpotlightRid の結果を作成する。
