@@ -11,6 +11,11 @@
 
 ## develop
 
+- [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
+  - MediaChannel に 画面キャプチャ開始 / 停止 API を追加する
+  - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+
 ## 2026.1.0
 
 **リリース日**: 2026-02-20
