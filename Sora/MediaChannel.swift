@@ -761,6 +761,8 @@ public final class MediaChannel {
 
   /// MediaChannel の接続中に ReplayKit を利用して画面キャプチャおよび映像配信を開始します
   ///
+  /// 送信フレームレートは `ScreenCaptureSettings.targetFPS` で制御できます。
+  ///
   /// 同一 senderStream に対してカメラキャプチャが動作中の場合は開始できません。
   /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
   ///
