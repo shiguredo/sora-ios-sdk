@@ -5,8 +5,12 @@ import ReplayKit
 /// 画面キャプチャの設定です。
 public struct ScreenCaptureSettings {
   /// 送信する映像フレームレートの目標値です。
+  /// 固定レートではなく上限値となります。また高負荷時はレートを下回る可能性があります。
   /// 1 以上を指定します。入力フレームが高頻度な場合は古いフレームを間引きます。
+  /// 指定できる最大値は 120 です。これより大きな値は 120 に丸められます。
   /// 既定値は `15` です。
+  ///
+  /// フレーム送信間隔は PTS に依存して変動します。
   public var targetFPS: Int
 
   /// 映像フレーム送信前に `CMSampleBuffer` を加工するためのクロージャーです。
@@ -65,6 +69,7 @@ final class ScreenCaptureController: @unchecked Sendable {
   private var settings = ScreenCaptureSettings()
   private var senderStream: MediaStream?
   private var lastSentVideoPresentationTimestamp: CMTime?
+  private var lastSentVideoUptime: TimeInterval?
   // startCapture の非同期完了を世代管理するための ID です。
   // start/stop が前後したときに、古い start 完了コールバックを無効化します。
   private var captureID: UInt64 = 0
@@ -178,6 +183,7 @@ final class ScreenCaptureController: @unchecked Sendable {
         // 後続世代の start が走った場合は captureID で旧世代コールバックを無効化します。
         self.settings = settings
         self.lastSentVideoPresentationTimestamp = nil
+        self.lastSentVideoUptime = nil
         self.senderStream = senderStream
         captureState = .starting
         return captureID
@@ -198,6 +204,7 @@ final class ScreenCaptureController: @unchecked Sendable {
         captureState = .stopped
         senderStream = nil
         lastSentVideoPresentationTimestamp = nil
+        lastSentVideoUptime = nil
         activeCaptureID = nil
         return .failed(error)
       }
@@ -217,15 +224,18 @@ final class ScreenCaptureController: @unchecked Sendable {
         captureState = .stopping
         senderStream = nil
         lastSentVideoPresentationTimestamp = nil
+        lastSentVideoUptime = nil
         activeCaptureID = nil
         return true
       }
     }
   }
 
-  // キャプチャーした画面フレームを映像フレームに変換してストリーム送出します。
+  // キャプチャした画面フレームを映像フレームに変換してストリーム送出します。
   // targetFPS に基づいて PTS 間引きを行い、送信対象フレームを制御します。
   // さらに送信処理中に到着したフレームは待たずに破棄し、キュー滞留と遅延増加を防ぎます。
+  // onRuntimeError は通知専用で、エラー発生時の停止処理を含みません。
+  // キャプチャを停止するには stopCapture を実行する必要があります。
   private func handleSampleBuffer(
     sampleBuffer: CMSampleBuffer,
     sampleBufferType: RPSampleBufferType,
@@ -282,34 +292,49 @@ final class ScreenCaptureController: @unchecked Sendable {
     }
   }
 
-  // 前回送信したフレームのタイムスタンプと targetFPS から今回フレームを送信するかを判定します
+  // 前回送信したフレームの PTS と targetFPS から今回フレームを送信するかを判定します
+  // PTS が利用できない場合は単調時刻でフォールバック判定します
   private func shouldSendVideoFrame(presentationTimestamp: CMTime) -> Bool {
     withLock {
-      // presentationTimestamp が取れない場合にドロップすると画面停止や過剰なドロップになりうるため
-      // 判断できない場合は捨てないようにしている
+      // PTS が無効な場合は単調時刻で間引きます。
       guard presentationTimestamp.isValid, !presentationTimestamp.isIndefinite else {
-        return true
+        return shouldSendVideoFrameWithUptime()
       }
       guard
         let lastSentVideoPresentationTimestamp,
         lastSentVideoPresentationTimestamp.isValid,
         !lastSentVideoPresentationTimestamp.isIndefinite
       else {
-        return true
+        return shouldSendVideoFrameWithUptime()
       }
 
       // 間引くフレームの判定を行う
-      let targetFPS = min(max(1, settings.targetFPS), Int(Int32.max))
+      let targetFPS = min(max(1, settings.targetFPS), 120)
       let minInterval = CMTime(value: 1, timescale: CMTimeScale(targetFPS))
       let elapsed = CMTimeSubtract(presentationTimestamp, lastSentVideoPresentationTimestamp)
+      if !elapsed.isValid || elapsed.isIndefinite || CMTimeCompare(elapsed, .zero) < 0 {
+        return shouldSendVideoFrameWithUptime()
+      }
       return CMTimeCompare(elapsed, minInterval) >= 0
     }
   }
 
-  // 送信したフレームの PTS を保持します
+  private func shouldSendVideoFrameWithUptime() -> Bool {
+    guard let lastSentVideoUptime else {
+      return true
+    }
+    let targetFPS = min(max(1, settings.targetFPS), 120)
+    let minInterval = 1.0 / Double(targetFPS)
+    let elapsed = ProcessInfo.processInfo.systemUptime - lastSentVideoUptime
+    return elapsed >= minInterval
+  }
+
+  // 送信したフレームの PTS と単調時刻を保持します
   private func markVideoFrameSent(presentationTimestamp: CMTime) {
     withLock {
+      lastSentVideoUptime = ProcessInfo.processInfo.systemUptime
       guard presentationTimestamp.isValid, !presentationTimestamp.isIndefinite else {
+        lastSentVideoPresentationTimestamp = nil
         return
       }
       lastSentVideoPresentationTimestamp = presentationTimestamp

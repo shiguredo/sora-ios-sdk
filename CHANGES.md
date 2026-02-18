@@ -15,6 +15,7 @@
   - MediaChannel に 画面キャプチャ開始 / 停止 API を追加する
   - 画面キャプチャ開始時に渡す設定として `ScreenCaptureSettings` クラスを追加する
     - targetFPS パラメータにより送信 FPS を指定することができる
+    - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
 
