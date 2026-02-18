@@ -21,7 +21,7 @@ Please read https://github.com/shiguredo/oss before use.
 - iOS 14 以降
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
 - Xcode 26.2
-- Swift 5.10
+  - Swift 5 言語モードでビルドしています
 - WebRTC SFU Sora 2025.1.0 以降
 
 Xcode と Swift のバージョンによっては、 取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
