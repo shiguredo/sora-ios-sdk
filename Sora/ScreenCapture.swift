@@ -4,20 +4,6 @@ import ReplayKit
 
 /// 画面キャプチャの設定です。
 public struct ScreenCaptureSettings {
-  /// ReplayKit の `RPScreenRecorder.isMicrophoneEnabled` に対応する設定です。
-  /// `true` の場合、 ReplayKit 側でマイク入力を有効化します。
-  /// ただし現状の SDK は `RPSampleBufferType.video` のみ送信するため、
-  /// この設定を `true` にしても Sora へ音声は送信されません。
-  /// 既定値は `false` です。
-  public var isMicrophoneEnabled: Bool
-
-  /// ReplayKit の `RPScreenRecorder.isCameraEnabled` に対応する設定です。
-  /// `true` の場合、 ReplayKit のカメラプレビュー機能を利用できます。
-  /// ただし現状の SDK は画面の `RPSampleBufferType.video` のみ送信するため、
-  /// ReplayKit カメラ映像の合成や送信は行いません。
-  /// 既定値は `false` です。
-  public var isCameraEnabled: Bool
-
   /// 映像フレーム送信前に `CMSampleBuffer` を加工するためのクロージャーです。
   /// `nil` を返すと該当フレームを破棄します。
   public var videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
@@ -28,18 +14,12 @@ public struct ScreenCaptureSettings {
   /// 初期化します。
   ///
   /// - Parameters:
-  ///   - isMicrophoneEnabled: `RPScreenRecorder.isMicrophoneEnabled` に渡す値
-  ///   - isCameraEnabled: `RPScreenRecorder.isCameraEnabled` に渡す値
   ///   - videoSampleBufferTransformer: 映像フレーム送信前の加工処理
   ///   - onRuntimeError: 画面キャプチャ実行中エラーの通知コールバック
   public init(
-    isMicrophoneEnabled: Bool = false,
-    isCameraEnabled: Bool = false,
     videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)? = nil,
     onRuntimeError: ((Error) -> Void)? = nil
   ) {
-    self.isMicrophoneEnabled = isMicrophoneEnabled
-    self.isCameraEnabled = isCameraEnabled
     self.videoSampleBufferTransformer = videoSampleBufferTransformer
     self.onRuntimeError = onRuntimeError
   }
@@ -93,8 +73,9 @@ final class ScreenCaptureController: @unchecked Sendable {
       // MainActor への切り替え中に stopCapture が先行する可能性がありますが、
       // completionHandler 側で captureID を照合して旧世代の start 完了を無効化します。
       Task { @MainActor in
-        self.recorder.isMicrophoneEnabled = settings.isMicrophoneEnabled
-        self.recorder.isCameraEnabled = settings.isCameraEnabled
+        // 本 API は画面映像のみを送信対象としており、 ReplayKit 経路でのマイク / カメラ入力は使用しません。
+        self.recorder.isMicrophoneEnabled = false
+        self.recorder.isCameraEnabled = false
         self.recorder.startCapture(
           handler: { [weak self] sampleBuffer, sampleBufferType, error in
             self?.handleSampleBuffer(
