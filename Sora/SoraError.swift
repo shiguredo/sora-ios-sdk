@@ -45,9 +45,6 @@ public enum SoraError: Error {
   /// RPC 機能が利用できない
   case rpcUnavailable(reason: String)
 
-  /// 利用を許可されていない RPC メソッド
-  case rpcMethodNotAllowed(method: String)
-
   /// RPC リクエストのエンコードに失敗
   case rpcEncodingError(reason: String)
 
@@ -106,8 +103,6 @@ extension SoraError: LocalizedError {
       return "Messaging error: \(reason)"
     case .rpcUnavailable(let reason):
       return "RPC unavailable: \(reason)"
-    case .rpcMethodNotAllowed(let method):
-      return "RPC method not allowed: \(method)"
     case .rpcEncodingError(let reason):
       return "RPC encoding error: \(reason)"
     case .rpcDecodingError(let reason):

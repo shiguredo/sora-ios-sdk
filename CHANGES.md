@@ -85,7 +85,6 @@
   - DataChannel 経由の RPC を扱う `RPCChannel` クラスを追加する
   - `SoraError` に RPC 関連のエラーケースを追加する
     - `rpcUnavailable(reason: String)`
-    - `rpcMethodNotAllowed(method: String)`
     - `rpcEncodingError(reason: String)`
     - `rpcDecodingError(reason: String)`
     - `rpcDataChannelClosed(reason: String)`
