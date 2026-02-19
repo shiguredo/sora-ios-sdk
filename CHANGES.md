@@ -12,11 +12,14 @@
 ## develop
 
 - [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
-  - MediaChannel に 画面キャプチャ開始 / 停止 API を追加する
+  - MediaChannel に画面キャプチャ開始 / 停止 API を追加する
   - 画面キャプチャ開始時に渡す設定として `ScreenCaptureSettings` 構造体を追加する
     - targetFPS パラメータにより送信 FPS を指定することができる
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+- [FIX] MediaChannel の ScreenCaptureController 生成をスレッドセーフにする
+  - `getOrCreateScreenCaptureController` と参照取得を専用ロックで保護する
   - @t-miya
 
 ## 2026.1.0
