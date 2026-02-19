@@ -18,6 +18,8 @@ public struct ScreenCaptureSettings {
   public var videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
 
   /// 画面キャプチャ実行中に発生したエラー通知コールバックです。
+  /// 通知専用のため、このコールバック呼び出しではキャプチャ停止を行いません。
+  /// 停止が必要な場合は利用側で `MediaChannel.stopScreenCapture()` を呼び出してください。
   public var onRuntimeError: ((Error) -> Void)?
 
   /// 初期化します。
@@ -26,6 +28,8 @@ public struct ScreenCaptureSettings {
   ///   - targetFPS: 送信する映像フレームレートの目標値
   ///   - videoSampleBufferTransformer: 映像フレーム送信前の加工処理
   ///   - onRuntimeError: 画面キャプチャ実行中エラーの通知コールバック
+  ///     - 通知専用のため、このコールバック呼び出しではキャプチャ停止を行いません
+  ///     - 停止が必要な場合は利用側で `MediaChannel.stopScreenCapture()` を呼び出してください
   public init(
     targetFPS: Int = 15,
     videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)? = nil,
