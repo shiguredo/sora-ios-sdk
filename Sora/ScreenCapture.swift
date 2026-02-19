@@ -134,7 +134,13 @@ final class ScreenCaptureController: @unchecked Sendable {
 
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
       Task { @MainActor in
-        self.recorder.stopCapture { _ in
+        self.recorder.stopCapture { error in
+          if let error {
+            Logger.error(
+              type: .mediaChannel,
+              message: "failed to stop screen capture: \(error.localizedDescription)"
+            )
+          }
           self.withLock {
             self.captureState = .stopped
           }
