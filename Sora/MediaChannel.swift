@@ -828,7 +828,7 @@ public final class MediaChannel {
     }
   }
 
-  // ScreenCaptureControllr をロック付きで取得します
+  // ScreenCaptureController をロック付きで取得します
   private func withScreenCaptureControllerLock<T>(_ block: () throws -> T) rethrows -> T {
     screenCaptureControllerLock.lock()
     defer { screenCaptureControllerLock.unlock() }
