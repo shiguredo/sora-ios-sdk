@@ -765,6 +765,7 @@ public final class MediaChannel {
   ///
   /// 同一 senderStream に対してカメラキャプチャが動作中の場合は開始できません。
   /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
+  /// 接続後にカメラを停止する場合は `setVideoHardMute(true)` を先に呼んでください。
   ///
   /// - Parameter settings: 画面キャプチャ設定
   /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます

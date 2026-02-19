@@ -31,7 +31,7 @@ public struct ScreenCaptureSettings {
     videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)? = nil,
     onRuntimeError: ((Error) -> Void)? = nil
   ) {
-    self.targetFPS = max(1, targetFPS)
+    self.targetFPS = min(max(1, targetFPS), 120)
     self.videoSampleBufferTransformer = videoSampleBufferTransformer
     self.onRuntimeError = onRuntimeError
   }
@@ -251,13 +251,13 @@ final class ScreenCaptureController: @unchecked Sendable {
       return
     }
 
-    // PTS を取得して、targetFPS との比較から、今回のフレームを送信するか判定します
-    let presentationTimestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-    guard shouldSendVideoFrame(presentationTimestamp: presentationTimestamp) else {
+    guard let context = captureContext() else {
       return
     }
 
-    guard let context = captureContext() else {
+    // PTS を取得して、targetFPS との比較から、今回のフレームを送信するか判定します
+    let presentationTimestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+    guard shouldSendVideoFrame(presentationTimestamp: presentationTimestamp) else {
       return
     }
 
