@@ -213,6 +213,9 @@ public final class MediaChannel {
   // stopScreenCapture / internalDisconnect から非同期停止を呼ぶため、
   // 参照を途中で解放せずに同一インスタンスへ停止要求を集約します。
   private var screenCaptureController: ScreenCaptureController?
+  // screenCaptureController の生成・参照取得を排他し、
+  // startScreenCapture の並行呼び出し時でも単一インスタンスを保証するためのロックです。
+  private let screenCaptureControllerLock = NSLock()
 
   // MARK: - インスタンスの生成
 
@@ -493,7 +496,7 @@ public final class MediaChannel {
       // 接続の終了時に画面キャプチャを停止します。
       // 非同期で実行し、切断シーケンス自体はブロックしません。
       // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
-      screenCaptureController?.stopCaptureForDisconnect()
+      currentScreenCaptureController()?.stopCaptureForDisconnect()
 
       Logger.debug(type: .mediaChannel, message: "try disconnecting")
       if let error {
@@ -797,6 +800,7 @@ public final class MediaChannel {
 
   /// ReplayKit を利用した画面キャプチャを停止します
   public func stopScreenCapture() async {
+    let screenCaptureController = currentScreenCaptureController()
     await screenCaptureController?.stopCapture()
     Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
   }
@@ -805,13 +809,30 @@ public final class MediaChannel {
   // インスタンス未生成の場合は生成します
   // スクリーンキャプチャ機能は必ず利用するとは限らないため必要時に生成しています
   private func getOrCreateScreenCaptureController() -> ScreenCaptureController {
-    if let screenCaptureController {
+    withScreenCaptureControllerLock {
+      if let screenCaptureController {
+        return screenCaptureController
+      }
+
+      let screenCaptureController = ScreenCaptureController(mediaChannel: self)
+      self.screenCaptureController = screenCaptureController
       return screenCaptureController
     }
+  }
 
-    let screenCaptureController = ScreenCaptureController(mediaChannel: self)
-    self.screenCaptureController = screenCaptureController
-    return screenCaptureController
+  // Current の ScreenCaptureController を取得します。
+  // キャプチャ終了時、切断時に取得するために利用します。
+  private func currentScreenCaptureController() -> ScreenCaptureController? {
+    withScreenCaptureControllerLock {
+      screenCaptureController
+    }
+  }
+
+  // ScreenCaptureControllr をロック付きで取得します
+  private func withScreenCaptureControllerLock<T>(_ block: () throws -> T) rethrows -> T {
+    screenCaptureControllerLock.lock()
+    defer { screenCaptureControllerLock.unlock() }
+    return try block()
   }
 
   // 映像ミュートのための接続状況や接続設定のチェックを実行した上で送信ストリームを取得します
