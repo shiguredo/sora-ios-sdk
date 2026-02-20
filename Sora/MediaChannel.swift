@@ -839,6 +839,12 @@ public final class MediaChannel {
     currentScreenCaptureController()?.isCaptureActive() ?? false
   }
 
+  // CameraVideoCapturer からの内部チェック用です。
+  // 画面キャプチャの active 状態を返します。
+  func isScreenCaptureActiveForInternalCheck() -> Bool {
+    isScreenCaptureActive()
+  }
+
   // ScreenCaptureController をロック付きで取得します
   private func withScreenCaptureControllerLock<T>(_ block: () throws -> T) rethrows -> T {
     screenCaptureControllerLock.lock()
