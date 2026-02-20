@@ -751,6 +751,13 @@ public final class MediaChannel {
         cameraSettings: configuration.cameraSettings
       )
     } else {
+      // 画面キャプチャ動作中はカメラを再開しません
+      guard !isScreenCaptureActive() else {
+        throw SoraError.mediaChannelError(
+          reason:
+            "screen capture is active, stopScreenCapture before setVideoHardMute(false)")
+      }
+
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(
         mute: false,
@@ -826,6 +833,10 @@ public final class MediaChannel {
     withScreenCaptureControllerLock {
       screenCaptureController
     }
+  }
+
+  private func isScreenCaptureActive() -> Bool {
+    currentScreenCaptureController()?.isCaptureActive() ?? false
   }
 
   // ScreenCaptureController をロック付きで取得します

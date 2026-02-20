@@ -162,6 +162,14 @@ final class ScreenCaptureController: @unchecked Sendable {
     }
   }
 
+  // 画面キャプチャが動作中かどうかを返します。
+  // starting / running / stopping を動作中として扱います。
+  func isCaptureActive() -> Bool {
+    withLock {
+      captureState != .stopped
+    }
+  }
+
   // MARK: - Private
 
   private enum StartCaptureResult {
