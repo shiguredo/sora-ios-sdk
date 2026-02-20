@@ -18,9 +18,6 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
-- [FIX] MediaChannel の ScreenCaptureController 生成をスレッドセーフにする
-  - `getOrCreateScreenCaptureController` と参照取得を専用ロックで保護する
-  - @t-miya
 
 ## 2026.1.0
 
