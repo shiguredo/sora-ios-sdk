@@ -1,6 +1,5 @@
 import Foundation
 
-@available(iOS 13, *)
 class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDelegate,
   URLSessionWebSocketDelegate
 {

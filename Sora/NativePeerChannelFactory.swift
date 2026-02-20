@@ -33,10 +33,17 @@ class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
 class NativePeerChannelFactory {
   static var `default` = NativePeerChannelFactory()
 
+  let audioDeviceModule: RTCAudioDeviceModule
+  /// 録音ポーズ/再開制御用に保持する ADM ラッパー
+  let audioDeviceModuleWrapper: AudioDeviceModuleWrapper
+
   var nativeFactory: RTCPeerConnectionFactory
 
   init() {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
+
+    audioDeviceModule = RTCAudioDeviceModule()
+    audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: audioDeviceModule)
 
     // 映像コーデックのエンコーダーとデコーダーを用意する
     let encoder = WrapperVideoEncoderFactory.shared
@@ -44,7 +51,8 @@ class NativePeerChannelFactory {
     nativeFactory =
       RTCPeerConnectionFactory(
         encoderFactory: encoder,
-        decoderFactory: decoder)
+        decoderFactory: decoder,
+        audioDeviceModule: audioDeviceModule)
 
     for info in encoder.supportedCodecs() {
       Logger.debug(

@@ -198,6 +198,24 @@ public enum SimulcastRid {
   case r2
 }
 
+/// サイマルキャストで視聴する映像の種類を表します。
+public enum SimulcastRequestRid {
+  /// 未指定
+  case unspecified
+
+  /// 映像を受信しない
+  case none
+
+  /// r0
+  case r0
+
+  /// r1
+  case r1
+
+  /// r2
+  case r2
+}
+
 /// スポットライトの映像の種類を表します 。
 public enum SpotlightRid {
   /**
@@ -309,6 +327,9 @@ public struct SignalingConnect {
 
   /// サイマルキャストでの映像の種類
   public var simulcastRid: SimulcastRid?
+
+  /// サイマルキャストで視聴する映像の種類
+  public var simulcastRequestRid: SimulcastRequestRid
 
   /// :nodoc:
   public var soraClient: String?
@@ -453,6 +474,9 @@ public struct SignalingOffer {
 
   /// スポットライト
   public let spotlight: Bool?
+
+  /// RPC で利用可能なメソッド
+  public var rpcMethods: [String]?
 
   /// audio
   public let audio: Bool?
@@ -768,6 +792,29 @@ extension SimulcastRid: Codable {
   }
 }
 
+private var simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
+  // .unspecified は simulcast_request_rid の値ではなく
+  // エンコードする必要がないため、テーブルに含めていない
+  PairTable(
+    name: "simulcastRequestRid",
+    pairs: [
+      ("none", .none),
+      ("r0", .r0),
+      ("r1", .r1),
+      ("r2", .r2),
+    ])
+
+/// :nodoc:
+extension SimulcastRequestRid: Codable {
+  public init(from decoder: Decoder) throws {
+    throw SoraError.invalidSignalingMessage
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    try simulcastRequestRidTable.encode(self, to: encoder)
+  }
+}
+
 private var spotlightRidTable: PairTable<String, SpotlightRid> =
   PairTable(
     name: "spotlightRid",
@@ -830,6 +877,7 @@ extension SignalingConnect: Codable {
     case spotlight_unfocus_rid
     case simulcast
     case simulcast_rid
+    case simulcast_request_rid
     case video
     case audio
     case sora_client
@@ -952,6 +1000,9 @@ extension SignalingConnect: Codable {
       switch role {
       case .sendrecv, .recvonly:
         try container.encodeIfPresent(simulcastRid, forKey: .simulcast_rid)
+        if simulcastRequestRid != .unspecified {
+          try container.encode(simulcastRequestRid, forKey: .simulcast_request_rid)
+        }
       default:
         break
       }
@@ -1079,6 +1130,7 @@ extension SignalingOffer: Codable {
     case video
     case video_codec_type
     case video_bit_rate
+    case rpc_methods
   }
 
   public init(from decoder: Decoder) throws {
@@ -1110,6 +1162,7 @@ extension SignalingOffer: Codable {
     video = try container.decodeIfPresent(Bool.self, forKey: .video)
     videoCodecType = try container.decodeIfPresent(String.self, forKey: .video_codec_type)
     videoBitRate = try container.decodeIfPresent(Int.self, forKey: .video_bit_rate)
+    rpcMethods = try container.decodeIfPresent([String].self, forKey: .rpc_methods)
   }
 
   public func encode(to encoder: Encoder) throws {

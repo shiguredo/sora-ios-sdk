@@ -11,6 +11,124 @@
 
 ## develop
 
+## 2026.1.0
+
+- [UPDATE] PeerChannel.initializeAudioInput での音声入力初期化時にマイク入力をミュートするか設定するようにする
+  - `RTCAudioSession.setInitialMicrophoneMute` に `Configuration.initialMicrophoneEnabled` の否定値を渡す
+  - @t-miya
+- [UPDATE] libwebrtc m144.7559.2.2 に上げる
+  - @t-miya
+- [UPDATE] VideoHardMuteActor での映像ハードミュート解除時にカメラキャプチャ未起動なら開始するようにする
+  - `Configuration.initialCameraEnabled` により接続時にカメラ初期化が行われていない場合の分岐
+  - @t-miya
+- [UPDATE] Statistics, StatisticsEntry をドキュメント対象として公開する
+  - `getStats` メソッドの返り値である `Statistics` のドキュメントを生成するため
+  - @t-miya
+- [UPDATE] Configuration.simulcastRid を非推奨にする
+  - 移行先は `Configuration.simulcastRequestRid`
+  - @zztkm
+- [ADD] Configuration に接続確立時のマイク入力を有効にするか設定できる `initialMicrophoneEnabled` を追加する
+  - 接続時に音声ハードミュートを行うために利用する
+  - @t-miya
+- [ADD] Configuration に接続確立時にカメラ初期化を行わない設定 `initialCameraEnabled` を追加する
+  - 接続時に映像ハードミュートを行うために利用する
+  - @t-miya
+- [ADD] MediaChannel に音声ソフトミュートを設定する `setAudioSoftMute(_:)` を追加する
+  - 送信ストリームの AudioTrack を取得し、MediaStream.audioEnabled を切り替える
+    - デジタルサイレンスパケットが送られる状態となり、マイクからの音声は送出されない
+  - MediaChannel から AudioTrack の有無判定を行うため、 MediaStream に `hasAudioTrack` を追加する
+  - @t-miya
+- [ADD] MediaChannel に映像ソフトミュートを設定する `setVideoSoftMute(_:)` を追加する
+  - 送信ストリームの VideoTrack を取得し、MediaStream.videoEnabled を切り替える
+  - MediaChannel から VideoTrack の有無判定を行うため、 MediaStream に `hasVideoTrack` を追加する
+  - @t-miya
+- [ADD] MediaChannel に映像ハードミュートを設定する `setVideoHardMute(_:)` を追加する
+  - CameraVideoCapturer の `stop` と `restart` のラッパー
+    - ハードミュートの複数同時実行を防ぐための Actor `VideoHardMuteActor` を追加する
+  - 映像ソフトミュートも併用し、黒塗りフレームの状態で停止させる
+  - @t-miya
+- [ADD] 音声のハードミュート有効化/無効化機能を追加する
+  - iOS 端末のマイクインジケーターを消灯させる
+  - AudioDeviceModuleWrapper クラスを追加する
+    - RTCAudioDeviceModule の pauseRecording/resumeRecording を実行するためのラッパークラス
+    - インスタンスは NativePeerChannelFactory が保持する
+  - MediaChannel に setAudioHardMute(_:) を追加する
+    - 内部で NativePeerChannelFactory 経由で AudioDeviceModuleWrapper.setAudioHardMute(_:) を呼び出す
+  - @t-miya
+- [ADD] MediaChannel に libwebrtc の統計情報を取得する `getStats` メソッドを追加する
+  - @t-miya
+- [ADD] RTCAudioTrack から音声データを受け取るためのコールバックプロトコルである RTCAudioTrackSink を追加する
+  - @zztkm
+- [ADD] MediaStream に RTCAudioTrackSink を RTCAudioTrack と関連付ける / 関連付けを解除するためのメソッドを追加する
+  - 追加したメソッド
+    - `addAudioTrackSink(_ sink: RTCAudioTrackSink)`
+    - `removeAudioTrackSink(_ sink: RTCAudioTrackSink)`
+  - @zztkm
+- [ADD] シグナリング接続時に視聴するストリームの rid を指定する `Configuration.simulcastRequestRid: SimulcastRequestRid` を追加する
+  - rid を指定できる値の列挙型として SimulcastRequestRid を追加する
+    - デフォルト値の `unspecified` の場合はシグナリングパラメータに `simulcast_request_rid` を含めない
+  - role が sendrecv または recvonly の場合、かつ simulcast が true の場合にのみ有効
+  - @zztkm
+- [ADD] サイマルキャストの rid を表す汎用型 `Rid` 列挙型を追加する
+  - @zztkm
+- [ADD] RPC 機能を追加する
+  - `SignalingOffer` に以下の項目を追加する
+    - `rpcMethods: [String]?`
+  - `MediaChannel` に `rpc` メソッドを追加する
+  - RPC メソッドを定義するための `RPCMethodProtocol` プロトコルを追加する
+  - `RPCMethodProtocol` に準拠した型を追加する
+    - `RequestSimulcastRid`
+    - `RequestSpotlightRid`
+    - `ResetSpotlightRid`
+    - `PutSignalingNotifyMetadata`
+    - `PutSignalingNotifyMetadataItem`
+  - RPC エラー応答の詳細を表す `RPCErrorDetail` 構造体を追加する
+  - RPC 成功応答を表す `RPCResponse<Result>` ジェネリック構造体を追加する
+  - DataChannel 経由の RPC を扱う `RPCChannel` クラスを追加する
+  - `SoraError` に RPC 関連のエラーケースを追加する
+    - `rpcUnavailable(reason: String)`
+    - `rpcEncodingError(reason: String)`
+    - `rpcDecodingError(reason: String)`
+    - `rpcDataChannelClosed(reason: String)`
+    - `rpcTimeout`
+    - `rpcServerError(detail: RPCErrorDetail)`
+  - @zztkm
+
+### misc
+
+- [UPDATE] GitHub Actions のビルド環境を更新する
+  - macOS の version を 26 に変更
+  - Xcode の version を 26.2 に変更
+  - SDK を iOS 26.2 に変更
+  - @t-miya
+- [UPDATE] SwiftLintPlugins を 0.63.2 に上げる
+  - @zztkm
+- [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
+  - @zztkm
+- [UPDATE] jazzy の設定ファイルを更新する
+  - `module_version` を 2025.3.0 に変更
+  - @zztkm
+- [UPDATE] URLSessionWebSocketChannel の iOS 13 以上を指定する @available アトリビュートを削除する
+  - システム条件として iOS 14 以上となっているため不要
+  - @t-miya
+- [ADD] dependabot を導入する
+  - `.github/dependabot.yml` を追加する
+  - @voluntas
+- [ADD] `Package.swift` に `testTarget` を追加する
+  - xcodebuild で test を実行するために target を追加
+  - @zztkm
+- [ADD] pre-commit を導入する
+  - .pre-commit-config.yaml ファイルを追加する
+  - 初期導入では hooks に format / lint をそれぞれ fix / check を追加し合計 4 つの hook を設定する
+  - ツールは prek を利用することを前提とする
+    - https://github.com/j178/prek
+  - @zztkm
+- [FIX] GitHub Actions のビルド環境を更新する
+  - macOS 15 での利用中に `error: iOS 18.4 Platform Not Installed.` となってしまったため
+  - Xcode の version を 16.4 に変更
+  - SDK を iOS 18.5 に変更
+  - @t-miya
+
 ## 2025.2.0
 
 **リリース日**: 2025-09-18

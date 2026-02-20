@@ -125,6 +125,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var dataChannels: [String: DataChannel] = [:]
   var switchedToDataChannel: Bool = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
+  var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
 
@@ -353,6 +354,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       spotlightUnfocusRid: configuration.spotlightUnfocusRid,
       simulcastEnabled: simulcast,
       simulcastRid: configuration.simulcastRid,
+      simulcastRequestRid: configuration.simulcastRequestRid,
       soraClient: soraClient,
       webRTCVersion: webRTCVersion,
       environment: DeviceInfo.current.description,
@@ -479,7 +481,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     // カメラの初期化
-    if configuration.videoEnabled, configuration.cameraSettings.isEnabled {
+    if configuration.videoEnabled, configuration.cameraSettings.isEnabled,
+      configuration.initialCameraEnabled
+    {
       initializeCameraVideoCapture(stream: stream)
     }
 
@@ -499,6 +503,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel,
         message: "initialize audio input")
 
+      let session = RTCAudioSession.sharedInstance()
+
+      // 初期状態でマイクをミュートするかを設定します。
+      // setInitialMicrophoneMute はマイクミュートを有効にするか、initialMicrophoneEnabled は初期のマイクを有効にするか
+      // の設定のため、initialMicrophoneEnabled の否定値を渡します。
+      //
+      // 入力初期化後は変更できないため、 initializeInput の前に設定します。
+      let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
+      if !session.setInitialMicrophoneMute(initialMicrophoneMute) {
+        Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
+      }
+
       // カテゴリをマイク用途のものに変更する
       // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
       Logger.debug(
@@ -507,7 +523,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       RTCAudioSessionConfiguration.webRTC().category =
         AVAudioSession.Category.playAndRecord.rawValue
 
-      RTCAudioSession.sharedInstance().initializeInput { error in
+      session.initializeInput { error in
         if let error {
           Logger.debug(
             type: .peerChannel,
@@ -1032,6 +1048,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     internalHandlers.onReceiveSignaling?(signaling)
   }
 
+  /// DataChannel の RPC で受信したメッセージを処理する。
+  func handleRPCMessage(_ data: Data) {
+    guard let rpcChannel else {
+      Logger.warn(type: .peerChannel, message: "rpcChannel is unavailable")
+      return
+    }
+    rpcChannel.handleMessage(data)
+  }
+
   private func finishConnecting() {
     Logger.debug(type: .peerChannel, message: "did connect")
     Logger.debug(
@@ -1062,6 +1087,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.error(
         type: .peerChannel,
         message: "error: \(error.localizedDescription)")
+    }
+
+    if let rpcChannel {
+      rpcChannel.invalidate(
+        reason: SoraError.rpcDataChannelClosed(reason: reason.description))
+      self.rpcChannel = nil
     }
 
     sendDisconnectMessageIfNeeded(reason: reason, error: error)
@@ -1362,6 +1393,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel,
       peerChannel: self)
     dataChannels[dataChannel.label] = dc
+
+    if label == "rpc" {
+      rpcChannel = RPCChannel(dataChannel: dc)
+    }
   }
 }
 

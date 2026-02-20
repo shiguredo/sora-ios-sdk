@@ -48,20 +48,44 @@ public protocol MediaStream: AnyObject {
   // MARK: - 映像と音声の可否
 
   /// 映像の可否。
-  /// ``false`` をセットすると、サーバーへの映像の送受信を停止します。
-  /// ``true`` をセットすると送受信を再開します。
+  /// `false` をセットすると、サーバーへの映像の送受信を停止します。
+  /// `true` をセットすると送受信を再開します。
   var videoEnabled: Bool { get set }
 
   /// 音声の可否。
-  /// ``false`` をセットすると、サーバーへの音声の送受信を停止します。
-  /// ``true`` をセットすると送受信を再開します。
+  /// `false` をセットすると、サーバーへの音声の送受信を停止します。
+  /// `true` をセットすると送受信を再開します。
   ///
   /// サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
   var audioEnabled: Bool { get set }
 
+  /// 映像トラックを保持している場合は `true` を返します。
+  ///
+  /// 映像ミュート時に映像トラックが存在するかチェックするために使用されます。
+  /// ミュート時に実行する videoEnabled setter は返り値やエラーを返さないため、
+  /// 呼び出し側へエラーを通知するために必要となります。
+  var hasVideoTrack: Bool { get }
+
+  /// 音声トラックを保持している場合は `true` を返します。
+  ///
+  /// 音声ミュート時に音声トラックが存在するかチェックするために使用されます。
+  /// ミュート時に実行する audioEnabled setter は返り値やエラーを返さないため、
+  /// 呼び出し側へエラーを通知するために必要となります。
+  var hasAudioTrack: Bool { get }
+
   /// 受信した音声のボリューム。 0 から 10 (含む) までの値をセットします。
   /// このプロパティはロールがサブスクライバーの場合のみ有効です。
   var remoteAudioVolume: Double? { get set }
+
+  // MARK: 音声データ取得
+
+  /// RTCAudioTrackSink を RTCAudioTrack に関連付けます。
+  /// 追加済みのシンクを再度追加した場合は何もしません。
+  func addAudioTrackSink(_ sink: RTCAudioTrackSink)
+
+  /// RTCAudioTrackSink の関連付けを解除します。
+  /// 未追加の RTCAudioTrackSink を指定した場合は何もしません。
+  func removeAudioTrackSink(_ sink: RTCAudioTrackSink)
 
   // MARK: 映像フレームの送信
 
@@ -187,6 +211,14 @@ class BasicMediaStream: MediaStream {
     }
   }
 
+  var hasAudioTrack: Bool {
+    nativeAudioTrack != nil
+  }
+
+  var hasVideoTrack: Bool {
+    nativeVideoTrack != nil
+  }
+
   var remoteAudioVolume: Double? {
     get {
       nativeAudioTrack?.source.volume
@@ -208,6 +240,18 @@ class BasicMediaStream: MediaStream {
           message: "set audio volume \(volume)")
       }
     }
+  }
+
+  func addAudioTrackSink(_ sink: RTCAudioTrackSink) {
+    Logger.debug(type: .mediaStream, message: "add audio track sink \(sink)")
+    // RTCAudioTrack 側で RTCAudioTrackSink 追加時の重複チェックを行うため
+    // iOS SDK 側では重複チェックを行わない。
+    nativeAudioTrack?.add(sink)
+  }
+
+  func removeAudioTrackSink(_ sink: RTCAudioTrackSink) {
+    Logger.debug(type: .mediaStream, message: "remove audio track sink \(sink)")
+    nativeAudioTrack?.remove(sink)
   }
 
   init(peerChannel: PeerChannel, nativeStream: RTCMediaStream) {

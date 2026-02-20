@@ -135,12 +135,41 @@ public struct Configuration {
   /// デフォルトは `true` です。
   public var audioEnabled: Bool = true
 
+  /// 接続確立時に端末カメラキャプチャを自動起動するかどうか。
+  ///
+  /// `cameraSettings.isEnabled` が `true` の場合でも、このフラグが `false` であれば
+  /// 接続時点ではカメラキャプチャを起動しません。
+  /// 後から `MediaChannel.setVideoHardMute(false)` で必要に応じて開始できます。
+  public var initialCameraEnabled: Bool = true
+
+  /// 接続確立時にマイクを有効にするかどうか。
+  ///
+  /// このフラグが `false` であれば接続時点ではマイク入力は無効となります。(ハードミュート相当)
+  /// 後から `MediaChannel.setAudioHardMute(false)` で必要に応じてマイクを有効にできます。
+  public var initialMicrophoneEnabled: Bool = true
+
   /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
   public var simulcastEnabled: Bool = false
 
   /// サイマルキャストでの映像の種類。
-  /// ロールが `.sendrecv` または `.recvonly` のときのみ有効です。
+  /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
+  ///
+  /// simulcastRequestRid と同時に設定された場合、Sora 2025.2.0 以降では simulcastRequestRid が優先されます。
+  @available(
+    *, deprecated,
+    message: """
+      シグナリング接続時の simulcast_rid は 2027 年 12 月リリース予定の Sora にて
+      廃止予定であるため、このプロパティは非推奨です。
+      代わりに SimulcastRequestRid を使用してください。
+      """
+  )
   public var simulcastRid: SimulcastRid?
+
+  /// サイマルキャストで視聴する映像の種類。
+  /// ロールが `.sendrecv` または `.recvonly` かつ `simulcastEnabled` が true のときのみ有効です。
+  ///
+  /// このプロパティは Sora 2025.2.0 以降で利用可能です。
+  public var simulcastRequestRid: SimulcastRequestRid = .unspecified
 
   /// スポットライトの可否
   /// 詳しくは Sora のスポットライト機能を参照してください。

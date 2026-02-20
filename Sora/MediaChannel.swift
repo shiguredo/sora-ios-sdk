@@ -203,6 +203,10 @@ public final class MediaChannel {
 
   private let manager: Sora
 
+  // 映像ハードミュートの同時呼び出しを直列化するための Actor です
+  // MediaChannel 間の排他実行を保証するため static にしています
+  private static let videoHardMuteActor = VideoHardMuteActor()
+
   // MARK: - インスタンスの生成
 
   /// 初期化します。
@@ -225,6 +229,91 @@ public final class MediaChannel {
         .peerChannel(_peerChannel!),
       ],
       timeout: configuration.connectionTimeout)
+  }
+
+  // MARK: - RPC
+
+  /// RPC メソッドを型安全に呼び出します
+  ///
+  /// このメソッドを使用して、Sora サーバーで定義された RPC メソッドを非同期で実行できます。
+  /// - Parameters:
+  ///   - method: 呼び出す RPC メソッドの型 (例: `RequestSimulcastRid.self`)
+  ///   - params: メソッドに渡すパラメータ。型安全に検証されます
+  ///   - isNotificationRequest: `true` の場合、送信後に Sora からのレスポンスを待ちません。デフォルトは `false`
+  ///   - timeout: レスポンスを待つ最大時間（秒）。デフォルトは 5.0 秒
+  ///
+  /// - Returns: メソッドの実行結果。isNotificationRequest が true の場合は nil を返します
+  ///
+  /// - Throws: 以下のエラーが発生することがあります
+  ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
+  ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
+  ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
+  ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された
+  ///   - `SoraError.rpcTimeout`: レスポンスがタイムアウト時間内に返されなかった
+  ///   - `SoraError.rpcServerError`: Sora からエラーレスポンスがあった
+  ///
+  /// # 使用例
+  /// ```swift
+  /// do {
+  ///   let response = try await mediaChannel.rpc(
+  ///     method: RequestSimulcastRid.self,
+  ///     params: RequestSimulcastRidParams(rid: "r0")
+  ///   )
+  ///
+  ///   if let result = response?.result {
+  ///     print("Channel ID: \(result.channelId)")
+  ///   }
+  /// } catch {
+  ///   print("RPC call failed: \(error)")
+  /// }
+  /// ```
+  public func rpc<M: RPCMethodProtocol>(
+    method: M.Type,
+    params: M.Params,
+    isNotificationRequest: Bool = false,
+    timeout: TimeInterval = 5.0
+  ) async throws -> RPCResponse<M.Result>? {
+    let response = try await withCheckedThrowingContinuation {
+      (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
+      guard let rpcChannel = self.peerChannel.rpcChannel else {
+        continuation.resume(
+          throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
+        return
+      }
+      _ = rpcChannel.call(
+        methodName: method.name,
+        params: params,
+        isNotificationRequest: isNotificationRequest,
+        timeout: timeout
+      ) { result in
+        continuation.resume(with: result)
+      }
+    }
+    guard let response else {
+      return nil
+    }
+    return try decodeRPCResponse(response, method: method)
+  }
+
+  private func decodeRPCResponse<M: RPCMethodProtocol>(
+    _ response: RPCResponse<Any>,
+    method: M.Type
+  ) throws -> RPCResponse<M.Result> {
+    let decoded: M.Result
+    do {
+      decoded = try decodeRPCResult(response.result, as: M.Result.self)
+    } catch {
+      throw SoraError.rpcDecodingError(reason: error.localizedDescription)
+    }
+    return RPCResponse<M.Result>(id: response.id, result: decoded)
+  }
+
+  private func decodeRPCResult<T: Decodable>(_ result: Any, as type: T.Type) throws -> T {
+    let data = try JSONSerialization.data(
+      withJSONObject: result,
+      options: [.fragmentsAllowed])
+    let decoder = JSONDecoder()
+    return try decoder.decode(T.self, from: data)
   }
 
   // MARK: - 接続
@@ -442,6 +531,58 @@ public final class MediaChannel {
     }
   }
 
+  /// libwebrtc の統計情報を取得します。
+  /// 非同期取得中に切断された場合でも安全になるよう、コールバック内で
+  /// self の生存確認、state == .connected の再確認、peerChannel.nativeChannel が同一インスタンスかどうか、をチェックしています。
+  ///
+  /// - parameter handler: 統計情報取得後に呼ばれるクロージャー
+  public func getStats(handler: @escaping (Result<Statistics, Error>) -> Void) {
+    guard state == .connected else {
+      let message = "MediaChannel is not connected (state: \(state))"
+      Logger.debug(type: .mediaChannel, message: message)
+      handler(.failure(SoraError.peerChannelError(reason: message)))
+      return
+    }
+
+    guard let peerConnection = peerChannel.nativeChannel else {
+      let message =
+        "RTCPeerConnection is unavailable (state: \(state), nativeChannel: nil)"
+      Logger.debug(type: .mediaChannel, message: message)
+      handler(.failure(SoraError.peerChannelError(reason: message)))
+      return
+    }
+
+    // peerConnection.statistics クロージャはlibwebrtc 側のスレッドから遅れて呼ばれ、内部で MediaChannel をキャプチャします。
+    // ここで self を強参照すると、MediaChannel が切断・解放されたあとでもクロージャが解放されず、deinit が遅れたり循環参照が発生する恐れがあります。
+    // そのため [weak self] でキャプチャし、呼び出し時点で MediaChannel がまだ有効かどうかをチェックしています。
+    // self が解放済みなら MediaChannel is unavailable エラーを返すことで安全に処理を抜けます。
+    peerConnection.statistics { [weak self] report in
+      guard let self else {
+        handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is unavailable")))
+        return
+      }
+
+      guard self.state == .connected else {
+        let message = "MediaChannel is not connected (state: \(self.state))"
+        Logger.debug(type: .mediaChannel, message: message)
+        handler(.failure(SoraError.peerChannelError(reason: message)))
+        return
+      }
+
+      guard let currentPeerConnection = self.peerChannel.nativeChannel,
+        currentPeerConnection === peerConnection
+      else {
+        let message =
+          "RTCPeerConnection is unavailable (state: \(self.state), nativeChannel changed)"
+        Logger.debug(type: .mediaChannel, message: message)
+        handler(.failure(SoraError.peerChannelError(reason: message)))
+        return
+      }
+
+      handler(.success(Statistics(contentsOf: report)))
+    }
+  }
+
   /// DataChannel を利用してメッセージを送信します
   public func sendMessage(label: String, data: Data) -> Error? {
     guard peerChannel.switchedToDataChannel else {
@@ -468,6 +609,176 @@ public final class MediaChannel {
 
     return result
       ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
+  }
+
+  /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します
+  ///
+  /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
+  public func setAudioHardMute(_ mute: Bool) -> Error? {
+    // 接続されていなければエラー
+    guard state == .connected else {
+      return SoraError.mediaChannelError(
+        reason: "MediaChannel is not connected (state: \(state))")
+    }
+
+    // 接続設定で音声が有効になっていなければエラー
+    guard configuration.audioEnabled else {
+      return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
+    // 接続設定で配信側ロールになっていなければエラー
+    guard configuration.isSender else {
+      return SoraError.mediaChannelError(reason: "role is not sender")
+    }
+
+    // 音声ハードミュートを切り替えます
+    if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+      return SoraError.mediaChannelError(
+        reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+    }
+
+    return nil
+  }
+
+  /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
+  ///
+  /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
+  public func setAudioSoftMute(_ mute: Bool) -> Error? {
+    // 接続されていなければエラー
+    guard state == .connected else {
+      return SoraError.mediaChannelError(
+        reason: "MediaChannel is not connected (state: \(state))")
+    }
+
+    // 接続設定で音声が有効になっていなければエラー
+    guard configuration.audioEnabled else {
+      return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
+    // 接続設定で配信側ロールになっていなければエラー
+    guard configuration.isSender else {
+      return SoraError.mediaChannelError(reason: "role is not sender")
+    }
+
+    // 送信ストリームが有効でなければエラー
+    guard let senderStream else {
+      return SoraError.mediaChannelError(reason: "senderStream is unavailable")
+    }
+
+    // ローカル音声トラックが存在しなければエラー
+    guard senderStream.hasAudioTrack else {
+      return SoraError.mediaChannelError(reason: "senderStream has no AudioTrack")
+    }
+
+    // ローカル音声トラックの有効/無効を切り替えます
+    senderStream.audioEnabled = !mute
+    Logger.debug(type: .mediaChannel, message: "setAudioSoftMute mute=\(mute)")
+    return nil
+  }
+
+  /// MediaChannel の接続中に映像をソフトミュート有効化 / 無効化します
+  /// 黒塗りフレームが送信される状態になります
+  ///
+  /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
+  public func setVideoSoftMute(_ mute: Bool) -> Error? {
+    let senderStream: MediaStream
+    switch requireSenderStreamForVideoMute() {
+    case .failure(let error):
+      return error
+    case .success(let stream):
+      senderStream = stream
+    }
+
+    // ローカル映像トラックの有効/無効を切り替えます
+    senderStream.videoEnabled = !mute
+    Logger.debug(type: .mediaChannel, message: "setVideoSoftMute mute=\(mute)")
+    return nil
+  }
+
+  /// MediaChannel の接続中に映像をハードミュート有効化 / 無効化します
+  ///
+  /// 端末カメラ利用が有効になっている必要があります
+  /// 外部入力や別キャプチャ経路には対応していません
+  ///
+  /// 内部で Actor により、操作を排他実行します。
+  /// 同時に呼び出された場合は Actor 側で `SoraError.mediaChannelError` がスローされます
+  ///
+  /// 映像ハードミュートは、黒塗りフレーム状態で停止させるためローカルトラックの停止を含みます
+  /// 事前に映像ソフトミュートを利用していた場合は状態が上書きされます
+  /// ハードミュート解除時に直前のソフトミュートの状態を復元するようなことはしません
+  ///
+  /// - Parameter mute: `true` で有効化、`false` で無効化
+  /// - Throws: エラー時は `SoraError.cameraError` または `SoraError.mediaChannelError` がスローされます
+  public func setVideoHardMute(_ mute: Bool) async throws {
+    let senderStream: MediaStream
+    switch requireSenderStreamForVideoMute() {
+    case .failure(let error):
+      throw error
+    case .success(let stream):
+      senderStream = stream
+    }
+
+    // 接続設定でカメラ利用が有効になっているか
+    // 端末カメラではなく別ソース（外部入力や別キャプチャ経路）の場合は false になることがあり、機能としては未対応
+    guard configuration.cameraSettings.isEnabled else {
+      throw SoraError.mediaChannelError(reason: "cameraSettings.isEnabled is false")
+    }
+
+    if mute {
+      // ソフトミュートによる黒塗りフレーム送出 -> ハードミュート有効化の順になるようにします
+      senderStream.videoEnabled = false
+      try await Self.videoHardMuteActor.setMute(
+        mute: true,
+        senderStream: senderStream,
+        cameraSettings: configuration.cameraSettings
+      )
+    } else {
+      // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
+      try await Self.videoHardMuteActor.setMute(
+        mute: false,
+        senderStream: senderStream,
+        cameraSettings: configuration.cameraSettings
+      )
+      senderStream.videoEnabled = true
+    }
+    Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")
+  }
+
+  // 映像ミュートのための接続状況や接続設定のチェックを実行した上で送信ストリームを取得します
+  //
+  // チェックを全て通過した場合は .success で送信ストリームを返します
+  // 問題があった場合は .failure で SoraError.mediaChannelError を返します
+  private func requireSenderStreamForVideoMute() -> Result<MediaStream, Error> {
+    // 接続されていなければエラー
+    guard state == .connected else {
+      return .failure(
+        SoraError.mediaChannelError(reason: "MediaChannel is not connected (state: \(state))"))
+    }
+
+    // 接続設定で映像が有効になっていなければエラー
+    guard configuration.videoEnabled else {
+      return .failure(SoraError.mediaChannelError(reason: "videoEnabled is false"))
+    }
+
+    // 接続設定で配信側ロールになっていなければエラー
+    guard configuration.isSender else {
+      return .failure(SoraError.mediaChannelError(reason: "role is not sender"))
+    }
+
+    // 送信ストリームが有効になっていなければエラー
+    guard let senderStream else {
+      return .failure(SoraError.mediaChannelError(reason: "senderStream is unavailable"))
+    }
+
+    // 送信ストリームに映像トラックが含まれていなければエラー
+    guard senderStream.hasVideoTrack else {
+      return .failure(SoraError.mediaChannelError(reason: "senderStream has no VideoTrack"))
+    }
+
+    return .success(senderStream)
   }
 }
 
