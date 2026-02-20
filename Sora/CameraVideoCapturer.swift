@@ -211,6 +211,11 @@ public final class CameraVideoCapturer {
       return
     }
 
+    if let error = errorIfScreenCaptureActive() {
+      completionHandler(error)
+      return
+    }
+
     native.startCapture(
       with: device,
       format: format,
@@ -272,6 +277,11 @@ public final class CameraVideoCapturer {
       return
     }
 
+    if let error = errorIfScreenCaptureActive() {
+      completionHandler(error)
+      return
+    }
+
     if isRunning {
       stop { [self] (error: Error?) in
         guard error == nil else {
@@ -306,6 +316,20 @@ public final class CameraVideoCapturer {
         completionHandler(nil)
       }
     }
+  }
+
+  // 同時複数入力経路は対応していないため、画面キャプチャ動作中はカメラを動作させないためのチェックです。
+  private func errorIfScreenCaptureActive() -> Error? {
+    guard let mediaChannel = stream?.mediaChannel else {
+      return nil
+    }
+    guard !mediaChannel.isScreenCaptureActiveForInternalCheck() else {
+      return SoraError.mediaChannelError(
+        reason:
+          "screen capture is active, stopScreenCapture before CameraVideoCapturer.start()/restart()"
+      )
+    }
+    return nil
   }
 
   /// カメラを停止後、指定されたパラメーターで起動します。
