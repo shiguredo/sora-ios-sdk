@@ -13,6 +13,8 @@
 
 ## 2026.1.0
 
+**リリース日**: 2026-02-20
+
 - [UPDATE] PeerChannel.initializeAudioInput での音声入力初期化時にマイク入力をミュートするか設定するようにする
   - `RTCAudioSession.setInitialMicrophoneMute` に `Configuration.initialMicrophoneEnabled` の否定値を渡す
   - @t-miya
