@@ -11,6 +11,12 @@
 
 ## develop
 
+### misc
+
+- [CHANGE] Slack 通知を rtCamp/action-slack-notify から shiguredo/github-actions の slack-notify に置き換える
+  - 2 つの通知ジョブを 1 つに統合し、notify_mode による通知制御と Fixed 通知に対応
+  - @voluntas
+
 ## 2026.1.0
 
 **リリース日**: 2026-02-20
