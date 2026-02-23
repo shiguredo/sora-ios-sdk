@@ -46,29 +46,16 @@ jobs:
     - name: Lint
       run: |
         make lint
-  slack_notify_succeeded:
+  slack_notify:
     needs: [build]
     runs-on: ubuntu-24.04
-    if: success()
+    if: always()
+    permissions:
+      actions: read
     steps:
       - name: Slack Notification
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_CHANNEL: sora-ios-sdk
-          SLACK_COLOR: good
-          SLACK_TITLE: SUCCEEDED
-          SLACK_ICON_EMOJI: ":star-struck:"
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-  slack_notify_failed:
-    needs: [build]
-    runs-on: ubuntu-24.04
-    if: failure()
-    steps:
-      - name: Slack Notification
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_CHANNEL: sora-ios-sdk
-          SLACK_COLOR: danger
-          SLACK_TITLE: "FAILED"
-          SLACK_ICON_EMOJI: ":japanese_ogre:"
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        uses: shiguredo/github-actions/.github/actions/slack-notify@main
+        with:
+          status: ${{ job.status }}
+          slack_webhook: ${{ secrets.SLACK_WEBHOOK }}
+          slack_channel: sora-ios-sdk

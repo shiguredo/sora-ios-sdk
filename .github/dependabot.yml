@@ -6,5 +6,5 @@ updates:
       interval: "weekly"
     allow:
       - dependency-name: "actions/checkout"
-      - dependency-name: "rtCamp/action-slack-notify"
+      - dependency-name: "shiguredo/github-actions"
       - dependency-name: "anthropics/claude-code-action"
