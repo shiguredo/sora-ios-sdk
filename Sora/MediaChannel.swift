@@ -812,6 +812,11 @@ public final class MediaChannel {
     Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
   }
 
+  /// 画面キャプチャが動作中かを取得します
+  public func isScreenCaptureActive() -> Bool {
+    currentScreenCaptureController()?.isCaptureActive() ?? false
+  }
+
   // screenCaptureController インスタンスを取得します
   // インスタンス未生成の場合は生成します
   // スクリーンキャプチャ機能は必ず利用するとは限らないため必要時に生成しています
@@ -833,16 +838,6 @@ public final class MediaChannel {
     withScreenCaptureControllerLock {
       screenCaptureController
     }
-  }
-
-  private func isScreenCaptureActive() -> Bool {
-    currentScreenCaptureController()?.isCaptureActive() ?? false
-  }
-
-  // CameraVideoCapturer からの内部チェック用です。
-  // 画面キャプチャの active 状態を返します。
-  func isScreenCaptureActiveForInternalCheck() -> Bool {
-    isScreenCaptureActive()
   }
 
   // ScreenCaptureController をロック付きで取得します
