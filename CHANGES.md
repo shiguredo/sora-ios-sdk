@@ -11,6 +11,14 @@
 
 ## develop
 
+- [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
+  - MediaChannel に画面キャプチャ開始 / 停止 API を追加する
+  - 画面キャプチャ開始時に渡す設定として `ScreenCaptureSettings` 構造体を追加する
+    - targetFPS パラメータにより送信 FPS を指定することができる
+    - PTS が無効な場合は単調時刻でフォールバックして間引く
+  - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+
 ### misc
 
 - [CHANGE] Slack 通知を rtCamp/action-slack-notify から shiguredo/github-actions の slack-notify に置き換える
