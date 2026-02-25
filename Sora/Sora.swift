@@ -456,7 +456,7 @@ private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessio
       .wakeFromSleep, .noSuitableRouteForCategory:
       onChangeAudioRoute()
     case .routeConfigurationChange:
-      // webrtc 側でもヘッドセットの接続変化検出に注力のため無視しているためここでも無視します
+      // WebRTC 側でも routeConfigurationChange を無視しているため、ここでも無視します
       break
     @unknown default:
       onChangeAudioRoute()
