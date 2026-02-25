@@ -306,6 +306,42 @@ public final class Sora {
     }
   }
 
+  /// ハンズフリーの有効 / 無効を設定します。
+  ///
+  /// `true` の場合は内蔵スピーカー + 内蔵マイクの組み合わせに切り替えます。
+  /// `false` の場合はオーディオ出力オーバーライドを解除します。
+  ///
+  /// - parameter enable: `true` で有効、`false` で無効
+  /// - returns: 変更の成否
+  public func setHandsfree(_ enable: Bool) -> Result<Void, Error> {
+    do {
+      let session = RTCAudioSession.sharedInstance()
+      session.lockForConfiguration()
+      defer {
+        session.unlockForConfiguration()
+      }
+      let overrideOutput: AVAudioSession.PortOverride = enable ? .speaker : .none
+      try session.overrideOutputAudioPort(overrideOutput)
+      return .success(())
+    } catch {
+      return .failure(error)
+    }
+  }
+
+  /// 現在がハンズフリー状態かどうかを返します。
+  ///
+  /// 内蔵スピーカー + 内蔵マイクの組み合わせをハンズフリー状態とみなします。
+  public func isHandsfree() -> Bool {
+    let session = RTCAudioSession.sharedInstance()
+    session.lockForConfiguration()
+    defer {
+      session.unlockForConfiguration()
+    }
+    let output = session.currentRoute.outputs.first?.portType
+    let input = session.currentRoute.inputs.first?.portType
+    return output == .builtInSpeaker && input == .builtInMic
+  }
+
   // MARK: - libwebrtc のログ出力
 
   private static var webRTCCallbackLogger: RTCCallbackLogger = {
