@@ -333,10 +333,6 @@ public final class Sora {
   /// 内蔵スピーカー + 内蔵マイクの組み合わせをハンズフリー状態とみなします。
   public func isHandsfree() -> Bool {
     let session = RTCAudioSession.sharedInstance()
-    session.lockForConfiguration()
-    defer {
-      session.unlockForConfiguration()
-    }
     let output = session.currentRoute.outputs.first?.portType
     let input = session.currentRoute.inputs.first?.portType
     return output == .builtInSpeaker && input == .builtInMic
@@ -460,7 +456,7 @@ private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessio
       .wakeFromSleep, .noSuitableRouteForCategory:
       onChangeAudioRoute()
     case .routeConfigurationChange:
-      // webrtc 側でもヘッドセットの接続変化検出に注力のため無視している、ルートのため無視します
+      // webrtc 側でもヘッドセットの接続変化検出に注力のため無視しているためここでも無視します
       break
     @unknown default:
       onChangeAudioRoute()
