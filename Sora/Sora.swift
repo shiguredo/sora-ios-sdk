@@ -289,6 +289,9 @@ public final class Sora {
       defer {
         session.unlockForConfiguration()
       }
+      // 音声出力経路のリセットを行います。
+      // RTCAudioSession.overrideOutputAudioPort はカテゴリが playAndRecord の場合のみ有効なため
+      // カテゴリ遷移前のこの状態でリセットを行います。
       if shouldResetPortOverride(for: mode)
         && session.category == AVAudioSession.Category.playAndRecord.rawValue
       {
