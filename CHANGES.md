@@ -11,8 +11,6 @@
 
 ## develop
 
-- [UPDATE] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
-  - @t-miya
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
   - `RTCAudioSessionDelegate.audioSessionDidChangeRoute` を利用してコールバックする
   - コールバック引数として `RTCAudioSession`, `reason`, `previousRoute` を渡す
@@ -24,6 +22,9 @@
     - targetFPS パラメータにより送信 FPS を指定することができる
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+- [UPDATE] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
+  - 入力経路を `.speaker` にオーバーライドした後に他モードを指定しても経路がリセットされなかったため
   - @t-miya
 
 ### misc
