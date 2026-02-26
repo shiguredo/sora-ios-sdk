@@ -286,6 +286,17 @@ public final class Sora {
       var options = options
       let session = RTCAudioSession.sharedInstance()
       session.lockForConfiguration()
+      defer {
+        session.unlockForConfiguration()
+      }
+      // 音声出力経路のリセットを行います。
+      // RTCAudioSession.overrideOutputAudioPort はカテゴリが playAndRecord の場合のみ有効なため
+      // カテゴリ遷移前のこの状態でリセットを行います。
+      if shouldResetPortOverride(for: mode)
+        && session.category == AVAudioSession.Category.playAndRecord.rawValue
+      {
+        try session.overrideOutputAudioPort(.none)
+      }
       switch mode {
       case .default(let category, let output):
         if output == .speaker {
@@ -302,14 +313,23 @@ public final class Sora {
         }
         try session.setCategory(.playAndRecord, with: options)
         try session.setMode(.voiceChat)
-        if output == .speaker {
-          try session.overrideOutputAudioPort(.speaker)
-        }
+        try session.overrideOutputAudioPort(output.portOverride)
       }
-      session.unlockForConfiguration()
       return .success(())
     } catch {
       return .failure(error)
+    }
+  }
+
+  // setAudioMode にて音声入力経路のリセットを行うか判定します
+  private func shouldResetPortOverride(for mode: AudioMode) -> Bool {
+    switch mode {
+    case .default(_, let output):
+      return output == .default
+    case .videoChat:
+      return false
+    case .voiceChat(let output):
+      return output == .default
     }
   }
 

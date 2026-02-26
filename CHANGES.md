@@ -23,6 +23,9 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
+  - 入力経路を `.speaker` にオーバーライドした後に他モードを指定しても経路がリセットされなかったため
+  - @t-miya
 
 ### misc
 
