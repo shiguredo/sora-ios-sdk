@@ -19,8 +19,14 @@ public final class SoraHandlers {
   /// 音声入出力ルートが変更されたときに呼ばれるクロージャー
   ///
   /// - parameter session: 変更通知元の `RTCAudioSession`
+  /// - parameter reason: 変更理由
   /// - parameter previousRoute: 変更前のルート情報
-  public var onChangeAudioRoute: ((RTCAudioSession, AVAudioSessionRouteDescription) -> Void)?
+  public var onChangeAudioRoute:
+    (
+      (
+        RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+      ) -> Void
+    )?
 
   /// 初期化します。
   public init() {}
@@ -71,8 +77,8 @@ public final class Sora {
   public let handlers = SoraHandlers()
 
   private lazy var audioSessionDelegateAdapter = SoraRTCAudioSessionDelegateAdapter {
-    [weak self] session, previousRoute in
-    self?.handlers.onChangeAudioRoute?(session, previousRoute)
+    [weak self] session, reason, previousRoute in
+    self?.handlers.onChangeAudioRoute?(session, reason, previousRoute)
   }
 
   // MARK: - インスタンスの生成と取得
@@ -406,9 +412,17 @@ public final class ConnectionTask {
 // 3. SoraRTCAudioSessionDelegateAdapter(本クラス) の audioSessionDidChangeRoute で通知を受ける
 // 4. onChangeAudioRoute で SDK 利用者へ通知する
 private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessionDelegate {
-  private let onChangeAudioRoute: (RTCAudioSession, AVAudioSessionRouteDescription) -> Void
+  private let onChangeAudioRoute:
+    (
+      RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+    ) -> Void
 
-  init(onChangeAudioRoute: @escaping (RTCAudioSession, AVAudioSessionRouteDescription) -> Void) {
+  init(
+    onChangeAudioRoute:
+      @escaping (
+        RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+      ) -> Void
+  ) {
     self.onChangeAudioRoute = onChangeAudioRoute
   }
 
@@ -420,12 +434,12 @@ private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessio
     switch reason {
     case .unknown, .newDeviceAvailable, .oldDeviceUnavailable, .categoryChange, .override,
       .wakeFromSleep, .noSuitableRouteForCategory:
-      onChangeAudioRoute(session, previousRoute)
+      onChangeAudioRoute(session, reason, previousRoute)
     case .routeConfigurationChange:
       // WebRTC 側でも routeConfigurationChange を無視しているため、ここでも無視します
       break
     @unknown default:
-      onChangeAudioRoute(session, previousRoute)
+      onChangeAudioRoute(session, reason, previousRoute)
     }
   }
 }
