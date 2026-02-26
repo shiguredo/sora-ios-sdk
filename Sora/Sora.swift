@@ -18,8 +18,9 @@ public final class SoraHandlers {
 
   /// 音声入出力ルートが変更されたときに呼ばれるクロージャー
   ///
-  /// ハンズフリー状態などの現在値が必要な場合は、`RTCAudioSession.currentRoute` を参照してください。
-  public var onChangeAudioRoute: (() -> Void)?
+  /// - parameter session: 変更通知元の `RTCAudioSession`
+  /// - parameter previousRoute: 変更前のルート情報
+  public var onChangeAudioRoute: ((RTCAudioSession, AVAudioSessionRouteDescription) -> Void)?
 
   /// 初期化します。
   public init() {}
@@ -70,8 +71,8 @@ public final class Sora {
   public let handlers = SoraHandlers()
 
   private lazy var audioSessionDelegateAdapter = SoraRTCAudioSessionDelegateAdapter {
-    [weak self] in
-    self?.handlers.onChangeAudioRoute?()
+    [weak self] session, previousRoute in
+    self?.handlers.onChangeAudioRoute?(session, previousRoute)
   }
 
   // MARK: - インスタンスの生成と取得
@@ -306,38 +307,6 @@ public final class Sora {
     }
   }
 
-  /// ハンズフリーの有効 / 無効を設定します。
-  ///
-  /// `true` の場合は内蔵スピーカー + 内蔵マイクの組み合わせに切り替えます。
-  /// `false` の場合はオーディオ出力オーバーライドを解除します。
-  ///
-  /// - parameter enable: `true` で有効、`false` で無効
-  /// - returns: 変更の成否
-  public func setHandsfree(_ enable: Bool) -> Result<Void, Error> {
-    do {
-      let session = RTCAudioSession.sharedInstance()
-      session.lockForConfiguration()
-      defer {
-        session.unlockForConfiguration()
-      }
-      let overrideOutput: AVAudioSession.PortOverride = enable ? .speaker : .none
-      try session.overrideOutputAudioPort(overrideOutput)
-      return .success(())
-    } catch {
-      return .failure(error)
-    }
-  }
-
-  /// 現在がハンズフリー状態かどうかを返します。
-  ///
-  /// 内蔵スピーカー + 内蔵マイクの組み合わせをハンズフリー状態とみなします。
-  public func isHandsfree() -> Bool {
-    let session = RTCAudioSession.sharedInstance()
-    let output = session.currentRoute.outputs.first?.portType
-    let input = session.currentRoute.inputs.first?.portType
-    return output == .builtInSpeaker && input == .builtInMic
-  }
-
   // MARK: - libwebrtc のログ出力
 
   private static var webRTCCallbackLogger: RTCCallbackLogger = {
@@ -437,29 +406,26 @@ public final class ConnectionTask {
 // 3. SoraRTCAudioSessionDelegateAdapter(本クラス) の audioSessionDidChangeRoute で通知を受ける
 // 4. onChangeAudioRoute で SDK 利用者へ通知する
 private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessionDelegate {
-  private let onChangeAudioRoute: () -> Void
+  private let onChangeAudioRoute: (RTCAudioSession, AVAudioSessionRouteDescription) -> Void
 
-  init(onChangeAudioRoute: @escaping () -> Void) {
+  init(onChangeAudioRoute: @escaping (RTCAudioSession, AVAudioSessionRouteDescription) -> Void) {
     self.onChangeAudioRoute = onChangeAudioRoute
   }
 
-  // 現状、ルート変更が起きたことを通知する機能、のみを提供します
   func audioSessionDidChangeRoute(
     _ session: RTCAudioSession,
     reason: AVAudioSession.RouteChangeReason,
     previousRoute: AVAudioSessionRouteDescription
   ) {
-    _ = session
-    _ = previousRoute
     switch reason {
     case .unknown, .newDeviceAvailable, .oldDeviceUnavailable, .categoryChange, .override,
       .wakeFromSleep, .noSuitableRouteForCategory:
-      onChangeAudioRoute()
+      onChangeAudioRoute(session, previousRoute)
     case .routeConfigurationChange:
       // WebRTC 側でも routeConfigurationChange を無視しているため、ここでも無視します
       break
     @unknown default:
-      onChangeAudioRoute()
+      onChangeAudioRoute(session, previousRoute)
     }
   }
 }
