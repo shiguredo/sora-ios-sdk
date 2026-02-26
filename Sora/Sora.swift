@@ -16,6 +16,18 @@ public final class SoraHandlers {
   /// メディアチャネルが除去されたときに呼ばれるクロージャー
   public var onRemoveMediaChannel: ((MediaChannel) -> Void)?
 
+  /// 音声入出力ルートが変更されたときに呼ばれるクロージャー
+  ///
+  /// - parameter session: 変更通知元の `RTCAudioSession`
+  /// - parameter reason: 変更理由
+  /// - parameter previousRoute: 変更前のルート情報
+  public var onChangeAudioRoute:
+    (
+      (
+        RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+      ) -> Void
+    )?
+
   /// 初期化します。
   public init() {}
 }
@@ -64,6 +76,11 @@ public final class Sora {
   /// イベントハンドラ
   public let handlers = SoraHandlers()
 
+  private lazy var audioSessionDelegateAdapter = SoraRTCAudioSessionDelegateAdapter {
+    [weak self] session, reason, previousRoute in
+    self?.handlers.onChangeAudioRoute?(session, reason, previousRoute)
+  }
+
   // MARK: - インスタンスの生成と取得
 
   /// シングルトンインスタンス
@@ -87,6 +104,11 @@ public final class Sora {
     // which is fatal to the initialization logic.
     // The following line will NEVER fail.
     if !initialized { fatalError() }
+    RTCAudioSession.sharedInstance().add(audioSessionDelegateAdapter)
+  }
+
+  deinit {
+    RTCAudioSession.sharedInstance().remove(audioSessionDelegateAdapter)
   }
 
   // MARK: - メディアチャネルの管理
@@ -377,6 +399,47 @@ public final class ConnectionTask {
     if state != .completed {
       Logger.debug(type: .mediaChannel, message: "connection task completed")
       state = .completed
+    }
+  }
+}
+
+// RTCAudioSessionDelegate を実装し、audioSessionDidChangeRoute イベントを受けて、
+// handlers.onChangeAudioRoute を呼び出す中継クラスです。
+//
+// オーディオ経路変更通知の流れ
+// 1. オーディオ経路の変更を RTCAudioSession::handleRouteChangeNotification で AVAudioSessionRouteChangeNotification で受信
+// 2. RTCAudioSession::notifyDidChangeRouteWithReason で audioSessionDidChangeRoute:reason:previousRoute: が呼ばれる
+// 3. SoraRTCAudioSessionDelegateAdapter(本クラス) の audioSessionDidChangeRoute で通知を受ける
+// 4. onChangeAudioRoute で SDK 利用者へ通知する
+private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessionDelegate {
+  private let onChangeAudioRoute:
+    (
+      RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+    ) -> Void
+
+  init(
+    onChangeAudioRoute:
+      @escaping (
+        RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+      ) -> Void
+  ) {
+    self.onChangeAudioRoute = onChangeAudioRoute
+  }
+
+  func audioSessionDidChangeRoute(
+    _ session: RTCAudioSession,
+    reason: AVAudioSession.RouteChangeReason,
+    previousRoute: AVAudioSessionRouteDescription
+  ) {
+    switch reason {
+    case .unknown, .newDeviceAvailable, .oldDeviceUnavailable, .categoryChange, .override,
+      .wakeFromSleep, .noSuitableRouteForCategory:
+      onChangeAudioRoute(session, reason, previousRoute)
+    case .routeConfigurationChange:
+      // WebRTC 側でも routeConfigurationChange を無視しているため、ここでも無視します
+      break
+    @unknown default:
+      onChangeAudioRoute(session, reason, previousRoute)
     }
   }
 }
