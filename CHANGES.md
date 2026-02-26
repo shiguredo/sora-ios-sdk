@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
+  - @t-miya
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
   - `RTCAudioSessionDelegate.audioSessionDidChangeRoute` を利用してコールバックする
   - コールバック引数として `RTCAudioSession`, `reason`, `previousRoute` を渡す
