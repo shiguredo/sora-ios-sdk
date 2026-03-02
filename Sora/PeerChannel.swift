@@ -128,7 +128,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var dataChannels: [String: DataChannel] = [:]
   var switchedToDataChannel: Bool = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
-  var rpcAllowedMethods: [String] = []
   var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
@@ -961,20 +960,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         signalingOfferMessageDataChannels = dataChannels
       }
 
-      if let rpcMethods = offer.rpcMethods {
-        rpcAllowedMethods = rpcMethods
-        // 未知の RPC メソッドが含まれている場合はログ出力する
-        for method in rpcMethods {
-          if RPCMethod(name: method) == nil {
-            Logger.warn(
-              type: .peerChannel,
-              message: "unknown RPC method received from server: \(method)")
-          }
-        }
-      } else {
-        rpcAllowedMethods = []
-      }
-
       // offer.simulcast が設定されている場合、WrapperVideoEncoderFactory.shared.simulcastEnabled を上書きする
       if let simulcast = offer.simulcast {
         WrapperVideoEncoderFactory.shared.simulcastEnabled = simulcast
@@ -1417,9 +1402,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     dataChannels[dataChannel.label] = dc
 
     if label == "rpc" {
-      rpcChannel = RPCChannel(
-        dataChannel: dc,
-        rpcMethods: rpcAllowedMethods)
+      rpcChannel = RPCChannel(dataChannel: dc)
     }
   }
 }

@@ -11,6 +11,24 @@
 
 ## develop
 
+- [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
+  - MediaChannel に画面キャプチャ開始 / 停止 API を追加する
+  - 画面キャプチャ開始時に渡す設定として `ScreenCaptureSettings` 構造体を追加する
+    - targetFPS パラメータにより送信 FPS を指定することができる
+    - PTS が無効な場合は単調時刻でフォールバックして間引く
+  - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+
+### misc
+
+- [CHANGE] Slack 通知を rtCamp/action-slack-notify から shiguredo/github-actions の slack-notify に置き換える
+  - 2 つの通知ジョブを 1 つに統合し、notify_mode による通知制御と Fixed 通知に対応
+  - @voluntas
+
+## 2026.1.0
+
+**リリース日**: 2026-02-20
+
 - [UPDATE] PeerChannel.initializeAudioInput での音声入力初期化時にマイク入力をミュートするか設定するようにする
   - `RTCAudioSession.setInitialMicrophoneMute` に `Configuration.initialMicrophoneEnabled` の否定値を渡す
   - @t-miya
@@ -75,11 +93,9 @@
 - [ADD] サイマルキャストの rid を表す汎用型 `Rid` 列挙型を追加する
   - @zztkm
 - [ADD] RPC 機能を追加する
-  - RPC メソッドを表す列挙型 `RPCMethod` を追加する
   - `SignalingOffer` に以下の項目を追加する
     - `rpcMethods: [String]?`
   - `MediaChannel` に `rpc` メソッドを追加する
-  - `MediaChannel` に `rpcMethods: [RPCMethod]` を追加する
   - RPC メソッドを定義するための `RPCMethodProtocol` プロトコルを追加する
   - `RPCMethodProtocol` に準拠した型を追加する
     - `RequestSimulcastRid`
@@ -87,14 +103,11 @@
     - `ResetSpotlightRid`
     - `PutSignalingNotifyMetadata`
     - `PutSignalingNotifyMetadataItem`
-  - RPC の ID を表す `RPCID` 列挙型を追加する
-    - `int(Int)` と `string(String)` の 2 つのケースをサポート
   - RPC エラー応答の詳細を表す `RPCErrorDetail` 構造体を追加する
   - RPC 成功応答を表す `RPCResponse<Result>` ジェネリック構造体を追加する
   - DataChannel 経由の RPC を扱う `RPCChannel` クラスを追加する
   - `SoraError` に RPC 関連のエラーケースを追加する
     - `rpcUnavailable(reason: String)`
-    - `rpcMethodNotAllowed(method: String)`
     - `rpcEncodingError(reason: String)`
     - `rpcDecodingError(reason: String)`
     - `rpcDataChannelClosed(reason: String)`
@@ -109,7 +122,7 @@
   - Xcode の version を 26.2 に変更
   - SDK を iOS 26.2 に変更
   - @t-miya
-- [UPDATE] SwiftLint を 0.63.0 に上げる
+- [UPDATE] SwiftLintPlugins を 0.63.2 に上げる
   - @zztkm
 - [UPDATE] `Claude Assistant` の `claude-response` を `ubuntu-slim` に移行する
   - @zztkm
@@ -119,8 +132,17 @@
 - [UPDATE] URLSessionWebSocketChannel の iOS 13 以上を指定する @available アトリビュートを削除する
   - システム条件として iOS 14 以上となっているため不要
   - @t-miya
+- [ADD] dependabot を導入する
+  - `.github/dependabot.yml` を追加する
+  - @voluntas
 - [ADD] `Package.swift` に `testTarget` を追加する
   - xcodebuild で test を実行するために target を追加
+  - @zztkm
+- [ADD] pre-commit を導入する
+  - .pre-commit-config.yaml ファイルを追加する
+  - 初期導入では hooks に format / lint をそれぞれ fix / check を追加し合計 4 つの hook を設定する
+  - ツールは prek を利用することを前提とする
+    - https://github.com/j178/prek
   - @zztkm
 - [FIX] GitHub Actions のビルド環境を更新する
   - macOS 15 での利用中に `error: iOS 18.4 Platform Not Installed.` となってしまったため

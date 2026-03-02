@@ -161,27 +161,6 @@ public final class MediaChannel {
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
   public private(set) var subscriberCount: Int?
 
-  /// RPC で利用可能なメソッド一覧
-  ///
-  /// Sora サーバーから通知された RPC メソッドが列挙型として取得できます。
-  /// rpc メソッドを呼び出す前に、必要なメソッドがこの一覧に含まれているかを確認することを推奨します。
-  ///
-  /// - Returns: 利用可能な RPC メソッドの一覧。RPC が初期化されていない場合は空配列を返します
-  ///
-  /// # 使用例
-  ///
-  /// ```swift
-  /// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
-  ///   let result = try await mediaChannel.rpc(
-  ///     method: RequestSimulcastRid.self,
-  ///     params: RequestSimulcastRidParams(rid: "r0")
-  ///   )
-  /// }
-  /// ```
-  public var rpcMethods: [RPCMethod] {
-    peerChannel.rpcChannel?.allowedMethods.compactMap { RPCMethod(name: $0) } ?? []
-  }
-
   // MARK: 接続チャネル
 
   /// シグナリングチャネル
@@ -235,6 +214,16 @@ public final class MediaChannel {
   // MediaChannel 間の排他実行を保証するため static にしています
   private static let videoHardMuteActor = VideoHardMuteActor()
 
+  // ReplayKit を利用した画面キャプチャ制御です
+  // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
+  // 生成後は MediaChannel のライフサイクルで保持します。
+  // stopScreenCapture / internalDisconnect から非同期停止を呼ぶため、
+  // 参照を途中で解放せずに同一インスタンスへ停止要求を集約します。
+  private var screenCaptureController: ScreenCaptureController?
+  // screenCaptureController の生成・参照取得を排他し、
+  // startScreenCapture の並行呼び出し時でも単一インスタンスを保証するためのロックです。
+  private let screenCaptureControllerLock = NSLock()
+
   // MARK: - インスタンスの生成
 
   /// 初期化します。
@@ -264,8 +253,6 @@ public final class MediaChannel {
   /// RPC メソッドを型安全に呼び出します
   ///
   /// このメソッドを使用して、Sora サーバーで定義された RPC メソッドを非同期で実行できます。
-  /// 呼び出す前に rpcMethods プロパティで該当メソッドが利用可能であることを確認してください。
-  ///
   /// - Parameters:
   ///   - method: 呼び出す RPC メソッドの型 (例: `RequestSimulcastRid.self`)
   ///   - params: メソッドに渡すパラメータ。型安全に検証されます
@@ -276,7 +263,6 @@ public final class MediaChannel {
   ///
   /// - Throws: 以下のエラーが発生することがあります
   ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
-  ///   - `SoraError.rpcMethodNotAllowed`: 指定されたメソッドが利用不可
   ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
   ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
   ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された
@@ -524,6 +510,11 @@ public final class MediaChannel {
       break
 
     default:
+      // 接続の終了時に画面キャプチャを停止します。
+      // 非同期で実行し、切断シーケンス自体はブロックしません。
+      // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
+      currentScreenCaptureController()?.stopCaptureForDisconnect()
+
       Logger.debug(type: .mediaChannel, message: "try disconnecting")
       if let error {
         Logger.error(
@@ -777,6 +768,13 @@ public final class MediaChannel {
         cameraSettings: configuration.cameraSettings
       )
     } else {
+      // 画面キャプチャ動作中はカメラを再開しません
+      guard !isScreenCaptureActive() else {
+        throw SoraError.mediaChannelError(
+          reason:
+            "screen capture is active, stopScreenCapture before setVideoHardMute(false)")
+      }
+
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(
         mute: false,
@@ -786,6 +784,84 @@ public final class MediaChannel {
       senderStream.videoEnabled = true
     }
     Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")
+  }
+
+  /// MediaChannel の接続中に ReplayKit を利用して画面キャプチャおよび映像配信を開始します
+  ///
+  /// 送信フレームレートは `ScreenCaptureSettings.targetFPS` で制御できます。
+  ///
+  /// 同一 senderStream に対してカメラキャプチャが動作中の場合は開始できません。
+  /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
+  /// 接続後にカメラを停止する場合は `setVideoHardMute(true)` を先に呼んでください。
+  ///
+  /// - Parameter settings: 画面キャプチャ設定
+  /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます
+  public func startScreenCapture(settings: ScreenCaptureSettings = .init()) async throws {
+    let senderStream: MediaStream
+    switch requireSenderStreamForVideoMute() {
+    case .failure(let error):
+      throw error
+    case .success(let stream):
+      senderStream = stream
+    }
+
+    // カメラキャプチャ動作中は開始できません
+    guard !(await isCameraVideoCaptureRunning(on: senderStream)) else {
+      throw SoraError.mediaChannelError(
+        reason:
+          "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+      )
+    }
+
+    let screenCaptureController = getOrCreateScreenCaptureController()
+
+    try await screenCaptureController.startCapture(
+      settings: settings,
+      senderStream: senderStream
+    )
+    Logger.debug(type: .mediaChannel, message: "startScreenCapture")
+  }
+
+  /// ReplayKit を利用した画面キャプチャを停止します
+  public func stopScreenCapture() async {
+    let screenCaptureController = currentScreenCaptureController()
+    await screenCaptureController?.stopCapture()
+    Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
+  }
+
+  /// 画面キャプチャが動作中かを取得します
+  public func isScreenCaptureActive() -> Bool {
+    currentScreenCaptureController()?.isCaptureActive() ?? false
+  }
+
+  // screenCaptureController インスタンスを取得します
+  // インスタンス未生成の場合は生成します
+  // スクリーンキャプチャ機能は必ず利用するとは限らないため必要時に生成しています
+  private func getOrCreateScreenCaptureController() -> ScreenCaptureController {
+    withScreenCaptureControllerLock {
+      if let screenCaptureController {
+        return screenCaptureController
+      }
+
+      let screenCaptureController = ScreenCaptureController(mediaChannel: self)
+      self.screenCaptureController = screenCaptureController
+      return screenCaptureController
+    }
+  }
+
+  // Current の ScreenCaptureController を取得します。
+  // キャプチャ終了時、切断時に取得するために利用します。
+  private func currentScreenCaptureController() -> ScreenCaptureController? {
+    withScreenCaptureControllerLock {
+      screenCaptureController
+    }
+  }
+
+  // ScreenCaptureController をロック付きで取得します
+  private func withScreenCaptureControllerLock<T>(_ block: () throws -> T) rethrows -> T {
+    screenCaptureControllerLock.lock()
+    defer { screenCaptureControllerLock.unlock() }
+    return try block()
   }
 
   // 映像ミュートのための接続状況や接続設定のチェックを実行した上で送信ストリームを取得します
@@ -820,6 +896,23 @@ public final class MediaChannel {
     }
 
     return .success(senderStream)
+  }
+
+  // 指定した senderStream に対してカメラキャプチャが実行中かを返します
+  private func isCameraVideoCaptureRunning(on senderStream: MediaStream) async -> Bool {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        guard
+          let current = CameraVideoCapturer.current,
+          current.isRunning,
+          let currentSenderStream = current.stream
+        else {
+          continuation.resume(returning: false)
+          return
+        }
+        continuation.resume(returning: currentSenderStream === senderStream)
+      }
+    }
   }
 }
 

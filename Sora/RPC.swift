@@ -1,51 +1,29 @@
 import Foundation
 
-/// RPC の ID を表す型。
-public enum RPCID: Hashable {
-  case int(Int)
-  case string(String)
-
-  init?(any value: Any) {
-    if let intValue = value as? Int {
-      self = .int(intValue)
-      return
-    }
-    // JSONSerialization は整数を NSNumber として返すことがあるためこちらも考慮する
-    if let numberValue = value as? NSNumber {
-      self = .int(numberValue.intValue)
-      return
-    }
-    if let stringValue = value as? String {
-      self = .string(stringValue)
-      return
-    }
-    return nil
-  }
-
-  var jsonValue: Any {
-    switch self {
-    case .int(let value):
-      return value
-    case .string(let value):
-      return value
-    }
-  }
-}
-
 /// RPC エラー応答の詳細。
 public struct RPCErrorDetail {
+  /// JSON-RPC 2.0 のエラーコード。
   public let code: Int
+  /// エラーメッセージ。
   public let message: String
+  /// エラーに関する追加情報。
   public let data: Any?
 }
 
 /// RPC 成功応答。
 public struct RPCResponse<Result> {
+  /// JSON-RPC プロトコルのバージョン。
   public let jsonrpc: String
-  public let id: RPCID
+  /// リクエストと対応する ID。
+  public let id: Int
+  /// リクエストが正常終了した場合の結果情報。
   public let result: Result
 
-  public init(id: RPCID, result: Result) {
+  /// RPC 成功応答を作成する。
+  /// - Parameters:
+  ///   - id: リクエストと対応する ID。
+  ///   - result: RPC 呼び出しの結果。
+  public init(id: Int, result: Result) {
     self.jsonrpc = "2.0"
     self.id = id
     self.result = result
@@ -53,7 +31,7 @@ public struct RPCResponse<Result> {
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
-public final class RPCChannel {
+final class RPCChannel {
   /// pending 管理用の構造体
   private struct Pending {
     let completion: (Result<RPCResponse<Any>?, SoraError>) -> Void
@@ -64,22 +42,10 @@ public final class RPCChannel {
   private let queue = DispatchQueue(
     label: "jp.shiguredo.sora-ios-sdk.rpc.channel", attributes: .concurrent)
   private var nextId: Int = 1
-  private var pendings: [RPCID: Pending] = [:]
+  private var pendings: [Int: Pending] = [:]
 
-  /// Sora から払い出されたメソッド一覧 (メソッド名の文字列リスト)
-  /// MediaChannel.rpcMethods で RPCMethod Enum に変換されます
-  let allowedMethods: [String]
-  private let allowedMethodNames: Set<String>
-
-  init?(
-    dataChannel: DataChannel, rpcMethods: [String]
-  ) {
-    guard !rpcMethods.isEmpty else {
-      return nil
-    }
+  init(dataChannel: DataChannel) {
     self.dataChannel = dataChannel
-    self.allowedMethods = rpcMethods
-    self.allowedMethodNames = Set(rpcMethods)
   }
 
   /// RPC が利用可能かを返す。
@@ -101,11 +67,6 @@ public final class RPCChannel {
       return false
     }
 
-    guard allowedMethodNames.contains(methodName) else {
-      completion?(.failure(SoraError.rpcMethodNotAllowed(method: methodName)))
-      return false
-    }
-
     var payload: [String: Any] = [
       "jsonrpc": "2.0",
       "method": methodName,
@@ -120,11 +81,11 @@ public final class RPCChannel {
       }
     }
 
-    var identifier: RPCID?
+    var identifier: Int?
     if !isNotificationRequest {
       let nextIdentifier = nextIdentifier()
       identifier = nextIdentifier
-      payload["id"] = nextIdentifier.jsonValue
+      payload["id"] = nextIdentifier
     }
 
     guard JSONSerialization.isValidJSONObject(payload) else {
@@ -210,8 +171,17 @@ public final class RPCChannel {
       return
     }
 
-    guard let idValue = json["id"], let identifier = RPCID(any: idValue) else {
+    guard let idValue = json["id"] else {
       Logger.error(type: .dataChannel, message: "rpc response id is missing")
+      return
+    }
+    let identifier: Int
+    do {
+      identifier = try Self.parseResponseID(idValue)
+    } catch {
+      Logger.error(
+        type: .dataChannel,
+        message: "rpc response id is invalid: \(error.localizedDescription)")
       return
     }
 
@@ -235,7 +205,7 @@ public final class RPCChannel {
 
   /// すべての pending を失敗扱いで終了する。
   func invalidate(reason: SoraError) {
-    let snapshots: [RPCID: Pending] = queue.sync(flags: .barrier) {
+    let snapshots: [Int: Pending] = queue.sync(flags: .barrier) {
       let current = pendings
       pendings.removeAll()
       return current
@@ -246,10 +216,10 @@ public final class RPCChannel {
     }
   }
 
-  private func nextIdentifier() -> RPCID {
+  private func nextIdentifier() -> Int {
     queue.sync(flags: .barrier) {
       defer { nextId += 1 }
-      return RPCID.int(nextId)
+      return nextId
     }
   }
 
@@ -260,7 +230,7 @@ public final class RPCChannel {
     return object
   }
 
-  private func finishPending(id: RPCID, result: Result<RPCResponse<Any>?, SoraError>) {
+  private func finishPending(id: Int, result: Result<RPCResponse<Any>?, SoraError>) {
     let pending = queue.sync(flags: .barrier) { () -> Pending? in
       let value = pendings[id]
       pendings.removeValue(forKey: id)
@@ -273,6 +243,18 @@ public final class RPCChannel {
     }
     pending.timeoutWorkItem.cancel()
     pending.completion(result)
+  }
+
+  private static func parseResponseID(_ value: Any) throws -> Int {
+    if let intValue = value as? Int {
+      return intValue
+    }
+    if let numberValue = value as? NSNumber {
+      return numberValue.intValue
+    } else {
+      throw SoraError.rpcDecodingError(
+        reason: "response id must be Int or NSNumber: \(type(of: value))")
+    }
   }
 }
 

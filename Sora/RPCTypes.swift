@@ -12,8 +12,6 @@ private enum RPCMethodNames {
 /// RPC メソッドを定義するためのプロトコル
 ///
 /// 新しい RPC メソッドを SDK に追加する場合は、このプロトコルに準拠した型を定義してください。
-///
-/// - Note: 通常のユーザーは、このプロトコルを直接実装する必要はありません
 public protocol RPCMethodProtocol {
   /// RPC メソッドのパラメータ型
   associatedtype Params: Encodable
@@ -23,10 +21,14 @@ public protocol RPCMethodProtocol {
   static var name: String { get }
 }
 
+/// RequestSimulcastRid のパラメータ。
 public struct RequestSimulcastRidParams: Codable {
+  /// 要求する映像の rid。
   public let rid: Rid
+  /// 送信者のコネクション ID。
   public let senderConnectionId: String?
 
+  /// RequestSimulcastRid のパラメータを作成する。
   public init(rid: Rid, senderConnectionId: String? = nil) {
     self.rid = rid
     self.senderConnectionId = senderConnectionId
@@ -38,11 +40,16 @@ public struct RequestSimulcastRidParams: Codable {
   }
 }
 
+/// RequestSpotlightRid のパラメータ。
 public struct RequestSpotlightRidParams: Codable {
+  /// 送信者のコネクション ID。
   public let sendConnectionId: String?
+  /// 要求するスポットライトフォーカス時 rid。
   public let spotlightFocusRid: Rid
+  /// 要求するスポットライトアンフォーカス時 rid。
   public let spotlightUnfocusRid: Rid
 
+  /// RequestSpotlightRid のパラメータを作成する。
   public init(
     sendConnectionId: String? = nil,
     spotlightFocusRid: Rid,
@@ -60,9 +67,12 @@ public struct RequestSpotlightRidParams: Codable {
   }
 }
 
+/// ResetSpotlightRid のパラメータ。
 public struct ResetSpotlightRidParams: Encodable {
+  /// 送信者のコネクション ID。
   public let sendConnectionId: String?
 
+  /// ResetSpotlightRid のパラメータを作成する。
   public init(sendConnectionId: String? = nil) {
     self.sendConnectionId = sendConnectionId
   }
@@ -72,21 +82,30 @@ public struct ResetSpotlightRidParams: Encodable {
   }
 }
 
+/// PutSignalingNotifyMetadata のパラメータ。
 public struct PutSignalingNotifyMetadataParams<Metadata: Encodable>: Encodable {
+  /// 設定するメタデータ。
   public let metadata: Metadata
+  /// メタデータ更新時に push 通知するかどうか。
   public let push: Bool?
 
+  /// PutSignalingNotifyMetadata のパラメータを作成する。
   public init(metadata: Metadata, push: Bool? = nil) {
     self.metadata = metadata
     self.push = push
   }
 }
 
+/// PutSignalingNotifyMetadataItem のパラメータ。
 public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable {
+  /// 設定するメタデータのキー。
   public let key: String
+  /// 設定するメタデータの値。
   public let value: Value
+  /// メタデータ更新時に push 通知するかどうか。
   public let push: Bool?
 
+  /// PutSignalingNotifyMetadataItem のパラメータを作成する。
   public init(key: String, value: Value, push: Bool? = nil) {
     self.key = key
     self.value = value
@@ -94,12 +113,18 @@ public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable 
   }
 }
 
+/// RequestSimulcastRid の正常終了時の result。
 public struct RequestSimulcastRidResult: Decodable {
+  /// チャンネル ID。
   public let channelId: String
+  /// 受信者のコネクション ID。
   public let receiverConnectionId: String
+  /// 適用された rid。
   public let rid: Rid
+  /// 送信者のコネクション ID。
   public let senderConnectionId: String?
 
+  /// RequestSimulcastRid の結果を作成する。
   public init(
     channelId: String,
     receiverConnectionId: String,
@@ -120,12 +145,18 @@ public struct RequestSimulcastRidResult: Decodable {
   }
 }
 
+/// RequestSpotlightRid の正常終了時の result。
 public struct RequestSpotlightRidResult: Decodable {
+  /// チャンネル ID。
   public let channelId: String
+  /// 受信者のコネクション ID。
   public let recvConnectionId: String
+  /// 要求するスポットライトフォーカス時 rid。
   public let spotlightFocusRid: Rid
+  /// 要求するスポットライトアンフォーカス時 rid。
   public let spotlightUnfocusRid: Rid
 
+  /// RequestSpotlightRid の結果を作成する。
   public init(
     channelId: String,
     recvConnectionId: String,
@@ -146,10 +177,14 @@ public struct RequestSpotlightRidResult: Decodable {
   }
 }
 
+/// ResetSpotlightRid の正常終了時の result。
 public struct ResetSpotlightRidResult: Decodable {
+  /// チャンネル ID。
   public let channelId: String
+  /// 受信者のコネクション ID。
   public let recvConnectionId: String
 
+  /// ResetSpotlightRid の結果を作成する。
   public init(channelId: String, recvConnectionId: String) {
     self.channelId = channelId
     self.recvConnectionId = recvConnectionId
@@ -161,40 +196,38 @@ public struct ResetSpotlightRidResult: Decodable {
   }
 }
 
-// MARK: - RPC メソッド型の命名規則について
-
-/// # RPC メソッド型の命名規則
-///
-/// ## 現在の命名規則
-/// 現在、RPC メソッド型は `RequestSimulcastRid`、`RequestSpotlightRid` のようにメソッド名のみで命名しています。
-/// メソッド名のバージョン情報（例：`2025.2.0`）は、型の `name` プロパティに格納されています。
-///
-/// ```swift
-/// public enum RequestSimulcastRid: RPCMethodProtocol {
-///   public static let name = "2025.2.0/RequestSimulcastRid"
-/// }
-/// ```
-///
-/// ## 将来の命名規則への移行計画
-/// 同じメソッド名でバージョンが異なる場合（例：`2025.2.0/RequestSpotlightRid` と `2027.2.0/RequestSpotlightRid`）が増えた際には、
-/// バージョン情報を型名に含める新しい命名規則に移行する予定です。
-///
-/// ### 新しい命名規則の例
-/// ```swift
-/// // 新しい命名規則の例（将来のバージョン）
-/// public enum RequestSpotlightRid_2025_2_0: RPCMethodProtocol { ... }
-/// public enum RequestSpotlightRid_2027_2_0: RPCMethodProtocol { ... }
-/// ```
-///
-/// ## 移行時のアプローチ
-/// 1. **既存の型はエイリアスを作成**
-///    - 既存の型は新しい命名規則の型のエイリアスとして提供します
-/// 2. **deprecated マーク**
-///    - 既存の型を `@deprecated` マークし、ユーザーに移行を促します
-/// 3. **新規メソッドは新しい命名規則で追加**
-///    - 将来追加されるメソッドは新しい命名規則で定義します
-///
-/// このアプローチにより、既存コードとの互換性を保ちながら、スムーズに移行できるようにしています。
+// # RPC メソッド型の命名規則
+//
+// ## 現在の命名規則
+// 現在、RPC メソッド型は `RequestSimulcastRid`、`RequestSpotlightRid` のようにメソッド名のみで命名しています。
+// メソッド名のバージョン情報（例：`2025.2.0`）は、型の `name` プロパティに格納されています。
+//
+// ```swift
+// public enum RequestSimulcastRid: RPCMethodProtocol {
+//   public static let name = "2025.2.0/RequestSimulcastRid"
+// }
+// ```
+//
+// ## 将来の命名規則への移行計画
+// 同じメソッド名でバージョンが異なる場合（例：`2025.2.0/RequestSpotlightRid` と `2027.2.0/RequestSpotlightRid`）が増えた際には、
+// バージョン情報を型名に含める新しい命名規則に移行する予定です。
+//
+// ### 新しい命名規則の例
+// ```swift
+// // 新しい命名規則の例（将来のバージョン）
+// public enum RequestSpotlightRid_2025_2_0: RPCMethodProtocol { ... }
+// public enum RequestSpotlightRid_2027_2_0: RPCMethodProtocol { ... }
+// ```
+//
+// ## 移行時のアプローチ
+// 1. **既存の型はエイリアスを作成**
+//    - 既存の型は新しい命名規則の型のエイリアスとして提供します
+// 2. **deprecated マーク**
+//    - 既存の型を `@deprecated` マークし、ユーザーに移行を促します
+// 3. **新規メソッドは新しい命名規則で追加**
+//    - 将来追加されるメソッドは新しい命名規則で定義します
+//
+// このアプローチにより、既存コードとの互換性を保ちながら、スムーズに移行できるようにしています。
 
 /// サイマルキャスト の rid をリクエストする RPC メソッド
 ///
@@ -290,57 +323,5 @@ public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable
   public typealias Result = Metadata
   public static var name: String {
     RPCMethodNames.putSignalingNotifyMetadataItem
-  }
-}
-
-/// RPC メソッドを型安全に表現する Enum
-///
-/// MediaChannel.rpcMethods で利用可能なメソッドをこの型として取得できます。
-/// このEnum を使用することで、コンパイル時にメソッド名の妥当性が検証されます。
-///
-/// # 使用例
-/// ```swift
-/// if mediaChannel.rpcMethods.contains(.requestSimulcastRid) {
-///   let params = RequestSimulcastRidParams(rid: "r0")
-///   let response = try await mediaChannel.rpc(
-///     method: RequestSimulcastRid.self,
-///     params: params
-///   )
-/// }
-/// ```
-public enum RPCMethod {
-  case requestSimulcastRid
-  case requestSpotlightRid
-  case resetSpotlightRid
-  case putSignalingNotifyMetadata
-  case putSignalingNotifyMetadataItem
-
-  var name: String {
-    switch self {
-    case .requestSimulcastRid:
-      return RPCMethodNames.requestSimulcastRid
-    case .requestSpotlightRid:
-      return RPCMethodNames.requestSpotlightRid
-    case .resetSpotlightRid:
-      return RPCMethodNames.resetSpotlightRid
-    case .putSignalingNotifyMetadata:
-      return RPCMethodNames.putSignalingNotifyMetadata
-    case .putSignalingNotifyMetadataItem:
-      return RPCMethodNames.putSignalingNotifyMetadataItem
-    }
-  }
-
-  init?(name: String) {
-    let allMethods: [RPCMethod] = [
-      .requestSimulcastRid,
-      .requestSpotlightRid,
-      .resetSpotlightRid,
-      .putSignalingNotifyMetadata,
-      .putSignalingNotifyMetadataItem,
-    ]
-    guard let method = allMethods.first(where: { $0.name == name }) else {
-      return nil
-    }
-    self = method
   }
 }

@@ -20,9 +20,9 @@ Please read https://github.com/shiguredo/oss before use.
 
 - iOS 14 以降
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
-- Xcode 16.2
-- Swift 5.10
-- WebRTC SFU Sora 2025.1.0 以降
+- Xcode 26.2
+  - Swift 5 言語モードでビルドしています
+- WebRTC SFU Sora 2025.2.0 以降
 
 Xcode と Swift のバージョンによっては、 取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
 
@@ -57,7 +57,7 @@ Xcode と Swift のバージョンによっては、 取得できるバイナリ
 Apache License 2.0
 
 ```
-Copyright 2017-2024, Shiguredo Inc.
+Copyright 2017-2026, Shiguredo Inc.
 Copyright 2017-2023, SUZUKI Tetsuya (Original Author)
 
 Licensed under the Apache License, Version 2.0 (the "License");
