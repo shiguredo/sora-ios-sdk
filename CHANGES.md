@@ -16,12 +16,20 @@
   - @zztkm
 - [ADD] MediaChannel に シグナリング の JSON 文字列 を 受け取る `onReceiveSignalingJSON` を追加する
   - @zztkm
+- [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
+  - `RTCAudioSessionDelegate.audioSessionDidChangeRoute` を利用してコールバックする
+  - コールバック引数として `RTCAudioSession`, `reason`, `previousRoute` を渡す
+  - 音声ルートの状態などの評価はコールバック内で `RTCAudioSession.currentRoute` を参照する
+  - @t-miya
 - [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
   - MediaChannel に画面キャプチャ開始 / 停止 API を追加する
   - 画面キャプチャ開始時に渡す設定として `ScreenCaptureSettings` 構造体を追加する
     - targetFPS パラメータにより送信 FPS を指定することができる
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+- [FIX] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
+  - 入力経路を `.speaker` にオーバーライドした後に他モードを指定しても経路がリセットされなかったため
   - @t-miya
 
 ### misc
