@@ -11,6 +11,11 @@
 
 ## develop
 
+- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
+  - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
+  - @zztkm
+- [ADD] MediaChannel に シグナリング の JSON 文字列 を 受け取る `onReceiveSignalingJSON` を追加する
+  - @zztkm
 - [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
   - MediaChannel に画面キャプチャ開始 / 停止 API を追加する
   - 画面キャプチャ開始時に渡す設定として `ScreenCaptureSettings` 構造体を追加する
@@ -42,11 +47,6 @@
   - @t-miya
 - [UPDATE] Configuration.simulcastRid を非推奨にする
   - 移行先は `Configuration.simulcastRequestRid`
-  - @zztkm
-- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
-  - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
-  - @zztkm
-- [ADD] MediaChannel に シグナリング の JSON 文字列 を 受け取る `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] Configuration に接続確立時のマイク入力を有効にするか設定できる `initialMicrophoneEnabled` を追加する
   - 接続時に音声ハードミュートを行うために利用する
