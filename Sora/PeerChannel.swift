@@ -48,7 +48,7 @@ final class PeerChannelInternalHandlers {
   var onReceiveSignaling: ((Signaling) -> Void)?
 
   /// シグナリング 受信時に JSON 文字列で呼ばれるクロージャー
-  var onReceiveSignalingText: ((String) -> Void)?
+  var onReceiveSignalingJSON: ((String) -> Void)?
 
   /// DataChannel の open 時に呼ばれるクロージャー
   var onOpenDataChannel: ((String) -> Void)?
@@ -189,7 +189,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     signalingChannel.internalHandlers.onReceiveText = { [weak self] text in
-      self?.internalHandlers.onReceiveSignalingText?(text)
+      self?.internalHandlers.onReceiveSignalingJSON?(text)
     }
   }
 

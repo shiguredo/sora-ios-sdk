@@ -201,7 +201,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
 
       case "signaling", "push", "notify":
         if let messageText {
-          peerChannel.internalHandlers.onReceiveSignalingText?(messageText)
+          peerChannel.internalHandlers.onReceiveSignalingJSON?(messageText)
         }
         switch Signaling.decode(data) {
         case .success(let signaling):
