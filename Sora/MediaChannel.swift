@@ -38,7 +38,8 @@ public final class MediaChannelHandlers {
   /// ストリームが除去されたときに呼ばれるクロージャー
   public var onRemoveStream: ((MediaStream) -> Void)?
 
-  /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
+  /// シグナリング受信時に呼ばれるクロージャー。
+  /// 引数の `String` には、受信したシグナリングメッセージの JSON 文字列が渡されます。
   public var onReceiveSignalingJSON: ((String) -> Void)?
 
   /// シグナリング受信時に呼ばれるクロージャー
