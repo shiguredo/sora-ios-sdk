@@ -426,14 +426,14 @@ public final class MediaChannel {
       weakSelf.handlers.onRemoveStream?(stream)
     }
 
-    peerChannel.internalHandlers.onReceiveSignalingJSON = { [weak self] text in
+    peerChannel.internalHandlers.onReceiveSignalingJSON = { [weak self] json in
       guard let weakSelf = self else {
         return
       }
       Logger.debug(type: .mediaChannel, message: "receive signaling json")
       Logger.debug(type: .mediaChannel, message: "call onReceiveSignalingJSON")
-      weakSelf.internalHandlers.onReceiveSignalingJSON?(text)
-      weakSelf.handlers.onReceiveSignalingJSON?(text)
+      weakSelf.internalHandlers.onReceiveSignalingJSON?(json)
+      weakSelf.handlers.onReceiveSignalingJSON?(json)
     }
 
     peerChannel.internalHandlers.onReceiveSignaling = { [weak self] message in

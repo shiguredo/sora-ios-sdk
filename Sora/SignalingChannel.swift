@@ -324,9 +324,9 @@ class SignalingChannel {
     case .binary:
       Logger.debug(type: .signalingChannel, message: "discard binary message")
 
-    case .text(let text):
-      internalHandlers.onReceiveJSON?(text)
-      guard let data = text.data(using: .utf8) else {
+    case .text(let json):
+      internalHandlers.onReceiveJSON?(json)
+      guard let data = json.data(using: .utf8) else {
         Logger.error(type: .signalingChannel, message: "invalid encoding")
         return
       }
@@ -338,7 +338,7 @@ class SignalingChannel {
       case .failure(let error):
         Logger.error(
           type: .signalingChannel,
-          message: "decode failed (\(error.localizedDescription)) => \(text)")
+          message: "decode failed (\(error.localizedDescription)) => \(json)")
       }
     }
   }
