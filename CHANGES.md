@@ -11,6 +11,11 @@
 
 ## develop
 
+- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
+  - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
+  - @zztkm
+- [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
+  - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
   - `RTCAudioSessionDelegate.audioSessionDidChangeRoute` を利用してコールバックする
   - コールバック引数として `RTCAudioSession`, `reason`, `previousRoute` を渡す

@@ -161,10 +161,11 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
       return
     }
 
-    if let message = String(data: data, encoding: .utf8) {
+    let messageJSON = String(data: data, encoding: .utf8)
+    if let messageJSON {
       Logger.info(
         type: .dataChannel,
-        message: "received data channel message: \(String(describing: message))")
+        message: "received data channel message: \(String(describing: messageJSON))")
     }
 
     // Sora から送られてきたメッセージ
@@ -199,6 +200,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         }
 
       case "signaling", "push", "notify":
+        if let messageJSON {
+          peerChannel.internalHandlers.onReceiveSignalingJSON?(messageJSON)
+        }
         switch Signaling.decode(data) {
         case .success(let signaling):
           peerChannel.handleSignalingOverDataChannel(signaling)

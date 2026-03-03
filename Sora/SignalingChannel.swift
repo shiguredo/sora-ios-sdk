@@ -25,6 +25,9 @@ class SignalingChannelInternalHandlers {
   /// シグナリング受信時に呼ばれるクロージャー
   var onReceive: ((Signaling) -> Void)?
 
+  /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
+  var onReceiveJSON: ((String) -> Void)?
+
   /// シグナリング送信時に呼ばれるクロージャー
   var onSend: ((Signaling) -> Signaling)?
 
@@ -321,8 +324,9 @@ class SignalingChannel {
     case .binary:
       Logger.debug(type: .signalingChannel, message: "discard binary message")
 
-    case .text(let text):
-      guard let data = text.data(using: .utf8) else {
+    case .text(let json):
+      internalHandlers.onReceiveJSON?(json)
+      guard let data = json.data(using: .utf8) else {
         Logger.error(type: .signalingChannel, message: "invalid encoding")
         return
       }
@@ -334,7 +338,7 @@ class SignalingChannel {
       case .failure(let error):
         Logger.error(
           type: .signalingChannel,
-          message: "decode failed (\(error.localizedDescription)) => \(text)")
+          message: "decode failed (\(error.localizedDescription)) => \(json)")
       }
     }
   }
