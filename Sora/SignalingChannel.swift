@@ -25,7 +25,7 @@ class SignalingChannelInternalHandlers {
   /// シグナリング受信時に呼ばれるクロージャー
   var onReceive: ((Signaling) -> Void)?
 
-  /// シグナリング 受信時に JSON 文字列で呼ばれるクロージャー
+  /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
   var onReceiveText: ((String) -> Void)?
 
   /// シグナリング送信時に呼ばれるクロージャー

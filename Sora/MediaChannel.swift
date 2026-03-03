@@ -38,13 +38,13 @@ public final class MediaChannelHandlers {
   /// ストリームが除去されたときに呼ばれるクロージャー
   public var onRemoveStream: ((MediaStream) -> Void)?
 
-  /// シグナリング 受信時に JSON 文字列で呼ばれるクロージャー
+  /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
   public var onReceiveSignalingJSON: ((String) -> Void)?
 
-  /// シグナリング 受信時に呼ばれるクロージャー
+  /// シグナリング受信時に呼ばれるクロージャー
   @available(
     *, deprecated,
-    message: "JSON 文字列 を 受け取る onReceiveSignalingJSON へ 移行 してください。"
+    message: "JSON 文字列を受け取る onReceiveSignalingJSON へ移行してください。"
   )
   public var onReceiveSignaling: ((Signaling) -> Void)?
 

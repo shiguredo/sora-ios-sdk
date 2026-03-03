@@ -47,7 +47,7 @@ final class PeerChannelInternalHandlers {
   /// シグナリング受信時に呼ばれるクロージャー
   var onReceiveSignaling: ((Signaling) -> Void)?
 
-  /// シグナリング 受信時に JSON 文字列で呼ばれるクロージャー
+  /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
   var onReceiveSignalingJSON: ((String) -> Void)?
 
   /// DataChannel の open 時に呼ばれるクロージャー
