@@ -187,7 +187,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       self?.handleSignalingOverWebSocket(signaling)
     }
 
-    signalingChannel.internalHandlers.onReceiveText = { [weak self] text in
+    signalingChannel.internalHandlers.onReceiveJSON = { [weak self] text in
       self?.internalHandlers.onReceiveSignalingJSON?(text)
     }
   }

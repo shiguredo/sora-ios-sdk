@@ -26,7 +26,7 @@ class SignalingChannelInternalHandlers {
   var onReceive: ((Signaling) -> Void)?
 
   /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
-  var onReceiveText: ((String) -> Void)?
+  var onReceiveJSON: ((String) -> Void)?
 
   /// シグナリング送信時に呼ばれるクロージャー
   var onSend: ((Signaling) -> Signaling)?
@@ -325,7 +325,7 @@ class SignalingChannel {
       Logger.debug(type: .signalingChannel, message: "discard binary message")
 
     case .text(let text):
-      internalHandlers.onReceiveText?(text)
+      internalHandlers.onReceiveJSON?(text)
       guard let data = text.data(using: .utf8) else {
         Logger.error(type: .signalingChannel, message: "invalid encoding")
         return
