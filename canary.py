@@ -165,7 +165,7 @@ def main():
     )
 
     if not args.dry_run and not confirm_execution(current_version, new_version):
-        print("処理を中止しました。")
+        print("Canceled.")
         return
 
     write_file(PACKAGEINFO_FILE, updated_packageinfo_content, args.dry_run)
