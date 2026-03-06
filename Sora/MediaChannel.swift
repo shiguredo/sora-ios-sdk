@@ -690,6 +690,11 @@ public final class MediaChannel {
       return SoraError.mediaChannelError(reason: "audioEnabled is false")
     }
 
+    // 接続設定で配信側ロールになっていなければエラー
+    guard configuration.isSender else {
+      return SoraError.mediaChannelError(reason: "role is not sender")
+    }
+
     if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioBypass(enabled) {
       return SoraError.mediaChannelError(
         reason: "AudioDeviceModuleWrapper::setAudioBypass failed")
