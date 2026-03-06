@@ -548,8 +548,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           return
         }
         self.isAudioInputInitialized = true
-        if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.applyAudioBypassIfNeeded() {
-          Logger.warn(type: .peerChannel, message: "failed to applyAudioBypassIfNeeded")
+        if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.applyAudioBypass() {
+          Logger.warn(type: .peerChannel, message: "failed to applyAudioBypass")
         }
         Logger.debug(
           type: .peerChannel,

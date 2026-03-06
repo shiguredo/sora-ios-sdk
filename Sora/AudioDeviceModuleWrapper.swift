@@ -33,7 +33,7 @@ internal final class AudioDeviceModuleWrapper {
         isHardMuted = mute
         // 録音の pause / resume 後は Voice-Processing I/O AudioUnit の設定が
         // 実装依存で初期値に戻る場合があるため、保持している希望状態を再適用します。
-        if !applyAudioBypass() {
+        if !applyAudioBypassInternal() {
           Logger.warn(
             type: .mediaChannel,
             message: "setAudioHardMute succeeded but failed to re-apply audio bypass")
@@ -53,15 +53,15 @@ internal final class AudioDeviceModuleWrapper {
   func setAudioBypass(_ enabled: Bool) -> Bool {
     queue.sync {
       desiredAudioBypassEnabled = enabled
-      return applyAudioBypass()
+      return applyAudioBypassInternal()
     }
   }
 
   /// 保持している音声バイパス設定を再適用します
   /// - Returns: 成功した場合は `true`、失敗した場合は `false` を返します
-  func applyAudioBypassIfNeeded() -> Bool {
+  func applyAudioBypass() -> Bool {
     queue.sync {
-      applyAudioBypass()
+      applyAudioBypassInternal()
     }
   }
 
@@ -82,7 +82,7 @@ internal final class AudioDeviceModuleWrapper {
     Int32(audioDeviceModule.resumeRecording())
   }
 
-  private func applyAudioBypass() -> Bool {
+  private func applyAudioBypassInternal() -> Bool {
     let result = Int32(audioDeviceModule.setBypassVoiceProcessing(desiredAudioBypassEnabled))
     if result == 0 {
       Logger.debug(
