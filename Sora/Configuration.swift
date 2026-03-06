@@ -135,6 +135,10 @@ public struct Configuration {
   /// デフォルトは `true` です。
   public var audioEnabled: Bool = true
 
+  /// 接続確立後の音声入力初期化時に音声バイパス処理のを有効にするかどうか。
+  /// デフォルトは `false` です。
+  public var audioBypassEnabled: Bool = false
+
   /// 接続確立時に端末カメラキャプチャを自動起動するかどうか。
   ///
   /// `cameraSettings.isEnabled` が `true` の場合でも、このフラグが `false` であれば

@@ -522,6 +522,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
       }
 
+      // 音声バイパス処理の初期状態を設定します。
+      // Voice-Processing AudioUnit の初期化前は内部で保留され、
+      // 初期化完了後に再適用されます。
+      if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioBypass(
+        configuration.audioBypassEnabled)
+      {
+        Logger.warn(type: .peerChannel, message: "failed to setAudioBypass")
+      }
+
       // カテゴリをマイク用途のものに変更する
       // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
       Logger.debug(
@@ -539,6 +548,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           return
         }
         self.isAudioInputInitialized = true
+        if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.applyAudioBypassIfNeeded() {
+          Logger.warn(type: .peerChannel, message: "failed to applyAudioBypassIfNeeded")
+        }
         Logger.debug(
           type: .peerChannel,
           message:

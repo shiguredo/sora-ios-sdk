@@ -674,6 +674,42 @@ public final class MediaChannel {
     return nil
   }
 
+  /// MediaChannel の接続中に音声バイパス処理の有効化/無効化を設定します
+  ///
+  /// - Parameter enabled: `true` で有効化、`false` で無効化
+  /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
+  public func setAudioBypass(_ enabled: Bool) -> Error? {
+    // 接続されていなければエラー
+    guard state == .connected else {
+      return SoraError.mediaChannelError(
+        reason: "MediaChannel is not connected (state: \(state))")
+    }
+
+    // 接続設定で音声が有効になっていなければエラー
+    guard configuration.audioEnabled else {
+      return SoraError.mediaChannelError(reason: "audioEnabled is false")
+    }
+
+    if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioBypass(enabled) {
+      return SoraError.mediaChannelError(
+        reason: "AudioDeviceModuleWrapper::setAudioBypass failed")
+    }
+
+    return nil
+  }
+
+  /// MediaChannel の接続中に音声バイパス処理の実状態を取得します
+  ///
+  /// - Returns: 有効な場合は `true`、無効な場合は `false` を返します
+  public func isAudioBypassEnabled() -> Bool {
+    NativePeerChannelFactory.default.audioDeviceModuleWrapper.isAudioBypassEnabled()
+  }
+
+  @available(*, deprecated, message: "isAudioBypassEnabled を利用してください。")
+  public func isBypassVoiceProcessingEnabled() -> Bool {
+    isAudioBypassEnabled()
+  }
+
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化

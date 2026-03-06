@@ -11,6 +11,11 @@
 
 ## develop
 
+- [ADD] 音声バイパス処理を追加する
+  - `kAUVoiceIOProperty_BypassVoiceProcessing` の設定により、 Voice-Processing I/O Audio Unit の音声処理をバイパスできるようにする
+  - `Configuration` に `audioBypassEnabled` を追加する
+  - `MediaChannel` に `setAudioBypass(_:)`、 `isAudioBypassEnabled()` を追加する
+  - @t-miya
 - [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
   - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
   - @zztkm
