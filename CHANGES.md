@@ -11,14 +11,14 @@
 
 ## develop
 
+- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
+  - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
+  - @zztkm
 - [ADD] 音声バイパス処理を追加する
   - `kAUVoiceIOProperty_BypassVoiceProcessing` の設定により、 Voice-Processing I/O Audio Unit の音声処理をバイパスできるようにする
   - `Configuration` に `audioBypassEnabled` を追加する
   - `MediaChannel` に `setAudioBypass(_:)`、 `isAudioBypassEnabled()` を追加する
   - @t-miya
-- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
-  - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
-  - @zztkm
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
