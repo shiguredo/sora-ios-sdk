@@ -135,7 +135,7 @@ public struct Configuration {
   /// デフォルトは `true` です。
   public var audioEnabled: Bool = true
 
-  /// 接続確立後の音声入力初期化時に音声バイパス処理のを有効にするかどうか。
+  /// 接続確立後の音声入力初期化時に音声バイパス処理を有効にするかどうか。
   /// デフォルトは `false` です。
   public var audioBypassEnabled: Bool = false
 
