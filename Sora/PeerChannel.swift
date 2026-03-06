@@ -522,9 +522,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
       }
 
-      // 音声バイパス処理の初期状態を設定します。
-      // Voice-Processing AudioUnit の初期化前は内部で保留され、
-      // 初期化完了後に再適用されます。
+      // 音声バイパス処理の初期希望状態を設定します。
+      // AudioDeviceModuleWrapper が desiredAudioBypassEnabled を保持し、
+      // initializeInput 完了後に applyAudioBypass で実状態へ再適用します。
       if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioBypass(
         configuration.audioBypassEnabled)
       {
