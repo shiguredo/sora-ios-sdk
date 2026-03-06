@@ -31,6 +31,8 @@ internal final class AudioDeviceModuleWrapper {
       let result = internalResult == 0
       if result {
         isHardMuted = mute
+        // 録音の pause / resume 後は Voice-Processing I/O AudioUnit の設定が
+        // 実装依存で初期値に戻る場合があるため、保持している希望状態を再適用します。
         if !applyAudioBypass() {
           Logger.warn(
             type: .mediaChannel,
