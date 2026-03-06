@@ -72,11 +72,6 @@ internal final class AudioDeviceModuleWrapper {
     }
   }
 
-  @available(*, deprecated, message: "isAudioBypassEnabled を利用してください。")
-  func isBypassVoiceProcessingEnabled() -> Bool {
-    isAudioBypassEnabled()
-  }
-
   private func pauseRecordingInternal() -> Int32 {
     Int32(audioDeviceModule.pauseRecording())
   }

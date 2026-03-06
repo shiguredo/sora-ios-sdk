@@ -710,11 +710,6 @@ public final class MediaChannel {
     NativePeerChannelFactory.default.audioDeviceModuleWrapper.isAudioBypassEnabled()
   }
 
-  @available(*, deprecated, message: "isAudioBypassEnabled を利用してください。")
-  public func isBypassVoiceProcessingEnabled() -> Bool {
-    isAudioBypassEnabled()
-  }
-
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
