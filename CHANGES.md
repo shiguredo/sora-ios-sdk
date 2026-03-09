@@ -21,6 +21,10 @@
 - [UPDATE] `URLSessionWebSocketChannel` と `Proxy` を Swift 6 の `Sendable` 要件に対応させる
   - `URLSessionWebSocketChannel` を `final class` かつ `@unchecked Sendable` とし、 `Proxy` を `Sendable` に対応させる
   - @zztkm
+- [UPDATE] 静的共有状態と singleton を Swift 6 の concurrency-safe 要件に対応させる
+  - `CameraVideoCapturer`, `Logger`, `NativePeerChannelFactory`, `Sora` などの共有状態を整理する
+  - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
+  - @zztkm
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する

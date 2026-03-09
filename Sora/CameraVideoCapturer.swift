@@ -1,19 +1,24 @@
 import Foundation
 import WebRTC
 
+// カメラの共有状態は内部でロックしつつ扱うため、 @unchecked Sendable を付与します。
 /// 解像度やフレームレートなどの設定は `start` 実行時に指定します。
 /// カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
 ///
 /// カメラの設定を変更したい場合は、 `change` を実行します。
-public final class CameraVideoCapturer {
+public final class CameraVideoCapturer: @unchecked Sendable {
   // MARK: インスタンスの取得
+
+  private static let stateLock = NSLock()
+  private nonisolated(unsafe) static var currentStorage: CameraVideoCapturer?
+  private nonisolated(unsafe) static var handlersStorage = CameraVideoCapturerHandlers()
 
   /// 利用可能なデバイスのリスト
   /// RTCCameraVideoCapturer.captureDevices を返します。
   public static var devices: [AVCaptureDevice] { RTCCameraVideoCapturer.captureDevices() }
 
   /// 前面のカメラに対応するデバイス
-  public private(set) static var front: CameraVideoCapturer? = {
+  public static let front: CameraVideoCapturer? = {
     if let device = device(for: .front) {
       return CameraVideoCapturer(device: device)
     } else {
@@ -22,7 +27,7 @@ public final class CameraVideoCapturer {
   }()
 
   /// 背面のカメラに対応するデバイス
-  public private(set) static var back: CameraVideoCapturer? = {
+  public static let back: CameraVideoCapturer? = {
     if let device = device(for: .back) {
       return CameraVideoCapturer(device: device)
     } else {
@@ -31,7 +36,11 @@ public final class CameraVideoCapturer {
   }()
 
   /// 起動中のデバイス
-  public private(set) static var current: CameraVideoCapturer?
+  public static var current: CameraVideoCapturer? {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return currentStorage
+  }
 
   /// RTCCameraVideoCapturer が保持している AVCaptureSession
   public var captureSession: AVCaptureSession { native.captureSession }
@@ -164,7 +173,18 @@ public final class CameraVideoCapturer {
   public private(set) var isRunning: Bool = false
 
   /// イベントハンドラ
-  public static var handlers = CameraVideoCapturerHandlers()
+  public static var handlers: CameraVideoCapturerHandlers {
+    get {
+      stateLock.lock()
+      defer { stateLock.unlock() }
+      return handlersStorage
+    }
+    set {
+      stateLock.lock()
+      handlersStorage = newValue
+      stateLock.unlock()
+    }
+  }
 
   /// カメラの位置
   public var position: AVCaptureDevice.Position {
@@ -228,7 +248,7 @@ public final class CameraVideoCapturer {
       self.format = format
       self.frameRate = frameRate
       isRunning = true
-      CameraVideoCapturer.current = self
+      CameraVideoCapturer.setCurrent(self)
       completionHandler(nil)
       CameraVideoCapturer.handlers.onStart?(self)
     }
@@ -254,7 +274,7 @@ public final class CameraVideoCapturer {
 
       // stop が成功した際の処理
       isRunning = false
-      CameraVideoCapturer.current = nil
+      CameraVideoCapturer.setCurrent(nil)
       completionHandler(nil)
       CameraVideoCapturer.handlers.onStop?(self)
     }
@@ -345,12 +365,18 @@ public final class CameraVideoCapturer {
       }
     }
   }
+
+  private static func setCurrent(_ current: CameraVideoCapturer?) {
+    stateLock.lock()
+    currentStorage = current
+    stateLock.unlock()
+  }
 }
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。
 public struct CameraSettings: CustomStringConvertible {
   /// デフォルトの設定。
-  public static let `default` = CameraSettings()
+  public static var `default`: CameraSettings { CameraSettings() }
 
   /// `CameraVideoCapturer` で使用する映像解像度を表すenumです。
   public enum Resolution: Sendable {
@@ -487,7 +513,7 @@ extension CameraSettings.Resolution: Codable {
 }
 
 /// CameraVideoCapturer のイベントハンドラです。
-public class CameraVideoCapturerHandlers {
+public final class CameraVideoCapturerHandlers: @unchecked Sendable {
   /// 生成された映像フレームを受け取ります。
   /// 返した映像フレームがストリームに渡されます。
   public var onCapture: ((CameraVideoCapturer, VideoFrame) -> VideoFrame)?

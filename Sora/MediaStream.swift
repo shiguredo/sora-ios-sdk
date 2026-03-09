@@ -265,7 +265,7 @@ class BasicMediaStream: MediaStream {
     videoRendererAdapter?.videoRenderer?.onDisconnect(from: peerChannel.mediaChannel ?? nil)
   }
 
-  private static let dummyCapturer = RTCVideoCapturer()
+  private static var dummyCapturer: RTCVideoCapturer { RTCVideoCapturer() }
   func send(videoFrame: VideoFrame?) {
     if let frame = videoFrame {
       // フィルターを通す

@@ -32,9 +32,10 @@ public final class SoraHandlers {
   public init() {}
 }
 
+// SDK の共有インスタンスを提供し、内部状態は SDK 側で管理するため、 @unchecked Sendable を付与します。
 /// サーバーへのインターフェースです。
 /// `Sora` オブジェクトを使用してサーバーへの接続を行います。
-public final class Sora {
+public final class Sora: @unchecked Sendable {
   // MARK: - SDK の操作
 
   private static let isInitialized: Bool = {
@@ -335,7 +336,7 @@ public final class Sora {
 
   // MARK: - libwebrtc のログ出力
 
-  private static var webRTCCallbackLogger: RTCCallbackLogger = {
+  private nonisolated(unsafe) static var webRTCCallbackLogger: RTCCallbackLogger = {
     let logger = RTCCallbackLogger()
     logger.severity = .none
     return logger
