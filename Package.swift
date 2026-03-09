@@ -3,7 +3,7 @@
 import Foundation
 import PackageDescription
 
-let libwebrtcVersion = "m144.7559.2.2"
+let libwebrtcVersion = "m146.7680.0.1"
 
 let package = Package(
     name: "Sora",
@@ -21,7 +21,7 @@ let package = Package(
         .binaryTarget(
             name: "WebRTC",
             url: "https://github.com/shiguredo-webrtc-build/webrtc-build/releases/download/\(libwebrtcVersion)/WebRTC.xcframework.zip",
-            checksum: "5e13c05f4684b9c0478079a49c11225d9bcaea2bbb5e0b3abec2ad3bda91f56d"
+            checksum: "cb6ce2168c12d73160441e89168f4b74c61f92aa3c2913c2a9962304851569d6"
         ),
         .target(
             name: "Sora",
