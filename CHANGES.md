@@ -16,6 +16,7 @@
   - @zztkm
 - [UPDATE] `PairTable` を不変な値型に変更し、関連する型を `Sendable` に対応させる
   - Swift 6 言語モードでビルドするための対応
+  - SDK 側で公開 enum に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
   - @zztkm
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
