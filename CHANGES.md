@@ -18,6 +18,9 @@
   - Swift 6 言語モードでビルドするための対応
   - SDK 側で公開 enum に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
   - @zztkm
+- [UPDATE] `URLSessionWebSocketChannel` と `Proxy` を Swift 6 の `Sendable` 要件に対応させる
+  - `URLSessionWebSocketChannel` を `final class` かつ `@unchecked Sendable` とし、 `Proxy` を `Sendable` に対応させる
+  - @zztkm
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
