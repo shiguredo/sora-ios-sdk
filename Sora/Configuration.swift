@@ -8,7 +8,7 @@ private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
 
 /// プロキシに関する設定です
-public struct Proxy: CustomStringConvertible {
+public struct Proxy: CustomStringConvertible, Sendable {
   /// プロキシのホスト
   let host: String
 

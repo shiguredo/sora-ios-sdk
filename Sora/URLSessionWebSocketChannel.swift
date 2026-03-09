@@ -1,7 +1,9 @@
 import Foundation
 
-class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDelegate,
-  URLSessionWebSocketDelegate
+// URLSession の delegateQueue と SignalingChannel 側の単一並行キューを前提に状態を扱うため、
+// ここでは Sendable 検査を明示的に引き受けます。
+final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessionDelegate,
+  URLSessionTaskDelegate, URLSessionWebSocketDelegate
 {
   let url: URL
   let proxy: Proxy?
