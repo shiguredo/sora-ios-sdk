@@ -1,7 +1,8 @@
 import Foundation
 
+// URLSession を利用した WebSocket 通信用のクラスです。
 // URLSession の delegateQueue と SignalingChannel 側の単一並行キューを前提に状態を扱うため、
-// ここでは Sendable 検査を明示的に引き受けます。
+// @unchecked Sendable を付与します。
 final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessionDelegate,
   URLSessionTaskDelegate, URLSessionWebSocketDelegate
 {
