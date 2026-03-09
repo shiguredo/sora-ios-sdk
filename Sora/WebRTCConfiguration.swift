@@ -19,7 +19,7 @@ public struct MediaConstraints {
 }
 
 /// SDP でのマルチストリームの記述方式です。
-public enum SDPSemantics {
+public enum SDPSemantics: Sendable {
   /// Unified Plan
   case unifiedPlan
 
@@ -115,7 +115,7 @@ public struct WebRTCConfiguration {
   var nativeConstraints: RTCMediaConstraints { constraints.nativeValue }
 }
 
-private var sdpSemanticsTable: PairTable<String, SDPSemantics> =
+private let sdpSemanticsTable: PairTable<String, SDPSemantics> =
   PairTable(
     name: "SDPSemantics",
     pairs: [("unifiedPlan", .unifiedPlan)])

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 接続するクライアントのロールを表します。
-public enum Role {
+public enum Role: Sendable {
   /// 送信のみ
   case sendonly
 
@@ -12,7 +12,7 @@ public enum Role {
   case sendrecv
 }
 
-private var roleTable: PairTable<String, Role> =
+private let roleTable: PairTable<String, Role> =
   PairTable(
     name: "Role",
     pairs: [

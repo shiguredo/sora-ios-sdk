@@ -3,7 +3,7 @@ import Foundation
 
 /// ストリームの方向を表します。
 /// シグナリングメッセージで使われます。
-public enum SignalingRole: String {
+public enum SignalingRole: String, Sendable {
   /// 送信のみ
   case sendonly
 

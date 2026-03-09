@@ -14,6 +14,9 @@
 - [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
   - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
   - @zztkm
+- [UPDATE] `PairTable` を不変な値型に変更し、関連する型を `Sendable` に対応させる
+  - Swift 6 言語モードでビルドするための対応
+  - @zztkm
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
