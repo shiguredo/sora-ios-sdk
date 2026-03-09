@@ -187,7 +187,7 @@ public enum Signaling {
 }
 
 /// サイマルキャストでの映像の種類を表します。
-public enum SimulcastRid {
+public enum SimulcastRid: Sendable {
   /// r0
   case r0
 
@@ -199,7 +199,7 @@ public enum SimulcastRid {
 }
 
 /// サイマルキャストで視聴する映像の種類を表します。
-public enum SimulcastRequestRid {
+public enum SimulcastRequestRid: Sendable {
   /// 未指定
   case unspecified
 
@@ -217,7 +217,7 @@ public enum SimulcastRequestRid {
 }
 
 /// スポットライトの映像の種類を表します 。
-public enum SpotlightRid {
+public enum SpotlightRid: Sendable {
   /**
      SpotlightRid が設定されていない状態
   
@@ -772,7 +772,7 @@ extension Signaling: Codable {
   }
 }
 
-private var simulcastRidTable: PairTable<String, SimulcastRid> =
+private let simulcastRidTable: PairTable<String, SimulcastRid> =
   PairTable(
     name: "simulcastRid",
     pairs: [
@@ -792,7 +792,7 @@ extension SimulcastRid: Codable {
   }
 }
 
-private var simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
+private let simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
   // .unspecified は simulcast_request_rid の値ではなく
   // エンコードする必要がないため、テーブルに含めていない
   PairTable(
@@ -815,7 +815,7 @@ extension SimulcastRequestRid: Codable {
   }
 }
 
-private var spotlightRidTable: PairTable<String, SpotlightRid> =
+private let spotlightRidTable: PairTable<String, SpotlightRid> =
   PairTable(
     name: "spotlightRid",
     pairs: [
@@ -838,7 +838,7 @@ extension SpotlightRid: Codable {
 }
 
 /// :nodoc:
-private var roleTable: PairTable<String, SignalingRole> =
+private let roleTable: PairTable<String, SignalingRole> =
   PairTable(
     name: "SignalingRole",
     pairs: [

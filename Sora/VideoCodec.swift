@@ -13,7 +13,7 @@ private let descriptionTable: PairTable<String, VideoCodec> =
     ])
 
 /// 映像コーデックを表します。
-public enum VideoCodec {
+public enum VideoCodec: Sendable {
   /**
      サーバーが指定するデフォルトのコーデック。
      現在のデフォルトのコーデックは VP9 です。

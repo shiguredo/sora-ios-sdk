@@ -1,13 +1,13 @@
 import Foundation
 import WebRTC
 
-private var iceTransportPolicyTable: PairTable<ICETransportPolicy, RTCIceTransportPolicy> =
+private let iceTransportPolicyTable: PairTable<ICETransportPolicy, RTCIceTransportPolicy> =
   PairTable(
     name: "ICETransportPolicy",
     pairs: [(.relay, .relay), (.all, .all)])
 
 /// ICE 通信ポリシーを表します。
-public enum ICETransportPolicy {
+public enum ICETransportPolicy: Sendable {
   /// TURN サーバーを経由するメディアリレー候補のみを使用します。
   case relay
 

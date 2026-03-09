@@ -1,7 +1,7 @@
 import UIKit
 
 /// :nodoc:
-public enum AspectRatio {
+public enum AspectRatio: Sendable {
   case standard  // 4:3
   case wide  // 16:9
 
@@ -23,7 +23,7 @@ public enum AspectRatio {
   }
 }
 
-private var aspectRatioTable: PairTable<String, AspectRatio> =
+private let aspectRatioTable: PairTable<String, AspectRatio> =
   PairTable(
     name: "AspectRatio",
     pairs: [

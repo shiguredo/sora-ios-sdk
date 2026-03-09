@@ -1,5 +1,5 @@
 /// サイマルキャストの rid を表す汎用型
-public enum Rid: Equatable {
+public enum Rid: Equatable, Sendable {
   /// 映像を受信しない
   case none
 
@@ -13,7 +13,7 @@ public enum Rid: Equatable {
   case r2
 }
 
-private var ridTable: PairTable<String, Rid> =
+private let ridTable: PairTable<String, Rid> =
   PairTable(
     name: "rid",
     pairs: [

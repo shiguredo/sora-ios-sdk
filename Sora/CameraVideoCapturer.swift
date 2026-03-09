@@ -353,7 +353,7 @@ public struct CameraSettings: CustomStringConvertible {
   public static let `default` = CameraSettings()
 
   /// `CameraVideoCapturer` で使用する映像解像度を表すenumです。
-  public enum Resolution {
+  public enum Resolution: Sendable {
     /// QVGA, 320x240
     case qvga240p
 
@@ -465,7 +465,7 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
 
 // MARK: -
 
-private var resolutionTable: PairTable<String, CameraSettings.Resolution> =
+private let resolutionTable: PairTable<String, CameraSettings.Resolution> =
   PairTable(
     name: "CameraVideoCapturer.Settings.Resolution",
     pairs: [

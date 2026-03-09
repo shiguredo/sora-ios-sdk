@@ -52,10 +52,10 @@ public enum Utilities {
   }
 }
 
-final class PairTable<T: Equatable, U: Equatable> {
-  var name: String
+struct PairTable<T: Equatable & Sendable, U: Equatable & Sendable>: Sendable {
+  let name: String
 
-  private var pairs: [(T, U)]
+  private let pairs: [(T, U)]
 
   init(name: String, pairs: [(T, U)]) {
     self.name = name
