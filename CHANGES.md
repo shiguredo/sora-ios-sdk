@@ -21,6 +21,9 @@
 - [UPDATE] `URLSessionWebSocketChannel` と `Proxy` を Swift 6 の `Sendable` 要件に対応させる
   - `URLSessionWebSocketChannel` を `final class` かつ `@unchecked Sendable` とし、 `Proxy` を `Sendable` に対応させる
   - @zztkm
+- [UPDATE] TURN-TLS の証明書検証で iOS の CA を利用する
+  - `RTCSSLCertificateVerifier.verifyChain` を利用して証明書チェーン全体を取得し、 Security フレームワークで検証する
+  - @zztkm
 - [UPDATE] libwebrtc m146.7680.0.1 に上げる
   - @zztkm
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する

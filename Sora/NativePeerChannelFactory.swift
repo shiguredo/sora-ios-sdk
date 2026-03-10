@@ -72,11 +72,12 @@ class NativePeerChannelFactory {
     proxy: Proxy? = nil,
     delegate: RTCPeerConnectionDelegate?
   ) -> RTCPeerConnection? {
+    let certificateVerifier = createCertificateVerifier(configuration: configuration)
     if let proxy {
       return nativeFactory.peerConnection(
         with: configuration.nativeValue,
         constraints: constraints.nativeValue,
-        certificateVerifier: nil,
+        certificateVerifier: certificateVerifier,
         delegate: delegate,
         proxyType: RTCProxyType.https,
         proxyAgent: proxy.agent,
@@ -85,10 +86,29 @@ class NativePeerChannelFactory {
         proxyUsername: proxy.username ?? "",
         proxyPassword: proxy.password ?? "")
     } else {
-      return nativeFactory.peerConnection(
-        with: configuration.nativeValue, constraints: constraints.nativeValue,
-        delegate: delegate)
+      if let certificateVerifier {
+        return nativeFactory.peerConnection(
+          with: configuration.nativeValue,
+          constraints: constraints.nativeValue,
+          certificateVerifier: certificateVerifier,
+          delegate: delegate)
+      } else {
+        return nativeFactory.peerConnection(
+          with: configuration.nativeValue,
+          constraints: constraints.nativeValue,
+          delegate: delegate)
+      }
     }
+  }
+
+  func createCertificateVerifier(
+    configuration: WebRTCConfiguration
+  ) -> RTCSSLCertificateVerifier? {
+    if configuration.usesSecureTURNTLS {
+      return IOSCertificateVerifier()
+    }
+
+    return nil
   }
 
   func createNativeStream(streamId: String) -> RTCMediaStream {
