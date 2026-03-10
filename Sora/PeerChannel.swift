@@ -773,6 +773,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     guard nativeChannel != nil else {
+      // connect() で取得した初期ロックをここで解放しないと、
+      // disconnect が defer されたままになってしまう。
+      lock.unlock()
       disconnect(
         error: SoraError.peerChannelError(reason: "createNativePeerChannel failed"),
         reason: .signalingFailure)
