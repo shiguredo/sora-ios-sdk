@@ -1,17 +1,13 @@
 import Foundation
 import WebRTC
 
-// カメラの共有状態は内部でロックしつつ扱うため、 @unchecked Sendable を付与します。
+// カメラの共有状態は既存のカメラ用キューで扱う前提のため、 @unchecked Sendable を付与します。
 /// 解像度やフレームレートなどの設定は `start` 実行時に指定します。
 /// カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
 ///
 /// カメラの設定を変更したい場合は、 `change` を実行します。
 public final class CameraVideoCapturer: @unchecked Sendable {
   // MARK: インスタンスの取得
-
-  private static let stateLock = NSLock()
-  private nonisolated(unsafe) static var currentStorage: CameraVideoCapturer?
-  private nonisolated(unsafe) static var handlersStorage = CameraVideoCapturerHandlers()
 
   /// 利用可能なデバイスのリスト
   /// RTCCameraVideoCapturer.captureDevices を返します。
@@ -35,12 +31,9 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     }
   }()
 
+  // TODO(zztkm): 共有状態を actor に移し、 async API に置き換えて concurrency-safe にする。
   /// 起動中のデバイス
-  public static var current: CameraVideoCapturer? {
-    stateLock.lock()
-    defer { stateLock.unlock() }
-    return currentStorage
-  }
+  public private(set) nonisolated(unsafe) static var current: CameraVideoCapturer?
 
   /// RTCCameraVideoCapturer が保持している AVCaptureSession
   public var captureSession: AVCaptureSession { native.captureSession }
@@ -172,19 +165,9 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   /// カメラが起動中であれば ``true``
   public private(set) var isRunning: Bool = false
 
+  // TODO(zztkm): イベントハンドラを actor 経由で管理し、 @Sendable な API に置き換える。
   /// イベントハンドラ
-  public static var handlers: CameraVideoCapturerHandlers {
-    get {
-      stateLock.lock()
-      defer { stateLock.unlock() }
-      return handlersStorage
-    }
-    set {
-      stateLock.lock()
-      handlersStorage = newValue
-      stateLock.unlock()
-    }
-  }
+  public nonisolated(unsafe) static var handlers = CameraVideoCapturerHandlers()
 
   /// カメラの位置
   public var position: AVCaptureDevice.Position {
@@ -248,7 +231,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       self.format = format
       self.frameRate = frameRate
       isRunning = true
-      CameraVideoCapturer.setCurrent(self)
+      CameraVideoCapturer.current = self
       completionHandler(nil)
       CameraVideoCapturer.handlers.onStart?(self)
     }
@@ -274,7 +257,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
 
       // stop が成功した際の処理
       isRunning = false
-      CameraVideoCapturer.setCurrent(nil)
+      CameraVideoCapturer.current = nil
       completionHandler(nil)
       CameraVideoCapturer.handlers.onStop?(self)
     }
@@ -366,11 +349,6 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     }
   }
 
-  private static func setCurrent(_ current: CameraVideoCapturer?) {
-    stateLock.lock()
-    currentStorage = current
-    stateLock.unlock()
-  }
 }
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。

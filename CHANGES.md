@@ -26,6 +26,7 @@
 - [UPDATE] 静的共有状態と singleton を Swift 6 の concurrency-safe 要件に対応させる
   - `CameraVideoCapturer`, `Logger`, `NativePeerChannelFactory`, `Sora` などの共有状態を整理する
   - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
+  - `CameraSettings.default` を共有保存値から新しい値を返す計算プロパティに変更する
   - SDK 側で公開 class に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
