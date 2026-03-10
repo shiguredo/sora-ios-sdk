@@ -15,7 +15,7 @@ final class IOSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
   // `RTCSSLCertificateVerifier` の必須要件を満たすために実装する。
   // `verifyChain` が利用できる libwebrtc では、通常はこちらは使われない想定。
   func verify(_ derCertificate: Data) -> Bool {
-    verifyChain([derCertificate])
+    return verifyChain([derCertificate])
   }
 
   @objc func verifyChain(_ derCertificateChain: [Data]) -> Bool {
@@ -46,6 +46,7 @@ final class IOSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
       return false
     }
 
-    return SecTrustEvaluateWithError(trust, nil)
+    var error: CFError?
+    return SecTrustEvaluateWithError(trust, &error)
   }
 }

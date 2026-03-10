@@ -203,19 +203,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try connecting")
 
-    nativeChannel = NativePeerChannelFactory.default
-      .createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
-        proxy: configuration.proxy,
-        delegate: self)
-    guard nativeChannel != nil else {
-      let message = "createNativePeerChannel failed"
-      Logger.debug(type: .peerChannel, message: message)
-      handler(SoraError.peerChannelError(reason: message))
-      return
-    }
-
     // このロックは finishConnecting() で解除される
     lock.lock()
     onConnect = handler
@@ -759,15 +746,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func createAndSendAnswer(offer: SignalingOffer) {
-    guard let nativeChannel else {
-      Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-      return
-    }
-
     Logger.debug(type: .peerChannel, message: "try sending answer")
     offerEncodings = offer.encodings
 
     if let config = offer.configuration {
+      let usesSecureTURNTLS = config.iceServerInfos.contains { info in
+        info.usesSecureTURNTLS
+      }
       Logger.debug(type: .peerChannel, message: "update configuration")
       Logger.debug(
         type: .peerChannel, message: "ICE server infos => \(config.iceServerInfos)")
@@ -775,7 +760,24 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel, message: "ICE transport policy => \(config.iceTransportPolicy)")
       webRTCConfiguration.iceServerInfos = config.iceServerInfos
       webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
-      nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
+    }
+
+    if nativeChannel == nil {
+      nativeChannel = NativePeerChannelFactory.default
+        .createNativePeerChannel(
+          configuration: webRTCConfiguration,
+          constraints: webRTCConfiguration.constraints,
+          proxy: configuration.proxy,
+          delegate: self)
+    } else if offer.configuration != nil {
+      nativeChannel?.setConfiguration(webRTCConfiguration.nativeValue)
+    }
+
+    guard nativeChannel != nil else {
+      disconnect(
+        error: SoraError.peerChannelError(reason: "createNativePeerChannel failed"),
+        reason: .signalingFailure)
+      return
     }
 
     lock.lock()
