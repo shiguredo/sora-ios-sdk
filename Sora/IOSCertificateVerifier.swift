@@ -2,6 +2,7 @@ import Foundation
 import Security
 import WebRTC
 
+/// TURN-TLS 向けに iOS のシステム CA で証明書チェーンを検証する verifier です。
 final class IOSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
   typealias Evaluator = ([SecCertificate]) -> Bool
 
@@ -13,7 +14,7 @@ final class IOSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
   }
 
   // `RTCSSLCertificateVerifier` の必須要件を満たすために実装する。
-  // `verifyChain` が利用できる libwebrtc では、通常はこちらは使われない想定。
+  // `verifyChain` が利用できる場合こちらは使われない。
   func verify(_ derCertificate: Data) -> Bool {
     return verifyChain([derCertificate])
   }
