@@ -750,9 +750,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     offerEncodings = offer.encodings
 
     if let config = offer.configuration {
-      let usesSecureTURNTLS = config.iceServerInfos.contains { info in
-        info.usesSecureTURNTLS
-      }
       Logger.debug(type: .peerChannel, message: "update configuration")
       Logger.debug(
         type: .peerChannel, message: "ICE server infos => \(config.iceServerInfos)")

@@ -27,8 +27,6 @@
   - `RTCSSLCertificateVerifier.verifyChain` を利用して証明書チェーン全体を取得し、 Security フレームワークで検証する
   - `offer.configuration` で TURN-TLS の ICE サーバー設定を受け取った後に、接続に利用する `RTCPeerConnection` を生成する
   - @zztkm
-- [UPDATE] libwebrtc m146.7680.0.1 に上げる
-  - @zztkm
 - [UPDATE] 静的共有状態と singleton を Swift 6 の concurrency-safe 要件に対応させる
   - `CameraVideoCapturer`, `Logger`, `NativePeerChannelFactory`, `Sora` などの共有状態を整理する
   - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
