@@ -76,6 +76,8 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   ) -> RTCPeerConnection? {
     let certificateVerifier = createCertificateVerifier(configuration: configuration)
     if let proxy {
+      // proxy ありの overload は certificateVerifier が nullable のため、
+      // verifier が不要な場合は nil をそのまま渡せる。
       return nativeFactory.peerConnection(
         with: configuration.nativeValue,
         constraints: constraints.nativeValue,
@@ -95,6 +97,8 @@ final class NativePeerChannelFactory: @unchecked Sendable {
           certificateVerifier: certificateVerifier,
           delegate: delegate)
       } else {
+        // proxy なしの certificateVerifier 付き overload は nullable ではないため、
+        // certificateVerifier が不要な場合は certificateVerifier なしの overload を使う。
         return nativeFactory.peerConnection(
           with: configuration.nativeValue,
           constraints: constraints.nativeValue,
