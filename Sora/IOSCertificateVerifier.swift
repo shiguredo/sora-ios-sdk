@@ -35,7 +35,14 @@ final class IOSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
   }
 
   private static func evaluate(_ certificateChain: [SecCertificate]) -> Bool {
-    let policy = SecPolicyCreateSSL(false, nil)
+    // TURN サーバーの証明書をサーバー用途として検証する。
+    // ただし、 RTCSSLCertificateVerifier からは接続先ホスト名を受け取れないため、
+    // serverName を指定したホスト名検証は行えない。
+    // libwebrtc の TURN-TLS 向け OpenSSLAdapter 経路でも、ホスト名は SNI には使われるが、
+    // 証明書の SAN / CN 照合には使われていない。
+    // そのため、ここでは libwebrtc の既存挙動に合わせて、
+    // iOS のシステム CA による証明書チェーン検証のみを行う。
+    let policy = SecPolicyCreateSSL(true, nil)
     var trust: SecTrust?
     let status = SecTrustCreateWithCertificates(
       certificateChain as CFArray,

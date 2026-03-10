@@ -25,7 +25,7 @@
   - @zztkm
 - [UPDATE] TURN-TLS の証明書検証で iOS の CA を利用する
   - `RTCSSLCertificateVerifier.verifyChain` を利用して証明書チェーン全体を取得し、 Security フレームワークで検証する
-  - TURN-TLS の ICE サーバー設定を `offer.configuration` で受け取った後に main の `RTCPeerConnection` を生成する
+  - `offer.configuration` で TURN-TLS の ICE サーバー設定を受け取った後に、接続に利用する `RTCPeerConnection` を生成する
   - @zztkm
 - [UPDATE] libwebrtc m146.7680.0.1 に上げる
   - @zztkm
