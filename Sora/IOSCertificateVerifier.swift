@@ -18,6 +18,7 @@ final class IOSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
     return verifyChain([derCertificate])
   }
 
+  // libwebrtc 側から Objective-C の `verifyChain:` selector として呼べるように `@objc` を付与する。
   @objc func verifyChain(_ derCertificateChain: [Data]) -> Bool {
     let certificateChain = derCertificateChain.compactMap { derCertificate in
       SecCertificateCreateWithData(nil, derCertificate as CFData)
