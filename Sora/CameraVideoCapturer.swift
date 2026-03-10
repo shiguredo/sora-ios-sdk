@@ -513,7 +513,7 @@ extension CameraSettings.Resolution: Codable {
 }
 
 /// CameraVideoCapturer のイベントハンドラです。
-public final class CameraVideoCapturerHandlers: @unchecked Sendable {
+public class CameraVideoCapturerHandlers {
   /// 生成された映像フレームを受け取ります。
   /// 返した映像フレームがストリームに渡されます。
   public var onCapture: ((CameraVideoCapturer, VideoFrame) -> VideoFrame)?
