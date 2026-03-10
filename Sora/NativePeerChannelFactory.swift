@@ -1,8 +1,9 @@
 import Foundation
 import WebRTC
 
-class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
-  static var shared = WrapperVideoEncoderFactory()
+// WebRTC のエンコーダーファクトリーを共有して扱うため、 @unchecked Sendable を付与します。
+final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoEncoderFactory {
+  static let shared = WrapperVideoEncoderFactory()
 
   var defaultEncoderFactory: RTCDefaultVideoEncoderFactory
 
@@ -30,8 +31,9 @@ class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
   }
 }
 
-class NativePeerChannelFactory {
-  static var `default` = NativePeerChannelFactory()
+// WebRTC のファクトリーを共有して扱うため、 @unchecked Sendable を付与します。
+final class NativePeerChannelFactory: @unchecked Sendable {
+  static let `default` = NativePeerChannelFactory()
 
   let audioDeviceModule: RTCAudioDeviceModule
   /// 録音ポーズ/再開制御用に保持する ADM ラッパー

@@ -1,11 +1,12 @@
 import Foundation
 import WebRTC
 
+// カメラの共有状態は既存のカメラ用キューで扱う前提のため、 @unchecked Sendable を付与します。
 /// 解像度やフレームレートなどの設定は `start` 実行時に指定します。
 /// カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
 ///
 /// カメラの設定を変更したい場合は、 `change` を実行します。
-public final class CameraVideoCapturer {
+public final class CameraVideoCapturer: @unchecked Sendable {
   // MARK: インスタンスの取得
 
   /// 利用可能なデバイスのリスト
@@ -13,7 +14,7 @@ public final class CameraVideoCapturer {
   public static var devices: [AVCaptureDevice] { RTCCameraVideoCapturer.captureDevices() }
 
   /// 前面のカメラに対応するデバイス
-  public private(set) static var front: CameraVideoCapturer? = {
+  public static let front: CameraVideoCapturer? = {
     if let device = device(for: .front) {
       return CameraVideoCapturer(device: device)
     } else {
@@ -22,7 +23,7 @@ public final class CameraVideoCapturer {
   }()
 
   /// 背面のカメラに対応するデバイス
-  public private(set) static var back: CameraVideoCapturer? = {
+  public static let back: CameraVideoCapturer? = {
     if let device = device(for: .back) {
       return CameraVideoCapturer(device: device)
     } else {
@@ -30,8 +31,9 @@ public final class CameraVideoCapturer {
     }
   }()
 
+  // TODO(zztkm): 共有状態を actor に移し、 async API に置き換えて concurrency-safe にする。
   /// 起動中のデバイス
-  public private(set) static var current: CameraVideoCapturer?
+  public private(set) nonisolated(unsafe) static var current: CameraVideoCapturer?
 
   /// RTCCameraVideoCapturer が保持している AVCaptureSession
   public var captureSession: AVCaptureSession { native.captureSession }
@@ -163,8 +165,9 @@ public final class CameraVideoCapturer {
   /// カメラが起動中であれば ``true``
   public private(set) var isRunning: Bool = false
 
+  // TODO(zztkm): イベントハンドラを actor 経由で管理し、 @Sendable な API に置き換える。
   /// イベントハンドラ
-  public static var handlers = CameraVideoCapturerHandlers()
+  public nonisolated(unsafe) static var handlers = CameraVideoCapturerHandlers()
 
   /// カメラの位置
   public var position: AVCaptureDevice.Position {
@@ -345,12 +348,13 @@ public final class CameraVideoCapturer {
       }
     }
   }
+
 }
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。
 public struct CameraSettings: CustomStringConvertible {
   /// デフォルトの設定。
-  public static let `default` = CameraSettings()
+  public static var `default`: CameraSettings { CameraSettings() }
 
   /// `CameraVideoCapturer` で使用する映像解像度を表すenumです。
   public enum Resolution: Sendable {

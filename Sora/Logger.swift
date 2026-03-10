@@ -174,8 +174,10 @@ extension Log: CustomStringConvertible {
 
 // MARK: -
 
+// ロガーは共有インスタンスを通して利用され、内部状態を呼び出し側で制御するため、
+// @unchecked Sendable を付与します。
 /// :nodoc:
-public final class Logger {
+public final class Logger: @unchecked Sendable {
   public enum Group {
     case channels
     case connectionTimer
@@ -185,7 +187,12 @@ public final class Logger {
     case user
   }
 
-  public static var shared = Logger()
+  private nonisolated(unsafe) static var sharedStorage = Logger()
+
+  public static var shared: Logger {
+    get { sharedStorage }
+    set { sharedStorage = newValue }
+  }
 
   public var onOutputHandler: ((Log) -> Void)?
 
