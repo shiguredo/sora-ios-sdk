@@ -60,13 +60,9 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
       Logger.debug(
         type: .videoRenderer,
         message: "set size \(size) for \(renderer)")
-      if Thread.isMainThread {
-        renderer.onChange(size: size)
-      } else {
-        let event = VideoRendererSizeEvent(renderer: renderer, size: size)
-        DispatchQueue.main.async { [event] in
-          event.renderer?.onChange(size: event.size)
-        }
+      let event = VideoRendererSizeEvent(renderer: renderer, size: size)
+      DispatchQueue.main.async { [event] in
+        event.renderer?.onChange(size: event.size)
       }
     } else {
       Logger.debug(
@@ -77,13 +73,9 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
 
   func renderFrame(_ frame: RTCVideoFrame?) {
     let videoFrame = frame.map { VideoFrame.native(capturer: nil, frame: $0) }
-    if Thread.isMainThread {
-      videoRenderer?.render(videoFrame: videoFrame)
-    } else {
-      let event = VideoRendererFrameEvent(renderer: videoRenderer, videoFrame: videoFrame)
-      DispatchQueue.main.async { [event] in
-        event.renderer?.render(videoFrame: event.videoFrame)
-      }
+    let event = VideoRendererFrameEvent(renderer: videoRenderer, videoFrame: videoFrame)
+    DispatchQueue.main.async { [event] in
+      event.renderer?.render(videoFrame: event.videoFrame)
     }
   }
 }
