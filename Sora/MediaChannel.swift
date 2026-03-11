@@ -795,8 +795,8 @@ public final class MediaChannel {
       senderStream.videoEnabled = false
       try await Self.videoHardMuteActor.setMute(
         mute: true,
-        senderStream: senderStream,
-        cameraSettings: configuration.cameraSettings
+        senderStream: SenderStreamBox(stream: senderStream),
+        cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
     } else {
       // 画面キャプチャ動作中はカメラを再開しません
@@ -809,8 +809,8 @@ public final class MediaChannel {
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(
         mute: false,
-        senderStream: senderStream,
-        cameraSettings: configuration.cameraSettings
+        senderStream: SenderStreamBox(stream: senderStream),
+        cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
       senderStream.videoEnabled = true
     }

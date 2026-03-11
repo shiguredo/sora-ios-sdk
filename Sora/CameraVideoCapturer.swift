@@ -352,7 +352,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
 }
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。
-public struct CameraSettings: CustomStringConvertible, Sendable {
+public struct CameraSettings: CustomStringConvertible {
   /// デフォルトの設定。
   public static var `default`: CameraSettings { CameraSettings() }
 

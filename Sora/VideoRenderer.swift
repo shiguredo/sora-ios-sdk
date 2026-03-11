@@ -1,6 +1,26 @@
 import Foundation
 import WebRTC
 
+private final class VideoRendererSizeEvent: NSObject {
+  weak var renderer: VideoRenderer?
+  let size: CGSize
+
+  init(renderer: VideoRenderer?, size: CGSize) {
+    self.renderer = renderer
+    self.size = size
+  }
+}
+
+private final class VideoRendererFrameEvent: NSObject {
+  weak var renderer: VideoRenderer?
+  let videoFrame: VideoFrame?
+
+  init(renderer: VideoRenderer?, videoFrame: VideoFrame?) {
+    self.renderer = renderer
+    self.videoFrame = videoFrame
+  }
+}
+
 /// 映像の描画に必要な機能を定義したプロトコルです。
 public protocol VideoRenderer: AnyObject {
   /// 映像のサイズが変更されたときに呼ばれます。
@@ -26,7 +46,7 @@ public protocol VideoRenderer: AnyObject {
   func onSwitch(audio: Bool)
 }
 
-class VideoRendererAdapter: NSObject, RTCVideoRenderer, @unchecked Sendable {
+class VideoRendererAdapter: NSObject, RTCVideoRenderer {
   private(set) weak var videoRenderer: VideoRenderer?
 
   init(videoRenderer: VideoRenderer) {
@@ -41,9 +61,8 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer, @unchecked Sendable {
       if Thread.isMainThread {
         renderer.onChange(size: size)
       } else {
-        DispatchQueue.main.sync {
-          self.videoRenderer?.onChange(size: size)
-        }
+        let event = VideoRendererSizeEvent(renderer: renderer, size: size)
+        perform(#selector(handleSizeEvent(_:)), on: .main, with: event, waitUntilDone: false)
       }
     } else {
       Logger.debug(
@@ -53,20 +72,20 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer, @unchecked Sendable {
   }
 
   func renderFrame(_ frame: RTCVideoFrame?) {
-    let render = {
-      if let renderer = self.videoRenderer {
-        if let frame {
-          let frame = VideoFrame.native(capturer: nil, frame: frame)
-          renderer.render(videoFrame: frame)
-        } else {
-          renderer.render(videoFrame: nil)
-        }
-      }
-    }
+    let videoFrame = frame.map { VideoFrame.native(capturer: nil, frame: $0) }
     if Thread.isMainThread {
-      render()
+      videoRenderer?.render(videoFrame: videoFrame)
     } else {
-      DispatchQueue.main.sync(execute: render)
+      let event = VideoRendererFrameEvent(renderer: videoRenderer, videoFrame: videoFrame)
+      perform(#selector(handleFrameEvent(_:)), on: .main, with: event, waitUntilDone: false)
     }
+  }
+
+  @objc private func handleSizeEvent(_ event: VideoRendererSizeEvent) {
+    event.renderer?.onChange(size: event.size)
+  }
+
+  @objc private func handleFrameEvent(_ event: VideoRendererFrameEvent) {
+    event.renderer?.render(videoFrame: event.videoFrame)
   }
 }

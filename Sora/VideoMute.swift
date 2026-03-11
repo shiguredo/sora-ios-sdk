@@ -1,4 +1,29 @@
+import AVFoundation
 import Foundation
+
+// 公開 API の CameraSettings に Sendable を要求せず、
+// actor 境界を越えるために必要な値だけを内部でスナップショット化します。
+struct CameraSettingsSnapshot: Sendable {
+  let resolution: CameraSettings.Resolution
+  let frameRate: Int
+  let positionRawValue: Int
+
+  init(_ cameraSettings: CameraSettings) {
+    resolution = cameraSettings.resolution
+    frameRate = cameraSettings.frameRate
+    positionRawValue = cameraSettings.position.rawValue
+  }
+
+  var position: AVCaptureDevice.Position {
+    AVCaptureDevice.Position(rawValue: positionRawValue) ?? .unspecified
+  }
+}
+
+// 公開 API の MediaStream に Sendable を要求せず、
+// actor 境界で参照を受け渡すための内部ラッパーです。
+struct SenderStreamBox: @unchecked Sendable {
+  let stream: MediaStream
+}
 
 // 映像ハードミュートの同時呼び出しによるレースコンディション防止を目的とした Actor です
 // MediaChannel.setVideoHardMute(_:) での使用を想定しています
@@ -17,7 +42,11 @@ actor VideoHardMuteActor {
   /// - Throws:
   ///   - 既に処理実行中の場合は `SoraError.mediaChannelError`
   ///   - カメラ操作の失敗時は `SoraError.cameraError`
-  func setMute(mute: Bool, senderStream: MediaStream, cameraSettings: CameraSettings) async throws {
+  func setMute(
+    mute: Bool,
+    senderStream: SenderStreamBox,
+    cameraSettings: CameraSettingsSnapshot
+  ) async throws {
     guard !isProcessing else {
       throw SoraError.mediaChannelError(reason: "video hard mute operation is in progress")
     }
@@ -78,13 +107,13 @@ actor VideoHardMuteActor {
   // カメラキャプチャを再開します
   private func restartCameraVideoCapture(
     _ capturer: CameraVideoCapturer,
-    senderStream: MediaStream
+    senderStream: SenderStreamBox
   ) async throws {
     // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して実行します
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       SoraDispatcher.async(on: .camera) {
         // マルチストリームの場合、停止時と現在の送信ストリームが異なることがあるので再設定します
-        capturer.stream = senderStream
+        capturer.stream = senderStream.stream
         // CameraVideoCapturer.restart はコールバック形式です
         capturer.restart { error in
           if let error {
@@ -99,8 +128,8 @@ actor VideoHardMuteActor {
 
   // カメラキャプチャを開始します
   private func startCameraVideoCapture(
-    cameraSettings: CameraSettings,
-    senderStream: MediaStream
+    cameraSettings: CameraSettingsSnapshot,
+    senderStream: SenderStreamBox
   ) async throws {
     // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して実行します
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -155,7 +184,7 @@ actor VideoHardMuteActor {
 
         // カメラキャプチャを開始します
         // CameraVideoCapturer.start はコールバック形式です
-        capturer.stream = senderStream
+        capturer.stream = senderStream.stream
         // start 完了まで capturer を確実に生存させるためにクロージャ側でも保持します。
         // start 成功時は CameraVideoCapturer.current がセットされ、以後はそちらが保持します。
         capturer.start(format: format, frameRate: frameRate) { [capturer] error in

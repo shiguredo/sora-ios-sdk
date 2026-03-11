@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// :nodoc:
 func currentMachineName() -> String {
@@ -21,14 +22,22 @@ func currentMachineName() -> String {
 }
 
 /// :nodoc:
+func currentSystemVersion() -> String {
+  if Thread.isMainThread {
+    return MainActor.assumeIsolated { UIDevice.current.systemVersion }
+  } else {
+    return DispatchQueue.main.sync {
+      MainActor.assumeIsolated { UIDevice.current.systemVersion }
+    }
+  }
+}
+
+/// :nodoc:
 public struct DeviceInfo: Sendable {
   public static let current: DeviceInfo = .init(
     machineName: currentMachineName(),
     systemName: "iOS",
-    systemVersion: {
-      let version = ProcessInfo.processInfo.operatingSystemVersion
-      return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
-    }())
+    systemVersion: currentSystemVersion())
 
   public let machineName: String
   public let systemName: String
