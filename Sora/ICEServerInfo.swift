@@ -42,7 +42,7 @@ public final class ICEServerInfo {
     self.tlsSecurityPolicy = tlsSecurityPolicy
   }
 
-  var usesSecureTURNTLS: Bool {
+  var usesVerifiedTURNTLS: Bool {
     switch tlsSecurityPolicy {
     case .secure:
       return urls.contains { url in

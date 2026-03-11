@@ -110,7 +110,7 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   private func createCertificateVerifier(
     configuration: WebRTCConfiguration
   ) -> RTCSSLCertificateVerifier? {
-    if configuration.usesSecureTURNTLS {
+    if configuration.usesVerifiedTURNTLS {
       return IOSCertificateVerifier()
     }
 

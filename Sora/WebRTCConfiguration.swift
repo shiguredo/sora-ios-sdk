@@ -114,9 +114,9 @@ public struct WebRTCConfiguration {
 
   var nativeConstraints: RTCMediaConstraints { constraints.nativeValue }
 
-  var usesSecureTURNTLS: Bool {
+  var usesVerifiedTURNTLS: Bool {
     iceServerInfos.contains { info in
-      info.usesSecureTURNTLS
+      info.usesVerifiedTURNTLS
     }
   }
 }
