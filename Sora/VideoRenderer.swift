@@ -53,6 +53,8 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     self.videoRenderer = videoRenderer
   }
 
+  // TODO(zztkm): VideoView / VideoRenderer の MainActor 整合性は別途根本対応する。
+  // Swift 6 ビルドを優先し、描画とサイズ変更だけを main thread に受け渡します。
   func setSize(_ size: CGSize) {
     if let renderer = videoRenderer {
       Logger.debug(

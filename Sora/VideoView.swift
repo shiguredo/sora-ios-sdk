@@ -180,6 +180,7 @@ public class VideoView: UIView {
 
 // MARK: - VideoRenderer
 
+// TODO(zztkm): VideoRenderer 側の MainActor 整合性を整理したら `@preconcurrency` を外す。
 /// :nodoc:
 extension VideoView: @preconcurrency VideoRenderer {
   /// :nodoc:
