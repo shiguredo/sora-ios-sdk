@@ -1,7 +1,7 @@
 import Foundation
 import WebRTC
 
-private final class VideoRendererSizeEvent: NSObject {
+private final class VideoRendererSizeEvent: @unchecked Sendable {
   weak var renderer: VideoRenderer?
   let size: CGSize
 
@@ -11,7 +11,7 @@ private final class VideoRendererSizeEvent: NSObject {
   }
 }
 
-private final class VideoRendererFrameEvent: NSObject {
+private final class VideoRendererFrameEvent: @unchecked Sendable {
   weak var renderer: VideoRenderer?
   let videoFrame: VideoFrame?
 
@@ -64,7 +64,9 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
         renderer.onChange(size: size)
       } else {
         let event = VideoRendererSizeEvent(renderer: renderer, size: size)
-        perform(#selector(handleSizeEvent(_:)), on: .main, with: event, waitUntilDone: false)
+        DispatchQueue.main.async { [event] in
+          event.renderer?.onChange(size: event.size)
+        }
       }
     } else {
       Logger.debug(
@@ -79,15 +81,9 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
       videoRenderer?.render(videoFrame: videoFrame)
     } else {
       let event = VideoRendererFrameEvent(renderer: videoRenderer, videoFrame: videoFrame)
-      perform(#selector(handleFrameEvent(_:)), on: .main, with: event, waitUntilDone: false)
+      DispatchQueue.main.async { [event] in
+        event.renderer?.render(videoFrame: event.videoFrame)
+      }
     }
-  }
-
-  @objc private func handleSizeEvent(_ event: VideoRendererSizeEvent) {
-    event.renderer?.onChange(size: event.size)
-  }
-
-  @objc private func handleFrameEvent(_ event: VideoRendererFrameEvent) {
-    event.renderer?.render(videoFrame: event.videoFrame)
   }
 }
