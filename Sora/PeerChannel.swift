@@ -514,14 +514,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(
         type: .peerChannel,
         message: "skip default audio input initialization because custom audio device is used")
-
-      let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
-      if initialMicrophoneMute,
-        let audioInputController = nativePeerChannelFactory.audioInputMuteController,
-        !audioInputController.setAudioInputMuted(true)
-      {
-        Logger.warn(type: .peerChannel, message: "failed to mute custom audio input")
-      }
+      // カスタム音声デバイス利用時の初期マイク状態は、接続前に Sora.configureBeforeConnect で適用済みです。
       isAudioInputInitialized = true
     } else {
       Logger.debug(
