@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 
 /// :nodoc:
 func currentMachineName() -> String {
@@ -23,13 +22,8 @@ func currentMachineName() -> String {
 
 /// :nodoc:
 func currentSystemVersion() -> String {
-  if Thread.isMainThread {
-    return MainActor.assumeIsolated { UIDevice.current.systemVersion }
-  } else {
-    return DispatchQueue.main.sync {
-      MainActor.assumeIsolated { UIDevice.current.systemVersion }
-    }
-  }
+  let version = ProcessInfo.processInfo.operatingSystemVersion
+  return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
 }
 
 /// :nodoc:
