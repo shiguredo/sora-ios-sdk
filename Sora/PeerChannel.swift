@@ -510,6 +510,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(
         type: .peerChannel,
         message: "audio input is already initialized")
+    } else if nativePeerChannelFactory.usesCustomAudioDevice {
+      Logger.debug(
+        type: .peerChannel,
+        message: "skip default audio input initialization because custom audio device is used")
+
+      let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
+      if initialMicrophoneMute,
+        let audioInputController = nativePeerChannelFactory.audioInputMuteController,
+        !audioInputController.setAudioInputMuted(true)
+      {
+        Logger.warn(type: .peerChannel, message: "failed to mute custom audio input")
+      }
+      isAudioInputInitialized = true
     } else {
       Logger.debug(
         type: .peerChannel,

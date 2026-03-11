@@ -153,6 +153,14 @@ public final class Sora: @unchecked Sendable {
         _ error: Error?
       ) -> Void
   ) -> ConnectionTask {
+    if let error = configureBeforeConnect(configuration: configuration) {
+      let task = ConnectionTask()
+      task.complete()
+      handler(nil, error)
+      handlers.onConnect?(nil, error)
+      return task
+    }
+
     let mediaChan = MediaChannel(manager: self, configuration: configuration)
     mediaChan.internalHandlers.onDisconnectLegacy = { [weak self, weak mediaChan] error in
       guard let weakSelf = self else {
@@ -188,6 +196,35 @@ public final class Sora: @unchecked Sendable {
       handler(mediaChan, nil)
       weakSelf.handlers.onConnect?(mediaChan, nil)
     }
+  }
+
+  // Configuration の組み合わせチェックと、接続前の事前適用を行います
+  func configureBeforeConnect(configuration: Configuration) -> Error? {
+    if configuration.isSender,
+      configuration.audioEnabled,
+      !configuration.initialMicrophoneEnabled,
+      let customAudioDevice = configuration.customAudioDevice,
+      !(customAudioDevice is AudioInputMuteControllable)
+    {
+      return SoraError.mediaChannelError(
+        reason:
+          "customAudioDevice must conform to AudioInputMuteControllable when initialMicrophoneEnabled is false"
+      )
+    }
+
+    if configuration.isSender,
+      configuration.audioEnabled,
+      let audioInputMuteControllable = configuration.customAudioDevice
+        as? AudioInputMuteControllable
+    {
+      let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
+      if !audioInputMuteControllable.setAudioInputMuted(initialMicrophoneMute) {
+        return SoraError.mediaChannelError(
+          reason: "failed to apply initial microphone state to customAudioDevice")
+      }
+    }
+
+    return nil
   }
 
   // MARK: - 音声ユニットの操作

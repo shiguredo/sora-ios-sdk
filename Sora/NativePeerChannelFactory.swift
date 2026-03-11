@@ -34,26 +34,54 @@ final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoE
 // WebRTC の非 Sendable オブジェクトを保持するため、
 // 呼び出し側でスレッド安全性を担保する前提で @unchecked Sendable を付与します。
 final class NativePeerChannelFactory: @unchecked Sendable {
-  let audioDeviceModule: RTCAudioDeviceModule
-  /// 録音ポーズ/再開制御用に保持する ADM ラッパー
-  let audioDeviceModuleWrapper: AudioDeviceModuleWrapper
+  let audioDeviceModule: RTCAudioDeviceModule?
+  let customAudioDevice: RTCAudioDevice?
+  /// 録音ミュート制御用に保持するラッパー
+  let audioInputMuteController: AudioInputMuteController?
 
   var nativeFactory: RTCPeerConnectionFactory
 
-  init(bypassVoiceProcessing: Bool) {
-    Logger.debug(type: .peerChannel, message: "create native peer channel factory")
+  var usesCustomAudioDevice: Bool {
+    customAudioDevice != nil
+  }
 
-    audioDeviceModule = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
-    audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: audioDeviceModule)
+  init(bypassVoiceProcessing: Bool, customAudioDevice: RTCAudioDevice? = nil) {
+    Logger.debug(type: .peerChannel, message: "create native peer channel factory")
+    self.customAudioDevice = customAudioDevice
 
     // 映像コーデックのエンコーダーとデコーダーを用意する
     let encoder = WrapperVideoEncoderFactory.shared
     let decoder = RTCDefaultVideoDecoderFactory()
-    nativeFactory =
-      RTCPeerConnectionFactory(
-        encoderFactory: encoder,
-        decoderFactory: decoder,
-        audioDeviceModule: audioDeviceModule)
+    if let customAudioDevice {
+      // カスタム ADM を使用する
+      audioDeviceModule = nil
+      if let audioInputMuteControllable = customAudioDevice as? AudioInputMuteControllable {
+        audioInputMuteController = AudioInputMuteControllableWrapper(
+          audioInputMuteControllable: audioInputMuteControllable)
+      } else {
+        audioInputMuteController = nil
+      }
+      nativeFactory =
+        RTCPeerConnectionFactory(
+          encoderFactory: encoder,
+          decoderFactory: decoder,
+          audioDevice: customAudioDevice)
+    } else {
+      guard
+        let createdAudioDeviceModule = RTCAudioDeviceModule(
+          bypassVoiceProcessing: bypassVoiceProcessing)
+      else {
+        fatalError("RTCAudioDeviceModule の生成に失敗しました")
+      }
+      self.audioDeviceModule = createdAudioDeviceModule
+      audioInputMuteController = AudioDeviceModuleWrapper(
+        audioDeviceModule: createdAudioDeviceModule)
+      nativeFactory =
+        RTCPeerConnectionFactory(
+          encoderFactory: encoder,
+          decoderFactory: decoder,
+          audioDeviceModule: createdAudioDeviceModule)
+    }
 
     for info in encoder.supportedCodecs() {
       Logger.debug(
