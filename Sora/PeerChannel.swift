@@ -133,11 +133,24 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   weak var mediaChannel: MediaChannel?
 
   var state: PeerChannelConnectionState {
-    guard let nativeChannel else {
-      return PeerChannelConnectionState(RTCPeerConnectionState.new)
+    if let nativeChannel {
+      let state = PeerChannelConnectionState(nativeChannel.connectionState)
+      // connect() 開始後から finishConnecting() / basicDisconnect() までは onConnect が保持される。
+      // そのため、 RTCPeerConnection を生成済みでも connectionState が .new の間は
+      // 接続試行中として扱う。
+      if onConnect != nil, state == .new {
+        return .connecting
+      }
+      return state
     }
 
-    return PeerChannelConnectionState(nativeChannel.connectionState)
+    if onConnect != nil {
+      // offer.configuration を受け取るまで RTCPeerConnection を生成しないため、
+      // nativeChannel が未生成でも、onConnect が保持されていれば接続試行中として扱う。
+      return .connecting
+    }
+
+    return PeerChannelConnectionState(RTCPeerConnectionState.new)
   }
 
   var nativeChannel: RTCPeerConnection?
@@ -265,6 +278,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func sendConnectMessage(error: Error?) {
     if let error {
+      lock.unlock()
       Logger.error(
         type: .peerChannel,
         message: "failed connecting to signaling channel (\(error.localizedDescription))")
