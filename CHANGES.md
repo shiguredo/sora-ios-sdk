@@ -28,11 +28,11 @@
   - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
   - `CameraSettings.default` を共有保存値から新しい値を返す計算プロパティに変更する
   - SDK 側で公開 class に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
-- [UPDATE] UIKit 依存 API の MainActor 関連ビルドエラーを Swift 6 ビルド優先で暫定対応する
+- [UPDATE] Swift 6 言語モードのビルドで発生する UIKit 依存 API の MainActor 関連ビルドエラーが発生しないように暫定対応を行う
   - `DeviceInfo` を `UIDevice` 依存の状態保持から `Sendable` なスナップショットへ変更する
   - `VideoView` の `VideoRenderer` 準拠を `@preconcurrency` で扱い、 `VideoRendererAdapter` の main thread への受け渡しを整理する
   - `VideoView` は `UIView` ベースで main thread で扱う必要があるが、 `VideoRenderer` の callback は main thread 前提として型で表現されていない
-  - 今回は Swift 6 ビルドを優先し、描画とサイズ変更のみ main thread に受け渡す暫定対応を行う
+  - 今回は Swift 6 言語モードでのビルドを優先し、描画とサイズ変更のみ main thread に受け渡す暫定対応を行う
   - `VideoRenderer` の callback 全体を main thread 前提で扱う設計整理は別途行う
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
