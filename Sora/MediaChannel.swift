@@ -291,8 +291,8 @@ public final class MediaChannel {
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
-    let response = try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
+    let responseData = try await withUnsafeThrowingContinuation {
+      (continuation: UnsafeContinuation<Data?, Error>) in
       guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
@@ -304,12 +304,42 @@ public final class MediaChannel {
         isNotificationRequest: isNotificationRequest,
         timeout: timeout
       ) { result in
-        continuation.resume(with: result)
+        switch result {
+        case .success(let response):
+          guard let response else {
+            continuation.resume(returning: nil)
+            return
+          }
+          do {
+            let data = try JSONSerialization.data(
+              withJSONObject: [
+                "jsonrpc": response.jsonrpc,
+                "id": response.id,
+                "result": response.result,
+              ],
+              options: [.fragmentsAllowed])
+            continuation.resume(returning: data)
+          } catch {
+            continuation.resume(
+              throwing: SoraError.rpcDecodingError(reason: error.localizedDescription))
+          }
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
       }
     }
-    guard let response else {
+    guard let responseData else {
       return nil
     }
+    let object = try JSONSerialization.jsonObject(with: responseData, options: [.fragmentsAllowed])
+    guard
+      let json = object as? [String: Any],
+      let id = json["id"] as? Int,
+      let result = json["result"]
+    else {
+      throw SoraError.rpcDecodingError(reason: "rpc response is invalid")
+    }
+    let response = RPCResponse<Any>(id: id, result: result)
     return try decodeRPCResponse(response, method: method)
   }
 

@@ -26,7 +26,7 @@ public protocol VideoRenderer: AnyObject {
   func onSwitch(audio: Bool)
 }
 
-class VideoRendererAdapter: NSObject, RTCVideoRenderer {
+class VideoRendererAdapter: NSObject, RTCVideoRenderer, @unchecked Sendable {
   private(set) weak var videoRenderer: VideoRenderer?
 
   init(videoRenderer: VideoRenderer) {
@@ -38,8 +38,12 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
       Logger.debug(
         type: .videoRenderer,
         message: "set size \(size) for \(renderer)")
-      DispatchQueue.main.async {
+      if Thread.isMainThread {
         renderer.onChange(size: size)
+      } else {
+        DispatchQueue.main.sync {
+          self.videoRenderer?.onChange(size: size)
+        }
       }
     } else {
       Logger.debug(
@@ -49,7 +53,7 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
   }
 
   func renderFrame(_ frame: RTCVideoFrame?) {
-    DispatchQueue.main.async {
+    let render = {
       if let renderer = self.videoRenderer {
         if let frame {
           let frame = VideoFrame.native(capturer: nil, frame: frame)
@@ -58,6 +62,11 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
           renderer.render(videoFrame: nil)
         }
       }
+    }
+    if Thread.isMainThread {
+      render()
+    } else {
+      DispatchQueue.main.sync(execute: render)
     }
   }
 }

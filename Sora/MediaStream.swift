@@ -28,7 +28,7 @@ public final class MediaStreamHandlers {
 ///
 /// メディアストリームは映像と音声の送受信を行います。
 /// メディアストリーム 1 つにつき、 1 つの映像と 1 つの音声を送受信可能です。
-public protocol MediaStream: AnyObject {
+public protocol MediaStream: AnyObject, Sendable {
   // MARK: - イベントハンドラ
 
   /// イベントハンドラ
@@ -110,7 +110,7 @@ public protocol MediaStream: AnyObject {
   func terminate()
 }
 
-class BasicMediaStream: MediaStream {
+class BasicMediaStream: MediaStream, @unchecked Sendable {
   let handlers = MediaStreamHandlers()
 
   var peerChannel: PeerChannel

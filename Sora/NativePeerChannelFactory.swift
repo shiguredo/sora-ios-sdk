@@ -177,12 +177,13 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       constraints: constraints)
     peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
     peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
-    Task {
-      do {
-        let sdp = try await peer2.offer(for: constraints.nativeValue)
-        handler(sdp.sdp, nil)
-      } catch {
+    peer2.offer(for: constraints.nativeValue) { sdp, error in
+      if let error {
         handler(nil, error)
+      } else if let sdp {
+        handler(sdp.sdp, nil)
+      } else {
+        handler(nil, SoraError.peerChannelError(reason: "offer creation failed"))
       }
       peer2.close()
     }

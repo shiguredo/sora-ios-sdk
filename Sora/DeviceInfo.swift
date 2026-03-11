@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 
 /// :nodoc:
 func currentMachineName() -> String {
@@ -22,21 +21,26 @@ func currentMachineName() -> String {
 }
 
 /// :nodoc:
-public struct DeviceInfo {
-  public static var current: DeviceInfo = .init(
-    device: UIDevice.current,
-    machineName: currentMachineName())
+public struct DeviceInfo: Sendable {
+  public static let current: DeviceInfo = .init(
+    machineName: currentMachineName(),
+    systemName: "iOS",
+    systemVersion: {
+      let version = ProcessInfo.processInfo.operatingSystemVersion
+      return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    }())
 
   public let machineName: String
+  public let systemName: String
+  public let systemVersion: String
 
   public var description: String {
-    "\(machineName); \(device.systemName) \(device.systemVersion)"
+    "\(machineName); \(systemName) \(systemVersion)"
   }
 
-  private let device: UIDevice
-
-  init(device: UIDevice, machineName: String) {
+  init(machineName: String, systemName: String, systemVersion: String) {
     self.machineName = machineName
-    self.device = device
+    self.systemName = systemName
+    self.systemVersion = systemVersion
   }
 }

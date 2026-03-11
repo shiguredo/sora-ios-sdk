@@ -181,7 +181,7 @@ public class VideoView: UIView {
 // MARK: - VideoRenderer
 
 /// :nodoc:
-extension VideoView: VideoRenderer {
+extension VideoView: @preconcurrency VideoRenderer {
   /// :nodoc:
   public func onChange(size: CGSize) {
     contentView.onVideoFrameSizeUpdated(size)
