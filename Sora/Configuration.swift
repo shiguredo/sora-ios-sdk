@@ -160,9 +160,9 @@ public struct Configuration {
   /// 指定した場合は `RTCPeerConnectionFactory` の生成時に `RTCAudioDevice` を利用し、
   /// `bypassVoiceProcessing` による `RTCAudioDeviceModule` の生成は行いません。
   ///
-  /// `initialMicrophoneEnabled = false` または `MediaChannel.setAudioHardMute(_:)` を利用する場合は、
-  /// 指定するデバイスを
-  /// `AudioInputMuteControllable` にも準拠させてください。
+  /// `audioEnabled = true` かつ送信側ロールで利用する場合は、
+  /// 指定するデバイスを `AudioInputMuteControllable` にも準拠させてください。
+  /// 初期マイク状態の適用と `MediaChannel.setAudioHardMute(_:)` の両方で利用します。
   /// `AudioInputMuteControllable.setAudioInputMuted(_:)` は接続前にも呼ばれます。
   public var customAudioDevice: RTCAudioDevice?
 
