@@ -28,7 +28,7 @@ func currentSystemVersion() -> String {
 
 /// :nodoc:
 public struct DeviceInfo: Sendable {
-  public static let current: DeviceInfo = .init(
+  nonisolated(unsafe) public static var current: DeviceInfo = .init(
     machineName: currentMachineName(),
     systemName: "iOS",
     systemVersion: currentSystemVersion())
