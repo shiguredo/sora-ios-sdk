@@ -291,8 +291,8 @@ public final class MediaChannel {
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
-    let response = try await withUnsafeThrowingContinuation {
-      (continuation: UnsafeContinuation<RPCResponseSnapshot?, Error>) in
+    let response = try await withCheckedThrowingContinuation {
+      (continuation: CheckedContinuation<RPCResponseSnapshot?, Error>) in
       guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
