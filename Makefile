@@ -18,7 +18,8 @@ build:
 		clean build \
 		CODE_SIGNING_REQUIRED=NO \
 		CODE_SIGN_IDENTITY= \
-		PROVISIONING_PROFILE=
+		PROVISIONING_PROFILE= \
+		SWIFT_VERSION=6
 
 # swift-format lint
 fmt-lint:
@@ -28,4 +29,3 @@ fmt-lint:
 lint:
 	swift package plugin --allow-writing-to-package-directory swiftlint --fix .
 	swift package plugin --allow-writing-to-package-directory swiftlint --strict .
-
