@@ -30,11 +30,17 @@ public struct RPCResponse<Result> {
   }
 }
 
+struct RPCResponseSnapshot: Sendable {
+  let jsonrpc: String
+  let id: Int
+  let resultData: Data
+}
+
 /// DataChannel 経由の RPC を扱うクラス。
 final class RPCChannel {
   /// pending 管理用の構造体
   private struct Pending {
-    let completion: (Result<RPCResponse<Any>?, SoraError>) -> Void
+    let completion: (Result<RPCResponseSnapshot?, SoraError>) -> Void
     let timeoutWorkItem: DispatchWorkItem
   }
 
@@ -60,7 +66,7 @@ final class RPCChannel {
     params: Encodable? = nil,
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0,
-    completion: ((Result<RPCResponse<Any>?, SoraError>) -> Void)? = nil
+    completion: ((Result<RPCResponseSnapshot?, SoraError>) -> Void)? = nil
   ) -> Bool {
     guard isAvailable else {
       completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
@@ -186,9 +192,21 @@ final class RPCChannel {
     }
 
     if let result = json["result"] {
-      let response = RPCResponse<Any>(id: identifier, result: result)
-      finishPending(id: identifier, result: .success(response))
-      return
+      do {
+        let resultData = try JSONSerialization.data(
+          withJSONObject: result, options: [.fragmentsAllowed])
+        let response = RPCResponseSnapshot(jsonrpc: version, id: identifier, resultData: resultData)
+        finishPending(id: identifier, result: .success(response))
+        return
+      } catch {
+        Logger.error(
+          type: .dataChannel,
+          message: "rpc response result encode failed: \(error.localizedDescription)")
+        finishPending(
+          id: identifier,
+          result: .failure(SoraError.rpcDecodingError(reason: error.localizedDescription)))
+        return
+      }
     }
 
     if let error = json["error"] as? [String: Any],
@@ -230,7 +248,7 @@ final class RPCChannel {
     return object
   }
 
-  private func finishPending(id: Int, result: Result<RPCResponse<Any>?, SoraError>) {
+  private func finishPending(id: Int, result: Result<RPCResponseSnapshot?, SoraError>) {
     let pending = queue.sync(flags: .barrier) { () -> Pending? in
       let value = pendings[id]
       pendings.removeValue(forKey: id)

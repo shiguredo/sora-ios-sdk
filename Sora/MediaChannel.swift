@@ -291,8 +291,8 @@ public final class MediaChannel {
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
-    let responseData = try await withUnsafeThrowingContinuation {
-      (continuation: UnsafeContinuation<Data?, Error>) in
+    let response = try await withUnsafeThrowingContinuation {
+      (continuation: UnsafeContinuation<RPCResponseSnapshot?, Error>) in
       guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
@@ -306,62 +306,30 @@ public final class MediaChannel {
       ) { result in
         switch result {
         case .success(let response):
-          guard let response else {
-            continuation.resume(returning: nil)
-            return
-          }
-          do {
-            let data = try JSONSerialization.data(
-              withJSONObject: [
-                "jsonrpc": response.jsonrpc,
-                "id": response.id,
-                "result": response.result,
-              ],
-              options: [.fragmentsAllowed])
-            continuation.resume(returning: data)
-          } catch {
-            continuation.resume(
-              throwing: SoraError.rpcDecodingError(reason: error.localizedDescription))
-          }
+          continuation.resume(returning: response)
         case .failure(let error):
           continuation.resume(throwing: error)
         }
       }
     }
-    guard let responseData else {
+    guard let response else {
       return nil
     }
-    let object = try JSONSerialization.jsonObject(with: responseData, options: [.fragmentsAllowed])
-    guard
-      let json = object as? [String: Any],
-      let id = json["id"] as? Int,
-      let result = json["result"]
-    else {
-      throw SoraError.rpcDecodingError(reason: "rpc response is invalid")
-    }
-    let response = RPCResponse<Any>(id: id, result: result)
     return try decodeRPCResponse(response, method: method)
   }
 
   private func decodeRPCResponse<M: RPCMethodProtocol>(
-    _ response: RPCResponse<Any>,
+    _ response: RPCResponseSnapshot,
     method: M.Type
   ) throws -> RPCResponse<M.Result> {
     let decoded: M.Result
     do {
-      decoded = try decodeRPCResult(response.result, as: M.Result.self)
+      let decoder = JSONDecoder()
+      decoded = try decoder.decode(M.Result.self, from: response.resultData)
     } catch {
       throw SoraError.rpcDecodingError(reason: error.localizedDescription)
     }
     return RPCResponse<M.Result>(id: response.id, result: decoded)
-  }
-
-  private func decodeRPCResult<T: Decodable>(_ result: Any, as type: T.Type) throws -> T {
-    let data = try JSONSerialization.data(
-      withJSONObject: result,
-      options: [.fragmentsAllowed])
-    let decoder = JSONDecoder()
-    return try decoder.decode(T.self, from: data)
   }
 
   // MARK: - 接続
