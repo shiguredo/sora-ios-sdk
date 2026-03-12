@@ -32,7 +32,7 @@ public struct RPCResponse<Result> {
 
 // `result` は JSONSerialization が返す読み取り専用の値として扱う前提で
 // actor 境界を越えるために `@unchecked Sendable` を付与します。
-struct RPCResponseSnapshot: @unchecked Sendable {
+struct RPCRawResponse: @unchecked Sendable {
   let jsonrpc: String
   let id: Int
   let result: Any
@@ -42,7 +42,7 @@ struct RPCResponseSnapshot: @unchecked Sendable {
 final class RPCChannel {
   /// pending 管理用の構造体
   private struct Pending {
-    let completion: (Result<RPCResponseSnapshot?, SoraError>) -> Void
+    let completion: (Result<RPCRawResponse?, SoraError>) -> Void
     let timeoutWorkItem: DispatchWorkItem
   }
 
@@ -68,7 +68,7 @@ final class RPCChannel {
     params: Encodable? = nil,
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0,
-    completion: ((Result<RPCResponseSnapshot?, SoraError>) -> Void)? = nil
+    completion: ((Result<RPCRawResponse?, SoraError>) -> Void)? = nil
   ) -> Bool {
     guard isAvailable else {
       completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
@@ -194,7 +194,7 @@ final class RPCChannel {
     }
 
     if let result = json["result"] {
-      let response = RPCResponseSnapshot(jsonrpc: version, id: identifier, result: result)
+      let response = RPCRawResponse(jsonrpc: version, id: identifier, result: result)
       finishPending(id: identifier, result: .success(response))
       return
     }
@@ -238,7 +238,7 @@ final class RPCChannel {
     return object
   }
 
-  private func finishPending(id: Int, result: Result<RPCResponseSnapshot?, SoraError>) {
+  private func finishPending(id: Int, result: Result<RPCRawResponse?, SoraError>) {
     let pending = queue.sync(flags: .barrier) { () -> Pending? in
       let value = pendings[id]
       pendings.removeValue(forKey: id)

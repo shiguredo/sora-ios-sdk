@@ -292,7 +292,7 @@ public final class MediaChannel {
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
     let response = try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<RPCResponseSnapshot?, Error>) in
+      (continuation: CheckedContinuation<RPCRawResponse?, Error>) in
       guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
@@ -319,7 +319,7 @@ public final class MediaChannel {
   }
 
   private func decodeRPCResponse<M: RPCMethodProtocol>(
-    _ response: RPCResponseSnapshot,
+    _ response: RPCRawResponse,
     method: M.Type
   ) throws -> RPCResponse<M.Result> {
     let decoded: M.Result
