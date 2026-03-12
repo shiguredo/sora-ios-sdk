@@ -30,10 +30,12 @@ public struct RPCResponse<Result> {
   }
 }
 
-struct RPCResponseSnapshot: Sendable {
+// `result` は JSONSerialization が返す読み取り専用の値として扱う前提で
+// actor 境界を越えるために `@unchecked Sendable` を付与します。
+struct RPCResponseSnapshot: @unchecked Sendable {
   let jsonrpc: String
   let id: Int
-  let resultData: Data
+  let result: Any
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
@@ -192,21 +194,9 @@ final class RPCChannel {
     }
 
     if let result = json["result"] {
-      do {
-        let resultData = try JSONSerialization.data(
-          withJSONObject: result, options: [.fragmentsAllowed])
-        let response = RPCResponseSnapshot(jsonrpc: version, id: identifier, resultData: resultData)
-        finishPending(id: identifier, result: .success(response))
-        return
-      } catch {
-        Logger.error(
-          type: .dataChannel,
-          message: "rpc response result encode failed: \(error.localizedDescription)")
-        finishPending(
-          id: identifier,
-          result: .failure(SoraError.rpcDecodingError(reason: error.localizedDescription)))
-        return
-      }
+      let response = RPCResponseSnapshot(jsonrpc: version, id: identifier, result: result)
+      finishPending(id: identifier, result: .success(response))
+      return
     }
 
     if let error = json["error"] as? [String: Any],

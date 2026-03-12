@@ -324,12 +324,19 @@ public final class MediaChannel {
   ) throws -> RPCResponse<M.Result> {
     let decoded: M.Result
     do {
-      let decoder = JSONDecoder()
-      decoded = try decoder.decode(M.Result.self, from: response.resultData)
+      decoded = try decodeRPCResult(response.result, as: M.Result.self)
     } catch {
       throw SoraError.rpcDecodingError(reason: error.localizedDescription)
     }
     return RPCResponse<M.Result>(id: response.id, result: decoded)
+  }
+
+  private func decodeRPCResult<T: Decodable>(_ result: Any, as type: T.Type) throws -> T {
+    let data = try JSONSerialization.data(
+      withJSONObject: result,
+      options: [.fragmentsAllowed])
+    let decoder = JSONDecoder()
+    return try decoder.decode(T.self, from: data)
   }
 
   // MARK: - 接続
