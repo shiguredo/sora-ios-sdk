@@ -121,6 +121,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var internalHandlers = PeerChannelInternalHandlers()
   let configuration: Configuration
   let signalingChannel: SignalingChannel
+  let nativePeerChannelFactory: NativePeerChannelFactory
 
   private(set) var streams: [MediaStream] = []
   private(set) var iceCandidates: [ICECandidate] = []
@@ -168,11 +169,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   required init(
     configuration: Configuration, signalingChannel: SignalingChannel,
+    nativePeerChannelFactory: NativePeerChannelFactory,
     mediaChannel: MediaChannel?
   ) {
     self.signalingChannel = signalingChannel
     self.mediaChannel = mediaChannel
     self.configuration = configuration
+    self.nativePeerChannelFactory = nativePeerChannelFactory
     webRTCConfiguration = configuration.webRTCConfiguration
 
     lock = Lock()
@@ -203,7 +206,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try connecting")
 
-    nativeChannel = NativePeerChannelFactory.default
+    nativeChannel =
+      nativePeerChannelFactory
       .createNativePeerChannel(
         configuration: webRTCConfiguration,
         constraints: webRTCConfiguration.constraints,
@@ -288,7 +292,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if configuration.isSender {
       Logger.debug(type: .peerChannel, message: "try creating offer SDP")
-      NativePeerChannelFactory.default
+      nativePeerChannelFactory
         .createClientOfferSDP(
           configuration: webRTCConfiguration,
           constraints: webRTCConfiguration.constraints
@@ -390,7 +394,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "initialize sender stream")
 
-    let nativeStream = NativePeerChannelFactory.default
+    let nativeStream =
+      nativePeerChannelFactory
       .createNativeSenderStream(
         streamId: configuration.publisherStreamId,
         videoTrackId:

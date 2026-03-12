@@ -41,10 +41,10 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 
   var nativeFactory: RTCPeerConnectionFactory
 
-  init() {
+  init(bypassVoiceProcessing: Bool = false) {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
 
-    audioDeviceModule = RTCAudioDeviceModule()
+    audioDeviceModule = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
     audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: audioDeviceModule)
 
     // 映像コーデックのエンコーダーとデコーダーを用意する
