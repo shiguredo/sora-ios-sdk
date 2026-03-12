@@ -21,6 +21,8 @@ struct CameraSettingsSnapshot: Sendable {
 
 // 公開 API の MediaStream に Sendable を要求せず、
 // actor 境界で参照を受け渡すための内部ラッパーです。
+// 注意: MediaStream 自体は Sendable ではないため、
+// ここでの `@unchecked Sendable` は同時アクセスが起きない前提に依存します。
 struct SenderStreamBox: @unchecked Sendable {
   let stream: MediaStream
 }

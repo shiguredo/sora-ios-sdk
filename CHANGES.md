@@ -35,6 +35,7 @@
   - 今回は Swift 6 言語モードでのビルドを優先し、描画とサイズ変更のみ main thread に受け渡す暫定対応を行う
   - `VideoRenderer` の callback 全体を main thread 前提で扱う設計整理は別途行う
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
+  - @zztkm
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する

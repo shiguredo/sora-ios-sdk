@@ -167,7 +167,13 @@ public class VideoView: UIView {
   /// 映像フレームの描画を停止します。
   /// 描画の停止中は ``render(videoFrame:)`` が実行されません。
   public func stop() {
-    isRendering = false
+    if Thread.isMainThread {
+      isRendering = false
+    } else {
+      DispatchQueue.main.async {
+        self.isRendering = false
+      }
+    }
   }
 
   /// デバッグモードを有効にします。
