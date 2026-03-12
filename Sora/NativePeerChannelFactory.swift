@@ -40,7 +40,7 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 
   var nativeFactory: RTCPeerConnectionFactory
 
-  init(bypassVoiceProcessing: Bool = false) {
+  init(bypassVoiceProcessing: Bool) {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
 
     audioDeviceModule = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
