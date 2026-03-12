@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// :nodoc:
 func currentMachineName() -> String {
@@ -21,18 +22,17 @@ func currentMachineName() -> String {
 }
 
 /// :nodoc:
-func currentSystemVersion() -> String {
-  let version = ProcessInfo.processInfo.operatingSystemVersion
-  return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
-}
-
-/// :nodoc:
-func currentSystemName() -> String {
-  #if targetEnvironment(macCatalyst)
-    return "macOS"
-  #else
-    return "iOS"
-  #endif
+func currentSystemInfo() -> (systemName: String, systemVersion: String) {
+  if Thread.isMainThread {
+    return MainActor.assumeIsolated {
+      (UIDevice.current.systemName, UIDevice.current.systemVersion)
+    }
+  }
+  return DispatchQueue.main.sync {
+    MainActor.assumeIsolated {
+      (UIDevice.current.systemName, UIDevice.current.systemVersion)
+    }
+  }
 }
 
 /// :nodoc:
@@ -40,10 +40,13 @@ public struct DeviceInfo: Sendable {
   // 公開 API 互換性維持のため writable のままにします。
   // `nonisolated(unsafe)` はスレッド安全性をコンパイラが検証しないため、
   // 利用側が同時書き換えを行わない前提です。
-  nonisolated(unsafe) public static var current: DeviceInfo = .init(
-    machineName: currentMachineName(),
-    systemName: currentSystemName(),
-    systemVersion: currentSystemVersion())
+  nonisolated(unsafe) public static var current: DeviceInfo = {
+    let system = currentSystemInfo()
+    return .init(
+      machineName: currentMachineName(),
+      systemName: system.systemName,
+      systemVersion: system.systemVersion)
+  }()
 
   public let machineName: String
   public let systemName: String
