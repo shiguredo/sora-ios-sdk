@@ -292,7 +292,7 @@ public final class MediaChannel {
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
     let response = try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
+      (continuation: CheckedContinuation<RPCRawResponse?, Error>) in
       guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
@@ -304,7 +304,12 @@ public final class MediaChannel {
         isNotificationRequest: isNotificationRequest,
         timeout: timeout
       ) { result in
-        continuation.resume(with: result)
+        switch result {
+        case .success(let response):
+          continuation.resume(returning: response)
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
       }
     }
     guard let response else {
@@ -314,7 +319,7 @@ public final class MediaChannel {
   }
 
   private func decodeRPCResponse<M: RPCMethodProtocol>(
-    _ response: RPCResponse<Any>,
+    _ response: RPCRawResponse,
     method: M.Type
   ) throws -> RPCResponse<M.Result> {
     let decoded: M.Result
@@ -765,8 +770,8 @@ public final class MediaChannel {
       senderStream.videoEnabled = false
       try await Self.videoHardMuteActor.setMute(
         mute: true,
-        senderStream: senderStream,
-        cameraSettings: configuration.cameraSettings
+        senderStream: SenderStreamBox(stream: senderStream),
+        cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
     } else {
       // 画面キャプチャ動作中はカメラを再開しません
@@ -779,8 +784,8 @@ public final class MediaChannel {
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(
         mute: false,
-        senderStream: senderStream,
-        cameraSettings: configuration.cameraSettings
+        senderStream: SenderStreamBox(stream: senderStream),
+        cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
       senderStream.videoEnabled = true
     }
