@@ -1,6 +1,9 @@
 import Foundation
 import WebRTC
 
+// `renderer` は weak 参照のため型としては Sendable にできません。
+// ただしこのイベントは生成後に不変で、 main thread へ受け渡す用途に限定しているため
+// 同時アクセスが起きない前提で `@unchecked Sendable` を付与します。
 private final class VideoRendererSizeEvent: @unchecked Sendable {
   weak var renderer: VideoRenderer?
   let size: CGSize
@@ -11,6 +14,9 @@ private final class VideoRendererSizeEvent: @unchecked Sendable {
   }
 }
 
+// `renderer` は weak 参照のため型としては Sendable にできません。
+// ただしこのイベントは生成後に不変で、 main thread へ受け渡す用途に限定しているため
+// 同時アクセスが起きない前提で `@unchecked Sendable` を付与します。
 private final class VideoRendererFrameEvent: @unchecked Sendable {
   weak var renderer: VideoRenderer?
   let videoFrame: VideoFrame?
