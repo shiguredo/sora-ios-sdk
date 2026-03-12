@@ -6,6 +6,8 @@ import WebRTC
 // `renderer` は weak 参照のため型としては Sendable にできません。
 // ただしこのイベントは生成後に不変で、 main thread へ受け渡す用途に限定しているため
 // 同時アクセスが起きない前提で `@unchecked Sendable` を付与します。
+// 将来 `MainActor` 前提の描画 API（互換性を保つため別プロトコル追加を想定）へ移行した場合、
+// このラッパーは不要になります。
 private final class VideoRendererSizeEvent: @unchecked Sendable {
   weak var renderer: VideoRenderer?
   let size: CGSize
@@ -22,6 +24,8 @@ private final class VideoRendererSizeEvent: @unchecked Sendable {
 // `renderer` は weak 参照のため型としては Sendable にできません。
 // ただしこのイベントは生成後に不変で、 main thread へ受け渡す用途に限定しているため
 // 同時アクセスが起きない前提で `@unchecked Sendable` を付与します。
+// 将来 `MainActor` 前提の描画 API（互換性を保つため別プロトコル追加を想定）へ移行した場合、
+// このラッパーは不要になります。
 private final class VideoRendererFrameEvent: @unchecked Sendable {
   weak var renderer: VideoRenderer?
   let videoFrame: VideoFrame?
@@ -66,6 +70,7 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
 
   // TODO(zztkm): VideoView / VideoRenderer の MainActor 整合性は別途根本対応する。
   // Swift 6 ビルドを優先し、描画とサイズ変更だけを main thread に受け渡します。
+  // 互換性を保った `MainActor` 前提 API を追加した後は、この暫定ロジックを削除します。
   func setSize(_ size: CGSize) {
     if let renderer = videoRenderer {
       Logger.debug(
