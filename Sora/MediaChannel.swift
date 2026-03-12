@@ -210,6 +210,7 @@ public final class MediaChannel {
   private var _connectionTimer: ConnectionTimer?
 
   private let manager: Sora
+  private let nativePeerChannelFactory: NativePeerChannelFactory
 
   // 映像ハードミュートの同時呼び出しを直列化するための Actor です
   // MediaChannel 間の排他実行を保証するため static にしています
@@ -234,10 +235,13 @@ public final class MediaChannel {
   init(manager: Sora, configuration: Configuration) {
     self.manager = manager
     self.configuration = configuration
+    self.nativePeerChannelFactory = NativePeerChannelFactory(
+      bypassVoiceProcessing: configuration.bypassVoiceProcessing)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
       signalingChannel: signalingChannel,
+      nativePeerChannelFactory: nativePeerChannelFactory,
       mediaChannel: self)
     handlers = configuration.mediaChannelHandlers
 
@@ -671,7 +675,7 @@ public final class MediaChannel {
     }
 
     // 音声ハードミュートを切り替えます
-    if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+    if !self.nativePeerChannelFactory.audioDeviceModuleWrapper.setAudioHardMute(mute) {
       return SoraError.mediaChannelError(
         reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
     }

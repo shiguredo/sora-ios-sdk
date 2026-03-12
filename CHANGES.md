@@ -11,6 +11,9 @@
 
 ## develop
 
+- [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
+  - 音声入力処理のバイパス追加に伴い、接続単位での管理が必要となったため
+  - @t-miya
 - [UPDATE] libwebrtc m146.7680.0.1 に上げる
   - @zztkm
 - [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
@@ -35,6 +38,9 @@
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
   - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
   - @zztkm
+- [ADD] Configuration に接続時の音声入力処理のバイパスを設定する `bypassVoiceProcessing` を追加する
+  - `RTCAudioDeviceModule.initWithBypassVoiceProcessing(_:)` を接続単位で利用する
+  - @t-miya
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
