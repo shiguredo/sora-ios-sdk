@@ -30,6 +30,8 @@
   - SDK 側で公開 class に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
 - [UPDATE] Swift 6 言語モードのビルドで発生する UIKit 依存 API の MainActor 関連ビルドエラーが発生しないように暫定対応を行う
   - `DeviceInfo` を `UIDevice` 依存の状態保持から `Sendable` なスナップショットへ変更する
+  - Swift 6 では `UIDevice` の参照を保持したまま `DeviceInfo` を actor 境界で扱うと `MainActor` 隔離と `Sendable` 制約によりビルドエラーになるため、 `systemName` と `systemVersion` を値として保持する形に変更した
+  - 既存の environment 文字列との互換性を維持するため、 `systemName` と `systemVersion` の値自体は `UIDevice.current` の実測値を利用する
   - `VideoView` の `VideoRenderer` 準拠を `@preconcurrency` で扱い、 `VideoRendererAdapter` の main thread への受け渡しを整理する
   - `VideoView` は `UIView` ベースで main thread で扱う必要があるが、 `VideoRenderer` の callback は main thread 前提として型で表現されていない
   - 今回は Swift 6 言語モードでのビルドを優先し、描画とサイズ変更のみ main thread に受け渡す暫定対応を行う

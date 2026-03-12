@@ -23,6 +23,9 @@ func currentMachineName() -> String {
 
 /// :nodoc:
 func currentSystemInfo() -> (systemName: String, systemVersion: String) {
+  // main thread で DispatchQueue.main.sync を呼ぶとデッドロックするため分岐します。
+  // 逆に off-main では MainActor.assumeIsolated を直接呼べないため、
+  // main queue へ同期してから UIDevice.current を参照します。
   if Thread.isMainThread {
     return MainActor.assumeIsolated {
       (UIDevice.current.systemName, UIDevice.current.systemVersion)
