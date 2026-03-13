@@ -786,7 +786,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         constraints: webRTCConfiguration.constraints,
         proxy: configuration.proxy,
         delegate: self)
-    guard nativeChannel != nil else {
+    guard let nativeChannel else {
       // connect() で取得した初期ロックをここで解放しないと、
       // disconnect が defer されたままになってしまう。
       lock.unlock()
@@ -795,7 +795,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         reason: .signalingFailure)
       return
     }
-    nativeChannel?.setConfiguration(webRTCConfiguration.nativeValue)
+    nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
 
     lock.lock()
     createAnswer(
