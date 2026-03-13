@@ -11,6 +11,9 @@
 
 ## develop
 
+- [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
+  - 音声入力処理のバイパス追加に伴い、接続単位での管理が必要となったため
+  - @t-miya
 - [UPDATE] libwebrtc m146.7680.0.1 に上げる
   - @zztkm
 - [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
@@ -32,6 +35,16 @@
   - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
   - `CameraSettings.default` を共有保存値から新しい値を返す計算プロパティに変更する
   - SDK 側で公開 class に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
+- [UPDATE] Swift 6 言語モードのビルドで発生する UIKit 依存 API の MainActor 関連ビルドエラーが発生しないように暫定対応を行う
+  - `DeviceInfo` を `UIDevice` 依存の状態保持から `Sendable` なスナップショットへ変更する
+  - Swift 6 では `UIDevice` の参照を保持したまま `DeviceInfo` を actor 境界で扱うと `MainActor` 隔離と `Sendable` 制約によりビルドエラーになるため、 `systemName` と `systemVersion` を値として保持する形に変更した
+  - `VideoView` の `VideoRenderer` 準拠を `@preconcurrency` で扱い、 `VideoRendererAdapter` の main thread への受け渡しを整理する
+  - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
+  - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
+  - @zztkm
+- [ADD] Configuration に接続時の音声入力処理のバイパスを設定する `bypassVoiceProcessing` を追加する
+  - `RTCAudioDeviceModule.initWithBypassVoiceProcessing(_:)` を接続単位で利用する
+  - @t-miya
 - [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
   - @zztkm
 - [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
@@ -55,6 +68,8 @@
 - [CHANGE] Slack 通知を rtCamp/action-slack-notify から shiguredo/github-actions の slack-notify に置き換える
   - 2 つの通知ジョブを 1 つに統合し、notify_mode による通知制御と Fixed 通知に対応
   - @voluntas
+- [UPDATE] build.yml の xcodebuild build コマンドに `SWIFT_VERSION=6` を追加する
+  - @zztkm
 
 ## 2026.1.0
 

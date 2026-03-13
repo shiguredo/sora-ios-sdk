@@ -1,6 +1,41 @@
 import Foundation
 import WebRTC
 
+// Swift 6 では `DispatchQueue.main.async` のクロージャで `renderer` と `size` を
+// 直接キャプチャすると `sending` エラーになるため、受け渡し専用のイベント型を用意します。
+// `renderer` は weak 参照のため型としては Sendable にできません。
+// ただしこのイベントは生成後に不変で、 main thread へ受け渡す用途に限定しているため
+// 同時アクセスが起きない前提で `@unchecked Sendable` を付与します。
+// 将来 `MainActor` 前提の描画 API（互換性を保つため別プロトコル追加を想定）へ移行した場合、
+// このラッパーは不要になります。
+private final class VideoRendererSizeEvent: @unchecked Sendable {
+  weak var renderer: VideoRenderer?
+  let size: CGSize
+
+  init(renderer: VideoRenderer?, size: CGSize) {
+    self.renderer = renderer
+    self.size = size
+  }
+}
+
+// Swift 6 では `DispatchQueue.main.async` のクロージャで `self` / `renderer` /
+// `videoFrame` を直接キャプチャすると `sending` エラーになるため、受け渡し専用の
+// イベント型を用意します。
+// `renderer` は weak 参照のため型としては Sendable にできません。
+// ただしこのイベントは生成後に不変で、 main thread へ受け渡す用途に限定しているため
+// 同時アクセスが起きない前提で `@unchecked Sendable` を付与します。
+// 将来 `MainActor` 前提の描画 API（互換性を保つため別プロトコル追加を想定）へ移行した場合、
+// このラッパーは不要になります。
+private final class VideoRendererFrameEvent: @unchecked Sendable {
+  weak var renderer: VideoRenderer?
+  let videoFrame: VideoFrame?
+
+  init(renderer: VideoRenderer?, videoFrame: VideoFrame?) {
+    self.renderer = renderer
+    self.videoFrame = videoFrame
+  }
+}
+
 /// 映像の描画に必要な機能を定義したプロトコルです。
 public protocol VideoRenderer: AnyObject {
   /// 映像のサイズが変更されたときに呼ばれます。
@@ -33,13 +68,17 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
     self.videoRenderer = videoRenderer
   }
 
+  // TODO(zztkm): VideoView / VideoRenderer の MainActor 整合性は別途根本対応する。
+  // Swift 6 ビルドを優先し、描画とサイズ変更だけを main thread に受け渡します。
+  // 互換性を保った `MainActor` 前提 API を追加した後は、この暫定ロジックを削除します。
   func setSize(_ size: CGSize) {
     if let renderer = videoRenderer {
       Logger.debug(
         type: .videoRenderer,
         message: "set size \(size) for \(renderer)")
-      DispatchQueue.main.async {
-        renderer.onChange(size: size)
+      let event = VideoRendererSizeEvent(renderer: renderer, size: size)
+      DispatchQueue.main.async { [event] in
+        event.renderer?.onChange(size: event.size)
       }
     } else {
       Logger.debug(
@@ -49,15 +88,10 @@ class VideoRendererAdapter: NSObject, RTCVideoRenderer {
   }
 
   func renderFrame(_ frame: RTCVideoFrame?) {
-    DispatchQueue.main.async {
-      if let renderer = self.videoRenderer {
-        if let frame {
-          let frame = VideoFrame.native(capturer: nil, frame: frame)
-          renderer.render(videoFrame: frame)
-        } else {
-          renderer.render(videoFrame: nil)
-        }
-      }
+    let videoFrame = frame.map { VideoFrame.native(capturer: nil, frame: $0) }
+    let event = VideoRendererFrameEvent(renderer: videoRenderer, videoFrame: videoFrame)
+    DispatchQueue.main.async { [event] in
+      event.renderer?.render(videoFrame: event.videoFrame)
     }
   }
 }

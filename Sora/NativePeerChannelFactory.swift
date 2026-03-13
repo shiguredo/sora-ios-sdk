@@ -31,20 +31,19 @@ final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoE
   }
 }
 
-// WebRTC のファクトリーを共有して扱うため、 @unchecked Sendable を付与します。
+// WebRTC の非 Sendable オブジェクトを保持するため、
+// 呼び出し側でスレッド安全性を担保する前提で @unchecked Sendable を付与します。
 final class NativePeerChannelFactory: @unchecked Sendable {
-  static let `default` = NativePeerChannelFactory()
-
   let audioDeviceModule: RTCAudioDeviceModule
   /// 録音ポーズ/再開制御用に保持する ADM ラッパー
   let audioDeviceModuleWrapper: AudioDeviceModuleWrapper
 
   var nativeFactory: RTCPeerConnectionFactory
 
-  init() {
+  init(bypassVoiceProcessing: Bool) {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
 
-    audioDeviceModule = RTCAudioDeviceModule()
+    audioDeviceModule = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
     audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: audioDeviceModule)
 
     // 映像コーデックのエンコーダーとデコーダーを用意する
@@ -201,12 +200,13 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       constraints: constraints)
     peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
     peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
-    Task {
-      do {
-        let sdp = try await peer2.offer(for: constraints.nativeValue)
-        handler(sdp.sdp, nil)
-      } catch {
+    peer2.offer(for: constraints.nativeValue) { sdp, error in
+      if let error {
         handler(nil, error)
+      } else if let sdp {
+        handler(sdp.sdp, nil)
+      } else {
+        handler(nil, SoraError.peerChannelError(reason: "offer creation failed"))
       }
       peer2.close()
     }

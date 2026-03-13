@@ -121,6 +121,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var internalHandlers = PeerChannelInternalHandlers()
   let configuration: Configuration
   let signalingChannel: SignalingChannel
+  let nativePeerChannelFactory: NativePeerChannelFactory
 
   private(set) var streams: [MediaStream] = []
   private(set) var iceCandidates: [ICECandidate] = []
@@ -181,11 +182,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   required init(
     configuration: Configuration, signalingChannel: SignalingChannel,
+    nativePeerChannelFactory: NativePeerChannelFactory,
     mediaChannel: MediaChannel?
   ) {
     self.signalingChannel = signalingChannel
     self.mediaChannel = mediaChannel
     self.configuration = configuration
+    self.nativePeerChannelFactory = nativePeerChannelFactory
     webRTCConfiguration = configuration.webRTCConfiguration
 
     lock = Lock()
@@ -214,10 +217,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
-    Logger.debug(type: .peerChannel, message: "try connecting")
-
-    // このロックは finishConnecting() で解除される
-    lock.lock()
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
@@ -289,7 +288,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if configuration.isSender {
       Logger.debug(type: .peerChannel, message: "try creating offer SDP")
-      NativePeerChannelFactory.default
+      nativePeerChannelFactory
         .createClientOfferSDP(
           configuration: webRTCConfiguration,
           constraints: webRTCConfiguration.constraints
@@ -391,7 +390,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "initialize sender stream")
 
-    let nativeStream = NativePeerChannelFactory.default
+    let nativeStream =
+      nativePeerChannelFactory
       .createNativeSenderStream(
         streamId: configuration.publisherStreamId,
         videoTrackId:
@@ -773,10 +773,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
     }
 
+    Logger.debug(type: .peerChannel, message: "try connecting")
+    // このロックは finishConnecting() で解除される
+    lock.lock()
+
     if nativeChannel == nil {
       // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
       // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
-      nativeChannel = NativePeerChannelFactory.default
+      nativeChannel = nativePeerChannelFactory
         .createNativePeerChannel(
           configuration: webRTCConfiguration,
           constraints: webRTCConfiguration.constraints,

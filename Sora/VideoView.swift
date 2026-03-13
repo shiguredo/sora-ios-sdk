@@ -180,8 +180,10 @@ public class VideoView: UIView {
 
 // MARK: - VideoRenderer
 
+// TODO(zztkm): VideoRenderer の callback 全体を main thread 前提で扱える設計に整理したら
+// `@preconcurrency` を外す。
 /// :nodoc:
-extension VideoView: VideoRenderer {
+extension VideoView: @preconcurrency VideoRenderer {
   /// :nodoc:
   public func onChange(size: CGSize) {
     contentView.onVideoFrameSizeUpdated(size)

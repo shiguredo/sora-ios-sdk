@@ -148,6 +148,12 @@ public struct Configuration {
   /// 後から `MediaChannel.setAudioHardMute(false)` で必要に応じてマイクを有効にできます。
   public var initialMicrophoneEnabled: Bool = true
 
+  /// 接続時に iOS の Voice Processing をバイパスするかどうか。
+  ///
+  /// `true` の場合は、 Voice Processing を無効にした状態で ADM を生成します。
+  /// 接続中の動的変更には対応していません。
+  public var bypassVoiceProcessing: Bool = false
+
   /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
   public var simulcastEnabled: Bool = false
 
