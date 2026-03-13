@@ -200,26 +200,13 @@ public final class Sora: @unchecked Sendable {
 
   // Configuration の組み合わせチェックと、接続前の事前適用を行います
   func configureBeforeConnect(configuration: Configuration) -> Error? {
-    if configuration.isSender,
-      configuration.audioEnabled,
-      let customAudioDevice = configuration.customAudioDevice,
+    // customAudioDevice 利用時は AudioInputMuteControllable プロトコル準拠となっている必要があります
+    if let customAudioDevice = configuration.customAudioDevice,
       !(customAudioDevice is AudioInputMuteControllable)
     {
       return SoraError.mediaChannelError(
         reason: "customAudioDevice must conform to AudioInputMuteControllable when sending audio"
       )
-    }
-
-    if configuration.isSender,
-      configuration.audioEnabled,
-      let audioInputMuteControllable = configuration.customAudioDevice
-        as? AudioInputMuteControllable
-    {
-      let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
-      if !audioInputMuteControllable.setAudioInputMuted(initialMicrophoneMute) {
-        return SoraError.mediaChannelError(
-          reason: "failed to apply initial microphone state to customAudioDevice")
-      }
     }
 
     return nil

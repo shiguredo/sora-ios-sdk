@@ -36,7 +36,7 @@ final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoE
 final class NativePeerChannelFactory: @unchecked Sendable {
   let audioDeviceModule: RTCAudioDeviceModule?
   let customAudioDevice: RTCAudioDevice?
-  /// 録音ミュート制御用に保持するラッパー
+  /// 音声入力ミュート制御に利用するコントローラー
   let audioInputMuteController: AudioInputMuteController?
 
   var nativeFactory: RTCPeerConnectionFactory
@@ -68,6 +68,7 @@ final class NativePeerChannelFactory: @unchecked Sendable {
           audioDevice: customAudioDevice)
     } else {
       guard
+        // 内部生成時は音声入力バイパス設定を反映する
         let createdAudioDeviceModule = RTCAudioDeviceModule(
           bypassVoiceProcessing: bypassVoiceProcessing)
       else {
