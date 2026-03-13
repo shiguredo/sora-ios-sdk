@@ -152,7 +152,8 @@ public struct Configuration {
   ///
   /// `true` の場合は、 Voice Processing を無効にした状態で ADM を生成します。
   /// 接続中の動的変更には対応していません。
-  /// `customAudioDevice` を指定した場合は、この設定は利用されません。
+  /// `customAudioDevice` を指定した場合は `RTCAudioDeviceModule` を生成せず、
+  /// 指定した `RTCAudioDevice` をそのまま利用するため、この設定は適用されません
   public var bypassVoiceProcessing: Bool = false
 
   /// 高度な用途向けのカスタム音声入出力デバイスです。
