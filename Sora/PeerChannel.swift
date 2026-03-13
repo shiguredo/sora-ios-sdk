@@ -780,7 +780,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     if nativeChannel == nil {
       // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
       // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
-      nativeChannel = nativePeerChannelFactory
+      nativeChannel =
+        nativePeerChannelFactory
         .createNativePeerChannel(
           configuration: webRTCConfiguration,
           constraints: webRTCConfiguration.constraints,
