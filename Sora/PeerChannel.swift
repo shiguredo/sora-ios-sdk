@@ -217,6 +217,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
+    Logger.debug(type: .peerChannel, message: "try connecting")
+    // このロックは finishConnecting() で解除される
+    lock.lock()
+
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
@@ -773,23 +777,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
     }
 
-    Logger.debug(type: .peerChannel, message: "try connecting")
-    // このロックは finishConnecting() で解除される
-    lock.lock()
-
-    if nativeChannel == nil {
-      // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
-      // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
-      nativeChannel =
-        nativePeerChannelFactory
-        .createNativePeerChannel(
-          configuration: webRTCConfiguration,
-          constraints: webRTCConfiguration.constraints,
-          proxy: configuration.proxy,
-          delegate: self)
-    } else if offer.configuration != nil {
-      nativeChannel?.setConfiguration(webRTCConfiguration.nativeValue)
-    }
+    // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
+    // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
+    nativeChannel =
+      nativePeerChannelFactory
+      .createNativePeerChannel(
+        configuration: webRTCConfiguration,
+        constraints: webRTCConfiguration.constraints,
+        proxy: configuration.proxy,
+        delegate: self)
+    nativeChannel?.setConfiguration(webRTCConfiguration.nativeValue)
 
     guard nativeChannel != nil else {
       // connect() で取得した初期ロックをここで解放しないと、
