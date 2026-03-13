@@ -134,11 +134,24 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   weak var mediaChannel: MediaChannel?
 
   var state: PeerChannelConnectionState {
-    guard let nativeChannel else {
-      return PeerChannelConnectionState(RTCPeerConnectionState.new)
+    if let nativeChannel {
+      let state = PeerChannelConnectionState(nativeChannel.connectionState)
+      // connect() 開始後から finishConnecting() / basicDisconnect() までは onConnect が保持される。
+      // そのため、 RTCPeerConnection を生成済みでも connectionState が .new の間は
+      // 接続試行中として扱う。
+      if onConnect != nil, state == .new {
+        return .connecting
+      }
+      return state
     }
 
-    return PeerChannelConnectionState(nativeChannel.connectionState)
+    if onConnect != nil {
+      // offer.configuration を受け取るまで RTCPeerConnection を生成しないため、
+      // nativeChannel が未生成でも、onConnect が保持されていれば接続試行中として扱う。
+      return .connecting
+    }
+
+    return PeerChannelConnectionState(RTCPeerConnectionState.new)
   }
 
   var nativeChannel: RTCPeerConnection?
@@ -205,23 +218,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     Logger.debug(type: .peerChannel, message: "try connecting")
-
-    nativeChannel =
-      nativePeerChannelFactory
-      .createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
-        proxy: configuration.proxy,
-        delegate: self)
-    guard nativeChannel != nil else {
-      let message = "createNativePeerChannel failed"
-      Logger.debug(type: .peerChannel, message: message)
-      handler(SoraError.peerChannelError(reason: message))
-      return
-    }
-
     // このロックは finishConnecting() で解除される
     lock.lock()
+
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
@@ -282,6 +281,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func sendConnectMessage(error: Error?) {
     if let error {
+      lock.unlock()
       Logger.error(
         type: .peerChannel,
         message: "failed connecting to signaling channel (\(error.localizedDescription))")
@@ -764,11 +764,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func createAndSendAnswer(offer: SignalingOffer) {
-    guard let nativeChannel else {
-      Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-      return
-    }
-
     Logger.debug(type: .peerChannel, message: "try sending answer")
     offerEncodings = offer.encodings
 
@@ -780,8 +775,27 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel, message: "ICE transport policy => \(config.iceTransportPolicy)")
       webRTCConfiguration.iceServerInfos = config.iceServerInfos
       webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
-      nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
     }
+
+    // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
+    // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
+    nativeChannel =
+      nativePeerChannelFactory
+      .createNativePeerChannel(
+        configuration: webRTCConfiguration,
+        constraints: webRTCConfiguration.constraints,
+        proxy: configuration.proxy,
+        delegate: self)
+    guard let nativeChannel else {
+      // connect() で取得した初期ロックをここで解放しないと、
+      // disconnect が defer されたままになってしまう。
+      lock.unlock()
+      disconnect(
+        error: SoraError.peerChannelError(reason: "createNativePeerChannel failed"),
+        reason: .signalingFailure)
+      return
+    }
+    nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
 
     lock.lock()
     createAnswer(

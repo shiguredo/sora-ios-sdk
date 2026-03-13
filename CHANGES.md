@@ -26,6 +26,10 @@
 - [UPDATE] `URLSessionWebSocketChannel` と `Proxy` を Swift 6 の `Sendable` 要件に対応させる
   - `URLSessionWebSocketChannel` を `final class` かつ `@unchecked Sendable` とし、 `Proxy` を `Sendable` に対応させる
   - @zztkm
+- [UPDATE] TURN-TLS の証明書検証で iOS の CA を利用する
+  - `RTCSSLCertificateVerifier.verifyChain` を利用して証明書チェーン全体を取得し、 Security フレームワークで検証する
+  - `offer.configuration` で TURN-TLS の ICE サーバー設定を受け取った後に、接続に利用する `RTCPeerConnection` を生成する
+  - @zztkm
 - [UPDATE] 静的共有状態と singleton を Swift 6 の concurrency-safe 要件に対応させる
   - `CameraVideoCapturer`, `Logger`, `NativePeerChannelFactory`, `Sora` などの共有状態を整理する
   - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
@@ -55,6 +59,9 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] シグナリングチャンネル接続エラー時に `connect()` で取得したロックが解放されないバグを修正する
+  - `sendConnectMessage(error:)` のエラーパスで `lock.unlock()` が呼ばれていなかったため
+  - @zztkm
 - [FIX] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
   - 入力経路を `.speaker` にオーバーライドした後に他モードを指定しても経路がリセットされなかったため
   - @t-miya

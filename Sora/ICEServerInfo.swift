@@ -41,6 +41,17 @@ public final class ICEServerInfo {
     self.credential = credential
     self.tlsSecurityPolicy = tlsSecurityPolicy
   }
+
+  var usesVerifiedTURNTLS: Bool {
+    switch tlsSecurityPolicy {
+    case .secure:
+      return urls.contains { url in
+        url.lowercased().hasPrefix("turns:")
+      }
+    case .insecure:
+      return false
+    }
+  }
 }
 
 /// :nodoc:

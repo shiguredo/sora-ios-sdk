@@ -73,11 +73,14 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     proxy: Proxy? = nil,
     delegate: RTCPeerConnectionDelegate?
   ) -> RTCPeerConnection? {
+    let certificateVerifier = createCertificateVerifier(configuration: configuration)
     if let proxy {
+      // proxy ありの overload は certificateVerifier が nullable のため、
+      // verifier が不要な場合は nil をそのまま渡せる。
       return nativeFactory.peerConnection(
         with: configuration.nativeValue,
         constraints: constraints.nativeValue,
-        certificateVerifier: nil,
+        certificateVerifier: certificateVerifier,
         delegate: delegate,
         proxyType: RTCProxyType.https,
         proxyAgent: proxy.agent,
@@ -86,10 +89,31 @@ final class NativePeerChannelFactory: @unchecked Sendable {
         proxyUsername: proxy.username ?? "",
         proxyPassword: proxy.password ?? "")
     } else {
-      return nativeFactory.peerConnection(
-        with: configuration.nativeValue, constraints: constraints.nativeValue,
-        delegate: delegate)
+      if let certificateVerifier {
+        return nativeFactory.peerConnection(
+          with: configuration.nativeValue,
+          constraints: constraints.nativeValue,
+          certificateVerifier: certificateVerifier,
+          delegate: delegate)
+      } else {
+        // proxy なしの certificateVerifier 付き overload は nullable ではないため、
+        // certificateVerifier が不要な場合は certificateVerifier なしの overload を使う。
+        return nativeFactory.peerConnection(
+          with: configuration.nativeValue,
+          constraints: constraints.nativeValue,
+          delegate: delegate)
+      }
     }
+  }
+
+  private func createCertificateVerifier(
+    configuration: WebRTCConfiguration
+  ) -> RTCSSLCertificateVerifier? {
+    if configuration.usesVerifiedTURNTLS {
+      return IOSCertificateVerifier()
+    }
+
+    return nil
   }
 
   func createNativeStream(streamId: String) -> RTCMediaStream {

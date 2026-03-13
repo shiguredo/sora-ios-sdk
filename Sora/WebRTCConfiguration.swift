@@ -113,6 +113,12 @@ public struct WebRTCConfiguration {
   }
 
   var nativeConstraints: RTCMediaConstraints { constraints.nativeValue }
+
+  var usesVerifiedTURNTLS: Bool {
+    iceServerInfos.contains { info in
+      info.usesVerifiedTURNTLS
+    }
+  }
 }
 
 private let sdpSemanticsTable: PairTable<String, SDPSemantics> =
