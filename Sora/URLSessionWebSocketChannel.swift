@@ -8,6 +8,7 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
 {
   let url: URL
   let proxy: Proxy?
+  let caCertificate: SecCertificate?
   var handlers = WebSocketChannelHandlers()
   var internalHandlers = WebSocketChannelInternalHandlers()
   var isClosing = false
@@ -22,9 +23,10 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
   var urlSession: URLSession?
   var webSocketTask: URLSessionWebSocketTask?
 
-  init(url: URL, proxy: Proxy?) {
+  init(url: URL, proxy: Proxy?, caCertificate: SecCertificate?) {
     self.url = url
     self.proxy = proxy
+    self.caCertificate = caCertificate
   }
 
   func connect(delegateQueue: OperationQueue?) {
@@ -256,8 +258,14 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
     // 認証方式によって処理を分岐
     switch authMethod {
     case NSURLAuthenticationMethodServerTrust:
-      // デフォルト処理
-      completionHandler(.performDefaultHandling, nil)
+      if let ca = caCertificate {
+        // カスタム CA が設定されている場合はそれを使用してサーバー証明書を検証
+        handleServerTrustChallenge(
+          challenge, completionHandler: completionHandler, caCertificate: ca)
+      } else {
+        // カスタム CA が設定されていない場合はデフォルト処理
+        completionHandler(.performDefaultHandling, nil)
+      }
     case NSURLAuthenticationMethodHTTPBasic:
       // basic 認証
       handleBasicAuthenticationChallenge(challenge, completionHandler: completionHandler)
@@ -272,11 +280,134 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
     }
   }
 
-  // Proxy Authentication
+  private func handleServerTrustChallenge(
+    _ challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void,
+    caCertificate: SecCertificate
+  ) {
+    Logger.debug(
+      type: .webSocketChannel,
+      message:
+        "handleServerTrustChallenge: Starting custom CA certificate validation for \(challenge.protectionSpace.host)"
+    )
+
+    guard let serverTrust = challenge.protectionSpace.serverTrust else {
+      Logger.warn(
+        type: .webSocketChannel,
+        message:
+          "handleServerTrustChallenge: No serverTrust object available for \(challenge.protectionSpace.host)"
+      )
+      completionHandler(.performDefaultHandling, nil)
+      return
+    }
+
+    // カスタムCAを信頼アンカーとして設定
+    guard setCustomCAAsAnchor(caCertificate, for: serverTrust) else {
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+
+    // SSL ポリシーでホスト名検証を有効化（基本的な X.509 検証も含まれる）
+    guard enableHostnameVerification(for: serverTrust, host: host) else {
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      return
+    }
+
+    // 証明書を評価
+    evaluateTrust(serverTrust, completionHandler: completionHandler)
+  }
+
+  private func setCustomCAAsAnchor(_ caCertificate: SecCertificate, for serverTrust: SecTrust)
+    -> Bool
+  {
+    // カスタム CA を信頼アンカーとして追加
+    // ここで追加されたアンカー以外の証明書は無視される（システムの証明書も無視される）
+    // https://developer.apple.com/documentation/security/sectrustsetanchorcertificatesonly(_:_:)
+    let anchorCertificates = [caCertificate]
+    var osStatus = SecTrustSetAnchorCertificates(serverTrust, anchorCertificates as CFArray)
+
+    if osStatus != errSecSuccess {
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "SecTrustSetAnchorCertificates failed: \(osStatus)")
+      return false
+    }
+
+    // システムの信頼ストアではなく、提供されたアンカーのみを使用するように強制
+    // これにより、カスタムCAによって署名されていること *のみ* を検証できる
+    osStatus = SecTrustSetAnchorCertificatesOnly(serverTrust, true)
+
+    guard osStatus == errSecSuccess else {
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "Warning: Could not set anchor certificates only: \(osStatus)")
+      return false
+    }
+
+    return true
+  }
+
+  private func enableHostnameVerification(for serverTrust: SecTrust, host: String) -> Bool {
+    // ホスト名の検証ポリシーを追加（デフォルトで含まれている場合もあるが明示的に行うのが安全）
+    // 注意: wss:// スキームの場合、ポリシー作成時に "wss" ではなく "https" を使うことが多い
+    let sslPolicy = SecPolicyCreateSSL(true, host as CFString)
+    let osStatus = SecTrustSetPolicies(serverTrust, sslPolicy)
+
+    guard osStatus == errSecSuccess else {
+      Logger.warn(
+        type: .webSocketChannel,
+        message: "SecTrustSetPolicies (SSL) failed: \(osStatus)")
+      return false
+    }
+
+    Logger.debug(
+      type: .webSocketChannel, message: "SSL policy with hostname verification enabled for: \(host)"
+    )
+    return true
+  }
+
+  private func evaluateTrust(
+    _ serverTrust: SecTrust,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    var error: CFError?
+    let trustResult = SecTrustEvaluateWithError(serverTrust, &error)
+
+    if trustResult {
+      // 信頼できると評価された場合はサーバーの証明書を使って認証情報を作成する
+      Logger.info(
+        type: .webSocketChannel,
+        message: "Server trust evaluation succeeded - SSL/TLS connection is secure")
+      completionHandler(.useCredential, URLCredential(trust: serverTrust))
+    } else {
+      Logger.warn(
+        type: .webSocketChannel,
+        message:
+          "Server trust evaluation failed: \(error?.localizedDescription ?? "Unknown error"). This may indicate an invalid certificate chain or hostname mismatch."
+      )
+      completionHandler(.cancelAuthenticationChallenge, nil)
+    }
+  }
+
+  // --- Helper: Proxy Authentication ---
   private func handleBasicAuthenticationChallenge(
     _ challenge: URLAuthenticationChallenge,
     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
   ) {
+    // 既存の Proxy Basic 認証ロジックを流用
+    let ps = challenge.protectionSpace
+    let previousFailureCount = challenge.previousFailureCount
+
+    // 既に失敗している場合はチャレンジを中止する
+    guard previousFailureCount == 0 else {
+      let message =
+        "[\(host)] \(#function): Proxy authentication failed (previous failure count: \(previousFailureCount)). Proxy => \(String(describing: proxy))"
+      Logger.info(type: .webSocketChannel, message: message)
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      disconnect(error: SoraError.signalingChannelError(reason: message))
+      return
+    }
+
     // username と password をチェック
     guard let username = proxy?.username, let password = proxy?.password else {
       let message =
