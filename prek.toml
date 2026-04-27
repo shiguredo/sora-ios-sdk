@@ -1,0 +1,56 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+# 全フック共通のステージ
+default_stages = ["pre-commit"]
+
+# Sora と SoraTests 配下の Swift ファイルが対象
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "swift-format-fix"
+name = "swift format fix"
+language = "system"
+entry = "swift"
+args = ["format", "--in-place"]
+files = '^(Sora|SoraTests)/.*\.swift$'
+
+[[repos.hooks]]
+id = "swift-format-check"
+name = "swift format check"
+language = "system"
+entry = "swift"
+args = ["format", "lint", "--strict", "--parallel"]
+files = '^(Sora|SoraTests)/.*\.swift$'
+
+[[repos.hooks]]
+id = "swiftlint-fix"
+name = "SwiftLint fix"
+language = "system"
+entry = "swift"
+args = [
+  "package",
+  "plugin",
+  "--allow-writing-to-package-directory",
+  "swiftlint",
+  "--fix",
+  "--",
+]
+files = '^(Sora|SoraTests)/.*\.swift$'
+
+[[repos.hooks]]
+id = "swiftlint-check"
+name = "SwiftLint check"
+language = "system"
+entry = "swift"
+args = [
+  "package",
+  "plugin",
+  "--allow-writing-to-package-directory",
+  "swiftlint",
+  "--strict",
+  "--",
+]
+files = '^(Sora|SoraTests)/.*\.swift$'
