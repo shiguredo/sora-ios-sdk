@@ -14,8 +14,8 @@
 - [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
   - 音声入力処理のバイパス追加に伴い、接続単位での管理が必要となったため
   - @t-miya
-- [UPDATE] libwebrtc m146.7680.0.1 に上げる
-  - @zztkm
+- [UPDATE] libwebrtc m148.7778.5.0 に上げる
+  - @zztkm @voluntas
 - [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
   - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
   - @zztkm
