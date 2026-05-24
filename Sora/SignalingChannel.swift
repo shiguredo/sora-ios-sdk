@@ -109,7 +109,10 @@ class SignalingChannel {
   private func setUpWebSocketChannel(url: URL, proxy: Proxy?)
     -> URLSessionWebSocketChannel
   {
-    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy)
+    let ws = URLSessionWebSocketChannel(
+      url: url,
+      proxy: proxy,
+      caCertificate: configuration.caCertificate)
 
     // 接続成功時
     ws.internalHandlers.onConnect = { [weak self] webSocketChannel in

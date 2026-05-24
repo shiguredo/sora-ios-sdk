@@ -112,6 +112,13 @@ public struct Configuration {
   /// 指定した時間内に接続が成立しなければ接続試行を中止します。
   public var connectionTimeout: Int = 30
 
+  /// WSS シグナリング接続で使用するカスタム CA 証明書。
+  ///
+  /// `nil` の場合は iOS システムの信頼済み CA を使用して検証します。
+  /// カスタム CA 証明書を指定した場合、その CA で署名されたサーバー証明書を検証対象にします。
+  /// 自己署名証明書やプライベート CA を使用する場合に設定してください。
+  public var caCertificate: SecCertificate?
+
   /// 映像コーデック。デフォルトは `.default` です。
   public var videoCodec: VideoCodec = .default
 
