@@ -42,6 +42,10 @@
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
   - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
   - @zztkm
+- [ADD] Configuration にカスタム `RTCAudioDevice` を指定する `customAudioDevice` を追加する
+  - `RTCPeerConnectionFactory` 生成時に `RTCAudioDevice` を差し込めるようにする
+  - カスタム RTCAudioDevice 利用時の音声ハードミュート実装用拡張ポイントとして `AudioInputMuteControllable` を追加する
+  - @t-miya
 - [ADD] Configuration に接続時の音声入力処理のバイパスを設定する `bypassVoiceProcessing` を追加する
   - `RTCAudioDeviceModule.initWithBypassVoiceProcessing(_:)` を接続単位で利用する
   - @t-miya
