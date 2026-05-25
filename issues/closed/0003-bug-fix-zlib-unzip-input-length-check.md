@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-05-25
+- Completed: 2026-05-25
 - Model: Opus 4.7
 - Branch: feature/fix-zlib-unzip-input-length-check
 
@@ -92,3 +93,13 @@ static func unzip(_ input: Data) -> Data? {
 - `DataChannel` 経由の結合テストで、不正な圧縮データを受信するケースを検証する
 
 いずれの場合も、0 / 1 / 2 / 5 / 6 / 7 バイトの入力でクラッシュしないことを確認する。
+
+## 解決方法
+
+### 1. 入力長チェックの追加
+
+`input.isEmpty` チェックを `input.count < 7` に変更した。ヘッダー (2 バイト) + 圧縮データ (1 バイト以上) + チェックサム (4 バイト) の最低必要バイト数を満たさない入力に対して、`removeFirst` / `removeLast` に到達する前に `nil` を返す。このチェックは `destinationBuffer` の `allocate` より前にあるため、メモリ管理に影響しない。
+
+### 2. メモリリークの修正
+
+`compression_decode_buffer` が `size == 0` を返した場合に `destinationBuffer.deallocate()` を追加した。正常系では `Data(bytesNoCopy:deallocator:.free)` で所有権を移譲するが、このパスでは `Data` を生成しないため明示的に解放する。
