@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-05-25
+- Completed: 2026-05-25
 - Model: Opus 4.7
 - Branch: feature/fix-peer-channel-lock-synchronization
 
@@ -133,3 +134,30 @@ final class Lock {
 ## 関連 issue
 
 - issue 0007: `PeerChannel` の複数クロージャで `[weak self]` が欠如している問題。`[weak self]` 化後のクロージャから `self?.lock.lock()` を呼ぶ設計との整合性に注意が必要。issue 0007 の修正を先に適用した場合、`self` が nil になって `lock()` が呼ばれず `unlock()` だけが呼ばれるバランス崩壊が起きないか確認すること
+
+## 解決方法
+
+`PeerChannel.Lock` クラスに以下の修正を適用した。
+
+### 1. NSLock による排他制御の導入
+
+`count`, `shouldDisconnect`, および新規追加の `isDisconnecting` フラグへの全アクセスを単一の NSLock で保護した。`basicDisconnect()` の呼び出しは全てロック解放後に行い、再入パスでのデッドロックを防止する。
+
+### 2. `isDisconnecting` フラグによる切断と新規処理開始の直列化
+
+`waitDisconnect()` で `count == 0` の即時切断パス、および `unlock()` で `count` が 0 に戻り遅延切断を実行するパスで `isDisconnecting = true` を設定する。`lock()` は `isDisconnecting == true` の場合 `false` を返し、呼び出し側で早期リターンする。
+
+不変条件: `isDisconnecting == true` ならば `count == 0`
+
+### 3. `lock()` 呼び出し箇所の guard 化
+
+以下の 4 箇所で `guard lock.lock() else { return }` に変更し、切断中の新規処理開始を拒否する:
+
+- `createAndSendAnswer` 内（nativeChannel 生成後の createAnswer 開始時）
+- `createAndSendUpdateAnswer` 内
+- `createAndSendReAnswer` の createAnswer コールバック内
+- `createAndSendReAnswerOverDataChannel` の createAnswer コールバック内
+
+### 4. デッドコード `Lock.disconnect()` の削除
+
+旧実装では `unlock()` → `disconnect()` と呼んでいたが、新実装では `unlock()` 内で直接 `shouldDisconnect` を処理するため、`Lock.disconnect()` は呼び出し元が存在しなくなった。このメソッドだけが `count > 0` のまま `isDisconnecting = true` を設定できる不整合な入口であったため削除した。
