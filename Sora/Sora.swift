@@ -72,7 +72,17 @@ public final class Sora: @unchecked Sendable {
   // MARK: - プロパティ
 
   /// 接続中のメディアチャネルのリスト
-  public private(set) var mediaChannels: [MediaChannel] = []
+  public var mediaChannels: [MediaChannel] {
+    mediaChannelLock.lock()
+    defer { mediaChannelLock.unlock() }
+    return _mediaChannels
+  }
+
+  // mediaChannels の実体。読み書きは必ず mediaChannelLock で保護する
+  private var _mediaChannels: [MediaChannel] = []
+
+  // _mediaChannels への全アクセスを保護する排他ロック
+  private let mediaChannelLock = NSLock()
 
   /// イベントハンドラ
   public let handlers = SoraHandlers()
@@ -114,23 +124,37 @@ public final class Sora: @unchecked Sendable {
 
   // MARK: - メディアチャネルの管理
 
+  // mediaChannelLock で _mediaChannels を保護し、handlers コールバックはロック外で呼ぶ。
+  //
+  // ロック内でコールバックを呼ぶと、ユーザーのハンドラから connect() を再呼び出しした場合にデッドロックする。
   func add(mediaChannel: MediaChannel) {
-    DispatchQueue.global().sync {
-      if !mediaChannels.contains(mediaChannel) {
-        Logger.debug(type: .sora, message: "add media channel")
-        mediaChannels.append(mediaChannel)
-        handlers.onAddMediaChannel?(mediaChannel)
-      }
+    var added = false
+    mediaChannelLock.lock()
+    if !_mediaChannels.contains(mediaChannel) {
+      Logger.debug(type: .sora, message: "add media channel")
+      _mediaChannels.append(mediaChannel)
+      added = true
+    }
+    mediaChannelLock.unlock()
+
+    if added {
+      handlers.onAddMediaChannel?(mediaChannel)
     }
   }
 
+  // add と同様、mediaChannelLock で _mediaChannels を保護し、handlers コールバックはロック外で呼ぶ。
   func remove(mediaChannel: MediaChannel) {
-    DispatchQueue.global().sync {
-      if mediaChannels.contains(mediaChannel) {
-        Logger.debug(type: .sora, message: "remove media channel")
-        mediaChannels.remove(mediaChannel)
-        handlers.onRemoveMediaChannel?(mediaChannel)
-      }
+    var removed = false
+    mediaChannelLock.lock()
+    if _mediaChannels.contains(mediaChannel) {
+      Logger.debug(type: .sora, message: "remove media channel")
+      _mediaChannels.remove(mediaChannel)
+      removed = true
+    }
+    mediaChannelLock.unlock()
+
+    if removed {
+      handlers.onRemoveMediaChannel?(mediaChannel)
     }
   }
 

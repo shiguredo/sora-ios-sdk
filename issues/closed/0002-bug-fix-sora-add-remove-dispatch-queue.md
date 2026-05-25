@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-05-25
+- Completed: 2026-05-25
 - Model: Opus 4.7
 - Branch: feature/fix-sora-add-remove-dispatch-queue
 
@@ -106,3 +107,17 @@ Swift の Array は値型（struct）のため、getter でコピーが返され
 ## 関連 issue
 
 - issue 0001: `PeerChannel.Lock` にも NSLock を導入する。排他制御の手法を統一する
+
+## 解決方法
+
+### 1. NSLock による排他制御の導入
+
+`DispatchQueue.global().sync`（concurrent queue であり排他制御として機能しない）を `NSLock` に置換した。`_mediaChannels` への全アクセス（`contains`、`append`、`remove`）を `mediaChannelLock` で保護する。
+
+### 2. handlers コールバックのロック外移動
+
+`handlers.onAddMediaChannel` / `handlers.onRemoveMediaChannel` の呼び出しをロック外に移動した。ロック内で呼ぶと、ユーザーのハンドラから `Sora.connect()` を再呼び出しした場合にデッドロックする。
+
+### 3. mediaChannels の外部読み取り保護
+
+`public private(set) var mediaChannels` を `private var _mediaChannels` + スレッドセーフな computed property に変更した。getter 内で NSLock を取得し、Array の値コピーを返す。Swift の COW により、呼び出し元で変更しなければコピーコストは発生しない。

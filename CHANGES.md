@@ -59,6 +59,8 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] Sora.add/remove の DispatchQueue.global().sync を NSLock に置換し、mediaChannels へのスレッドセーフなアクセスを保証する
+  - @t-miya
 - [FIX] PeerChannel.Lock の count / shouldDisconnect にスレッド間の排他制御を追加し、データレースおよび切断と新規処理開始の並走を防止する
   - @t-miya
 - [FIX] シグナリングチャンネル接続エラー時に `connect()` で取得したロックが解放されないバグを修正する
