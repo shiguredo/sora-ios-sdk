@@ -51,7 +51,8 @@ private enum ZLibUtil {
   }
 
   static func unzip(_ input: Data) -> Data? {
-    if input.isEmpty {
+    // ヘッダー (2 バイト) + 圧縮データ (1 バイト以上) + チェックサム (4 バイト) = 最低 7 バイト必要
+    if input.count < 7 {
       return nil
     }
 
@@ -75,6 +76,9 @@ private enum ZLibUtil {
       COMPRESSION_ZLIB)
 
     if size == 0 {
+      // 正常系では Data(bytesNoCopy:deallocator:.free) で所有権を移譲するが、
+      // このパスでは Data を生成しないため明示的に解放する
+      destinationBuffer.deallocate()
       return nil
     }
 
