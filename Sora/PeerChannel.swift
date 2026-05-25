@@ -76,44 +76,76 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   final class Lock {
     weak var context: PeerChannel?
-    var count: Int = 0
-    var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
+
+    // 進行中の非同期処理数。lock() でインクリメント、unlock() でデクリメントする
+    private var count: Int = 0
+
+    // 切断処理が開始されたことを示すフラグ。true の場合 lock() は false を返す。
+    // 不変条件: isDisconnecting == true ならば count == 0
+    private var isDisconnecting: Bool = false
+
+    // count > 0 の間に切断要求があった場合に遅延実行用パラメータを保持する
+    private var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
+
+    // count, isDisconnecting, shouldDisconnect への全アクセスを保護する排他ロック
+    private let nsLock = NSLock()
 
     func waitDisconnect(error: Error?, reason: DisconnectReason) {
+      var shouldCallBasicDisconnect = false
+      nsLock.lock()
       if count == 0 {
-        context?.basicDisconnect(error: error, reason: reason)
+        isDisconnecting = true
+        shouldCallBasicDisconnect = true
       } else {
         shouldDisconnect = (true, error, reason)
       }
+      nsLock.unlock()
+
+      if shouldCallBasicDisconnect {
+        context?.basicDisconnect(error: error, reason: reason)
+      }
     }
 
-    func lock() {
+    @discardableResult
+    func lock() -> Bool {
+      nsLock.lock()
+      if isDisconnecting {
+        nsLock.unlock()
+        return false
+      }
       count += 1
+      nsLock.unlock()
+      return true
     }
 
     func unlock() {
+      var disconnectParams: (Error?, DisconnectReason)?
+      nsLock.lock()
       if count <= 0 {
         fatalError("count is already 0")
       }
       count -= 1
       if count == 0 {
-        disconnect()
+        switch shouldDisconnect {
+        case (true, let error, let reason):
+          isDisconnecting = true
+          shouldDisconnect = (false, nil, .unknown)
+          disconnectParams = (error, reason)
+        default:
+          break
+        }
       }
-    }
+      nsLock.unlock()
 
-    func disconnect() {
-      switch shouldDisconnect {
-      case (true, let error, let reason):
-        shouldDisconnect = (false, nil, .unknown)
+      if let (error, reason) = disconnectParams {
         if let context {
           if context.state != .closed {
             context.basicDisconnect(error: error, reason: reason)
           }
         }
-      default:
-        break
       }
     }
+
   }
 
   // MARK: - Properties
@@ -797,7 +829,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
     nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
 
-    lock.lock()
+    guard lock.lock() else {
+      Logger.debug(type: .peerChannel, message: "already disconnecting, skip create answer")
+      return
+    }
     createAnswer(
       isSender: configuration.isSender,
       offer: offer.sdp,
@@ -825,7 +860,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func createAndSendUpdateAnswer(forOffer offer: String) {
     Logger.debug(type: .peerChannel, message: "create and send update-answer")
-    lock.lock()
+    guard lock.lock() else {
+      Logger.debug(type: .peerChannel, message: "already disconnecting, skip create update-answer")
+      return
+    }
     createAnswer(
       isSender: false,
       offer: offer,
@@ -868,7 +906,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // この場合、 SDP 再ハンドシェイク時に SDP を local description に設定する際に EXC_BAD_ACCESS (不正なメモリアクセス) が発生し、
       // アプリがクラッシュしてしまうことがあったが、lock() の呼び出しをクロージャー内にすることで、不正なメモリアクセスを防ぐことができるように
       // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で lock() の位置を移動)
-      self.lock.lock()  // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
+      guard self.lock.lock() else {
+        Logger.debug(type: .peerChannel, message: "already disconnecting, skip re-answer")
+        return
+      }
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
@@ -908,7 +949,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       constraints: webRTCConfiguration.nativeConstraints
     ) { answer, error in
       // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
-      self.lock.lock()
+      guard self.lock.lock() else {
+        Logger.debug(
+          type: .peerChannel, message: "already disconnecting, skip re-answer over DataChannel")
+        return
+      }
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
