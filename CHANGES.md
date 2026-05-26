@@ -59,6 +59,8 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] `URLSessionWebSocketChannel.send` の `webSocketTask` force unwrap を修正し、nil 時のクラッシュを防止する
+  - @t-miya
 - [FIX] ZLibUtil.unzip の入力長チェックを追加し、7 バイト未満の不正データによるクラッシュとメモリリークを修正する
   - @t-miya
 - [FIX] Sora.add/remove の DispatchQueue.global().sync を NSLock に置換し、mediaChannels へのスレッドセーフなアクセスを保証する
