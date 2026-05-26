@@ -100,7 +100,7 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
   }
 
   func send(message: WebSocketMessage) {
-    var nativeMessage: URLSessionWebSocketTask.Message!
+    let nativeMessage: URLSessionWebSocketTask.Message
     switch message {
     case .text(let text):
       Logger.debug(type: .webSocketChannel, message: "[\(host)] sending text: \(text)")
@@ -109,7 +109,11 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
       Logger.debug(type: .webSocketChannel, message: "[\(host)] sending binary: \(data)")
       nativeMessage = .data(data)
     }
-    webSocketTask!.send(nativeMessage) { [weak self] error in
+    guard let webSocketTask else {
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] webSocketTask is nil")
+      return
+    }
+    webSocketTask.send(nativeMessage) { [weak self] error in
       guard let weakSelf = self else {
         return
       }
