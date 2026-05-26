@@ -1,7 +1,8 @@
 # PeerChannel.initializeCameraVideoCapture の CameraVideoCapturer.current! を if let に変更する
 
-- Priority: Medium
+- Priority: Low
 - Created: 2026-05-25
+- Completed: 2026-05-26
 - Model: Opus 4.7
 - Branch: feature/fix-camera-current-toctou-force-unwrap
 
@@ -83,3 +84,12 @@ if let current = CameraVideoCapturer.current {
 
 - `initializeCameraVideoCapture` は `private` メソッドであり、公開 API に変更はない
 - CHANGES.md には `[FIX]` として記録する
+
+## 解決方法
+
+`PeerChannel.swift` の `initializeCameraVideoCapture` メソッド内で以下の修正を行った:
+
+1. `if CameraVideoCapturer.current != nil, CameraVideoCapturer.current!.isRunning` を `if let current = CameraVideoCapturer.current, current.isRunning` に変更し、force unwrap を 2 箇所除去した
+2. `CameraVideoCapturer.current!.stop` を `current.stop` に変更し、ローカル変数経由で安全にアクセスするようにした
+3. 元のコメント「CameraVideoCapturer.current を停止してから capturer を start する」を維持した
+4. これにより、同ファイル `terminateSenderStream` (L687) の `if let` パターンとスタイルが統一された
