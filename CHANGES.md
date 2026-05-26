@@ -59,6 +59,9 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] `PeerChannel` のクロージャに `[weak self]` を追加し、解放遅延リスクを縮小する
+  - statistics コールバック、createClientOfferSDP コールバック、createAnswer setRemoteDescription コールバックに追加する
+  - @t-miya
 - [FIX] `PeerChannel.initializeCameraVideoCapture` の `CameraVideoCapturer.current` への force unwrap を除去し、レースリスクを縮小する
   - @t-miya
 - [FIX] `CameraVideoCapturerDelegate` の `weak var cameraVideoCapturer` の暗黙的アンラップ型を Optional に変更し、nil 時のクラッシュを防止する

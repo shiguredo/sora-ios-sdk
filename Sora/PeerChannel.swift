@@ -328,7 +328,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         .createClientOfferSDP(
           configuration: webRTCConfiguration,
           constraints: webRTCConfiguration.constraints
-        ) { sdp, sdpError in
+        ) { [weak self] sdp, sdpError in
+          guard let self else {
+            return
+          }
           if let error = sdpError {
             Logger.debug(
               type: .peerChannel,
@@ -714,7 +717,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try setting remote description")
     let offer = RTCSessionDescription(type: .offer, sdp: offer)
-    nativeChannel.setRemoteDescription(offer) { error in
+    nativeChannel.setRemoteDescription(offer) { [weak self] error in
+      guard let self else {
+        return
+      }
       guard error == nil else {
         Logger.debug(
           type: .peerChannel,
@@ -1042,7 +1048,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .ping(let ping):
       let pong = SignalingPong()
       if ping.statisticsEnabled == true {
-        nativeChannel?.statistics { report in
+        nativeChannel?.statistics { [weak self] report in
+          guard let self else {
+            return
+          }
           var json: [String: Any] = ["type": "pong"]
           let stats = Statistics(contentsOf: report)
           json["stats"] = stats.jsonObject
