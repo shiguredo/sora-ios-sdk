@@ -641,9 +641,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
-    if CameraVideoCapturer.current != nil, CameraVideoCapturer.current!.isRunning {
+    if let current = CameraVideoCapturer.current, current.isRunning {
       // CameraVideoCapturer.current を停止してから capturer を start する
-      CameraVideoCapturer.current!.stop { (error: Error?) in
+      current.stop { (error: Error?) in
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
