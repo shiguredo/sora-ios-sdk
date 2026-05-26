@@ -451,13 +451,17 @@ public struct CameraSettings: CustomStringConvertible {
 // MARK: -
 
 private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
-  weak var cameraVideoCapturer: CameraVideoCapturer!
+  weak var cameraVideoCapturer: CameraVideoCapturer?
 
   init(cameraVideoCapturer: CameraVideoCapturer) {
     self.cameraVideoCapturer = cameraVideoCapturer
   }
 
   func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
+    guard let cameraVideoCapturer else {
+      Logger.debug(type: .cameraVideoCapturer, message: "cameraVideoCapturer is nil")
+      return
+    }
     let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
     if let editedFrame = CameraVideoCapturer.handlers.onCapture?(cameraVideoCapturer, frame) {
       cameraVideoCapturer.stream?.send(videoFrame: editedFrame)

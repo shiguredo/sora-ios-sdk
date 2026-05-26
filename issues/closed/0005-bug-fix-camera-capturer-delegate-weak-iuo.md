@@ -1,7 +1,8 @@
 # CameraVideoCapturerDelegate の weak var! を weak var? に変更する
 
-- Priority: Medium
+- Priority: Low
 - Created: 2026-05-25
+- Completed: 2026-05-26
 - Model: Opus 4.7
 - Branch: feature/fix-camera-capturer-delegate-weak-iuo
 
@@ -52,3 +53,11 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
 
 - `CameraVideoCapturerDelegate` は `private class` であり、公開 API に変更はない
 - CHANGES.md には `[FIX]` として記録する
+
+## 解決方法
+
+`CameraVideoCapturer.swift` の `CameraVideoCapturerDelegate` クラスに以下の修正を行った:
+
+1. `weak var cameraVideoCapturer: CameraVideoCapturer!` を `weak var cameraVideoCapturer: CameraVideoCapturer?` に変更した
+2. `capturer(_:didCapture:)` メソッドの先頭に `guard let cameraVideoCapturer else` を追加し、nil の場合は `Logger.debug` でログ出力して return するようにした
+3. `guard let` によりローカル変数に束縛するため、クロージャ実行中にオブジェクトが解放されるケースも防止される
