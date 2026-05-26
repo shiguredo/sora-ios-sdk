@@ -59,6 +59,8 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] `CameraVideoCapturerDelegate` の `weak var cameraVideoCapturer` の暗黙的アンラップ型を Optional に変更し、nil 時のクラッシュを防止する
+  - @t-miya
 - [FIX] `URLSessionWebSocketChannel.send` の `webSocketTask` force unwrap を修正し、nil 時のクラッシュを防止する
   - @t-miya
 - [FIX] ZLibUtil.unzip の入力長チェックを追加し、7 バイト未満の不正データによるクラッシュとメモリリークを修正する
