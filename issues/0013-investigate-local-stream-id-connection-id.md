@@ -2,81 +2,71 @@
 
 - Priority: Low
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-06-05
 - Model: Opus 4.8
 - Branch:
+- Polished: 2026-06-05
 
 ## 目的
 
 ローカルストリーム（送信側 sender）の streamId に、現状の `"mainStream"` 固定値ではなく Sora が発行した `connectionId` を設定できるかを調査し、実現可能性と制約を明確にする。ストリームの識別を Sora 側の接続単位と一致させることが狙いである。
 
-## 依存関係
+## 調査結果
 
-`0014-add-mediastream-connection-id`（受信側 MediaStream への connectionId 追加）と領域が近いが、本 issue は送信側ストリームの streamId を対象としており論点が異なる。受信側の connectionId 公開方針と整合を取ること。
+### 結論: 実現可能
 
-## 優先度根拠
+ソースコード分析の結果、`connectionId` は送信ストリーム生成より前に確定するため、streamId に `connectionId` を設定することは技術的に可能である。
 
-Low とする。機能上の不具合ではなく、固定値による直接的な不具合は報告されていない。streamId を connectionId に揃えることはストリーム識別の改善・整合性向上が目的であり、緊急性は低い。固定値前提のロジックへの影響確認が必要なため、慎重に進める Low とする。
+### 呼び出し順序の検証
 
-## 現状
+`PeerChannel.swift` の処理フロー:
 
-送信ストリームの streamId の既定値は `"mainStream"` 固定である。
+1. `handleSignalingOverWebSocket` で offer 受信 → `connectionId = offer.connectionId`（`PeerChannel.swift:1027`）
+2. `createAndSendAnswer` → `createAnswer` の内部で `initializeSenderStream(mid:)` が呼ばれる（`PeerChannel.swift:742`）
+3. `initializeSenderStream` 内で `createNativeSenderStream(streamId:)` が呼ばれ、`configuration.publisherStreamId` が渡される（`PeerChannel.swift:434-435`）
 
-```swift
-private let defaultPublisherStreamId: String = "mainStream"
-```
+`connectionId` の確定（ステップ 1）は stream 生成（ステップ 2-3）より前であり、タイミングの問題は存在しない。issue 作成当初に想定された「offer 受信より前の stream 生成」は発生していない。
 
-`Sora/Configuration.swift:6`
+### 実現方式の候補
 
-```swift
-/// パブリッシャーのストリームの ID です。
-/// 通常、指定する必要はありません。
-public var publisherStreamId: String = defaultPublisherStreamId
-```
-
-`Sora/Configuration.swift:248`
-
-送信ストリーム生成時にこの固定値が使われる。
+`publisherStreamId` が既定値 `"mainStream"` かつ `connectionId` が非 nil の場合に、`self.connectionId` を streamId として使用する方式:
 
 ```swift
-.createNativeSenderStream(
-  streamId: configuration.publisherStreamId,
+let streamId: String
+if configuration.publisherStreamId == defaultPublisherStreamId,
+   let connId = self.connectionId {
+    streamId = connId
+} else {
+    streamId = configuration.publisherStreamId
+}
 ```
 
-`Sora/PeerChannel.swift:434`
+### 変更が必要な箇所
 
-Sora が発行した connectionId は offer メッセージ受信時に取得できる（`Sora/SignalingOffer.connectionId`、`Sora/Signaling.swift:443`）。
+| ファイル | 行 | 内容 |
+|----------|-----|------|
+| `PeerChannel.swift` | 434-435 | `createNativeSenderStream(streamId:)` の引数を connectionId 対応に変更 |
+| `MediaChannel.swift` | 191 | `senderStream` の比較ロジックを connectionId 対応に変更 |
+| `MediaChannel.swift` | 199 | `receiverStreams` の判定ロジックを同様に変更 |
 
-```swift
-connectionId = offer.connectionId
-```
+### 後方互換性の考慮
 
-`Sora/PeerChannel.swift:1027`
+- `publisherStreamId` を明示指定している利用者は、これまで通り指定値が優先される。
+- `connectionId` が nil の場合（異常系）、従来通り `"mainStream"` が使われる。
+- 既存利用者のほとんどは `publisherStreamId` を明示指定していないため、暗黙的な挙動変更となる。挙動変更の周知が必要。
 
-`publisherStreamId` は送信ストリームの判定にも利用されている。固定値変更時にこの判定が壊れないよう注意が必要である。
+### 代替アプローチ
 
-```swift
-public var senderStream: MediaStream? {
-  ...
-  stream.streamId == configuration.publisherStreamId
-```
+`RTCMediaStream` の streamId を変更する代わりに、`MediaStream` ラッパーに `connectionId` プロパティを持たせて識別に使う方式もある。こちらの方が native streamId に依存しないため後方互換性の面で安全だが、`MediaStream` の `streamId` との二重管理になる。
 
-`Sora/MediaChannel.swift:191`
+## 次のステップ
 
-送信ストリームは offer 受信より前（`initializeSenderStream`、`Sora/PeerChannel.swift:422` 付近）で生成される箇所があり、生成時点では connectionId が未確定である可能性がある。生成タイミングと connectionId 確定タイミングの前後関係が論点となる。
+本調査の結果、streamId への connectionId 設定は技術的に可能である。実装にあたっては別 issue を立て、以下の設計判断を行う:
 
-## 設計方針
-
-- 送信ストリームの生成タイミングと offer 受信（connectionId 確定）のタイミングを整理し、送信ストリームの streamId を connectionId に設定できる順序かどうかを確認する。
-- `RTCMediaStream` の streamId を生成後に変更できるか、もしくは connectionId 確定後に送信ストリームを生成する構成へ変更できるかを調査する。
-- `MediaChannel.senderStream` / `receiverStreams` 等で `publisherStreamId` を固定値前提に比較しているロジックが、connectionId ベースでも正しく送受信ストリームを判別できるかを確認する。
-- `publisherStreamId` を明示指定している利用者の挙動を壊さないこと。既定挙動を connectionId へ切り替えるか、オプトインにするかを判断する。
-
-## 完了条件
-
-- 送信ストリームの streamId に connectionId を設定できるかどうかを、生成タイミングの制約を踏まえて結論づけること。
-- 実現可能な場合は変更方針と後方互換への影響を整理すること。実現困難な場合は代替案を提示すること。
-- 調査結果に基づき、対応を行う場合は別 issue として方針を立てること。
-- 調査結果と結論を `issues/` 配下の本 issue に記録すること。
+1. streamId を connectionId に変更する方式を採用するか、`MediaStream` ラッパーに connectionId プロパティを追加する方式を採用するか
+2. 既定挙動の変更をオプトインにするか（新フラグを追加するか）
+3. 受信側の connectionId 公開（`0014-add-mediastream-connection-id`）との整合性
 
 ## 解決方法
+
+ソースコードの処理フローを解析し、`connectionId` が送信ストリーム生成より前に確定することを確認した。実装方針の詳細は別 issue で対応する。
