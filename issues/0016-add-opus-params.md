@@ -5,6 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/add-opus-params
+- Polished: 2026-06-05
 
 ## 目的
 
@@ -17,97 +18,63 @@
 
 ## 現状
 
-`Configuration` から送信できる音声設定は `audioCodec` と `audioBitRate` に限られており、`opus_params` を送信する経路が存在しない。
+`Configuration` から送信できる音声設定は `audioCodec` と `audioBitRate` に限られており、`opus_params` を送信する経路が存在しない。`SignalingConnect`（`Sora/Signaling.swift:305-311`）も音声については `audioCodec` / `audioBitRate` のみを保持する。
 
-`Configuration` には `audioCodec` と `audioBitRate` のみが定義されている。
-
-```swift
-// Sora/Configuration.swift:124-128
-/// 音声コーデック。デフォルトは `.default` です。
-public var audioCodec: AudioCodec = .default
-
-/// 音声ビットレート。デフォルトは無指定です。
-public var audioBitRate: Int?
-```
-
-`SignalingConnect` も音声については `audioCodec` / `audioBitRate` のみを保持する。
+`encode(to:)` の `audio` コンテナ生成条件（`Sora/Signaling.swift:981`）は以下のとおりであり、`opus_params` のみを指定した場合に `audio` コンテナが生成されない:
 
 ```swift
-// Sora/Signaling.swift:307-311
-/// 音声コーデック
-public var audioCodec: AudioCodec
-
-/// 音声ビットレート
-public var audioBitRate: Int?
+if audioCodec != .default || audioBitRate != nil {
 ```
 
-`encode(to:)` では `audio` コンテナに `codec_type` と `bit_rate` のみをエンコードしており、`opus_params` をエンコードしていない。`audio` コンテナを生成する条件にも `opus_params` が含まれていない。
-
-```swift
-// Sora/Signaling.swift:980-993
-if audioEnabled {
-  if audioCodec != .default || audioBitRate != nil {
-    var audioContainer =
-      container
-      .nestedContainer(
-        keyedBy: AudioCodingKeys.self,
-        forKey: .audio)
-    if audioCodec != .default {
-      try audioContainer.encode(audioCodec, forKey: .codec_type)
-    }
-    try audioContainer.encodeIfPresent(
-      audioBitRate,
-      forKey: .bit_rate)
-  }
-} else {
-  try container.encode(false, forKey: .audio)
-}
-```
-
-`AudioCodingKeys` には `opus_params` のキーが無い。
-
-```swift
-// Sora/Signaling.swift:903-906
-enum AudioCodingKeys: String, CodingKey {
-  case codec_type
-  case bit_rate
-}
-```
-
-一方、映像コーデックパラメーターは `Encodable?` 型で `Configuration` から `SignalingConnect` まで透過的に渡され、ネストしたコンテナにエンコードされている。
-
-```swift
-// Sora/Signaling.swift:963-974
-if let vp9Params {
-  let vp9ParamsEnc = videoContainer.superEncoder(forKey: .vp9_params)
-  try vp9Params.encode(to: vp9ParamsEnc)
-}
-if let av1Params {
-  let av1ParamsEnc = videoContainer.superEncoder(forKey: .av1_params)
-  try av1Params.encode(to: av1ParamsEnc)
-}
-if let h264Params {
-  let h264ParamsEnc = videoContainer.superEncoder(forKey: .h264_params)
-  try h264Params.encode(to: h264ParamsEnc)
-}
-```
+`AudioCodingKeys`（`Sora/Signaling.swift:903-906`）には `codec_type` と `bit_rate` しかなく、`opus_params` のキーが存在しない。映像コーデックパラメーター（`vp9Params` / `av1Params` / `h264Params`）は `Encodable?` として `SignalingConnect` → `PeerChannel.swift:413-415` で渡され、`encode(to:)` では `superEncoder` パターンでネストしたコンテナにエンコードされている（`Sora/Signaling.swift:964-974`）。音声側も同様のパターンで実装できる。
 
 ## 設計方針
 
-- 映像コーデックパラメーター (`vp9Params` / `av1Params` / `h264Params`) と同じ設計に揃え、`opus_params` を `Encodable?` として `Configuration` から `SignalingConnect` まで透過的に渡す。SDK 側で個別パラメーターの型を厳密に持たないため、サーバーの仕様変更にも追従しやすい。
-- 新規プロパティのデフォルトは `nil` とし、`nil` の場合は `opus_params` をエンコードしない。後方互換性を維持する。
-- 現状の `audio` コンテナ生成条件 `audioCodec != .default || audioBitRate != nil` では `opus_params` のみ指定したケースで `audio` コンテナが生成されないため、`opus_params` が存在する場合も `audio` コンテナを生成するよう条件を拡張する。
+映像コーデックパラメーター（`videoVp9Params` 等）と同じ設計に揃え、`opus_params` を `Encodable?` として透過的に渡す。SDK 側で個別パラメーターの型を厳密に持たないため、サーバーの仕様変更にも追従しやすい。新規プロパティのデフォルトは `nil` とし、後方互換性を維持する。
+
+変更が必要な箇所は以下の 3 ファイルにわたる:
+
+1. **`Sora/Configuration.swift:128` 直後**に `audioOpusParams: Encodable?` を追加する。`Configuration` の命名規則は `video` プレフィックス付きの `videoVp9Params` / `videoAv1Params` / `videoH264Params` に対称して、音声は `audio` プレフィックス付きの `audioOpusParams` とする。デフォルト `nil`。
+
+2. **`Sora/Signaling.swift`**:
+   - `SignalingConnect` 構造体の `audioBitRate`（311 行目）直後に `public var opusParams: Encodable?` を追加する（`SignalingConnect` 側は `vp9Params` / `av1Params` / `h264Params` と同様にプレフィックスなし）。
+   - `AudioCodingKeys`（903 行目）に `case opus_params` を追加する。
+   - `audio` コンテナ生成条件（981 行目）を `if audioCodec != .default || audioBitRate != nil || opusParams != nil {` に変更する。
+   - `encode(to:)` の `audio` コンテナ内で `audioBitRate` の `encodeIfPresent` 直後に、映像コーデックパラメーターと同様の `superEncoder` パターンで `opusParams` のエンコード処理を追加する（`if let opusParams { let enc = audioContainer.superEncoder(forKey: .opus_params); try opusParams.encode(to: enc) }`）。
+
+3. **`Sora/PeerChannel.swift:413-415`** の `SignalingConnect(...)` メンバーワイズイニシャライザ呼び出し（382 行目）の引数リストに `opusParams: configuration.audioOpusParams` を追加する（`h264Params: configuration.videoH264Params` の直後）。これはプロパティ代入ではなくイニシャライザの引数追加である。この変更がなければ `Configuration.audioOpusParams` の値がシグナリングメッセージに反映されない。
+
+`audioEnabled = false` の場合、`encode(to:)` は `audio` コンテナを生成せず `false` を送信する既存の挙動があり（`Sora/Signaling.swift:994-995`）、`opusParams` を指定していても無視される。これは意図した動作として許容する。
+
+`audioOpusParams` のみ指定して `audioCodec` と `audioBitRate` を両方デフォルトのままにした場合、`audio` コンテナは `{"opus_params": {...}}` となり `codec_type` キーを含まない。Sora サーバーはこれを音声有効として処理できることを前提とする（`codec_type` 省略時は Opus がデフォルトコーデックとなる Sora の仕様に基づく）。
+
+## テスト方針
+
+モック・スタブは使用しない。シグナリングメッセージの JSON エンコードは `JSONEncoder` を使った純粋なユニットテストで検証できる。
+
+以下をテストする:
+
+- `audioOpusParams` が `nil` の場合、`SignalingConnect` のエンコード結果の JSON に `audio.opus_params` キーが存在しないこと。
+- `audioOpusParams` に具体的な `Encodable` 型（テスト専用の `struct TestOpusParams: Encodable { let minptime: Int }` 等）を設定した場合、`audio.opus_params` がエンコードされること。`opusParams: Encodable?` は型消去のため `JSONEncoder().encode(opusParams!)` を直接呼べないが、`SignalingConnect` 全体を `JSONEncoder` でエンコードすることで検証できる。
+- `audioCodec` / `audioBitRate` を両方デフォルト値に保ち `audioOpusParams` のみ設定した場合、`audio` コンテナが生成されること（生成条件拡張の確認）。
+- `audioEnabled = false` の場合、`audioOpusParams` を設定しても `audio` コンテナが生成されずキーが存在しないこと。
+
+テストの追加先は新規ファイル `SoraTests/SignalingConnectTests.swift` を作成すること（`SoraTests/` 配下に `SignalingConnect` 向けテストファイルは存在しない）。
 
 ## 完了条件
 
-- `Configuration` に `opus_params` を指定するプロパティ (`Encodable?`) が追加されている。
-- `Configuration.audioOpusParams` を指定すると、シグナリング connect メッセージの `audio.opus_params` として送信されること。
-- `nil` の場合は `opus_params` がエンコードされず、既存の挙動が変更されていないこと (後方互換性が保たれている)。
-- `opus_params` が正しく JSON にエンコードされること、および `nil` 時にエンコードされないことを検証するテストが `SoraTests/` に追加されている。
-- `CHANGES.md` の `develop` セクションに以下を追記すること:
-  ```
-  - [ADD] Configuration に audio.opus_params を指定する audioOpusParams を追加する
-    - @担当者
-  ```
+- `Configuration` に `audioOpusParams: Encodable?` プロパティが追加されること。
+- `SignalingConnect` に `opusParams: Encodable?` プロパティが追加されること。
+- `AudioCodingKeys` に `case opus_params` が追加されること。
+- `audio` コンテナ生成条件が `opusParams != nil` を含む形に拡張されること。
+- `PeerChannel.swift` の `SignalingConnect(...)` イニシャライザ引数リストに `opusParams: configuration.audioOpusParams` が追加されること（`h264Params: configuration.videoH264Params` の直後）。
+- `audioOpusParams` が `nil` の場合は `opus_params` がエンコードされず既存の挙動が変更されないこと（後方互換）。
+- テスト方針に記載したテストがすべて通ること。
+- `CHANGES.md` の `develop` セクションに以下の形式で追記すること:
+
+```
+- [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする
+  - @voluntas
+```
 
 ## 解決方法

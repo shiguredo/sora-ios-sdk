@@ -5,10 +5,13 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/refactor-ondisconnectwitherror-rename
+- Polished: 2026-06-06
 
 ## 目的
 
-`onDisconnectWithError` というハンドラ名は ObjC / Swift の命名慣習に照らすと不適切である。`with` は引数の前置詞であり、コールバック名に含めても意味を持たない。命名規則に沿って `onError` へ改名し、旧名は後方互換のため deprecated として残す。
+`onDisconnectWithError` というハンドラ名は冗長であり、`onConnect` との対称性もない。`onConnect` / `onReceive` の命名パターンに揃え、`onDisconnect` へ改名する。
+
+`WebSocketChannelInternalHandlers` は internal な final class であり、モジュール外に公開されていない。内部の全呼び出し箇所は一括更新できるため、deprecated による移行期間は設けずに直接リネームする。
 
 ## 優先度根拠
 
@@ -17,18 +20,16 @@
 
 ## 現状
 
-`onDisconnectWithError` が WebSocket チャネルの内部ハンドラとして定義・利用されている。`WebSocketChannelInternalHandlers` のプロパティとして宣言されている。
+`WebSocketChannelInternalHandlers`（`Sora/WebSocketChannel.swift:141`）は `onConnect` / `onDisconnectWithError` / `onReceive` の 3 ハンドラを持つ。
 
-```swift
-final class WebSocketChannelInternalHandlers {
-  public var onConnect: ((URLSessionWebSocketChannel) -> Void)?
-  public var onDisconnectWithError: ((URLSessionWebSocketChannel, Error) -> Void)?
-  public var onReceive: ((WebSocketMessage) -> Void)?
-  public init() {}
-}
-```
+`onDisconnectWithError` は以下の 4 箇所で参照される。
 
-`Sora/WebSocketChannel.swift:143` で宣言している。切断時に error がある場合に発火する。
+- 宣言: `Sora/WebSocketChannel.swift:143`
+- 発火: `Sora/URLSessionWebSocketChannel.swift:90`（`if let error { ... }` ブロック内のみで発火する）
+- 設定: `Sora/SignalingChannel.swift:156`
+- コメント参照: `Sora/URLSessionWebSocketChannel.swift:77`
+
+発火箇所の構造は以下のとおりで、エラーが nil でない場合にのみ発火する。
 
 ```swift
 if let error {
@@ -39,35 +40,35 @@ if let error {
 }
 ```
 
-`Sora/URLSessionWebSocketChannel.swift:90` で発火し、`Sora/URLSessionWebSocketChannel.swift:77` のコメントでも名称を参照している。ハンドラの設定は `Sora/SignalingChannel.swift:156` で行われている。
-
-```swift
-ws.internalHandlers.onDisconnectWithError = { [weak self] ws, error in
-```
-
-`WebSocketChannelInternalHandlers` 自体はアクセス修飾子のない `final class`（internal）であり、プロパティに `public` が付いていてもコンテナ型が internal のためモジュール外からは参照できない。
-
 ## 設計方針
 
-- `onDisconnectWithError` を命名規則に沿った `onError` へ改名する。
-  - 「error がセットされたとき（切断やネットワークエラー時）に発火する」という当該ハンドラの実態を端的に表し、`with` のような無意味な前置詞を含まない。
-- 後方互換のため旧名 `onDisconnectWithError` を削除せず deprecated 化して残す。
-  - 真の格納プロパティを新名 `onError` とし、`onDisconnectWithError` は `onError` へ委譲する computed property（`get` / `set`）として残す。
-  - `@available(*, deprecated, message: "Use onError instead.")` を付与する。
-- 内部の設定箇所・発火箇所（`URLSessionWebSocketChannel` / `SignalingChannel`）はすべて新名 `onError` を参照するよう更新する。
+- `onDisconnectWithError` を `onDisconnect` へ改名する。
+  - `onConnect` の対称形であり、接続・切断イベントが自然なペアとして理解できる。
+  - シグネチャ `(URLSessionWebSocketChannel, Error)` の `Error` 引数がエラー発生を型として表現するため、名前への `WithError` は不要。
+- `onDisconnect` は現状エラーがある場合にのみ発火する（`if let error { ... }` ガード）。`onConnect` が全接続ケースで発火するのと非対称だが、シグネチャが常に `Error` を受け取る設計であり呼び出し側は必ずエラーが渡されると理解できる。`Sora/URLSessionWebSocketChannel.swift:77` のコメントを更新してエラー発生時のみ発火する旨を明示する。
+- `SignalingChannelInternalHandlers`（`Sora/SignalingChannel.swift:23`）にも `onDisconnect` が存在するため、改名後の `SignalingChannel.swift` 内には `ws.internalHandlers.onDisconnect`（`WebSocketChannelInternalHandlers` のもの）と `weakSelf.internalHandlers.onDisconnect`（`SignalingChannelInternalHandlers` のもの）の 2 種類が共存する。コンパイルエラーは生じないが、`SignalingChannel.swift:156` の設定箇所のコメントで型の文脈（`WebSocketChannelInternalHandlers` であること）を明示する。
 - 発火タイミング・引数（`(URLSessionWebSocketChannel, Error)`）は変更しない。
+
+## テスト方針
+
+モック・スタブは使用しない。
+
+- `WebSocketChannelInternalHandlers` を直接テストするケースは存在しないため、コンパイルエラーが発生しないことを確認する。
+- 既存のテストがすべてパスすること。
 
 ## 完了条件
 
-- `WebSocketChannelInternalHandlers` に新名 `onError` の格納プロパティが追加され、内部の設定・発火箇所がすべて新名を参照していること。
-- 旧名 `onDisconnectWithError` が新名への委譲として残り、deprecated 化されていること。
+- `Sora/WebSocketChannel.swift:143` の `onDisconnectWithError` プロパティが `onDisconnect` へ改名されていること。
+- `Sora/URLSessionWebSocketChannel.swift:90` の発火箇所が `onDisconnect` を参照していること。
+- `Sora/SignalingChannel.swift:156` の設定箇所が `onDisconnect` を参照しており、`WebSocketChannelInternalHandlers` の `onDisconnect` であることをコメントで明示していること。
+- `Sora/URLSessionWebSocketChannel.swift:77` のコメントが `onDisconnect` を反映し、エラー発生時のみ発火する旨を示していること。
+- `Sora/SignalingChannel.swift:155` 付近の切断時 error 挙動を説明するコメントが `onDisconnect` という新名と整合していること。
 - ハンドラの発火タイミング・引数が変更前後で同一であること。
-- 関連コメント（`Sora/URLSessionWebSocketChannel.swift:77` 等）の名称が新名に更新されていること。
 - 既存のテストがすべて通ること。
-- `CHANGES.md` の `develop` セクションに以下を追記すること:
+- `CHANGES.md` の `## develop` セクションの `### misc` に以下を追記すること:
   ```
-  - [CHANGE] WebSocketChannelInternalHandlers.onDisconnectWithError を onError へ改名し、旧名を deprecated にする
-    - @担当者
+  - [UPDATE] WebSocketChannelInternalHandlers.onDisconnectWithError を onDisconnect へ改名する
+    - @voluntas
   ```
 
 ## 解決方法

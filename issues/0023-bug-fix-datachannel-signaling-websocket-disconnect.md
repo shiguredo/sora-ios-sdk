@@ -5,6 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/fix-datachannel-signaling-websocket-disconnect
+- Polished: 2026-06-06
 
 ## 目的
 
@@ -26,15 +27,10 @@ case .switched(let switched):
   signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
   if signalingChannel.ignoreDisconnectWebSocket {
     if let webSocketChannel = signalingChannel.webSocketChannel {
-      // DataChannel への切り替え後でも、まだ WebSocket 経由で送信中のメッセージが存在する可能性がある。
-      // そのため、余裕を持って指定時間（秒）後に WebSocket を切断するようスケジュールしている。
-      // ...
       DispatchQueue.global(qos: .background).asyncAfter(
         deadline: .now() + Self.switchedDisconnectDelay
       ) { [weak self] in
         guard let self else { return }
-        // PeerChannel が切断状態の場合は、WebSocket Channel はすでに切断されており、
-        // disconnect を呼び出す必要がないため、PeerChannel の状態をチェックしている。
         if state != .closed {
           webSocketChannel.disconnect(error: nil)
         }
@@ -43,7 +39,7 @@ case .switched(let switched):
   }
 ```
 
-この切断契機は WebSocket 経由の `type: switched` 受信であり、クライアント側 DataChannel (`signaling` ラベル) の確立を待っていない。DataChannel の `signaling` ラベルのメッセージ受信は次の経路を経て `handleSignalingOverDataChannel` で処理される。
+この切断契機は WebSocket 経由の `type: switched` 受信であり、クライアント側 DataChannel `signaling` ラベルの確立を待っていない。DataChannel のメッセージ受信は次の経路を経て `handleSignalingOverDataChannel` で処理される。
 
 ```swift
 // Sora/DataChannel.swift:206-217
@@ -61,21 +57,66 @@ case "signaling", "push", "notify":
   }
 ```
 
-```swift
-// Sora/PeerChannel.swift:1109
-func handleSignalingOverDataChannel(_ signaling: Signaling) {
-```
-
-つまり、`type: switched` から 10 秒以内に DataChannel での `signaling` メッセージ受信が間に合わない場合、DataChannel 経由のシグナリングが確立する前に WebSocket が切断され得る。
-
 ## 設計方針
 
-- WebSocket 切断の契機を「`type: switched` 受信」から「DataChannel の `signaling` ラベルでのメッセージ受信」へ変更する。
-- `type: switched` 受信時には `switchedToDataChannel` フラグの設定や `ignoreDisconnectWebSocket` の反映など切り替え状態の更新のみを行い、WebSocket 切断のスケジュールは行わない。
+**WebSocket 切断の契機変更**:
+
+- `type: switched` 受信時は `switchedToDataChannel` フラグの設定と `ignoreDisconnectWebSocket` の反映のみを行い、WebSocket 切断のスケジュールは行わない。`Sora/PeerChannel.swift:1073-1094` の `if signalingChannel.ignoreDisconnectWebSocket { ... }` ブロック全体（`asyncAfter` 呼び出しを含む）を削除する。
 - DataChannel の `signaling` ラベルで最初のメッセージを受信したタイミングで、`ignoreDisconnectWebSocket` が真の場合に WebSocket 切断をスケジュールする。
-- まだ WebSocket 経由で送信中のメッセージが残る可能性に配慮し、切断には既存の遅延 (`switchedDisconnectDelay`) を維持する。切断時には `state != .closed` を確認してから `disconnect` を呼ぶ既存のガードも維持する。
-- WebSocket を一度しか切断しないよう、切断スケジュールが重複しないガード (フラグ等) を `PeerChannel` に追加する。
-- DataChannel シグナリングを使わない接続 (`ignoreDisconnectWebSocket` が偽) の場合の挙動は変更しない。後方互換性を維持する。
+
+**契機として `signaling` ラベルを選ぶ根拠**:
+
+`Sora/DataChannel.swift:206` では `"signaling"`, `"push"`, `"notify"` の 3 ラベルが同一 case に束ねられているが、WebSocket 切断の契機として `signaling` ラベルを選ぶ理由は以下のとおり。Sora サーバーは DataChannel 切り替え後の最初のシグナリングメッセージ（`re-offer` 等）を `signaling` ラベルの DataChannel で送ってくる。このメッセージが届いた時点で DataChannel シグナリング経路が確立済みであることが確実となる。`push` / `notify` は通知メッセージであり、切り替え前後いずれのタイミングでも届く可能性があるため、DataChannel シグナリング確立の証拠としては不適切。
+
+**フック場所の実装方法**:
+
+`Sora/DataChannel.swift:206` の `case "signaling", "push", "notify":` ブロック内で、`decode` が成功した `case .success(let signaling):` パスに入ったあと、`dataChannel.label == "signaling"` の場合のみ WebSocket 切断をスケジュールする。既存の `guard let peerChannel else { return }` （行 151-154）を通過した後のスコープに挿入するため、`peerChannel` は非 optional として利用できる。具体的には `peerChannel.handleSignalingOverDataChannel(signaling)` の呼び出し**前**に以下を追加する:
+
+変更後の `case .success` ブロック全体は以下のようになる:
+
+```swift
+case .success(let signaling):
+  // signaling ラベルの DataChannel でメッセージを受信した時点を
+  // DataChannel シグナリング確立の証拠として WebSocket 切断をスケジュールする
+  if dataChannel.label == "signaling" {
+    peerChannel.scheduleWebSocketDisconnectIfNeeded()
+  }
+  peerChannel.handleSignalingOverDataChannel(signaling)
+```
+
+`decode` 失敗パス（`case .failure`）では DataChannel の健全性を確認できないため、WebSocket 切断のトリガーとしない（`case .success` 内のみで発火する）。
+
+`scheduleWebSocketDisconnectIfNeeded()` は `PeerChannel` に新たに追加する `internal` メソッドとする。`DataChannel.swift` と `PeerChannel.swift` は同一モジュール（`Sora`）内にあるため `internal` アクセスで `peerChannel.scheduleWebSocketDisconnectIfNeeded()` の呼び出しが可能。メソッドの本体は `DispatchQueue.main.async` でラップして main キューで直列実行し、以下を行う:
+1. 重複防止フラグ `webSocketDisconnectScheduled` が `true` であれば早期 return する
+2. フラグを `true` にセットする
+3. `ignoreDisconnectWebSocket` が偽であれば return する
+4. `signalingChannel.webSocketChannel` をメソッド呼び出し時点で取得し、`nil` であれば return する（取得したインスタンスを asyncAfter クロージャでキャプチャする）
+5. `DispatchQueue.global(qos: .background).asyncAfter` で `Self.switchedDisconnectDelay` (10 秒、`PeerChannel.swift:75` の `private static` 定数。同クラス内なので `Self.` でアクセス可能) 後に `[weak self]` ガードと `state != .closed` チェックを維持して `webSocketChannel.disconnect(error: nil)` をスケジュールする（DataChannel 確立直後も WebSocket 経由の送信キューにメッセージが残っている可能性があるため、既存の遅延を維持する）
+
+**重複防止フラグ**:
+
+`Sora/PeerChannel.swift` に `var webSocketDisconnectScheduled: Bool = false` を追加する。宣言場所は `switchedToDataChannel` （行 162）と同じスコープ（`// MARK: - Properties` 以下）とする。`scheduleWebSocketDisconnectIfNeeded()` は main キューで呼ばれるため、このフラグへのアクセスも main キュー上で完結する。
+
+**スレッドセーフ性**:
+
+`BasicDataChannelDelegate.dataChannel(_:didReceiveMessageWith:)` は WebRTC ライブラリの内部スレッドから呼ばれるため、`scheduleWebSocketDisconnectIfNeeded()` 呼び出し自体は内部スレッドで行われる。メソッド本体を `DispatchQueue.main.async` でラップすることで、フラグのチェック・セットおよび `asyncAfter` の発行はすべて main キューで直列実行される。`asyncAfter` クロージャ（`DispatchQueue.global(qos: .background)` で実行）内の `state != .closed` チェックは既存と同様に `[weak self]` ガードのみとする。
+
+**後方互換性**:
+
+`ignoreDisconnectWebSocket` が偽の場合（DataChannel シグナリングを使わない接続）は、`dataChannel.label == "signaling"` のメッセージを受信した際に `scheduleWebSocketDisconnectIfNeeded()` が呼ばれるが、メソッド内の手順 3 の `ignoreDisconnectWebSocket` チェックで早期 return されるため、WebSocket 切断はスケジュールされず従来の挙動を変更しない。
+
+**DataChannel メッセージが届かない場合の挙動**:
+
+`type: switched` を受信したが DataChannel の `signaling` ラベルでメッセージが届かない場合、WebSocket 切断はスケジュールされない。この場合、DataChannel が確立できないという別の障害として顕在化し（DataChannel 送信失敗や PeerConnection 状態変化等）、別経路で接続が失敗する。WebSocket を切り続けることは問題ない（切断スケジュールを待たず自然に失敗する）ため、タイムアウト等の追加処理は本 issue のスコープ外とする。
+
+## テスト方針
+
+モック・スタブは使用しない。DataChannel を実際に経由するシグナリングのテストはネットワーク接続が必要なため、以下の手動テストで確認し、結果を `## 解決方法` に記載すること:
+
+- `ignoreDisconnectWebSocket: true` の接続で DataChannel の `signaling` ラベルでメッセージを受信した後（10 秒待機後）に WebSocket が切断されることをログで確認すること。
+- `type: switched` 受信直後（DataChannel 確立前）に WebSocket が切断されないことをログで確認すること。
+- 切断スケジュールが 1 回しか実行されないこと（複数の `signaling` ラベルメッセージを受信しても 2 回目以降はスキップされること）をログで確認すること。
+- `ignoreDisconnectWebSocket: false` の接続では WebSocket 切断スケジュールが行われないことを確認すること。
 
 ## 完了条件
 
@@ -83,10 +124,11 @@ func handleSignalingOverDataChannel(_ signaling: Signaling) {
 - DataChannel 確立前に WebSocket が切断されないこと。
 - 切断スケジュールが重複して実行されないこと。
 - DataChannel シグナリングを使わない接続では従来どおりの挙動になること。
+- 手動テストの結果を `## 解決方法` に記載すること。
 - `CHANGES.md` の `develop` セクションに以下を追記すること:
   ```
   - [FIX] DataChannel の signaling ラベル受信を契機に WebSocket を切断するようにする
-    - @担当者
+    - @voluntas
   ```
 
 ## 解決方法

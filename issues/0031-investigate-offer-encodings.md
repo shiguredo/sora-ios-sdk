@@ -4,82 +4,84 @@
 - Created: 2026-06-03
 - Completed:
 - Model: Opus 4.8
-- Branch: feature/investigate-offer-encodings
+- Branch: feature/refactor-offer-encodings
+- Polished: 2026-06-06
 
 ## 目的
 
-Sora から `type: offer` で受け取った `encodings` を sender の `RtpParameters` に反映する処理に、過去のワークアラウンドと思われるコードがある。`active`（`is_active`）が素直に反映されなかった経緯で `parameters` を毎回コピーして丸ごとセットし直す実装になっている。WebRTC の `RtpSender.setParameters` には反映条件（後述）があり、現在の実装がその制約に抵触していないか、ワークアラウンドが今も必要かを調査し、不要であればリファクタリングする。
+Sora から `type: offer` で受け取った `encodings` を sender の `RtpParameters` に反映する処理に、過去のワークアラウンドと思われるコードがある。`active`（`is_active`）が素直に反映されなかった経緯で `parameters` を毎回コピーして丸ごとセットし直す実装になっている。WebRTC の `RtpSender::SetParameters` には制約があり、現在のワークアラウンドが今も必要かを調査し、不要であればリファクタリングする。
 
 ## 依存関係
 
-本 issue と `0008-add-network-priority-to-rtp-encoding` は、いずれも `updateOfferEncodings(_:)` を変更するため実装が衝突する。本 issue でワークアラウンドの構造を変更すると `0008-add-network-priority-to-rtp-encoding` の追加箇所がずれる。どちらかを先に進め、もう一方はその差分に追従すること。
+本 issue と `0008-add-network-priority-to-rtp-encoding` は、いずれも `updateOfferEncodings(_:)` を変更するため実装が衝突する。0008（Medium）を先に実装し、本 issue（Low）はその差分に追従する。着手前に 0008 がマージ済みかを確認すること。
 
 ## 優先度根拠
 
-- 現状の実装で動作はしている。まず調査が主目的であり、ユーザー影響のある不具合報告ではないため Low とする。
+- ユーザー影響のある不具合ではなく、調査とリファクタリングが主目的のため Low とする。
 
 ## 現状
 
-answer 生成時に offer の encodings を保持し、各 sender に対して反映している。
+`updateOfferEncodings(_:)` は `extension RTCRtpSender`（`Sora/PeerChannel.swift:1484`）に実装されており、`parameters` を都度コピー（`let newParameters = parameters`）して各エンコーディングフィールドを書き換えてから `parameters = newParameters` で書き戻す実装になっている。コメントには「parameters はアクセスのたびにコピーされてしまうので、すべての parameters をセットし直す」と記載されており、`active` が素直に反映されなかった経緯での対応と推測される。
 
-```swift
-// Sora/PeerChannel.swift:800
-sender.updateOfferEncodings(oldEncodings)
-// ...
-// Sora/PeerChannel.swift:806
-offerEncodings = offer.encodings
-```
+`updateSenderOfferEncodings()`（`Sora/PeerChannel.swift:788`）は以下の 4 箇所から呼ばれる。
 
-実際の反映処理は `extension RTCRtpSender` の `updateOfferEncodings(_:)` にある。`parameters` を都度コピーして上書きし、最後に書き戻している。
+- 行 744: `createAnswer` 内、`setRemoteDescription` 完了コールバックの中（`isSender == true` の場合。`initialOffer` の値に関わらず呼ばれる。`initialOffer` の条件は直前の `initializeSenderStream` にのみかかる）
+- 行 893: `createAndSendUpdateAnswer` 内、update-answer 送信後
+- 行 934: `createAndSendReAnswer` 内、re-answer 送信後
+- 行 1007: `createAndSendReAnswerOverDataChannel` 内、DataChannel 経由の re-answer 送信後
 
-```swift
-// Sora/PeerChannel.swift:1484
-func updateOfferEncodings(_ encodings: [SignalingOffer.Encoding]) {
-  Logger.debug(
-    type: .peerChannel, message: "update offer encodings for sender => \(senderId)")
+`offerEncodings` は `Sora/PeerChannel.swift:202` で宣言されており、`createAndSendAnswer(offer:)` 行 806 での代入が唯一の代入箇所。re-offer フロー（行 893・934・1007 の呼び出し元）では `offerEncodings` が更新されないため、常に初回 offer の `encodings` が参照される。この挙動が意図的な仕様かどうかの確認が必要。
 
-  // parameters はアクセスのたびにコピーされてしまうので、すべての parameters をセットし直す
-  let newParameters = parameters  // コピーされる
-  for oldEncoding in newParameters.encodings {
-    // ...
-    oldEncoding.isActive = encoding.active
-    // rid / maxFramerate / maxBitrate / scaleResolutionDownBy /
-    // scaleResolutionDownTo / scalabilityMode を上書き
-    // ...
-  }
+`updateOfferEncodings(_:)` 内の rid マッチング（`guard oldEncoding.rid == encoding.rid`）では、`oldEncoding.rid == nil` かつ `encoding.rid == nil` の場合も条件を通過する。サイマルキャスト非使用時（rid なし）に複数の `encodings` が存在すると、最初にマッチした `encoding` の値が全 sender に適用されてしまう可能性がある。
 
-  parameters = newParameters
-}
-```
-
-WebRTC の `RtpSender::SetParameters`（`pc/rtp_sender.cc`）には以下の制約があり、これに抵触している可能性がある。
-
-- transceiver が stopped でないこと
-- sender が stopped でないこと
-- sender の `getParameters`（`parameters` 取得）が事前に呼ばれていること
-- 最後に `getParameters` した際の transaction_id と、設定しようとしている parameters の transaction_id が一致すること
-
-現実装は `let newParameters = parameters` で都度取得した直後に同じオブジェクトへ書き戻しているため transaction_id 制約は満たしていると考えられるが、`active` が素直に反映されなかった当時の事象が、この制約のどれに起因していたのかが整理されていない。
+`RtpSender::SetParameters`（`pc/rtp_sender.cc`）には transaction_id の一致を含む複数の制約がある。どの制約が当時の問題の原因であったかは調査が必要。
 
 ## 設計方針
 
-まず調査し、その結果に基づいてリファクタリングの可否を判断する。
+以下の順序で調査し、結果に基づいてリファクタリングの可否を判断する。
 
-- 調査項目
-  - `active`（`is_active`）が素直に反映されなかった当時の事象が、`SetParameters` のどの制約に起因していたかを特定する。
-  - 現在の libwebrtc バージョン（`Package.swift` の `libwebrtcVersion`）での `RtpSender::SetParameters` の挙動を WebRTC ソースで確認する。
-  - `parameters` を丸ごとコピーして書き戻す現在の方式が必須か、個別フィールドのみの更新で足りるかを確認する。
-- リファクタリング方針（調査の結果ワークアラウンドが不要と判明した場合）
-  - `updateOfferEncodings` の処理を簡潔化する。可能なら `extension RTCRtpSender` の責務分割やログの整理を行う。
-  - sender / transceiver が stopped のケースのガードを `updateOfferEncodings` の冒頭で明示的に入れることを検討する。
-- 後方互換性: 反映される RtpParameters の最終結果（各エンコーディングの値）が変更前後で同一であることを担保する。挙動が変わるリファクタリングは行わない。
+### 調査手順
+
+1. **当時の事象の特定**: `git log -S "parameters はアクセスのたびにコピー" -- Sora/PeerChannel.swift` などでワークアラウンドを導入したコミットを特定し、コミットメッセージ・PR 説明から当時の原因を確認する。追跡できない場合はその旨を `## 解決方法` に記録し、以降の調査に基づいて判断する。
+2. **libwebrtc m148 の制約確認**: `Package.swift` の `libwebrtcVersion` で使用バージョンを確認した上で、`WebRTC.xcframework` 内の `RTCRtpSender` ヘッダーで `parameters` setter の制約を確認する。ヘッダーで判断できない場合は webrtc.googlesource.com の m148 タグ付近の `pc/rtp_sender.cc::SetParameters` を参照する。
+3. **rid=nil マッチングの挙動確認**: サイマルキャスト非使用時の `updateOfferEncodings(_:)` の動作を確認し、rid=nil 同士のマッチングが正しいかを検証する。問題がある場合は修正または別 issue として起票する。
+4. **re-offer 時の offerEncodings 未更新の確認**: re-offer フロー（行 893・934・1007 の呼び出し元）で `offerEncodings` が更新されない挙動が仕様かどうかを `PeerChannel.swift` の処理フローで確認し、`## 解決方法` に記録する。
+5. **rid 再代入の意図確認**: 行 1498-1501 の `oldEncoding.rid = rid` はマッチング後に同じ rid を再代入しており冗長に見える。ワークアラウンドの一部かどうかを確認する。
+
+### リファクタリング方針（ワークアラウンドが不要と判明した場合）
+
+- `updateOfferEncodings(_:)` の copy-all-parameters を廃止し、個別フィールドのみを更新する実装に簡潔化する。
+- 反映される RtpParameters の最終結果（各エンコーディングの値）が変更前後で同一であることを担保する。挙動が変わるリファクタリングは行わない。
+
+### ワークアラウンドが必要と判明した場合
+
+- 調査結果をコメントとして `updateOfferEncodings(_:)` の冒頭に明記する（なぜ必要か・制約のどれに該当するか）。
+
+## テスト方針
+
+モック・スタブは使用しない。
+
+- リファクタリングを行った場合は、既存の全テストが通ること。
+- `updateOfferEncodings(_:)` に対応する専用テストが現時点で存在しないため（`grep -r updateOfferEncodings SoraTests/` で確認）、リファクタリングを行った場合は `SoraTests/` にテストを追加すること。`active` / `maxFramerate` / `maxBitrate` / `scaleResolutionDownBy` / `scaleResolutionDownTo` / `scalabilityMode` / `rid` マッチングの各フィールドが正しく反映されることを確認するテストを書くこと。
 
 ## 完了条件
 
-- `active` が反映されなかった当時の事象の原因が `SetParameters` の制約のどれに該当するか特定され、issue に記録されていること。
-- 現行 libwebrtc での `SetParameters` 制約を踏まえ、現在のワークアラウンドが必要か不要かが結論付けられていること。
-- 不要と判明した場合は `updateOfferEncodings` がリファクタリングされ、反映結果が変更前後で同一であることが確認されていること。必要と判明した場合は、なぜ必要かをコメントとして該当箇所に明記すること。
-- 既存のテストがすべて通ること。
-- リファクタリングを行った場合は `CHANGES.md` の `## develop` セクションに `[UPDATE]`（または `misc`）エントリと担当者行を追記すること。
+- 当時の事象の原因が `SetParameters` の制約のどれに該当するか特定（または追跡不能として記録）され、`## 解決方法` に記録されていること。
+- 現行 libwebrtc m148 での `SetParameters` 制約を踏まえ、現在のワークアラウンドが必要か不要かが結論付けられていること。
+- rid=nil 同士のマッチング挙動が正しいか確認され、問題がある場合は修正または別 issue として起票されていること（別 issue として起票した場合、本 issue での追加対応は不要）。
+- re-offer フロー（行 893・934・1007）での `offerEncodings` 未更新が仕様か問題かを確認し、`## 解決方法` に記録されていること。
+- rid 再代入（行 1498-1501）の意図を確認し、`## 解決方法` に記録されていること。
+- ワークアラウンドが不要と判明した場合は `updateOfferEncodings(_:)` がリファクタリングされ、テスト方針に記載した全フィールドのテストを追加して反映結果が変更前後で同一であることが確認されていること。ワークアラウンドが必要と判明した場合は、なぜ必要かをコメントとして該当箇所に明記されていること。
+- `CHANGES.md` の `## develop` セクションの `### misc` に以下を追記すること（`### misc` セクションが存在しない場合は新設すること）:
+  - リファクタリングを行った場合:
+    ```
+    - [UPDATE] updateOfferEncodings の copy-all-parameters ワークアラウンドを除去しリファクタリングする
+      - @voluntas
+    ```
+  - コメント追記のみの場合:
+    ```
+    - [UPDATE] updateOfferEncodings のワークアラウンドが必要な理由をコメントとして明記する
+      - @voluntas
+    ```
 
 ## 解決方法
