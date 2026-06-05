@@ -4,7 +4,7 @@
 - Created: 2026-06-03
 - Completed:
 - Model: Opus 4.8
-- Branch:
+- Branch: feature/investigate-local-stream-id-connection-id
 - Polished: 2026-06-05
 
 ## 目的
