@@ -5,6 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/add-spotlight-enabled-bool
+- Polished: 2026-06-05
 
 ## 目的
 
@@ -65,21 +66,71 @@ case .disabled:
 
 ## 設計方針
 
-1. 破壊的変更を避けるため、既存の `spotlightEnabled: Spotlight`（enum）は残したまま `@available(*, deprecated, ...)` で非推奨化する。
-2. 同等の機能を持つ `Bool` 型のプロパティを新設する。命名は既存の `Bool` プロパティ（`simulcastEnabled` 等）との整合を取って決定する。
-3. 旧 enum プロパティと新 Bool プロパティは内部的に同じ状態を指すよう相互変換する（一方を真値の保管先とし、もう一方を計算プロパティにする）。どちらを設定しても最終的に `SignalingConnect` へ正しく反映されるようにする。
-4. `SignalingConnect` 側のエンコードは最終的に真偽値で判定できるよう整理する。ただし既存の enum 受け渡しを壊さない。
-5. 後方互換性: 既存コードが enum を使い続けても従来どおり動作し、コンパイルエラーにならない（非推奨警告のみ）こと。
+### 1. 新プロパティの追加
+
+- **名前**: `isSpotlightEnabled: Bool` — Swift の Bool プロパティ命名規則に従い `is` プレフィックスを付与する。既存の `spotlightEnabled` は enum に占有されているため新規名が必要となる。
+- **デフォルト値**: `false`
+- **保管場所**: `Configuration.swift:182` の enum `spotlightEnabled` の直前に stored property として定義する。
+
+### 2. 新旧プロパティの関係（source of truth）
+
+- **`isSpotlightEnabled`** を stored property（真値の保管先）とする。
+- **`spotlightEnabled`**（enum）を computed property に変更し、`isSpotlightEnabled` の値から導出する:
+  ```swift
+  @available(*, deprecated, message: "`isSpotlightEnabled: Bool` を使用してください")
+  public var spotlightEnabled: Spotlight {
+    get { isSpotlightEnabled ? .enabled : .disabled }
+    set { isSpotlightEnabled = (newValue == .enabled) }
+  }
+  ```
+- `Configuration.Spotlight` enum 自体は非推奨化しない。`SignalingConnect` が引き続き `Spotlight` 型を使用するため。
+
+### 3. 競合解決（両方設定された場合）
+
+最後に設定された値が勝つ。新 Bool プロパティ `isSpotlightEnabled` が stored property であるため、enum 経由での設定も内部では Bool を更新し、同一の状態を指す。
+
+### 4. SignalingConnect と PeerChannel の扱い
+
+- `SignalingConnect.spotlightEnabled` は `Configuration.Spotlight` 型のまま変更しない。
+- `PeerChannel.swift:397` の `spotlightEnabled: configuration.spotlightEnabled` も変更不要。`configuration.spotlightEnabled` が computed property として Bool → enum 変換を行うため、既存の受け渡しがそのまま機能する。
+- `SignalingConnect` のエンコード処理 (`Signaling.swift:1011`) も変更不要。
+
+### 5. 非推奨化
+
+`multistreamEnabled` の非推奨化（`Configuration.swift:84-91`）を参考に、以下のメッセージで非推奨化する:
+
+```swift
+@available(*, deprecated, message: "`isSpotlightEnabled: Bool` で設定してください。2027 年中に廃止予定")
+```
+
+### 6. 後方互換性
+
+既存コードが enum を使い続けても従来どおり動作し、コンパイルエラーにならない（非推奨警告のみ）。`SignalingConnect` / `PeerChannel` の内部実装は変更不要のため、SDK 内部にも破壊的変更は発生しない。
+
+## テスト方針
+
+`SoraTests/` に以下のテストケースを追加する:
+
+| # | ケース | 検証内容 |
+|---|--------|---------|
+| 1 | `isSpotlightEnabled = true`（デフォルト値から設定） | connect JSON に `"spotlight": true` が含まれること |
+| 2 | `isSpotlightEnabled = false`（明示的に無効化） | connect JSON に `spotlight` キーが含まれないこと |
+| 3 | デフォルト値（`isSpotlightEnabled` 未設定） | connect JSON に `spotlight` キーが含まれないこと |
+| 4 | `spotlightEnabled = .enabled`（旧 enum で設定） | connect JSON に `"spotlight": true` が含まれ、`isSpotlightEnabled` が `true` を返すこと |
+| 5 | `spotlightEnabled = .disabled`（旧 enum で設定） | connect JSON に `spotlight` キーが含まれず、`isSpotlightEnabled` が `false` を返すこと |
+| 6 | Bool → enum → Bool の往復 | 設定値が往復後も変化しないこと |
+| 7 | spotlightNumber / spotlightFocusRid / spotlightUnfocusRid との併用 | 新旧どちらのプロパティ経由で spotlight を有効化しても、関連パラメーターが正しくエンコードされること |
 
 ## 完了条件
 
-- `spotlightEnabled` を `Bool` で設定できる新プロパティが追加されていること。
-- 既存の enum 型 `spotlightEnabled` が非推奨化されつつ従来どおり動作すること。
+- `isSpotlightEnabled: Bool` が `Configuration` に追加されていること。
+- 既存の enum 型 `spotlightEnabled` が computed property に変更され、`@available(*, deprecated)` で非推奨化されていること。
 - enum / Bool いずれで設定しても connect メッセージの `spotlight` 出力が等価になること。
-- 新旧プロパティの相互整合と connect 出力の等価性を検証するテストを追加すること。
+- `SignalingConnect` / `PeerChannel` の内部実装が変更不要であること。
+- テストが追加されていること。
 - `CHANGES.md` の `develop` セクションに以下を追記すること:
   ```
-  - [ADD] spotlightEnabled を Bool で設定できるプロパティを追加する
+  - [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
     - @担当者
   - [UPDATE] enum 型の Configuration.spotlightEnabled を非推奨にする
     - @担当者
