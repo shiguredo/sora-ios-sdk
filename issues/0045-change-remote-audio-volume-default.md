@@ -5,28 +5,56 @@
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/change-remote-audio-volume-default
-- Polished:
+- Polished: 2026-06-06
 
-## 概要
+## 目的
 
-`audioTrack` の volume のデフォルト値が最大値（10）に設定されており、受信音声にノイズが入ることがある。デフォルト値を適切な値に見直す。
+リモートストリーム追加時に audio track の volume を最大値（10）に強制設定しているコードを修正し、WebRTC デフォルト値で動作するようにする。最大値への強制設定はクリッピングノイズの原因となるため、不要な増幅を排除する。
+
+## 優先度根拠
+
+最大音量への強制設定はノイズ混入という音声品質の劣化を引き起こす可能性があり、ユーザー体験に直接影響する。ただし音量を意図的に最大にしている用途では破壊的変更となるため、影響範囲の考慮が必要。Medium とする。
 
 ## 現状
 
-`Sora/PeerChannel.swift` にて、受信した音声トラックの volume が最大値（10）に設定されている。この設定が原因で受信音声にノイズが混入する場合がある。
+### コードの実態
 
-## 後方互換への影響
+`PeerChannel.swift` の `peerConnection(_:didAdd stream:)` デリゲートメソッド（`PeerChannel.swift:1352`）において、リモートストリームが追加されるたびに以下を実行している。
 
-- **破壊的変更**となる
-- 現在の利用者にとっては音量が小さくなったように見える
-- 必要に応じてアプリ側で volume を 10 に設定してもらう必要がある
+```swift
+stream.audioTracks.first?.source.volume = MediaStreamAudioVolume.max
+```
 
-## 根拠
+`MediaStreamAudioVolume.max` は `10.0`（`MediaStream.swift:10`）。WebRTC 内部では `RTCAudioSource.volume` はゲイン倍率として扱われ、範囲は `[0, 10]`、WebRTC デフォルト値は `1.0`（原音を変化させない）。`10.0` を設定すると約 20dB の増幅が加わり、受信信号レベルが中程度以上の場合にデジタルクリッピングが発生し、ノイズ・歪みとして聴こえる。
 
-デフォルト最大音量による音質劣化（ノイズ混入）は、そのままでは音声品質として不適切。適切なデフォルト値に変更することで標準的な使い方での音質が向上する。
+アプリ側が `MediaStream.remoteAudioVolume` プロパティを使って任意の値に変更できるため、SDK がデフォルトで `10.0` に固定する必要はない。
 
-## 対応方針
+### issue 0036 との依存関係
 
-- WebRTC 標準のデフォルト値、または一般的に問題が生じないデフォルト値を調査して設定する
-- 変更時はリリースノート（`CHANGES.md`）に `[CHANGE]` として記載し、破壊的変更である旨を明示する
-- 利用者が既存の挙動に戻せるよう volume の設定方法をドキュメントに記載することも検討する
+`0036-refactor-deprecated-on-add-stream.md` は同一の `PeerChannel.swift:1352` を `peerConnection(_:didAdd receiver:streams:)` へ移行するリファクタリングを行い、その完了条件（同 issue 57 行目）に「`source.volume = MediaStreamAudioVolume.max` の設定を維持すること」と明記している。
+
+本 issue はこの前提と矛盾する。0036 が先にマージされると変更対象箇所が消え、0036 の完了条件も破れる。実装順序は **本 issue（0045）を先に実施し、0036 の完了条件を「`source.volume = MediaStreamAudioVolume.max` から変更後のデフォルト値を維持すること」へ更新してから 0036 を実施する** こと。
+
+## 設計方針
+
+`PeerChannel.swift:1352` の `stream.audioTracks.first?.source.volume = MediaStreamAudioVolume.max` の行を削除する。これにより、audio track の volume は WebRTC のデフォルト値（1.0）で動作する。
+
+`MediaStreamAudioVolume.max` への戻し方はアプリ側で `mediaStream.remoteAudioVolume = MediaStreamAudioVolume.max` を設定することで可能であり、この点をリリースノートに明記する。
+
+## 完了条件
+
+- `PeerChannel.swift:1352` の `stream.audioTracks.first?.source.volume = MediaStreamAudioVolume.max` が削除されていること
+- 接続後に `MediaStream.remoteAudioVolume` が `1.0` を返すこと（SDK が上書きしていないため WebRTC デフォルト値のままであること）
+- 通常の `sendrecv` / `recvonly` 接続でリモート音声が聴こえること
+- マルチストリーム接続で各ストリームの音声が正常に動作すること
+- `0036-refactor-deprecated-on-add-stream.md` の完了条件内の「`audio track の source.volume = MediaStreamAudioVolume.max` の設定」という記述を「`source.volume` を明示的に設定しないこと」に更新すること
+- `0036-refactor-deprecated-on-add-stream.md` の設計方針内の「`receiver.track` を `RTCAudioTrack` にキャストできる場合のみ `source.volume = MediaStreamAudioVolume.max` を設定する」という記述を削除すること
+- `CHANGES.md` の `develop` セクションに以下を追記すること
+
+```
+- [CHANGE] リモートストリーム追加時の audio track volume を最大値（10）から WebRTC デフォルト値（1.0）に変更する
+  - 既存の挙動（volume=10）に戻すにはアプリ側で `mediaStream.remoteAudioVolume = MediaStreamAudioVolume.max` を設定すること
+  - @voluntas
+```
+
+## 解決方法

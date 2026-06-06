@@ -1,42 +1,61 @@
-# HTTP Proxy 対応 Phase 2（PAC ファイル対応または OS 設定の参照）
+# HTTP Proxy 対応 Phase 2（OS 設定の自動参照）
 
 - Priority: Low
 - Created: 2026-06-06
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/add-http-proxy-phase2
-- Polished:
+- Polished: 2026-06-06
 
-## 概要
+## 目的
 
-HTTP Proxy 対応の Phase 2 として、OS のプロキシ設定を自動的に参照する機能、または PAC（Proxy Auto-Config）ファイルによるプロキシ設定に対応する。
+`Configuration.proxy` が未設定（`nil`）の場合に OS のシステムプロキシ設定を自動参照し、手動設定なしでプロキシ経由の接続を可能にする。企業ネットワーク環境での設定コストを削減する。
 
-## Phase 1 の実装状況（完了済み）
+## 優先度根拠
 
-`Configuration.proxy` として `Proxy(host:port:username:password:)` を指定できる API がすでに実装されている。
+Phase 1 で手動プロキシ設定（`Configuration.proxy`）が既に利用可能なため、Phase 2 は必須ではなく利便性向上のみ。MDM / VPN プロファイルが設定するプロキシを `CFNetworkCopySystemProxySettings()` で確実に取得できるかどうかの検証も必要であり、Low とする。
 
-- **WebSocket シグナリング**：`URLSessionWebSocketChannel` が `connectionProxyDictionary` を使って HTTP/HTTPS プロキシ経由で接続する
-- **TURN**：`NativePeerChannelFactory` が libwebrtc の `RTCProxyType.https` にホスト・ポート・認証情報を渡してプロキシ経由の TURN 接続を行う
+PAC ファイル対応は本 issue のスコープ外とし、別途 issue で検討する。
 
-libwebrtc の内部実装を利用しているため、C++ SDK と同じ層でプロキシを処理できている。
+## 現状
 
-## Phase 2 の対応内容
+Phase 1 の実装（`CHANGES.md` の `## 2022.5.0` セクション `[ADD] HTTP プロキシに対応する` で実装済み）では、`Configuration.proxy` が `nil` の場合に OS のシステムプロキシ設定は参照されない。
 
-### 案 A：OS のプロキシ設定を参照する
+- **WebSocket 側**（`URLSessionWebSocketChannel.swift:33-60`）: `URLSessionConfiguration.ephemeral` を使用し、`proxy` が `nil` の場合は `connectionProxyDictionary` を設定しないため OS プロキシは無視される（`ephemeral` はデフォルトでシステムプロキシを参照しない）
+- **TURN 側**（`NativePeerChannelFactory.swift:77-107`）: `proxy` が `nil` の場合は 91 行目の `else` ブランチで、`certificateVerifier` の有無に応じた proxy なしの overload が呼ばれる
 
-- iOS の `CFNetworkCopySystemProxySettings()` または `URLSession` のシステムプロキシ設定を読み取り、自動的にプロキシを適用する
-- ユーザーが手動でプロキシを指定しなくても OS 設定に従って動作するようになる
+## 設計方針
 
-### 案 B：PAC ファイルによるプロキシ自動設定
+### WebSocket 側の変更（`URLSessionWebSocketChannel.swift`）
 
-- PAC ファイル（`FindProxyForURL` 関数を持つ JavaScript ファイル）の URL を指定できるようにする
-- PAC ファイルを取得・評価して接続先に応じたプロキシを選択する
-- PAC ファイルの評価には `JavaScriptCore` の利用を検討する
+`URLSessionWebSocketChannel.connect(delegateQueue:)`（`URLSessionWebSocketChannel.swift:30`）内の `if let proxy {` ブロック（33-60 行目）の直後（61 行目の位置）に、`proxy` が `nil` かつ OS プロキシ設定が存在する場合の分岐を追加する:
 
-## 優先する案
+```swift
+// proxy が nil の場合は OS のシステムプロキシ設定を参照する
+if proxy == nil,
+   let systemSettings = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [AnyHashable: Any] {
+    configuration.connectionProxyDictionary = systemSettings
+}
+```
 
-案 A（OS 設定の参照）の方が実装コストが低く、企業ネットワーク環境での利用者にとっても自然な動作に近いため優先度が高い。
+`CFNetworkCopySystemProxySettings()` の戻り値は `Unmanaged<CFDictionary>?` であり、`.takeRetainedValue()` で `CFDictionary` を取り出し、`[AnyHashable: Any]` にキャストして `connectionProxyDictionary` に設定する（`connectionProxyDictionary` の型は `[AnyHashable: Any]?`）。
 
-## 根拠
+### TURN 側の調査事項（`NativePeerChannelFactory.swift`）
 
-企業ネットワーク環境では HTTP Proxy が必須の場合があり、OS 設定に従ってプロキシが自動適用されることで利用者の設定コストが大幅に下がる。PAC ファイル対応はより高度なプロキシ制御を必要とする環境向け。
+libwebrtc の `RTCProxyType` は `none / socks5 / https` の 3 種のみ。`CFNetworkCopySystemProxySettings()` の返値を `RTCProxyType.https` として渡せるかを確認する。また libwebrtc の `ProxyInfo` に `autodetect` フィールドが存在するが、iOS 上で OS プロキシを自動参照できるかは未検証であり、実装前に調査が必要。
+
+### `proxy` 設定の優先順位
+
+`Configuration.proxy` が非 `nil` の場合は手動設定を優先する。`nil` の場合にのみ OS プロキシ設定を参照する（フォールバック動作）。
+
+## 完了条件
+
+- `Configuration.proxy` が `nil` の状態で、iOS デバイスの Wi-Fi 設定アプリでのプロキシ設定（手動プロキシ）を行った後に SDK が WebSocket 接続を確立できること
+- `Configuration.proxy` が非 `nil` の状態では `Configuration.proxy` による明示設定が優先され、Phase 1 の挙動が変わらないこと
+- TURN 側への OS プロキシ参照の適用可否を調査し、適用可能であれば別 issue を起票すること、適用不可であれば調査結果を本 issue に追記すること
+- `CHANGES.md` の `## develop` セクションにある既存の `[ADD]` エントリ（現在 4 件）の最後に以下を追記すること
+
+```
+- [ADD] Configuration.proxy が nil の場合に OS のシステムプロキシ設定を自動参照するようにする
+  - @voluntas
+```
