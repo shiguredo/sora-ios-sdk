@@ -11,32 +11,32 @@ class SignalingOfferEncodingTests: XCTestCase {
   // 各 networkPriority の文字列表現が正しくデコードされることを確認する
   func testDecodeNetworkPriorityVeryLow() throws {
     let json = """
-    {"active": true, "rid": "r0", "networkPriority": "very-low"}
-    """
+      {"active": true, "rid": "r0", "networkPriority": "very-low"}
+      """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     XCTAssertEqual(encoding.networkPriority, .veryLow)
   }
 
   func testDecodeNetworkPriorityLow() throws {
     let json = """
-    {"active": true, "rid": "r0", "networkPriority": "low"}
-    """
+      {"active": true, "rid": "r0", "networkPriority": "low"}
+      """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     XCTAssertEqual(encoding.networkPriority, .low)
   }
 
   func testDecodeNetworkPriorityMedium() throws {
     let json = """
-    {"active": true, "rid": "r0", "networkPriority": "medium"}
-    """
+      {"active": true, "rid": "r0", "networkPriority": "medium"}
+      """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     XCTAssertEqual(encoding.networkPriority, .medium)
   }
 
   func testDecodeNetworkPriorityHigh() throws {
     let json = """
-    {"active": true, "rid": "r0", "networkPriority": "high"}
-    """
+      {"active": true, "rid": "r0", "networkPriority": "high"}
+      """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     XCTAssertEqual(encoding.networkPriority, .high)
   }
@@ -44,8 +44,8 @@ class SignalingOfferEncodingTests: XCTestCase {
   // networkPriority キーが存在しない場合は nil になることを確認する
   func testDecodeNetworkPriorityAbsent() throws {
     let json = """
-    {"active": true, "rid": "r0"}
-    """
+      {"active": true, "rid": "r0"}
+      """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     XCTAssertNil(encoding.networkPriority)
   }
@@ -53,8 +53,8 @@ class SignalingOfferEncodingTests: XCTestCase {
   // 未知の文字列の場合は nil になることを確認する
   func testDecodeNetworkPriorityUnknown() throws {
     let json = """
-    {"active": true, "rid": "r0", "networkPriority": "unknown-value"}
-    """
+      {"active": true, "rid": "r0", "networkPriority": "unknown-value"}
+      """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     XCTAssertNil(encoding.networkPriority)
   }
@@ -71,8 +71,8 @@ class SignalingOfferEncodingTests: XCTestCase {
     ]
     for (jsonValue, expectedPriority) in cases {
       let json = """
-      {"active": true, "rid": "r0", "networkPriority": "\(jsonValue)"}
-      """
+        {"active": true, "rid": "r0", "networkPriority": "\(jsonValue)"}
+        """
       let encoding = try decoder.decode(
         SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
       let params = encoding.rtpEncodingParameters
@@ -85,8 +85,8 @@ class SignalingOfferEncodingTests: XCTestCase {
   // networkPriority が nil の場合は rtpEncodingParameters.networkPriority も nil になることを確認する
   func testRtpEncodingParametersWithNilNetworkPriority() throws {
     let json = """
-    {"active": true, "rid": "r0"}
-    """
+      {"active": true, "rid": "r0"}
+      """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     let params = encoding.rtpEncodingParameters
     XCTAssertNil(params.networkPriority)
