@@ -408,7 +408,7 @@ public struct SignalingOffer {
     /// scalability mode
     public let scalabilityMode: String?
 
-    /// ネットワーク優先度 (DiffServ Code Point)
+    /// ネットワーク優先度
     public let networkPriority: RTCPriority?
 
     /// RTP エンコーディングに関するパラメーター

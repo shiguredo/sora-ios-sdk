@@ -1,13 +1,14 @@
-import XCTest
 import WebRTC
+import XCTest
 
 @testable import Sora
 
-final class SignalingOfferEncodingTests: XCTestCase {
+class SignalingOfferEncodingTests: XCTestCase {
   private let decoder = JSONDecoder()
 
   // MARK: - JSON デコードテスト
 
+  // 各 networkPriority の文字列表現が正しくデコードされることを確認する
   func testDecodeNetworkPriorityVeryLow() throws {
     let json = """
     {"active": true, "rid": "r0", "networkPriority": "very-low"}
@@ -40,6 +41,7 @@ final class SignalingOfferEncodingTests: XCTestCase {
     XCTAssertEqual(encoding.networkPriority, .high)
   }
 
+  // networkPriority キーが存在しない場合は nil になることを確認する
   func testDecodeNetworkPriorityAbsent() throws {
     let json = """
     {"active": true, "rid": "r0"}
@@ -48,6 +50,7 @@ final class SignalingOfferEncodingTests: XCTestCase {
     XCTAssertNil(encoding.networkPriority)
   }
 
+  // 未知の文字列の場合は nil になることを確認する
   func testDecodeNetworkPriorityUnknown() throws {
     let json = """
     {"active": true, "rid": "r0", "networkPriority": "unknown-value"}
@@ -58,6 +61,7 @@ final class SignalingOfferEncodingTests: XCTestCase {
 
   // MARK: - rtpEncodingParameters 反映テスト
 
+  // rtpEncodingParameters に networkPriority が正しく反映されることを確認する
   func testRtpEncodingParametersReflectsNetworkPriority() throws {
     let cases: [(String, RTCPriority)] = [
       ("very-low", .veryLow),
@@ -78,14 +82,30 @@ final class SignalingOfferEncodingTests: XCTestCase {
     }
   }
 
+  // networkPriority が nil の場合は rtpEncodingParameters.networkPriority も nil になることを確認する
   func testRtpEncodingParametersWithNilNetworkPriority() throws {
     let json = """
     {"active": true, "rid": "r0"}
     """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     let params = encoding.rtpEncodingParameters
-    // networkPriority が nil の場合はデフォルト値が維持されること
-    let defaultParams = RTCRtpEncodingParameters()
-    XCTAssertEqual(params.networkPriority, defaultParams.networkPriority)
+    XCTAssertNil(params.networkPriority)
+  }
+
+  // MARK: - RTCPriority 文字列表現テスト
+
+  // RTCPriority の CustomStringConvertible が正しい文字列を返すことを確認する
+  func testRTCPriorityDescription() throws {
+    let cases: [(RTCPriority, String)] = [
+      (.veryLow, "very-low"),
+      (.low, "low"),
+      (.medium, "medium"),
+      (.high, "high"),
+    ]
+    for (priority, expected) in cases {
+      XCTAssertEqual(
+        priority.description, expected,
+        "RTCPriority.\(priority) の description が \(expected) と一致しません")
+    }
   }
 }

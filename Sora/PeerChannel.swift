@@ -15,6 +15,19 @@ extension RTCDegradationPreference: CustomStringConvertible {
 }
 
 /// :nodoc:
+extension RTCPriority: CustomStringConvertible {
+  public var description: String {
+    switch self {
+    case .veryLow: "very-low"
+    case .low: "low"
+    case .medium: "medium"
+    case .high: "high"
+    default: "-"
+    }
+  }
+}
+
+/// :nodoc:
 extension RTCRtpParameters {
   override open var description: String {
     let degradationPreference =
@@ -1532,20 +1545,7 @@ extension RTCRtpSender {
         }
 
         if let value = encoding.networkPriority {
-          let priorityString: String
-          switch value {
-          case .veryLow:
-            priorityString = "very-low"
-          case .low:
-            priorityString = "low"
-          case .medium:
-            priorityString = "medium"
-          case .high:
-            priorityString = "high"
-          @unknown default:
-            priorityString = "unknown(\(value))"
-          }
-          Logger.debug(type: .peerChannel, message: "networkPriority: \(priorityString)")
+          Logger.debug(type: .peerChannel, message: "networkPriority: \(value)")
           oldEncoding.networkPriority = value
         }
 
