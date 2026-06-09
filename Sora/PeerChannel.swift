@@ -1531,6 +1531,24 @@ extension RTCRtpSender {
           oldEncoding.scalabilityMode = value
         }
 
+        if let value = encoding.networkPriority {
+          let priorityString: String
+          switch value {
+          case .veryLow:
+            priorityString = "very-low"
+          case .low:
+            priorityString = "low"
+          case .medium:
+            priorityString = "medium"
+          case .high:
+            priorityString = "high"
+          @unknown default:
+            priorityString = "unknown(\(value))"
+          }
+          Logger.debug(type: .peerChannel, message: "networkPriority: \(priorityString)")
+          oldEncoding.networkPriority = value
+        }
+
         break
       }
     }

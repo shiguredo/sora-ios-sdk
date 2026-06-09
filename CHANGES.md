@@ -59,6 +59,10 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [ADD] offer の encodings の `networkPriority` を `RTCRtpEncodingParameters` に反映する
+  - `SignalingOffer.Encoding` に `networkPriority: RTCPriority?` プロパティを追加する
+  - `updateOfferEncodings(_:)` で `networkPriority` を反映する
+  - @zztkm
 - [FIX] `PeerChannel` のクロージャに `[weak self]` を追加し、解放遅延リスクを縮小する
   - statistics コールバック、createClientOfferSDP コールバック、createAnswer setRemoteDescription コールバックに追加する
   - @t-miya
