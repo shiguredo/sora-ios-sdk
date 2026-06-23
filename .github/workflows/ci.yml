@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+    - 'AGENTS.md'
+    - 'CHANGES.md'
+    - 'CLAUDE.md'
+    - 'LICENSE'
+    - 'README.md'
+    - 'THANKS'
+    - 'canary.py'
+    - '.gitignore'
+
+jobs:
+  e2e:
+    runs-on: [self-hosted, macOS, ARM64, Apple-M1]
+    timeout-minutes: 45
+    env:
+      XCODE: /Applications/Xcode_26.2.app
+      XCODE_SDK: iphoneos26.2
+      SORA_SIGNALING_URL: ${{ secrets.TEST_SIGNALING_URL }}
+      TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
+      TEST_CHANNEL_ID_PREFIX: ${{ secrets.TEST_CHANNEL_ID_PREFIX }}
+      TEST_CHANNEL_ID_SUFFIX: _${{ github.run_id }}
+    steps:
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+    - name: Select Xcode Version
+      run: sudo xcode-select -s '${{ env.XCODE }}/Contents/Developer'
+    - name: Show Xcode Version
+      run: xcodebuild -version
+    - name: Setup iOS Simulator
+      run: |
+        SIMULATOR_NAME="iPhone 17 Pro"
+        RUNTIME="com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+        DEVICE_TYPE="iPhone 17 Pro"
+        echo "Simulator: $SIMULATOR_NAME"
+
+        # デバイスの存在を確認し、存在しなければ作成する
+        if xcrun simctl list devices | grep -q "$SIMULATOR_NAME"; then
+          echo "Simulator '$SIMULATOR_NAME' already exists"
+        else
+          echo "Creating simulator '$SIMULATOR_NAME'"
+          xcrun simctl create "$SIMULATOR_NAME" "$DEVICE_TYPE" "$RUNTIME"
+        fi
+
+        # 起動
+        xcrun simctl boot "$SIMULATOR_NAME"
+        xcrun simctl bootstatus "$SIMULATOR_NAME" -b
+
+        # 起動状態を確認
+        xcrun simctl list devices | grep "$SIMULATOR_NAME"
+    - name: Run E2E Tests
+      run: |
+        set -o pipefail && \
+          xcodebuild build-for-testing \
+            -scheme Sora-Package \
+            -sdk ${{ env.XCODE_SDK }} \
+            -derivedDataPath build \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            PROVISIONING_PROFILE= \
+            SWIFT_VERSION=6
+
+        XCTESTRUN=$(find build -name "*.xctestrun" -path "*/Products/*" | head -1)
+        if [ ! -f "$XCTESTRUN" ]; then
+          echo "Error: .xctestrun not found"
+          exit 1
+        fi
+        echo "Injecting environment variables into $XCTESTRUN"
+        plutil -replace TestingEnvironmentVariables -json "{
+          \"SORA_SIGNALING_URL\": \"$SORA_SIGNALING_URL\",
+          \"TEST_SECRET_KEY\": \"$TEST_SECRET_KEY\",
+          \"TEST_CHANNEL_ID_PREFIX\": \"$TEST_CHANNEL_ID_PREFIX\",
+          \"TEST_CHANNEL_ID_SUFFIX\": \"$TEST_CHANNEL_ID_SUFFIX\"
+        }" "$XCTESTRUN"
+
+        set -o pipefail && \
+          xcodebuild test-without-building \
+            -scheme Sora-Package \
+            -sdk ${{ env.XCODE_SDK }} \
+            -derivedDataPath build \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            PROVISIONING_PROFILE= \
+            SWIFT_VERSION=6
+    - name: Upload Test Results
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-results
+        path: build/**/*.xcresult
+    - name: Shutdown Simulator
+      if: always()
+      run: xcrun simctl shutdown 'iPhone 17 Pro' || true

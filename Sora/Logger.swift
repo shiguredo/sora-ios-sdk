@@ -307,8 +307,39 @@ public final class Logger: @unchecked Sendable {
     if !out { return }
 
     if level.value > 0, level.value <= log.level.value {
-      onOutputHandler?(log)
-      print(log.description)
+      let masked = Logger.maskSecrets(in: log.message)
+      let maskedLog = Log(level: log.level, type: log.type, message: masked)
+      onOutputHandler?(maskedLog)
+      print(maskedLog.description)
     }
+  }
+
+  // MARK: - シークレットマスク
+
+  /// マスク対象のシークレットキー
+  /// この文字列が含まれるキーの値はマスタ対象とする
+  private static let secretKeys = [
+    "access_token", "token", "secret", "authorization", "credential",
+  ]
+
+  /// ログメッセージに含まれるシークレット情報をマスクする
+  ///
+  /// JSON 文字列内のシークレットキーに該当する値を `"***"` に置換する
+  private static func maskSecrets(in message: String) -> String {
+    var result = message
+    for key in secretKeys {
+      // JSON のキー名に該当する文字列値部分をマスクする
+      // 例: "access_token": "abc123" → "access_token": "***"
+      let pattern = "\"\(key)\"\\s*:\\s*\"[^\"]*\""
+      if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+        let range = NSRange(result.startIndex..., in: result)
+        result = regex.stringByReplacingMatches(
+          in: result,
+          options: [],
+          range: range,
+          withTemplate: "\"\(key)\": \"***\"")
+      }
+    }
+    return result
   }
 }

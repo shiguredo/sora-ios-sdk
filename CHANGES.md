@@ -81,6 +81,10 @@
   - 入力経路を `.speaker` にオーバーライドした後に他モードを指定しても経路がリセットされなかったため
   - @t-miya
 
+- [CHANGE] シグナリングチャンネルの debug ログ出力から secret をマスクするようにする
+  - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
+  - @t-miya
+
 ### misc
 
 - [CHANGE] prek.toml に切り替える
@@ -90,6 +94,9 @@
   - @voluntas
 - [UPDATE] build.yml の xcodebuild build コマンドに `SWIFT_VERSION=6` を追加する
   - @zztkm
+- [ADD] iOS E2E テストを self-hosted macOS runner で CI 実行できるようにする
+  - ci.yml を追加し、recvonly 接続テストを iOS Simulator 上で実行する
+  - @t-miya
 
 ## 2026.1.0
 
