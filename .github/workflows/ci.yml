@@ -18,7 +18,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, Apple-M1]
     timeout-minutes: 45
     env:
-      XCODE: /Applications/Xcode_26.2.app
+      XCODE: /Applications/Xcode.app
       XCODE_SDK: iphoneos26.2
       SORA_SIGNALING_URL: ${{ secrets.TEST_SIGNALING_URL }}
       TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
