@@ -61,12 +61,16 @@ jobs:
           exit 1
         fi
         echo "Injecting environment variables into $XCTESTRUN"
-        plutil -replace TestingEnvironmentVariables -json "{
-          \"SORA_SIGNALING_URL\": \"$SORA_SIGNALING_URL\",
-          \"TEST_SECRET_KEY\": \"$TEST_SECRET_KEY\",
-          \"TEST_CHANNEL_ID_PREFIX\": \"$TEST_CHANNEL_ID_PREFIX\",
-          \"TEST_CHANNEL_ID_SUFFIX\": \"$TEST_CHANNEL_ID_SUFFIX\"
-        }" "$XCTESTRUN"
+        plutil -replace TestConfigurations.0.TestTargets.0.EnvironmentVariables \
+          -json "{}" "$XCTESTRUN"
+        plutil -insert TestConfigurations.0.TestTargets.0.EnvironmentVariables.SORA_SIGNALING_URL \
+          -string "$SORA_SIGNALING_URL" "$XCTESTRUN"
+        plutil -insert TestConfigurations.0.TestTargets.0.EnvironmentVariables.TEST_SECRET_KEY \
+          -string "$TEST_SECRET_KEY" "$XCTESTRUN"
+        plutil -insert TestConfigurations.0.TestTargets.0.EnvironmentVariables.TEST_CHANNEL_ID_PREFIX \
+          -string "$TEST_CHANNEL_ID_PREFIX" "$XCTESTRUN"
+        plutil -insert TestConfigurations.0.TestTargets.0.EnvironmentVariables.TEST_CHANNEL_ID_SUFFIX \
+          -string "$TEST_CHANNEL_ID_SUFFIX" "$XCTESTRUN"
 
         set -o pipefail && \
           xcodebuild test-without-building \
