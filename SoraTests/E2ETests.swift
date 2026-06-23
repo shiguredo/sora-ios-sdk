@@ -48,7 +48,12 @@ final class E2ETests: XCTestCase {
       throw XCTSkip("TEST_SECRET_KEY が未設定のためスキップします")
     }
 
-    let prefix = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_PREFIX"]
+    let prefix: String? = {
+      if let v = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_PREFIX"], !v.isEmpty {
+        return v
+      }
+      return nil
+    }()
     let suffix = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_SUFFIX"] ?? ""
     let channelId = "\(prefix ?? "")e2e-test\(suffix)"
     print("TEST_CHANNEL_ID_PREFIX: \(prefix != nil ? "set" : "not set")")
