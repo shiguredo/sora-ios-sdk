@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 45
     env:
       XCODE: /Applications/Xcode.app
-      XCODE_SDK: iphoneos26.2
+      XCODE_SDK: iphoneos26.5
       SORA_SIGNALING_URL: ${{ secrets.TEST_SIGNALING_URL }}
       TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
       TEST_CHANNEL_ID_PREFIX: ${{ secrets.TEST_CHANNEL_ID_PREFIX }}
@@ -49,7 +49,7 @@ jobs:
             -scheme Sora-Package \
             -sdk ${{ env.XCODE_SDK }} \
             -derivedDataPath build \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE= \
@@ -73,7 +73,7 @@ jobs:
             -scheme Sora-Package \
             -sdk ${{ env.XCODE_SDK }} \
             -derivedDataPath build \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE= \
