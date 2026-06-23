@@ -74,14 +74,11 @@ jobs:
 
         set -o pipefail && \
           xcodebuild test-without-building \
-            -scheme Sora-Package \
-            -sdk ${{ env.XCODE_SDK }} \
-            -derivedDataPath build \
+            -xctestrun "$XCTESTRUN" \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
-            PROVISIONING_PROFILE= \
-            SWIFT_VERSION=6
+            PROVISIONING_PROFILE=
     - name: Upload Test Results
       if: failure()
       uses: actions/upload-artifact@v4
