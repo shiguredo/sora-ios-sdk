@@ -106,7 +106,9 @@ public struct WebRTCConfiguration {
     // AES-GCM を有効にする
     config.cryptoOptions = RTCCryptoOptions(
       srtpEnableGcmCryptoSuites: true,
+      srtpPreferGcmCryptoSuites: true,
       srtpEnableAes128Sha1_32CryptoCipher: false,
+      srtpEnableAes128Sha1_80CryptoCipher: false,
       srtpEnableEncryptedRtpHeaderExtensions: false,
       sframeRequireFrameEncryption: false)
     return config
