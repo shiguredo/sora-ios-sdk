@@ -31,24 +31,17 @@ jobs:
     - name: Setup iOS Simulator
       run: |
         SIMULATOR_NAME="iPhone 17 Pro"
-        RUNTIME="com.apple.CoreSimulator.SimRuntime.iOS-26-2"
-        DEVICE_TYPE="iPhone 17 Pro"
-        echo "Simulator: $SIMULATOR_NAME"
 
         # デバイスの存在を確認し、存在しなければ作成する
-        if xcrun simctl list devices | grep -q "$SIMULATOR_NAME"; then
-          echo "Simulator '$SIMULATOR_NAME' already exists"
-        else
+        if ! xcrun simctl list devices | grep -q "$SIMULATOR_NAME"; then
           echo "Creating simulator '$SIMULATOR_NAME'"
-          xcrun simctl create "$SIMULATOR_NAME" "$DEVICE_TYPE" "$RUNTIME"
+          xcrun simctl create "$SIMULATOR_NAME" \
+            "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro"
         fi
 
         # 起動
         xcrun simctl boot "$SIMULATOR_NAME"
         xcrun simctl bootstatus "$SIMULATOR_NAME" -b
-
-        # 起動状態を確認
-        xcrun simctl list devices | grep "$SIMULATOR_NAME"
     - name: Run E2E Tests
       run: |
         set -o pipefail && \
