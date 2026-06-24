@@ -70,9 +70,6 @@ final class E2ETests: XCTestCase {
       role: .recvonly
     )
     config.signalingConnectMetadata = E2EMetadata(access_token: accessToken)
-    // recvonly のため送信メディアは不要
-    config.audioEnabled = false
-    config.videoEnabled = false
 
     return config
   }
