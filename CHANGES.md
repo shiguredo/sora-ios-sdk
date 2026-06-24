@@ -11,6 +11,9 @@
 
 ## develop
 
+- [CHANGE] ログ出力時にクレデンシャル情報をマスクするようにする
+  - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
+  - @t-miya
 - [UPDATE] libwebrtc m150.7871.2.1 に上げる
   - @t-miya
 - [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
@@ -79,10 +82,6 @@
   - @zztkm
 - [FIX] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
   - 入力経路を `.speaker` にオーバーライドした後に他モードを指定しても経路がリセットされなかったため
-  - @t-miya
-
-- [CHANGE] シグナリングチャンネルの debug ログ出力から secret をマスクするようにする
-  - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
   - @t-miya
 
 ### misc

@@ -1,6 +1,5 @@
+import Sora
 import XCTest
-
-@testable import Sora
 
 /// iOS E2E テスト
 ///
@@ -13,17 +12,22 @@ import XCTest
 /// - TEST_CHANNEL_ID_SUFFIX: channelId の suffix (省略可、デフォルト "")
 final class E2ETests: XCTestCase {
   private var sora: Sora!
+  private var originalLogLevel: LogLevel!
+  private struct InvalidURLError: Error {}
 
   override func setUp() {
     super.setUp()
-    // シークレットを含むログを抑制するため、ログレベルを warn に設定する
+    originalLogLevel = Logger.shared.level
     Logger.shared.level = .warn
     sora = Sora()
   }
 
   override func tearDown() {
+    for channel in sora?.mediaChannels ?? [] {
+      channel.disconnect(error: nil)
+    }
     sora = nil
-    Logger.shared.level = .info
+    Logger.shared.level = originalLogLevel
     super.tearDown()
   }
 
@@ -35,10 +39,13 @@ final class E2ETests: XCTestCase {
   private func buildConfiguration() throws -> Configuration {
     guard
       let urlString = ProcessInfo.processInfo.environment["SORA_SIGNALING_URL"],
-      !urlString.isEmpty,
-      let url = URL(string: urlString)
+      !urlString.isEmpty
     else {
       throw XCTSkip("SORA_SIGNALING_URL が未設定のためスキップします")
+    }
+    guard let url = URL(string: urlString) else {
+      XCTFail("SORA_SIGNALING_URL が不正な値です: \(urlString)")
+      throw InvalidURLError()
     }
 
     guard
@@ -94,10 +101,14 @@ final class E2ETests: XCTestCase {
 
     wait(for: [expectation], timeout: 30)
 
-    // テスト後に切断する
     if let channel = connectedChannel {
       let disconnectExpectation = self.expectation(description: "切断が完了すること")
-      channel.handlers.onDisconnect = { _ in
+      channel.handlers.onDisconnect = { event in
+        if case .ok(let code, _) = event {
+          XCTAssertEqual(code, 1000, "正常切断コードであること")
+        } else {
+          XCTFail("予期しない切断: \(event)")
+        }
         disconnectExpectation.fulfill()
       }
       channel.disconnect(error: nil)
@@ -129,9 +140,14 @@ final class E2ETests: XCTestCase {
       return
     }
 
-    // 切断を実行し、onDisconnect が呼ばれることを確認する
+    // 切断を実行し、onDisconnect が正常切断コードで呼ばれることを確認する
     let disconnectExpectation = self.expectation(description: "切断が成功すること")
-    channel.handlers.onDisconnect = { _ in
+    channel.handlers.onDisconnect = { event in
+      if case .ok(let code, _) = event {
+        XCTAssertEqual(code, 1000, "正常切断コードであること")
+      } else {
+        XCTFail("予期しない切断: \(event)")
+      }
       disconnectExpectation.fulfill()
     }
 
@@ -158,26 +174,36 @@ final class E2ETests: XCTestCase {
         return
       }
 
-      // 接続状態が connected であることを確認する
-      if channel.native?.connectionState == .connected {
-        connectedChannel = channel
-        expectation.fulfill()
-      } else {
-        // 接続状態が connected になっていなくても、
-        // onConnect が呼ばれた時点でタイミング差で未遷移の可能性があるため、
-        // 少し待ってから再確認する
-        let state = channel.native?.connectionState
-        XCTFail("接続状態が connected ではない: \(String(describing: state))")
-        expectation.fulfill()
+      // onConnect が呼ばれた時点では connectionState がまだ .connected に
+      // 遷移していない可能性があるため、最大 5 秒間ポーリングで待つ
+      let deadline = Date().addingTimeInterval(5)
+      func poll() {
+        if channel.native?.connectionState == .connected {
+          connectedChannel = channel
+          expectation.fulfill()
+        } else if Date() > deadline {
+          let state = channel.native?.connectionState
+          XCTFail("接続状態が connected に遷移しなかった: \(String(describing: state))")
+          expectation.fulfill()
+        } else {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            poll()
+          }
+        }
       }
+      poll()
     }
 
     wait(for: [expectation], timeout: 30)
 
-    // テスト後に切断する
     if let channel = connectedChannel {
       let disconnectExpectation = self.expectation(description: "切断が完了すること")
-      channel.handlers.onDisconnect = { _ in
+      channel.handlers.onDisconnect = { event in
+        if case .ok(let code, _) = event {
+          XCTAssertEqual(code, 1000, "正常切断コードであること")
+        } else {
+          XCTFail("予期しない切断: \(event)")
+        }
         disconnectExpectation.fulfill()
       }
       channel.disconnect(error: nil)

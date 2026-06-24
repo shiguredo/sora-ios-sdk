@@ -146,10 +146,10 @@ public struct Log {
   public let timestamp: Date
   public let message: String
 
-  init(level: LogLevel, type: LogType, message: String) {
+  init(level: LogLevel, type: LogType, timestamp: Date = Date(), message: String) {
     self.level = level
     self.type = type
-    timestamp = Date()
+    self.timestamp = timestamp
     self.message = message
   }
 }
@@ -308,7 +308,9 @@ public final class Logger: @unchecked Sendable {
 
     if level.value > 0, level.value <= log.level.value {
       let masked = Logger.maskSecrets(in: log.message)
-      let maskedLog = Log(level: log.level, type: log.type, message: masked)
+      let maskedLog = Log(
+        level: log.level, type: log.type,
+        timestamp: log.timestamp, message: masked)
       onOutputHandler?(maskedLog)
       print(maskedLog.description)
     }
@@ -317,28 +319,33 @@ public final class Logger: @unchecked Sendable {
   // MARK: - シークレットマスク
 
   /// マスク対象のシークレットキー
-  /// この文字列が含まれるキーの値はマスタ対象とする
+  /// この文字列が含まれるキーの値はマスク対象とする
   private static let secretKeys = [
     "access_token", "token", "secret", "authorization", "credential",
   ]
+
+  /// 事前コンパイルされた秘密情報マスク用の正規表現パターン
+  private static let secretPatterns: [(key: String, regex: NSRegularExpression)] = {
+    secretKeys.compactMap { key in
+      let escaped = NSRegularExpression.escapedPattern(for: key)
+      let pattern = "\"\(escaped)\"\\s*:\\s*\"[^\"]*\""
+      let regex = try! NSRegularExpression(pattern: pattern)
+      return (key, regex)
+    }
+  }()
 
   /// ログメッセージに含まれるシークレット情報をマスクする
   ///
   /// JSON 文字列内のシークレットキーに該当する値を `"***"` に置換する
   private static func maskSecrets(in message: String) -> String {
     var result = message
-    for key in secretKeys {
-      // JSON のキー名に該当する文字列値部分をマスクする
-      // 例: "access_token": "abc123" → "access_token": "***"
-      let pattern = "\"\(key)\"\\s*:\\s*\"[^\"]*\""
-      if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-        let range = NSRange(result.startIndex..., in: result)
-        result = regex.stringByReplacingMatches(
-          in: result,
-          options: [],
-          range: range,
-          withTemplate: "\"\(key)\": \"***\"")
-      }
+    for (key, regex) in secretPatterns {
+      let range = NSRange(result.startIndex..., in: result)
+      result = regex.stringByReplacingMatches(
+        in: result,
+        options: [],
+        range: range,
+        withTemplate: "\"\(key)\": \"***\"")
     }
     return result
   }
