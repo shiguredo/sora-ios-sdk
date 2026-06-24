@@ -11,6 +11,9 @@
 
 ## develop
 
+- [CHANGE] ログ出力時にクレデンシャル情報をマスクするようにする
+  - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
+  - @t-miya
 - [UPDATE] libwebrtc m150.7871.2.1 に上げる
   - @t-miya
 - [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
@@ -90,6 +93,9 @@
   - @voluntas
 - [UPDATE] build.yml の xcodebuild build コマンドに `SWIFT_VERSION=6` を追加する
   - @zztkm
+- [ADD] iOS E2E テストを self-hosted macOS runner で CI 実行できるようにする
+  - ci.yml を追加し、recvonly 接続テストを iOS Simulator 上で実行する
+  - @t-miya
 
 ## 2026.1.0
 
