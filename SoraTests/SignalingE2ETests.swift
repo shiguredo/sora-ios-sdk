@@ -80,6 +80,13 @@ final class E2ETests: XCTestCase {
     return config
   }
 
+  /// `role` を指定して E2E 用の Configuration を構築する
+  private func buildConfiguration(role: Role) throws -> Configuration {
+    var config = try buildConfiguration()
+    config.role = role
+    return config
+  }
+
   // MARK: - recvonly 接続テスト
 
   /// Sora に recvonly で接続できることを確認する
@@ -182,6 +189,69 @@ final class E2ETests: XCTestCase {
     wait(for: [expectation], timeout: 30)
 
     if let channel = connectedChannel {
+      let disconnectExpectation = self.expectation(description: "切断が完了すること")
+      channel.handlers.onDisconnect = { event in
+        if case .ok(let code, _) = event {
+          XCTAssertEqual(code, 1000, "正常切断コードであること")
+        } else {
+          XCTFail("予期しない切断: \(event)")
+        }
+        disconnectExpectation.fulfill()
+      }
+      channel.disconnect(error: nil)
+      wait(for: [disconnectExpectation], timeout: 10)
+    }
+  }
+
+  // MARK: - sendonly ダミー映像テスト
+
+  /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
+  func testSendonlyDummyVideo() throws {
+    let config = try buildConfiguration(role: .sendonly)
+    let expectation = self.expectation(description: "sendonly でダミー映像を送信できること")
+    var capturer: DummyVideoCapturer?
+
+    _ = sora.connect(configuration: config) { mediaChannel, error in
+      if let error {
+        XCTFail("接続に失敗した: \(error)")
+        expectation.fulfill()
+        return
+      }
+      guard let channel = mediaChannel, let stream = channel.senderStream else {
+        XCTFail("senderStream が nil")
+        expectation.fulfill()
+        return
+      }
+      capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+      capturer?.stream = stream
+      capturer?.start()
+      // 2 秒間送信後、getStats() で outbound video の送信実績を確認する
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        channel.getStats { result in
+          defer { expectation.fulfill() }
+          guard case .success(let stats) = result else {
+            XCTFail("getStats に失敗した")
+            return
+          }
+          let videoOutbound = stats.entries.first {
+            $0.type == "outbound-rtp"
+              && ($0.id.contains("video") || $0.id.contains("Video"))
+          }
+          XCTAssertNotNil(videoOutbound, "outbound video stats が存在すること")
+          let bytesSent = videoOutbound?.values["bytesSent"] as? NSNumber
+          let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
+          XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
+          XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
+          XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
+          XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
+        }
+      }
+    }
+
+    wait(for: [expectation], timeout: 35)
+    capturer?.stop()
+    // 切断
+    if let channel = sora.mediaChannels.first {
       let disconnectExpectation = self.expectation(description: "切断が完了すること")
       channel.handlers.onDisconnect = { event in
         if case .ok(let code, _) = event {

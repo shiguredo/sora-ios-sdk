@@ -93,6 +93,9 @@
   - @voluntas
 - [UPDATE] build.yml の xcodebuild build コマンドに `SWIFT_VERSION=6` を追加する
   - @zztkm
+- [ADD] Test にダミー映像キャプチャ DummyVideoCapturer を追加する
+  - 8 色のカラーバーを生成し、実機カメラ不要の E2E テストを可能にする
+  - @t-miya
 - [ADD] iOS E2E テストを self-hosted macOS runner で CI 実行できるようにする
   - ci.yml を追加し、recvonly 接続テストを iOS Simulator 上で実行する
   - @t-miya
