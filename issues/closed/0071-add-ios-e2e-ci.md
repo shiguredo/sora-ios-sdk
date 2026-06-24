@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-22
-- Completed:
+- Completed: 2026-06-24
 - Model: GPT-5
 - Branch: feature/add-ios-e2e-ci
 - Polished: 2026-06-22
@@ -258,6 +258,19 @@ slack_notify:
 ```
 
 build と e2e のいずれかが失敗した場合は `failure` を通知する。e2e が runner 不在でスキップされた場合は `skipped` となり、上記の式では `failure` 扱いとなる。これは runner 不在を障害として通知する意図であり、許容する。
+
+## 解決方法
+
+以下の対応を行い、self-hosted macOS runner 上で iOS E2E テストを CI 実行できる構成にした。
+
+- `.github/workflows/ci.yml` を追加し、`e2e` job を self-hosted macOS ARM64 runner で実行するようにした
+- `xcrun simctl` を用いた Simulator の作成、起動、停止処理を workflow に追加した
+- `xcodebuild build-for-testing` で生成した `.xctestrun` に `SORA_SIGNALING_URL`、`TEST_SECRET_KEY`、`TEST_CHANNEL_ID_PREFIX`、`TEST_CHANNEL_ID_SUFFIX` を注入し、`xcodebuild test-without-building` で E2E テストを実行するようにした
+- `SoraTests/E2ETests.swift` を追加し、`recvonly` の接続、切断、offer / answer 完了を検証する E2E テストを実装した
+- E2E テストでは `Logger.shared.level = .warn` を設定し、シークレットを含みうる `.info` / `.debug` ログの露出を抑制するようにした
+- `slack_notify` job を追加し、`e2e` が `success` 以外の結果になった場合に Slack 通知するようにした
+
+今回の CI 実行で発生した Swift 6 の並行性エラーに対しては、`SignalingE2ETests.swift` の不要なポーリング実装を削除し、`onConnect` 成功時点で `connectionState == .connected` を即時検証する形に修正した。
 
 ## 完了条件
 
