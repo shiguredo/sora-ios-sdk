@@ -44,6 +44,8 @@ jobs:
         xcrun simctl bootstatus "$SIMULATOR_NAME" -b
     - name: Run E2E Tests
       run: |
+        rm -rf build
+
         # Simulator の system log をバックグラウンドで収集する
         xcrun simctl spawn booted log stream --predicate 'processImagePath contains "Sora"' &
         LOG_PID=$!
