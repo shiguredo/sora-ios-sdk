@@ -1,4 +1,4 @@
-import Accelerate
+@preconcurrency import Accelerate
 import CoreGraphics
 import CoreVideo
 import Foundation
