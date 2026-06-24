@@ -174,24 +174,9 @@ final class E2ETests: XCTestCase {
         return
       }
 
-      // onConnect が呼ばれた時点では connectionState がまだ .connected に
-      // 遷移していない可能性があるため、最大 5 秒間ポーリングで待つ
-      let deadline = Date().addingTimeInterval(5)
-      func poll() {
-        if channel.native?.connectionState == .connected {
-          connectedChannel = channel
-          expectation.fulfill()
-        } else if Date() > deadline {
-          let state = channel.native?.connectionState
-          XCTFail("接続状態が connected に遷移しなかった: \(String(describing: state))")
-          expectation.fulfill()
-        } else {
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            poll()
-          }
-        }
-      }
-      poll()
+      XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+      connectedChannel = channel
+      expectation.fulfill()
     }
 
     wait(for: [expectation], timeout: 30)
