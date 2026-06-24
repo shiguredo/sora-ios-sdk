@@ -79,12 +79,21 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
-    - name: Upload Test Results
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: e2e-test-results
-        path: build/**/*.xcresult
     - name: Shutdown Simulator
       if: always()
       run: xcrun simctl shutdown 'iPhone 17 Pro' || true
+  slack_notify:
+    needs: [e2e]
+    runs-on: ubuntu-slim
+    if: ${{ needs.e2e.result == 'failure' }}
+    permissions:
+      actions: read
+    steps:
+      - name: Slack Notification
+        uses: shiguredo/github-actions/.github/actions/slack-notify@main
+        with:
+          status: ${{ needs.e2e.result }}
+          slack_webhook: ${{ secrets.SLACK_WEBHOOK }}
+          slack_channel: sora-ios-sdk
+        env:
+          GH_TOKEN: ${{ github.token }}

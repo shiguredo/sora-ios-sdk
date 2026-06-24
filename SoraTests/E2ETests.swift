@@ -56,7 +56,6 @@ final class E2ETests: XCTestCase {
     }()
     let suffix = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_SUFFIX"] ?? ""
     let channelId = "\(prefix ?? "")e2e-test\(suffix)"
-    print("TEST_CHANNEL_ID_PREFIX: \(prefix != nil ? "set" : "not set")")
 
     // E2E テスト専用のメタデータ構造体
     struct E2EMetadata: Encodable {
