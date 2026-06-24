@@ -226,7 +226,8 @@ final class E2ETests: XCTestCase {
       capturer?.stream = stream
       capturer?.start()
       // 2 秒間送信後、getStats() で outbound video の送信実績を確認する
-      DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+      Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { timer in
+        timer.invalidate()
         channel.getStats { result in
           defer { expectation.fulfill() }
           guard case .success(let stats) = result else {
