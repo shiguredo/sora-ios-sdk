@@ -69,7 +69,7 @@ final class PeerChannelInternalHandlers {
 class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - Constants
 
-  /// type: switched 受信後、WebSocket 切断までの待機時間（秒）
+  /// DataChannel の signaling ラベル受信後、WebSocket 切断までの待機時間（秒）
   /// NOTE: DataChannel への切り替え後、WebSocket 経由でまだ送信中のメッセージがある可能性を考慮し、
   /// 余裕を持って WebSocket を切断するために待機時間を設けている。
   private static let switchedDisconnectDelay: TimeInterval = 10.0
@@ -160,6 +160,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   var dataChannels: [String: DataChannel] = [:]
   var switchedToDataChannel: Bool = false
+  nonisolated(unsafe) var webSocketDisconnectScheduled: Bool = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
   var rpcChannel: RPCChannel?
 
@@ -1073,25 +1074,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .switched(let switched):
       switchedToDataChannel = true
       signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
-      if signalingChannel.ignoreDisconnectWebSocket {
-        if let webSocketChannel = signalingChannel.webSocketChannel {
-          // DataChannel への切り替え後でも、まだ WebSocket 経由で送信中のメッセージが存在する可能性がある。
-          // そのため、余裕を持って指定時間（秒）後に WebSocket を切断するようスケジュールしている。
-          // 加えて、WebSocket の切断はユーザーに影響を与えない cleanup 処理であり緊急性が低いため、
-          // DispatchQueue.global(qos: .background) を使用して優先度を下げている。
-          // 参考: https://developer.apple.com/documentation/dispatch/dispatchqos/qosclass-swift.enum/background
-          DispatchQueue.global(qos: .background).asyncAfter(
-            deadline: .now() + Self.switchedDisconnectDelay
-          ) { [weak self] in
-            guard let self else { return }
-            // PeerChannel が切断状態の場合は、WebSocket Channel はすでに切断されており、
-            // disconnect を呼び出す必要がないため、PeerChannel の状態をチェックしている。
-            if state != .closed {
-              webSocketChannel.disconnect(error: nil)
-            }
-          }
-        }
-      }
 
       if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
         onDataChannel(mediaChannel)
@@ -1126,6 +1108,39 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "call onReceiveSignaling")
     internalHandlers.onReceiveSignaling?(signaling)
+  }
+
+  /// DataChannel の signaling ラベル受信を契機に WebSocket 切断をスケジュールする
+  func scheduleWebSocketDisconnectIfNeeded() {
+    // DataChannel の delegate コールバックは WebRTC の内部スレッドから呼ばれる。
+    // webSocketDisconnectScheduled は nonisolated(unsafe) であり、
+    // 以下の条件チェックと flag 更新はアトミックではないが、
+    // webSocketChannel.disconnect 二重実行しても問題ないため、
+    // 重複スケジュールを防ぐのはベストエフォートで十分。
+    if webSocketDisconnectScheduled { return }
+    guard switchedToDataChannel, signalingChannel.ignoreDisconnectWebSocket else { return }
+    guard state != .closed else { return }
+    guard let webSocketChannel = signalingChannel.webSocketChannel else { return }
+
+    webSocketDisconnectScheduled = true
+
+    Logger.info(
+      type: .peerChannel,
+      message: "scheduling WebSocket disconnect after \(Self.switchedDisconnectDelay) seconds")
+
+    // DataChannel 確立直後も WebSocket 経由の送信キューにメッセージが残っている可能性があるため、
+    // 既存の遅延 (switchedDisconnectDelay) を維持する
+    DispatchQueue.global(qos: .background).asyncAfter(
+      deadline: .now() + Self.switchedDisconnectDelay
+    ) { [weak self] in
+      guard let self else { return }
+      if self.state != .closed {
+        Logger.info(
+          type: .peerChannel,
+          message: "disconnecting WebSocket after DataChannel signaling established")
+        webSocketChannel.disconnect(error: nil)
+      }
+    }
   }
 
   /// DataChannel の RPC で受信したメッセージを処理する。
@@ -1214,6 +1229,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
     dataChannelSignalingClose = nil
+    webSocketDisconnectScheduled = false
 
     Logger.debug(type: .peerChannel, message: "did disconnect")
   }

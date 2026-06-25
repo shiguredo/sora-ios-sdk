@@ -209,6 +209,11 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         }
         switch Signaling.decode(data) {
         case .success(let signaling):
+          // signaling ラベルの DataChannel でメッセージを受信した時点を
+          // DataChannel シグナリング確立の証拠として WebSocket 切断をスケジュールする
+          if dataChannel.label == "signaling" {
+            peerChannel.scheduleWebSocketDisconnectIfNeeded()
+          }
           peerChannel.handleSignalingOverDataChannel(signaling)
         case .failure(let error):
           Logger.error(
