@@ -62,6 +62,9 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] DataChannel の signaling ラベル受信を契機に WebSocket を切断するようにする
+  - `type: switched` 受信時から DataChannel `signaling` ラベルでのメッセージ受信時に変更する
+  - @t-miya
 - [FIX] `PeerChannel` のクロージャに `[weak self]` を追加し、解放遅延リスクを縮小する
   - statistics コールバック、createClientOfferSDP コールバック、createAnswer setRemoteDescription コールバックに追加する
   - @t-miya
