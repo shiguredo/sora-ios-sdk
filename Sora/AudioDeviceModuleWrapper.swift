@@ -2,7 +2,7 @@ import Foundation
 import WebRTC
 
 /// RTCAudioDeviceModule の録音ポーズ/再開をラップするクラス
-internal final class AudioDeviceModuleWrapper {
+internal final class AudioDeviceModuleWrapper: AudioInputMuteController {
   private let audioDeviceModule: RTCAudioDeviceModule
   // ハードミュート処理を直列化するためのキュー
   private let queue = DispatchQueue(label: "jp.shiguredo.sora.audio.device.wrapper")
@@ -17,6 +17,10 @@ internal final class AudioDeviceModuleWrapper {
   /// - Parameter mute: `true` でミュート有効化、`false` でミュート無効化
   /// - Returns: 成功した場合は `true`、失敗した場合は `false` を返します
   func setAudioHardMute(_ mute: Bool) -> Bool {
+    setAudioInputMuted(mute)
+  }
+
+  func setAudioInputMuted(_ mute: Bool) -> Bool {
     queue.sync {
       guard isHardMuted != mute else {
         return true

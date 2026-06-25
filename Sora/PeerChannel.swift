@@ -545,6 +545,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(
         type: .peerChannel,
         message: "audio input is already initialized")
+    } else if nativePeerChannelFactory.usesCustomAudioDevice {
+      Logger.debug(
+        type: .peerChannel,
+        message: "skip default audio input initialization because custom audio device is used")
+      // カスタム音声デバイス利用時の初期マイク状態は、接続前に Sora.configureBeforeConnect で適用済みです。
+      isAudioInputInitialized = true
     } else {
       Logger.debug(
         type: .peerChannel,

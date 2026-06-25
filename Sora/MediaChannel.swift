@@ -236,7 +236,8 @@ public final class MediaChannel {
     self.manager = manager
     self.configuration = configuration
     self.nativePeerChannelFactory = NativePeerChannelFactory(
-      bypassVoiceProcessing: configuration.bypassVoiceProcessing)
+      bypassVoiceProcessing: configuration.bypassVoiceProcessing,
+      customAudioDevice: configuration.customAudioDevice)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
@@ -675,9 +676,13 @@ public final class MediaChannel {
     }
 
     // 音声ハードミュートを切り替えます
-    if !self.nativePeerChannelFactory.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+    guard let audioInputController = nativePeerChannelFactory.audioInputMuteController else {
+      return SoraError.mediaChannelError(reason: "audio input mute control is unsupported")
+    }
+
+    if !audioInputController.setAudioInputMuted(mute) {
       return SoraError.mediaChannelError(
-        reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+        reason: "failed to set audio input muted")
     }
 
     return nil

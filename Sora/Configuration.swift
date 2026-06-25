@@ -152,7 +152,20 @@ public struct Configuration {
   ///
   /// `true` の場合は、 Voice Processing を無効にした状態で ADM を生成します。
   /// 接続中の動的変更には対応していません。
+  /// `customAudioDevice` を指定した場合は `RTCAudioDeviceModule` を生成せず、
+  /// 指定した `RTCAudioDevice` をそのまま利用するため、この設定は適用されません。
   public var bypassVoiceProcessing: Bool = false
+
+  /// 高度な用途向けのカスタム音声入出力デバイスです。
+  ///
+  /// 指定した場合は `RTCPeerConnectionFactory` の生成時に `RTCAudioDevice` を利用し、
+  /// `bypassVoiceProcessing` による `RTCAudioDeviceModule` の生成は行いません。
+  ///
+  /// `audioEnabled = true` かつ送信側ロールで利用する場合は、
+  /// 指定するデバイスを `AudioInputMuteControllable` にも準拠させてください。
+  /// 初期マイク状態の適用と `MediaChannel.setAudioHardMute(_:)` の両方で利用します。
+  /// `AudioInputMuteControllable.setAudioInputMuted(_:)` は接続前にも呼ばれます。
+  public var customAudioDevice: RTCAudioDevice?
 
   /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
   public var simulcastEnabled: Bool = false
