@@ -91,7 +91,7 @@ jobs:
   slack_notify:
     needs: [e2e]
     runs-on: ubuntu-slim
-    if: ${{ needs.e2e.result != 'success' }}
+    if: ${{ always() && needs.e2e.result != 'success' }}
     permissions:
       actions: read
     steps:
