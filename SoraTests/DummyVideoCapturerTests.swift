@@ -7,9 +7,11 @@ final class DummyVideoCapturerTests: XCTestCase {
 
   func testStartStopTogglesIsRunning() {
     let capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
-    // stream 未設定でも start は isRunning を true にしない
     XCTAssertFalse(capturer.isRunning)
     capturer.start()
+    // stream 未設定でも Timer は起動される
+    XCTAssertTrue(capturer.isRunning)
+    capturer.stop()
     XCTAssertFalse(capturer.isRunning)
   }
 
@@ -17,7 +19,9 @@ final class DummyVideoCapturerTests: XCTestCase {
     let capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
     capturer.start()
     capturer.start()
-    XCTAssertFalse(capturer.isRunning)
+    // 重複呼び出しは無視され、isRunning は true のまま
+    XCTAssertTrue(capturer.isRunning)
+    capturer.stop()
   }
 
   func testStopDuplicateIgnored() {
@@ -47,7 +51,7 @@ final class DummyVideoCapturerTests: XCTestCase {
   }
 
   func testDeinitInvalidatesTimer() {
-    var weakCapturer: DummyVideoCapturer?
+    weak var weakCapturer: DummyVideoCapturer?
     autoreleasepool {
       let capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
       capturer.start()

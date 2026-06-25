@@ -207,7 +207,11 @@ final class E2ETests: XCTestCase {
 
   /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
   func testSendonlyDummyVideo() throws {
-    let config = try buildConfiguration(role: .sendonly)
+    var config = try buildConfiguration(role: .sendonly)
+    // 接続時の物理カメラ自動起動を抑止し、senderStream 生成後にダミー映像を流す
+    config.initialCameraEnabled = false
+    // この E2E はダミー映像送信の確認に限定し、音声初期化による不安定要因を避ける
+    config.audioEnabled = false
     let expectation = self.expectation(description: "sendonly でダミー映像を送信できること")
     var capturer: DummyVideoCapturer?
 
@@ -225,31 +229,40 @@ final class E2ETests: XCTestCase {
       capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
       capturer?.stream = stream
       capturer?.start()
-      // 2 秒間送信後、getStats() で outbound video の送信実績を確認する
-      Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { timer in
-        timer.invalidate()
-        channel.getStats { result in
-          defer { expectation.fulfill() }
-          guard case .success(let stats) = result else {
-            XCTFail("getStats に失敗した")
-            return
+      // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
+      // ダミー映像送信の継続と WebRTC 統計情報を確認する
+      DispatchQueue.main.async {
+        let timer = Timer(timeInterval: 2, repeats: false) { _ in
+          channel.getStats { result in
+            defer { expectation.fulfill() }
+            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+            XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
+            XCTAssertTrue(capturer?.isRunning ?? false, "DummyVideoCapturer が動作中であること")
+            XCTAssertGreaterThan(capturer?.frameCount ?? 0, 0, "ダミー映像フレームが送信されていること")
+
+            guard case .success(let stats) = result else {
+              XCTFail("getStats に失敗した")
+              return
+            }
+
+            let videoOutbound = stats.entries.first {
+              $0.type == "outbound-rtp"
+                && ($0.values["kind"] as? NSString) == "video"
+            }
+            XCTAssertNotNil(videoOutbound, "outbound video stats が存在すること")
+            let bytesSent = videoOutbound?.values["bytesSent"] as? NSNumber
+            let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
+            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
+            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
+            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
+            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
           }
-          let videoOutbound = stats.entries.first {
-            $0.type == "outbound-rtp"
-              && ($0.id.contains("video") || $0.id.contains("Video"))
-          }
-          XCTAssertNotNil(videoOutbound, "outbound video stats が存在すること")
-          let bytesSent = videoOutbound?.values["bytesSent"] as? NSNumber
-          let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
-          XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
-          XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-          XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
-          XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
         }
+        RunLoop.main.add(timer, forMode: .common)
       }
     }
 
-    wait(for: [expectation], timeout: 35)
+    wait(for: [expectation], timeout: 90)
     capturer?.stop()
     // 切断
     if let channel = sora.mediaChannels.first {

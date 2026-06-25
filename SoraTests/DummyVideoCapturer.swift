@@ -31,6 +31,9 @@ final class DummyVideoCapturer: @unchecked Sendable {
   /// 連続失敗カウンタ
   private var consecutiveFailureCount: Int = 0
 
+  /// stream 未設定の警告を初回のみに抑えるためのフラグ
+  private var warnedStreamNil: Bool = false
+
   /// タイムスタンプの基準時刻
   private var startTime: TimeInterval = 0
 
@@ -71,12 +74,9 @@ final class DummyVideoCapturer: @unchecked Sendable {
       Logger.warn(type: .user("DummyVideoCapturer"), message: "DummyVideoCapturer already running")
       return
     }
-    guard stream != nil else {
-      Logger.warn(type: .user("DummyVideoCapturer"), message: "DummyVideoCapturer stream not set")
-      return
-    }
     startTime = ProcessInfo.processInfo.systemUptime
     consecutiveFailureCount = 0
+    warnedStreamNil = false
     isRunning = true
     let interval = 1.0 / Double(frameRate)
     timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
@@ -148,9 +148,12 @@ final class DummyVideoCapturer: @unchecked Sendable {
       stream.send(videoFrame: videoFrame)
       frameCount += 1
     } else {
-      Logger.warn(
-        type: .user("DummyVideoCapturer"),
-        message: "DummyVideoCapturer stream is nil, frame discarded")
+      if !warnedStreamNil {
+        Logger.warn(
+          type: .user("DummyVideoCapturer"),
+          message: "DummyVideoCapturer stream is nil, frame discarded")
+        warnedStreamNil = true
+      }
     }
   }
 
