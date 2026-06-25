@@ -1,4 +1,4 @@
-import Sora
+@preconcurrency import Sora
 import XCTest
 
 /// iOS E2E テスト
@@ -226,19 +226,20 @@ final class E2ETests: XCTestCase {
         expectation.fulfill()
         return
       }
-      capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
-      capturer?.stream = stream
-      capturer?.start()
+      let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+      currentCapturer.stream = stream
+      currentCapturer.start()
+      capturer = currentCapturer
       // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
       // ダミー映像送信の継続と WebRTC 統計情報を確認する
-      DispatchQueue.main.async {
+      DispatchQueue.main.async { [channel, currentCapturer, expectation] in
         let timer = Timer(timeInterval: 2, repeats: false) { _ in
           channel.getStats { result in
             defer { expectation.fulfill() }
             XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
             XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
-            XCTAssertTrue(capturer?.isRunning ?? false, "DummyVideoCapturer が動作中であること")
-            XCTAssertGreaterThan(capturer?.frameCount ?? 0, 0, "ダミー映像フレームが送信されていること")
+            XCTAssertTrue(currentCapturer.isRunning, "DummyVideoCapturer が動作中であること")
+            XCTAssertGreaterThan(currentCapturer.frameCount, 0, "ダミー映像フレームが送信されていること")
 
             guard case .success(let stats) = result else {
               XCTFail("getStats に失敗した")
