@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import WebRTC
 
 // MARK: デフォルト値
@@ -216,6 +217,10 @@ public struct Configuration {
   /// プロキシに関する設定
   public var proxy: Proxy?
 
+  /// サーバー証明書検証に使用する CA 証明書の PEM 文字列。
+  /// nil を指定するとシステム CA による既定の検証を行う。
+  public var caCertificate: String?
+
   /// 転送フィルターの設定
   ///
   /// この項目は 2025 年 12 月リリース予定の Sora にて廃止されます
@@ -287,6 +292,50 @@ public struct Configuration {
     self.channelId = channelId
     self.role = role
     self.multistreamEnabled = multistreamEnabled
+  }
+}
+
+// MARK: - CA 証明書解析
+
+extension Configuration {
+  /// PEM 文字列から CA 証明書を解析する
+  func parsedCACertificates() throws -> [SecCertificate]? {
+    guard let pem = caCertificate else { return nil }
+    return try Self.parsePEMCertificates(pem)
+  }
+
+  /// PEM 文字列から SecCertificate の配列を生成する
+  private static func parsePEMCertificates(_ pem: String) throws -> [SecCertificate] {
+    // PEM ブロックを非貪欲マッチで抽出する。
+    // `[\s\S]*?` により BEGIN に対応する最初の END までを取得する。
+    // これにより複数証明書連結時でもブロック単位の抽出が可能で、
+    // URL-safe Base64（ハイフンを含む）にも対応する。
+    let pattern = "-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----"
+    guard let regex = try? NSRegularExpression(pattern: pattern) else {
+      throw SoraError.configurationError(reason: "failed to create PEM regex")
+    }
+    let range = NSRange(pem.startIndex..., in: pem)
+    let matches = regex.matches(in: pem, range: range)
+    guard !matches.isEmpty else {
+      throw SoraError.configurationError(reason: "caCertificate contains no valid PEM blocks")
+    }
+
+    var certs: [SecCertificate] = []
+    for match in matches {
+      guard let base64Range = Range(match.range(at: 1), in: pem) else {
+        throw SoraError.configurationError(reason: "failed to extract PEM block")
+      }
+      let base64 = String(pem[base64Range])
+        .components(separatedBy: .whitespacesAndNewlines).joined()
+      guard let derData = Data(base64Encoded: base64) else {
+        throw SoraError.configurationError(reason: "failed to decode Base64 in PEM block")
+      }
+      guard let cert = SecCertificateCreateWithData(nil, derData as CFData) else {
+        throw SoraError.configurationError(reason: "failed to create SecCertificate from DER data")
+      }
+      certs.append(cert)
+    }
+    return certs
   }
 }
 

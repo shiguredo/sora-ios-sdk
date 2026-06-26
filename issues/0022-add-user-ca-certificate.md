@@ -46,36 +46,33 @@
 
 **PEM → `[SecCertificate]` 変換**:
 
-- `Sora/Configuration.swift` に以下の `internal` メソッドを追加する。 `private` ではなく `internal` とすることで `SignalingChannel` と `PeerChannel` から呼び出せるようにする:
+- `Sora/Configuration.swift` に以下の `internal` メソッドを追加する。 `private` ではなく `internal` とすることで `SignalingChannel` と `PeerChannel` から呼び出せるようにする。 `Configuration.swift` は現在 `Security` を import していないため、本変更で `import Security` を追加する。証明書解析を `Configuration` に持たせるのは、`caCertificate` プロパティとその解析が常に一体で使われるためであり、別ファイルに切り出すほどの汎用性はないと判断する:
 
   ```swift
   // internal: SignalingChannel および PeerChannel から呼び出す
   func parsedCACertificates() throws -> [SecCertificate]? {
     guard let pem = caCertificate else { return nil }
-    let certs = Configuration.parsePEMCertificates(pem)
-    if certs.isEmpty {
-      throw SoraError.configurationError(reason: "caCertificate contains no valid PEM certificates")
-    }
-    return certs
+    return try Configuration.parsePEMCertificates(pem)
   }
   ```
 
-- 変換の実装は `private static func parsePEMCertificates(_ pem: String) -> [SecCertificate]` として `Configuration.swift` に追加する。アルゴリズムは以下:
-  1. PEM 文字列から `-----BEGIN CERTIFICATE-----` から `-----END CERTIFICATE-----` までの各ブロックを正規表現等で抽出する。
-  2. 各ブロックからヘッダー・フッターを除去し、改行を除去して Base64 デコードし DER バイト列を得る。
-  3. `SecCertificateCreateWithData(nil, derData as CFData)` を呼んで `SecCertificate` を生成する。生成できなかった（ `nil` が返った）ブロックはスキップする。
-  4. 生成できた `SecCertificate` の配列を返す。
+- 変換の実装は `private static func parsePEMCertificates(_ pem: String) throws -> [SecCertificate]` として `Configuration.swift` に追加する。アルゴリズムは以下:
+  1. PEM 文字列から `-----BEGIN CERTIFICATE-----` から `-----END CERTIFICATE-----` までの各ブロックを正規表現等で抽出する。ブロックが 1 件も見つからない場合は `SoraError.configurationError` を throw する。
+  2. 各ブロックからヘッダー・フッターを除去し、改行を除去して Base64 デコードし DER バイト列を得る。Base64 デコードに失敗したブロックがあった場合も `SoraError.configurationError` を throw する（部分的な成功を許さず、設定ミスを即座に検出するため）。
+  3. `SecCertificateCreateWithData(nil, derData as CFData)` を呼んで `SecCertificate` を生成する。生成できなかった（ `nil` が返った）ブロックがあった場合も同様に `SoraError.configurationError` を throw する。
+  4. 全てのブロックが正常に変換できた場合、生成できた `SecCertificate` の配列を返す。
 
 **変換失敗時の挙動**:
 
 - `caCertificate` が `nil` の場合は `nil` を返し（後方互換、エラーなし）、システム CA による検証を行う。
-- `caCertificate` が非 `nil` だが有効な証明書を 1 つも含まない（不正な PEM 形式・空文字列等）の場合は `SoraError.configurationError` を throw する。この throw は接続時（ `connect()` の処理中）に発生し、 connect のコールバック（ `handler: (MediaChannel?, Error?) -> Void` ）にエラーとして伝播される。
+- `caCertificate` が非 `nil` だが有効な証明書を 1 つも含まない、またはいずれかのブロックで抽出・デコードに失敗した場合は `SoraError.configurationError` を throw する。部分的な成功は許さず、全ブロックの変換成功を要求する。この throw は接続時（ `connect()` の処理中）に発生し、 connect のコールバック（ `handler: (MediaChannel?, Error?) -> Void` ）にエラーとして伝播される。
 
-**配線（両経路への伝播）**:
+**配線（0020 / 0021 の担当範囲）**:
 
-- WebSocket 経路（ 0020 の担当範囲）: `SignalingChannel.setUpWebSocketChannel` の呼び出し元（ `connect` / `redirect` ）で `try configuration.parsedCACertificates()` を呼び出し、結果を `setUpWebSocketChannel` の引数として渡す。 throw 時はエラーを `disconnect(error:reason:)` 経由で接続コールバックに伝播させること。
-- TURN-TLS 経路（ 0021 の担当範囲）: `PeerChannel.swift` 行 822 の `createNativePeerChannel` 呼び出し前に `try configuration.parsedCACertificates()` を呼び出し、結果の `[SecCertificate]?` を `caCertificates:` 引数として渡す。 throw 時は同様に接続コールバックに伝播させること。
-- 本 issue のスコープはプロパティ追加・変換関数の実装・ `SoraError.configurationError` 追加のみとし、各経路への引数追加と throw 伝播の実装は 0020 / 0021 で行う。
+本 issue では `parsedCACertificates()` を提供するのみで、各経路への配線は行わない。以下の配線は 0020 / 0021 で行う:
+
+- WebSocket 経路（0020）: `SignalingChannel.setUpWebSocketChannel` の呼び出し元で `try configuration.parsedCACertificates()` を呼び出し、結果を引数として渡す
+- TURN-TLS 経路（0021）: `PeerChannel.createNativePeerChannel` 呼び出し前に `try configuration.parsedCACertificates()` を呼び出し、結果の `[SecCertificate]?` を引数として渡す
 
 ## テスト方針
 
@@ -97,7 +94,7 @@
 - `private static func parsePEMCertificates(_ pem: String) -> [SecCertificate]` が実装されていること。
 - `SoraError` に `case configurationError(reason: String)` が追加され、 `LocalizedError.errorDescription` にも対応する `case` が追加されていること。
 - `caCertificate` が `nil` の場合は既存の動作が変わらないこと（後方互換）。
-- `caCertificate` が不正な PEM の場合は `connect()` コールバックに `SoraError.configurationError` が渡されること（ 0020 / 0021 で配線が完了した後に確認可能）。
+- `caCertificate` が不正な PEM の場合に `SoraError.configurationError` が throw されること（実際の `connect()` への伝播は 0020 / 0021 で配線完了後に確認可能）。
 - テスト方針に記載したテストがすべて通ること。
 - `CHANGES.md` の `develop` セクションに以下を追記すること:
   ```
