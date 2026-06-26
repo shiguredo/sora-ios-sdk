@@ -306,8 +306,11 @@ extension Configuration {
 
   /// PEM 文字列から SecCertificate の配列を生成する
   private static func parsePEMCertificates(_ pem: String) throws -> [SecCertificate] {
-    // PEM ブロックを抽出
-    let pattern = "-----BEGIN CERTIFICATE-----\\s*([^-]+)\\s*-----END CERTIFICATE-----"
+    // PEM ブロックを非貪欲マッチで抽出する。
+    // `[\s\S]*?` により BEGIN に対応する最初の END までを取得する。
+    // これにより複数証明書連結時でもブロック単位の抽出が可能で、
+    // URL-safe Base64（ハイフンを含む）にも対応する。
+    let pattern = "-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----"
     guard let regex = try? NSRegularExpression(pattern: pattern) else {
       throw SoraError.configurationError(reason: "failed to create PEM regex")
     }
@@ -322,7 +325,8 @@ extension Configuration {
       guard let base64Range = Range(match.range(at: 1), in: pem) else {
         throw SoraError.configurationError(reason: "failed to extract PEM block")
       }
-      let base64 = String(pem[base64Range]).replacingOccurrences(of: "\n", with: "")
+      let base64 = String(pem[base64Range])
+        .components(separatedBy: .whitespacesAndNewlines).joined()
       guard let derData = Data(base64Encoded: base64) else {
         throw SoraError.configurationError(reason: "failed to decode Base64 in PEM block")
       }
