@@ -14,7 +14,7 @@
 - [CHANGE] ログ出力時にクレデンシャル情報をマスクするようにする
   - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
   - @t-miya
-- [UPDATE] libwebrtc m150.7871.2.1 に上げる
+- [UPDATE] libwebrtc m150.7871.3.0 に上げる
   - @t-miya
 - [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
   - 音声入力処理のバイパス追加に伴い、接続単位での管理が必要となったため
