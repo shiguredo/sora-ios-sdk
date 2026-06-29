@@ -40,9 +40,9 @@ sora-js-sdk の `.github/workflows/deploy-apidoc.yml` を参考に、Jazzy + mac
 
 - workflow `name: deploy-apidoc`
 - トリガー
-  - `push: branches: [master]`（リリース時に `release/x.y.z` を `master` へマージするタイミングで発火）
-  - `workflow_dispatch`（手動発火）
-  - `paths-ignore` は設定しない（master への push はリリース時のみで頻度が低く、ドキュメント生成以外の変更で発火するリスクが小さいため）
+  - `push: branches: [master]`（develop でマージした変更を master に cherry-pick して push するタイミングで発火）
+  - `workflow_dispatch`（手動発火。再実行や master push 前の試行に使う）
+  - `paths-ignore` は設定しない（master への push は cherry-pick によるワークフロー・ドキュメント変更が中心で頻度が低く、ドキュメント生成以外の変更で発火するリスクが小さいため）
 - `permissions: contents: read`
 - `concurrency: { group: pages, cancel-in-progress: false }`（GitHub Pages のデプロイ競合を防ぐため。`build.yml` / `ci.yml` には無いが Pages デプロイ固有の要件）
 - `build` ジョブ
@@ -106,9 +106,10 @@ sora-js-sdk の `.github/workflows/deploy-apidoc.yml` を参考に、Jazzy + mac
 
 マージ後の手動作業（PR スコープ外、作業者が実施するもの）:
 
+- develop でマージした変更を master に cherry-pick する
 - GitHub Pages の `source.branch` を `master` に切り替える（`gh api` で実施）
-- `workflow_dispatch` で初回デプロイを実行し、`https://shiguredo.github.io/sora-ios-sdk/` に Jazzy 出力が配信されていることを確認する
-  - master への push トリガーでも自動デプロイされるが、初回は `workflow_dispatch` で確実に発火させて表示確認する
+- master への cherry-pick push で workflow が自動発火し、`https://shiguredo.github.io/sora-ios-sdk/` に Jazzy 出力が配信されていることを確認する
+  - `workflow_dispatch` は再実行や master push 前の試行用の予備として利用可能
 
 ## 解決方法
 
@@ -118,5 +119,7 @@ sora-js-sdk の `.github/workflows/deploy-apidoc.yml` を参考に、Jazzy + mac
    - `- [ADD] API ドキュメントを GitHub Pages で公開するワークフローを追加する`
    - `  - @<担当者>`
    - shiguredo-changelog 規約に従い、担当者行を 2 文字インデントして追加する
-4. PR を出してマージする
-5. マージ後の手動作業は「完了条件」の「マージ後の手動作業」に従う（`source.branch` 切替 → `workflow_dispatch` で初回デプロイ確認）
+4. PR を出して develop にマージする
+5. develop の変更を master に cherry-pick する
+6. GitHub Pages の `source.branch` を `master` に切り替える（`gh api` で実施）
+7. master への push で workflow が自動発火するので、`https://shiguredo.github.io/sora-ios-sdk/` の表示を確認する
