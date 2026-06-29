@@ -105,6 +105,9 @@
 - [ADD] iOS E2E テストを self-hosted macOS runner で CI 実行できるようにする
   - ci.yml を追加し、recvonly 接続テストを iOS Simulator 上で実行する
   - @t-miya
+- [ADD] API ドキュメントを GitHub Pages で公開するワークフローを追加する
+  - deploy-apidoc.yml を追加し、Jazzy で生成した API ドキュメントを GitHub Pages にデプロイする
+  - @voluntas
 
 ## 2026.1.0
 
