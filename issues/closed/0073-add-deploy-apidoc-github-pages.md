@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-26
-- Completed:
+- Completed: 2026-06-29
 - Model: Opus 4.7
 - Branch: feature/add-deploy-apidoc-github-pages
 - Polished: 2026-06-29
@@ -123,3 +123,18 @@ sora-js-sdk の `.github/workflows/deploy-apidoc.yml` を参考に、Jazzy + mac
 5. develop の変更を master に cherry-pick する
 6. GitHub Pages の `source.branch` を `master` に切り替える（`gh api` で実施）
 7. master への push で workflow が自動発火するので、`https://shiguredo.github.io/sora-ios-sdk/` の表示を確認する
+
+以下の対応を行った。
+
+- `.github/workflows/deploy-apidoc.yml` を新規作成し、Jazzy で生成した API ドキュメントを GitHub Pages にデプロイする workflow を追加した
+  - `build` ジョブ: `macos-26` runner で Jazzy をインストールし、API ドキュメントを `docs/` に生成して `actions/upload-pages-artifact` でアップロードする
+  - `deploy` ジョブ: `ubuntu-slim` runner で `actions/deploy-pages` を使って GitHub Pages にデプロイする
+  - `slack_notify` ジョブ: `ubuntu-slim` runner で `shiguredo/github-actions` の slack-notify を使い、`notify_mode: failure_and_fixed` で Pages デプロイの失敗と復旧を通知する
+- `.jazzy.yaml` の `root_url` を `https://sora-ios-sdk.shiguredo.jp/` から `https://shiguredo.github.io/sora-ios-sdk/` に変更した
+- `CHANGES.md` の `## develop` の `### misc` セクションに `[ADD]` エントリを追記した
+
+PR スコープ外の手動作業（マージ後に作業者が実施するもの）:
+
+- develop でマージした変更を master に cherry-pick する
+- GitHub Pages の `source.branch` を `master` に切り替える（`gh api` で実施）
+- master への cherry-pick push で workflow が自動発火し、`https://shiguredo.github.io/sora-ios-sdk/` に Jazzy 出力が配信されていることを確認する
