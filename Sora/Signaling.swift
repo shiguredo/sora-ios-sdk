@@ -1117,6 +1117,11 @@ extension SignalingOffer.Encoding: Codable {
         networkPriority = .medium
       case "high":
         networkPriority = .high
+      default:
+        Logger.warn(
+          type: .signaling,
+          message: "unknown networkPriority value: \(rawNetworkPriority)")
+        networkPriority = nil
       }
     } else {
       networkPriority = nil

@@ -50,6 +50,15 @@ class SignalingOfferEncodingTests: XCTestCase {
     XCTAssertNil(encoding.networkPriority)
   }
 
+  // 空文字列の場合は nil になることを確認する
+  func testDecodeNetworkPriorityEmpty() throws {
+    let json = """
+      {"active": true, "rid": "r0", "networkPriority": ""}
+      """
+    let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
+    XCTAssertNil(encoding.networkPriority)
+  }
+
   // 未知の文字列の場合は nil になることを確認する
   func testDecodeNetworkPriorityUnknown() throws {
     let json = """
@@ -82,14 +91,15 @@ class SignalingOfferEncodingTests: XCTestCase {
     }
   }
 
-  // networkPriority が nil の場合は rtpEncodingParameters.networkPriority も nil になることを確認する
+  // networkPriority が nil の場合は rtpEncodingParameters.networkPriority がデフォルト値のままであることを確認する
   func testRtpEncodingParametersWithNilNetworkPriority() throws {
     let json = """
       {"active": true, "rid": "r0"}
       """
     let encoding = try decoder.decode(SignalingOffer.Encoding.self, from: json.data(using: .utf8)!)
     let params = encoding.rtpEncodingParameters
-    XCTAssertNil(params.networkPriority)
+    let defaultParams = RTCRtpEncodingParameters()
+    XCTAssertEqual(params.networkPriority, defaultParams.networkPriority)
   }
 
   // MARK: - RTCPriority 文字列表現テスト
