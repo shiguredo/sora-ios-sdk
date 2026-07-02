@@ -15,6 +15,7 @@ extension RTCDegradationPreference: CustomStringConvertible {
 }
 
 /// :nodoc:
+/// デバッグログ出力用に RTCPriority の文字列表現を提供する
 extension RTCPriority: CustomStringConvertible {
   public var description: String {
     switch self {
