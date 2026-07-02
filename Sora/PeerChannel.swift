@@ -9,7 +9,7 @@ extension RTCDegradationPreference: CustomStringConvertible {
     case .disabled: "disabled"
     case .maintainFramerate: "maintain-framerate"
     case .maintainResolution: "maintain-resolution"
-    default: "-"
+    @unknown default: "-"
     }
   }
 }
@@ -22,7 +22,7 @@ extension RTCPriority: CustomStringConvertible {
     case .low: "low"
     case .medium: "medium"
     case .high: "high"
-    default: "-"
+    @unknown default: "unknown(\(rawValue))"
     }
   }
 }

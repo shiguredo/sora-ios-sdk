@@ -407,7 +407,7 @@ public struct SignalingOffer {
     /// scalability mode
     public let scalabilityMode: String?
 
-    /// ネットワーク優先度
+    /// ネットワーク優先度 (DiffServ Code Point)
     public let networkPriority: RTCPriority?
 
     /// RTP エンコーディングに関するパラメーター
@@ -1117,8 +1117,6 @@ extension SignalingOffer.Encoding: Codable {
         networkPriority = .medium
       case "high":
         networkPriority = .high
-      default:
-        networkPriority = nil
       }
     } else {
       networkPriority = nil
