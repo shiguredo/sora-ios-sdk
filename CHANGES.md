@@ -11,7 +11,10 @@
 
 ## develop
 
-- [UPDATE] libwebrtc m148.7778.7.0 に上げる
+- [CHANGE] ログ出力時にクレデンシャル情報をマスクするようにする
+  - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
+  - @t-miya
+- [UPDATE] libwebrtc m150.7871.3.0 に上げる
   - @t-miya
 - [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
   - 音声入力処理のバイパス追加に伴い、接続単位での管理が必要となったため
@@ -42,6 +45,9 @@
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
   - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
   - @zztkm
+- [ADD] Configuration にサーバー証明書検証用の CA 証明書を指定する公開プロパティを追加する
+  - `caCertificate` に PEM 文字列を設定可能にし、後続 issue で証明書検証に利用する前提の API を追加する
+  - @t-miya
 - [ADD] Configuration に接続時の音声入力処理のバイパスを設定する `bypassVoiceProcessing` を追加する
   - `RTCAudioDeviceModule.initWithBypassVoiceProcessing(_:)` を接続単位で利用する
   - @t-miya
@@ -63,6 +69,9 @@
   - `SignalingOffer.Encoding` に `networkPriority: RTCPriority?` プロパティを追加する
   - `updateOfferEncodings(_:)` で `networkPriority` を反映する
   - @zztkm
+- [FIX] DataChannel の signaling ラベル受信を契機に WebSocket を切断するようにする
+  - `type: switched` 受信時から DataChannel `signaling` ラベルでのメッセージ受信時に変更する
+  - @t-miya
 - [FIX] `PeerChannel` のクロージャに `[weak self]` を追加し、解放遅延リスクを縮小する
   - statistics コールバック、createClientOfferSDP コールバック、createAnswer setRemoteDescription コールバックに追加する
   - @t-miya
@@ -94,6 +103,15 @@
   - @voluntas
 - [UPDATE] build.yml の xcodebuild build コマンドに `SWIFT_VERSION=6` を追加する
   - @zztkm
+- [ADD] Test にダミー映像キャプチャ DummyVideoCapturer を追加する
+  - 8 色のカラーバーを生成し、実機カメラ不要の E2E テストを可能にする
+  - @t-miya
+- [ADD] iOS E2E テストを self-hosted macOS runner で CI 実行できるようにする
+  - ci.yml を追加し、recvonly 接続テストを iOS Simulator 上で実行する
+  - @t-miya
+- [ADD] API ドキュメントを GitHub Pages で公開するワークフローを追加する
+  - deploy-apidoc.yml を追加し、Jazzy で生成した API ドキュメントを GitHub Pages にデプロイする
+  - @voluntas
 
 ## 2026.1.0
 
