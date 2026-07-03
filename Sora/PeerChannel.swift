@@ -9,7 +9,21 @@ extension RTCDegradationPreference: CustomStringConvertible {
     case .disabled: "disabled"
     case .maintainFramerate: "maintain-framerate"
     case .maintainResolution: "maintain-resolution"
-    default: "-"
+    @unknown default: "-"
+    }
+  }
+}
+
+/// :nodoc:
+/// デバッグログ出力用に RTCPriority の文字列表現を提供する
+extension RTCPriority: CustomStringConvertible {
+  public var description: String {
+    switch self {
+    case .veryLow: "very-low"
+    case .low: "low"
+    case .medium: "medium"
+    case .high: "high"
+    @unknown default: "unknown(\(rawValue))"
     }
   }
 }
@@ -1545,6 +1559,11 @@ extension RTCRtpSender {
         if let value = encoding.scalabilityMode {
           Logger.debug(type: .peerChannel, message: "scalabilityMode: \(value)")
           oldEncoding.scalabilityMode = value
+        }
+
+        if let value = encoding.networkPriority {
+          Logger.debug(type: .peerChannel, message: "networkPriority: \(value)")
+          oldEncoding.networkPriority = value
         }
 
         break

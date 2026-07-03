@@ -220,7 +220,6 @@ public enum SimulcastRequestRid: Sendable {
 public enum SpotlightRid: Sendable {
   /**
      SpotlightRid が設定されていない状態
-  
      変数の型を SpotlightRid? にした場合、 .none が Optional.none と SpotlightRid.none の
      どちらを指しているか分かりにくいという問題がありました。
      この問題を解決するため、変数に値が設定されていない状態を表す .unspecified を定義するとともに、
@@ -408,6 +407,9 @@ public struct SignalingOffer {
     /// scalability mode
     public let scalabilityMode: String?
 
+    /// ネットワーク優先度 (DiffServ Code Point)
+    public let networkPriority: RTCPriority?
+
     /// RTP エンコーディングに関するパラメーター
     public var rtpEncodingParameters: RTCRtpEncodingParameters {
       let params = RTCRtpEncodingParameters()
@@ -426,6 +428,9 @@ public struct SignalingOffer {
         params.scaleResolutionDownTo?.maxHeight = value.maxHeight
       }
       params.scalabilityMode = scalabilityMode
+      if let value = networkPriority {
+        params.networkPriority = value
+      }
       return params
     }
   }
@@ -1075,6 +1080,7 @@ extension SignalingOffer.Encoding: Codable {
     case scaleResolutionDownBy
     case scaleResolutionDownTo
     case scalabilityMode
+    case networkPriority
   }
 
   public init(from decoder: Decoder) throws {
@@ -1099,6 +1105,27 @@ extension SignalingOffer.Encoding: Codable {
     scalabilityMode = try container.decodeIfPresent(
       String.self,
       forKey: .scalabilityMode)
+    if let rawNetworkPriority = try container.decodeIfPresent(
+      String.self, forKey: .networkPriority)
+    {
+      switch rawNetworkPriority {
+      case "very-low":
+        networkPriority = .veryLow
+      case "low":
+        networkPriority = .low
+      case "medium":
+        networkPriority = .medium
+      case "high":
+        networkPriority = .high
+      default:
+        Logger.warn(
+          type: .signaling,
+          message: "unknown networkPriority value: \(rawNetworkPriority)")
+        networkPriority = nil
+      }
+    } else {
+      networkPriority = nil
+    }
   }
 
   public func encode(to encoder: Encoder) throws {

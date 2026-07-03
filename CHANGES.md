@@ -45,6 +45,10 @@
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
   - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
   - @zztkm
+- [ADD] offer の encodings の networkPriority を RTCRtpEncodingParameters に反映する
+  - SignalingOffer.Encoding に networkPriority: RTCPriority? プロパティを追加する
+  - updateOfferEncodings と rtpEncodingParameters で networkPriority を反映する
+  - @t-miya
 - [ADD] Configuration にサーバー証明書検証用の CA 証明書を指定する公開プロパティを追加する
   - `caCertificate` に PEM 文字列を設定可能にし、後続 issue で証明書検証に利用する前提の API を追加する
   - @t-miya
