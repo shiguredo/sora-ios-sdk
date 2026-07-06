@@ -45,6 +45,8 @@
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
   - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
   - @zztkm
+- [ADD] Configuration に H.265 向け映像コーデックパラメーター videoH265Params を追加する
+  - @t-miya
 - [ADD] offer の encodings の networkPriority を RTCRtpEncodingParameters に反映する
   - SignalingOffer.Encoding に networkPriority: RTCPriority? プロパティを追加する
   - updateOfferEncodings と rtpEncodingParameters で networkPriority を反映する

@@ -238,6 +238,10 @@ public struct Configuration {
   /// H264 向け映像コーデックパラメーター
   public var videoH264Params: Encodable?
 
+  /// H265 向け映像コーデックパラメーター
+  /// Sora 側含め実験的機能の段階です。
+  public var videoH265Params: Encodable?
+
   // MARK: - イベントハンドラ
 
   /// WebSocket チャネルに関するイベントハンドラ
