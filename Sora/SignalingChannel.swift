@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Security
 
 /// ストリームの方向を表します。
 /// シグナリングメッセージで使われます。
@@ -106,10 +107,10 @@ class SignalingChannel {
     return uniqueUrls
   }
 
-  private func setUpWebSocketChannel(url: URL, proxy: Proxy?)
+  private func setUpWebSocketChannel(url: URL, proxy: Proxy?, caCertificates: [SecCertificate]?)
     -> URLSessionWebSocketChannel
   {
-    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy)
+    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy, caCertificates: caCertificates)
 
     // 接続成功時
     ws.internalHandlers.onConnect = { [weak self] webSocketChannel in
@@ -209,11 +210,25 @@ class SignalingChannel {
     onConnect = handler
     state = .connecting
 
+    // CA 証明書のパース
+    let caCertificates: [SecCertificate]?
+    do {
+      caCertificates = try configuration.parsedCACertificates()
+    } catch {
+      Logger.error(
+        type: .signalingChannel,
+        message: "failed to parse CA certificate: \(error.localizedDescription)")
+      state = .disconnected
+      onConnect?(error)
+      onConnect = nil
+      return
+    }
+
     let urlCandidates = unique(urls: configuration.urlCandidates)
     Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
     for url in urlCandidates {
       let ws = setUpWebSocketChannel(
-        url: url, proxy: configuration.proxy)
+        url: url, proxy: configuration.proxy, caCertificates: caCertificates)
       Logger.info(
         type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
       ws.connect(delegateQueue: queue)
@@ -239,8 +254,20 @@ class SignalingChannel {
       return
     }
 
+    // CA 証明書のパース
+    let caCertificates: [SecCertificate]?
+    do {
+      caCertificates = try configuration.parsedCACertificates()
+    } catch {
+      Logger.error(
+        type: .signalingChannel,
+        message: "failed to parse CA certificate: \(error.localizedDescription)")
+      disconnect(error: error, reason: .signalingFailure)
+      return
+    }
+
     let ws = setUpWebSocketChannel(
-      url: newUrl, proxy: configuration.proxy)
+      url: newUrl, proxy: configuration.proxy, caCertificates: caCertificates)
     ws.connect(delegateQueue: queue)
   }
 
