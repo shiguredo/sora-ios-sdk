@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import WebRTC
 
 /// :nodoc:
@@ -833,12 +834,28 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
     // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
+
+    // CA 証明書のパース
+    // 既に SignalingChannel.connect() でパース成功しているため、
+    // この throw パスは実運用では到達しない防御的コードである
+    let caCertificates: [SecCertificate]?
+    do {
+      caCertificates = try configuration.parsedCACertificates()
+    } catch {
+      lock.unlock()
+      disconnect(
+        error: error,
+        reason: .signalingFailure)
+      return
+    }
+
     nativeChannel =
       nativePeerChannelFactory
       .createNativePeerChannel(
         configuration: webRTCConfiguration,
         constraints: webRTCConfiguration.constraints,
         proxy: configuration.proxy,
+        caCertificates: caCertificates,
         delegate: self)
     guard let nativeChannel else {
       // connect() で取得した初期ロックをここで解放しないと、

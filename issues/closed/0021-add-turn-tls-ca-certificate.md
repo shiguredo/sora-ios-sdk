@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-07-08
 - Model: Opus 4.8
 - Branch: feature/add-turn-tls-ca-certificate
 - Polished: 2026-07-08
@@ -106,3 +106,53 @@ libwebrtc から `verifyChain(_:)` で渡される DER チェーンは、TURN �
   ```
 
 ## 解決方法
+
+### IOSCertificateVerifier.swift
+
+`convenience init(caCertificates: [SecCertificate]?)` を追加し、CA 証明書ありの場合は評価ロジックを内包する evaluator クロージャーを `init(evaluator:)` に渡す。CA 証明書なし（nil または空）の場合はデフォルト evaluator（システム CA 検証）を使用する。
+
+`evaluate(_ certificateChain: [SecCertificate], caCertificates: [SecCertificate])` を追加し、以下の評価パイプラインを実装:
+1. `rootAnchorCertificates(from:)` で自己署名証明書のみをアンカーとして抽出
+2. `SecPolicyCreateSSL` + `SecTrustCreateWithCertificates` で SecTrust を構築
+3. `SecTrustSetAnchorCertificates` + `SecTrustSetAnchorCertificatesOnly(true)` で指定 CA のみを信頼アンカーに設定
+4. `SecTrustEvaluateWithError` で評価し、成功時は debug ログ、失敗時は CFError をログ出力
+5. 各 API の OSStatus をチェックし失敗時は `false` を返す
+
+`rootAnchorCertificates(from:)` は 0020 の `URLSessionWebSocketChannel.rootAnchorCertificates(from:)` と同一ロジックを個別実装。
+
+クラス Doc コメントを「システム CA で証明書チェーンを検証する」から「システム CA またはユーザー指定 CA で証明書チェーンを検証する」に更新。
+
+### NativePeerChannelFactory.swift
+
+- `createNativePeerChannel` に `caCertificates: [SecCertificate]? = nil` 引数を追加
+- `createCertificateVerifier` に `caCertificates: [SecCertificate]?` 引数を追加し、`IOSCertificateVerifier(caCertificates: caCertificates)` を呼ぶ
+
+### PeerChannel.swift
+
+- `import Security` を追加
+- `createAndSendAnswer` 内で `configuration.parsedCACertificates()` を `try` で呼び出し、結果を `createNativePeerChannel` に渡す
+- throw 時は `lock.unlock()` → `disconnect(error:reason:)` で伝播
+
+### Configuration.swift
+
+`caCertificate` の Swift Doc コメントに制約を追記:
+- ホスト名検証は行われず、証明書チェーンの署名検証のみが実施される
+- TURN-TLS では TURN サーバーが完全なチェーンを送出する必要がある
+
+### テスト
+
+`IOSCertificateVerifierTests.swift` を新規作成。0020 と同一の Base64 DER 証明書を再利用し、4 ケースを追加:
+- 指定 CA アンカーで署名済みチェーン → `true`
+- 異なる CA アンカーで署名済みチェーン → `false`
+- `caCertificates: nil` で自己署名チェーン → `false`（システム CA で信頼されない）
+- `caCertificates: []` で自己署名チェーン → `false`（空配列は nil と同様にシステム CA フォールバック）
+
+### 実機確認
+
+プライベート CA（ルート CA + 中間 CA + 葉証明書）で署名した `turns:` サーバーに対し、ルート CA の PEM を `caCertificate` に指定して接続。以下のログを確認:
+
+```
+TURN-TLS trust evaluate succeeded
+```
+
+CA 証明書未指定時はシステム CA 検証にフォールバックし、公的 CA で署名されたサーバーに接続できることを確認。

@@ -45,6 +45,8 @@
   - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
   - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
   - @zztkm
+- [ADD] TURN-TLS でユーザー指定の CA 証明書を検証できるようにする
+  - @t-miya
 - [ADD] WebSocket シグナリングでユーザー指定の CA 証明書を検証できるようにする
   - @t-miya
 - [ADD] Configuration に H.265 向け映像コーデックパラメーター videoH265Params を追加する
