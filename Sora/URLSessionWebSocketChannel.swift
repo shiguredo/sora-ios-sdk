@@ -383,6 +383,9 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
   }
 
   /// 指定された証明書群から自己署名の root CA のみを抽出する
+  ///
+  /// root CA と中間 CA のみが含まれる証明書チェーンを想定しているため、
+  /// subject と issuer 比較の簡易的なチェックにより抽出する
   static func rootAnchorCertificates(from certificates: [SecCertificate]) -> [SecCertificate] {
     certificates.filter { certificate in
       guard
