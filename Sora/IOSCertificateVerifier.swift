@@ -15,8 +15,10 @@ final class IOSCertificateVerifier: NSObject, RTCSSLCertificateVerifier {
 
   /// ユーザー指定 CA 証明書をアンカーとして使う verifier を生成する
   ///
-  /// `caCertificates` が非 nil かつ非空の場合は指定 CA のみを信頼アンカーとし、
-  /// nil または空の場合はシステム CA による既定の検証を行う（後方互換性維持）
+  /// `caCertificates` が非 nil かつ非空の場合は、指定された証明書のうち
+  /// 自己署名のルート CA のみを信頼アンカーとして証明書チェーンを検証する。
+  /// nil または空の場合は、既存のデフォルト evaluator と同じく
+  /// システム CA による証明書チェーン検証を行う
   convenience init(caCertificates: [SecCertificate]?) {
     if let caCertificates, !caCertificates.isEmpty {
       self.init(evaluator: { chain in
