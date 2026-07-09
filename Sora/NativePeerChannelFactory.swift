@@ -71,9 +71,12 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     configuration: WebRTCConfiguration,
     constraints: MediaConstraints,
     proxy: Proxy? = nil,
+    caCertificates: [SecCertificate]? = nil,
     delegate: RTCPeerConnectionDelegate?
   ) -> RTCPeerConnection? {
-    let certificateVerifier = createCertificateVerifier(configuration: configuration)
+    let certificateVerifier = createCertificateVerifier(
+      configuration: configuration,
+      caCertificates: caCertificates)
     if let proxy {
       // proxy ありの overload は certificateVerifier が nullable のため、
       // verifier が不要な場合は nil をそのまま渡せる。
@@ -107,10 +110,11 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   }
 
   private func createCertificateVerifier(
-    configuration: WebRTCConfiguration
+    configuration: WebRTCConfiguration,
+    caCertificates: [SecCertificate]?
   ) -> RTCSSLCertificateVerifier? {
     if configuration.usesVerifiedTURNTLS {
-      return IOSCertificateVerifier()
+      return IOSCertificateVerifier(caCertificates: caCertificates)
     }
 
     return nil

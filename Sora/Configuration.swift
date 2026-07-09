@@ -218,7 +218,18 @@ public struct Configuration {
   public var proxy: Proxy?
 
   /// サーバー証明書検証に使用する CA 証明書の PEM 文字列。
+  ///
+  /// 指定するとシステム CA を使用せず、指定 CA のみを信頼アンカーとして
+  /// WebSocket シグナリングおよび TURN-TLS 接続のサーバー証明書を検証する。
   /// nil を指定するとシステム CA による既定の検証を行う。
+  ///
+  /// ## 制約
+  ///
+  /// - TURN-TLS ではホスト名検証は行われない。
+  ///   指定 CA による証明書チェーンの署名検証のみが実施される。
+  ///   （WebSocket は URLSession によりホスト名検証が行われる）
+  /// - TURN-TLS では、 TURN サーバーが葉証明書と中間証明書を含む
+  ///   完全なチェーンを送出する必要がある。
   public var caCertificate: String?
 
   /// 転送フィルターの設定
