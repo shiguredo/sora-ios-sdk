@@ -14,6 +14,8 @@
 - [CHANGE] ログ出力時にクレデンシャル情報をマスクするようにする
   - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
   - @t-miya
+- [UPDATE] SwiftLint に force_unwrapping / implicitly_unwrapped_optional ルールを追加する
+  - @t-miya
 - [UPDATE] libwebrtc m150.7871.3.0 に上げる
   - @t-miya
 - [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする

@@ -19,7 +19,7 @@ public enum Utilities {
   }
 
   public final class Stopwatch {
-    private var timer: Timer!
+    private var timer: Timer?
     private var seconds: Int
     private var handler: (String) -> Void
 
@@ -41,12 +41,15 @@ public enum Utilities {
 
     public func run() {
       seconds = 0
+      guard let timer else {
+        return
+      }
       RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
       timer.fire()
     }
 
     public func stop() {
-      timer.invalidate()
+      timer?.invalidate()
       seconds = 0
     }
   }

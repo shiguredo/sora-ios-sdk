@@ -318,6 +318,8 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
   ) {
     // 呼び出し元で非 nil が保証されている
+    // guard let による分岐直後のため安全
+    // swiftlint:disable:next force_unwrapping
     let caCertificates = self.caCertificates!
     guard let serverTrust = challenge.protectionSpace.serverTrust else {
       let message =

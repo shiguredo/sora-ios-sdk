@@ -13,6 +13,8 @@ public enum TLSSecurityPolicy: Sendable {
   case insecure
 
   var nativeValue: RTCTlsCertPolicy {
+    // Dictionary の定義上、全 case が網羅されているため安全
+    // swiftlint:disable:next force_unwrapping
     tlsSecurityPolicyTable[self]!
   }
 }

@@ -146,9 +146,9 @@ class SignalingChannel {
 
       weakSelf.state = .connected
 
-      if weakSelf.onConnect != nil {
+      if let onConnect = weakSelf.onConnect {
         Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
-        weakSelf.onConnect!(nil)
+        onConnect(nil)
       }
     }
 
@@ -326,7 +326,7 @@ class SignalingChannel {
         break
       }
 
-      let str = String(data: data, encoding: .utf8)!
+      let str = String(data: data, encoding: .utf8) ?? ""
       Logger.debug(type: .signalingChannel, message: str)
       ws.send(message: .text(str))
     } catch {

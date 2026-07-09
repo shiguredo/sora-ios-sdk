@@ -8,13 +8,21 @@ func currentMachineName() -> String {
     .allocate(capacity: machineKey.utf8CString.count)
   _ = machineKeyPtr.initialize(from: machineKey.utf8CString)
   var machineNameLen = 0
+  // allocate 直後の UnsafeMutableBufferPointer は非 nil が保証される
+  // swiftlint:disable:next force_unwrapping
   sysctlbyname(machineKeyPtr.baseAddress!, nil, &machineNameLen, nil, 0)
   let machineNamePtr = UnsafeMutableBufferPointer<Int8>
     .allocate(capacity: machineNameLen)
   sysctlbyname(
+    // allocate 直後の UnsafeMutableBufferPointer は非 nil が保証される
+    // swiftlint:disable:next force_unwrapping
     machineKeyPtr.baseAddress!,
+    // allocate 直後の UnsafeMutableBufferPointer は非 nil が保証される
+    // swiftlint:disable:next force_unwrapping
     machineNamePtr.baseAddress!,
     &machineNameLen, nil, 0)
+  // allocate 直後の UnsafeMutableBufferPointer は非 nil が保証される
+  // swiftlint:disable:next force_unwrapping
   let machineName = String.init(cString: machineNamePtr.baseAddress!)
   machineKeyPtr.deallocate()
   machineNamePtr.deallocate()

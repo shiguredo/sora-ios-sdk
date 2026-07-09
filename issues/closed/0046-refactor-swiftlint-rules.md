@@ -2,10 +2,10 @@
 
 - Priority: Low
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-07-08
 - Model: Sonnet 4.6
 - Branch: feature/refactor-swiftlint-rules
-- Polished: 2026-06-06
+- Polished: 2026-07-08
 
 ## 目的
 
@@ -71,7 +71,37 @@ PR #337 の `[weak self]` 漏れを検知する標準 SwiftLint ルールは Swi
 
 ```
 - [UPDATE] SwiftLint に force_unwrapping / implicitly_unwrapped_optional ルールを追加する
-  - @voluntas
+  - @t-miya
 ```
 
 ## 解決方法
+
+### `.swiftlint.yml`
+
+`opt_in_rules` を追加し、`force_unwrapping` と `implicitly_unwrapped_optional` を有効化した。IUO の `mode: all_except_iboutlets` で `@IBOutlet` を自動除外。
+
+### 違反修正
+
+48 件の既存違反を修正した（17 ファイル）。修正方針:
+
+| 種類 | 件数 | 対応 |
+|---|---|---|
+| PikerTable 参照 (`left(other:)!`) | 4 | 抑制（全 case 網羅のため安全） |
+| Unsafe ポインタ `baseAddress!` | 5 | 抑制（allocate 直後で非 nil 保証） |
+| `error!`（guard else 節内） | 10 | 抑制（guard の else 節で非 nil 保証） |
+| `answer!` / `sdp!`（コールバック内） | 9 | 抑制（guard error == nil 直後で安全） |
+| IUO（`Timer!`, `RTCCameraVideoCapturer!`） | 2 | 抑制（init で初期化保証） |
+| `String(data:encoding:)!` | 1 | `?? "-"` で安全に置換 |
+| `capturer.frameRate!` | 1 | `guard let` で置換 |
+| `timer!` | 1 | `guard let` で置換 |
+| `onConnect!(nil)` | 1 | `if let` でラップ |
+| 条件式 `window!.isKeyWindow` | 1 | `guard let` で置換 |
+| `Bundle.main...!` | 1 | `guard let` で置換 |
+| その他 init 内 IUO | 2 | 抑制（init で初期化保証） |
+
+抑制コメントは前行に日本語の理由を記述し、`// swiftlint:disable:next <rule>` 行にはルール名のみを記述した。
+
+### 確認
+
+- 修正前: 48 violations
+- 修正後: `swiftlint --strict` exit code 0, 40 tests 0 failures

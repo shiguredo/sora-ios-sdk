@@ -15,6 +15,8 @@ public enum ICETransportPolicy: Sendable {
   case all
 
   var nativeValue: RTCIceTransportPolicy {
+    // PairTable の定義上、全 case が網羅されているため安全
+    // swiftlint:disable:next force_unwrapping
     iceTransportPolicyTable.right(other: self)!
   }
 }

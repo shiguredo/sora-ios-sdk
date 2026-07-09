@@ -35,6 +35,8 @@ extension Role: Codable {
 extension Role: CustomStringConvertible {
   /// 文字列表現を返します。
   public var description: String {
+    // PairTable の定義上、全 case が網羅されているため安全
+    // swiftlint:disable:next force_unwrapping
     roleTable.left(other: self)!
   }
 }
