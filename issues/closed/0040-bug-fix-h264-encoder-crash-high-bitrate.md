@@ -2,7 +2,7 @@
 
 - Priority: High
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-07-08
 - Model: Sonnet 4.6
 - Branch: feature/fix-h264-encoder-crash-high-bitrate
 - Polished: 2026-06-06
@@ -74,3 +74,13 @@ libwebrtc ERROR: (RTCVideoEncoderH264.mm:769): H264 encode failed with code: -12
 - [FIX] Configuration.videoBitRate に大きい値を設定すると H.264 エンコーダーがクラッシュする問題を修正する
   - @voluntas
 ```
+
+## 解決方法
+
+m150.7871.3.0（現在の SDK が使用する libwebrtc）で再現確認を実施した。
+
+- 環境: iPhone 14 / iOS 26.5.2
+- 設定: H.264 + videoBitRate=30000 kbps、解像度 hd720p（デフォルト）
+- 結果: クラッシュせず、正常に接続・エンコード可能
+
+m148 → m150 の libwebrtc 更新により `RTCVideoEncoderH264.mm` のエンコードエラーハンドリングが改善され、解決済みと判断する。SDK 側のコード変更は不要。CHANGES.md への追記も不要。
