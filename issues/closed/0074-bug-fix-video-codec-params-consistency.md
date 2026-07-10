@@ -2,7 +2,7 @@
 
 - Priority: High
 - Created: 2026-07-06
-- Completed:
+- Completed: 2026-07-10
 - Model: GPT-5
 - Branch: feature/fix-video-codec-params-consistency
 - Polished: 2026-07-10
@@ -45,13 +45,28 @@ h264Params: configuration.videoCodec == .h264 ? configuration.videoH264Params : 
 
 ### Signaling.swift
 
-エンコード時に `videoCodec` チェックを追加する（0011 の H.265 と同じパターン）:
+エンコード時のガードを 2 層とも修正する。
+
+内側のエンコードガード（0011 の H.265 と同じパターン）:
 
 ```swift
 if let vp9Params, videoCodec == .vp9 {
 if let av1Params, videoCodec == .av1 {
 if let h264Params, videoCodec == .h264 {
 ```
+
+外側の video コンテナ生成条件も合わせて修正する。現状は params が非 nil であれば codec にかかわらずコンテナを生成してしまうため、codec 一致時のみ有効な params フラグを算出してから判定する:
+
+```swift
+let hasMatchingParams = (videoCodec == .vp9 && vp9Params != nil)
+    || (videoCodec == .av1 && av1Params != nil)
+    || (videoCodec == .h264 && h264Params != nil)
+    || (videoCodec == .h265 && h265Params != nil)
+
+if videoCodec != .default || videoBitRate != nil || hasMatchingParams {
+```
+
+これにより、`videoCodec == .default` で `vp9Params` が非 nil の場合でも空の `video: {}` が生成されない。
 
 ### videoCodec == .default の扱い
 
@@ -65,16 +80,16 @@ if let h264Params, videoCodec == .h264 {
 
 モック・スタブは使用しない。既存の `SignalingConnectEncodingTests` に以下のケースを追加する。
 
-- `videoCodec == .vp9` + `videoVp9Params` 設定 → `vp9_params` が含まれる
-- `videoCodec == .h264` + `videoVp9Params` 設定 → `vp9_params` が含まれない
-- `videoCodec == .default` + `videoVp9Params` 設定 → `vp9_params` が含まれない
-- 同様のテストを AV1 / H.264 についても追加
-- H.265 のコード不一致テストは 0011 で実装済みのため不要
+- `videoCodec == .vp9` + `videoVp9Params` 設定 → `video.codec_type: "VP9"` および `video.vp9_params` が含まれる
+- `videoCodec == .h264` + `videoVp9Params` 設定 → `video` キー内に `vp9_params` が含まれない
+- `videoCodec == .default` + `videoVp9Params` 設定 → `video` キー自体が存在しない（空の `video: {}` が生成されない）
+- 同様のテストを AV1 / H.264 / H.265 についても追加
+- H.265 のコード一致テストは 0011 で実装済み。不一致テストは本 issue で追加する
 
 ## 完了条件
 
 - VP9 / AV1 / H.264 / H.265 すべてで `videoCodec` と一致する場合のみ params が送信されること
-- `videoCodec == .default` では codec 固有 params が一切送信されないこと
+- `videoCodec == .default` では codec 固有 params が一切送信されず、`video` キー自体も生成されないこと
 - テストがすべて通ること
 - `CHANGES.md` の `develop` セクションに以下を追記すること:
   ```
@@ -83,3 +98,26 @@ if let h264Params, videoCodec == .h264 {
   ```
 
 ## 解決方法
+
+### PeerChannel.swift
+
+VP9 / AV1 / H.264 に 0011 の H.265 と同じ codec ガードを追加した。
+
+### Signaling.swift
+
+2 層とも修正した:
+- 外側条件: `hasMatchingParams` を導入し、codec 一致時のみ video コンテナを生成
+- 内側エンコード: VP9 / AV1 / H.264 に `videoCodec == .xxx` ガードを追加（H.265 は既存）
+
+### テスト
+
+`SignalingConnectEncodingTests` に 12 ケース（3 per codec × 4 codec）を追加:
+- codec 一致時: `params` が含まれる
+- `.default` 時: `video` キー自体が存在しない
+- codec 不一致時: `params` が含まれない
+
+### 確認
+
+- `swiftlint --strict`: 0 violations
+- `swift format lint --strict`: 通過
+- `xcodebuild test`: 49 tests, 0 failures

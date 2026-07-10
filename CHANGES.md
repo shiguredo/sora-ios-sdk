@@ -77,6 +77,8 @@
     - PTS が無効な場合は単調時刻でフォールバックして間引く
   - 画面キャプチャには ReplayKit を利用する
   - @t-miya
+- [FIX] videoCodec と不一致の codec 固有パラメーターが送信される問題を修正する
+  - @t-miya
 - [FIX] DataChannel の signaling ラベル受信を契機に WebSocket を切断するようにする
   - `type: switched` 受信時から DataChannel `signaling` ラベルでのメッセージ受信時に変更する
   - @t-miya

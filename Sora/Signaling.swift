@@ -955,9 +955,14 @@ extension SignalingConnect: Codable {
     try container.encodeIfPresent(forwardingFilters, forKey: .forwarding_filters)
 
     if videoEnabled {
-      if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil
-        || h264Params != nil || h265Params != nil
-      {
+      // codec 一致時のみ有効な params を判定する
+      let hasMatchingParams =
+        (videoCodec == .vp9 && vp9Params != nil)
+        || (videoCodec == .av1 && av1Params != nil)
+        || (videoCodec == .h264 && h264Params != nil)
+        || (videoCodec == .h265 && h265Params != nil)
+
+      if videoCodec != .default || videoBitRate != nil || hasMatchingParams {
         var videoContainer =
           container
           .nestedContainer(
@@ -969,15 +974,15 @@ extension SignalingConnect: Codable {
         try videoContainer.encodeIfPresent(
           videoBitRate,
           forKey: .bit_rate)
-        if let vp9Params {
+        if let vp9Params, videoCodec == .vp9 {
           let vp9ParamsEnc = videoContainer.superEncoder(forKey: .vp9_params)
           try vp9Params.encode(to: vp9ParamsEnc)
         }
-        if let av1Params {
+        if let av1Params, videoCodec == .av1 {
           let av1ParamsEnc = videoContainer.superEncoder(forKey: .av1_params)
           try av1Params.encode(to: av1ParamsEnc)
         }
-        if let h264Params {
+        if let h264Params, videoCodec == .h264 {
           let h264ParamsEnc = videoContainer.superEncoder(forKey: .h264_params)
           try h264Params.encode(to: h264ParamsEnc)
         }
