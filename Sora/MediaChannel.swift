@@ -169,6 +169,8 @@ public final class MediaChannel {
 
   /// ピアチャネル
   var peerChannel: PeerChannel {
+    // init で必ず初期化されるため安全
+    // swiftlint:disable:next force_unwrapping
     _peerChannel!
   }
 
@@ -203,6 +205,8 @@ public final class MediaChannel {
   }
 
   private var connectionTimer: ConnectionTimer {
+    // init で必ず初期化されるため安全
+    // swiftlint:disable:next force_unwrapping
     _connectionTimer!
   }
 
@@ -248,6 +252,8 @@ public final class MediaChannel {
     _connectionTimer = ConnectionTimer(
       monitors: [
         .signalingChannel(signalingChannel),
+        // 同一 init 内で初期化済みのため安全
+        // swiftlint:disable:next force_unwrapping
         .peerChannel(_peerChannel!),
       ],
       timeout: configuration.connectionTimeout)

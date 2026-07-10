@@ -109,6 +109,11 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       return
     }
 
+    guard let capturerFrameRate = capturer.frameRate else {
+      completionHandler(SoraError.cameraError(reason: "frameRate should not be nil"))
+      return
+    }
+
     // 反対の position を持つ CameraVideoCapturer を取得します。
     guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front)
     else {
@@ -123,7 +128,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
         width: dimension.width,
         height: dimension.height,
         for: flip.device,
-        frameRate: capturer.frameRate!)
+        frameRate: capturerFrameRate)
     else {
       completionHandler(
         SoraError.cameraError(
@@ -131,7 +136,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       return
     }
 
-    guard let frameRate = CameraVideoCapturer.maxFrameRate(capturer.frameRate!, for: format)
+    guard let frameRate = CameraVideoCapturer.maxFrameRate(capturerFrameRate, for: format)
     else {
       completionHandler(
         SoraError.cameraError(
@@ -183,7 +188,11 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   /// フォーマット
   public private(set) var format: AVCaptureDevice.Format?
 
+  // init で必ず初期化されるため安全
+  // swiftlint:disable:next implicitly_unwrapped_optional
   private var native: RTCCameraVideoCapturer!
+  // init で必ず初期化されるため安全
+  // swiftlint:disable:next implicitly_unwrapped_optional
   private var nativeDelegate: CameraVideoCapturerDelegate!
 
   /// 引数に指定した device を利用して CameraVideoCapturer を初期化します。

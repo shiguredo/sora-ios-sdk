@@ -340,7 +340,10 @@ class VideoViewContentView: UIView {
   private var allowsRender: Bool {
     // 前述のエラーはキーウィンドウ外での描画でも発生するので、
     // ビューがキーウィンドウに表示されている場合のみ描画を許可する
-    !(isHidden || window == nil || !window!.isKeyWindow)
+    guard let window else {
+      return false
+    }
+    return !isHidden && window.isKeyWindow
   }
 
   private var renderingContentMode: UIView.ContentMode {

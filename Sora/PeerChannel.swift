@@ -369,6 +369,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     if error != nil {
       Logger.error(
         type: .peerChannel,
+        // nil チェック直後のため安全
+        // swiftlint:disable:next force_unwrapping
         message: "failed connecting to signaling channel (\(error!.localizedDescription))")
       disconnect(
         error: SoraError.peerChannelError(reason: "failed connecting to signaling channel"),
@@ -667,6 +669,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
+            // guard の else 節で非 nil が保証されるため安全
+            // swiftlint:disable:next force_unwrapping
             message: "CameraVideoCapturer.stop failed =>  \(error!)")
           return
         }
@@ -675,6 +679,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           guard error == nil else {
             Logger.debug(
               type: .peerChannel,
+              // guard の else 節で非 nil が保証されるため安全
+              // swiftlint:disable:next force_unwrapping
               message: "CameraVideoCapturer.start failed =>  \(error!)")
             return
           }
@@ -689,6 +695,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
+            // guard の else 節で非 nil が保証されるため安全
+            // swiftlint:disable:next force_unwrapping
             message: "CameraVideoCapturer.start failed =>  \(error!)")
           return
         }
@@ -709,6 +717,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           if error != nil {
             Logger.debug(
               type: .peerChannel,
+              // nil チェック直後のため安全
+              // swiftlint:disable:next force_unwrapping
               message: "failed to stop CameraVideoCapturer =>  \(error!)")
           }
         }
@@ -741,6 +751,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard error == nil else {
         Logger.debug(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed setting remote description: (\(error!.localizedDescription)")
         handler(nil, error)
         return
@@ -766,6 +778,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
+            // guard の else 節で非 nil が保証されるため安全
+            // swiftlint:disable:next force_unwrapping
             message: "failed creating native answer (\(error!.localizedDescription)")
           handler(nil, error)
           return
@@ -779,6 +793,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "did create answer")
 
         Logger.debug(type: .peerChannel, message: "try setting local description")
+        // guard error == nil 直後のため安全
+        // swiftlint:disable:next force_unwrapping
         nativeChannel.setLocalDescription(answer!) { error in
           guard error == nil else {
             Logger.debug(
@@ -792,10 +808,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             message: "did set local description")
           Logger.debug(
             type: .peerChannel,
+            // guard error == nil 直後のため安全
+            // swiftlint:disable:next force_unwrapping
             message: "\(answer!.sdpDescription)")
           Logger.debug(
             type: .peerChannel,
             message: "did create answer")
+          // guard error == nil 直後のため安全
+          // swiftlint:disable:next force_unwrapping
           handler(answer!.sdp, nil)
         }
       }
@@ -882,6 +902,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create answer (\(error!.localizedDescription))")
         self.lock.unlock()
         self.disconnect(
@@ -890,6 +912,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let answer = SignalingAnswer(sdp: sdp!)
       self.signalingChannel.send(message: Signaling.answer(answer))
       self.lock.unlock()
@@ -911,6 +935,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create update-answer (\(error!.localizedDescription)")
         self.lock.unlock()
         self.disconnect(
@@ -919,6 +945,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let message = Signaling.update(SignalingUpdate(sdp: answer!))
       self.signalingChannel.send(message: message)
 
@@ -927,6 +955,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       self.internalHandlers.onUpdate?(answer!)
 
       self.lock.unlock()
@@ -952,6 +982,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create re-answer (\(error!.localizedDescription)")
         self.lock.unlock()
         self.disconnect(
@@ -960,6 +992,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
       self.signalingChannel.send(message: message)
 
@@ -968,6 +1002,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       self.internalHandlers.onUpdate?(answer!)
 
       self.lock.unlock()
@@ -996,6 +1032,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create re-answer: error => (\(error!.localizedDescription)")
         self.lock.unlock()
         self.disconnect(
@@ -1004,6 +1042,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
 
       var data: Data?
@@ -1041,6 +1081,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       self.internalHandlers.onUpdate?(answer!)
 
       self.lock.unlock()
@@ -1198,6 +1240,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if onConnect != nil {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
+      // nil チェック直後のため安全
+      // swiftlint:disable:next force_unwrapping
       onConnect!(nil)
       onConnect = nil
     }
@@ -1255,6 +1299,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if onConnect != nil {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
+      // nil チェック直後のため安全
+      // swiftlint:disable:next force_unwrapping
       onConnect!(error)
       onConnect = nil
     }

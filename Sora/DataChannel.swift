@@ -39,6 +39,8 @@ private enum ZLibUtil {
     zipped.append(destinationBuffer, count: size)
 
     let checksum = input.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> UInt32 in
+      // 空でない Data の withUnsafeBytes 内では baseAddress は非 nil
+      // swiftlint:disable:next force_unwrapping
       let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
       return UInt32(adler32(1, bytef, UInt32(input.count)))
     }
@@ -85,6 +87,8 @@ private enum ZLibUtil {
     let data = Data(bytesNoCopy: destinationBuffer, count: size, deallocator: .free)
 
     let calculatedChecksum = data.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Data in
+      // 非空 Data の withUnsafeBytes 内では baseAddress は非 nil
+      // swiftlint:disable:next force_unwrapping
       let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
       var result = UInt32(adler32(1, bytef, UInt32(data.count))).bigEndian
       return Data(bytes: &result, count: MemoryLayout<UInt32>.size)

@@ -39,3 +39,10 @@ disabled_rules:
   - for_where
   - large_tuple
   - todo
+
+opt_in_rules:
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+
+implicitly_unwrapped_optional:
+  mode: all_except_iboutlets
