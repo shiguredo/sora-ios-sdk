@@ -428,9 +428,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       redirect: redirect,
       forwardingFilter: configuration.forwardingFilter,
       forwardingFilters: configuration.forwardingFilters,
-      vp9Params: configuration.videoVp9Params,
-      av1Params: configuration.videoAv1Params,
-      h264Params: configuration.videoH264Params,
+      vp9Params: configuration.videoCodec == .vp9 ? configuration.videoVp9Params : nil,
+      av1Params: configuration.videoCodec == .av1 ? configuration.videoAv1Params : nil,
+      h264Params: configuration.videoCodec == .h264 ? configuration.videoH264Params : nil,
       h265Params: configuration.videoCodec == .h265 ? configuration.videoH265Params : nil
     )
 
