@@ -11,7 +11,7 @@
 
 ## develop
 
-- [CHANGE] TURN-TLS の証明書検証で iOS の CA を利用する
+- [CHANGE] TURN-TLS の証明書検証で iOS のルートストアを利用する
   - `RTCSSLCertificateVerifier.verifyChain` を利用して証明書チェーン全体を取得し、 Security フレームワークで検証する
   - `offer.configuration` で TURN-TLS の ICE サーバー設定を受け取った後に、接続に利用する `RTCPeerConnection` を生成する
   - @zztkm
@@ -40,6 +40,7 @@
   - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
   - `CameraSettings.default` を共有保存値から新しい値を返す計算プロパティに変更する
   - SDK 側で公開 class に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
+  - @zztkm
 - [UPDATE] Swift 6 言語モードのビルドで発生する UIKit 依存 API の MainActor 関連ビルドエラーが発生しないように暫定対応を行う
   - `DeviceInfo` を `UIDevice` 依存の状態保持から `Sendable` なスナップショットへ変更する
   - Swift 6 では `UIDevice` の参照を保持したまま `DeviceInfo` を actor 境界で扱うと `MainActor` 隔離と `Sendable` 制約によりビルドエラーになるため、 `systemName` と `systemVersion` を値として保持する形に変更した
