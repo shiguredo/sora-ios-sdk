@@ -225,9 +225,6 @@ public struct Configuration {
   ///
   /// ## 制約
   ///
-  /// - TURN-TLS ではホスト名検証は行われない。
-  ///   指定 CA による証明書チェーンの署名検証のみが実施される。
-  ///   （WebSocket は URLSession によりホスト名検証が行われる）
   /// - TURN-TLS では、 TURN サーバーが葉証明書と中間証明書を含む
   ///   完全なチェーンを送出する必要がある。
   public var caCertificate: String?
