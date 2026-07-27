@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/fix-videohardmuteactor-stored-capturer-clear
-- Polished: 2026-06-06
+- Polished: 2026-07-27
 
 ## 目的
 
@@ -55,20 +55,22 @@ try await startCameraVideoCapture(cameraSettings: cameraSettings, senderStream: 
 
 | 経路 | クリア位置 |
 |------|-----------|
-| A（既に再開済み）| 行 73 の `return` 前 |
-| B（restart 成功）| 行 76 の `return` 前 |
-| C（start 成功）| 行 79 の後（防御的クリア。この時点で `storedCapturer` は元から `nil`） |
+| A（既に再開済み）| `return` 前（置換コードの `if currentCapturer != nil` ブロック内） |
+| B（restart 成功）| `return` 前（置換コードの `restartCameraVideoCapture` 呼び出し後） |
+| C（start 成功）| `startCameraVideoCapture` 呼び出し後（防御的クリア。この時点で `storedCapturer` は元から `nil`） |
 
-変更前の `Sora/VideoMute.swift:72-79` を以下のコードに置き換える（変更後は行数が増える）。
+変更前の `Sora/VideoMute.swift:70-79` を以下のコードに置き換える（変更後は行数が増える）。
 
 ```swift
 // ミュートを無効化します
+// 現在のキャプチャラーが取得できる場合は既に再開済みとして成功扱いにします
 let currentCapturer = await currentCameraVideoCapturer()
 if currentCapturer != nil {
   // 既にキャプチャが起動済みのため解除成功とみなし、不要な参照をクリアします
   storedCapturer = nil
   return
 }
+// 前回停止時のキャプチャラーが保持できていれば restart、なければ start します
 if let capturerForRestart = storedCapturer {
   try await restartCameraVideoCapture(capturerForRestart, senderStream: senderStream)
   // restart 成功後にクリアします（throw されなかった場合のみここに到達）
@@ -82,13 +84,13 @@ storedCapturer = nil
 
 **解除失敗時の挙動**:
 
-`restartCameraVideoCapture` が throw した場合、`storedCapturer` はクリアしない。次回の `mute = false` 呼び出しで同じ capturer を使って再試行できる。ただし capturer 自体が壊れている（ハードウェア異常等）場合は再試行しても失敗し続けるため、`mute = true` が呼ばれて `storedCapturer` が上書きされるまで参照が残る。この挙動は意図的であり、コメントで明記する。
+`restartCameraVideoCapture` が throw した場合、`storedCapturer` はクリアしない。次回の `mute = false` 呼び出しで同じ capturer を使って再試行できる。ただし capturer 自体が壊れている（ハードウェア異常等）場合は再試行しても失敗し続ける。この場合 `CameraVideoCapturer.current` は `nil` のままのため、`mute = true` を呼んでも `currentCameraVideoCapturer()` が `nil` を返し早期リターン（行 60-63）し、`storedCapturer` は上書きされない。参照は actor の生存期間中残る。この挙動は意図的であり（再試行の可能性を維持る）、コメントで明記する。
 
 **後方互換性**: 公開 API の `setVideoHardMute` の外形的な挙動は変えない。内部状態のクリアのみ。
 
 ## テスト方針
 
-モック・スタブは使用しない。実機または Simulator で以下を手動確認すること。
+モック・スタブは使用しない。実機または Simulator で以下を手動確認すること。`storedCapturer` は `private` のため、内部状態の検証は一時的なデバッグログの追加またはコードリーディングによる静的確認で行う。
 
 - `mute = true` → `mute = false`（restart 経路）の順で呼び出し後、映像が再開されること。
 - `mute = true` → `mute = false`（start 経路: `storedCapturer == nil` の状態）の順で映像が起動されること。
