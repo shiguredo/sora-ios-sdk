@@ -5,7 +5,7 @@
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/fix-flip-resolution-change
-- Polished: 2026-06-06
+- Polished: 2026-07-27
 
 ## 目的
 
@@ -19,7 +19,7 @@
 
 ### バグの根本原因
 
-`CameraVideoCapturer.flip()`（`CameraVideoCapturer.swift:104-158`）は切り替え先カメラのフォーマットを選択する際、`CameraSettings.resolution`（ユーザーが設定した目標解像度）ではなく「現在キャプチャしているフォーマットの実寸」を入力値として使っている（`CameraVideoCapturer.swift:120-126`）:
+`CameraVideoCapturer.flip()`（`CameraVideoCapturer.swift:104-163`）は切り替え先カメラのフォーマットを選択する際、`CameraSettings.resolution`（ユーザーが設定した目標解像度）ではなく「現在キャプチャしているフォーマットの実寸」を入力値として使っている（`CameraVideoCapturer.swift:125-131`）:
 
 ```swift
 let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
@@ -39,13 +39,13 @@ guard
 2. `flip()` でフロントカメラに切り替える。フロントカメラが 1080p をサポートしない場合、近似選択アルゴリズムにより近い解像度（例: 720p = 1280x720）が選択される
 3. 再度 `flip()` でバックカメラに戻す。このとき入力値は「フロントカメラが実際に使っていた 720p（1280x720）」であるため、バックカメラでも 720p が選択され元の 1080p に戻らない
 
-`PeerChannel.initializeCameraVideoCapture()`（`PeerChannel.swift:624-625`）では `configuration.cameraSettings.resolution.width` / `.height` を使って初期フォーマットを選択しているが、`flip()` は `configuration` にアクセスする設計になっていないため、元の目標解像度が失われる。
+`PeerChannel.initializeCameraVideoCapture()`（`PeerChannel.swift:643-644`）では `configuration.cameraSettings.resolution.width` / `.height` を使って初期フォーマットを選択しているが、`flip()` は `configuration` にアクセスする設計になっていないため、元の目標解像度が失われる。
 
 ## 設計方針
 
 `CameraVideoCapturer` に元の目標解像度を保持するプロパティを追加し、`flip()` がそれを参照するように修正する。これにより `flip()` の public API シグネチャを変えずにバグを修正できる（シグネチャ変更は破壊的変更となるため避ける）。
 
-`CameraVideoCapturer` に以下のプロパティを追加する（`CameraVideoCapturer.swift:184` の `format` プロパティの直後。CLAUDE.md の「コメントはしっかり入れること」の規約に従いコメントを付けること）:
+`CameraVideoCapturer` に以下のプロパティを追加する（`CameraVideoCapturer.swift:189` の `format` プロパティの直後。AGENTS.md の「コメントはしっかり入れること」の規約に従いコメントを付けること）:
 
 ```swift
 /// `flip()` が解像度を維持するための目標解像度。`nil` の場合は現在フォーマットの実寸を使う
@@ -56,10 +56,10 @@ internal var targetResolution: CameraSettings.Resolution? = nil
 
 `PeerChannel.initializeCameraVideoCapture()` の `capturer.start(format:frameRate:)` の completionHandler 内、`capturer.stream = stream` の直前に `capturer.targetResolution = configuration.cameraSettings.resolution` を設定する。このメソッドには `capturer.start()` を呼ぶ分岐が 2 箇所あるため、両方に追加すること:
 
-- 第 1 分岐: `PeerChannel.swift:649` の `current.stop` のコールバック内で呼ばれる `capturer.start` の completionHandler（`PeerChannel.swift:657-668`）内の `capturer.stream = stream`（667 行目）の直前
-- 第 2 分岐: `PeerChannel.swift:671` の `else` ブランチの `capturer.start` の completionHandler（671-682 行目）内の `capturer.stream = stream`（681 行目）の直前
+- 第 1 分岐: `PeerChannel.swift:668` の `current.stop` のコールバック内で呼ばれる `capturer.start` の completionHandler（`PeerChannel.swift:678-691`）内の `capturer.stream = stream`（690 行目）の直前
+- 第 2 分岐: `PeerChannel.swift:693` の `else` ブランチの `capturer.start` の completionHandler（694-707 行目）内の `capturer.stream = stream`（706 行目）の直前
 
-`flip()` 内の `dimension` の算出（`CameraVideoCapturer.swift:120`）を以下のように修正する（107 行目で `capturer.format` を unwrap した変数 `format` を取得済み。122 行目以降で同名の `format` が shadow されるが、`dimension` の算出は 120 行目であり 107 行目の `format` を参照する）:
+`flip()` 内の `dimension` の算出（`CameraVideoCapturer.swift:125`）を以下のように修正する（107 行目で `capturer.format` を unwrap した変数 `format` を取得済み。127 行目以降で同名の `format` が shadow されるが、`dimension` の算出は 125 行目であり 107 行目の `format` を参照する）:
 
 ```swift
 // 修正後: targetResolution があればその目標解像度を使う。なければ実寸にフォールバック
@@ -71,7 +71,7 @@ if let target = capturer.targetResolution {
 }
 ```
 
-`flip()` 実行後、`flip.stream = capturer.stream`（`CameraVideoCapturer.swift:154`）の直後、`completionHandler(nil)`（155 行目）の前に `flip.targetResolution = capturer.targetResolution` を追加して目標解像度を引き継ぐ。
+`flip()` 実行後、`flip.stream = capturer.stream`（`CameraVideoCapturer.swift:159`）の直後、`completionHandler(nil)`（160 行目）の前に `flip.targetResolution = capturer.targetResolution` を追加して目標解像度を引き継ぐ。
 
 `change(format:frameRate:completionHandler:)` は `AVCaptureDevice.Format` を直接引数に取るため `targetResolution` は変化しない（呼び出し側が特定の `Format` を選んでいるため、`targetResolution` の上書きは行わない）。`change()` 後に `flip()` を呼んだ際に `targetResolution` の古い値が使われる動作の是非は別 issue で検討する。
 
