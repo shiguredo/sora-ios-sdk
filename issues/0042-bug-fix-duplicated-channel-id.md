@@ -5,7 +5,7 @@
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/fix-duplicated-channel-id
-- Polished: 2026-06-06
+- Polished: 2026-07-27
 
 ## 目的
 
@@ -21,15 +21,12 @@
 
 `MediaChannel.connect()` は `state.isConnecting`（`ConnectionState.swift:18`）のみで排他制御しており、`isConnecting` は `state == .connecting` のみ `true` を返す（`.disconnecting` は含まない）。
 
-`MediaChannel.internalDisconnect()` の処理は以下の順序で実行される：
+`MediaChannel.internalDisconnect()` の処理は `PeerChannel.Lock.count` の値によって異なる:
 
-1. `state = .disconnecting`
-2. `connectionTimer.stop()`
-3. `peerChannel.disconnect(...)` — WebSocket / シグナリングの非同期クリーンアップを開始
-4. `state = .disconnected`（`peerChannel.disconnect` の完了を待たずに同期的にセット）
-5. `handlers.onDisconnectLegacy?(error)` — アプリ側の `onDisconnect` ハンドラを呼ぶ（その直前に `internalHandlers.onDisconnectLegacy?(error)` も呼ばれる）
+- **count == 0 の場合**: `peerChannel.disconnect()` 内で `Lock.waitDisconnect()`（`PeerChannel.swift:108-122`）が `basicDisconnect()` を同期的に実行してから返るため、WebSocket / シグナリングのクリーンアップが完了した後に `state = .disconnected` がセットされる。この場合、競合は発生しない
+- **count > 0 の場合**: `Lock.waitDisconnect()` は `shouldDisconnect` にパラメータを保存するだけで即座には `basicDisconnect()` を呼ばない。`internalDisconnect()` は `peerChannel.disconnect()` の完了を待たずに `state = .disconnected` を同期的にセットし、`handlers.onDisconnectLegacy?(error)` を呼ぶ。この時点では WebSocket / シグナリングのクリーンアップがサーバー側でまだ完了していない
 
-アプリ側が `onDisconnect` ハンドラ内で即座に `connect()` を呼ぶと、`state == .disconnected` であるため `state.isConnecting` は `false` となり、`connect()` が実行される。しかしこの時点では `peerChannel.disconnect()` の WebSocket / シグナリングクリーンアップがサーバー側でまだ完了していない可能性があり、同一チャンネル ID での多重接続が発生して `DUPLICATED-CHANNEL-ID` エラーを引き起こす。
+`count > 0` の場合、アプリ側が `onDisconnect` ハンドラ内で即座に `connect()` を呼ぶと、`state == .disconnected` であるため接続が実行される。しかし `Sora.connect()` は新しい `MediaChannel` インスタンスを生成する（`Sora.swift:180`）ため、旧インスタンスの state ガードは再接続経路に介入できない。サーバー側のチャンネルクリーンアップが完了していない状態で同一チャンネル ID の接続シグナリングが送られ、`DUPLICATED-CHANNEL-ID` エラーを引き起こす。
 
 `DUPLICATED-CHANNEL-ID` は Sora サーバーからシグナリングエラーとして返され、`SoraError.webSocketClosed(code:reason:)` の形式で切断ハンドラに伝わる。
 
@@ -40,18 +37,18 @@
 
 ## 設計方針
 
-修正方針は以下の 2 つが候補であり、どちらか一方、または両方を適用する：
+修正方針は以下の 2 つが候補であり、優先度順に示す:
 
-**方針 A**: `MediaChannel.connect()` の state チェックを拡張し、`state == .disconnecting` の間も接続不可として `SoraError.connectionBusy` を返すようにする（`MediaChannel.swift:367` の `state.isConnecting` を `state.isConnecting || state == .disconnecting` に変更するか、`isConnecting` の定義を拡張する）
+**方針 A（推奨）**: `0047-add-disconnect-complete-handler.md` の切断完了ハンドラを先行実装し、アプリ側が「サーバー側のクリーンアップが完了したタイミング」で `connect()` を呼べるようにする（根本解決）
 
-**方針 B**: `0047-add-disconnect-complete-handler.md` の切断完了ハンドラを先行実装し、アプリ側が「サーバー側のクリーンアップが完了したタイミング」で `connect()` を呼べるようにする（根本解決）
+**方針 B（防衛的修正）**: `Sora.connect()` レベルで、同一 channelId を持つ既存の `MediaChannel` の切断が未完了の場合に `SoraError.connectionBusy` を返すガードを追加する。`MediaChannel.connect()` の state チェックは新インスタンスに対して機能しないため（`Sora.connect()` が毎回新しい `MediaChannel` を生成する）、ガードは `Sora` レベルに置く必要がある。ガード条件の観測には `PeerChannel.Lock.count`（`private`）や `MediaChannel.state`（`count > 0` でも `.disconnected` が同期的にセットされる）は使えないため、`basicDisconnect()` 完了を追跡する新しいフラグ（例: `MediaChannel` または `Sora` 上の `disconnectCompleted` フラグ）の導入が必要
 
-方針 A は SDK 側の防衛的修正として単独で適用可能。方針 B は 0047 の実装を要するが、アプリ側での正確なタイミング制御を可能にする根本解決策。
+方針 A はアプリ側での正確なタイミング制御を可能にする根本解決策。方針 B は SDK 側の防衛的修正だが、サーバー側のクリーンアップ完了を保証するものではないため、方針 A の代替にはならない。両方を適用することも可能。
 
 ## 完了条件
 
-- `state == .disconnecting` の間に `connect()` を呼んだ場合に `SoraError.connectionBusy` が返ること（方針 A を採用した場合）
 - 切断 → 即時再接続のパターンで `DUPLICATED-CHANNEL-ID` エラーが発生しないこと
+- 方針 B を採用した場合: `Sora.connect()` 呼び出し時に既存チャンネルの切断が未完了であれば `SoraError.connectionBusy` が返ること
 - 通常の接続・切断フローに影響がないこと
 - `CHANGES.md` の `develop` セクションに以下を追記すること
 
@@ -62,4 +59,4 @@
 
 ## 関連 issue
 
-- `0047-add-disconnect-complete-handler.md`: 切断完了ハンドラの追加（本 issue の方針 B に対応する根本解決策）
+- `0047-add-disconnect-complete-handler.md`: 切断完了ハンドラの追加（本 issue の方針 A に対応する根本解決策）
