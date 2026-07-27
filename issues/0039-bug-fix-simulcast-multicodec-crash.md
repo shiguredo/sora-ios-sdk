@@ -5,7 +5,7 @@
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/fix-simulcast-multicodec-crash
-- Polished: 2026-06-06
+- Polished: 2026-07-27
 
 ## 目的
 
