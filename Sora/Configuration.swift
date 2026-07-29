@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import WebRTC
 
 // MARK: デフォルト値
@@ -8,7 +9,7 @@ private let defaultPublisherVideoTrackId: String = "mainVideo"
 private let defaultPublisherAudioTrackId: String = "mainAudio"
 
 /// プロキシに関する設定です
-public struct Proxy: CustomStringConvertible {
+public struct Proxy: CustomStringConvertible, Sendable {
   /// プロキシのホスト
   let host: String
 
@@ -148,6 +149,12 @@ public struct Configuration {
   /// 後から `MediaChannel.setAudioHardMute(false)` で必要に応じてマイクを有効にできます。
   public var initialMicrophoneEnabled: Bool = true
 
+  /// 接続時に iOS の Voice Processing をバイパスするかどうか。
+  ///
+  /// `true` の場合は、 Voice Processing を無効にした状態で ADM を生成します。
+  /// 接続中の動的変更には対応していません。
+  public var bypassVoiceProcessing: Bool = false
+
   /// サイマルキャストの可否。 `true` であればサイマルキャストを有効にします。
   public var simulcastEnabled: Bool = false
 
@@ -210,6 +217,18 @@ public struct Configuration {
   /// プロキシに関する設定
   public var proxy: Proxy?
 
+  /// サーバー証明書検証に使用する CA 証明書の PEM 文字列。
+  ///
+  /// 指定するとシステム CA を使用せず、指定 CA のみを信頼アンカーとして
+  /// WebSocket シグナリングおよび TURN-TLS 接続のサーバー証明書を検証する。
+  /// nil を指定するとシステム CA による既定の検証を行う。
+  ///
+  /// ## 制約
+  ///
+  /// - TURN-TLS では、 TURN サーバーが葉証明書と中間証明書を含む
+  ///   完全なチェーンを送出する必要がある。
+  public var caCertificate: String?
+
   /// 転送フィルターの設定
   ///
   /// この項目は 2025 年 12 月リリース予定の Sora にて廃止されます
@@ -226,6 +245,10 @@ public struct Configuration {
 
   /// H264 向け映像コーデックパラメーター
   public var videoH264Params: Encodable?
+
+  /// H265 向け映像コーデックパラメーター
+  /// Sora 側含め実験的機能の段階です。
+  public var videoH265Params: Encodable?
 
   // MARK: - イベントハンドラ
 
@@ -281,6 +304,50 @@ public struct Configuration {
     self.channelId = channelId
     self.role = role
     self.multistreamEnabled = multistreamEnabled
+  }
+}
+
+// MARK: - CA 証明書解析
+
+extension Configuration {
+  /// PEM 文字列から CA 証明書を解析する
+  func parsedCACertificates() throws -> [SecCertificate]? {
+    guard let pem = caCertificate else { return nil }
+    return try Self.parsePEMCertificates(pem)
+  }
+
+  /// PEM 文字列から SecCertificate の配列を生成する
+  private static func parsePEMCertificates(_ pem: String) throws -> [SecCertificate] {
+    // PEM ブロックを非貪欲マッチで抽出する。
+    // `[\s\S]*?` により BEGIN に対応する最初の END までを取得する。
+    // これにより複数証明書連結時でもブロック単位の抽出が可能で、
+    // URL-safe Base64（ハイフンを含む）にも対応する。
+    let pattern = "-----BEGIN CERTIFICATE-----([\\s\\S]*?)-----END CERTIFICATE-----"
+    guard let regex = try? NSRegularExpression(pattern: pattern) else {
+      throw SoraError.configurationError(reason: "failed to create PEM regex")
+    }
+    let range = NSRange(pem.startIndex..., in: pem)
+    let matches = regex.matches(in: pem, range: range)
+    guard !matches.isEmpty else {
+      throw SoraError.configurationError(reason: "caCertificate contains no valid PEM blocks")
+    }
+
+    var certs: [SecCertificate] = []
+    for match in matches {
+      guard let base64Range = Range(match.range(at: 1), in: pem) else {
+        throw SoraError.configurationError(reason: "failed to extract PEM block")
+      }
+      let base64 = String(pem[base64Range])
+        .components(separatedBy: .whitespacesAndNewlines).joined()
+      guard let derData = Data(base64Encoded: base64) else {
+        throw SoraError.configurationError(reason: "failed to decode Base64 in PEM block")
+      }
+      guard let cert = SecCertificateCreateWithData(nil, derData as CFData) else {
+        throw SoraError.configurationError(reason: "failed to create SecCertificate from DER data")
+      }
+      certs.append(cert)
+    }
+    return certs
   }
 }
 

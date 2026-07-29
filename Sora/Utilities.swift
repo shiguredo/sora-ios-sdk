@@ -19,7 +19,7 @@ public enum Utilities {
   }
 
   public final class Stopwatch {
-    private var timer: Timer!
+    private var timer: Timer?
     private var seconds: Int
     private var handler: (String) -> Void
 
@@ -41,21 +41,24 @@ public enum Utilities {
 
     public func run() {
       seconds = 0
+      guard let timer else {
+        return
+      }
       RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
       timer.fire()
     }
 
     public func stop() {
-      timer.invalidate()
+      timer?.invalidate()
       seconds = 0
     }
   }
 }
 
-final class PairTable<T: Equatable, U: Equatable> {
-  var name: String
+struct PairTable<T: Equatable & Sendable, U: Equatable & Sendable>: Sendable {
+  let name: String
 
-  private var pairs: [(T, U)]
+  private let pairs: [(T, U)]
 
   init(name: String, pairs: [(T, U)]) {
     self.name = name

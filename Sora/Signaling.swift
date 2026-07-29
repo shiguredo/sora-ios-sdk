@@ -187,7 +187,7 @@ public enum Signaling {
 }
 
 /// サイマルキャストでの映像の種類を表します。
-public enum SimulcastRid {
+public enum SimulcastRid: Sendable {
   /// r0
   case r0
 
@@ -199,7 +199,7 @@ public enum SimulcastRid {
 }
 
 /// サイマルキャストで視聴する映像の種類を表します。
-public enum SimulcastRequestRid {
+public enum SimulcastRequestRid: Sendable {
   /// 未指定
   case unspecified
 
@@ -217,10 +217,9 @@ public enum SimulcastRequestRid {
 }
 
 /// スポットライトの映像の種類を表します 。
-public enum SpotlightRid {
+public enum SpotlightRid: Sendable {
   /**
      SpotlightRid が設定されていない状態
-  
      変数の型を SpotlightRid? にした場合、 .none が Optional.none と SpotlightRid.none の
      どちらを指しているか分かりにくいという問題がありました。
      この問題を解決するため、変数に値が設定されていない状態を表す .unspecified を定義するとともに、
@@ -368,6 +367,9 @@ public struct SignalingConnect {
 
   /// H264 向け映像コーデックパラメーター
   public var h264Params: Encodable?
+
+  /// H265 向け映像コーデックパラメーター
+  public var h265Params: Encodable?
 }
 
 /// "offer" シグナリングメッセージを表します。
@@ -408,6 +410,9 @@ public struct SignalingOffer {
     /// scalability mode
     public let scalabilityMode: String?
 
+    /// ネットワーク優先度 (DiffServ Code Point)
+    public let networkPriority: RTCPriority?
+
     /// RTP エンコーディングに関するパラメーター
     public var rtpEncodingParameters: RTCRtpEncodingParameters {
       let params = RTCRtpEncodingParameters()
@@ -426,6 +431,9 @@ public struct SignalingOffer {
         params.scaleResolutionDownTo?.maxHeight = value.maxHeight
       }
       params.scalabilityMode = scalabilityMode
+      if let value = networkPriority {
+        params.networkPriority = value
+      }
       return params
     }
   }
@@ -772,7 +780,7 @@ extension Signaling: Codable {
   }
 }
 
-private var simulcastRidTable: PairTable<String, SimulcastRid> =
+private let simulcastRidTable: PairTable<String, SimulcastRid> =
   PairTable(
     name: "simulcastRid",
     pairs: [
@@ -792,7 +800,7 @@ extension SimulcastRid: Codable {
   }
 }
 
-private var simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
+private let simulcastRequestRidTable: PairTable<String, SimulcastRequestRid> =
   // .unspecified は simulcast_request_rid の値ではなく
   // エンコードする必要がないため、テーブルに含めていない
   PairTable(
@@ -815,7 +823,7 @@ extension SimulcastRequestRid: Codable {
   }
 }
 
-private var spotlightRidTable: PairTable<String, SpotlightRid> =
+private let spotlightRidTable: PairTable<String, SpotlightRid> =
   PairTable(
     name: "spotlightRid",
     pairs: [
@@ -838,7 +846,7 @@ extension SpotlightRid: Codable {
 }
 
 /// :nodoc:
-private var roleTable: PairTable<String, SignalingRole> =
+private let roleTable: PairTable<String, SignalingRole> =
   PairTable(
     name: "SignalingRole",
     pairs: [
@@ -898,6 +906,7 @@ extension SignalingConnect: Codable {
     case vp9_params
     case av1_params
     case h264_params
+    case h265_params
   }
 
   enum AudioCodingKeys: String, CodingKey {
@@ -946,9 +955,14 @@ extension SignalingConnect: Codable {
     try container.encodeIfPresent(forwardingFilters, forKey: .forwarding_filters)
 
     if videoEnabled {
-      if videoCodec != .default || videoBitRate != nil || vp9Params != nil || av1Params != nil
-        || h264Params != nil
-      {
+      // codec 一致時のみ有効な params を判定する
+      let hasMatchingParams =
+        (videoCodec == .vp9 && vp9Params != nil)
+        || (videoCodec == .av1 && av1Params != nil)
+        || (videoCodec == .h264 && h264Params != nil)
+        || (videoCodec == .h265 && h265Params != nil)
+
+      if videoCodec != .default || videoBitRate != nil || hasMatchingParams {
         var videoContainer =
           container
           .nestedContainer(
@@ -960,17 +974,21 @@ extension SignalingConnect: Codable {
         try videoContainer.encodeIfPresent(
           videoBitRate,
           forKey: .bit_rate)
-        if let vp9Params {
+        if let vp9Params, videoCodec == .vp9 {
           let vp9ParamsEnc = videoContainer.superEncoder(forKey: .vp9_params)
           try vp9Params.encode(to: vp9ParamsEnc)
         }
-        if let av1Params {
+        if let av1Params, videoCodec == .av1 {
           let av1ParamsEnc = videoContainer.superEncoder(forKey: .av1_params)
           try av1Params.encode(to: av1ParamsEnc)
         }
-        if let h264Params {
+        if let h264Params, videoCodec == .h264 {
           let h264ParamsEnc = videoContainer.superEncoder(forKey: .h264_params)
           try h264Params.encode(to: h264ParamsEnc)
+        }
+        if let h265Params, videoCodec == .h265 {
+          let h265ParamsEnc = videoContainer.superEncoder(forKey: .h265_params)
+          try h265Params.encode(to: h265ParamsEnc)
         }
       }
     } else {
@@ -1075,6 +1093,7 @@ extension SignalingOffer.Encoding: Codable {
     case scaleResolutionDownBy
     case scaleResolutionDownTo
     case scalabilityMode
+    case networkPriority
   }
 
   public init(from decoder: Decoder) throws {
@@ -1099,6 +1118,27 @@ extension SignalingOffer.Encoding: Codable {
     scalabilityMode = try container.decodeIfPresent(
       String.self,
       forKey: .scalabilityMode)
+    if let rawNetworkPriority = try container.decodeIfPresent(
+      String.self, forKey: .networkPriority)
+    {
+      switch rawNetworkPriority {
+      case "very-low":
+        networkPriority = .veryLow
+      case "low":
+        networkPriority = .low
+      case "medium":
+        networkPriority = .medium
+      case "high":
+        networkPriority = .high
+      default:
+        Logger.warn(
+          type: .signaling,
+          message: "unknown networkPriority value: \(rawNetworkPriority)")
+        networkPriority = nil
+      }
+    } else {
+      networkPriority = nil
+    }
   }
 
   public func encode(to encoder: Encoder) throws {

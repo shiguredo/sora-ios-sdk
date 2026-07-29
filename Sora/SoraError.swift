@@ -9,6 +9,9 @@ public enum SoraError: Error {
   /// 接続試行開始から一定時間内に接続できなかったことを示します。
   case connectionTimeout
 
+  /// Configuration に関するエラー
+  case configurationError(reason: String)
+
   /// 何らかの処理の実行中で、指定された処理を実行できないことを示します。
   case connectionBusy(reason: String)
 
@@ -74,6 +77,8 @@ extension SoraError: LocalizedError {
       return "Connection is cancelled"
     case .connectionTimeout:
       return "Connection is timeout"
+    case .configurationError(let reason):
+      return "Configuration error (\(reason))"
     case .connectionBusy(let reason):
       return "Connection is busy (\(reason))"
     case .webSocketClosed(let statusCode, let reason):

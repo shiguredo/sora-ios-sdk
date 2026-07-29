@@ -1,11 +1,12 @@
 import Foundation
 import WebRTC
 
+// カメラの共有状態は既存のカメラ用キューで扱う前提のため、 @unchecked Sendable を付与します。
 /// 解像度やフレームレートなどの設定は `start` 実行時に指定します。
 /// カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
 ///
 /// カメラの設定を変更したい場合は、 `change` を実行します。
-public final class CameraVideoCapturer {
+public final class CameraVideoCapturer: @unchecked Sendable {
   // MARK: インスタンスの取得
 
   /// 利用可能なデバイスのリスト
@@ -13,7 +14,7 @@ public final class CameraVideoCapturer {
   public static var devices: [AVCaptureDevice] { RTCCameraVideoCapturer.captureDevices() }
 
   /// 前面のカメラに対応するデバイス
-  public private(set) static var front: CameraVideoCapturer? = {
+  public static let front: CameraVideoCapturer? = {
     if let device = device(for: .front) {
       return CameraVideoCapturer(device: device)
     } else {
@@ -22,7 +23,7 @@ public final class CameraVideoCapturer {
   }()
 
   /// 背面のカメラに対応するデバイス
-  public private(set) static var back: CameraVideoCapturer? = {
+  public static let back: CameraVideoCapturer? = {
     if let device = device(for: .back) {
       return CameraVideoCapturer(device: device)
     } else {
@@ -30,8 +31,9 @@ public final class CameraVideoCapturer {
     }
   }()
 
+  // TODO(zztkm): 共有状態を actor に移し、 async API に置き換えて concurrency-safe にする。
   /// 起動中のデバイス
-  public private(set) static var current: CameraVideoCapturer?
+  public private(set) nonisolated(unsafe) static var current: CameraVideoCapturer?
 
   /// RTCCameraVideoCapturer が保持している AVCaptureSession
   public var captureSession: AVCaptureSession { native.captureSession }
@@ -107,6 +109,11 @@ public final class CameraVideoCapturer {
       return
     }
 
+    guard let capturerFrameRate = capturer.frameRate else {
+      completionHandler(SoraError.cameraError(reason: "frameRate should not be nil"))
+      return
+    }
+
     // 反対の position を持つ CameraVideoCapturer を取得します。
     guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front)
     else {
@@ -121,7 +128,7 @@ public final class CameraVideoCapturer {
         width: dimension.width,
         height: dimension.height,
         for: flip.device,
-        frameRate: capturer.frameRate!)
+        frameRate: capturerFrameRate)
     else {
       completionHandler(
         SoraError.cameraError(
@@ -129,7 +136,7 @@ public final class CameraVideoCapturer {
       return
     }
 
-    guard let frameRate = CameraVideoCapturer.maxFrameRate(capturer.frameRate!, for: format)
+    guard let frameRate = CameraVideoCapturer.maxFrameRate(capturerFrameRate, for: format)
     else {
       completionHandler(
         SoraError.cameraError(
@@ -163,8 +170,9 @@ public final class CameraVideoCapturer {
   /// カメラが起動中であれば ``true``
   public private(set) var isRunning: Bool = false
 
+  // TODO(zztkm): イベントハンドラを actor 経由で管理し、 @Sendable な API に置き換える。
   /// イベントハンドラ
-  public static var handlers = CameraVideoCapturerHandlers()
+  public nonisolated(unsafe) static var handlers = CameraVideoCapturerHandlers()
 
   /// カメラの位置
   public var position: AVCaptureDevice.Position {
@@ -180,7 +188,11 @@ public final class CameraVideoCapturer {
   /// フォーマット
   public private(set) var format: AVCaptureDevice.Format?
 
+  // init で必ず初期化されるため安全
+  // swiftlint:disable:next implicitly_unwrapped_optional
   private var native: RTCCameraVideoCapturer!
+  // init で必ず初期化されるため安全
+  // swiftlint:disable:next implicitly_unwrapped_optional
   private var nativeDelegate: CameraVideoCapturerDelegate!
 
   /// 引数に指定した device を利用して CameraVideoCapturer を初期化します。
@@ -345,15 +357,16 @@ public final class CameraVideoCapturer {
       }
     }
   }
+
 }
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。
 public struct CameraSettings: CustomStringConvertible {
   /// デフォルトの設定。
-  public static let `default` = CameraSettings()
+  public static var `default`: CameraSettings { CameraSettings() }
 
   /// `CameraVideoCapturer` で使用する映像解像度を表すenumです。
-  public enum Resolution {
+  public enum Resolution: Sendable {
     /// QVGA, 320x240
     case qvga240p
 
@@ -447,13 +460,17 @@ public struct CameraSettings: CustomStringConvertible {
 // MARK: -
 
 private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
-  weak var cameraVideoCapturer: CameraVideoCapturer!
+  weak var cameraVideoCapturer: CameraVideoCapturer?
 
   init(cameraVideoCapturer: CameraVideoCapturer) {
     self.cameraVideoCapturer = cameraVideoCapturer
   }
 
   func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
+    guard let cameraVideoCapturer else {
+      Logger.debug(type: .cameraVideoCapturer, message: "cameraVideoCapturer is nil")
+      return
+    }
     let frame = VideoFrame.native(capturer: capturer, frame: nativeFrame)
     if let editedFrame = CameraVideoCapturer.handlers.onCapture?(cameraVideoCapturer, frame) {
       cameraVideoCapturer.stream?.send(videoFrame: editedFrame)
@@ -465,7 +482,7 @@ private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
 
 // MARK: -
 
-private var resolutionTable: PairTable<String, CameraSettings.Resolution> =
+private let resolutionTable: PairTable<String, CameraSettings.Resolution> =
   PairTable(
     name: "CameraVideoCapturer.Settings.Resolution",
     pairs: [

@@ -1,7 +1,7 @@
 import Foundation
 
 /// WebSocket のステータスコードを表します。
-public enum WebSocketStatusCode {
+public enum WebSocketStatusCode: Sendable {
   /// 1000
   case normal
 

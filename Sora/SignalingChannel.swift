@@ -1,9 +1,10 @@
 import AVFoundation
 import Foundation
+import Security
 
 /// ストリームの方向を表します。
 /// シグナリングメッセージで使われます。
-public enum SignalingRole: String {
+public enum SignalingRole: String, Sendable {
   /// 送信のみ
   case sendonly
 
@@ -24,6 +25,9 @@ class SignalingChannelInternalHandlers {
 
   /// シグナリング受信時に呼ばれるクロージャー
   var onReceive: ((Signaling) -> Void)?
+
+  /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
+  var onReceiveJSON: ((String) -> Void)?
 
   /// シグナリング送信時に呼ばれるクロージャー
   var onSend: ((Signaling) -> Signaling)?
@@ -103,10 +107,10 @@ class SignalingChannel {
     return uniqueUrls
   }
 
-  private func setUpWebSocketChannel(url: URL, proxy: Proxy?)
+  private func setUpWebSocketChannel(url: URL, proxy: Proxy?, caCertificates: [SecCertificate]?)
     -> URLSessionWebSocketChannel
   {
-    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy)
+    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy, caCertificates: caCertificates)
 
     // 接続成功時
     ws.internalHandlers.onConnect = { [weak self] webSocketChannel in
@@ -142,9 +146,9 @@ class SignalingChannel {
 
       weakSelf.state = .connected
 
-      if weakSelf.onConnect != nil {
+      if let onConnect = weakSelf.onConnect {
         Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
-        weakSelf.onConnect!(nil)
+        onConnect(nil)
       }
     }
 
@@ -206,11 +210,25 @@ class SignalingChannel {
     onConnect = handler
     state = .connecting
 
+    // CA 証明書のパース
+    let caCertificates: [SecCertificate]?
+    do {
+      caCertificates = try configuration.parsedCACertificates()
+    } catch {
+      Logger.error(
+        type: .signalingChannel,
+        message: "failed to parse CA certificate: \(error.localizedDescription)")
+      state = .disconnected
+      onConnect?(error)
+      onConnect = nil
+      return
+    }
+
     let urlCandidates = unique(urls: configuration.urlCandidates)
     Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
     for url in urlCandidates {
       let ws = setUpWebSocketChannel(
-        url: url, proxy: configuration.proxy)
+        url: url, proxy: configuration.proxy, caCertificates: caCertificates)
       Logger.info(
         type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
       ws.connect(delegateQueue: queue)
@@ -236,8 +254,20 @@ class SignalingChannel {
       return
     }
 
+    // CA 証明書のパース
+    let caCertificates: [SecCertificate]?
+    do {
+      caCertificates = try configuration.parsedCACertificates()
+    } catch {
+      Logger.error(
+        type: .signalingChannel,
+        message: "failed to parse CA certificate: \(error.localizedDescription)")
+      disconnect(error: error, reason: .signalingFailure)
+      return
+    }
+
     let ws = setUpWebSocketChannel(
-      url: newUrl, proxy: configuration.proxy)
+      url: newUrl, proxy: configuration.proxy, caCertificates: caCertificates)
     ws.connect(delegateQueue: queue)
   }
 
@@ -296,7 +326,7 @@ class SignalingChannel {
         break
       }
 
-      let str = String(data: data, encoding: .utf8)!
+      let str = String(data: data, encoding: .utf8) ?? ""
       Logger.debug(type: .signalingChannel, message: str)
       ws.send(message: .text(str))
     } catch {
@@ -321,8 +351,9 @@ class SignalingChannel {
     case .binary:
       Logger.debug(type: .signalingChannel, message: "discard binary message")
 
-    case .text(let text):
-      guard let data = text.data(using: .utf8) else {
+    case .text(let json):
+      internalHandlers.onReceiveJSON?(json)
+      guard let data = json.data(using: .utf8) else {
         Logger.error(type: .signalingChannel, message: "invalid encoding")
         return
       }
@@ -334,7 +365,7 @@ class SignalingChannel {
       case .failure(let error):
         Logger.error(
           type: .signalingChannel,
-          message: "decode failed (\(error.localizedDescription)) => \(text)")
+          message: "decode failed (\(error.localizedDescription)) => \(json)")
       }
     }
   }

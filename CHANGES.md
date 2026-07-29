@@ -11,7 +11,126 @@
 
 ## develop
 
+## 2026.2.0
+
+**リリース日**: 2026-07-29
+
+- [CHANGE] TURN-TLS の証明書検証で iOS のルートストアを利用する
+  - `RTCSSLCertificateVerifier.verifyChain` を利用して証明書チェーン全体を取得し、 Security フレームワークで検証する
+  - `offer.configuration` で TURN-TLS の ICE サーバー設定を受け取った後に、接続に利用する `RTCPeerConnection` を生成する
+  - @zztkm
+- [CHANGE] ログ出力時にクレデンシャル情報をマスクするようにする
+  - Logger の全ログ出力において `access_token`、`token`、`secret`、`authorization`、`credential` の値を `***` に置換する
+  - @t-miya
+- [UPDATE] SwiftLint に force_unwrapping / implicitly_unwrapped_optional ルールを追加する
+  - @t-miya
+- [UPDATE] libwebrtc m150.7871.3.0 に上げる
+  - @t-miya
+- [UPDATE] `NativePeerChannelFactory` 接続単位で生成して利用するようにする
+  - 音声入力処理のバイパス追加に伴い、接続単位での管理が必要となったため
+  - @t-miya
+- [UPDATE] MediaChannelHandlers.onReceiveSignaling を非推奨にする
+  - 移行先は `MediaChannelHandlers.onReceiveSignalingJSON`
+  - @zztkm
+- [UPDATE] `PairTable` を不変な値型に変更し、関連する型を `Sendable` に対応させる
+  - Swift 6 言語モードでビルドするための対応
+  - SDK 側で公開 enum に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
+  - @zztkm
+- [UPDATE] `URLSessionWebSocketChannel` と `Proxy` を Swift 6 の `Sendable` 要件に対応させる
+  - `URLSessionWebSocketChannel` を `final class` かつ `@unchecked Sendable` とし、 `Proxy` を `Sendable` に対応させる
+  - @zztkm
+- [UPDATE] 静的共有状態と singleton を Swift 6 の concurrency-safe 要件に対応させる
+  - `CameraVideoCapturer`, `Logger`, `NativePeerChannelFactory`, `Sora` などの共有状態を整理する
+  - `MediaStream` のダミー capturer と `MediaChannelConfiguration.maxBitRate` の共有状態を見直す
+  - `CameraSettings.default` を共有保存値から新しい値を返す計算プロパティに変更する
+  - SDK 側で公開 class に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
+  - @zztkm
+- [UPDATE] Swift 6 言語モードのビルドで発生する UIKit 依存 API の MainActor 関連ビルドエラーが発生しないように暫定対応を行う
+  - `DeviceInfo` を `UIDevice` 依存の状態保持から `Sendable` なスナップショットへ変更する
+  - Swift 6 では `UIDevice` の参照を保持したまま `DeviceInfo` を actor 境界で扱うと `MainActor` 隔離と `Sendable` 制約によりビルドエラーになるため、 `systemName` と `systemVersion` を値として保持する形に変更した
+  - `VideoView` の `VideoRenderer` 準拠を `@preconcurrency` で扱い、 `VideoRendererAdapter` の main thread への受け渡しを整理する
+  - `MediaStream`, `MediaChannel`, `NativePeerChannelFactory` の非 `Sendable` な受け渡しを整理する
+  - `NativePeerChannelFactory.createClientOfferSDP` の `offer` は `Task + async / await` では `passing closure as a 'sending' parameter risks causing data races` エラーになるため、コールバック形式へ変更する
+  - @zztkm
+- [ADD] TURN-TLS でユーザー指定の CA 証明書を検証できるようにする
+  - @t-miya
+- [ADD] WebSocket シグナリングでユーザー指定の CA 証明書を検証できるようにする
+  - @t-miya
+- [ADD] Configuration に H.265 向け映像コーデックパラメーター videoH265Params を追加する
+  - @t-miya
+- [ADD] offer の encodings の networkPriority を RTCRtpEncodingParameters に反映する
+  - SignalingOffer.Encoding に networkPriority: RTCPriority? プロパティを追加する
+  - updateOfferEncodings と rtpEncodingParameters で networkPriority を反映する
+  - @t-miya
+- [ADD] Configuration にサーバー証明書検証用の CA 証明書を指定する公開プロパティを追加する
+  - `caCertificate` に PEM 文字列を設定可能にし、後続 issue で証明書検証に利用する前提の API を追加する
+  - @t-miya
+- [ADD] Configuration に接続時の音声入力処理のバイパスを設定する `bypassVoiceProcessing` を追加する
+  - `RTCAudioDeviceModule.initWithBypassVoiceProcessing(_:)` を接続単位で利用する
+  - @t-miya
+- [ADD] MediaChannelHandlers にシグナリングメッセージを JSON 文字列として取得する `onReceiveSignalingJSON` を追加する
+  - @zztkm
+- [ADD] 音声ルート変更イベントとして `SoraHandlers.onChangeAudioRoute` を追加する
+  - `RTCAudioSessionDelegate.audioSessionDidChangeRoute` を利用してコールバックする
+  - コールバック引数として `RTCAudioSession`, `reason`, `previousRoute` を渡す
+  - 音声ルートの状態などの評価はコールバック内で `RTCAudioSession.currentRoute` を参照する
+  - @t-miya
+- [ADD] iOS 端末画面をキャプチャして配信する ScreenCapture を追加する
+  - MediaChannel に画面キャプチャ開始 / 停止 API を追加する
+  - 画面キャプチャ開始時に渡す設定として `ScreenCaptureSettings` 構造体を追加する
+    - targetFPS パラメータにより送信 FPS を指定することができる
+    - PTS が無効な場合は単調時刻でフォールバックして間引く
+  - 画面キャプチャには ReplayKit を利用する
+  - @t-miya
+- [FIX] videoCodec と不一致の codec 固有パラメーターが送信される問題を修正する
+  - @t-miya
+- [FIX] DataChannel の signaling ラベル受信を契機に WebSocket を切断するようにする
+  - `type: switched` 受信時から DataChannel `signaling` ラベルでのメッセージ受信時に変更する
+  - @t-miya
+- [FIX] `PeerChannel` のクロージャに `[weak self]` を追加し、解放遅延リスクを縮小する
+  - statistics コールバック、createClientOfferSDP コールバック、createAnswer setRemoteDescription コールバックに追加する
+  - @t-miya
+- [FIX] `PeerChannel.initializeCameraVideoCapture` の `CameraVideoCapturer.current` への force unwrap を除去し、レースリスクを縮小する
+  - @t-miya
+- [FIX] `CameraVideoCapturerDelegate` の `weak var cameraVideoCapturer` の暗黙的アンラップ型を Optional に変更し、nil 時のクラッシュを防止する
+  - @t-miya
+- [FIX] `URLSessionWebSocketChannel.send` の `webSocketTask` force unwrap を修正し、nil 時のクラッシュを防止する
+  - @t-miya
+- [FIX] ZLibUtil.unzip の入力長チェックを追加し、7 バイト未満の不正データによるクラッシュとメモリリークを修正する
+  - @t-miya
+- [FIX] Sora.add/remove の DispatchQueue.global().sync を NSLock に置換し、mediaChannels へのスレッドセーフなアクセスを保証する
+  - @t-miya
+- [FIX] PeerChannel.Lock の count / shouldDisconnect にスレッド間の排他制御を追加し、データレースおよび切断と新規処理開始の並走を防止する
+  - @t-miya
+- [FIX] シグナリングチャンネル接続エラー時に `connect()` で取得したロックが解放されないバグを修正する
+  - `sendConnectMessage(error:)` のエラーパスで `lock.unlock()` が呼ばれていなかったため
+  - @zztkm
+- [FIX] `Sora.setAudioMode` で AudioMode が `.default` であれば入力経路のオーバーライドをリセットする
+  - 入力経路を `.speaker` にオーバーライドした後に他モードを指定しても経路がリセットされなかったため
+  - @t-miya
+
+### misc
+
+- [CHANGE] prek.toml に切り替える
+  - @voluntas
+- [CHANGE] Slack 通知を rtCamp/action-slack-notify から shiguredo/github-actions の slack-notify に置き換える
+  - 2 つの通知ジョブを 1 つに統合し、notify_mode による通知制御と Fixed 通知に対応
+  - @voluntas
+- [UPDATE] build.yml の xcodebuild build コマンドに `SWIFT_VERSION=6` を追加する
+  - @zztkm
+- [ADD] Test にダミー映像キャプチャ DummyVideoCapturer を追加する
+  - 8 色のカラーバーを生成し、実機カメラ不要の E2E テストを可能にする
+  - @t-miya
+- [ADD] iOS E2E テストを self-hosted macOS runner で CI 実行できるようにする
+  - ci.yml を追加し、recvonly 接続テストを iOS Simulator 上で実行する
+  - @t-miya
+- [ADD] API ドキュメントを GitHub Pages で公開するワークフローを追加する
+  - deploy-apidoc.yml を追加し、Jazzy で生成した API ドキュメントを GitHub Pages にデプロイする
+  - @voluntas
+
 ## 2026.1.0
+
+**リリース日**: 2026-02-20
 
 - [UPDATE] PeerChannel.initializeAudioInput での音声入力初期化時にマイク入力をミュートするか設定するようにする
   - `RTCAudioSession.setInitialMicrophoneMute` に `Configuration.initialMicrophoneEnabled` の否定値を渡す

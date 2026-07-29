@@ -16,13 +16,26 @@ public final class SoraHandlers {
   /// メディアチャネルが除去されたときに呼ばれるクロージャー
   public var onRemoveMediaChannel: ((MediaChannel) -> Void)?
 
+  /// 音声入出力ルートが変更されたときに呼ばれるクロージャー
+  ///
+  /// - parameter session: 変更通知元の `RTCAudioSession`
+  /// - parameter reason: 変更理由
+  /// - parameter previousRoute: 変更前のルート情報
+  public var onChangeAudioRoute:
+    (
+      (
+        RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+      ) -> Void
+    )?
+
   /// 初期化します。
   public init() {}
 }
 
+// SDK の共有インスタンスを提供し、内部状態は SDK 側で管理するため、 @unchecked Sendable を付与します。
 /// サーバーへのインターフェースです。
 /// `Sora` オブジェクトを使用してサーバーへの接続を行います。
-public final class Sora {
+public final class Sora: @unchecked Sendable {
   // MARK: - SDK の操作
 
   private static let isInitialized: Bool = {
@@ -59,10 +72,25 @@ public final class Sora {
   // MARK: - プロパティ
 
   /// 接続中のメディアチャネルのリスト
-  public private(set) var mediaChannels: [MediaChannel] = []
+  public var mediaChannels: [MediaChannel] {
+    mediaChannelLock.lock()
+    defer { mediaChannelLock.unlock() }
+    return _mediaChannels
+  }
+
+  // mediaChannels の実体。読み書きは必ず mediaChannelLock で保護する
+  private var _mediaChannels: [MediaChannel] = []
+
+  // _mediaChannels への全アクセスを保護する排他ロック
+  private let mediaChannelLock = NSLock()
 
   /// イベントハンドラ
   public let handlers = SoraHandlers()
+
+  private lazy var audioSessionDelegateAdapter = SoraRTCAudioSessionDelegateAdapter {
+    [weak self] session, reason, previousRoute in
+    self?.handlers.onChangeAudioRoute?(session, reason, previousRoute)
+  }
 
   // MARK: - インスタンスの生成と取得
 
@@ -87,27 +115,46 @@ public final class Sora {
     // which is fatal to the initialization logic.
     // The following line will NEVER fail.
     if !initialized { fatalError() }
+    RTCAudioSession.sharedInstance().add(audioSessionDelegateAdapter)
+  }
+
+  deinit {
+    RTCAudioSession.sharedInstance().remove(audioSessionDelegateAdapter)
   }
 
   // MARK: - メディアチャネルの管理
 
+  // mediaChannelLock で _mediaChannels を保護し、handlers コールバックはロック外で呼ぶ。
+  //
+  // ロック内でコールバックを呼ぶと、ユーザーのハンドラから connect() を再呼び出しした場合にデッドロックする。
   func add(mediaChannel: MediaChannel) {
-    DispatchQueue.global().sync {
-      if !mediaChannels.contains(mediaChannel) {
-        Logger.debug(type: .sora, message: "add media channel")
-        mediaChannels.append(mediaChannel)
-        handlers.onAddMediaChannel?(mediaChannel)
-      }
+    var added = false
+    mediaChannelLock.lock()
+    if !_mediaChannels.contains(mediaChannel) {
+      Logger.debug(type: .sora, message: "add media channel")
+      _mediaChannels.append(mediaChannel)
+      added = true
+    }
+    mediaChannelLock.unlock()
+
+    if added {
+      handlers.onAddMediaChannel?(mediaChannel)
     }
   }
 
+  // add と同様、mediaChannelLock で _mediaChannels を保護し、handlers コールバックはロック外で呼ぶ。
   func remove(mediaChannel: MediaChannel) {
-    DispatchQueue.global().sync {
-      if mediaChannels.contains(mediaChannel) {
-        Logger.debug(type: .sora, message: "remove media channel")
-        mediaChannels.remove(mediaChannel)
-        handlers.onRemoveMediaChannel?(mediaChannel)
-      }
+    var removed = false
+    mediaChannelLock.lock()
+    if _mediaChannels.contains(mediaChannel) {
+      Logger.debug(type: .sora, message: "remove media channel")
+      _mediaChannels.remove(mediaChannel)
+      removed = true
+    }
+    mediaChannelLock.unlock()
+
+    if removed {
+      handlers.onRemoveMediaChannel?(mediaChannel)
     }
   }
 
@@ -264,6 +311,17 @@ public final class Sora {
       var options = options
       let session = RTCAudioSession.sharedInstance()
       session.lockForConfiguration()
+      defer {
+        session.unlockForConfiguration()
+      }
+      // 音声出力経路のリセットを行います。
+      // RTCAudioSession.overrideOutputAudioPort はカテゴリが playAndRecord の場合のみ有効なため
+      // カテゴリ遷移前のこの状態でリセットを行います。
+      if shouldResetPortOverride(for: mode)
+        && session.category == AVAudioSession.Category.playAndRecord.rawValue
+      {
+        try session.overrideOutputAudioPort(.none)
+      }
       switch mode {
       case .default(let category, let output):
         if output == .speaker {
@@ -280,20 +338,29 @@ public final class Sora {
         }
         try session.setCategory(.playAndRecord, with: options)
         try session.setMode(.voiceChat)
-        if output == .speaker {
-          try session.overrideOutputAudioPort(.speaker)
-        }
+        try session.overrideOutputAudioPort(output.portOverride)
       }
-      session.unlockForConfiguration()
       return .success(())
     } catch {
       return .failure(error)
     }
   }
 
+  // setAudioMode にて音声入力経路のリセットを行うか判定します
+  private func shouldResetPortOverride(for mode: AudioMode) -> Bool {
+    switch mode {
+    case .default(_, let output):
+      return output == .default
+    case .videoChat:
+      return false
+    case .voiceChat(let output):
+      return output == .default
+    }
+  }
+
   // MARK: - libwebrtc のログ出力
 
-  private static var webRTCCallbackLogger: RTCCallbackLogger = {
+  private nonisolated(unsafe) static var webRTCCallbackLogger: RTCCallbackLogger = {
     let logger = RTCCallbackLogger()
     logger.severity = .none
     return logger
@@ -377,6 +444,47 @@ public final class ConnectionTask {
     if state != .completed {
       Logger.debug(type: .mediaChannel, message: "connection task completed")
       state = .completed
+    }
+  }
+}
+
+// RTCAudioSessionDelegate を実装し、audioSessionDidChangeRoute イベントを受けて、
+// handlers.onChangeAudioRoute を呼び出す中継クラスです。
+//
+// オーディオ経路変更通知の流れ
+// 1. オーディオ経路の変更を RTCAudioSession::handleRouteChangeNotification で AVAudioSessionRouteChangeNotification で受信
+// 2. RTCAudioSession::notifyDidChangeRouteWithReason で audioSessionDidChangeRoute:reason:previousRoute: が呼ばれる
+// 3. SoraRTCAudioSessionDelegateAdapter(本クラス) の audioSessionDidChangeRoute で通知を受ける
+// 4. onChangeAudioRoute で SDK 利用者へ通知する
+private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessionDelegate {
+  private let onChangeAudioRoute:
+    (
+      RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+    ) -> Void
+
+  init(
+    onChangeAudioRoute:
+      @escaping (
+        RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
+      ) -> Void
+  ) {
+    self.onChangeAudioRoute = onChangeAudioRoute
+  }
+
+  func audioSessionDidChangeRoute(
+    _ session: RTCAudioSession,
+    reason: AVAudioSession.RouteChangeReason,
+    previousRoute: AVAudioSessionRouteDescription
+  ) {
+    switch reason {
+    case .unknown, .newDeviceAvailable, .oldDeviceUnavailable, .categoryChange, .override,
+      .wakeFromSleep, .noSuitableRouteForCategory:
+      onChangeAudioRoute(session, reason, previousRoute)
+    case .routeConfigurationChange:
+      // WebRTC 側でも routeConfigurationChange を無視しているため、ここでも無視します
+      break
+    @unknown default:
+      onChangeAudioRoute(session, reason, previousRoute)
     }
   }
 }

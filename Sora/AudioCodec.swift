@@ -10,7 +10,7 @@ private let descriptionTable: PairTable<String, AudioCodec> =
     ])
 
 /// 音声コーデックを表します。
-public enum AudioCodec {
+public enum AudioCodec: Sendable {
   /**
      サーバーが指定するデフォルトのコーデック。
      現在のデフォルトのコーデックは Opus です。
@@ -27,6 +27,8 @@ public enum AudioCodec {
 extension AudioCodec: CustomStringConvertible {
   /// 文字列表現を返します。
   public var description: String {
+    // PairTable の定義上、全 case が網羅されているため安全
+    // swiftlint:disable:next force_unwrapping
     descriptionTable.left(other: self)!
   }
 }

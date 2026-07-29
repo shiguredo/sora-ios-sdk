@@ -1,6 +1,6 @@
 # Sora iOS SDK
 
-[![libwebrtc](https://img.shields.io/badge/libwebrtc-144.7559-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/7559)
+[![libwebrtc](https://img.shields.io/badge/libwebrtc-150.7871-blue.svg)](https://chromium.googlesource.com/external/webrtc/+/branch-heads/7871)
 [![GitHub tag](https://img.shields.io/github/tag/shiguredo/sora-ios-sdk.svg)](https://github.com/shiguredo/sora-ios-sdk)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -16,12 +16,29 @@ Please read https://github.com/shiguredo/oss before use.
 
 利用前に https://github.com/shiguredo/oss をお読みください。
 
+## 特徴
+
+- [libwebrtc](https://webrtc.googlesource.com/src/) を利用した iOS SDK
+- [WebRTC 統計情報](https://www.w3.org/TR/webrtc-stats/) の取得に対応 (`MediaChannel.getStats`)
+- 回線が不安定な際に、解像度とフレームレートの優先度を指定する `DegradationPreference` に対応
+  - `.maintainFramerate` / `.maintainResolution` / `.balanced` / `.disabled` を指定可能
+- 映像コーデック `VP8` / `VP9` / `AV1` / `H.264` / `H.265` に対応
+  - `H.264` / `H.265` は Apple Video Toolbox によるハードウェアデコーダー/エンコーダーを利用
+- 音声トラックを無効にし、デジタルサイレンスパケットを送出するミュート(ソフトミュート)を利用できる
+- 映像トラックを無効にし、黒塗りの映像パケットを送出するミュート(ソフトミュート)を利用できる
+- 音声・映像のプライバシーインジケーターを消灯するミュート(ハードミュート)を利用できる
+  - 接続時にハードミュート状態にできる
+- フロント / リアカメラ切り替えとキャプチャフォーマット変更に対応
+- 各種カメラ設定を利用できる
+  - 解像度・フレームレート・フロントカメラ優先
+- 受信した音声データを PCM 形式で取得できる
+
 ## システム条件
 
 - iOS 14 以降
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
 - Xcode 26.2
-  - Swift 5 言語モードでビルドしています
+  - Swift 6 言語モードでビルドしています
 - WebRTC SFU Sora 2025.2.0 以降
 
 Xcode と Swift のバージョンによっては、 取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。
@@ -57,8 +74,8 @@ Xcode と Swift のバージョンによっては、 取得できるバイナリ
 Apache License 2.0
 
 ```
-Copyright 2017-2024, Shiguredo Inc.
-Copyright 2017-2023, SUZUKI Tetsuya (Original Author)
+Copyright 2017 Shiguredo Inc.
+Copyright 2017 SUZUKI Tetsuya (Original Author)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

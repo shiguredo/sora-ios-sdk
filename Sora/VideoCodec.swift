@@ -13,7 +13,7 @@ private let descriptionTable: PairTable<String, VideoCodec> =
     ])
 
 /// 映像コーデックを表します。
-public enum VideoCodec {
+public enum VideoCodec: Sendable {
   /**
      サーバーが指定するデフォルトのコーデック。
      現在のデフォルトのコーデックは VP9 です。
@@ -39,6 +39,8 @@ public enum VideoCodec {
 extension VideoCodec: CustomStringConvertible {
   /// 文字列表現を返します。
   public var description: String {
+    // PairTable の定義上、全 case が網羅されているため安全
+    // swiftlint:disable:next force_unwrapping
     descriptionTable.left(other: self)!
   }
 }

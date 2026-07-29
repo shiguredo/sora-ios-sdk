@@ -39,6 +39,8 @@ private enum ZLibUtil {
     zipped.append(destinationBuffer, count: size)
 
     let checksum = input.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> UInt32 in
+      // 空でない Data の withUnsafeBytes 内では baseAddress は非 nil
+      // swiftlint:disable:next force_unwrapping
       let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
       return UInt32(adler32(1, bytef, UInt32(input.count)))
     }
@@ -51,7 +53,8 @@ private enum ZLibUtil {
   }
 
   static func unzip(_ input: Data) -> Data? {
-    if input.isEmpty {
+    // ヘッダー (2 バイト) + 圧縮データ (1 バイト以上) + チェックサム (4 バイト) = 最低 7 バイト必要
+    if input.count < 7 {
       return nil
     }
 
@@ -75,12 +78,17 @@ private enum ZLibUtil {
       COMPRESSION_ZLIB)
 
     if size == 0 {
+      // 正常系では Data(bytesNoCopy:deallocator:.free) で所有権を移譲するが、
+      // このパスでは Data を生成しないため明示的に解放する
+      destinationBuffer.deallocate()
       return nil
     }
 
     let data = Data(bytesNoCopy: destinationBuffer, count: size, deallocator: .free)
 
     let calculatedChecksum = data.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Data in
+      // 非空 Data の withUnsafeBytes 内では baseAddress は非 nil
+      // swiftlint:disable:next force_unwrapping
       let bytef = p.baseAddress!.assumingMemoryBound(to: Bytef.self)
       var result = UInt32(adler32(1, bytef, UInt32(data.count))).bigEndian
       return Data(bytes: &result, count: MemoryLayout<UInt32>.size)
@@ -161,10 +169,11 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
       return
     }
 
-    if let message = String(data: data, encoding: .utf8) {
+    let messageJSON = String(data: data, encoding: .utf8)
+    if let messageJSON {
       Logger.info(
         type: .dataChannel,
-        message: "received data channel message: \(String(describing: message))")
+        message: "received data channel message: \(String(describing: messageJSON))")
     }
 
     // Sora から送られてきたメッセージ
@@ -199,8 +208,16 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
         }
 
       case "signaling", "push", "notify":
+        if let messageJSON {
+          peerChannel.internalHandlers.onReceiveSignalingJSON?(messageJSON)
+        }
         switch Signaling.decode(data) {
         case .success(let signaling):
+          // signaling ラベルの DataChannel でメッセージを受信した時点を
+          // DataChannel シグナリング確立の証拠として WebSocket 切断をスケジュールする
+          if dataChannel.label == "signaling" {
+            peerChannel.scheduleWebSocketDisconnectIfNeeded()
+          }
           peerChannel.handleSignalingOverDataChannel(signaling)
         case .failure(let error):
           Logger.error(

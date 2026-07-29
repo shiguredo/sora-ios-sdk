@@ -65,7 +65,10 @@ class ConnectionTimer {
       }
       Logger.debug(type: .connectionTimer, message: "all OK")
     }
-    RunLoop.main.add(timer!, forMode: RunLoop.Mode.common)
+    guard let timer else {
+      return
+    }
+    RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
     isRunning = true
   }
 

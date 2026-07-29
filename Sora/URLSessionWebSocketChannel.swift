@@ -1,10 +1,15 @@
 import Foundation
+import Security
 
-class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDelegate,
-  URLSessionWebSocketDelegate
+// URLSession を利用した WebSocket 通信用のクラスです。
+// URLSession の delegateQueue と SignalingChannel 側の単一並行キューを前提に状態を扱うため、
+// @unchecked Sendable を付与します。
+final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessionDelegate,
+  URLSessionTaskDelegate, URLSessionWebSocketDelegate
 {
   let url: URL
   let proxy: Proxy?
+  let caCertificates: [SecCertificate]?
   var handlers = WebSocketChannelHandlers()
   var internalHandlers = WebSocketChannelInternalHandlers()
   var isClosing = false
@@ -19,9 +24,10 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
   var urlSession: URLSession?
   var webSocketTask: URLSessionWebSocketTask?
 
-  init(url: URL, proxy: Proxy?) {
+  init(url: URL, proxy: Proxy?, caCertificates: [SecCertificate]?) {
     self.url = url
     self.proxy = proxy
+    self.caCertificates = caCertificates
   }
 
   func connect(delegateQueue: OperationQueue?) {
@@ -97,7 +103,7 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
   }
 
   func send(message: WebSocketMessage) {
-    var nativeMessage: URLSessionWebSocketTask.Message!
+    let nativeMessage: URLSessionWebSocketTask.Message
     switch message {
     case .text(let text):
       Logger.debug(type: .webSocketChannel, message: "[\(host)] sending text: \(text)")
@@ -106,7 +112,11 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
       Logger.debug(type: .webSocketChannel, message: "[\(host)] sending binary: \(data)")
       nativeMessage = .data(data)
     }
-    webSocketTask!.send(nativeMessage) { [weak self] error in
+    guard let webSocketTask else {
+      Logger.debug(type: .webSocketChannel, message: "[\(host)] webSocketTask is nil")
+      return
+    }
+    webSocketTask.send(nativeMessage) { [weak self] error in
       guard let weakSelf = self else {
         return
       }
@@ -253,8 +263,14 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
     // 認証方式によって処理を分岐
     switch authMethod {
     case NSURLAuthenticationMethodServerTrust:
-      // デフォルト処理
-      completionHandler(.performDefaultHandling, nil)
+      if let caCertificates {
+        handleServerTrustAuthenticationChallenge(
+          challenge,
+          completionHandler: completionHandler)
+      } else {
+        // デフォルト処理
+        completionHandler(.performDefaultHandling, nil)
+      }
     case NSURLAuthenticationMethodHTTPBasic:
       // basic 認証
       handleBasicAuthenticationChallenge(challenge, completionHandler: completionHandler)
@@ -289,6 +305,99 @@ class URLSessionWebSocketChannel: NSObject, URLSessionDelegate, URLSessionTaskDe
 
     let credential = URLCredential(user: username, password: password, persistence: .forSession)
     completionHandler(.useCredential, credential)
+  }
+
+  // MARK: - サーバー証明書検証
+
+  /// ユーザー指定 CA 証明書を用いてサーバー証明書を検証する
+  ///
+  /// 呼び出し元で `self.caCertificates` が非 nil であることを保証している前提で、
+  /// `self.caCertificates` を直接参照する
+  private func handleServerTrustAuthenticationChallenge(
+    _ challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    // 呼び出し元で非 nil が保証されている
+    // guard let による分岐直後のため安全
+    // swiftlint:disable:next force_unwrapping
+    let caCertificates = self.caCertificates!
+    guard let serverTrust = challenge.protectionSpace.serverTrust else {
+      let message =
+        "[\(host)] \(#function): server trust is nil"
+      Logger.info(type: .webSocketChannel, message: message)
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      disconnect(error: SoraError.signalingChannelError(reason: message))
+      return
+    }
+
+    if Self.evaluateServerTrust(serverTrust, withAnchorCertificates: caCertificates) {
+      completionHandler(.useCredential, URLCredential(trust: serverTrust))
+    } else {
+      let message =
+        "[\(host)] \(#function): server trust evaluation failed"
+      Logger.info(type: .webSocketChannel, message: message)
+      completionHandler(.cancelAuthenticationChallenge, nil)
+      disconnect(error: SoraError.signalingChannelError(reason: message))
+    }
+  }
+
+  /// SecTrust を指定 CA 証明書アンカーで評価する
+  ///
+  /// `Configuration.caCertificate` にはルート CA と中間 CA の両方が PEM で含まれている可能性があるが、
+  /// `SecTrustSetAnchorCertificates` に中間 CA を渡すと、本来ルート CA の署名で検証すべき
+  /// 中間 CA が無条件に信頼済みアンカーと見なされ、チェーン検証の強度が落ちる。
+  /// そのため、発行者と主体が同一の自己署名証明書（ルート CA）のみをアンカーとして使用する
+  static func evaluateServerTrust(
+    _ serverTrust: SecTrust,
+    withAnchorCertificates anchorCertificates: [SecCertificate]
+  ) -> Bool {
+    // ルート CA（自己署名証明書）のみをアンカーとして抽出する
+    let rootAnchorCertificates = self.rootAnchorCertificates(from: anchorCertificates)
+    guard !rootAnchorCertificates.isEmpty else { return false }
+    let setAnchorsStatus = SecTrustSetAnchorCertificates(
+      serverTrust, rootAnchorCertificates as CFArray)
+    guard setAnchorsStatus == errSecSuccess else {
+      Logger.debug(
+        type: .webSocketChannel,
+        message:
+          "SecTrustSetAnchorCertificates failed with status \(setAnchorsStatus)")
+      return false
+    }
+    let setAnchorsOnlyStatus = SecTrustSetAnchorCertificatesOnly(serverTrust, true)
+    guard setAnchorsOnlyStatus == errSecSuccess else {
+      Logger.debug(
+        type: .webSocketChannel,
+        message:
+          "SecTrustSetAnchorCertificatesOnly failed with status \(setAnchorsOnlyStatus)")
+      return false
+    }
+    var error: CFError?
+    let result = SecTrustEvaluateWithError(serverTrust, &error)
+    if !result, let error {
+      let nsError = error as Error as NSError
+      Logger.debug(
+        type: .webSocketChannel,
+        message:
+          "server trust evaluate error: domain=\(nsError.domain), code=\(nsError.code), description=\(nsError.localizedDescription)"
+      )
+    }
+    return result
+  }
+
+  /// 指定された証明書群から自己署名の root CA のみを抽出する
+  ///
+  /// root CA と中間 CA のみが含まれる証明書チェーンを想定しているため、
+  /// subject と issuer 比較の簡易的なチェックにより抽出する
+  static func rootAnchorCertificates(from certificates: [SecCertificate]) -> [SecCertificate] {
+    certificates.filter { certificate in
+      guard
+        let subject = SecCertificateCopyNormalizedSubjectSequence(certificate) as Data?,
+        let issuer = SecCertificateCopyNormalizedIssuerSequence(certificate) as Data?
+      else {
+        return false
+      }
+      return subject == issuer
+    }
   }
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

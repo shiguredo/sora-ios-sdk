@@ -180,8 +180,10 @@ public class VideoView: UIView {
 
 // MARK: - VideoRenderer
 
+// TODO(zztkm): VideoRenderer の callback 全体を main thread 前提で扱える設計に整理したら
+// `@preconcurrency` を外す。
 /// :nodoc:
-extension VideoView: VideoRenderer {
+extension VideoView: @preconcurrency VideoRenderer {
   /// :nodoc:
   public func onChange(size: CGSize) {
     contentView.onVideoFrameSizeUpdated(size)
@@ -338,7 +340,10 @@ class VideoViewContentView: UIView {
   private var allowsRender: Bool {
     // 前述のエラーはキーウィンドウ外での描画でも発生するので、
     // ビューがキーウィンドウに表示されている場合のみ描画を許可する
-    !(isHidden || window == nil || !window!.isKeyWindow)
+    guard let window else {
+      return false
+    }
+    return !isHidden && window.isKeyWindow
   }
 
   private var renderingContentMode: UIView.ContentMode {

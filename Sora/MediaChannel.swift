@@ -38,7 +38,15 @@ public final class MediaChannelHandlers {
   /// ストリームが除去されたときに呼ばれるクロージャー
   public var onRemoveStream: ((MediaStream) -> Void)?
 
+  /// シグナリング受信時に呼ばれるクロージャー。
+  /// 引数の `String` には、受信したシグナリングメッセージの JSON 文字列が渡されます。
+  public var onReceiveSignalingJSON: ((String) -> Void)?
+
   /// シグナリング受信時に呼ばれるクロージャー
+  @available(
+    *, deprecated,
+    message: "JSON 文字列を受け取る onReceiveSignalingJSON へ移行してください。"
+  )
   public var onReceiveSignaling: ((Signaling) -> Void)?
 
   /// シグナリングが DataChannel 経由に切り替わったタイミングで呼ばれるクロージャー
@@ -161,6 +169,8 @@ public final class MediaChannel {
 
   /// ピアチャネル
   var peerChannel: PeerChannel {
+    // init で必ず初期化されるため安全
+    // swiftlint:disable:next force_unwrapping
     _peerChannel!
   }
 
@@ -195,6 +205,8 @@ public final class MediaChannel {
   }
 
   private var connectionTimer: ConnectionTimer {
+    // init で必ず初期化されるため安全
+    // swiftlint:disable:next force_unwrapping
     _connectionTimer!
   }
 
@@ -202,10 +214,21 @@ public final class MediaChannel {
   private var _connectionTimer: ConnectionTimer?
 
   private let manager: Sora
+  private let nativePeerChannelFactory: NativePeerChannelFactory
 
   // 映像ハードミュートの同時呼び出しを直列化するための Actor です
   // MediaChannel 間の排他実行を保証するため static にしています
   private static let videoHardMuteActor = VideoHardMuteActor()
+
+  // ReplayKit を利用した画面キャプチャ制御です
+  // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
+  // 生成後は MediaChannel のライフサイクルで保持します。
+  // stopScreenCapture / internalDisconnect から非同期停止を呼ぶため、
+  // 参照を途中で解放せずに同一インスタンスへ停止要求を集約します。
+  private var screenCaptureController: ScreenCaptureController?
+  // screenCaptureController の生成・参照取得を排他し、
+  // startScreenCapture の並行呼び出し時でも単一インスタンスを保証するためのロックです。
+  private let screenCaptureControllerLock = NSLock()
 
   // MARK: - インスタンスの生成
 
@@ -216,16 +239,21 @@ public final class MediaChannel {
   init(manager: Sora, configuration: Configuration) {
     self.manager = manager
     self.configuration = configuration
+    self.nativePeerChannelFactory = NativePeerChannelFactory(
+      bypassVoiceProcessing: configuration.bypassVoiceProcessing)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
       signalingChannel: signalingChannel,
+      nativePeerChannelFactory: nativePeerChannelFactory,
       mediaChannel: self)
     handlers = configuration.mediaChannelHandlers
 
     _connectionTimer = ConnectionTimer(
       monitors: [
         .signalingChannel(signalingChannel),
+        // 同一 init 内で初期化済みのため安全
+        // swiftlint:disable:next force_unwrapping
         .peerChannel(_peerChannel!),
       ],
       timeout: configuration.connectionTimeout)
@@ -274,7 +302,7 @@ public final class MediaChannel {
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
     let response = try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<RPCResponse<Any>?, Error>) in
+      (continuation: CheckedContinuation<RPCRawResponse?, Error>) in
       guard let rpcChannel = self.peerChannel.rpcChannel else {
         continuation.resume(
           throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
@@ -286,7 +314,12 @@ public final class MediaChannel {
         isNotificationRequest: isNotificationRequest,
         timeout: timeout
       ) { result in
-        continuation.resume(with: result)
+        switch result {
+        case .success(let response):
+          continuation.resume(returning: response)
+        case .failure(let error):
+          continuation.resume(throwing: error)
+        }
       }
     }
     guard let response else {
@@ -296,7 +329,7 @@ public final class MediaChannel {
   }
 
   private func decodeRPCResponse<M: RPCMethodProtocol>(
-    _ response: RPCResponse<Any>,
+    _ response: RPCRawResponse,
     method: M.Type
   ) throws -> RPCResponse<M.Result> {
     let decoded: M.Result
@@ -408,6 +441,16 @@ public final class MediaChannel {
       weakSelf.handlers.onRemoveStream?(stream)
     }
 
+    peerChannel.internalHandlers.onReceiveSignalingJSON = { [weak self] json in
+      guard let weakSelf = self else {
+        return
+      }
+      Logger.debug(type: .mediaChannel, message: "receive signaling json")
+      Logger.debug(type: .mediaChannel, message: "call onReceiveSignalingJSON")
+      weakSelf.internalHandlers.onReceiveSignalingJSON?(json)
+      weakSelf.handlers.onReceiveSignalingJSON?(json)
+    }
+
     peerChannel.internalHandlers.onReceiveSignaling = { [weak self] message in
       guard let weakSelf = self else {
         return
@@ -483,6 +526,11 @@ public final class MediaChannel {
       break
 
     default:
+      // 接続の終了時に画面キャプチャを停止します。
+      // 非同期で実行し、切断シーケンス自体はブロックしません。
+      // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
+      currentScreenCaptureController()?.stopCaptureForDisconnect()
+
       Logger.debug(type: .mediaChannel, message: "try disconnecting")
       if let error {
         Logger.error(
@@ -633,7 +681,7 @@ public final class MediaChannel {
     }
 
     // 音声ハードミュートを切り替えます
-    if !NativePeerChannelFactory.default.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+    if !self.nativePeerChannelFactory.audioDeviceModuleWrapper.setAudioHardMute(mute) {
       return SoraError.mediaChannelError(
         reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
     }
@@ -732,19 +780,104 @@ public final class MediaChannel {
       senderStream.videoEnabled = false
       try await Self.videoHardMuteActor.setMute(
         mute: true,
-        senderStream: senderStream,
-        cameraSettings: configuration.cameraSettings
+        senderStream: SenderStreamBox(stream: senderStream),
+        cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
     } else {
+      // 画面キャプチャ動作中はカメラを再開しません
+      guard !isScreenCaptureActive() else {
+        throw SoraError.mediaChannelError(
+          reason:
+            "screen capture is active, stopScreenCapture before setVideoHardMute(false)")
+      }
+
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(
         mute: false,
-        senderStream: senderStream,
-        cameraSettings: configuration.cameraSettings
+        senderStream: SenderStreamBox(stream: senderStream),
+        cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
       senderStream.videoEnabled = true
     }
     Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")
+  }
+
+  /// MediaChannel の接続中に ReplayKit を利用して画面キャプチャおよび映像配信を開始します
+  ///
+  /// 送信フレームレートは `ScreenCaptureSettings.targetFPS` で制御できます。
+  ///
+  /// 同一 senderStream に対してカメラキャプチャが動作中の場合は開始できません。
+  /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
+  /// 接続後にカメラを停止する場合は `setVideoHardMute(true)` を先に呼んでください。
+  ///
+  /// - Parameter settings: 画面キャプチャ設定
+  /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます
+  public func startScreenCapture(settings: ScreenCaptureSettings = .init()) async throws {
+    let senderStream: MediaStream
+    switch requireSenderStreamForVideoMute() {
+    case .failure(let error):
+      throw error
+    case .success(let stream):
+      senderStream = stream
+    }
+
+    // カメラキャプチャ動作中は開始できません
+    guard !(await isCameraVideoCaptureRunning(on: senderStream)) else {
+      throw SoraError.mediaChannelError(
+        reason:
+          "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+      )
+    }
+
+    let screenCaptureController = getOrCreateScreenCaptureController()
+
+    try await screenCaptureController.startCapture(
+      settings: settings,
+      senderStream: senderStream
+    )
+    Logger.debug(type: .mediaChannel, message: "startScreenCapture")
+  }
+
+  /// ReplayKit を利用した画面キャプチャを停止します
+  public func stopScreenCapture() async {
+    let screenCaptureController = currentScreenCaptureController()
+    await screenCaptureController?.stopCapture()
+    Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
+  }
+
+  /// 画面キャプチャが動作中かを取得します
+  public func isScreenCaptureActive() -> Bool {
+    currentScreenCaptureController()?.isCaptureActive() ?? false
+  }
+
+  // screenCaptureController インスタンスを取得します
+  // インスタンス未生成の場合は生成します
+  // スクリーンキャプチャ機能は必ず利用するとは限らないため必要時に生成しています
+  private func getOrCreateScreenCaptureController() -> ScreenCaptureController {
+    withScreenCaptureControllerLock {
+      if let screenCaptureController {
+        return screenCaptureController
+      }
+
+      let screenCaptureController = ScreenCaptureController(mediaChannel: self)
+      self.screenCaptureController = screenCaptureController
+      return screenCaptureController
+    }
+  }
+
+  // Current の ScreenCaptureController を取得します。
+  // キャプチャ終了時、切断時に取得するために利用します。
+  private func currentScreenCaptureController() -> ScreenCaptureController? {
+    withScreenCaptureControllerLock {
+      screenCaptureController
+    }
+  }
+
+  // ScreenCaptureController をロック付きで取得します
+  private func withScreenCaptureControllerLock<T>(_ block: () throws -> T) rethrows -> T {
+    screenCaptureControllerLock.lock()
+    defer { screenCaptureControllerLock.unlock() }
+    return try block()
   }
 
   // 映像ミュートのための接続状況や接続設定のチェックを実行した上で送信ストリームを取得します
@@ -779,6 +912,23 @@ public final class MediaChannel {
     }
 
     return .success(senderStream)
+  }
+
+  // 指定した senderStream に対してカメラキャプチャが実行中かを返します
+  private func isCameraVideoCaptureRunning(on senderStream: MediaStream) async -> Bool {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        guard
+          let current = CameraVideoCapturer.current,
+          current.isRunning,
+          let currentSenderStream = current.stream
+        else {
+          continuation.resume(returning: false)
+          return
+        }
+        continuation.resume(returning: currentSenderStream === senderStream)
+      }
+    }
   }
 }
 

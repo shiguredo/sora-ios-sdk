@@ -1,8 +1,9 @@
 import Foundation
 import WebRTC
 
-class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
-  static var shared = WrapperVideoEncoderFactory()
+// WebRTC のエンコーダーファクトリーを共有して扱うため、 @unchecked Sendable を付与します。
+final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoEncoderFactory {
+  static let shared = WrapperVideoEncoderFactory()
 
   var defaultEncoderFactory: RTCDefaultVideoEncoderFactory
 
@@ -30,19 +31,19 @@ class WrapperVideoEncoderFactory: NSObject, RTCVideoEncoderFactory {
   }
 }
 
-class NativePeerChannelFactory {
-  static var `default` = NativePeerChannelFactory()
-
+// WebRTC の非 Sendable オブジェクトを保持するため、
+// 呼び出し側でスレッド安全性を担保する前提で @unchecked Sendable を付与します。
+final class NativePeerChannelFactory: @unchecked Sendable {
   let audioDeviceModule: RTCAudioDeviceModule
   /// 録音ポーズ/再開制御用に保持する ADM ラッパー
   let audioDeviceModuleWrapper: AudioDeviceModuleWrapper
 
   var nativeFactory: RTCPeerConnectionFactory
 
-  init() {
+  init(bypassVoiceProcessing: Bool) {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
 
-    audioDeviceModule = RTCAudioDeviceModule()
+    audioDeviceModule = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
     audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: audioDeviceModule)
 
     // 映像コーデックのエンコーダーとデコーダーを用意する
@@ -70,13 +71,19 @@ class NativePeerChannelFactory {
     configuration: WebRTCConfiguration,
     constraints: MediaConstraints,
     proxy: Proxy? = nil,
+    caCertificates: [SecCertificate]? = nil,
     delegate: RTCPeerConnectionDelegate?
   ) -> RTCPeerConnection? {
+    let certificateVerifier = createCertificateVerifier(
+      configuration: configuration,
+      caCertificates: caCertificates)
     if let proxy {
+      // proxy ありの overload は certificateVerifier が nullable のため、
+      // verifier が不要な場合は nil をそのまま渡せる。
       return nativeFactory.peerConnection(
         with: configuration.nativeValue,
         constraints: constraints.nativeValue,
-        certificateVerifier: nil,
+        certificateVerifier: certificateVerifier,
         delegate: delegate,
         proxyType: RTCProxyType.https,
         proxyAgent: proxy.agent,
@@ -85,10 +92,32 @@ class NativePeerChannelFactory {
         proxyUsername: proxy.username ?? "",
         proxyPassword: proxy.password ?? "")
     } else {
-      return nativeFactory.peerConnection(
-        with: configuration.nativeValue, constraints: constraints.nativeValue,
-        delegate: delegate)
+      if let certificateVerifier {
+        return nativeFactory.peerConnection(
+          with: configuration.nativeValue,
+          constraints: constraints.nativeValue,
+          certificateVerifier: certificateVerifier,
+          delegate: delegate)
+      } else {
+        // proxy なしの certificateVerifier 付き overload は nullable ではないため、
+        // certificateVerifier が不要な場合は certificateVerifier なしの overload を使う。
+        return nativeFactory.peerConnection(
+          with: configuration.nativeValue,
+          constraints: constraints.nativeValue,
+          delegate: delegate)
+      }
     }
+  }
+
+  private func createCertificateVerifier(
+    configuration: WebRTCConfiguration,
+    caCertificates: [SecCertificate]?
+  ) -> RTCSSLCertificateVerifier? {
+    if configuration.usesVerifiedTURNTLS {
+      return IOSCertificateVerifier(caCertificates: caCertificates)
+    }
+
+    return nil
   }
 
   func createNativeStream(streamId: String) -> RTCMediaStream {
@@ -175,12 +204,13 @@ class NativePeerChannelFactory {
       constraints: constraints)
     peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
     peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
-    Task {
-      do {
-        let sdp = try await peer2.offer(for: constraints.nativeValue)
-        handler(sdp.sdp, nil)
-      } catch {
+    peer2.offer(for: constraints.nativeValue) { sdp, error in
+      if let error {
         handler(nil, error)
+      } else if let sdp {
+        handler(sdp.sdp, nil)
+      } else {
+        handler(nil, SoraError.peerChannelError(reason: "offer creation failed"))
       }
       peer2.close()
     }

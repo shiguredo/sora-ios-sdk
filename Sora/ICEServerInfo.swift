@@ -41,6 +41,17 @@ public final class ICEServerInfo {
     self.credential = credential
     self.tlsSecurityPolicy = tlsSecurityPolicy
   }
+
+  var usesVerifiedTURNTLS: Bool {
+    switch tlsSecurityPolicy {
+    case .secure:
+      return urls.contains { url in
+        url.lowercased().hasPrefix("turns:")
+      }
+    case .insecure:
+      return false
+    }
+  }
 }
 
 /// :nodoc:
@@ -48,7 +59,7 @@ extension ICEServerInfo: CustomStringConvertible {
   public var description: String {
     let encoder = JSONEncoder()
     let data = try! encoder.encode(self)
-    return String(data: data, encoding: .utf8)!
+    return String(data: data, encoding: .utf8) ?? "-"
   }
 }
 

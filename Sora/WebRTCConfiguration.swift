@@ -19,7 +19,7 @@ public struct MediaConstraints {
 }
 
 /// SDP でのマルチストリームの記述方式です。
-public enum SDPSemantics {
+public enum SDPSemantics: Sendable {
   /// Unified Plan
   case unifiedPlan
 
@@ -106,16 +106,24 @@ public struct WebRTCConfiguration {
     // AES-GCM を有効にする
     config.cryptoOptions = RTCCryptoOptions(
       srtpEnableGcmCryptoSuites: true,
+      srtpPreferGcmCryptoSuites: true,
       srtpEnableAes128Sha1_32CryptoCipher: false,
+      srtpEnableAes128Sha1_80CryptoCipher: false,
       srtpEnableEncryptedRtpHeaderExtensions: false,
       sframeRequireFrameEncryption: false)
     return config
   }
 
   var nativeConstraints: RTCMediaConstraints { constraints.nativeValue }
+
+  var usesVerifiedTURNTLS: Bool {
+    iceServerInfos.contains { info in
+      info.usesVerifiedTURNTLS
+    }
+  }
 }
 
-private var sdpSemanticsTable: PairTable<String, SDPSemantics> =
+private let sdpSemanticsTable: PairTable<String, SDPSemantics> =
   PairTable(
     name: "SDPSemantics",
     pairs: [("unifiedPlan", .unifiedPlan)])

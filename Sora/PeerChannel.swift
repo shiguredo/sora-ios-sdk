@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import WebRTC
 
 /// :nodoc:
@@ -9,7 +10,21 @@ extension RTCDegradationPreference: CustomStringConvertible {
     case .disabled: "disabled"
     case .maintainFramerate: "maintain-framerate"
     case .maintainResolution: "maintain-resolution"
-    default: "-"
+    @unknown default: "-"
+    }
+  }
+}
+
+/// :nodoc:
+/// デバッグログ出力用に RTCPriority の文字列表現を提供する
+extension RTCPriority: CustomStringConvertible {
+  public var description: String {
+    switch self {
+    case .veryLow: "very-low"
+    case .low: "low"
+    case .medium: "medium"
+    case .high: "high"
+    @unknown default: "unknown(\(rawValue))"
     }
   }
 }
@@ -47,6 +62,9 @@ final class PeerChannelInternalHandlers {
   /// シグナリング受信時に呼ばれるクロージャー
   var onReceiveSignaling: ((Signaling) -> Void)?
 
+  /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
+  var onReceiveSignalingJSON: ((String) -> Void)?
+
   /// DataChannel の open 時に呼ばれるクロージャー
   var onOpenDataChannel: ((String) -> Void)?
 
@@ -66,51 +84,83 @@ final class PeerChannelInternalHandlers {
 class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - Constants
 
-  /// type: switched 受信後、WebSocket 切断までの待機時間（秒）
+  /// DataChannel の signaling ラベル受信後、WebSocket 切断までの待機時間（秒）
   /// NOTE: DataChannel への切り替え後、WebSocket 経由でまだ送信中のメッセージがある可能性を考慮し、
   /// 余裕を持って WebSocket を切断するために待機時間を設けている。
   private static let switchedDisconnectDelay: TimeInterval = 10.0
 
   final class Lock {
     weak var context: PeerChannel?
-    var count: Int = 0
-    var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
+
+    // 進行中の非同期処理数。lock() でインクリメント、unlock() でデクリメントする
+    private var count: Int = 0
+
+    // 切断処理が開始されたことを示すフラグ。true の場合 lock() は false を返す。
+    // 不変条件: isDisconnecting == true ならば count == 0
+    private var isDisconnecting: Bool = false
+
+    // count > 0 の間に切断要求があった場合に遅延実行用パラメータを保持する
+    private var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
+
+    // count, isDisconnecting, shouldDisconnect への全アクセスを保護する排他ロック
+    private let nsLock = NSLock()
 
     func waitDisconnect(error: Error?, reason: DisconnectReason) {
+      var shouldCallBasicDisconnect = false
+      nsLock.lock()
       if count == 0 {
-        context?.basicDisconnect(error: error, reason: reason)
+        isDisconnecting = true
+        shouldCallBasicDisconnect = true
       } else {
         shouldDisconnect = (true, error, reason)
       }
+      nsLock.unlock()
+
+      if shouldCallBasicDisconnect {
+        context?.basicDisconnect(error: error, reason: reason)
+      }
     }
 
-    func lock() {
+    @discardableResult
+    func lock() -> Bool {
+      nsLock.lock()
+      if isDisconnecting {
+        nsLock.unlock()
+        return false
+      }
       count += 1
+      nsLock.unlock()
+      return true
     }
 
     func unlock() {
+      var disconnectParams: (Error?, DisconnectReason)?
+      nsLock.lock()
       if count <= 0 {
         fatalError("count is already 0")
       }
       count -= 1
       if count == 0 {
-        disconnect()
+        switch shouldDisconnect {
+        case (true, let error, let reason):
+          isDisconnecting = true
+          shouldDisconnect = (false, nil, .unknown)
+          disconnectParams = (error, reason)
+        default:
+          break
+        }
       }
-    }
+      nsLock.unlock()
 
-    func disconnect() {
-      switch shouldDisconnect {
-      case (true, let error, let reason):
-        shouldDisconnect = (false, nil, .unknown)
+      if let (error, reason) = disconnectParams {
         if let context {
           if context.state != .closed {
             context.basicDisconnect(error: error, reason: reason)
           }
         }
-      default:
-        break
       }
     }
+
   }
 
   // MARK: - Properties
@@ -118,23 +168,38 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var internalHandlers = PeerChannelInternalHandlers()
   let configuration: Configuration
   let signalingChannel: SignalingChannel
+  let nativePeerChannelFactory: NativePeerChannelFactory
 
   private(set) var streams: [MediaStream] = []
   private(set) var iceCandidates: [ICECandidate] = []
 
   var dataChannels: [String: DataChannel] = [:]
   var switchedToDataChannel: Bool = false
+  nonisolated(unsafe) var webSocketDisconnectScheduled: Bool = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
   var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
 
   var state: PeerChannelConnectionState {
-    guard let nativeChannel else {
-      return PeerChannelConnectionState(RTCPeerConnectionState.new)
+    if let nativeChannel {
+      let state = PeerChannelConnectionState(nativeChannel.connectionState)
+      // connect() 開始後から finishConnecting() / basicDisconnect() までは onConnect が保持される。
+      // そのため、 RTCPeerConnection を生成済みでも connectionState が .new の間は
+      // 接続試行中として扱う。
+      if onConnect != nil, state == .new {
+        return .connecting
+      }
+      return state
     }
 
-    return PeerChannelConnectionState(nativeChannel.connectionState)
+    if onConnect != nil {
+      // offer.configuration を受け取るまで RTCPeerConnection を生成しないため、
+      // nativeChannel が未生成でも、onConnect が保持されていれば接続試行中として扱う。
+      return .connecting
+    }
+
+    return PeerChannelConnectionState(RTCPeerConnectionState.new)
   }
 
   var nativeChannel: RTCPeerConnection?
@@ -165,11 +230,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   required init(
     configuration: Configuration, signalingChannel: SignalingChannel,
+    nativePeerChannelFactory: NativePeerChannelFactory,
     mediaChannel: MediaChannel?
   ) {
     self.signalingChannel = signalingChannel
     self.mediaChannel = mediaChannel
     self.configuration = configuration
+    self.nativePeerChannelFactory = nativePeerChannelFactory
     webRTCConfiguration = configuration.webRTCConfiguration
 
     lock = Lock()
@@ -183,6 +250,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     signalingChannel.internalHandlers.onReceive = { [weak self] signaling in
       self?.handleSignalingOverWebSocket(signaling)
     }
+
+    signalingChannel.internalHandlers.onReceiveJSON = { [weak self] json in
+      self?.internalHandlers.onReceiveSignalingJSON?(json)
+    }
   }
 
   func connect(handler: @escaping (Error?) -> Void) {
@@ -195,22 +266,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     Logger.debug(type: .peerChannel, message: "try connecting")
-
-    nativeChannel = NativePeerChannelFactory.default
-      .createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
-        proxy: configuration.proxy,
-        delegate: self)
-    guard nativeChannel != nil else {
-      let message = "createNativePeerChannel failed"
-      Logger.debug(type: .peerChannel, message: message)
-      handler(SoraError.peerChannelError(reason: message))
-      return
-    }
-
     // このロックは finishConnecting() で解除される
     lock.lock()
+
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
@@ -271,6 +329,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func sendConnectMessage(error: Error?) {
     if let error {
+      lock.unlock()
       Logger.error(
         type: .peerChannel,
         message: "failed connecting to signaling channel (\(error.localizedDescription))")
@@ -281,11 +340,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if configuration.isSender {
       Logger.debug(type: .peerChannel, message: "try creating offer SDP")
-      NativePeerChannelFactory.default
+      nativePeerChannelFactory
         .createClientOfferSDP(
           configuration: webRTCConfiguration,
           constraints: webRTCConfiguration.constraints
-        ) { sdp, sdpError in
+        ) { [weak self] sdp, sdpError in
+          guard let self else {
+            return
+          }
           if let error = sdpError {
             Logger.debug(
               type: .peerChannel,
@@ -307,6 +369,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     if error != nil {
       Logger.error(
         type: .peerChannel,
+        // nil チェック直後のため安全
+        // swiftlint:disable:next force_unwrapping
         message: "failed connecting to signaling channel (\(error!.localizedDescription))")
       disconnect(
         error: SoraError.peerChannelError(reason: "failed connecting to signaling channel"),
@@ -364,9 +428,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       redirect: redirect,
       forwardingFilter: configuration.forwardingFilter,
       forwardingFilters: configuration.forwardingFilters,
-      vp9Params: configuration.videoVp9Params,
-      av1Params: configuration.videoAv1Params,
-      h264Params: configuration.videoH264Params
+      vp9Params: configuration.videoCodec == .vp9 ? configuration.videoVp9Params : nil,
+      av1Params: configuration.videoCodec == .av1 ? configuration.videoAv1Params : nil,
+      h264Params: configuration.videoCodec == .h264 ? configuration.videoH264Params : nil,
+      h265Params: configuration.videoCodec == .h265 ? configuration.videoH265Params : nil
     )
 
     Logger.debug(type: .peerChannel, message: "send connect")
@@ -383,7 +448,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "initialize sender stream")
 
-    let nativeStream = NativePeerChannelFactory.default
+    let nativeStream =
+      nativePeerChannelFactory
       .createNativeSenderStream(
         streamId: configuration.publisherStreamId,
         videoTrackId:
@@ -597,12 +663,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
-    if CameraVideoCapturer.current != nil, CameraVideoCapturer.current!.isRunning {
+    if let current = CameraVideoCapturer.current, current.isRunning {
       // CameraVideoCapturer.current を停止してから capturer を start する
-      CameraVideoCapturer.current!.stop { (error: Error?) in
+      current.stop { (error: Error?) in
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
+            // guard の else 節で非 nil が保証されるため安全
+            // swiftlint:disable:next force_unwrapping
             message: "CameraVideoCapturer.stop failed =>  \(error!)")
           return
         }
@@ -611,6 +679,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           guard error == nil else {
             Logger.debug(
               type: .peerChannel,
+              // guard の else 節で非 nil が保証されるため安全
+              // swiftlint:disable:next force_unwrapping
               message: "CameraVideoCapturer.start failed =>  \(error!)")
             return
           }
@@ -625,6 +695,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
+            // guard の else 節で非 nil が保証されるため安全
+            // swiftlint:disable:next force_unwrapping
             message: "CameraVideoCapturer.start failed =>  \(error!)")
           return
         }
@@ -645,6 +717,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           if error != nil {
             Logger.debug(
               type: .peerChannel,
+              // nil チェック直後のため安全
+              // swiftlint:disable:next force_unwrapping
               message: "failed to stop CameraVideoCapturer =>  \(error!)")
           }
         }
@@ -670,10 +744,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try setting remote description")
     let offer = RTCSessionDescription(type: .offer, sdp: offer)
-    nativeChannel.setRemoteDescription(offer) { error in
+    nativeChannel.setRemoteDescription(offer) { [weak self] error in
+      guard let self else {
+        return
+      }
       guard error == nil else {
         Logger.debug(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed setting remote description: (\(error!.localizedDescription)")
         handler(nil, error)
         return
@@ -699,6 +778,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
+            // guard の else 節で非 nil が保証されるため安全
+            // swiftlint:disable:next force_unwrapping
             message: "failed creating native answer (\(error!.localizedDescription)")
           handler(nil, error)
           return
@@ -712,6 +793,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "did create answer")
 
         Logger.debug(type: .peerChannel, message: "try setting local description")
+        // guard error == nil 直後のため安全
+        // swiftlint:disable:next force_unwrapping
         nativeChannel.setLocalDescription(answer!) { error in
           guard error == nil else {
             Logger.debug(
@@ -725,10 +808,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             message: "did set local description")
           Logger.debug(
             type: .peerChannel,
+            // guard error == nil 直後のため安全
+            // swiftlint:disable:next force_unwrapping
             message: "\(answer!.sdpDescription)")
           Logger.debug(
             type: .peerChannel,
             message: "did create answer")
+          // guard error == nil 直後のため安全
+          // swiftlint:disable:next force_unwrapping
           handler(answer!.sdp, nil)
         }
       }
@@ -752,11 +839,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func createAndSendAnswer(offer: SignalingOffer) {
-    guard let nativeChannel else {
-      Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-      return
-    }
-
     Logger.debug(type: .peerChannel, message: "try sending answer")
     offerEncodings = offer.encodings
 
@@ -768,10 +850,48 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel, message: "ICE transport policy => \(config.iceTransportPolicy)")
       webRTCConfiguration.iceServerInfos = config.iceServerInfos
       webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
-      nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
     }
 
-    lock.lock()
+    // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
+    // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
+
+    // CA 証明書のパース
+    // 既に SignalingChannel.connect() でパース成功しているため、
+    // この throw パスは実運用では到達しない防御的コードである
+    let caCertificates: [SecCertificate]?
+    do {
+      caCertificates = try configuration.parsedCACertificates()
+    } catch {
+      lock.unlock()
+      disconnect(
+        error: error,
+        reason: .signalingFailure)
+      return
+    }
+
+    nativeChannel =
+      nativePeerChannelFactory
+      .createNativePeerChannel(
+        configuration: webRTCConfiguration,
+        constraints: webRTCConfiguration.constraints,
+        proxy: configuration.proxy,
+        caCertificates: caCertificates,
+        delegate: self)
+    guard let nativeChannel else {
+      // connect() で取得した初期ロックをここで解放しないと、
+      // disconnect が defer されたままになってしまう。
+      lock.unlock()
+      disconnect(
+        error: SoraError.peerChannelError(reason: "createNativePeerChannel failed"),
+        reason: .signalingFailure)
+      return
+    }
+    nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
+
+    guard lock.lock() else {
+      Logger.debug(type: .peerChannel, message: "already disconnecting, skip create answer")
+      return
+    }
     createAnswer(
       isSender: configuration.isSender,
       offer: offer.sdp,
@@ -782,6 +902,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create answer (\(error!.localizedDescription))")
         self.lock.unlock()
         self.disconnect(
@@ -790,6 +912,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let answer = SignalingAnswer(sdp: sdp!)
       self.signalingChannel.send(message: Signaling.answer(answer))
       self.lock.unlock()
@@ -799,7 +923,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func createAndSendUpdateAnswer(forOffer offer: String) {
     Logger.debug(type: .peerChannel, message: "create and send update-answer")
-    lock.lock()
+    guard lock.lock() else {
+      Logger.debug(type: .peerChannel, message: "already disconnecting, skip create update-answer")
+      return
+    }
     createAnswer(
       isSender: false,
       offer: offer,
@@ -808,6 +935,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create update-answer (\(error!.localizedDescription)")
         self.lock.unlock()
         self.disconnect(
@@ -816,6 +945,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let message = Signaling.update(SignalingUpdate(sdp: answer!))
       self.signalingChannel.send(message: message)
 
@@ -824,6 +955,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       self.internalHandlers.onUpdate?(answer!)
 
       self.lock.unlock()
@@ -842,10 +975,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // この場合、 SDP 再ハンドシェイク時に SDP を local description に設定する際に EXC_BAD_ACCESS (不正なメモリアクセス) が発生し、
       // アプリがクラッシュしてしまうことがあったが、lock() の呼び出しをクロージャー内にすることで、不正なメモリアクセスを防ぐことができるように
       // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で lock() の位置を移動)
-      self.lock.lock()  // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
+      guard self.lock.lock() else {
+        Logger.debug(type: .peerChannel, message: "already disconnecting, skip re-answer")
+        return
+      }
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create re-answer (\(error!.localizedDescription)")
         self.lock.unlock()
         self.disconnect(
@@ -854,6 +992,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
       self.signalingChannel.send(message: message)
 
@@ -862,6 +1002,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       self.internalHandlers.onUpdate?(answer!)
 
       self.lock.unlock()
@@ -882,10 +1024,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       constraints: webRTCConfiguration.nativeConstraints
     ) { answer, error in
       // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
-      self.lock.lock()
+      guard self.lock.lock() else {
+        Logger.debug(
+          type: .peerChannel, message: "already disconnecting, skip re-answer over DataChannel")
+        return
+      }
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
+          // guard の else 節で非 nil が保証されるため安全
+          // swiftlint:disable:next force_unwrapping
           message: "failed to create re-answer: error => (\(error!.localizedDescription)")
         self.lock.unlock()
         self.disconnect(
@@ -894,6 +1042,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
 
       var data: Data?
@@ -931,6 +1081,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
+      // guard error == nil 直後のため安全
+      // swiftlint:disable:next force_unwrapping
       self.internalHandlers.onUpdate?(answer!)
 
       self.lock.unlock()
@@ -971,7 +1123,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .ping(let ping):
       let pong = SignalingPong()
       if ping.statisticsEnabled == true {
-        nativeChannel?.statistics { report in
+        nativeChannel?.statistics { [weak self] report in
+          guard let self else {
+            return
+          }
           var json: [String: Any] = ["type": "pong"]
           let stats = Statistics(contentsOf: report)
           json["stats"] = stats.jsonObject
@@ -993,25 +1148,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .switched(let switched):
       switchedToDataChannel = true
       signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
-      if signalingChannel.ignoreDisconnectWebSocket {
-        if let webSocketChannel = signalingChannel.webSocketChannel {
-          // DataChannel への切り替え後でも、まだ WebSocket 経由で送信中のメッセージが存在する可能性がある。
-          // そのため、余裕を持って指定時間（秒）後に WebSocket を切断するようスケジュールしている。
-          // 加えて、WebSocket の切断はユーザーに影響を与えない cleanup 処理であり緊急性が低いため、
-          // DispatchQueue.global(qos: .background) を使用して優先度を下げている。
-          // 参考: https://developer.apple.com/documentation/dispatch/dispatchqos/qosclass-swift.enum/background
-          DispatchQueue.global(qos: .background).asyncAfter(
-            deadline: .now() + Self.switchedDisconnectDelay
-          ) { [weak self] in
-            guard let self else { return }
-            // PeerChannel が切断状態の場合は、WebSocket Channel はすでに切断されており、
-            // disconnect を呼び出す必要がないため、PeerChannel の状態をチェックしている。
-            if state != .closed {
-              webSocketChannel.disconnect(error: nil)
-            }
-          }
-        }
-      }
 
       if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
         onDataChannel(mediaChannel)
@@ -1048,6 +1184,39 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     internalHandlers.onReceiveSignaling?(signaling)
   }
 
+  /// DataChannel の signaling ラベル受信を契機に WebSocket 切断をスケジュールする
+  func scheduleWebSocketDisconnectIfNeeded() {
+    // DataChannel の delegate コールバックは WebRTC の内部スレッドから呼ばれる。
+    // webSocketDisconnectScheduled は nonisolated(unsafe) であり、
+    // 以下の条件チェックと flag 更新はアトミックではないが、
+    // webSocketChannel.disconnect 二重実行しても問題ないため、
+    // 重複スケジュールを防ぐのはベストエフォートで十分。
+    if webSocketDisconnectScheduled { return }
+    guard switchedToDataChannel, signalingChannel.ignoreDisconnectWebSocket else { return }
+    guard state != .closed else { return }
+    guard let webSocketChannel = signalingChannel.webSocketChannel else { return }
+
+    webSocketDisconnectScheduled = true
+
+    Logger.info(
+      type: .peerChannel,
+      message: "scheduling WebSocket disconnect after \(Self.switchedDisconnectDelay) seconds")
+
+    // DataChannel 確立直後も WebSocket 経由の送信キューにメッセージが残っている可能性があるため、
+    // 既存の遅延 (switchedDisconnectDelay) を維持する
+    DispatchQueue.global(qos: .background).asyncAfter(
+      deadline: .now() + Self.switchedDisconnectDelay
+    ) { [weak self] in
+      guard let self else { return }
+      if self.state != .closed {
+        Logger.info(
+          type: .peerChannel,
+          message: "disconnecting WebSocket after DataChannel signaling established")
+        webSocketChannel.disconnect(error: nil)
+      }
+    }
+  }
+
   /// DataChannel の RPC で受信したメッセージを処理する。
   func handleRPCMessage(_ data: Data) {
     guard let rpcChannel else {
@@ -1071,6 +1240,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if onConnect != nil {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
+      // nil チェック直後のため安全
+      // swiftlint:disable:next force_unwrapping
       onConnect!(nil)
       onConnect = nil
     }
@@ -1128,12 +1299,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if onConnect != nil {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
+      // nil チェック直後のため安全
+      // swiftlint:disable:next force_unwrapping
       onConnect!(error)
       onConnect = nil
     }
 
     // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
     dataChannelSignalingClose = nil
+    webSocketDisconnectScheduled = false
 
     Logger.debug(type: .peerChannel, message: "did disconnect")
   }
@@ -1449,6 +1623,11 @@ extension RTCRtpSender {
         if let value = encoding.scalabilityMode {
           Logger.debug(type: .peerChannel, message: "scalabilityMode: \(value)")
           oldEncoding.scalabilityMode = value
+        }
+
+        if let value = encoding.networkPriority {
+          Logger.debug(type: .peerChannel, message: "networkPriority: \(value)")
+          oldEncoding.networkPriority = value
         }
 
         break
