@@ -852,6 +852,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
     }
 
+    webRTCConfiguration.isInsecure = configuration.insecure
+    if configuration.insecure {
+      Logger.warn(
+        type: .peerChannel,
+        message: "insecure mode is enabled: TURN-TLS certificate verification is skipped")
+    }
+
     // offer.configuration で ICE サーバー設定を受け取った後に NativePeerChannel を
     // 生成することで TURN-TLS 向けの certificateVerifier を正しく設定する。
 

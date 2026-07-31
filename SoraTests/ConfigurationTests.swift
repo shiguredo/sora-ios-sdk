@@ -2,9 +2,10 @@ import XCTest
 
 @testable import Sora
 
-/// Configuration.caCertificate のテスト
+/// Configuration のテスト
 ///
-/// PEM 解析の全ブロック成功必須（all-or-nothing）の仕様を検証する。
+/// - CA 証明書の PEM 解析
+/// - `insecure` のデフォルト値
 final class ConfigurationTests: XCTestCase {
 
   private static let validPEM = """
@@ -26,10 +27,19 @@ final class ConfigurationTests: XCTestCase {
     -----END CERTIFICATE-----
     """
 
+  /// テストで共通利用するシグナリング URL を返す
+  private func makeTestURL() throws -> URL {
+    guard let url = URL(string: "wss://example.com") else {
+      throw XCTSkip("failed to create test URL")
+    }
+    return url
+  }
+
   /// caCertificate が nil の場合、後方互換のため nil を返しエラーは出さない
   func testNilCertificateReturnsNil() throws {
+    let url = try makeTestURL()
     var config = Configuration(
-      urlCandidates: [URL(string: "wss://example.com")!],
+      urlCandidates: [url],
       channelId: "test",
       role: .recvonly)
     config.caCertificate = nil
@@ -39,8 +49,9 @@ final class ConfigurationTests: XCTestCase {
 
   /// 有効な PEM 1 件が正しく SecCertificate に変換される
   func testValidPEMReturnsSecCertificate() throws {
+    let url = try makeTestURL()
     var config = Configuration(
-      urlCandidates: [URL(string: "wss://example.com")!],
+      urlCandidates: [url],
       channelId: "test",
       role: .recvonly)
     config.caCertificate = Self.validPEM
@@ -50,8 +61,9 @@ final class ConfigurationTests: XCTestCase {
 
   /// 複数の有効な PEM ブロックが連結された場合、全ブロックが変換される
   func testMultiplePEMBlocksReturnsMultipleCertificates() throws {
+    let url = try makeTestURL()
     var config = Configuration(
-      urlCandidates: [URL(string: "wss://example.com")!],
+      urlCandidates: [url],
       channelId: "test",
       role: .recvonly)
     config.caCertificate = Self.validPEM + Self.validPEM
@@ -61,8 +73,9 @@ final class ConfigurationTests: XCTestCase {
 
   /// 有効 PEM と不正 PEM が混在する場合、部分成功を許さず configurationError を throw する
   func testMixedValidAndInvalidPEMThrowsError() throws {
+    let url = try makeTestURL()
     var config = Configuration(
-      urlCandidates: [URL(string: "wss://example.com")!],
+      urlCandidates: [url],
       channelId: "test",
       role: .recvonly)
     config.caCertificate =
@@ -79,10 +92,21 @@ final class ConfigurationTests: XCTestCase {
     }
   }
 
+  /// insecure のデフォルト値が false であることを確認する
+  func testInsecureDefaultValue() throws {
+    let url = try makeTestURL()
+    let config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    XCTAssertFalse(config.insecure)
+  }
+
   /// PEM ブロックが 1 件も含まれない文字列は configurationError になる
   func testEmptyPEMThrowsError() throws {
+    let url = try makeTestURL()
     var config = Configuration(
-      urlCandidates: [URL(string: "wss://example.com")!],
+      urlCandidates: [url],
       channelId: "test",
       role: .recvonly)
     config.caCertificate = "not a valid pem"
@@ -96,8 +120,9 @@ final class ConfigurationTests: XCTestCase {
 
   /// PEM ヘッダ/フッタは正しいが Base64 が不正な場合、configurationError になる
   func testInvalidBase64PEMThrowsError() throws {
+    let url = try makeTestURL()
     var config = Configuration(
-      urlCandidates: [URL(string: "wss://example.com")!],
+      urlCandidates: [url],
       channelId: "test",
       role: .recvonly)
     config.caCertificate = """

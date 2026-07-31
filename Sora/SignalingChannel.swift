@@ -110,7 +110,9 @@ class SignalingChannel {
   private func setUpWebSocketChannel(url: URL, proxy: Proxy?, caCertificates: [SecCertificate]?)
     -> URLSessionWebSocketChannel
   {
-    let ws = URLSessionWebSocketChannel(url: url, proxy: proxy, caCertificates: caCertificates)
+    let ws = URLSessionWebSocketChannel(
+      url: url, proxy: proxy, caCertificates: caCertificates,
+      insecure: configuration.insecure)
 
     // 接続成功時
     ws.internalHandlers.onConnect = { [weak self] webSocketChannel in
@@ -210,6 +212,12 @@ class SignalingChannel {
     onConnect = handler
     state = .connecting
 
+    if configuration.insecure {
+      Logger.warn(
+        type: .signalingChannel,
+        message: "insecure mode is enabled: WebSocket TLS certificate verification is skipped")
+    }
+
     // CA 証明書のパース
     let caCertificates: [SecCertificate]?
     do {
@@ -239,6 +247,12 @@ class SignalingChannel {
   func redirect(location: String) {
     Logger.debug(type: .signalingChannel, message: "try redirecting to \(location)")
     state = .connecting
+
+    if configuration.insecure {
+      Logger.warn(
+        type: .signalingChannel,
+        message: "insecure mode is enabled: WebSocket TLS certificate verification is skipped")
+    }
 
     // 切断
     webSocketChannel?.disconnect(error: nil)

@@ -11,6 +11,14 @@
 
 ## develop
 
+- [UPDATE] `TLSSecurityPolicy` と `ICEServerInfo.tlsSecurityPolicy` を非推奨化する
+  - 2027 年中に廃止予定
+  - 移行先は `Configuration.insecure`
+  - @t-miya
+- [ADD] WebSocket シグナリングと TURN-TLS で insecure モードを利用できるようにする
+  - `Configuration.insecure = true` の場合はサーバー証明書の検証をスキップする
+  - @t-miya
+
 ## 2026.2.0
 
 **リリース日**: 2026-07-29
