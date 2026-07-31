@@ -17,19 +17,36 @@ public final class ICEServerInfo {
   public var credential: String?
 
   /// TLS のセキュリティポリシー
+  @available(*, deprecated, message: "2027 年中に廃止予定です。Configuration.insecure を使用してください")
   public var tlsSecurityPolicy: TLSSecurityPolicy = .secure
 
-  var nativeValue: RTCIceServer {
+  func nativeValue(insecure: Bool) -> RTCIceServer {
     RTCIceServer(
       urlStrings: urls,
       username: userName,
       credential: credential,
-      tlsCertPolicy: tlsSecurityPolicy.nativeValue)
+      tlsCertPolicy: insecure ? .insecureNoCheck : tlsSecurityPolicy.nativeValue)
   }
 
   // MARK: 初期化
 
   /// 初期化します。
+  public init(
+    urls: [String],
+    userName: String?,
+    credential: String?
+  ) {
+    self.urls = urls
+    self.userName = userName
+    self.credential = credential
+    self.tlsSecurityPolicy = .secure
+  }
+
+  /// 初期化します。
+  @available(
+    *, deprecated,
+    message: "2027 年中に廃止予定です。tlsSecurityPolicy は非推奨です。Configuration.insecure を使用してください"
+  )
   public init(
     urls: [String],
     userName: String?,
@@ -43,13 +60,11 @@ public final class ICEServerInfo {
   }
 
   var usesVerifiedTURNTLS: Bool {
-    switch tlsSecurityPolicy {
-    case .secure:
-      return urls.contains { url in
-        url.lowercased().hasPrefix("turns:")
-      }
-    case .insecure:
+    if tlsSecurityPolicy == .insecure {
       return false
+    }
+    return urls.contains { url in
+      url.lowercased().hasPrefix("turns:")
     }
   }
 }
@@ -79,8 +94,7 @@ extension ICEServerInfo: Codable {
     self.init(
       urls: urls,
       userName: userName,
-      credential: credential,
-      tlsSecurityPolicy: .secure)
+      credential: credential)
   }
 
   public func encode(to encoder: Encoder) throws {

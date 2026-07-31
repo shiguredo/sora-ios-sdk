@@ -10,6 +10,7 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
   let url: URL
   let proxy: Proxy?
   let caCertificates: [SecCertificate]?
+  let insecure: Bool
   var handlers = WebSocketChannelHandlers()
   var internalHandlers = WebSocketChannelInternalHandlers()
   var isClosing = false
@@ -24,10 +25,11 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
   var urlSession: URLSession?
   var webSocketTask: URLSessionWebSocketTask?
 
-  init(url: URL, proxy: Proxy?, caCertificates: [SecCertificate]?) {
+  init(url: URL, proxy: Proxy?, caCertificates: [SecCertificate]?, insecure: Bool) {
     self.url = url
     self.proxy = proxy
     self.caCertificates = caCertificates
+    self.insecure = insecure
   }
 
   func connect(delegateQueue: OperationQueue?) {
@@ -263,12 +265,21 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
     // 認証方式によって処理を分岐
     switch authMethod {
     case NSURLAuthenticationMethodServerTrust:
-      if let caCertificates {
+      switch Self.resolveServerTrustDisposition(
+        insecure: insecure, caCertificates: caCertificates)
+      {
+      case .skipVerification:
+        guard let serverTrust = challenge.protectionSpace.serverTrust else {
+          completionHandler(.cancelAuthenticationChallenge, nil)
+          disconnect(error: SoraError.signalingChannelError(reason: "server trust is nil"))
+          return
+        }
+        completionHandler(.useCredential, URLCredential(trust: serverTrust))
+      case .customCAVerification:
         handleServerTrustAuthenticationChallenge(
           challenge,
           completionHandler: completionHandler)
-      } else {
-        // デフォルト処理
+      case .defaultHandling:
         completionHandler(.performDefaultHandling, nil)
       }
     case NSURLAuthenticationMethodHTTPBasic:
@@ -308,6 +319,31 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
   }
 
   // MARK: - サーバー証明書検証
+
+  /// ServerTrust 認証チャレンジの解決方針を表します。
+  enum ServerTrustDisposition: Equatable {
+    /// 証明書検証をスキップし、全ての接続を許可する
+    case skipVerification
+    /// ユーザー指定 CA 証明書で検証する
+    case customCAVerification
+    /// システム既定の検証を行う
+    case defaultHandling
+  }
+
+  /// ServerTrust 認証チャレンジの解決方針を返す。
+  /// `insecure` と `caCertificates` の有無から方針を判定する。
+  static func resolveServerTrustDisposition(
+    insecure: Bool,
+    caCertificates: [SecCertificate]?
+  ) -> ServerTrustDisposition {
+    if insecure {
+      return .skipVerification
+    } else if caCertificates != nil {
+      return .customCAVerification
+    } else {
+      return .defaultHandling
+    }
+  }
 
   /// ユーザー指定 CA 証明書を用いてサーバー証明書を検証する
   ///

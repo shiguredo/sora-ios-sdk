@@ -229,6 +229,15 @@ public struct Configuration {
   ///   完全なチェーンを送出する必要がある。
   public var caCertificate: String?
 
+  /// サーバー証明書の検証をスキップするかどうか。
+  ///
+  /// `true` にすると WebSocket シグナリングおよび TURN-TLS の
+  /// サーバー証明書検証をスキップし、全ての接続を許可する。
+  /// 本番環境での利用は行わず、開発・検証目的のみで使用すること。
+  /// `caCertificate` が指定されていても、`insecure == true` が優先される。
+  /// デフォルトは `false`。
+  public var insecure: Bool = false
+
   /// 転送フィルターの設定
   ///
   /// この項目は 2025 年 12 月リリース予定の Sora にて廃止されます

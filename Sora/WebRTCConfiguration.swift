@@ -98,7 +98,7 @@ public struct WebRTCConfiguration {
   var nativeValue: RTCConfiguration {
     let config = RTCConfiguration()
     config.iceServers = iceServerInfos.map { info in
-      info.nativeValue
+      info.nativeValue(insecure: isInsecure)
     }
     config.iceTransportPolicy = iceTransportPolicy.nativeValue
     config.sdpSemantics = sdpSemantics.nativeValue
@@ -116,8 +116,15 @@ public struct WebRTCConfiguration {
 
   var nativeConstraints: RTCMediaConstraints { constraints.nativeValue }
 
+  /// `Configuration.insecure` に対応する内部フラグ。
+  /// `true` の場合は TURN-TLS の証明書検証をスキップする。
+  var isInsecure: Bool = false
+
   var usesVerifiedTURNTLS: Bool {
-    iceServerInfos.contains { info in
+    if isInsecure {
+      return false
+    }
+    return iceServerInfos.contains { info in
       info.usesVerifiedTURNTLS
     }
   }
