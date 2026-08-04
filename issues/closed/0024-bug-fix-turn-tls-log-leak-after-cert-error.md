@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-08-04
 - Model: Opus 4.8
 - Branch: feature/fix-turn-tls-log-leak-after-cert-error
 - Polished: 2026-08-04
@@ -169,3 +169,27 @@ WebSocket の切断は TURN 経路とは独立である。 SDK 内に「 ICE 失
 ```
 
 ## 解決方法
+
+### 調査結果 (根本原因)
+
+TURN-TLS 証明書エラーで接続に失敗した後も libwebrtc のログが流れ続ける原因は、 `connect()` が取得した初期ロックが解放されないまま残り、 `basicDisconnect` が到達不能になることだった。
+
+- `connect()` の初期ロック (`PeerChannel.swift:270`) は `finishConnecting()` と `sendConnectMessage(error:)` の 2 箇所でしか解放されない
+- answer 送信後の接続失敗 (RTCPeerConnectionState.failed / WebSocket 切断 / ConnectionTimer タイムアウト) ではどちらも発生しないため、 count は 1 のまま残る
+- `Lock.waitDisconnect` は count != 0 のとき `shouldDisconnect` に保存するだけで `basicDisconnect` を呼ばないため、 `nativeChannel?.close()` が実行されず、 `RTCPeerConnection` が生存し続けた
+
+なお、ユーザーに表示される「WebSocket error」は `MediaChannel.internalDisconnect` → `executeHandler` 経由で `basicDisconnect` とは独立に通知されるため、「エラーが表示された = クリーンアップ完了」ではない。
+
+### 修正内容
+
+- `Sora/PeerChannel.swift`: `Lock.waitDisconnect` が、接続試行中 (count == 1 かつ `onConnect != nil`) の切断要求を受け取った場合に、初期ロックを解放して `basicDisconnect` を直接実行するようにした。あわせて `isDisconnecting` チェックを追加し、切断処理の二重実行を防いだ
+- `Sora/PeerChannel.swift`: `Lock.unlock` が、切断処理開始後に非同期処理から呼ばれた場合に `unlock` を無視するようにした。また、接続試行中 (count == 1) に切断要求が保存されている場合は、進行中の非同期処理の完了時に `basicDisconnect` へ到達させるようにした
+- `Sora/MediaChannel.swift`: 接続失敗時のエラー通知を `executeHandler` 経由に統一し、 `basicDisconnect` 内の `onConnect?(error)` との多重呼び出しを防止した
+
+### 確認結果
+
+- 再現: 自己署名証明書の TURN-TLS サーバー構成で、 `TURN-TLS trust evaluate error` による接続失敗を確認
+- タイムアウト経路: 接続タイムアウト発生後に `basicDisconnect` → `nativeChannel?.close()` が実行され、以降 libwebrtc の `network.cc` ログが出力されないことを確認
+- 経路 A (WebSocket 切断): サーバー起因の切断 (close code 4490, reason TIMEOUT) で、ユーザーへのエラー通知が 1 回だけ呼ばれ、切断処理が完了することを確認
+- 後方互換: 自己署名証明書を利用した接続確認を実施し、接続が成功することを確認
+- 経路 B (ICE failed のみ): サーバー側のテスト用設定を用意できなかったため未確認 (経路 A と同一の `waitDisconnect` 修正を通過するため、挙動は同じ)
