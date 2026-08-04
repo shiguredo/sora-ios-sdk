@@ -21,7 +21,7 @@ TURN-TLS （ `turn_tls_only` 指定）で証明書エラーにより接続に失
 
 ## 関連 issue
 
-- 0041: offer 受信後にエラーとなった場合すぐに切断されない問題。同じ根本原因（ `connect()` の初期ロック解放漏れによる `basicDisconnect` 到達不能）を SDP エラーパスで扱う。未完了。
+- 0041: offer 受信後にエラーとなった場合すぐに切断されない問題。同じ根本原因（ `connect()` の初期ロック解放漏れによる `basicDisconnect` 到達不能）を SDP エラーパスで扱った issue 。 `createAnswer` エラーパスの `lock.unlock()` 追加は反映済みだが、本 issue の answer 送信成功後の失敗経路は別途未解決。
 - 0042: 切断・接続を繰り返すと DUPLICATED-CHANNEL-ID が発生する問題。本 issue の修正で接続失敗時に即時エラーが返るようになると、ユーザーが即座に再接続するフローが発生し、サーバー側の旧セッション解放とのレースが生じやすくなる。未完了。
 - 0043: 受信中にネットワークが切断されてもエラー通知がない問題。 `peerConnection(_:didChange:)` に新たな切断トリガー（方針 B は `RTCIceConnectionState.failed` ）を追加する方針であり、 `disconnect` → `Lock.waitDisconnect` の経路を共有する。 0043 の主シナリオ（接続完了後）は初期ロック解放済み（ count == 0 ）のため影響を受けないが、接続試行中に発火するケースは本 issue のロック解放漏れの影響を受ける。未完了。
 
@@ -95,18 +95,18 @@ WebSocket の切断は TURN 経路とは独立である。 SDK 内に「 ICE 失
 
 ### issue 0041 との関係
 
-本 issue の根本原因は issue 0041 と同じ機構である。 0041 は offer 受信後の SDP エラーパス（ `createAnswer` 失敗時）で同じ「初期ロック解放漏れ」の仮説を立てている（ 0041 もデバッグログでの検証を設計方針に置いており、未検証）。トリガーと症状が異なるため別 issue として扱う:
+本 issue の根本原因は issue 0041 と同じ機構である。 0041 では offer 受信後の SDP エラーパス（ `createAnswer` 失敗時）に対して `createAnswer` エラーパスでの `lock.unlock()` 追加を扱っている。トリガーと症状が異なるため、本 issue とは別 issue として扱う:
 
 - 0041: `createAnswer` エラー時（ count 2 → 1 後の `disconnect` ）。症状は約 30 秒の切断遅延
 - 本 issue: answer 送信成功後の接続失敗（ count 1 のまま）。症状は `RTCPeerConnection` の残存とログ流出
 
-0041 の修正案（ `createAnswer` エラーパスで `lock.unlock()` を追加）は本 issue のシナリオには効かない（修正の競合と二重解放への注意は「設計方針」の修正時の注意を参照）。
+0041 で扱った `createAnswer` エラーパスでの `lock.unlock()` 追加は、本 issue のシナリオには効かない（修正の競合と二重解放への注意は「設計方針」の修正時の注意を参照）。
 
 ## 設計方針
 
 **ステップ 1 （調査）: 根本原因の確認**
 
-上記の根本原因仮説（初期ロック解放漏れ）はコード解析上ほぼ確定しているが、実機・Simulator での再現時に以下へデバッグログを追加して仮説を検証する:
+上記の根本原因仮説（初期ロック解放漏れ）はコード解析上の強い仮説であるが、実機・Simulator での再現時に以下へデバッグログを追加して仮説を検証する:
 
 - `disconnect()` 入り口（ `Sora/PeerChannel.swift:318` ）: 呼び出し時の `state` と `reason`
 - `Lock.waitDisconnect` （ `PeerChannel.swift:108` ）: 呼び出し時の `count` と、保存したか・直接 `basicDisconnect` を呼んだか
@@ -140,7 +140,7 @@ WebSocket の切断は TURN 経路とは独立である。 SDK 内に「 ICE 失
 - 接続成功と切断要求の競合（ `.connected` への遷移と `disconnect` がほぼ同時）に注意する。現在のコードでは count 1 のまま `waitDisconnect` が保存し、後から `finishConnecting()` の `lock.unlock()` （ `PeerChannel.swift:1255` 、無条件で count を 0 にする）で初めて `basicDisconnect` が dispatch されるため安全に処理される。修正で count を 0 にする実装を選ぶと、配送済みの `.connected` コールバックが後から処理された場合に `finishConnecting()` の `unlock()` が count == 0 で `fatalError` になる。 `finishConnecting()` 側にガード（ `isDisconnecting` チェックなど）を入れるか、 `waitDisconnect` の不変条件（ `isDisconnecting == true` ならば count == 0 、 `PeerChannel.swift:99` ）を満たす形で count の遷移を設計すること
 - 経路 A と経路 B が短時間に連続発火した場合の `basicDisconnect` 二重実行を防ぐ（ `waitDisconnect` は `isDisconnecting` をチェックしないため、チェックの追加を検討する） 。 0043 の修正（ `RTCIceConnectionState.failed` トリガーの追加）が入った場合は、同一の接続失敗で `RTCPeerConnectionState.failed` と `RTCIceConnectionState.failed` の 2 トリガーが連続発火し得るため、対策は必須になる
 - エラー通知の多重呼び出しへの対処: 修正により `basicDisconnect` が到達可能になると、経路 A・B のどちらでも、 `MediaChannel.internalDisconnect` → `executeHandler` （ `Sora/MediaChannel.swift:541-543` ）と `basicDisconnect` 内の `onConnect?(error)` （ `PeerChannel.swift:1311` ）が両方実行され、ユーザーの connect handler が複数回呼ばれる（ `executeHandler` は `_handler = nil` にするが、 2 回目以降は `MediaChannel.swift:493` のクロージャから直接呼ばれるため防げない）。この多重呼び出しは修正で新たに発生するのではなく、既存のシグナリング接続エラーパス（ `PeerChannel.swift:332` ）でも発生している。どちらか一方に統合するなどの対策を、既存パスも含めた全パスで行うこと
-- issue 0041 の修正と競合しないこと。 0041 の修正が先に入った場合は本 issue の再現を再確認すること
+- issue 0041 で入った `createAnswer` エラーパスの修正と競合しないこと。 SDP エラーパスと answer 送信成功後の失敗経路で、ロック解放条件が二重解放にならないことを確認すること
 
 ## テスト方針
 
