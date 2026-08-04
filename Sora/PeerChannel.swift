@@ -89,6 +89,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// 余裕を持って WebSocket を切断するために待機時間を設けている。
   private static let switchedDisconnectDelay: TimeInterval = 10.0
 
+  /// 接続完了後に `RTCPeerConnectionState` が `.disconnected` になってから切断するまでの猶予時間（秒）
+  ///
+  /// 一時的なネットワーク切断 (`.disconnected` → `.connected` の回復) を阻害しないために設ける。
+  /// 再ネゴシエーション (ICE 再起動) は `.disconnected` → `.connecting` を経由するため、
+  /// タイマーは `.connecting` への遷移でキャンセルされる。
+  private static let disconnectedGracePeriod: TimeInterval = 5.0
+
   final class Lock {
     weak var context: PeerChannel?
 
@@ -105,14 +112,31 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // count, isDisconnecting, shouldDisconnect への全アクセスを保護する排他ロック
     private let nsLock = NSLock()
 
+    /// 猶予タイマー由来の切断要求が、接続の回復により無効化されるかを返す。
+    ///
+    /// タイマー発火時点の確認から切断実行までの間に接続が回復している場合、
+    /// 切断すると一時的な切断の回復を阻害するためキャンセルする。
+    /// `.disconnected` のままなら切断を継続する。 `.failed` は終端状態であり
+    /// 回復し得ないためキャンセルしない。他の reason はユーザーの意図または
+    /// 確定した切断なので、この再確認の対象外とする。
+    private func shouldCancelDisconnectTimerBasedDisconnect(reason: DisconnectReason) -> Bool {
+      reason == .peerConnectionStateDisconnected
+        && context?.state != .disconnected
+        && context?.state != .failed
+    }
+
     func waitDisconnect(error: Error?, reason: DisconnectReason) {
       var shouldCallBasicDisconnect = false
       nsLock.lock()
       if isDisconnecting {
         // 切断処理が既に開始されている場合、追加の切断要求は無視する
       } else if count == 0 {
-        isDisconnecting = true
-        shouldCallBasicDisconnect = true
+        // 猶予タイマー由来の切断は、タイマー発火時点の確認からここまでの間に
+        // 接続が回復している場合は切断しない
+        if !shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
+          isDisconnecting = true
+          shouldCallBasicDisconnect = true
+        }
       } else if count == 1, context?.onConnect != nil {
         // 接続試行中 (connect() の初期ロックのみが残っている状態) の切断要求。
         // 初期ロックは finishConnecting() か sendConnectMessage(error:) でのみ解放されるため、
@@ -123,6 +147,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         isDisconnecting = true
         shouldCallBasicDisconnect = true
       } else {
+        // 進行中の非同期処理が完了するまで切断要求を遅延保存する。
+        // 保存済みの切断要求は最後の切断要求で上書きされる。猶予タイマー由来の
+        // 切断要求がその後の .failed 遷移の切断要求で上書きされると NO-ERROR 送信が
+        // 失われるが (sendDisconnectMessageIfNeeded の state == .failed ガード)、
+        // .failed は ICE の完全失敗であり送信が届く可能性が低いため妥当とする
         shouldDisconnect = (true, error, reason)
       }
       nsLock.unlock()
@@ -165,10 +194,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       if count == 0 || (count == 1 && shouldDisconnect.0) {
         switch shouldDisconnect {
         case (true, let error, let reason):
-          count = 0
-          isDisconnecting = true
-          shouldDisconnect = (false, nil, .unknown)
-          disconnectParams = (error, reason)
+          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
+            // 接続が回復しているため切断をキャンセルする。
+            // isDisconnecting は設定しない (設定すると以後の切断・再ネゴシエーションが
+            // すべて不能になり、 Lock が恒久的に破壊されるため。キャンセル後は再び
+            // .disconnected になればタイマーが再開始される)
+            shouldDisconnect = (false, nil, .unknown)
+          } else {
+            count = 0
+            isDisconnecting = true
+            shouldDisconnect = (false, nil, .unknown)
+            disconnectParams = (error, reason)
+          }
         default:
           break
         }
@@ -199,6 +236,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var dataChannels: [String: DataChannel] = [:]
   var switchedToDataChannel: Bool = false
   nonisolated(unsafe) var webSocketDisconnectScheduled: Bool = false
+
+  // 接続完了後の切断検出 (RTCPeerConnectionState.disconnected) 用の猶予タイマー。
+  // タイマーの開始・キャンセルのフラグは webSocketDisconnectScheduled と同じく
+  // nonisolated(unsafe) で扱う (ベストエフォート)。二重開始は disconnectTimerScheduled
+  // で防止し、フラグ競合で発火が重複した場合の二重 disconnect は Lock.waitDisconnect の
+  // isDisconnecting ガードで吸収する
+  nonisolated(unsafe) private var disconnectTimerScheduled: Bool = false
+
+  // 猶予タイマーの世代 (トークン)。キャンセル・破棄のたびに +1 する。
+  // asyncAfter で投入済みのクロージャはキャンセルできないため、発火時に
+  // 記録した世代が現在の世代と一致するか確認することで、無効化されたタイマーの
+  // 発火を防ぐ (キャンセル後に再 .disconnected で新たなタイマーを開始した場合、
+  // 古いタイマーが先に発火して猶予時間が短縮される問題の対策)
+  nonisolated(unsafe) private var disconnectTimerGeneration: Int = 0
   var signalingOfferMessageDataChannels: [[String: Any]] = []
   var rpcChannel: RPCChannel?
 
@@ -1307,6 +1358,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
     streams.removeAll()
 
+    // 接続完了後の切断検出タイマーを破棄する。
+    // close 後に遅延して届く .disconnected 通知でタイマーが再開始されても、
+    // 発火時の state チェックで state == .closed になるため何も起きない
+    // (pending のタイマーは世代を進めることで無効化される)
+    cancelDisconnectTimer()
+    // 接続完了フラグをリセットする。切断後に MediaChannel が再接続でこの
+    // PeerChannel を再利用した場合、接続試行中の .disconnected でタイマーが
+    // 開始されないようにするため (接続試行中は ConnectionTimer が処理する)
+    connectedAtLeastOnce = false
+
     nativeChannel?.close()
 
     var error = error
@@ -1344,8 +1405,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   // https://sora-doc.shiguredo.jp/SORA_CLIENT
   private func sendDisconnectMessageIfNeeded(reason: DisconnectReason, error: Error?) {
-    if state == .failed {
-      // この関数に到達した時点で .failed なので、メッセージの送信は不要
+    if state == .failed, reason != .peerConnectionStateDisconnected {
+      // この関数に到達した時点で .failed なので、メッセージの送信は不要。
+      // ただし .peerConnectionStateDisconnected は猶予タイマー満了による切断であり、
+      // タイマー発火時に .disconnected であることを確認済みのため、その後に .failed へ
+      // 遷移してもシグナリング WebSocket は生存している可能性がある。
+      // サーバー側セッションの即時解放のために送信する
       return
     }
 
@@ -1355,28 +1420,29 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     switch reason {
     case .signalingFailure, .peerConnectionStateFailed:
+      // 接続試行中の失敗や ICE が完全に失敗した場合は、シグナリング経路が
+      // 生きている保証がないためメッセージを送らない
       break
     case .user, .noError:
       // reason: .user の場合、 error はユーザーから渡されているので考慮しない
       let noError = Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR"))
       if !dataChannelSignaling {
-        // WebSocket
+        // WebSocket シグナリング構成。WebSocket に送信する
         signalingChannel.send(message: noError)
-      } else if dataChannelSignaling, !ignoreDisconnectWebSocket {
-        // WebSocket + DataChannel
-        if switchedToDataChannel {
-          sendMessageOverDataChannel(message: noError)
-        } else {
-          signalingChannel.send(message: noError)
-        }
-      } else if dataChannelSignaling, ignoreDisconnectWebSocket {
-        // DataChannel
-        if switchedToDataChannel {
-          sendMessageOverDataChannel(message: noError)
-        } else {
-          signalingChannel.send(message: noError)
-        }
+      } else if switchedToDataChannel {
+        // DataChannel へ切り替え済みの場合は DataChannel に送信する
+        sendMessageOverDataChannel(message: noError)
+      } else {
+        // DataChannel へ切り替える前は WebSocket に送信する
+        signalingChannel.send(message: noError)
       }
+    case .peerConnectionStateDisconnected:
+      // ネットワーク切断で DataChannel は同じ ICE (DTLS/SCTP) 上にあり死んでいるため、
+      // 送信先はシグナリング WebSocket のみにする (生存していればサーバー側セッションの
+      // 即時解放が可能。送らないとサーバー側セッションがタイムアウトまで残存し、
+      // 即時再接続時に DUPLICATED-CHANNEL-ID レースが発生しやすくなる)
+      let noError = Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR"))
+      signalingChannel.send(message: noError)
     case .webSocket:
       if ignoreDisconnectWebSocket {
         break
@@ -1521,23 +1587,82 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       message: "peer connection state: \(String(describing: newState))")
     switch newState {
     case .failed:
+      cancelDisconnectTimer()
       disconnect(
         error: SoraError.peerChannelError(reason: "peer connection state: failed"),
         reason: .peerConnectionStateFailed)
     case .connected:
-      // NOTE: RTCPeerConnectionState は connected -> disconencted -> connected などと遷移する可能性があるが、
-      // finishDoing は複数回実行するとエラーになるので注意
-      //
-      // 遷移のパターンは以下のページの Figure 2 Non-normative ICE transport state transition diagram という図を参照
+      // RTCPeerConnectionState は connected -> disconnected -> connected などと遷移し得るが、
+      // finishConnecting は複数回実行するとエラーになるため、connectedAtLeastOnce でガードする。
+      // 遷移のパターンは以下のページの Figure 2 Non-normative ICE transport state transition diagram を参照
+      // (図は RTCPeerConnectionState ではなく RTCIceTransportState のものなので注意)
       // https://www.w3.org/TR/webrtc/#dom-rtcicetransportstate
-      // 図は (RTCPeerConnectionState ではなく) RTCIceTransportState のものなので注意
       if !connectedAtLeastOnce {
         finishConnecting()
         connectedAtLeastOnce = true
       }
+      cancelDisconnectTimer()
+    case .connecting:
+      cancelDisconnectTimer()
+    case .disconnected:
+      scheduleDisconnectTimerIfNeeded()
     default:
       break
     }
+  }
+
+  /// 接続完了後に `RTCPeerConnectionState` が `.disconnected` のまま停滞した場合に、
+  /// 猶予時間の経過後に切断するためのタイマーを開始する。
+  ///
+  /// 発火時に `RTCPeerConnectionState` を再確認し、 `.disconnected` のままの場合のみ
+  /// 切断する。また、 `Lock.unlock` の遅延実行経路では接続が回復している場合は
+  /// 切断をキャンセルする (いずれも発火・実行と `.connected` への回復の競合対策)。
+  private func scheduleDisconnectTimerIfNeeded() {
+    guard connectedAtLeastOnce else {
+      return
+    }
+    guard !disconnectTimerScheduled else {
+      return
+    }
+    disconnectTimerScheduled = true
+    Logger.debug(
+      type: .peerChannel,
+      message: "scheduling disconnect timer after \(Self.disconnectedGracePeriod) seconds")
+    let generation = disconnectTimerGeneration
+    DispatchQueue.global(qos: .background).asyncAfter(
+      deadline: .now() + Self.disconnectedGracePeriod
+    ) { [weak self] in
+      guard let self else {
+        return
+      }
+      guard generation == self.disconnectTimerGeneration else {
+        return
+      }
+      Logger.debug(
+        type: .peerChannel,
+        message: "disconnect timer fired (generation: \(generation))")
+      self.disconnectTimerScheduled = false
+      guard self.state == .disconnected else {
+        return
+      }
+      self.disconnect(
+        error: SoraError.peerChannelError(reason: "peer connection state: disconnected"),
+        reason: .peerConnectionStateDisconnected)
+    }
+  }
+
+  /// 猶予タイマーをキャンセルする。
+  ///
+  /// `.connecting` / `.connected` / `.failed` への遷移で呼ばれる。
+  /// キャンセル後に再び `.disconnected` へ遷移した場合は再開始される。
+  private func cancelDisconnectTimer() {
+    // タイマーが開始されていない場合は何もしない (ログも出さない)
+    guard disconnectTimerScheduled else {
+      return
+    }
+    disconnectTimerScheduled = false
+    disconnectTimerGeneration += 1
+    Logger.debug(type: .peerChannel, message: "canceled disconnect timer")
   }
 
   func peerConnection(
@@ -1676,6 +1801,7 @@ enum DisconnectReason: String {
   case signalingFailure
   case internalError
   case peerConnectionStateFailed
+  case peerConnectionStateDisconnected
   case webSocket
   case dataChannelClosed
   case noError

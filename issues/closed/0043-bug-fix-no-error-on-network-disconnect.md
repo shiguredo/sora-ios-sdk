@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-08-04
 - Model: Sonnet 4.6
 - Branch: feature/fix-no-error-on-network-disconnect
 - Polished: 2026-08-04
@@ -78,9 +78,9 @@
 
 修正時の注意:
 
-- `disconnect(error:reason:)` に渡す error は `SoraError.peerChannelError` 相当とし、 `reason` は `DisconnectReason.peerConnectionStateFailed` を流用する（新設しない。 `.peerConnectionStateFailed` と同様に Sora へ切断メッセージを送らない挙動になる）。 error を nil で渡すと `SoraCloseEvent` が `.ok` になり（ `MediaChannel.swift:562-579` ）、アプリから正常切断と区別できなくなる
+- `disconnect(error:reason:)` に渡す error は `SoraError.peerChannelError` 相当とし、 `reason` は新設した `DisconnectReason.peerConnectionStateDisconnected` を使う（ `.peerConnectionStateFailed` と異なり、 Sora へ切断メッセージを送信する）。 error を nil で渡すと `SoraCloseEvent` が `.ok` になり（ `MediaChannel.swift:562-579` ）、アプリから正常切断と区別できなくなる
 - タイマー発火と `RTCPeerConnectionState.failed` （既存ハンドラ）の連続発火による `basicDisconnect` の二重実行は、 0024 の修正で追加された `Lock.waitDisconnect` の `isDisconnecting` チェック（ `PeerChannel.swift:111-112` ）で防止されている
-- UDP のみ遮断の再現では WebSocket が生存しているが、 `.peerConnectionStateFailed` は `sendDisconnectMessageIfNeeded` で Sora へ切断メッセージを送らない（ `PeerChannel.swift:1357-1358` ）。このためサーバー側セッションはタイムアウトまで残存する（ 0042 の DUPLICATED-CHANNEL-ID レースへの影響は「関連 issue 」参照）
+- UDP のみ遮断の再現では WebSocket が生存しているため、 `DisconnectReason.peerConnectionStateDisconnected` は `sendDisconnectMessageIfNeeded` で Sora へ切断メッセージ (NO-ERROR) を送信し、 WebSocket シグナリング構成ではサーバー側セッションを即時解放できる（ 0042 の DUPLICATED-CHANNEL-ID レースの発生確率を下げる）。 DataChannel シグナリング構成ではシグナリングが同じ ICE (DTLS/SCTP) 上を流れるため切断中はメッセージが届かず、サーバー側セッションはタイムアウトまで残存する（ 0042 の DUPLICATED-CHANNEL-ID レースへの影響は「関連 issue 」参照）
 - 修正は接続完了後のネットワーク切断の検出に限定し、接続成功時の挙動は変更しない
 
 ## テスト方針
@@ -108,3 +108,29 @@
 ```
 
 ## 解決方法
+
+### 調査結果 (根本原因)
+
+接続完了後にネットワークが切断された場合、 `RTCPeerConnectionState` が `.disconnected` のまま `.failed` に遷移しないと `disconnect()` が呼ばれず、 `onDisconnect` が発火しない。
+
+- `peerConnection(_:didChange:RTCPeerConnectionState)` は `.failed` に対してのみ `disconnect()` を呼び、 `.disconnected` は `default: break` で何もしない
+- 接続完了後は `connectionTimer` が停止済みで、 `ConnectionTimer` も発火時に `isConnecting` チェックでスキップする設計のため、バックストップが存在しない
+- `RTCPeerConnectionState` は ICE 状態と DTLS 状態から導出されるため、 `.disconnected` 張り付きのケースでは `RTCIceConnectionState` も `.disconnected` のままであり、 `RTCIceConnectionState.failed` の監視では検出できない
+
+### 修正内容
+
+- `Sora/PeerChannel.swift`: 接続完了後 (`connectedAtLeastOnce == true` の後) に `RTCPeerConnectionState.disconnected` へ遷移した場合、猶予タイマー (5 秒) を開始し、経過後に `.disconnected` のままであれば `disconnect(error:reason:)` を呼ぶようにした
+  - タイマーは `DispatchQueue.global().asyncAfter` + 発火時 state 再チェック方式 ( `scheduleWebSocketDisconnectIfNeeded` と同様)
+  - 二重開始によるデッドライン延長を防ぐため、世代 (トークン) 方式でタイマーを単一化した ( `asyncAfter` はキャンセルできないため、キャンセル・破棄のたびに世代を進めて発火時に照合する)
+  - `.connecting` / `.connected` / `.failed` への遷移でキャンセル (再ネゴシエーション中の誤切断防止)
+  - `basicDisconnect` 内でタイマーを破棄 (close 後の遅延 `.disconnected` 通知での再開始防止) し、 `connectedAtLeastOnce` もリセット (切断後の PeerChannel 再利用時に、接続試行中の `.disconnected` でタイマーが開始されないようにする)
+  - 発火時と切断実行時 ( `Lock.waitDisconnect` / `Lock.unlock` ) に接続の回復を再確認し、回復済みなら切断をキャンセルする (一時的な切断の回復を阻害しないため)
+  - error は `SoraError.peerChannelError(reason: "peer connection state: disconnected")`、 reason は新設した `DisconnectReason.peerConnectionStateDisconnected` を使い、 Sora へ NO-ERROR 切断メッセージを送信する (WebSocket シグナリング構成ではサーバー側セッションを即時解放できる。DataChannel シグナリング構成では切断中は同じ ICE 上を流れるため届かない)
+  - タイマーの開始・発火・キャンセルに `Logger.debug` を追加した (ネットワーク切断時の挙動を追跡するための診断ログ)
+
+### 確認結果
+
+- 再現: Simulator + macOS pf による UDP 遮断で、シグナリング WebSocket は生存したまま `RTCPeerConnectionState` が `.disconnected` のまま `.failed` に遷移しない状態を確認
+- 切断: `.disconnected` 検出から 5 秒後に `onDisconnect` が `SoraCloseEvent.error` として呼ばれ、 `RTCPeerConnection` がクローズされることを確認
+- 一時的な切断: pf ルールの適用 → 解除 (猶予時間内) で `onDisconnect` が呼ばれず、接続が維持されることを確認
+- 後方互換: 通常の接続・切断フロー (アプリからの `disconnect()`、サーバーからの切断) に影響がないことを確認
