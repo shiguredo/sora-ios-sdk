@@ -490,7 +490,10 @@ public final class MediaChannel {
       if let error {
         Logger.error(type: .mediaChannel, message: "failed to connect")
         weakSelf.internalDisconnect(error: error, reason: .signalingFailure)
-        handler(error)
+        // internalDisconnect が接続試行中のエラー通知を executeHandler 経由で
+        // すでに実行している場合があるため、ここでは executeHandler 経由でのみ
+        // 通知する (二重呼び出し防止)
+        weakSelf.executeHandler(error: error)
 
         Logger.debug(type: .mediaChannel, message: "call onConnect")
         weakSelf.internalHandlers.onConnect?(error)

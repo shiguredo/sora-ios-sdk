@@ -18,6 +18,10 @@
 - [ADD] WebSocket シグナリングと TURN-TLS で insecure モードを利用できるようにする
   - `Configuration.insecure = true` の場合はサーバー証明書の検証をスキップする
   - @t-miya
+- [FIX] TURN-TLS の証明書エラーで接続失敗した後も libwebrtc のログが流れ続ける問題を修正する
+  - 接続試行中の切断要求で `connect()` の初期ロックを確実に解放し、 `RTCPeerConnection` をクローズする
+  - 接続失敗時のエラー通知が二重に呼ばれないようにする
+  - @t-miya
 
 ## 2026.2.0
 
