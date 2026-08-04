@@ -108,7 +108,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     func waitDisconnect(error: Error?, reason: DisconnectReason) {
       var shouldCallBasicDisconnect = false
       nsLock.lock()
-      if count == 0 {
+      if isDisconnecting {
+        // 切断処理が既に開始されている場合、追加の切断要求は無視する
+      } else if count == 0 {
+        isDisconnecting = true
+        shouldCallBasicDisconnect = true
+      } else if count == 1, context?.onConnect != nil {
+        // 接続試行中 (connect() の初期ロックのみが残っている状態) の切断要求。
+        // 初期ロックは finishConnecting() か sendConnectMessage(error:) でのみ解放されるため、
+        // answer 送信後の接続失敗などではそのまま解放されず basicDisconnect が呼ばれない。
+        // その結果 RTCPeerConnection がクローズされずに残り続けるため、
+        // ここで初期ロックを解放して basicDisconnect を直接実行する。
+        count = 0
         isDisconnecting = true
         shouldCallBasicDisconnect = true
       } else {
@@ -136,13 +147,25 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     func unlock() {
       var disconnectParams: (Error?, DisconnectReason)?
       nsLock.lock()
+      if isDisconnecting {
+        // 切断処理の開始後に非同期処理が完了した場合の unlock は無視する。
+        // waitDisconnect が接続試行中の切断要求を basicDisconnect へ直接到達させるため、
+        // 後続の非同期処理が unlock を呼んでも count は 0 のままである。
+        nsLock.unlock()
+        return
+      }
       if count <= 0 {
         fatalError("count is already 0")
       }
       count -= 1
-      if count == 0 {
+      // count == 0 になった場合に加えて、接続試行中 (count == 1) に切断要求が
+      // あった場合も、進行中の非同期処理が完了したここで basicDisconnect へ到達させる。
+      // これがないと、 createAndSendAnswer 実行中の切断要求が保存されたまま
+      // 初期ロックが解放されず、 basicDisconnect が呼ばれない。
+      if count == 0 || (count == 1 && shouldDisconnect.0) {
         switch shouldDisconnect {
         case (true, let error, let reason):
+          count = 0
           isDisconnecting = true
           shouldDisconnect = (false, nil, .unknown)
           disconnectParams = (error, reason)
