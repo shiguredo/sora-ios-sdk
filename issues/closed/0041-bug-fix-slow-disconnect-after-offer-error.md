@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-08-05
 - Model: Sonnet 4.6
 - Branch: feature/fix-slow-disconnect-after-offer-error
 - Polished: 2026-07-27
@@ -67,3 +67,25 @@ PeerChannel DEBUG: failed setting remote description: (Failed to set remote offe
 - [FIX] offer 受信後にエラーとなった場合すぐに切断されない問題を修正する
   - @voluntas
 ```
+
+## 解決方法
+
+### 確認結果 (再現試行)
+
+m150 環境 (Shiguredo-build M150, 150.7871.3.0) で、issue の再現手順 (iOS 未対応の SDP プロファイルをサーバーが提示する接続) を 2 通り試行したが、**いずれも `setRemoteDescription` エラーは発生しなかった**。
+
+- AV1 profile 2 を指定して sendrecv で接続: `setRemoteDescription` は成功。iOS の AV1 デコーダは profile 0 のみ対応のため `No video codecs in common` となり、ビデオ m-section が answer で拒否 (m=video 0) され、オーディオのみで接続が成立した (2026-08-05 確認)
+- H265 を指定して sendrecv で接続: H265 のネゴシエーションに成功し、映像・音声ともに接続が成立した (シミュレータでは H265 エンコードがタイムアウトするのみ) (2026-08-05 確認)
+
+現在の libwebrtc では、未対応コーデックは SDP エラーではなく「m-section の拒否」または「エンコードのみ失敗」となり、issue 記載の `Failed to set remote video description send parameters` エラーは発生しない挙動に変わっている。接続が成立してしまうため、本 issue の「切断 30 秒遅延」シナリオ自体が発生しない。
+
+### コード解析 (根本原因の仮説は解決済み)
+
+本 issue が仮説として記録した根本原因 (「`createAnswer` エラーパスで `connect()` の初期ロックが解放されず `basicDisconnect()` が到達不能になる」) は、0024 の修正で追加された `Lock.waitDisconnect` の `count == 1 && onConnect != nil` 分岐により解決済みであることをコード解析で確認した。
+
+- 初回接続の `createAnswer` エラーパス: `lock.unlock()` (count 2→1) → `disconnect()` → `waitDisconnect()` で count == 1 && onConnect != nil (接続試行中は `onConnect` が保持される) のため、初期ロックを解放して `basicDisconnect()` を直接実行する
+- 更新系 (update-answer) のエラーパス: `lock.unlock()` (count 1→0) → `disconnect()` → `waitDisconnect()` で count == 0 のため `basicDisconnect()` を直接実行する
+
+### 結論
+
+設計方針どおり「現在の libwebrtc m150 環境で再現しないため close」する。仮説の根本原因は 0024 の修正で解決済みであり、実装変更は不要。
