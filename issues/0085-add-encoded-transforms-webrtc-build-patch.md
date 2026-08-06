@@ -23,16 +23,24 @@ WebRTC Encoded Transforms を iOS SDK から利用できるようにするため
 
 ### 追加する ObjC API（ビデオ・オーディオ両対応）
 
-- `RTCFrameTransformer`（protocol）: `transformFrame:` + `enqueueFrame:`
-  - 内部に C++ `FrameTransformerInterface` の実装（ `RTCFrameTransformerInterface` ）を保持
+- `RTCFrameTransformer`: 具象クラス + デリゲートプロトコル（ `RTCFrameTransformerDelegate` ）
+  - `initWithKind:delegate:` で処理対象のフレーム種別（ `RTCFrameTransformerKindVideo` / `RTCFrameTransformerKindAudio` ）とデリゲートを指定
+  - デリゲートが `didReceiveVideoFrame:` / `didReceiveAudioFrame:` でフレームを受け取り、 `enqueueVideoFrame:` / `enqueueAudioFrame:` でストリームに戻す
+  - 内部に C++ `FrameTransformerInterface` の実装（ `ObjCFrameTransformer` ）を保持
   - Audio は `RegisterTransformedFrameCallback`（default）、Video は `RegisterTransformedFrameSinkCallback`（SSRC ごと）の両方を実装
-  - `StartShortCircuiting` による破棄時安全化
-  - `Transform()` は worker スレッドから呼ばれるため、コールバックは適切なキューにディスパッチする
+  - 破棄時は `StartShortCircuiting` でバイパス化し、以後のフレームを変換なしで直接パイプラインに戻す
+  - `Transform()` は libwebrtc のワーカースレッドから呼ばれる。コールバックはそのスレッド上で直接呼び出すため、アプリ側で必要なディスパッチを行う（doc コメントに明記）
   - `GetData` はネイティブ所有バッファのため、ObjC 側にはコピーして渡す（UAF 回避）
-- `RTCEncodedVideoFrame`: `TransformableVideoFrameInterface` のラップ（data / payloadType / ssrc / timestamp / mimeType / direction / isKeyFrame / rid / metadata）
-- `RTCEncodedAudioFrame`: `TransformableAudioFrameInterface` のラップ（data / payloadType / ssrc / timestamp / mimeType / direction / contributingSources / sequenceNumber / audioLevel / receiveTime）
-- `RTCRtpSender.frameTransformer` プロパティ + `generateKeyFrame(rids)`
+  - デリゲートが解放済みの場合はフレームをそのままパイプラインに戻す（映像・音声が止まらないようにする）
+  - 送信側はシミュラカストの rid ごとにフレームが届くため、 `RTCEncodedVideoFrame` に rid を含める
+- `RTCEncodedVideoFrame`: `TransformableVideoFrameInterface` のラップ（data / payloadType / ssrc / timestamp / mimeType / isKeyFrame / rid / width / height）
+- `RTCEncodedAudioFrame`: `TransformableAudioFrameInterface` のラップ（data / payloadType / ssrc / timestamp / mimeType / contributingSources / sequenceNumber / audioLevel）
+- `RTCRtpSender.frameTransformer` プロパティ + `generateKeyFrameForRids:`
 - `RTCRtpReceiver.frameTransformer` プロパティ
+
+### 初版で公開しないもの
+
+- `direction` / ビデオの `frameId` / `spatialIndex` / `temporalIndex` などのメタデータ、オーディオの `receiveTime` は公開しない（必要な要望が出たら別途追加する）
 
 ## 完了条件
 
