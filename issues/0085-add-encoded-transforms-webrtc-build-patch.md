@@ -20,6 +20,10 @@ WebRTC Encoded Transforms を iOS SDK から利用できるようにするため
 
 - sora-python-sdk の C++ 実装（ `src/sora_frame_transformer.h` ）を ObjC に移植する
 - `h265_ios.patch` と同方式でパッチ（ `patches/encoded_transform_ios.patch` ）を追加し、 `run.py` の `PATCHES` に登録する
+- sora-rust-sdk の設計方針（ `sora-rust-sdk/issues/0106` ）を参照する:
+  - コールバックは webrtc-rs の「関数ポインタ構造体 + `Box<dyn Trait>` の user_data」パターン（ `VideoEncoderEncodedImageCallback` と同型）に相当する方式とし、ObjC ではデリゲートパターンで実現する
+  - バックプレッシャーは持たない。libwebrtc 側の委譲実装に任せ、フレームの順序保証・ドロップの判断も libwebrtc の仕様に従う
+  - 変換後のフレームは元の順序を保ち、重複なく返す（MDN の記事にも明記されている）
 
 ### 追加する ObjC API（ビデオ・オーディオ両対応）
 
