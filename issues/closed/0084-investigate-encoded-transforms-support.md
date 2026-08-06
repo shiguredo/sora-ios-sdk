@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-08-06
-- Completed:
+- Completed: 2026-08-06
 - Model: DeepSeek V4 Flash
 - Branch: feature/add-encoded-transforms
 
@@ -38,7 +38,7 @@ MDN の "Using WebRTC Encoded Transforms"（ `RTCRtpScriptTransform` / `RTCEncod
 - フレーム全体の置き換え（暗号化）のみ実現できる。メタデータ改変とキーフレーム制御はできない
 - 推奨しない
 
-### 案 B: FrameTransformer の ObjC API をパッチで追加（webrtc-build 変更）— 推奨
+### 案 B: FrameTransformer の ObjC API をパッチで追加（webrtc-build 変更）— 採用
 
 - shiguredo-webrtc-build に ObjC パッチを追加し、MDN の機能をほぼ完全に再現する（ `h265_ios.patch` と同方式）
 - 追加する ObjC API（案）:
@@ -69,4 +69,17 @@ MDN の "Using WebRTC Encoded Transforms"（ `RTCRtpScriptTransform` / `RTCEncod
 
 ## 解決方法
 
-（未定。完了条件を満たす設計判断を行う。）
+### 設計判断（2026-08-06）
+
+**案 B（FrameTransformer の ObjC API を webrtc-build のパッチで追加）を採用する。**
+
+理由:
+- 案 A は iOS の公開 ObjC API に FrameEncryptor / FrameDecryptor が存在しないため、パッチなしでは実現できず、実質的に選択肢にならない
+- 案 B は時雨堂が自社ビルドの libwebrtc を提供しているため実現可能であり、暗号化だけでなくフレーム改変（SEI 付加等）・キーフレーム制御（generateKeyFrame）までカバーできる
+- ビデオ・オーディオ両対応とする
+- 参考実装として sora-python-sdk の C++ 実装（ `src/sora_frame_transformer.h` ）を ObjC に移植する
+
+### 完了条件の充足
+
+- 案 B での実装が決定された
+- 実装 issue が分割起票済み（0085: libwebrtc パッチとリリース、0086: Sora iOS SDK API 追加、0087: サンプルアプリと E2E テスト）
