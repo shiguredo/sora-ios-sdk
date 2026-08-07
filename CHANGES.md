@@ -25,6 +25,11 @@
 - [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
   - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
   - @t-miya
+- [ADD] Configuration にダミー音声の設定を追加する
+  - `dummyAudioEnabled` が `true` の場合、物理マイクの代わりにダミー音声（正弦波/無音）を生成して送信する
+  - `RTCAudioDevice` プロトコルを実装したカスタム音声デバイスで PCM データを注入する
+  - 遠隔音声の再生は AUAudioUnit（RemoteIO）経由で実装する
+  - @t-miya
 - [FIX] TURN-TLS の証明書エラーで接続失敗した後も libwebrtc のログが流れ続ける問題を修正する
   - 接続試行中の切断要求で `connect()` の初期ロックを確実に解放し、 `RTCPeerConnection` をクローズする
   - 接続失敗時のエラー通知が二重に呼ばれないようにする

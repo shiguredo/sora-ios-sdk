@@ -34,26 +34,52 @@ final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoE
 // WebRTC の非 Sendable オブジェクトを保持するため、
 // 呼び出し側でスレッド安全性を担保する前提で @unchecked Sendable を付与します。
 final class NativePeerChannelFactory: @unchecked Sendable {
-  let audioDeviceModule: RTCAudioDeviceModule
+  let audioDeviceModule: RTCAudioDeviceModule?
   /// 録音ポーズ/再開制御用に保持する ADM ラッパー
-  let audioDeviceModuleWrapper: AudioDeviceModuleWrapper
+  let audioDeviceModuleWrapper: AudioDeviceModuleWrapper?
+  /// ダミー音声有効時に使用するカスタム音声デバイス
+  let dummyAudioDevice: DummyAudioDevice?
 
   var nativeFactory: RTCPeerConnectionFactory
 
-  init(bypassVoiceProcessing: Bool) {
+  init(
+    bypassVoiceProcessing: Bool,
+    dummyAudioConfig: DummyAudioConfig? = nil
+  ) {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
-
-    audioDeviceModule = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
-    audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: audioDeviceModule)
 
     // 映像コーデックのエンコーダーとデコーダーを用意する
     let encoder = WrapperVideoEncoderFactory.shared
     let decoder = RTCDefaultVideoDecoderFactory()
-    nativeFactory =
-      RTCPeerConnectionFactory(
-        encoderFactory: encoder,
-        decoderFactory: decoder,
-        audioDeviceModule: audioDeviceModule)
+
+    if let config = dummyAudioConfig {
+      let device = DummyAudioDevice(config: config)
+      self.dummyAudioDevice = device
+      self.audioDeviceModule = nil
+      self.audioDeviceModuleWrapper = nil
+      // ダミー音声有効時は bypassVoiceProcessing は無視される (Voice Processing 不要のため)
+      if bypassVoiceProcessing {
+        Logger.warn(
+          type: .peerChannel,
+          message: "bypassVoiceProcessing is ignored when dummy audio is enabled")
+      }
+      nativeFactory =
+        RTCPeerConnectionFactory(
+          encoderFactory: encoder,
+          decoderFactory: decoder,
+          audioDevice: device)
+    } else {
+      let adm: RTCAudioDeviceModule = RTCAudioDeviceModule(
+        bypassVoiceProcessing: bypassVoiceProcessing)
+      self.dummyAudioDevice = nil
+      self.audioDeviceModule = adm
+      self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
+      nativeFactory =
+        RTCPeerConnectionFactory(
+          encoderFactory: encoder,
+          decoderFactory: decoder,
+          audioDeviceModule: adm)
+    }
 
     for info in encoder.supportedCodecs() {
       Logger.debug(

@@ -239,8 +239,13 @@ public final class MediaChannel {
   init(manager: Sora, configuration: Configuration) {
     self.manager = manager
     self.configuration = configuration
+    let dummyAudioConfig: DummyAudioConfig? = {
+      guard configuration.dummyAudioEnabled else { return nil }
+      return DummyAudioConfig(content: configuration.dummyAudioContent)
+    }()
     self.nativePeerChannelFactory = NativePeerChannelFactory(
-      bypassVoiceProcessing: configuration.bypassVoiceProcessing)
+      bypassVoiceProcessing: configuration.bypassVoiceProcessing,
+      dummyAudioConfig: dummyAudioConfig)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
@@ -683,8 +688,19 @@ public final class MediaChannel {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
+    // ダミー音声有効時は audioDeviceModuleWrapper が nil になるためエラーを返す
+    // (ハードミュートが無効化されていることを呼び出し側が検知できるようにする)
+    guard let wrapper = self.nativePeerChannelFactory.audioDeviceModuleWrapper else {
+      Logger.warn(
+        type: .mediaChannel,
+        message:
+          "setAudioHardMute called but audioDeviceModuleWrapper is nil (dummy audio enabled)")
+      return SoraError.mediaChannelError(
+        reason: "setAudioHardMute is not supported when dummy audio is enabled")
+    }
+
     // 音声ハードミュートを切り替えます
-    if !self.nativePeerChannelFactory.audioDeviceModuleWrapper.setAudioHardMute(mute) {
+    if !wrapper.setAudioHardMute(mute) {
       return SoraError.mediaChannelError(
         reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
     }

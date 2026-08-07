@@ -1,3 +1,4 @@
+import AVFoundation
 @preconcurrency import Sora
 import XCTest
 
@@ -11,14 +12,22 @@ import XCTest
 /// - TEST_CHANNEL_ID_PREFIX: channelId の prefix (省略可、デフォルト "")
 /// - TEST_CHANNEL_ID_SUFFIX: channelId の suffix (省略可、デフォルト "")
 final class E2ETests: XCTestCase {
-  private var sora: Sora!
-  private var originalLogLevel: LogLevel!
+  private var sora: Sora?
+  private var originalLogLevel: LogLevel?
+  private var originalAudioCategory: AVAudioSession.Category?
+  private var originalAudioMode: AVAudioSession.Mode?
+  private var originalAudioOptions: AVAudioSession.CategoryOptions?
   private struct InvalidURLError: Error {}
 
   override func setUp() {
     super.setUp()
     originalLogLevel = Logger.shared.level
     Logger.shared.level = .warn
+    // ダミー音声テストが AVAudioSession を変更するため、tearDown で復元できるように保存する
+    let session = AVAudioSession.sharedInstance()
+    originalAudioCategory = session.category
+    originalAudioMode = session.mode
+    originalAudioOptions = session.categoryOptions
     sora = Sora()
   }
 
@@ -27,7 +36,16 @@ final class E2ETests: XCTestCase {
       channel.disconnect(error: nil)
     }
     sora = nil
-    Logger.shared.level = originalLogLevel
+    Logger.shared.level = originalLogLevel ?? .info
+    // ダミー音声テストが変更した AVAudioSession のグローバル状態を復元し、
+    // 後続テストに影響しないようにする
+    if let category = originalAudioCategory {
+      try? AVAudioSession.sharedInstance().setCategory(
+        category,
+        mode: originalAudioMode ?? .default,
+        options: originalAudioOptions ?? [])
+    }
+    try? AVAudioSession.sharedInstance().setActive(false)
     super.tearDown()
   }
 
@@ -96,7 +114,7 @@ final class E2ETests: XCTestCase {
     let expectation = self.expectation(description: "recvonly 接続が成功すること")
     var connectedChannel: MediaChannel?
 
-    _ = sora.connect(configuration: config) { mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       if let error {
         XCTFail("接続に失敗した: \(error)")
         expectation.fulfill()
@@ -130,7 +148,7 @@ final class E2ETests: XCTestCase {
     let connectExpectation = self.expectation(description: "recvonly 接続が成功すること")
     var mediaChannel: MediaChannel?
 
-    _ = sora.connect(configuration: config) { channel, error in
+    _ = sora?.connect(configuration: config) { channel, error in
       if let error {
         XCTFail("接続に失敗した: \(error)")
         connectExpectation.fulfill()
@@ -169,7 +187,7 @@ final class E2ETests: XCTestCase {
     let expectation = self.expectation(description: "recvonly で offer/answer が完了すること")
     var connectedChannel: MediaChannel?
 
-    _ = sora.connect(configuration: config) { mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       if let error {
         XCTFail("接続に失敗した: \(error)")
         expectation.fulfill()
@@ -215,7 +233,7 @@ final class E2ETests: XCTestCase {
     let expectation = self.expectation(description: "sendonly でダミー映像を送信できること")
     var capturer: DummyVideoCapturer?
 
-    _ = sora.connect(configuration: config) { mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       if let error {
         XCTFail("接続に失敗した: \(error)")
         expectation.fulfill()
@@ -266,7 +284,76 @@ final class E2ETests: XCTestCase {
     wait(for: [expectation], timeout: 90)
     capturer?.stop()
     // 切断
-    if let channel = sora.mediaChannels.first {
+    if let channel = sora?.mediaChannels.first {
+      let disconnectExpectation = self.expectation(description: "切断が完了すること")
+      channel.handlers.onDisconnect = { event in
+        if case .ok(let code, _) = event {
+          XCTAssertEqual(code, 1000, "正常切断コードであること")
+        } else {
+          XCTFail("予期しない切断: \(event)")
+        }
+        disconnectExpectation.fulfill()
+      }
+      channel.disconnect(error: nil)
+      wait(for: [disconnectExpectation], timeout: 10)
+    }
+  }
+
+  // MARK: - sendonly ダミー音声テスト
+
+  /// sendonly で DummyAudioDevice を使ってダミー音声を送信できることを確認する
+  func testSendonlyDummyAudio() throws {
+    var config = try buildConfiguration(role: .sendonly)
+    // この E2E はダミー音声送信の確認に限定し、映像は無効にする
+    config.videoEnabled = false
+    config.audioEnabled = true
+    config.dummyAudioEnabled = true
+    let expectation = self.expectation(description: "sendonly でダミー音声を送信できること")
+
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
+      if let error {
+        XCTFail("接続に失敗した: \(error)")
+        expectation.fulfill()
+        return
+      }
+      guard let channel = mediaChannel else {
+        XCTFail("メディアチャネルが nil")
+        expectation.fulfill()
+        return
+      }
+      // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
+      // ダミー音声送信の継続と WebRTC 統計情報を確認する
+      DispatchQueue.main.async { [channel, expectation] in
+        let timer = Timer(timeInterval: 2, repeats: false) { _ in
+          channel.getStats { result in
+            defer { expectation.fulfill() }
+            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+
+            guard case .success(let stats) = result else {
+              XCTFail("getStats に失敗した")
+              return
+            }
+
+            let audioOutbound = stats.entries.first {
+              $0.type == "outbound-rtp"
+                && ($0.values["kind"] as? NSString) == "audio"
+            }
+            XCTAssertNotNil(audioOutbound, "outbound audio stats が存在すること")
+            let bytesSent = audioOutbound?.values["bytesSent"] as? NSNumber
+            let packetsSent = audioOutbound?.values["packetsSent"] as? NSNumber
+            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
+            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
+            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
+            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
+          }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+      }
+    }
+
+    wait(for: [expectation], timeout: 90)
+    // 切断
+    if let channel = sora?.mediaChannels.first {
       let disconnectExpectation = self.expectation(description: "切断が完了すること")
       channel.handlers.onDisconnect = { event in
         if case .ok(let code, _) = event {
