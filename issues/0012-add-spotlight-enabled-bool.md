@@ -30,7 +30,7 @@ public enum Spotlight {
 }
 ```
 
-`Sora/Configuration.swift:61`
+`Sora/Configuration.swift:62`
 
 `spotlightEnabled` は `Spotlight` 型で定義されており、`simulcastEnabled` 等の `Bool` プロパティと型が不揃いになっている。
 
@@ -40,9 +40,9 @@ public enum Spotlight {
 public var spotlightEnabled: Spotlight = .disabled
 ```
 
-`Sora/Configuration.swift:182`
+`Sora/Configuration.swift:183`
 
-`SignalingConnect.spotlightEnabled` も `Configuration.Spotlight` 型（`Sora/Signaling.swift:314`）で、エンコード時に `switch spotlightEnabled` で分岐している。
+`SignalingConnect.spotlightEnabled` も `Configuration.Spotlight` 型（`Sora/Signaling.swift:313`）で、エンコード時に `switch spotlightEnabled` で分岐している。
 
 ```swift
 switch spotlightEnabled {
@@ -60,9 +60,9 @@ case .disabled:
 }
 ```
 
-`Sora/Signaling.swift:1011`
+`Sora/Signaling.swift:1029`
 
-`PeerChannel` は `spotlightEnabled: configuration.spotlightEnabled`（`Sora/PeerChannel.swift:397`）をそのまま渡している。
+`PeerChannel` は `spotlightEnabled: configuration.spotlightEnabled`（`Sora/PeerChannel.swift:489`）をそのまま渡している。
 
 ## 設計方針
 
@@ -70,7 +70,7 @@ case .disabled:
 
 - **名前**: `isSpotlightEnabled: Bool` — Swift の Bool プロパティ命名規則に従い `is` プレフィックスを付与する。既存の `spotlightEnabled` は enum に占有されているため新規名が必要となる。
 - **デフォルト値**: `false`
-- **保管場所**: `Configuration.swift:182` の enum `spotlightEnabled` の直前に stored property として定義する。
+- **保管場所**: `Configuration.swift:183` の enum `spotlightEnabled` の直前に stored property として定義する。
 
 ### 2. 新旧プロパティの関係（source of truth）
 
@@ -92,12 +92,12 @@ case .disabled:
 ### 4. SignalingConnect と PeerChannel の扱い
 
 - `SignalingConnect.spotlightEnabled` は `Configuration.Spotlight` 型のまま変更しない。
-- `PeerChannel.swift:397` の `spotlightEnabled: configuration.spotlightEnabled` も変更不要。`configuration.spotlightEnabled` が computed property として Bool → enum 変換を行うため、既存の受け渡しがそのまま機能する。
-- `SignalingConnect` のエンコード処理 (`Signaling.swift:1011`) も変更不要。
+- `PeerChannel.swift:489` の `spotlightEnabled: configuration.spotlightEnabled` も変更不要。`configuration.spotlightEnabled` が computed property として Bool → enum 変換を行うため、既存の受け渡しがそのまま機能する。
+- `SignalingConnect` のエンコード処理 (`Signaling.swift:1029`) も変更不要。
 
 ### 5. 非推奨化
 
-`multistreamEnabled` の非推奨化（`Configuration.swift:84-91`）を参考に、以下のメッセージで非推奨化する:
+`multistreamEnabled` の非推奨化（`Configuration.swift:85-92`）を参考に、以下のメッセージで非推奨化する:
 
 ```swift
 @available(*, deprecated, message: "`isSpotlightEnabled: Bool` で設定してください。2027 年中に廃止予定")
