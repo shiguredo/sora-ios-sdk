@@ -334,6 +334,13 @@ final class E2ETests: XCTestCase {
               return
             }
 
+            // 音声コーデック (OPUS) が確定していることを確認する (sora-js-sdk の E2E と同様)
+            let audioCodec = stats.entries.first {
+              $0.type == "codec"
+                && ($0.values["mimeType"] as? NSString) == "audio/opus"
+            }
+            XCTAssertNotNil(audioCodec, "audio codec stats が存在すること")
+
             let audioOutbound = stats.entries.first {
               $0.type == "outbound-rtp"
                 && ($0.values["kind"] as? NSString) == "audio"
