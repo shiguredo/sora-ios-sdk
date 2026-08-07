@@ -2,7 +2,7 @@
 
 - Priority: High
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-08-07
 - Model: Sonnet 4.6
 - Branch: feature/fix-simulcast-multicodec-crash
 - Polished: 2026-07-27
@@ -65,3 +65,19 @@
 - [FIX] サイマルキャストマルチコーデック時に r0 を active:false にするとクラッシュする問題を修正する
   - @voluntas
 ```
+
+## 解決方法
+
+m150.7871.3.0（現在の SDK が使用する libwebrtc）で再現確認を実施した。
+
+- 環境: 実機（iOS アプリ）、Sora サーバー側で認証ウェブフックによるマルチコーデックの払い出しを利用
+- 払い出し内容:
+  - `simulcast_multicodec: true`
+  - `simulcast_encodings`: r0 `active: false`（scaleResolutionDownBy 4.0、maxFramerate 10.0）、r1 / r2 `active: true`
+  - `simulcast_codecs`: r0 AV1、r1 H265、r2 H264（profile_level_id 64001f）
+- 受信した offer の `encodings` に `codec` フィールドと r0 の `active: false` が含まれることをログで確認
+- 結果: クラッシュせず、正常に接続できた
+
+なお、本 issue の「確認済み環境」（iPhone 12 Pro Max / iOS 17.4.1 / libwebrtc m148.7778.7.0）は整合していない。iOS 17.4.1 は 2024 年 3 月リリースであり、元のクラッシュ報告は 2024 年（libwebrtc m122/m123 時代）のものと推測される。m148 は 2026 年 5 月リリースのため、issue 作成時に当時の最新版が誤って記載された可能性が高い。
+
+m123 → m148 の libwebrtc 更新の間にクラッシュが修正された可能性が高く、SDK 側のコード変更は不要と判断する。CHANGES.md への追記も不要。
