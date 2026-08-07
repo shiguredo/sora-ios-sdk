@@ -29,11 +29,16 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   private var _isRecordingInitialized = false
   private var _isRecording = false
 
+  // ハードミュート状態。initialMicrophoneEnabled = false の場合は初期状態でミュートする
+  // (Configuration.initialMicrophoneEnabled の契約をダミー音声経路でも守る)
+  private(set) var isHardMuted: Bool
+
   // 正弦波の位相 (フレーム境界での波形不連続を防ぐ)
   private var phase: Double = 0
 
   init(config: DummyAudioConfig) {
     self.config = config
+    self.isHardMuted = !config.initialMicrophoneEnabled
     super.init()
   }
 
@@ -243,8 +248,29 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     return true
   }
 
+  /// ハードミュートを有効化/無効化する
+  /// - Parameter mute: `true` でミュート有効化、`false` でミュート無効化
+  /// - Returns: 成功した場合は `true`
+  func setHardMute(_ mute: Bool) -> Bool {
+    let update: () -> Void = { [weak self] in
+      self?.isHardMuted = mute
+    }
+    if let delegate {
+      delegate.dispatchSync(update)
+    } else {
+      update()
+    }
+    return true
+  }
+
   private func deliverPCMData() {
     guard let delegate, _isRecording else { return }
+
+    // ハードミュート中は録音データを送信しない
+    // (Configuration.initialMicrophoneEnabled = false の契約と setAudioHardMute に対応する)
+    if isHardMuted {
+      return
+    }
 
     let sampleRate = delegate.preferredInputSampleRate
     // ADM 側と同じ四捨五入でフレーム数を算出する (objc_audio_device.mm に合わせる)

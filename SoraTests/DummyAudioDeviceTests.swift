@@ -2,10 +2,10 @@ import XCTest
 
 @testable import Sora
 
-/// DummyAudioDevice の PCM 生成 (fillPCMData) の単体テスト
+/// DummyAudioDevice の PCM 生成 (fillPCMData) とハードミュート制御の単体テスト
 ///
 /// RTCAudioDeviceDelegate のテストダブルは作らず (AGENTS.md のモック・スタブ禁止)、
-/// delegate を必要としない fillPCMData のみを検証する。
+/// delegate を必要としない fillPCMData とハードミュート状態のみを検証する。
 /// DummyAudioDevice のライフサイクルは実際の ADM 経由でのみ動作するため、E2E テストで検証する。
 final class DummyAudioDeviceTests: XCTestCase {
 
@@ -25,7 +25,8 @@ final class DummyAudioDeviceTests: XCTestCase {
 
   /// .silence の場合、全サンプルが 0 になることを確認する
   func testSilenceProducesZeroSamples() {
-    let device = DummyAudioDevice(config: DummyAudioConfig(content: .silence))
+    let device = DummyAudioDevice(
+      config: DummyAudioConfig(initialMicrophoneEnabled: true, content: .silence))
 
     let samples = readPCMData(device, frameCount: 960)
 
@@ -34,7 +35,8 @@ final class DummyAudioDeviceTests: XCTestCase {
 
   /// .sineWave(frequency: 440) の場合、負→正の符号反転が 1 秒あたり 440 ± 1 回になることを確認する
   func testSineWaveProducesExpectedFrequency() {
-    let device = DummyAudioDevice(config: DummyAudioConfig(content: .sineWave(frequency: 440)))
+    let device = DummyAudioDevice(
+      config: DummyAudioConfig(initialMicrophoneEnabled: true, content: .sineWave(frequency: 440)))
     let sampleRate = 48000.0
 
     let samples = readPCMData(device, frameCount: Int(sampleRate), sampleRate: sampleRate)
@@ -57,16 +59,46 @@ final class DummyAudioDeviceTests: XCTestCase {
 
     // 1 回で 1920 サンプル生成した場合
     let wholeDevice = DummyAudioDevice(
-      config: DummyAudioConfig(content: .sineWave(frequency: 440)))
+      config: DummyAudioConfig(initialMicrophoneEnabled: true, content: .sineWave(frequency: 440)))
     let whole = readPCMData(wholeDevice, frameCount: 1920, sampleRate: sampleRate)
 
     // 2 回に分けて生成した場合 (位相が保持される)
     let splitDevice = DummyAudioDevice(
-      config: DummyAudioConfig(content: .sineWave(frequency: 440)))
+      config: DummyAudioConfig(initialMicrophoneEnabled: true, content: .sineWave(frequency: 440)))
     let first = readPCMData(splitDevice, frameCount: 960, sampleRate: sampleRate)
     let second = readPCMData(splitDevice, frameCount: 960, sampleRate: sampleRate)
     let split = first + second
 
     XCTAssertEqual(whole, split, "フレーム境界を跨いでも位相が連続しているべき")
+  }
+
+  /// initialMicrophoneEnabled = false の場合、初期状態でハードミュートされることを確認する
+  /// (Configuration.initialMicrophoneEnabled の契約をダミー音声経路でも守る)
+  func testInitialMicrophoneDisabledStartsMuted() {
+    let device = DummyAudioDevice(
+      config: DummyAudioConfig(initialMicrophoneEnabled: false, content: .silence))
+
+    XCTAssertTrue(device.isHardMuted, "initialMicrophoneEnabled = false なら初期状態でミュートであるべき")
+  }
+
+  /// initialMicrophoneEnabled = true の場合、初期状態でミュートされていないことを確認する
+  func testInitialMicrophoneEnabledStartsUnmuted() {
+    let device = DummyAudioDevice(
+      config: DummyAudioConfig(initialMicrophoneEnabled: true, content: .silence))
+
+    XCTAssertFalse(device.isHardMuted, "initialMicrophoneEnabled = true なら初期状態でミュートではないべき")
+  }
+
+  /// setHardMute でハードミュート状態が切り替わることを確認する
+  /// (setAudioHardMute の契約をダミー音声経路でも守る)
+  func testSetHardMuteTogglesState() {
+    let device = DummyAudioDevice(
+      config: DummyAudioConfig(initialMicrophoneEnabled: true, content: .silence))
+
+    device.setHardMute(true)
+    XCTAssertTrue(device.isHardMuted, "setHardMute(true) でミュートになるべき")
+
+    device.setHardMute(false)
+    XCTAssertFalse(device.isHardMuted, "setHardMute(false) でミュートが解除されるべき")
   }
 }

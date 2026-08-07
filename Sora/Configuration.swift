@@ -337,6 +337,7 @@ public struct Configuration {
 
 /// ダミー音声の設定を NativePeerChannelFactory に渡すための値型
 struct DummyAudioConfig {
+  let initialMicrophoneEnabled: Bool
   let content: DummyAudioContent
 }
 

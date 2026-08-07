@@ -241,7 +241,9 @@ public final class MediaChannel {
     self.configuration = configuration
     let dummyAudioConfig: DummyAudioConfig? = {
       guard configuration.dummyAudioEnabled else { return nil }
-      return DummyAudioConfig(content: configuration.dummyAudioContent)
+      return DummyAudioConfig(
+        initialMicrophoneEnabled: configuration.initialMicrophoneEnabled,
+        content: configuration.dummyAudioContent)
     }()
     self.nativePeerChannelFactory = NativePeerChannelFactory(
       bypassVoiceProcessing: configuration.bypassVoiceProcessing,
@@ -688,24 +690,26 @@ public final class MediaChannel {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
-    // ダミー音声有効時は audioDeviceModuleWrapper が nil になるためエラーを返す
-    // (ハードミュートが無効化されていることを呼び出し側が検知できるようにする)
-    guard let wrapper = self.nativePeerChannelFactory.audioDeviceModuleWrapper else {
-      Logger.warn(
-        type: .mediaChannel,
-        message:
-          "setAudioHardMute called but audioDeviceModuleWrapper is nil (dummy audio enabled)")
-      return SoraError.mediaChannelError(
-        reason: "setAudioHardMute is not supported when dummy audio is enabled")
+    // 通常経路: RTCAudioDeviceModule のラッパーでハードミュートを切り替える
+    if let wrapper = self.nativePeerChannelFactory.audioDeviceModuleWrapper {
+      if !wrapper.setAudioHardMute(mute) {
+        return SoraError.mediaChannelError(
+          reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+      }
+      return nil
     }
 
-    // 音声ハードミュートを切り替えます
-    if !wrapper.setAudioHardMute(mute) {
-      return SoraError.mediaChannelError(
-        reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+    // ダミー音声経路: DummyAudioDevice でハードミュートを切り替える
+    if let dummyDevice = self.nativePeerChannelFactory.dummyAudioDevice {
+      if !dummyDevice.setHardMute(mute) {
+        return SoraError.mediaChannelError(
+          reason: "DummyAudioDevice::setHardMute failed")
+      }
+      return nil
     }
 
-    return nil
+    return SoraError.mediaChannelError(
+      reason: "setAudioHardMute is not supported")
   }
 
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
