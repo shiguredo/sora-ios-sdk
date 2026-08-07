@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-08-07
 - Model: Opus 4.8
 - Branch: feature/add-spotlight-enabled-bool
 - Polished: 2026-06-05
@@ -137,3 +137,13 @@ case .disabled:
   ```
 
 ## 解決方法
+
+- `Sora/Configuration.swift` に `isSpotlightEnabled: Bool` を stored property として追加した (デフォルト `false`)
+- 既存の `spotlightEnabled` を computed property に変更し、`isSpotlightEnabled` から導出するようにした
+  - `@available(*, deprecated)` で非推奨化し、`isSpotlightEnabled: Bool` への移行を促すようにした
+- `Configuration.Spotlight` に `Equatable` 準拠を追加した (テストの等価比較のため)
+- `Sora/PeerChannel.swift` の `sendConnectMessage` から SignalingConnect 構築を `makeSignalingConnect` として抽出した (ロジック不変)
+- テストを追加した
+  - `SoraTests/ConfigurationTests.swift`: `isSpotlightEnabled` と `spotlightEnabled` の相互変換 5 件
+  - `SoraTests/PeerChannelConnectEncodingTests.swift`: PeerChannel 経由の connect JSON 検証 5 件 (新旧 API の等価性含む)
+- `CHANGES.md` の develop セクションに追記した
