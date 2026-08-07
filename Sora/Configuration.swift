@@ -59,7 +59,7 @@ public struct Configuration {
   // MARK: - 接続に関する設定
 
   /// スポットライトの設定
-  public enum Spotlight {
+  public enum Spotlight: Equatable {
     /// 有効
     case enabled
 
@@ -180,7 +180,18 @@ public struct Configuration {
 
   /// スポットライトの可否
   /// 詳しくは Sora のスポットライト機能を参照してください。
-  public var spotlightEnabled: Spotlight = .disabled
+  public var isSpotlightEnabled: Bool = false
+
+  /// スポットライトの可否
+  /// 詳しくは Sora のスポットライト機能を参照してください。
+  @available(
+    *, deprecated,
+    message: "`isSpotlightEnabled: Bool` で設定してください。2027 年中に廃止予定"
+  )
+  public var spotlightEnabled: Spotlight {
+    get { isSpotlightEnabled ? .enabled : .disabled }
+    set { isSpotlightEnabled = (newValue == .enabled) }
+  }
 
   /// スポットライトの対象人数
   public var spotlightNumber: Int?

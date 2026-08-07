@@ -15,8 +15,15 @@
   - 2027 年中に廃止予定
   - 移行先は `Configuration.insecure`
   - @t-miya
+- [UPDATE] enum 型の `Configuration.spotlightEnabled` を非推奨にする
+  - 移行先は `Configuration.isSpotlightEnabled`
+  - Configuration 内のプロパティで型の一貫性を持たせるため変更
+  - @t-miya
 - [ADD] WebSocket シグナリングと TURN-TLS で insecure モードを利用できるようにする
   - `Configuration.insecure = true` の場合はサーバー証明書の検証をスキップする
+  - @t-miya
+- [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
+  - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
   - @t-miya
 - [FIX] TURN-TLS の証明書エラーで接続失敗した後も libwebrtc のログが流れ続ける問題を修正する
   - 接続試行中の切断要求で `connect()` の初期ロックを確実に解放し、 `RTCPeerConnection` をクローズする

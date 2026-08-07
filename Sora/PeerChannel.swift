@@ -456,6 +456,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "did connect to signaling channel")
 
+    let connect = makeSignalingConnect(sdp: sdp, redirect: redirect)
+
+    Logger.debug(type: .peerChannel, message: "send connect")
+    signalingChannel.send(message: Signaling.connect(connect))
+  }
+
+  /// Configuration から SignalingConnect を構築する。
+  ///
+  /// sendConnectMessage から呼び出す。テストから利用するため internal とする。
+  func makeSignalingConnect(sdp: String?, redirect: Bool?) -> SignalingConnect {
     var role: SignalingRole
     switch configuration.role {
     case .sendonly:
@@ -471,7 +481,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version.dropFirst()).\(WebRTCInfo.branch).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
 
     let simulcast = configuration.simulcastEnabled
-    let connect = SignalingConnect(
+    return SignalingConnect(
       role: role,
       channelId: configuration.channelId,
       clientId: configuration.clientId,
@@ -507,9 +517,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       h264Params: configuration.videoCodec == .h264 ? configuration.videoH264Params : nil,
       h265Params: configuration.videoCodec == .h265 ? configuration.videoH265Params : nil
     )
-
-    Logger.debug(type: .peerChannel, message: "send connect")
-    signalingChannel.send(message: Signaling.connect(connect))
   }
 
   private func initializeSenderStream(mid: [String: String]? = nil) {
