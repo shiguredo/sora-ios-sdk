@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-08
-- Completed:
+- Completed: 2026-08-07
 - Model: deepseek-v4-pro
 - Branch: feature/add-dummy-audio-source
 - Polished: 2026-08-07
@@ -733,12 +733,36 @@ CI 環境に音声出力デバイスが存在する必要がある（`initialize
 
 ## 完了条件
 
-- [ ] `DummyAudioDevice` が `RTCAudioDevice` プロトコルの全必須プロパティ/メソッドを実装し、設計方針のテーブルに従った値を返すこと
-- [ ] 受信側で 440Hz 正弦波が聞こえること（`deliverRecordedData` 経由の PCM 注入の確認。手動テストセクション参照）
-- [ ] AUAudioUnit 経由での遠隔音声の再生が動作し、`sendrecv` モードで双方向の音声通信が可能であること（手動テストセクション参照）
-- [ ] `.silence` と `.sineWave(frequency:)` の両方の `DummyAudioContent` が正しく動作すること
-- [ ] `initialMicrophoneEnabled = false` で初期ミュートされ、`setAudioHardMute(false)` で有効化できること（`Configuration.initialMicrophoneEnabled` の契約をダミー音声経路でも守ること）
-- [ ] `dummyAudioEnabled == false`（デフォルト）の場合、既存のマイク入力・再生に影響がないこと
-- [ ] 切断時に `DummyAudioDevice` が適切に停止され（`recvonly` を含む全ロール）、再接続（新規 `MediaChannel`）時にも正しく動作すること
-- [ ] `fillPCMData` の単体テストとダミー音声の E2E テストが実装され、すべて成功すること
-- [ ] `CHANGES.md` に変更履歴が追記されていること
+- [x] `DummyAudioDevice` が `RTCAudioDevice` プロトコルの全必須プロパティ/メソッドを実装し、設計方針のテーブルに従った値を返すこと
+- [x] 受信側で 440Hz 正弦波が聞こえること（`deliverRecordedData` 経由の PCM 注入の確認。手動テストセクション参照）
+- [x] AUAudioUnit 経由での遠隔音声の再生が動作し、`sendrecv` モードで双方向の音声通信が可能であること（手動テストセクション参照）
+- [x] `.silence` と `.sineWave(frequency:)` の両方の `DummyAudioContent` が正しく動作すること
+- [x] `initialMicrophoneEnabled = false` で初期ミュートされ、`setAudioHardMute(false)` で有効化できること（`Configuration.initialMicrophoneEnabled` の契約をダミー音声経路でも守ること）
+- [x] `dummyAudioEnabled == false`（デフォルト）の場合、既存のマイク入力・再生に影響がないこと
+- [x] 切断時に `DummyAudioDevice` が適切に停止され（`recvonly` を含む全ロール）、再接続（新規 `MediaChannel`）時にも正しく動作すること
+- [x] `fillPCMData` の単体テストとダミー音声の E2E テストが実装され、すべて成功すること
+- [x] `CHANGES.md` に変更履歴が追記されていること
+
+## 解決方法
+
+- `Sora/DummyAudioDevice.swift` を新規追加した
+  - `RTCAudioDevice` プロトコル実装。`DispatchSourceTimer` で PCM 16-bit データを生成し `delegate.deliverRecordedData` で ADM に注入する（録音）
+  - `AUAudioUnit`（RemoteIO）の `outputProvider` 経由で `delegate.getPlayoutData` を呼び、遠隔音声を再生する
+  - `AVAudioSession` の設定（`playAndRecord` + `.defaultToSpeaker`）を `initialize(with:)` で行う（`RTCAudioDevice.h` の契約）
+  - ハードミュート制御（`isHardMuted` / `setHardMute(_:)`）を実装し、`initialMicrophoneEnabled` の契約をダミー音声経路でも守る
+- `Sora/DummyAudioContent.swift` を新規追加した（`silence` / `sineWave(frequency:)`）
+- `Sora/Configuration.swift` に `dummyAudioEnabled` / `dummyAudioContent` / `DummyAudioConfig` を追加した
+- `Sora/NativePeerChannelFactory.swift` を修正した
+  - `audioDeviceModule` を Optional 化し、ダミー経路では `RTCPeerConnectionFactory.init(encoderFactory:decoderFactory:audioDevice:)` を使用する
+  - `dummyAudioDevice` プロパティを追加した
+- `Sora/MediaChannel.swift` を修正した
+  - `NativePeerChannelFactory.init` に `dummyAudioConfig` を渡す
+  - `setAudioHardMute` をダミー音声対応にした（`DummyAudioDevice.setHardMute(_:)` への委譲）
+- `Sora/PeerChannel.swift` を修正した
+  - `dummyAudioEnabled` 時の `initializeAudioInput()` をスキップする
+  - 切断時（`basicDisconnect` の isSender ガード外）に `DummyAudioDevice.terminateDevice()` を実行する
+- `Sora/Logger.swift` に `LogType.dummyAudioDevice` を追加した（`Group.channels` に属する）
+- テストを追加した
+  - `SoraTests/DummyAudioDeviceTests.swift`: `fillPCMData` の PCM 生成とハードミュート制御の単体テスト 6 件
+  - `SoraTests/SignalingE2ETests.swift`: `testSendonlyDummyAudio`（getStats で audio codec / outbound-rtp / bytesSent / packetsSent を確認）。CI で通過済み
+- `CHANGES.md` の develop セクションに [ADD] エントリを追記した
