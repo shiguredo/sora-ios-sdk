@@ -17,6 +17,11 @@ final class E2ETests: XCTestCase {
   private var originalAudioCategory: AVAudioSession.Category?
   private var originalAudioMode: AVAudioSession.Mode?
   private var originalAudioOptions: AVAudioSession.CategoryOptions?
+  // テストが AVAudioSession を有効化したかどうか (ダミー音声テストのみ true になる)。
+  // tearDown で「このテストが変更した場合のみ」復元するためのフラグ。
+  // 毎回 setActive(false) すると、AVAudioSession に触れない他の E2E テストが
+  // 前提とする音声状態を壊すため、フラグで限定する
+  private var audioSessionActivatedByTest = false
   private struct InvalidURLError: Error {}
 
   override func setUp() {
@@ -28,6 +33,7 @@ final class E2ETests: XCTestCase {
     originalAudioCategory = session.category
     originalAudioMode = session.mode
     originalAudioOptions = session.categoryOptions
+    audioSessionActivatedByTest = false
     sora = Sora()
   }
 
@@ -37,15 +43,16 @@ final class E2ETests: XCTestCase {
     }
     sora = nil
     Logger.shared.level = originalLogLevel ?? .info
-    // ダミー音声テストが変更した AVAudioSession のグローバル状態を復元し、
-    // 後続テストに影響しないようにする
-    if let category = originalAudioCategory {
-      try? AVAudioSession.sharedInstance().setCategory(
-        category,
-        mode: originalAudioMode ?? .default,
-        options: originalAudioOptions ?? [])
+    // テストが AVAudioSession を有効化した場合のみ復元し、後続テストに影響しないようにする
+    if audioSessionActivatedByTest {
+      if let category = originalAudioCategory {
+        try? AVAudioSession.sharedInstance().setCategory(
+          category,
+          mode: originalAudioMode ?? .default,
+          options: originalAudioOptions ?? [])
+      }
+      try? AVAudioSession.sharedInstance().setActive(false)
     }
-    try? AVAudioSession.sharedInstance().setActive(false)
     super.tearDown()
   }
 
@@ -308,6 +315,9 @@ final class E2ETests: XCTestCase {
     config.videoEnabled = false
     config.audioEnabled = true
     config.dummyAudioEnabled = true
+    // DummyAudioDevice.initialize(with:) が接続試行時に AVAudioSession を有効化するため、
+    // tearDown での復元対象とする
+    audioSessionActivatedByTest = true
     let expectation = self.expectation(description: "sendonly でダミー音声を送信できること")
 
     _ = sora?.connect(configuration: config) { mediaChannel, error in
