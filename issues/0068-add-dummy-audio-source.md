@@ -696,10 +696,11 @@ AGENTS.md の「モックやスタブは絶対に利用しないこと」に従�
 
 `SoraTests/SignalingE2ETests.swift` に `DummyVideoCapturer` の先例（`testSendonlyDummyVideo`）に倣って追加する。既存の E2E テストが `setUp` / `tearDown` で `Logger.shared.level` を保存・復元している先例（`SignalingE2ETests.swift:20-31`）に倣い、`AVAudioSession` の状態も保存・復元する:
 
-- `setUp` で `AVAudioSession.sharedInstance()` の `category` / `mode` / `categoryOptions` / `isActive` を保存する
+- `setUp` で `AVAudioSession.sharedInstance()` の `category` / `mode` / `categoryOptions` を保存する（`isActive` は取得 API がないため保存しない）
+- ダミー音声テストのみ `audioSessionActivatedByTest` フラグを true にし、`tearDown` はフラグが true の場合のみ復元する（毎回 `setActive(false)` すると、AVAudioSession に触れない他の E2E テストが前提とする音声状態を壊すため）
 - テストは `role: .sendonly`、`videoEnabled: false`、`audioEnabled: true`、`dummyAudioEnabled: true` の構成で接続し、`onConnect` が呼ばれることを確認する
-- `getStats()` で音声トラック（`kind == "audio"` の outbound-rtp）の `bytesSent` / `packetsSent` が増加すること（ダミー音声が実際に送信されていることの確認）
-- `tearDown` で保存した `category` / `mode` / `categoryOptions` に復元し、`setActive(false)` で非アクティブ化する（`DummyAudioDevice` が変更したグローバル状態が後続テストに影響しないようにする）
+- `getStats()` で音声コーデック（`codec` / `mimeType == "audio/opus"`）と音声トラック（`kind == "audio"` の outbound-rtp）の存在、`bytesSent` / `packetsSent` が 0 より大きいことを確認する（ダミー音声が実際に送信されていることの確認。sora-js-sdk の E2E と同様）
+- `tearDown` はフラグが true の場合のみ、保存した `category` / `mode` / `categoryOptions` に復元し、`setActive(false)` で非アクティブ化する（`DummyAudioDevice` が変更したグローバル状態が後続テストに影響しないようにする）
 
 CI 環境に音声出力デバイスが存在する必要がある（`initialize(with:)` の `setActive(true)` と AUAudioUnit の生成が音声出力デバイスに依存するため）。sendonly 構成なら再生は初期化されず影響は小さいが、これは libwebrtc の ADM の内部挙動に依存するため、実装時に sendonly 構成でも再生が初期化される場合はテスト設計を見直す。
 
