@@ -102,6 +102,66 @@ final class ConfigurationTests: XCTestCase {
     XCTAssertFalse(config.insecure)
   }
 
+  // MARK: - スポットライトの設定テスト
+
+  /// isSpotlightEnabled のデフォルト値が false であることを確認する
+  func testIsSpotlightEnabledDefaultValue() throws {
+    let url = try makeTestURL()
+    let config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    XCTAssertFalse(config.isSpotlightEnabled)
+  }
+
+  /// isSpotlightEnabled = true の場合、spotlightEnabled が .enabled を返すことを確認する
+  func testIsSpotlightEnabledTrueReflectsToEnum() throws {
+    let url = try makeTestURL()
+    var config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    config.isSpotlightEnabled = true
+    XCTAssertEqual(config.spotlightEnabled, .enabled)
+  }
+
+  /// spotlightEnabled = .enabled の場合、isSpotlightEnabled が true を返すことを確認する
+  func testEnumEnabledReflectsToBool() throws {
+    let url = try makeTestURL()
+    var config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    config.spotlightEnabled = .enabled
+    XCTAssertTrue(config.isSpotlightEnabled)
+  }
+
+  /// spotlightEnabled = .disabled の場合、isSpotlightEnabled が false を返すことを確認する
+  func testEnumDisabledReflectsToBool() throws {
+    let url = try makeTestURL()
+    var config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    config.spotlightEnabled = .disabled
+    XCTAssertFalse(config.isSpotlightEnabled)
+  }
+
+  /// Bool と enum の往復で設定値が変化しないことを確認する
+  func testBoolEnumRoundTrip() throws {
+    let url = try makeTestURL()
+    var config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    config.isSpotlightEnabled = true
+    XCTAssertEqual(config.spotlightEnabled, .enabled)
+    config.spotlightEnabled = .enabled
+    XCTAssertTrue(config.isSpotlightEnabled)
+    config.spotlightEnabled = .disabled
+    XCTAssertFalse(config.isSpotlightEnabled)
+  }
+
   /// PEM ブロックが 1 件も含まれない文字列は configurationError になる
   func testEmptyPEMThrowsError() throws {
     let url = try makeTestURL()
