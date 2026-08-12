@@ -479,23 +479,29 @@ final class E2ETests: XCTestCase {
       }
     }
 
+    // 後始末: 起動済みの capturer を停止する (未起動でも Optional で安全)
+    let stopCapturers: () -> Void = {
+      capturer1?.stop()
+      capturer2?.stop()
+    }
+
     // sendrecv1 の接続完了を待つ
     // ConnectionTimer (Configuration.connectionTimeout = 30 秒) の発火を wait 内で処理し、
     // テスト終了後に遅延コールバックが残らないよう、wait のタイムアウトを 35 秒とする
     wait(for: [connect1Expectation], timeout: 35)
     guard !connectFailed, let channel1 else {
-      // 後始末: capturer 停止 + 切断
-      capturer1?.stop()
+      // 後始末: capturer 停止 + 接続済みチャンネルの切断
+      stopCapturers()
       channel1?.disconnect(error: nil)
       return
     }
     // sendrecv2 の接続完了を待つ
     wait(for: [connect2Expectation], timeout: 35)
     guard !connectFailed, let channel2, let capturer1, let capturer2 else {
-      // 後始末: capturer 停止 + 切断
-      capturer1?.stop()
-      capturer2?.stop()
+      // 後始末: capturer 停止 + 接続済みチャンネルの切断 (channel2 が接続済みなら切断する)
+      stopCapturers()
       channel1.disconnect(error: nil)
+      channel2?.disconnect(error: nil)
       return
     }
 
@@ -516,8 +522,7 @@ final class E2ETests: XCTestCase {
     wait(for: [statsExpectation], timeout: 30)
 
     // 切断 (capturer を停止してから切断する)
-    capturer1.stop()
-    capturer2.stop()
+    stopCapturers()
     for channel in [channel1, channel2] {
       let disconnectExpectation = self.expectation(description: "切断が完了すること")
       channel.handlers.onDisconnect = { event in
