@@ -263,7 +263,13 @@ final class E2ETests: XCTestCase {
             XCTAssertGreaterThan(currentCapturer.frameCount, 0, "ダミー映像フレームが送信されていること")
 
             guard case .success(let stats) = result else {
-              XCTFail("getStats に失敗した")
+              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
+              // エラー詳細を含めて出力する
+              if case .failure(let error) = result {
+                XCTFail("getStats に失敗した: \(error)")
+              } else {
+                XCTFail("getStats に失敗した")
+              }
               return
             }
 
@@ -332,7 +338,13 @@ final class E2ETests: XCTestCase {
             XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
 
             guard case .success(let stats) = result else {
-              XCTFail("getStats に失敗した")
+              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
+              // エラー詳細を含めて出力する
+              if case .failure(let error) = result {
+                XCTFail("getStats に失敗した: \(error)")
+              } else {
+                XCTFail("getStats に失敗した")
+              }
               return
             }
 
