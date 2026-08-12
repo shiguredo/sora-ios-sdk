@@ -332,10 +332,17 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     case .silence:
       break
     case .sineWave(let frequency):
+      // 正弦波 (サイン波) を生成する。
+      // 波形は sin(2π × 周波数 × 時刻) で表され、時刻は位相 (phase) で管理する。
+      // 振幅はフルスケール (Int16 の最大値 32767) の 30% とする。
+      // フルスケールで連続再生するとクリッピングの恐れがあるため、余裕を持たせている。
+      let amplitude = 32767.0 * 0.3
       for i in 0..<frameCount {
-        let value = Int16(sin(2.0 * .pi * frequency * phase) * 32767.0 * 0.3)
+        let value = Int16(sin(2.0 * .pi * frequency * phase) * amplitude)
         pcm[i] = value
-        // フレーム境界で位相が不連続にならないよう、位相を進めて保持する
+        // サンプルごとに位相を 1 / サンプルレート 秒進める。
+        // 位相はインスタンス変数として保持するため、フレーム境界 (20ms) を跨いでも
+        // 波形が不連続にならず、クリックノイズが発生しない。
         phase += 1.0 / sampleRate
       }
     }
