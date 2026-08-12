@@ -507,6 +507,13 @@ final class E2ETests: XCTestCase {
     }
     wait(for: [statsExpectation], timeout: 30)
 
+    // capturer がバッファ確保の連続失敗で自動停止していないかを直接確認する
+    // (stats 検証の成否に関わらず実行し、失敗時の原因切り分けに役立てる)
+    XCTAssertTrue(capturer1.isRunning, "DummyVideoCapturer が動作中であること")
+    XCTAssertGreaterThan(capturer1.frameCount, 0, "ダミー映像フレームが送信されていること")
+    XCTAssertTrue(capturer2.isRunning, "DummyVideoCapturer が動作中であること")
+    XCTAssertGreaterThan(capturer2.frameCount, 0, "ダミー映像フレームが送信されていること")
+
     // 切断 (capturer を停止してから切断する)
     stopCapturers()
     for channel in [channel1, channel2] {
