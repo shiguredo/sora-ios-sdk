@@ -266,7 +266,7 @@ final class E2ETests: XCTestCase {
               // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
               // エラー詳細を含めて出力する
               if case .failure(let error) = result {
-                XCTFail("getStats に失敗した: \(error)")
+                XCTFail("getStats に失敗した : \(error)")
               } else {
                 XCTFail("getStats に失敗した")
               }
@@ -341,7 +341,7 @@ final class E2ETests: XCTestCase {
               // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
               // エラー詳細を含めて出力する
               if case .failure(let error) = result {
-                XCTFail("getStats に失敗した: \(error)")
+                XCTFail("getStats に失敗した : \(error)")
               } else {
                 XCTFail("getStats に失敗した")
               }
@@ -420,7 +420,7 @@ final class E2ETests: XCTestCase {
     _ = sora?.connect(configuration: config1) { [self] mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
-          XCTFail("sendrecv1 の接続に失敗した: \(error)")
+          XCTFail("sendrecv1 の接続に失敗した : \(error)")
           connectFailed = true
           connect1Expectation.fulfill()
           return
@@ -442,7 +442,7 @@ final class E2ETests: XCTestCase {
         _ = self.sora?.connect(configuration: config2) { mediaChannel2, error2 in
           DispatchQueue.main.async {
             if let error2 {
-              XCTFail("sendrecv2 の接続に失敗した: \(error2)")
+              XCTFail("sendrecv2 の接続に失敗した : \(error2)")
               connectFailed = true
               connect2Expectation.fulfill()
               return
@@ -586,14 +586,14 @@ final class E2ETests: XCTestCase {
       // 原因で発生し得るため、inbound 未達と同様にリトライする。上限に達した場合は失敗とする
       if attempt >= maxAttempts {
         if !statsFailures.isEmpty {
-          XCTFail("getStats に失敗した: \(statsFailures.joined(separator: "、"))")
+          XCTFail("getStats に失敗した : \(statsFailures.joined(separator: "、"))")
         } else {
           // 最後に観測した受信量を出力し、原因切り分けに役立てる
           let inbound1 = self.inboundVideoByteCounts(stats: stats1)
           let inbound2 = self.inboundVideoByteCounts(stats: stats2)
           XCTFail(
             "\(maxAttempts) 回試行しても両チャンネルの inbound video を確認できなかった"
-              + " (sendrecv1: \(inbound1.bytesReceived) bytes / \(inbound1.packetsReceived) packets、"
+              + " (sendrecv1: \(inbound1.bytesReceived) bytes / \(inbound1.packetsReceived) packets 、"
               + "sendrecv2: \(inbound2.bytesReceived) bytes / \(inbound2.packetsReceived) packets)")
         }
         expectation.fulfill()
