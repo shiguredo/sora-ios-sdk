@@ -62,6 +62,17 @@ final class E2ETests: XCTestCase {
 
   // MARK: - ヘルパー
 
+  /// E2E テスト用のチャンネル ID を構築する
+  ///
+  /// TEST_CHANNEL_ID_PREFIX / TEST_CHANNEL_ID_SUFFIX 環境変数を組み合わせる。
+  /// unique が true の場合は残留接続と混在しない一意な ID にする
+  private func buildChannelId(unique: Bool = false) -> String {
+    let prefix = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_PREFIX"] ?? ""
+    let suffix = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_SUFFIX"] ?? ""
+    let middle = unique ? "e2e-test-\(UUID().uuidString)" : "e2e-test"
+    return "\(prefix)\(middle)\(suffix)"
+  }
+
   /// E2E 用の Configuration を構築する
   ///
   /// 環境変数が未設定の場合は XCTSkip でテストをスキップする
@@ -84,14 +95,7 @@ final class E2ETests: XCTestCase {
       throw XCTSkip("TEST_SECRET_KEY が未設定のためスキップします")
     }
 
-    let prefix: String? = {
-      if let v = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_PREFIX"], !v.isEmpty {
-        return v
-      }
-      return nil
-    }()
-    let suffix = ProcessInfo.processInfo.environment["TEST_CHANNEL_ID_SUFFIX"] ?? ""
-    let channelId = "\(prefix ?? "")e2e-test\(suffix)"
+    let channelId = buildChannelId()
 
     // E2E テスト専用のメタデータ構造体
     struct E2EMetadata: Encodable {
@@ -381,8 +385,10 @@ final class E2ETests: XCTestCase {
 
   /// sendrecv 2 台が同一チャンネルに接続し、互いの映像を送受信できることを確認する
   func testSendrecvDummyVideo() throws {
-    // テスト固有の一意なチャンネル ID を生成する (残留接続との混在を防ぐ)
-    let channelId = "e2e-test-\(UUID().uuidString)"
+    // テスト固有の一意なチャンネル ID を生成する (残留接続との混在を防ぐ)。
+    // CI の Sora サーバーは channelId の prefix / suffix で接続を許可するため、
+    // 環境変数 TEST_CHANNEL_ID_PREFIX / TEST_CHANNEL_ID_SUFFIX も組み合わせる
+    let channelId = buildChannelId(unique: true)
 
     // 接続失敗フラグ。失敗時は後続ステップをスキップして早期に終了する
     var connectFailed = false
@@ -498,6 +504,9 @@ final class E2ETests: XCTestCase {
       // 後始末: capturer 停止 + 接続済みチャンネルの切断
       stopCapturers()
       disconnectAll()
+      // sendrecv2 は接続を開始していないため、未 fulfill の expectation が残って
+      // テスト終了時に unwaited expectation として報告されるのを防ぐ
+      connect2Expectation.fulfill()
       return
     }
     // sendrecv2 の接続完了を待つ
