@@ -41,6 +41,9 @@
 - [ADD] E2E テスト用にダミー音声デバイスを追加する
   - テストから internal な `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
   - @t-miya
+- [ADD] sendrecv E2E テストを追加する
+  - 同一チャンネルに 2 台の sendrecv クライアントを接続し、互いの映像を送受信できることを検証する
+  - @t-miya
 
 ## 2026.2.0
 

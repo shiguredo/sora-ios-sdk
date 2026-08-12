@@ -391,4 +391,247 @@ final class E2ETests: XCTestCase {
       wait(for: [disconnectExpectation], timeout: 10)
     }
   }
+
+  // MARK: - sendrecv ダミー映像テスト
+
+  /// sendrecv 2 台が同一チャンネルに接続し、互いの映像を送受信できることを確認する
+  func testSendrecvDummyVideo() throws {
+    // テスト固有の一意なチャンネル ID を生成する (残留接続との混在を防ぐ)
+    let channelId = "e2e-test-\(UUID().uuidString)"
+
+    // 接続失敗フラグ。失敗時は後続ステップをスキップして早期に終了する
+    var connectFailed = false
+
+    // 接続完了を待つ expectation (各接続ごとに wait を分けて直列に実行する)
+    let connect1Expectation = self.expectation(description: "sendrecv1 の接続が完了すること")
+    let connect2Expectation = self.expectation(description: "sendrecv2 の接続が完了すること")
+
+    // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
+    var channel1: MediaChannel?
+    var channel2: MediaChannel?
+    var capturer1: DummyVideoCapturer?
+    var capturer2: DummyVideoCapturer?
+
+    // sendrecv1 / sendrecv2 用の Configuration
+    var config1 = try buildConfiguration(role: .sendrecv)
+    config1.channelId = channelId
+    config1.videoEnabled = true
+    config1.audioEnabled = false
+    config1.videoCodec = .vp8
+    config1.initialCameraEnabled = false
+
+    var config2 = try buildConfiguration(role: .sendrecv)
+    config2.channelId = channelId
+    config2.videoEnabled = true
+    config2.audioEnabled = false
+    config2.videoCodec = .vp8
+    config2.initialCameraEnabled = false
+
+    // sendrecv1 を接続し、接続完了後に sendrecv2 を接続する (直列)
+    _ = sora?.connect(configuration: config1) { [self] mediaChannel, error in
+      if let error {
+        XCTFail("sendrecv1 の接続に失敗した: \(error)")
+        connectFailed = true
+        connect1Expectation.fulfill()
+        return
+      }
+      guard let channel = mediaChannel, let stream = channel.senderStream else {
+        XCTFail("sendrecv1 の senderStream が nil")
+        connectFailed = true
+        connect1Expectation.fulfill()
+        return
+      }
+      channel1 = channel
+      let currentCapturer1 = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+      currentCapturer1.stream = stream
+      currentCapturer1.start()
+      capturer1 = currentCapturer1
+      connect1Expectation.fulfill()
+
+      // sendrecv2 を接続する
+      _ = self.sora?.connect(configuration: config2) { mediaChannel2, error2 in
+        if let error2 {
+          XCTFail("sendrecv2 の接続に失敗した: \(error2)")
+          connectFailed = true
+          connect2Expectation.fulfill()
+          return
+        }
+        guard let channel2Unwrapped = mediaChannel2,
+          let stream2 = channel2Unwrapped.senderStream
+        else {
+          XCTFail("sendrecv2 の senderStream が nil")
+          connectFailed = true
+          connect2Expectation.fulfill()
+          return
+        }
+        channel2 = channel2Unwrapped
+        let currentCapturer2 = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+        currentCapturer2.stream = stream2
+        currentCapturer2.start()
+        capturer2 = currentCapturer2
+        connect2Expectation.fulfill()
+      }
+    }
+
+    // sendrecv1 の接続完了を待つ
+    wait(for: [connect1Expectation], timeout: 30)
+    guard !connectFailed else {
+      // 後始末: capturer 停止 + 切断
+      capturer1?.stop()
+      channel1?.disconnect(error: nil)
+      return
+    }
+    // sendrecv2 の接続完了を待つ
+    wait(for: [connect2Expectation], timeout: 30)
+    guard !connectFailed, let channel1, let channel2, let capturer1, let capturer2 else {
+      // 後始末: capturer 停止 + 切断
+      capturer1?.stop()
+      capturer2?.stop()
+      channel1?.disconnect(error: nil)
+      return
+    }
+
+    // 5 秒待機後に getStats を取得し、両チャンネルの video stats を確認する
+    // (受信は keyframe 供給に依存するため、リトライ付きで確認する)
+    let statsExpectation = self.expectation(description: "video stats を確認できること")
+    DispatchQueue.main.async {
+      let timer = Timer(timeInterval: 5, repeats: false) { _ in
+        self.verifyVideoStats(
+          channel1: channel1,
+          channel2: channel2,
+          attempt: 1,
+          maxAttempts: 3,
+          expectation: statsExpectation)
+      }
+      RunLoop.main.add(timer, forMode: .common)
+    }
+    wait(for: [statsExpectation], timeout: 30)
+
+    // 切断 (capturer を停止してから切断する)
+    capturer1.stop()
+    capturer2.stop()
+    for channel in [channel1, channel2] {
+      let disconnectExpectation = self.expectation(description: "切断が完了すること")
+      channel.handlers.onDisconnect = { event in
+        if case .ok(let code, _) = event {
+          XCTAssertEqual(code, 1000, "正常切断コードであること")
+        } else {
+          XCTFail("予期しない切断: \(event)")
+        }
+        disconnectExpectation.fulfill()
+      }
+      channel.disconnect(error: nil)
+      wait(for: [disconnectExpectation], timeout: 10)
+    }
+  }
+
+  /// 両チャンネルの video stats を検証する (2 秒間隔で最大 maxAttempts 回リトライする)
+  ///
+  /// 映像の受信は送信側エンコーダが最初の keyframe を送出するまで受信パケットが存在しないため、
+  /// 両チャンネルの inbound-rtp で bytesReceived / packetsReceived が 0 より大きいことを確認できた
+  /// 時点で打ち切り、codec / outbound の検証を行う。
+  private func verifyVideoStats(
+    channel1: MediaChannel,
+    channel2: MediaChannel,
+    attempt: Int,
+    maxAttempts: Int,
+    expectation: XCTestExpectation
+  ) {
+    var completedCount = 0
+    var stats1: Statistics?
+    var stats2: Statistics?
+    var statsFailure = false
+
+    // 両チャンネルの getStats の完了を待ち合わせる (カウンタ方式)
+    let check: () -> Void = {
+      completedCount += 1
+      guard completedCount == 2 else { return }
+
+      if statsFailure {
+        XCTFail("getStats に失敗した")
+        expectation.fulfill()
+        return
+      }
+      guard let stats1, let stats2 else {
+        XCTFail("stats が取得できなかった")
+        expectation.fulfill()
+        return
+      }
+
+      let inboundOK1 = self.hasInboundVideo(stats: stats1)
+      let inboundOK2 = self.hasInboundVideo(stats: stats2)
+      if inboundOK1 && inboundOK2 {
+        // リトライ成功時に codec / outbound の検証を一度だけ行う
+        self.verifyVideoCodecAndOutbound(stats: stats1, channel: channel1)
+        self.verifyVideoCodecAndOutbound(stats: stats2, channel: channel2)
+        expectation.fulfill()
+      } else if attempt >= maxAttempts {
+        XCTFail("\(maxAttempts) 回試行しても両チャンネルの inbound video を確認できなかった")
+        expectation.fulfill()
+      } else {
+        // 2 秒後に再試行する
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+          self.verifyVideoStats(
+            channel1: channel1,
+            channel2: channel2,
+            attempt: attempt + 1,
+            maxAttempts: maxAttempts,
+            expectation: expectation)
+        }
+      }
+    }
+
+    channel1.getStats { result in
+      guard case .success(let stats) = result else {
+        statsFailure = true
+        check()
+        return
+      }
+      stats1 = stats
+      check()
+    }
+    channel2.getStats { result in
+      guard case .success(let stats) = result else {
+        statsFailure = true
+        check()
+        return
+      }
+      stats2 = stats
+      check()
+    }
+  }
+
+  /// inbound-rtp (video) の bytesReceived / packetsReceived が 0 より大きいかを確認する
+  private func hasInboundVideo(stats: Statistics) -> Bool {
+    let inbound = stats.entries.first {
+      $0.type == "inbound-rtp"
+        && ($0.values["kind"] as? NSString) == "video"
+    }
+    let bytesReceived = inbound?.values["bytesReceived"] as? NSNumber
+    let packetsReceived = inbound?.values["packetsReceived"] as? NSNumber
+    return (bytesReceived?.intValue ?? 0) > 0 && (packetsReceived?.intValue ?? 0) > 0
+  }
+
+  /// video codec stats (VP8) と outbound-rtp (video) の stats を検証する
+  private func verifyVideoCodecAndOutbound(stats: Statistics, channel: MediaChannel) {
+    XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+
+    let codec = stats.entries.first {
+      $0.type == "codec"
+        && ($0.values["mimeType"] as? NSString) == "video/VP8"
+    }
+    XCTAssertNotNil(codec, "video codec stats (VP8) が存在すること")
+
+    let outbound = stats.entries.first {
+      $0.type == "outbound-rtp"
+        && ($0.values["kind"] as? NSString) == "video"
+    }
+    XCTAssertNotNil(outbound, "outbound video stats が存在すること")
+    let bytesSent = outbound?.values["bytesSent"] as? NSNumber
+    let packetsSent = outbound?.values["packetsSent"] as? NSNumber
+    XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
+    XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
+    XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
+    XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
+  }
 }
