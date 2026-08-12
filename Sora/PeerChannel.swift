@@ -624,7 +624,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // マイクの初期化
     if configuration.audioEnabled {
-      initializeAudioInput()
+      if configuration.audioDevice == nil {
+        initializeAudioInput()
+      } else {
+        // AVAudioSession の設定はカスタム音声デバイス (DummyAudioDevice.initialize(with:)) が行うためスキップする
+        Logger.debug(
+          type: .peerChannel,
+          message: "custom audio device enabled, skip initialize audio input")
+      }
+    } else if configuration.audioDevice != nil {
+      // 音声トラック自体が生成されないためダミー音声も無効となる
+      Logger.warn(
+        type: .peerChannel,
+        message: "custom audio device enabled but audioEnabled is false, audio is disabled")
     }
 
     // カメラの初期化
@@ -1358,6 +1370,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     if configuration.isSender {
       terminateSenderStream()
+    }
+
+    // カスタム音声デバイス (ダミー音声等) の停止。terminateSenderStream は送信側のカメラ停止のみを行い、
+    // 音声デバイスの停止は行わないため、recvonly を含む全ロールで実行する。
+    // nativeChannel?.close() より前に実行し、ADM スレッドが生存している状態で
+    // terminateDevice の dispatchSync を実行する
+    if let audioDevice = nativePeerChannelFactory.audioDevice {
+      audioDevice.terminateDevice()
     }
 
     for stream in streams {

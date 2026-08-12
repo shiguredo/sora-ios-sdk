@@ -36,6 +36,12 @@
     - DataChannel シグナリング構成では切断中は同じ ICE 上を流れるため届かない
   - @t-miya
 
+### misc
+
+- [ADD] E2E テスト用にダミー音声デバイスを追加する
+  - テストから internal な `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
+  - @t-miya
+
 ## 2026.2.0
 
 **リリース日**: 2026-07-29

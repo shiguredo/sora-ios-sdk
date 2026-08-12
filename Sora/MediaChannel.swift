@@ -240,7 +240,8 @@ public final class MediaChannel {
     self.manager = manager
     self.configuration = configuration
     self.nativePeerChannelFactory = NativePeerChannelFactory(
-      bypassVoiceProcessing: configuration.bypassVoiceProcessing)
+      bypassVoiceProcessing: configuration.bypassVoiceProcessing,
+      audioDevice: configuration.audioDevice)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
@@ -683,13 +684,26 @@ public final class MediaChannel {
       return SoraError.mediaChannelError(reason: "role is not sender")
     }
 
-    // 音声ハードミュートを切り替えます
-    if !self.nativePeerChannelFactory.audioDeviceModuleWrapper.setAudioHardMute(mute) {
-      return SoraError.mediaChannelError(
-        reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+    // 通常経路: RTCAudioDeviceModule のラッパーでハードミュートを切り替える
+    if let wrapper = self.nativePeerChannelFactory.audioDeviceModuleWrapper {
+      if !wrapper.setAudioHardMute(mute) {
+        return SoraError.mediaChannelError(
+          reason: "AudioDeviceModuleWrapper::setAudioHardMute failed")
+      }
+      return nil
     }
 
-    return nil
+    // ダミー音声経路: DummyAudioDevice でハードミュートを切り替える
+    if let dummyDevice = self.nativePeerChannelFactory.audioDevice as? DummyAudioDevice {
+      if !dummyDevice.setHardMute(mute) {
+        return SoraError.mediaChannelError(
+          reason: "DummyAudioDevice::setHardMute failed")
+      }
+      return nil
+    }
+
+    return SoraError.mediaChannelError(
+      reason: "setAudioHardMute is not supported")
   }
 
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
