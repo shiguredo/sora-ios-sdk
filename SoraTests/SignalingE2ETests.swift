@@ -114,7 +114,13 @@ final class E2ETests: XCTestCase {
   }
 
   /// チャンネルを切断し、正常切断コード (1000) が onDisconnect で通知されることを確認する
+  ///
+  /// 切断済みのチャンネルでは onDisconnect が発火しない (MediaChannel.internalDisconnect は
+  /// .disconnecting / .disconnected 状態では何もせずに戻る) ため、その場合は何もせずに戻る
   private func disconnectAndVerify(channel: MediaChannel, timeout: TimeInterval = 10) {
+    guard !channel.state.isDisconnected else {
+      return
+    }
     let disconnectExpectation = self.expectation(description: "切断が完了すること")
     channel.handlers.onDisconnect = { event in
       if case .ok(let code, _) = event {
@@ -455,6 +461,8 @@ final class E2ETests: XCTestCase {
     let disconnectAll: () -> Void = {
       for channel in [channel1, channel2] {
         guard let channel else { continue }
+        // 切断済みのチャンネルでは onDisconnect が発火しないため、待たずにスキップする
+        guard !channel.state.isDisconnected else { continue }
         let disconnectExpectation = self.expectation(description: "切断が完了すること")
         channel.handlers.onDisconnect = { _ in
           disconnectExpectation.fulfill()
