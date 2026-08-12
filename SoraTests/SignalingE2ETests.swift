@@ -260,38 +260,41 @@ final class E2ETests: XCTestCase {
       capturer = currentCapturer
       // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
       // ダミー映像送信の継続と WebRTC 統計情報を確認する
-      DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+      DispatchQueue.main.async {
         [channel, currentCapturer, expectation] in
-        channel.getStats { result in
-          defer { expectation.fulfill() }
-          XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
-          XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
-          XCTAssertTrue(currentCapturer.isRunning, "DummyVideoCapturer が動作中であること")
-          XCTAssertGreaterThan(currentCapturer.frameCount, 0, "ダミー映像フレームが送信されていること")
+        let timer = Timer(timeInterval: 2, repeats: false) { _ in
+          channel.getStats { result in
+            defer { expectation.fulfill() }
+            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+            XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
+            XCTAssertTrue(currentCapturer.isRunning, "DummyVideoCapturer が動作中であること")
+            XCTAssertGreaterThan(currentCapturer.frameCount, 0, "ダミー映像フレームが送信されていること")
 
-          guard case .success(let stats) = result else {
-            // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
-            // エラー詳細を含めて出力する
-            if case .failure(let error) = result {
-              XCTFail("getStats に失敗した : \(error)")
-            } else {
-              XCTFail("getStats に失敗した")
+            guard case .success(let stats) = result else {
+              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
+              // エラー詳細を含めて出力する
+              if case .failure(let error) = result {
+                XCTFail("getStats に失敗した : \(error)")
+              } else {
+                XCTFail("getStats に失敗した")
+              }
+              return
             }
-            return
-          }
 
-          let videoOutbound = stats.entries.first {
-            $0.type == "outbound-rtp"
-              && ($0.values["kind"] as? NSString) == "video"
+            let videoOutbound = stats.entries.first {
+              $0.type == "outbound-rtp"
+                && ($0.values["kind"] as? NSString) == "video"
+            }
+            XCTAssertNotNil(videoOutbound, "outbound video stats が存在すること")
+            let bytesSent = videoOutbound?.values["bytesSent"] as? NSNumber
+            let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
+            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
+            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
+            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
+            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
           }
-          XCTAssertNotNil(videoOutbound, "outbound video stats が存在すること")
-          let bytesSent = videoOutbound?.values["bytesSent"] as? NSNumber
-          let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
-          XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
-          XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-          XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
-          XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
         }
+        RunLoop.main.add(timer, forMode: .common)
       }
     }
 
@@ -336,41 +339,44 @@ final class E2ETests: XCTestCase {
       }
       // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
       // ダミー音声送信の継続と WebRTC 統計情報を確認する
-      DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [channel, expectation] in
-        channel.getStats { result in
-          defer { expectation.fulfill() }
-          XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+      DispatchQueue.main.async { [channel, expectation] in
+        let timer = Timer(timeInterval: 2, repeats: false) { _ in
+          channel.getStats { result in
+            defer { expectation.fulfill() }
+            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
 
-          guard case .success(let stats) = result else {
-            // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
-            // エラー詳細を含めて出力する
-            if case .failure(let error) = result {
-              XCTFail("getStats に失敗した : \(error)")
-            } else {
-              XCTFail("getStats に失敗した")
+            guard case .success(let stats) = result else {
+              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
+              // エラー詳細を含めて出力する
+              if case .failure(let error) = result {
+                XCTFail("getStats に失敗した : \(error)")
+              } else {
+                XCTFail("getStats に失敗した")
+              }
+              return
             }
-            return
-          }
 
-          // 音声コーデック (OPUS) が確定していることを確認する (sora-js-sdk の E2E と同様)
-          let audioCodec = stats.entries.first {
-            $0.type == "codec"
-              && ($0.values["mimeType"] as? NSString) == "audio/opus"
-          }
-          XCTAssertNotNil(audioCodec, "audio codec stats が存在すること")
+            // 音声コーデック (OPUS) が確定していることを確認する (sora-js-sdk の E2E と同様)
+            let audioCodec = stats.entries.first {
+              $0.type == "codec"
+                && ($0.values["mimeType"] as? NSString) == "audio/opus"
+            }
+            XCTAssertNotNil(audioCodec, "audio codec stats が存在すること")
 
-          let audioOutbound = stats.entries.first {
-            $0.type == "outbound-rtp"
-              && ($0.values["kind"] as? NSString) == "audio"
+            let audioOutbound = stats.entries.first {
+              $0.type == "outbound-rtp"
+                && ($0.values["kind"] as? NSString) == "audio"
+            }
+            XCTAssertNotNil(audioOutbound, "outbound audio stats が存在すること")
+            let bytesSent = audioOutbound?.values["bytesSent"] as? NSNumber
+            let packetsSent = audioOutbound?.values["packetsSent"] as? NSNumber
+            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
+            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
+            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
+            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
           }
-          XCTAssertNotNil(audioOutbound, "outbound audio stats が存在すること")
-          let bytesSent = audioOutbound?.values["bytesSent"] as? NSNumber
-          let packetsSent = audioOutbound?.values["packetsSent"] as? NSNumber
-          XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
-          XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-          XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
-          XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
         }
+        RunLoop.main.add(timer, forMode: .common)
       }
     }
 
