@@ -562,8 +562,8 @@ final class E2ETests: XCTestCase {
         }
       }
 
-      // getStats の failure は一時的な接続状態の変化 (ICE の一瞬の .disconnected 等) が
-      // 原因の可能性があるため、inbound 未達と同様にリトライする。上限に達した場合は失敗とする
+      // getStats の failure は getStats 実行中の接続状態の遷移 (切断・チャンネル再生成等) が
+      // 原因で発生し得るため、inbound 未達と同様にリトライする。上限に達した場合は失敗とする
       if attempt >= maxAttempts {
         if !statsFailures.isEmpty {
           XCTFail("getStats に失敗した: \(statsFailures.joined(separator: "、"))")

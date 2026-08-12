@@ -40,7 +40,7 @@ codec stats と outbound-rtp の検証は、リトライが成功した場合の
 
 検証は sora-js-sdk の `e2e-tests/tests/sendrecv.test.ts` と同様に受信バイト数・パケット数の確認に限定し、解像度（`frameWidth` / `frameHeight`）やフレームレート（`framesPerSecond`）の検証は行わない（js-sdk も実施していないため）。
 
-`getStats` が `failure` を返した場合（接続済みでない場合等）は、一時的な接続状態の変化が原因の可能性があるため inbound 未達と同様にリトライ対象とする。上限（3 回目）に達するまで failure が続いた場合は `XCTFail` し、診断メッセージに失敗理由（チャンネル名とエラー詳細）と最後に観測した受信量（`bytesReceived` / `packetsReceived`）を含める。
+`getStats` が `failure` を返した場合（接続済みでない場合等）は、getStats 実行中の接続状態の遷移（切断・チャンネル再生成等）が原因で発生し得るため inbound 未達と同様にリトライ対象とする。上限（3 回目）に達するまで failure が続いた場合は `XCTFail` し、診断メッセージに失敗理由（チャンネル名とエラー詳細）と最後に観測した受信量（`bytesReceived` / `packetsReceived`）を含める。
 
 5 秒待機と stats リトライは 1 つの expectation に統合し、その `wait(for:timeout:)` は 30 秒とする。
 
