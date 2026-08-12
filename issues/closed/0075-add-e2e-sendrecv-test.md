@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-08-12
 - Model: GPT-5
 - Branch: feature/add-e2e-sendrecv-test
 - Polished: 2026-08-07
@@ -29,18 +29,18 @@
 2. sendrecv1 を接続する（`role: .sendrecv`、`videoEnabled: true`、`audioEnabled: false`、`videoCodec: .vp8`、`initialCameraEnabled: false`）。コールバックはシグナリングのキュー上で実行されるため、処理の実行スレッドに依存させず、main RunLoop 上での後続処理（待機・stats 取得）は `DispatchQueue.main.async` で行う
 3. sendrecv1 の connect コールバック内で、`channel.senderStream` を取得して DummyVideoCapturer を設定・開始し、そのまま sendrecv2 を接続する。生成した capturer はテストメソッドスコープの変数に保持する（保持しないとコールバック終了時に解放され、フレーム送信が止まる）。接続した `MediaChannel` も同様に保持し、切断時に使用する（`sora?.mediaChannels.first` は配列の順序に依存するため使わない）
 4. sendrecv2 の connect コールバック内で、同様に DummyVideoCapturer を設定・開始する
-5. 接続完了を待つ（connect expectation 2 つを各 30 秒の `wait(for:timeout:)` で分けて直列に実行する）。接続失敗時（1 台目・2 台目とも）は、起動済みの capturer を stop して接続済みのチャンネルを切断し、`connectFailed` を true にして `XCTFail` し、expectation を fulfill する。wait から戻ったらフラグをチェックして `return` する
+5. 接続完了を待つ（connect expectation 2 つを各 35 秒の `wait(for:timeout:)` で分けて直列に実行する）。接続失敗時（1 台目・2 台目とも）は、起動済みの capturer を stop して接続済みのチャンネルを切断し、`connectFailed` を true にして `XCTFail` し、expectation を fulfill する。wait から戻ったらフラグをチェックして `return` する。wait のタイムアウトは 35 秒とする（ConnectionTimer が `Configuration.connectionTimeout` の 30 秒で発火するため、その発火を wait 内で処理し、テスト終了後に遅延コールバックが残らないようにする）
 6. 5 秒待機する（両方の接続完了後からカウントする）。待機は main RunLoop 上の `Timer` で行い、`Thread.sleep` は使用しない（main RunLoop を止めると DummyVideoCapturer のフレーム送信が停止するため）
 7. 両方の `getStats` を取得し、`type == "codec"` の `mimeType == "video/VP8"`・`type == "outbound-rtp"` の `kind == "video"` の `bytesSent` / `packetsSent`・`type == "inbound-rtp"` の `kind == "video"` の `bytesReceived` / `packetsReceived` を確認する
 8. 両方を切断し、`onDisconnect` で正常切断コード (1000) を確認する
 
-映像の受信は送信側エンコーダが最初の keyframe を送出するまで受信パケットが存在しない。そのため、5 秒待機後に `getStats` を取得し、**両チャンネルの inbound-rtp で `bytesReceived` / `packetsReceived` が 0 より大きいことを確認できた時点で打ち切る**。確認できない場合は 5 秒後に再取得し、初回を含めて最大 3 回試行する（keyframe の送出間隔がエンコーダ設定によって 10 秒超に伸びる可能性があるため、リトライ間隔は 2 秒ではなく 5 秒とし、試行窓を 15 秒まで広げる）。3 回目の試行でも確認できない場合は `XCTFail` して expectation を fulfill し、codec / outbound 検証と切断確認をスキップしてテストを終了する。
+映像の受信は送信側エンコーダが最初の keyframe を送出するまで受信パケットが存在しない。そのため、5 秒待機後に `getStats` を取得し、**両チャンネルの inbound-rtp で `bytesReceived` / `packetsReceived` が 0 より大きいことを確認できた時点で打ち切る**。確認できない場合は 5 秒後に再取得し、初回を含めて最大 3 回試行する（keyframe の送出間隔がエンコーダ設定によって 10 秒超に伸びる可能性があるため、リトライ間隔は 2 秒ではなく 5 秒とし、試行窓を 15 秒まで広げる）。3 回目の試行でも確認できない場合は `XCTFail` して expectation を fulfill する。stats 検証が失敗しても後始末（capturer の稼働確認・停止、接続済みチャンネルの切断と正常切断コードの確認）はスキップせず実行し、残留チャンネルを残さない。
 
 codec stats と outbound-rtp の検証は、リトライが成功した場合のみ一度だけ行う。
 
 検証は sora-js-sdk の `e2e-tests/tests/sendrecv.test.ts` と同様に受信バイト数・パケット数の確認に限定し、解像度（`frameWidth` / `frameHeight`）やフレームレート（`framesPerSecond`）の検証は行わない（js-sdk も実施していないため）。
 
-`getStats` が `failure` を返した場合（接続済みでない場合等）は、起動済みの capturer を stop して切断し、即 `XCTFail` して expectation を fulfill し、後続ステップをスキップしてテストを終了する。
+`getStats` が `failure` を返した場合（接続済みでない場合等）は、一時的な接続状態の変化が原因の可能性があるため inbound 未達と同様にリトライ対象とする。上限（3 回目）に達するまで failure が続いた場合は `XCTFail` し、診断メッセージに失敗理由（チャンネル名とエラー詳細）と最後に観測した受信量（`bytesReceived` / `packetsReceived`）を含める。
 
 5 秒待機と stats リトライは 1 つの expectation に統合し、その `wait(for:timeout:)` は 30 秒とする。
 
@@ -54,7 +54,7 @@ JS SDK の実装を参考にする: `e2e-tests/tests/sendrecv.test.ts`
 - `audioEnabled = false` のため、マイク権限は不要
 - `initialCameraEnabled = false` を設定し、物理カメラの自動起動を抑止する（既存テストと同じ）
 - `videoCodec = .vp8` を明示指定する
-- タイムアウト: 接続 30 秒 × 2 台 + 待機・stats リトライ 30 秒 + 切断 10 秒 × 2 台で、全体を 120 秒以内に収める
+- タイムアウト: 接続 35 秒 × 2 台 + 待機・stats リトライ 30 秒 + 切断 10 秒 × 2 台で、全体を 120 秒以内に収める
 - DummyVideoCapturer は 30fps × 2 台で動作するため、Simulator では CPU 負荷が高い。問題が生じた場合は frameRate を下げる
 
 ## Sora サーバー要件
@@ -72,7 +72,23 @@ JS SDK の実装を参考にする: `e2e-tests/tests/sendrecv.test.ts`
 
 ## 解決方法
 
-- 変更対象: `SoraTests/SignalingE2ETests.swift` に `testSendrecvDummyVideo` を追加（既存ヘルパーは変更しない）
-- 2 チャンネルの getStats は非同期コールバックで返るため、1 試行内で両方のコールバック完了を待ち合わせる（カウンタ方式等）
+以下の対応を行い、sendrecv 2 台の双方向映像送受信 E2E テストを実装した。
+
+- `SoraTests/SignalingE2ETests.swift` に `testSendrecvDummyVideo` を追加した
+  - 同一 `Sora()` インスタンスに 2 台の sendrecv クライアントを直列に接続する（sendrecv1 の connect コールバック内で sendrecv2 を接続）
+  - 両チャンネルで DummyVideoCapturer（640×480 @ 30fps）を `senderStream` に設定・開始し、capturer と MediaChannel をテストメソッドスコープの変数に保持する
+  - チャンネル ID は `e2e-test-\(UUID().uuidString)` の一意な ID を使用し、既存ヘルパーの `TEST_CHANNEL_ID_PREFIX` / `TEST_CHANNEL_ID_SUFFIX` は意図的に使用しない
+  - `audioEnabled = false`・`videoCodec = .vp8`・`initialCameraEnabled = false` を設定する
+- 接続完了は expectation 2 つを各 35 秒の `wait(for:timeout:)` で直列に待つ（ConnectionTimer の 30 秒発火を wait 内で処理するため）
+- 接続失敗は `connectFailed` フラグで管理し、失敗時は capturer 停止と接続済みチャンネルの切断（切断完了まで待つ）を行って早期終了する
+- 両チャンネルの video stats 検証は `verifyVideoStats` ヘルパーに実装した
+  - 5 秒待機後に初回の getStats を行い、両チャンネルの inbound-rtp（video）の `bytesReceived` / `packetsReceived` が 0 より大きいことを確認できた時点で打ち切り、codec（VP8）と outbound-rtp の検証を一度だけ行う
+  - 確認できない場合は 5 秒間隔で最大 3 回リトライする（keyframe 到着待ちのため 5 秒間隔とした）
+  - getStats の一時的な failure はリトライ対象とし、上限到達時の診断メッセージに失敗理由と最後に観測した受信量を含める
+  - 2 本の getStats コールバックは実行キューが固定されていないため、共有状態の更新は main queue に束ねてデータ競合を防ぐ
+- stats 検証の成否に関わらず、DummyVideoCapturer の稼働（`isRunning` / `frameCount > 0`）を確認してから切断する
+- `disconnectAndVerify` ヘルパーを追加し、正常切断コード (1000) の検証を既存の recvonly / sendonly 系 5 テストにも統合した（既存テストの重複していた切断ブロックを置換）
+  - 切断済みチャンネルでは onDisconnect が発火しないため、切断前に `state.isDisconnected` をチェックして待機をスキップする
+- 2 チャンネルの getStats は非同期コールバックで返るため、1 試行内で両方のコールバック完了を待ち合わせる（カウンタ方式）
 - DummyVideoCapturer の `stop()` は切断の前に行う（`Timer.invalidate` はスレッドセーフなため、コールバックスレッドから呼んでも安全）
 - inbound-rtp はチャンネル全体の受信統計であり、「相手からの映像」であることを厳密には検証できない（同一チャンネルへの第三者混入で誤検知し得る）。一意な channelId で混入リスクを軽減し、この限界を許容する
