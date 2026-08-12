@@ -9,9 +9,16 @@ import WebRTC
 /// delegate.deliverRecordedData で ADM に注入する。
 /// 遠隔音声の再生は AUAudioUnit (RemoteIO) の outputProvider 経由で
 /// delegate.getPlayoutData を呼び出す。
+///
+/// PCM データの生成 (波形の内容) は pcmGenerator として外部から注入する。
+/// 波形のロジック (正弦波等) はテスト・デモの用途に依存するため、SDK 側では持たない。
 final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
-  private let config: DummyAudioConfig
+  /// PCM データ生成処理。
+  /// 第 1 引数: データ書き込み先、第 2 引数: フレーム数、第 3 引数: サンプルレート
+  private let pcmGenerator:
+    (_ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double)
+      -> Void
 
   private weak var delegate: RTCAudioDeviceDelegate?
 
@@ -33,12 +40,18 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   // (Configuration.initialMicrophoneEnabled の契約をダミー音声経路でも守る)
   private(set) var isHardMuted: Bool
 
-  // 正弦波の位相 (フレーム境界での波形不連続を防ぐ)
-  private var phase: Double = 0
-
-  init(config: DummyAudioConfig) {
-    self.config = config
-    self.isHardMuted = !config.initialMicrophoneEnabled
+  /// 初期化する
+  /// - Parameter initialMicrophoneEnabled: 初期状態でハードミュートするかどうか
+  /// - Parameter pcmGenerator: PCM データ生成処理 (波形の内容を決める)
+  init(
+    initialMicrophoneEnabled: Bool,
+    pcmGenerator:
+      @escaping (
+        _ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double
+      ) -> Void
+  ) {
+    self.pcmGenerator = pcmGenerator
+    self.isHardMuted = !initialMicrophoneEnabled
     super.init()
   }
 
@@ -325,26 +338,8 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   /// PCM データを生成する。
   ///
   /// 単体テストから直接呼べるよう internal とし、サンプルレートは引数で受け取る。
+  /// 波形の生成は pcmGenerator (外部注入) に委譲する。
   func fillPCMData(data: UnsafeMutableRawPointer, frameCount: Int, sampleRate: Double = 48000) {
-    let pcm = data.assumingMemoryBound(to: Int16.self)
-    pcm.initialize(repeating: 0, count: frameCount)
-    switch config.content {
-    case .silence:
-      break
-    case .sineWave(let frequency):
-      // 正弦波 (サイン波) を生成する。
-      // 波形は sin(2π × 周波数 × 時刻) で表され、時刻は位相 (phase) で管理する。
-      // 振幅はフルスケール (Int16 の最大値 32767) の 30% とする。
-      // フルスケールで連続再生するとクリッピングの恐れがあるため、余裕を持たせている。
-      let amplitude = 32767.0 * 0.3
-      for i in 0..<frameCount {
-        let value = Int16(sin(2.0 * .pi * frequency * phase) * amplitude)
-        pcm[i] = value
-        // サンプルごとに位相を 1 / サンプルレート 秒進める。
-        // 位相はインスタンス変数として保持するため、フレーム境界 (20ms) を跨いでも
-        // 波形が不連続にならず、クリックノイズが発生しない。
-        phase += 1.0 / sampleRate
-      }
-    }
+    pcmGenerator(data, frameCount, sampleRate)
   }
 }

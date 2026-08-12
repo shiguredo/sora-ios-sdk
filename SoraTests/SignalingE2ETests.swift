@@ -1,6 +1,7 @@
 import AVFoundation
-@preconcurrency import Sora
 import XCTest
+
+@testable @preconcurrency import Sora
 
 /// iOS E2E テスト
 ///
@@ -314,7 +315,13 @@ final class E2ETests: XCTestCase {
     // この E2E はダミー音声送信の確認に限定し、映像は無効にする
     config.videoEnabled = false
     config.audioEnabled = true
-    config.dummyAudioEnabled = true
+    // 440Hz 正弦波を生成するダミー音声デバイスを注入する
+    let sineWaveGenerator = SineWaveGenerator(frequency: 440)
+    config.audioDevice = DummyAudioDevice(
+      initialMicrophoneEnabled: true,
+      pcmGenerator: { data, frameCount, sampleRate in
+        sineWaveGenerator.generate(data: data, frameCount: frameCount, sampleRate: sampleRate)
+      })
     // DummyAudioDevice.initialize(with:) が接続試行時に AVAudioSession を有効化するため、
     // tearDown での復元対象とする
     audioSessionActivatedByTest = true

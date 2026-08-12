@@ -292,13 +292,10 @@ public struct Configuration {
   /// 通常、指定する必要はありません。
   public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
 
-  /// ダミー音声を有効にするかどうか。
-  /// true の場合、物理マイクの代わりにダミー音声を生成して送信します。
-  /// この設定は接続確立時にのみ有効で、接続中の変更は反映されません。
-  public var dummyAudioEnabled: Bool = false
-
-  /// ダミー音声の内容
-  public var dummyAudioContent: DummyAudioContent = .sineWave(frequency: 440)
+  /// カスタム音声デバイス。
+  /// テストからダミー音声デバイス (DummyAudioDevice) を注入するために使用する。
+  /// :nodoc:
+  var audioDevice: RTCAudioDevice?
 
   /// 初期化します。
   /// - parameter url: サーバーの URL
@@ -333,12 +330,6 @@ public struct Configuration {
     self.role = role
     self.multistreamEnabled = multistreamEnabled
   }
-}
-
-/// ダミー音声の設定を NativePeerChannelFactory に渡すための値型
-struct DummyAudioConfig {
-  let initialMicrophoneEnabled: Bool
-  let content: DummyAudioContent
 }
 
 // MARK: - CA 証明書解析

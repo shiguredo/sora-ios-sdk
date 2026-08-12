@@ -37,14 +37,14 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   let audioDeviceModule: RTCAudioDeviceModule?
   /// 録音ポーズ/再開制御用に保持する ADM ラッパー
   let audioDeviceModuleWrapper: AudioDeviceModuleWrapper?
-  /// ダミー音声有効時に使用するカスタム音声デバイス
-  let dummyAudioDevice: DummyAudioDevice?
+  /// カスタム音声デバイス (テストから注入されたダミー音声デバイス等)
+  let audioDevice: RTCAudioDevice?
 
   var nativeFactory: RTCPeerConnectionFactory
 
   init(
     bypassVoiceProcessing: Bool,
-    dummyAudioConfig: DummyAudioConfig? = nil
+    audioDevice: RTCAudioDevice? = nil
   ) {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
 
@@ -52,26 +52,25 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     let encoder = WrapperVideoEncoderFactory.shared
     let decoder = RTCDefaultVideoDecoderFactory()
 
-    if let config = dummyAudioConfig {
-      let device = DummyAudioDevice(config: config)
-      self.dummyAudioDevice = device
+    if let audioDevice {
+      self.audioDevice = audioDevice
       self.audioDeviceModule = nil
       self.audioDeviceModuleWrapper = nil
-      // ダミー音声有効時は bypassVoiceProcessing は無視される (Voice Processing 不要のため)
+      // カスタム音声デバイス有効時は bypassVoiceProcessing は無視される (Voice Processing 不要のため)
       if bypassVoiceProcessing {
         Logger.warn(
           type: .peerChannel,
-          message: "bypassVoiceProcessing is ignored when dummy audio is enabled")
+          message: "bypassVoiceProcessing is ignored when custom audio device is enabled")
       }
       nativeFactory =
         RTCPeerConnectionFactory(
           encoderFactory: encoder,
           decoderFactory: decoder,
-          audioDevice: device)
+          audioDevice: audioDevice)
     } else {
       let adm: RTCAudioDeviceModule = RTCAudioDeviceModule(
         bypassVoiceProcessing: bypassVoiceProcessing)
-      self.dummyAudioDevice = nil
+      self.audioDevice = nil
       self.audioDeviceModule = adm
       self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
       nativeFactory =

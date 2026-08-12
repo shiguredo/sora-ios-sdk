@@ -239,15 +239,9 @@ public final class MediaChannel {
   init(manager: Sora, configuration: Configuration) {
     self.manager = manager
     self.configuration = configuration
-    let dummyAudioConfig: DummyAudioConfig? = {
-      guard configuration.dummyAudioEnabled else { return nil }
-      return DummyAudioConfig(
-        initialMicrophoneEnabled: configuration.initialMicrophoneEnabled,
-        content: configuration.dummyAudioContent)
-    }()
     self.nativePeerChannelFactory = NativePeerChannelFactory(
       bypassVoiceProcessing: configuration.bypassVoiceProcessing,
-      dummyAudioConfig: dummyAudioConfig)
+      audioDevice: configuration.audioDevice)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
@@ -700,7 +694,7 @@ public final class MediaChannel {
     }
 
     // ダミー音声経路: DummyAudioDevice でハードミュートを切り替える
-    if let dummyDevice = self.nativePeerChannelFactory.dummyAudioDevice {
+    if let dummyDevice = self.nativePeerChannelFactory.audioDevice as? DummyAudioDevice {
       if !dummyDevice.setHardMute(mute) {
         return SoraError.mediaChannelError(
           reason: "DummyAudioDevice::setHardMute failed")
