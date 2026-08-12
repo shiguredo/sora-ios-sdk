@@ -271,8 +271,8 @@ final class E2ETests: XCTestCase {
             let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
             XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
             XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
-            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
+            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
+            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
           }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -347,8 +347,8 @@ final class E2ETests: XCTestCase {
             let packetsSent = audioOutbound?.values["packetsSent"] as? NSNumber
             XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
             XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
-            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
+            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
+            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
           }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -648,7 +648,7 @@ final class E2ETests: XCTestCase {
     let packetsSent = outbound?.values["packetsSent"] as? NSNumber
     XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
     XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-    XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が増加していること")
-    XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が増加していること")
+    XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
+    XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
   }
 }
