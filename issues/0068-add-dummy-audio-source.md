@@ -2,14 +2,24 @@
 
 - Priority: Medium
 - Created: 2026-06-08
-- Completed: 2026-08-07
+- Completed:
 - Model: deepseek-v4-pro
 - Branch: feature/add-dummy-audio-source
 - Polished: 2026-08-07
 
+## Reopen の理由
+
+クローズ後に設計を見直し、以下の変更を行ったため reopen する:
+
+- 正弦波の生成ロジック (sin 計算・位相管理) はテスト・デモ用途の一実装であり、SDK のコア責務ではないため、SDK 側で持つのをやめた
+- 公開 API (`Configuration.dummyAudioEnabled` / `dummyAudioContent` / `DummyAudioContent`) を廃止し、PCM 生成を `pcmGenerator` クロージャとして外部 (テスト) から注入する形式に変更した
+- テストからの注入経路として、internal な `Configuration.audioDevice` (`RTCAudioDevice?`) を追加した
+
 ## 目的
 
-Sora iOS SDK を利用したアプリケーションのテストやデモにおいて、物理的なマイクを使用せずにダミーの音声データを生成して送信できる仕組みを提供する。`RTCAudioDevice` プロトコルは送受信一体であり、カスタムデバイスを `RTCPeerConnectionFactory` に渡すと遠隔音声の再生も自前で行う必要があるため、`AUAudioUnit`（RemoteIO）経由の再生実装も本 issue のスコープに含む。
+Sora iOS SDK の E2E テストにおいて、物理的なマイクを使用せずにダミーの音声データを生成して送信できる仕組みを提供する。`RTCAudioDevice` プロトコルは送受信一体であり、カスタムデバイスを `RTCPeerConnectionFactory` に渡すと遠隔音声の再生も自前で行う必要があるため、`AUAudioUnit`（RemoteIO）経由の再生実装も本 issue のスコープに含む。
+
+波形の生成 (正弦波等) はテスト・デモの用途に依存するため、`DummyAudioDevice` の `pcmGenerator` として外部から注入する。SDK 側では波形のロジックを持たない。
 
 ## 調査結果（解決済み）
 
@@ -38,9 +48,10 @@ Sora iOS SDK を利用したアプリケーションのテストやデモにお�
 ### 全体方針
 
 - `RTCAudioDevice` プロトコルを実装した `DummyAudioDevice` クラスを **Swift** で作成する（詳細は調査結果参照）
-- `DummyAudioDevice` を `RTCPeerConnectionFactory.init(encoderFactory:decoderFactory:audioDevice:)` に直接渡す
-- `NativePeerChannelFactory` を修正し、ダミー音声有効時にカスタム `RTCAudioDevice` を使用する
-- `Configuration` にダミー音声の設定を追加する
+- PCM データの生成（波形の内容）は `pcmGenerator` クロージャとして外部（テスト）から注入する。正弦波等の波形ロジックは SDK 側で持たない
+- テストからの注入経路として、`Configuration.audioDevice`（internal）にカスタム `RTCAudioDevice` を設定する
+- `NativePeerChannelFactory` は `Configuration.audioDevice` が設定されている場合、`RTCPeerConnectionFactory.init(encoderFactory:decoderFactory:audioDevice:)` に直接渡す
+- 公開 API（`Configuration.dummyAudioEnabled` / `dummyAudioContent` / `DummyAudioContent`）は追加しない
 
 ### `RTCAudioDevice` プロトコル実装の責務
 
@@ -83,7 +94,10 @@ import WebRTC
 
 final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
-  private let config: DummyAudioConfig
+  /// PCM データ生成処理。
+  /// 第 1 引数: データ書き込み先、第 2 引数: フレーム数、第 3 引数: サンプルレート
+  private let pcmGenerator: (_ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double)
+    -> Void
 
   private weak var delegate: RTCAudioDeviceDelegate?
 
@@ -101,11 +115,18 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   private var _isRecordingInitialized = false
   private var _isRecording = false
 
-  // 正弦波の位相 (フレーム境界での波形不連続を防ぐ)
-  private var phase: Double = 0
+  // ハードミュート状態。initialMicrophoneEnabled = false の場合は初期状態でミュートする
+  // (Configuration.initialMicrophoneEnabled の契約をダミー音声経路でも守る)
+  private(set) var isHardMuted: Bool
 
-  init(config: DummyAudioConfig) {
-    self.config = config
+  init(
+    initialMicrophoneEnabled: Bool,
+    pcmGenerator: @escaping (
+      _ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double
+    ) -> Void
+  ) {
+    self.pcmGenerator = pcmGenerator
+    self.isHardMuted = !initialMicrophoneEnabled
     super.init()
   }
 
@@ -319,18 +340,23 @@ func startRecording() -> Bool {
 
 `Configuration.initialMicrophoneEnabled` の契約（`false` のとき「接続時点ではマイク入力は無効」「後から `setAudioHardMute(false)` で有効化」）をダミー音声経路でも守る:
 
-- `DummyAudioDevice` は `isHardMuted` フラグを持ち、`DummyAudioConfig.initialMicrophoneEnabled` が `false` の場合は初期状態でミュートする
+- `DummyAudioDevice` は `isHardMuted` フラグを持ち、`initialMicrophoneEnabled` が `false` の場合は初期状態でミュートする
 - `deliverPCMData` は `isHardMuted == true` の場合、`deliverRecordedData` を呼ばずに録音データを送信しない
-- `MediaChannel.setAudioHardMute(_:)` は、`audioDeviceModuleWrapper` が nil（ダミー音声有効）の場合、`DummyAudioDevice.setHardMute(_:)` を呼び出してハードミュートを切り替える
+- `MediaChannel.setAudioHardMute(_:)` は、`audioDeviceModuleWrapper` が nil（カスタム音声デバイス有効）の場合、`DummyAudioDevice.setHardMute(_:)` を呼び出してハードミュートを切り替える
 
 ```swift
 // DummyAudioDevice.swift 内
 // ハードミュート状態。initialMicrophoneEnabled = false の場合は初期状態でミュートする
 private(set) var isHardMuted: Bool
 
-init(config: DummyAudioConfig) {
-  self.config = config
-  self.isHardMuted = !config.initialMicrophoneEnabled
+init(
+  initialMicrophoneEnabled: Bool,
+  pcmGenerator: @escaping (
+    _ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double
+  ) -> Void
+) {
+  self.pcmGenerator = pcmGenerator
+  self.isHardMuted = !initialMicrophoneEnabled
   super.init()
 }
 
@@ -439,82 +465,58 @@ func terminateDevice() -> Bool {
 }
 ```
 
-### Configuration 追加
+### Configuration の修正
+
+`Configuration` に、テストからのカスタム音声デバイス注入経路として internal な `audioDevice` プロパティを追加する（公開 API は追加しない）:
 
 ```swift
 // Configuration.swift に追加
 public struct Configuration {
-  /// ダミー音声を有効にするかどうか。
-  /// true の場合、物理マイクの代わりにダミー音声を生成して送信します。
-  /// この設定は接続確立時にのみ有効で、接続中の変更は反映されません。
-  public var dummyAudioEnabled: Bool = false
-
-  /// ダミー音声の内容
-  public var dummyAudioContent: DummyAudioContent = .sineWave(frequency: 440)
-}
-```
-
-### `DummyAudioContent` 型（新規ファイル）
-
-```swift
-// Sora/DummyAudioContent.swift (新規追加)
-public enum DummyAudioContent: Sendable {
-  case silence
-  case sineWave(frequency: Double)
-}
-```
-
-### `DummyAudioConfig` 型
-
-`Configuration` のダミー音声関連プロパティを `NativePeerChannelFactory` に渡すための値型:
-
-```swift
-// Configuration.swift 内に追加
-struct DummyAudioConfig {
-  let initialMicrophoneEnabled: Bool
-  let content: DummyAudioContent
+  /// カスタム音声デバイス。
+  /// テストからダミー音声デバイス (DummyAudioDevice) を注入するために使用する。
+  /// :nodoc:
+  var audioDevice: RTCAudioDevice?
 }
 ```
 
 ### NativePeerChannelFactory の修正
 
-`audioDeviceModule` プロパティの型を `RTCAudioDeviceModule?` に変更し、ダミー経路では `nil` とする。ダミー音声用の `RTCAudioDevice` は `dummyAudioDevice` プロパティで保持する。`dummyAudioDevice` は `NativePeerChannelFactory` の生成時に一度だけ設定し、以後変更しない:
+`audioDeviceModule` プロパティの型を `RTCAudioDeviceModule?` に変更し、カスタム音声デバイス経路では `nil` とする。カスタム音声デバイスは `audioDevice` プロパティで保持する。`audioDevice` は `NativePeerChannelFactory` の生成時に一度だけ設定し、以後変更しない:
 
 ```swift
 // NativePeerChannelFactory.swift
 final class NativePeerChannelFactory: @unchecked Sendable {
   let audioDeviceModule: RTCAudioDeviceModule?
   let audioDeviceModuleWrapper: AudioDeviceModuleWrapper?
-  let dummyAudioDevice: DummyAudioDevice?
+  let audioDevice: RTCAudioDevice?
   var nativeFactory: RTCPeerConnectionFactory
 
   init(
     bypassVoiceProcessing: Bool,
-    dummyAudioConfig: DummyAudioConfig? = nil
+    audioDevice: RTCAudioDevice? = nil
   ) {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
 
     let encoder = WrapperVideoEncoderFactory.shared
     let decoder = RTCDefaultVideoDecoderFactory()
 
-    if let config = dummyAudioConfig {
-      let device = DummyAudioDevice(config: config)
-      self.dummyAudioDevice = device
+    if let audioDevice {
+      self.audioDevice = audioDevice
       self.audioDeviceModule = nil
       self.audioDeviceModuleWrapper = nil
-      // ダミー音声有効時は bypassVoiceProcessing は無視される (Voice Processing 不要のため)
+      // カスタム音声デバイス有効時は bypassVoiceProcessing は無視される (Voice Processing 不要のため)
       if bypassVoiceProcessing {
         Logger.warn(
           type: .peerChannel,
-          message: "bypassVoiceProcessing is ignored when dummy audio is enabled")
+          message: "bypassVoiceProcessing is ignored when custom audio device is enabled")
       }
       nativeFactory = RTCPeerConnectionFactory(
         encoderFactory: encoder,
         decoderFactory: decoder,
-        audioDevice: device)  // id<RTCAudioDevice> を直接渡す
+        audioDevice: audioDevice)  // id<RTCAudioDevice> を直接渡す
     } else {
       let adm = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
-      self.dummyAudioDevice = nil
+      self.audioDevice = nil
       self.audioDeviceModule = adm
       self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
       nativeFactory = RTCPeerConnectionFactory(
@@ -537,42 +539,42 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 }
 ```
 
-### `dummyAudioEnabled` と `audioEnabled` の関係
+### `audioDevice` と `audioEnabled` の関係
 
-| `role` | `dummyAudioEnabled` | `audioEnabled` | 動作 |
+| `role` | `audioDevice` | `audioEnabled` | 動作 |
 |---|---|---|---|
-| `sendonly` / `sendrecv` | `false` | 任意 | 既存動作 |
-| `sendonly` / `sendrecv` | `true` | `true` | カスタム `RTCAudioDevice` でダミー音声を送信。AUAudioUnit 経由で遠隔音声の再生も動作する |
-| `sendonly` / `sendrecv` | `true` | `false` | 音声トラックは生成されないためダミー音声も無効（警告ログ出力） |
-| `recvonly` | `true` | 任意 | 送信は発生しないが、`DummyAudioDevice` はファクトリに渡されるため再生経路が AUAudioUnit に置き換わる |
+| `sendonly` / `sendrecv` | 未設定 (nil) | 任意 | 既存動作 |
+| `sendonly` / `sendrecv` | 設定あり | `true` | カスタム `RTCAudioDevice` でダミー音声を送信。AUAudioUnit 経由で遠隔音声の再生も動作する |
+| `sendonly` / `sendrecv` | 設定あり | `false` | 音声トラックは生成されないためダミー音声も無効（警告ログ出力） |
+| `recvonly` | 設定あり | 任意 | 送信は発生しないが、カスタム音声デバイスはファクトリに渡されるため再生経路が AUAudioUnit に置き換わる |
 
-`DummyAudioDevice` の生成は `dummyAudioEnabled == true` であれば `role` や `audioEnabled` に関わらず行われる。
+カスタム音声デバイス (`audioDevice`) が設定されていれば、`role` や `audioEnabled` に関わらず `RTCPeerConnectionFactory` に渡される。
 
 ### PeerChannel の修正
 
-`initializeSenderStream()` 内で、`dummyAudioEnabled == true` の場合は `initializeAudioInput()` をスキップする。AVAudioSession のカテゴリ設定は `DummyAudioDevice.initialize(with:)` が行うため、PeerChannel 側では何もしない:
+`initializeSenderStream()` 内で、`audioDevice` が設定されている場合は `initializeAudioInput()` をスキップする。AVAudioSession のカテゴリ設定は `DummyAudioDevice.initialize(with:)` が行うため、PeerChannel 側では何もしない:
 
 ```swift
 // initializeSenderStream() 内 (PeerChannel.swift:626-628)
 if configuration.audioEnabled {
-  if !configuration.dummyAudioEnabled {
+  if configuration.audioDevice == nil {
     initializeAudioInput()
   } else {
     Logger.debug(
       type: .peerChannel,
-      message: "dummy audio enabled, skip initialize audio input")
+      message: "custom audio device enabled, skip initialize audio input")
   }
 }
 ```
 
-`dummyAudioEnabled == true` かつ `audioEnabled == false` の場合は、音声トラック自体が生成されないためダミー音声も無効となる。この場合に警告ログを出力する:
+`audioDevice` が設定されていて `audioEnabled == false` の場合は、音声トラック自体が生成されないためダミー音声も無効となる。この場合に警告ログを出力する:
 
 ```swift
 // initializeSenderStream() 内、音声トラック生成後に追加
-if configuration.dummyAudioEnabled && !configuration.audioEnabled {
+if configuration.audioDevice != nil && !configuration.audioEnabled {
   Logger.warn(
     type: .peerChannel,
-    message: "dummy audio enabled but audioEnabled is false, dummy audio is disabled")
+    message: "custom audio device enabled but audioEnabled is false, audio is disabled")
 }
 ```
 
@@ -582,18 +584,16 @@ if configuration.dummyAudioEnabled && !configuration.audioEnabled {
 
 ```swift
 // basicDisconnect() 内、isSender ガードの直後 (ガードの外側) に追加
-if configuration.dummyAudioEnabled,
-  let dummyDevice = nativePeerChannelFactory.dummyAudioDevice
-{
-  dummyDevice.terminateDevice()
+if let audioDevice = nativePeerChannelFactory.audioDevice {
+  audioDevice.terminateDevice()
 }
 ```
 
-`dummyAudioDevice` への nil 代入は行わない。切断後は `NativePeerChannelFactory` ごと破棄されるため、デバイスの解放はファクトリの破棄に委ねる。
+`audioDevice` への nil 代入は行わない。切断後は `NativePeerChannelFactory` ごと破棄されるため、デバイスの解放はファクトリの破棄に委ねる。
 
 ### MediaChannel の修正
 
-`MediaChannel.setAudioHardMute(_:)` を修正し、`audioDeviceModuleWrapper` が nil（ダミー音声有効）の場合に `DummyAudioDevice.setHardMute(_:)` を呼び出してハードミュートを切り替える。`initialMicrophoneEnabled` の契約（後から `setAudioHardMute(false)` で有効化）をダミー音声経路でも守るためである:
+`MediaChannel.setAudioHardMute(_:)` を修正し、`audioDeviceModuleWrapper` が nil（カスタム音声デバイス有効）の場合に `DummyAudioDevice.setHardMute(_:)` を呼び出してハードミュートを切り替える。`initialMicrophoneEnabled` の契約（後から `setAudioHardMute(false)` で有効化）をダミー音声経路でも守るためである:
 
 ```swift
 // MediaChannel.swift:669-693
@@ -612,7 +612,7 @@ public func setAudioHardMute(_ mute: Bool) -> Error? {
   }
 
   // ダミー音声経路: DummyAudioDevice でハードミュートを切り替える
-  if let dummyDevice = nativePeerChannelFactory.dummyAudioDevice {
+  if let dummyDevice = nativePeerChannelFactory.audioDevice as? DummyAudioDevice {
     if !dummyDevice.setHardMute(mute) {
       return SoraError.mediaChannelError(
         reason: "DummyAudioDevice::setHardMute failed")
@@ -625,19 +625,12 @@ public func setAudioHardMute(_ mute: Bool) -> Error? {
 }
 ```
 
-`NativePeerChannelFactory.init` 呼び出し（`MediaChannel.swift:242`）に `dummyAudioConfig` を追加する:
+`NativePeerChannelFactory.init` 呼び出し（`MediaChannel.swift:242`）に `configuration.audioDevice` を渡す:
 
 ```swift
-let dummyConfig: DummyAudioConfig? = {
-  guard configuration.dummyAudioEnabled else { return nil }
-  return DummyAudioConfig(
-    initialMicrophoneEnabled: configuration.initialMicrophoneEnabled,
-    content: configuration.dummyAudioContent)
-}()
-
 nativePeerChannelFactory = NativePeerChannelFactory(
   bypassVoiceProcessing: configuration.bypassVoiceProcessing,
-  dummyAudioConfig: dummyConfig)
+  audioDevice: configuration.audioDevice)
 ```
 
 ### Logger type の追加
@@ -666,27 +659,30 @@ nativePeerChannelFactory = NativePeerChannelFactory(
 
 ### 制限事項
 
-- `DummyAudioDevice` は `bypassVoiceProcessing` に非対応。ダミー音声有効時に `bypassVoiceProcessing = true` を指定した場合は警告ログを出力して無視する
-- `pauseRecording` / `resumeRecording` は `RTCAudioDeviceModule` の API であり、`RTCAudioDevice` プロトコルには存在しない。ダミー音声有効時は `DummyAudioDevice.setHardMute(_:)` が `MediaChannel.setAudioHardMute(_:)` から呼ばれ、ハードミュートとして動作する（録音データの送信を停止する）
+- `DummyAudioDevice` は `bypassVoiceProcessing` に非対応。カスタム音声デバイス有効時に `bypassVoiceProcessing = true` を指定した場合は警告ログを出力して無視する
+- `pauseRecording` / `resumeRecording` は `RTCAudioDeviceModule` の API であり、`RTCAudioDevice` プロトコルには存在しない。カスタム音声デバイス有効時は `DummyAudioDevice.setHardMute(_:)` が `MediaChannel.setAudioHardMute(_:)` から呼ばれ、ハードミュートとして動作する（録音データの送信を停止する）
 - 録音は `DispatchSourceTimer` による定期生成のため、リアルタイムオーディオの品質（タイミングジッタ）は保証されない。ダミー用途として許容する
-- `DummyAudioContent.sineWave` の周波数はナイキスト周波数（サンプルレートの半分）以下を想定する。超過時はエイリアシングが発生する
-- Sora の公開音声 API（`Sora.audioEnabled` / `Sora.usesManualAudio` / `Sora.setAudioMode`）は `RTCAudioSession` 経由で動作するため、ダミー音声有効時は無効化または競合する。ダミー音声と組み合わせて使用しないこと
-- `Configuration.initialMicrophoneEnabled` は `initializeAudioInput()` 内の `setInitialMicrophoneMute` で適用されるが、ダミー音声有効時は `DummyAudioDevice` が `isHardMuted` として初期状態に反映する。`initialMicrophoneEnabled = false` の場合は初期状態でミュートされ、`setAudioHardMute(false)` で有効化できる
+- 波形の生成（正弦波等）は `pcmGenerator` として外部注入するため、SDK 側では波形の内容を保証しない。注入する波形の品質は呼び出し側（テスト）の責任となる
+- Sora の公開音声 API（`Sora.audioEnabled` / `Sora.usesManualAudio` / `Sora.setAudioMode`）は `RTCAudioSession` 経由で動作するため、カスタム音声デバイス有効時は無効化または競合する。カスタム音声デバイスと組み合わせて使用しないこと
+- `Configuration.initialMicrophoneEnabled` は `initializeAudioInput()` 内の `setInitialMicrophoneMute` で適用されるが、カスタム音声デバイス有効時は `DummyAudioDevice` が `isHardMuted` として初期状態に反映する。`initialMicrophoneEnabled = false` の場合は初期状態でミュートされ、`setAudioHardMute(false)` で有効化できる
 - `initialize(with:)` で設定した AVAudioSession（`playAndRecord` + アクティブ状態）は切断後も復元されない。アプリの既存カテゴリ設定は上書きされるため、復元はアプリ側で行うこと
 - `kAudioUnitSubType_RemoteIO` はシミュレーターで利用できない可能性がある（iOS シミュレーターは macOS のオーディオ基盤を使用するため）。シミュレーターで「音声が聞こえる」ことを確認する場合は、実装時に RemoteIO の動作を実測し、必要な代替（`kAudioUnitSubType_GenericOutput` 等）や制限事項への反映を検討する
 - `MediaChannel` は公式には再利用不可（一度接続した `MediaChannel` の再 `connect` は保証されない）。再接続は新規 `MediaChannel`（新規 `NativePeerChannelFactory`、新規 `DummyAudioDevice`）で行うこと
 
 ## テスト戦略
 
-AGENTS.md の「モックやスタブは絶対に利用しないこと」に従い、`RTCAudioDeviceDelegate` のテストダブルは作成しない。PCM 生成ロジックを internal 関数（`fillPCMData`）として分離し、モック不要の単体テストと、実際の接続を使う E2E テストで検証する。
+AGENTS.md の「モックやスタブは絶対に利用しないこと」に従い、`RTCAudioDeviceDelegate` のテストダブルは作成しない。波形の生成は `pcmGenerator` としてテスト側で実装し、モック不要の単体テストと、実際の接続を使う E2E テストで検証する。
 
 ### 単体テスト
 
 テストファイル: `SoraTests/DummyAudioDeviceTests.swift`
 
-- `fillPCMData` が `.silence` で全サンプル 0 を生成すること
-- `fillPCMData` が `.sineWave(frequency:)` で期待する周波数のサンプルを生成すること（サンプルレート 48000 Hz、周波数 440 Hz の場合、**負→正の符号反転**が 1 秒あたり 440 ± 1 回発生することを利用して検証する。位相が 0 から始まるため先頭サンプルは 0 になり、境界の扱い（`s[i-1] < 0 && s[i] >= 0`）で ±1 のずれが生じるため、範囲判定にする）
-- `fillPCMData` がフレーム境界を跨いでも位相が連続すること（クリックノイズ防止の検証）
+テスト側で `SineWaveGenerator`（440Hz 正弦波、フレーム境界で位相連続）を実装し、`DummyAudioDevice` の `pcmGenerator` として注入する:
+
+- `fillPCMData` が注入した `pcmGenerator` を呼ぶこと
+- 全 0 を生成する `pcmGenerator` を注入した場合、全サンプルが 0 になること
+- `SineWaveGenerator` が期待する周波数のサンプルを生成すること（サンプルレート 48000 Hz、周波数 440 Hz の場合、**負→正の符号反転**が 1 秒あたり 440 ± 1 回発生することを利用して検証する。位相が 0 から始まるため先頭サンプルは 0 になり、境界の扱い（`s[i-1] < 0 && s[i] >= 0`）で ±1 のずれが生じるため、範囲判定にする）
+- `SineWaveGenerator` がフレーム境界を跨いでも位相が連続すること（クリックノイズ防止の検証）
 - `initialMicrophoneEnabled = false` の場合、初期状態でハードミュートされること（`Configuration.initialMicrophoneEnabled` の契約）
 - `setHardMute(_:)` でハードミュート状態が切り替わること（`setAudioHardMute` の契約）
 
@@ -698,7 +694,7 @@ AGENTS.md の「モックやスタブは絶対に利用しないこと」に従�
 
 - `setUp` で `AVAudioSession.sharedInstance()` の `category` / `mode` / `categoryOptions` を保存する（`isActive` は取得 API がないため保存しない）
 - ダミー音声テストのみ `audioSessionActivatedByTest` フラグを true にし、`tearDown` はフラグが true の場合のみ復元する（毎回 `setActive(false)` すると、AVAudioSession に触れない他の E2E テストが前提とする音声状態を壊すため）
-- テストは `role: .sendonly`、`videoEnabled: false`、`audioEnabled: true`、`dummyAudioEnabled: true` の構成で接続し、`onConnect` が呼ばれることを確認する
+- テストは `role: .sendonly`、`videoEnabled: false`、`audioEnabled: true` の構成で、`SineWaveGenerator` を `pcmGenerator` に注入した `DummyAudioDevice` を `Configuration.audioDevice` に設定して接続し、`onConnect` が呼ばれることを確認する
 - `getStats()` で音声コーデック（`codec` / `mimeType == "audio/opus"`）と音声トラック（`kind == "audio"` の outbound-rtp）の存在、`bytesSent` / `packetsSent` が 0 より大きいことを確認する（ダミー音声が実際に送信されていることの確認。sora-js-sdk の E2E と同様）
 - `tearDown` はフラグが true の場合のみ、保存した `category` / `mode` / `categoryOptions` に復元し、`setActive(false)` で非アクティブ化する（`DummyAudioDevice` が変更したグローバル状態が後続テストに影響しないようにする）
 
@@ -706,63 +702,36 @@ CI 環境に音声出力デバイスが存在する必要がある（`initialize
 
 ### 手動テスト
 
-- シミュレーター上で `dummyAudioEnabled = true` を設定し、Sora への接続が成功すること（受信側でダミー音声（正弦波 440Hz）が聞こえることを確認する）
-- `sendrecv` で `dummyAudioEnabled = true` を設定し、遠隔参加者の音声が本デバイスのスピーカーから聞こえることを確認すること（`.defaultToSpeaker` によりスピーカー出力になる）
-- `recvonly` で `dummyAudioEnabled = true` を設定し、遠隔音声の再生が AUAudioUnit 経由で動作することを確認すること
-- `dummyAudioEnabled = false`（デフォルト）の場合、既存のマイク入力・再生に影響がないこと
+- シミュレーター上で `Configuration.audioDevice` にダミー音声デバイスを設定し、Sora への接続が成功すること（受信側でダミー音声（正弦波 440Hz）が聞こえることを確認する）
+- `sendrecv` でダミー音声デバイスを設定し、遠隔参加者の音声が本デバイスのスピーカーから聞こえることを確認すること（`.defaultToSpeaker` によりスピーカー出力になる）
+- `recvonly` でダミー音声デバイスを設定し、遠隔音声の再生が AUAudioUnit 経由で動作することを確認すること
+- `audioDevice` が未設定（デフォルト）の場合、既存のマイク入力・再生に影響がないこと
 
 ## 変更ファイル一覧
 
-- `Sora/Configuration.swift` — `dummyAudioEnabled`, `dummyAudioContent`, `DummyAudioConfig` を追加
-- `Sora/DummyAudioContent.swift` — `DummyAudioContent` enum を新規追加
-- `Sora/DummyAudioDevice.swift` — `RTCAudioDevice` プロトコル実装クラスを新規追加（Swift）、ハードミュート制御（`isHardMuted` / `setHardMute(_:)`）を含む
-- `Sora/NativePeerChannelFactory.swift` — `audioDeviceModule` の Optional 化、ダミー経路での `init(encoderFactory:decoderFactory:audioDevice:)` 使用、`dummyAudioDevice` プロパティ追加
-- `Sora/MediaChannel.swift` — `NativePeerChannelFactory.init` 呼び出しに `dummyAudioConfig` を追加、`setAudioHardMute` のダミー音声対応（`DummyAudioDevice.setHardMute(_:)` への委譲）
-- `Sora/PeerChannel.swift` — `dummyAudioEnabled` 時の `initializeAudioInput()` スキップ、切断時の `DummyAudioDevice` 停止処理追加、警告ログ追加
+- `Sora/Configuration.swift` — internal な `audioDevice` (`RTCAudioDevice?`) を追加
+- `Sora/DummyAudioDevice.swift` — `RTCAudioDevice` プロトコル実装クラスを新規追加（Swift）、`pcmGenerator` 注入、ハードミュート制御（`isHardMuted` / `setHardMute(_:)`）を含む
+- `Sora/NativePeerChannelFactory.swift` — `audioDeviceModule` の Optional 化、カスタム音声デバイス経路での `init(encoderFactory:decoderFactory:audioDevice:)` 使用、`audioDevice` プロパティ追加
+- `Sora/MediaChannel.swift` — `NativePeerChannelFactory.init` 呼び出しに `audioDevice` を渡す、`setAudioHardMute` のダミー音声対応（`DummyAudioDevice.setHardMute(_:)` への委譲）
+- `Sora/PeerChannel.swift` — `audioDevice` 設定時の `initializeAudioInput()` スキップ、切断時の音声デバイス停止処理追加、警告ログ追加
 - `Sora/Logger.swift` — `LogType` enum に `.dummyAudioDevice` を追加、`Group.channels` に追記
-- `SoraTests/DummyAudioDeviceTests.swift` — 新規追加（`fillPCMData` とハードミュート制御の単体テスト）
+- `SoraTests/DummyAudioDeviceTests.swift` — 新規追加（`SineWaveGenerator` と `pcmGenerator` 注入・ハードミュート制御の単体テスト）
 - `SoraTests/SignalingE2ETests.swift` — ダミー音声の E2E テスト追加
-- `CHANGES.md` — develop セクションの [ADD] エントリ群の後ろに以下を追記:
-  - [ADD] Configuration にダミー音声の設定を追加する
-    - `dummyAudioEnabled` が `true` の場合、物理マイクの代わりにダミー音声（正弦波/無音）を生成して送信する
-    - `RTCAudioDevice` プロトコルを実装したカスタム音声デバイスで PCM データを注入する
-    - 遠隔音声の再生は AUAudioUnit（RemoteIO）経由で実装する
+- `CHANGES.md` — develop セクションの `### misc` に以下を追記:
+  - [ADD] E2E テスト用にダミー音声デバイスを追加する
+    - `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
     - @担当者（実装時に確定する）
 
 実装時に `make fmt`（swift-format）と SwiftLint を実行してコードスニペットのフォーマットを整形すること。
 
 ## 完了条件
 
-- [x] `DummyAudioDevice` が `RTCAudioDevice` プロトコルの全必須プロパティ/メソッドを実装し、設計方針のテーブルに従った値を返すこと
-- [x] 受信側で 440Hz 正弦波が聞こえること（`deliverRecordedData` 経由の PCM 注入の確認。手動テストセクション参照）
-- [x] AUAudioUnit 経由での遠隔音声の再生が動作し、`sendrecv` モードで双方向の音声通信が可能であること（手動テストセクション参照）
-- [x] `.silence` と `.sineWave(frequency:)` の両方の `DummyAudioContent` が正しく動作すること
-- [x] `initialMicrophoneEnabled = false` で初期ミュートされ、`setAudioHardMute(false)` で有効化できること（`Configuration.initialMicrophoneEnabled` の契約をダミー音声経路でも守ること）
-- [x] `dummyAudioEnabled == false`（デフォルト）の場合、既存のマイク入力・再生に影響がないこと
-- [x] 切断時に `DummyAudioDevice` が適切に停止され（`recvonly` を含む全ロール）、再接続（新規 `MediaChannel`）時にも正しく動作すること
-- [x] `fillPCMData` の単体テストとダミー音声の E2E テストが実装され、すべて成功すること
-- [x] `CHANGES.md` に変更履歴が追記されていること
-
-## 解決方法
-
-- `Sora/DummyAudioDevice.swift` を新規追加した
-  - `RTCAudioDevice` プロトコル実装。`DispatchSourceTimer` で PCM 16-bit データを生成し `delegate.deliverRecordedData` で ADM に注入する（録音）
-  - `AUAudioUnit`（RemoteIO）の `outputProvider` 経由で `delegate.getPlayoutData` を呼び、遠隔音声を再生する
-  - `AVAudioSession` の設定（`playAndRecord` + `.defaultToSpeaker`）を `initialize(with:)` で行う（`RTCAudioDevice.h` の契約）
-  - ハードミュート制御（`isHardMuted` / `setHardMute(_:)`）を実装し、`initialMicrophoneEnabled` の契約をダミー音声経路でも守る
-- `Sora/DummyAudioContent.swift` を新規追加した（`silence` / `sineWave(frequency:)`）
-- `Sora/Configuration.swift` に `dummyAudioEnabled` / `dummyAudioContent` / `DummyAudioConfig` を追加した
-- `Sora/NativePeerChannelFactory.swift` を修正した
-  - `audioDeviceModule` を Optional 化し、ダミー経路では `RTCPeerConnectionFactory.init(encoderFactory:decoderFactory:audioDevice:)` を使用する
-  - `dummyAudioDevice` プロパティを追加した
-- `Sora/MediaChannel.swift` を修正した
-  - `NativePeerChannelFactory.init` に `dummyAudioConfig` を渡す
-  - `setAudioHardMute` をダミー音声対応にした（`DummyAudioDevice.setHardMute(_:)` への委譲）
-- `Sora/PeerChannel.swift` を修正した
-  - `dummyAudioEnabled` 時の `initializeAudioInput()` をスキップする
-  - 切断時（`basicDisconnect` の isSender ガード外）に `DummyAudioDevice.terminateDevice()` を実行する
-- `Sora/Logger.swift` に `LogType.dummyAudioDevice` を追加した（`Group.channels` に属する）
-- テストを追加した
-  - `SoraTests/DummyAudioDeviceTests.swift`: `fillPCMData` の PCM 生成とハードミュート制御の単体テスト 6 件
-  - `SoraTests/SignalingE2ETests.swift`: `testSendonlyDummyAudio`（getStats で audio codec / outbound-rtp / bytesSent / packetsSent を確認）。CI で通過済み
-- `CHANGES.md` の develop セクションに [ADD] エントリを追記した
+- [ ] `DummyAudioDevice` が `RTCAudioDevice` プロトコルの全必須プロパティ/メソッドを実装し、設計方針のテーブルに従った値を返すこと
+- [ ] 受信側で 440Hz 正弦波が聞こえること（`deliverRecordedData` 経由の PCM 注入の確認。手動テストセクション参照）
+- [ ] AUAudioUnit 経由での遠隔音声の再生が動作し、`sendrecv` モードで双方向の音声通信が可能であること（手動テストセクション参照）
+- [ ] 注入した `pcmGenerator` の PCM データが正しく送信されること（`SineWaveGenerator` の 440Hz 正弦波）
+- [ ] `initialMicrophoneEnabled = false` で初期ミュートされ、`setAudioHardMute(false)` で有効化できること（`Configuration.initialMicrophoneEnabled` の契約をダミー音声経路でも守ること）
+- [ ] `audioDevice` が未設定（デフォルト）の場合、既存のマイク入力・再生に影響がないこと
+- [ ] 切断時に `DummyAudioDevice` が適切に停止され（`recvonly` を含む全ロール）、再接続（新規 `MediaChannel`）時にも正しく動作すること
+- [ ] `pcmGenerator` 注入の単体テストとダミー音声の E2E テストが実装され、すべて成功すること
+- [ ] 公開 API（`Configuration.dummyAudioEnabled` / `dummyAudioContent` / `DummyAudioContent`）を追加していないこと
