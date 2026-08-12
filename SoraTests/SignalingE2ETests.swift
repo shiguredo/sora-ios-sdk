@@ -428,48 +428,54 @@ final class E2ETests: XCTestCase {
     config2.initialCameraEnabled = false
 
     // sendrecv1 を接続し、接続完了後に sendrecv2 を接続する (直列)
+    // connect コールバックは実行キューが固定されていないため、connectFailed の更新と
+    // 後続処理 (capturer 開始・sendrecv2 接続) は main queue に束ねる
     _ = sora?.connect(configuration: config1) { [self] mediaChannel, error in
-      if let error {
-        XCTFail("sendrecv1 の接続に失敗した: \(error)")
-        connectFailed = true
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("sendrecv1 の接続に失敗した: \(error)")
+          connectFailed = true
+          connect1Expectation.fulfill()
+          return
+        }
+        guard let channel = mediaChannel, let stream = channel.senderStream else {
+          XCTFail("sendrecv1 の senderStream が nil")
+          connectFailed = true
+          connect1Expectation.fulfill()
+          return
+        }
+        channel1 = channel
+        let currentCapturer1 = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+        currentCapturer1.stream = stream
+        currentCapturer1.start()
+        capturer1 = currentCapturer1
         connect1Expectation.fulfill()
-        return
-      }
-      guard let channel = mediaChannel, let stream = channel.senderStream else {
-        XCTFail("sendrecv1 の senderStream が nil")
-        connectFailed = true
-        connect1Expectation.fulfill()
-        return
-      }
-      channel1 = channel
-      let currentCapturer1 = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
-      currentCapturer1.stream = stream
-      currentCapturer1.start()
-      capturer1 = currentCapturer1
-      connect1Expectation.fulfill()
 
-      // sendrecv2 を接続する
-      _ = self.sora?.connect(configuration: config2) { mediaChannel2, error2 in
-        if let error2 {
-          XCTFail("sendrecv2 の接続に失敗した: \(error2)")
-          connectFailed = true
-          connect2Expectation.fulfill()
-          return
+        // sendrecv2 を接続する
+        _ = self.sora?.connect(configuration: config2) { mediaChannel2, error2 in
+          DispatchQueue.main.async {
+            if let error2 {
+              XCTFail("sendrecv2 の接続に失敗した: \(error2)")
+              connectFailed = true
+              connect2Expectation.fulfill()
+              return
+            }
+            guard let channel2Unwrapped = mediaChannel2,
+              let stream2 = channel2Unwrapped.senderStream
+            else {
+              XCTFail("sendrecv2 の senderStream が nil")
+              connectFailed = true
+              connect2Expectation.fulfill()
+              return
+            }
+            channel2 = channel2Unwrapped
+            let currentCapturer2 = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+            currentCapturer2.stream = stream2
+            currentCapturer2.start()
+            capturer2 = currentCapturer2
+            connect2Expectation.fulfill()
+          }
         }
-        guard let channel2Unwrapped = mediaChannel2,
-          let stream2 = channel2Unwrapped.senderStream
-        else {
-          XCTFail("sendrecv2 の senderStream が nil")
-          connectFailed = true
-          connect2Expectation.fulfill()
-          return
-        }
-        channel2 = channel2Unwrapped
-        let currentCapturer2 = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
-        currentCapturer2.stream = stream2
-        currentCapturer2.start()
-        capturer2 = currentCapturer2
-        connect2Expectation.fulfill()
       }
     }
 
@@ -530,6 +536,10 @@ final class E2ETests: XCTestCase {
   /// 映像の受信は送信側エンコーダが最初の keyframe を送出するまで受信パケットが存在しないため、
   /// 両チャンネルの inbound-rtp で bytesReceived / packetsReceived が 0 より大きいことを確認できた
   /// 時点で打ち切り、codec / outbound の検証を行う。
+  ///
+  /// このヘルパーは main queue 上で実行される。2 本の getStats コールバックは実行キューが固定されて
+  /// いないため、completedCount / stats1 / stats2 / statsFailure の更新は main queue に束ねて
+  /// データ競合を防ぐ。
   private func verifyVideoStats(
     channel1: MediaChannel,
     channel2: MediaChannel,
@@ -582,22 +592,26 @@ final class E2ETests: XCTestCase {
     }
 
     channel1.getStats { result in
-      guard case .success(let stats) = result else {
-        statsFailure = true
+      DispatchQueue.main.async {
+        guard case .success(let stats) = result else {
+          statsFailure = true
+          check()
+          return
+        }
+        stats1 = stats
         check()
-        return
       }
-      stats1 = stats
-      check()
     }
     channel2.getStats { result in
-      guard case .success(let stats) = result else {
-        statsFailure = true
+      DispatchQueue.main.async {
+        guard case .success(let stats) = result else {
+          statsFailure = true
+          check()
+          return
+        }
+        stats2 = stats
         check()
-        return
       }
-      stats2 = stats
-      check()
     }
   }
 
