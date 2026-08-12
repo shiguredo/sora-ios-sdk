@@ -294,6 +294,10 @@ public struct Configuration {
 
   /// カスタム音声デバイス。
   /// テストからダミー音声デバイス (DummyAudioDevice) を注入するために使用する。
+  ///
+  /// 未設定 (nil) の場合は、通常どおり `RTCAudioDeviceModule` 経由で物理マイクを使用する。
+  /// 設定した場合は、カスタム音声デバイスが物理マイクの代わりに使用され、
+  /// 音声入力の初期化 (`initializeAudioInput()`) はスキップされる。
   /// :nodoc:
   var audioDevice: RTCAudioDevice?
 
