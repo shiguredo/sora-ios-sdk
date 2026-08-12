@@ -39,7 +39,7 @@
 ### misc
 
 - [ADD] E2E テスト用にダミー音声デバイスを追加する
-  - `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
+  - テストから internal な `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
   - @t-miya
 
 ## 2026.2.0

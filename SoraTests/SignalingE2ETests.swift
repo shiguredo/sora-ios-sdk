@@ -18,10 +18,9 @@ final class E2ETests: XCTestCase {
   private var originalAudioCategory: AVAudioSession.Category?
   private var originalAudioMode: AVAudioSession.Mode?
   private var originalAudioOptions: AVAudioSession.CategoryOptions?
-  // テストが AVAudioSession を有効化したかどうか (ダミー音声テストのみ true になる)。
-  // tearDown で「このテストが変更した場合のみ」復元するためのフラグ。
-  // 毎回 setActive(false) すると、AVAudioSession に触れない他の E2E テストが
-  // 前提とする音声状態を壊すため、フラグで限定する
+  // テストが AVAudioSession を変更したかどうか (ダミー音声テストのみ true になる)。
+  // tearDown で「このテストが変更した場合のみ」カテゴリ設定を復元するためのフラグ。
+  // AVAudioSession に触れない他の E2E テストに影響しないよう、フラグで限定する
   private var audioSessionActivatedByTest = false
   private struct InvalidURLError: Error {}
 
@@ -44,7 +43,9 @@ final class E2ETests: XCTestCase {
     }
     sora = nil
     Logger.shared.level = originalLogLevel ?? .info
-    // テストが AVAudioSession を有効化した場合のみ復元し、後続テストに影響しないようにする
+    // テストが AVAudioSession を変更した場合のみ、カテゴリ設定を復元する。
+    // active 状態は取得 API がないため復元できない。setActive(false) を呼ぶと、
+    // テスト開始時点で active だった場合に非 active へ落としてしまうため、呼ばない
     if audioSessionActivatedByTest {
       if let category = originalAudioCategory {
         try? AVAudioSession.sharedInstance().setCategory(
@@ -52,7 +53,6 @@ final class E2ETests: XCTestCase {
           mode: originalAudioMode ?? .default,
           options: originalAudioOptions ?? [])
       }
-      try? AVAudioSession.sharedInstance().setActive(false)
     }
     super.tearDown()
   }

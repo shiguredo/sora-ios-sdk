@@ -12,6 +12,11 @@ import WebRTC
 ///
 /// PCM データの生成 (波形の内容) は pcmGenerator として外部から注入する。
 /// 波形のロジック (正弦波等) はテスト・デモの用途に依存するため、SDK 側では持たない。
+///
+/// delegate が未設定 (nil) の場合のデフォルト値は、サンプルレート 48000 Hz、
+/// IO バッファ期間 0.02 秒 (20ms) である。
+/// 接続時は delegate が選択する値 (preferredInputSampleRate /
+/// preferredInputIOBufferDuration 等) を使用する。
 final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
   /// PCM データ生成処理。
@@ -20,7 +25,21 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     (_ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double)
       -> Void
 
+  // 録音タイマーキュー (recordingQueue) と ADM スレッドの間で共有する状態を保護するロック。
+  // deliverPCMData は recordingQueue から呼ばれる一方、
+  // startRecording / stopRecording / setHardMute / terminateDevice は ADM スレッドから呼ばれる。
+  // delegate / _isRecording / isHardMuted の読み書きはこのロックで直列化する。
+  private let stateLock = NSLock()
+
   private weak var delegate: RTCAudioDeviceDelegate?
+
+  /// delegate をロック付きで取得する。
+  /// 弱参照のため、取得した時点で強参照としてローカルに保持する必要がある
+  private func lockedDelegate() -> RTCAudioDeviceDelegate? {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return delegate
+  }
 
   // 録音用
   private var recordingTimer: DispatchSourceTimer?
@@ -63,11 +82,11 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   // MARK: - RTCAudioDevice プロパティ
 
   var deviceInputSampleRate: Double {
-    delegate?.preferredInputSampleRate ?? 48000
+    lockedDelegate()?.preferredInputSampleRate ?? 48000
   }
 
   var inputIOBufferDuration: TimeInterval {
-    delegate?.preferredInputIOBufferDuration ?? 0.02
+    lockedDelegate()?.preferredInputIOBufferDuration ?? 0.02
   }
 
   var inputNumberOfChannels: Int { 1 }
@@ -75,11 +94,11 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   var inputLatency: TimeInterval { 0 }
 
   var deviceOutputSampleRate: Double {
-    delegate?.preferredOutputSampleRate ?? 48000
+    lockedDelegate()?.preferredOutputSampleRate ?? 48000
   }
 
   var outputIOBufferDuration: TimeInterval {
-    delegate?.preferredOutputIOBufferDuration ?? 0.02
+    lockedDelegate()?.preferredOutputIOBufferDuration ?? 0.02
   }
 
   var outputNumberOfChannels: Int { 1 }
@@ -95,7 +114,9 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   // MARK: - RTCAudioDevice メソッド
 
   func initialize(with delegate: RTCAudioDeviceDelegate) -> Bool {
+    stateLock.lock()
     self.delegate = delegate
+    stateLock.unlock()
 
     // RTCAudioDevice 実装は AVAudioSession の設定責務を持つ (RTCAudioDevice.h)
     do {
@@ -124,19 +145,23 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
       guard let self else { return }
       self.recordingTimer?.cancel()
       self.recordingTimer = nil
+      self.stateLock.lock()
       self._isRecording = false
       self._isRecordingInitialized = false
+      self.stateLock.unlock()
       self.audioUnit?.stopHardware()
       self.audioUnit = nil
       self._isPlaying = false
       self._isPlayoutInitialized = false
     }
-    if let delegate {
+    if let delegate = lockedDelegate() {
       delegate.dispatchSync(stop)
     } else {
       stop()
     }
-    delegate = nil
+    stateLock.lock()
+    self.delegate = nil
+    stateLock.unlock()
     _isInitialized = false
     return true
   }
@@ -144,7 +169,7 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   // MARK: - 再生 (Playout)
 
   func initializePlayout() -> Bool {
-    guard let delegate else { return false }
+    guard let delegate = lockedDelegate() else { return false }
 
     let desc = AudioComponentDescription(
       componentType: kAudioUnitType_Output,
@@ -229,13 +254,15 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   }
 
   func startRecording() -> Bool {
-    guard let delegate else { return false }
+    guard let delegate = lockedDelegate() else { return false }
 
     // 既存タイマーが残っている場合は先にキャンセルする。
     // Offer SDP 作成のたびに startRecording が呼ばれ得るため、再入は安全でなければならない
     recordingTimer?.cancel()
 
+    stateLock.lock()
     _isRecording = true
+    stateLock.unlock()
 
     let timer = DispatchSource.makeTimerSource(queue: recordingQueue)
     let interval = delegate.preferredInputIOBufferDuration
@@ -257,7 +284,9 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   func stopRecording() -> Bool {
     recordingTimer?.cancel()
     recordingTimer = nil
+    stateLock.lock()
     _isRecording = false
+    stateLock.unlock()
     return true
   }
 
@@ -266,9 +295,12 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   /// - Returns: 成功した場合は `true`
   func setHardMute(_ mute: Bool) -> Bool {
     let update: () -> Void = { [weak self] in
-      self?.isHardMuted = mute
+      guard let self else { return }
+      self.stateLock.lock()
+      self.isHardMuted = mute
+      self.stateLock.unlock()
     }
-    if let delegate {
+    if let delegate = lockedDelegate() {
       delegate.dispatchSync(update)
     } else {
       update()
@@ -277,7 +309,16 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   }
 
   private func deliverPCMData() {
-    guard let delegate, _isRecording else { return }
+    // 共有状態をロックで直列化して読み取る。
+    // delegate は弱参照のため、ローカル変数にコピーして強参照にすることで、
+    // deliverRecordedData 呼び出し中に解放されないようにする
+    stateLock.lock()
+    let delegate = self.delegate
+    let isRecording = _isRecording
+    let isHardMuted = self.isHardMuted
+    stateLock.unlock()
+
+    guard let delegate, isRecording else { return }
 
     // ハードミュート中は録音データを送信しない
     // (Configuration.initialMicrophoneEnabled = false の契約と setAudioHardMute に対応する)
