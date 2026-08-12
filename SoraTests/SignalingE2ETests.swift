@@ -130,6 +130,11 @@ final class E2ETests: XCTestCase {
       }
       disconnectExpectation.fulfill()
     }
+    // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
+    // onDisconnect が発火済みのため、wait せずに戻る
+    guard !channel.state.isDisconnected else {
+      return
+    }
     channel.disconnect(error: nil)
     wait(for: [disconnectExpectation], timeout: timeout)
   }
@@ -467,6 +472,9 @@ final class E2ETests: XCTestCase {
         channel.handlers.onDisconnect = { _ in
           disconnectExpectation.fulfill()
         }
+        // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
+        // onDisconnect が発火済みのため、待たずにスキップする
+        guard !channel.state.isDisconnected else { continue }
         channel.disconnect(error: nil)
         self.wait(for: [disconnectExpectation], timeout: 10)
       }
