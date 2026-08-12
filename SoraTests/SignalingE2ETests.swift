@@ -113,6 +113,21 @@ final class E2ETests: XCTestCase {
     return config
   }
 
+  /// チャンネルを切断し、正常切断コード (1000) が onDisconnect で通知されることを確認する
+  private func disconnectAndVerify(channel: MediaChannel, timeout: TimeInterval = 10) {
+    let disconnectExpectation = self.expectation(description: "切断が完了すること")
+    channel.handlers.onDisconnect = { event in
+      if case .ok(let code, _) = event {
+        XCTAssertEqual(code, 1000, "正常切断コードであること")
+      } else {
+        XCTFail("予期しない切断: \(event)")
+      }
+      disconnectExpectation.fulfill()
+    }
+    channel.disconnect(error: nil)
+    wait(for: [disconnectExpectation], timeout: timeout)
+  }
+
   // MARK: - recvonly 接続テスト
 
   /// Sora に recvonly で接続できることを確認する
@@ -135,17 +150,7 @@ final class E2ETests: XCTestCase {
     wait(for: [expectation], timeout: 30)
 
     if let channel = connectedChannel {
-      let disconnectExpectation = self.expectation(description: "切断が完了すること")
-      channel.handlers.onDisconnect = { event in
-        if case .ok(let code, _) = event {
-          XCTAssertEqual(code, 1000, "正常切断コードであること")
-        } else {
-          XCTFail("予期しない切断: \(event)")
-        }
-        disconnectExpectation.fulfill()
-      }
-      channel.disconnect(error: nil)
-      wait(for: [disconnectExpectation], timeout: 10)
+      disconnectAndVerify(channel: channel)
     }
   }
 
@@ -174,18 +179,7 @@ final class E2ETests: XCTestCase {
     }
 
     // 切断を実行し、onDisconnect が正常切断コードで呼ばれることを確認する
-    let disconnectExpectation = self.expectation(description: "切断が成功すること")
-    channel.handlers.onDisconnect = { event in
-      if case .ok(let code, _) = event {
-        XCTAssertEqual(code, 1000, "正常切断コードであること")
-      } else {
-        XCTFail("予期しない切断: \(event)")
-      }
-      disconnectExpectation.fulfill()
-    }
-
-    channel.disconnect(error: nil)
-    wait(for: [disconnectExpectation], timeout: 10)
+    disconnectAndVerify(channel: channel)
   }
 
   /// recvonly で offer / answer が完了し、接続状態が connected になることを確認する
@@ -215,17 +209,7 @@ final class E2ETests: XCTestCase {
     wait(for: [expectation], timeout: 30)
 
     if let channel = connectedChannel {
-      let disconnectExpectation = self.expectation(description: "切断が完了すること")
-      channel.handlers.onDisconnect = { event in
-        if case .ok(let code, _) = event {
-          XCTAssertEqual(code, 1000, "正常切断コードであること")
-        } else {
-          XCTFail("予期しない切断: \(event)")
-        }
-        disconnectExpectation.fulfill()
-      }
-      channel.disconnect(error: nil)
-      wait(for: [disconnectExpectation], timeout: 10)
+      disconnectAndVerify(channel: channel)
     }
   }
 
@@ -293,17 +277,7 @@ final class E2ETests: XCTestCase {
     capturer?.stop()
     // 切断
     if let channel = sora?.mediaChannels.first {
-      let disconnectExpectation = self.expectation(description: "切断が完了すること")
-      channel.handlers.onDisconnect = { event in
-        if case .ok(let code, _) = event {
-          XCTAssertEqual(code, 1000, "正常切断コードであること")
-        } else {
-          XCTFail("予期しない切断: \(event)")
-        }
-        disconnectExpectation.fulfill()
-      }
-      channel.disconnect(error: nil)
-      wait(for: [disconnectExpectation], timeout: 10)
+      disconnectAndVerify(channel: channel)
     }
   }
 
@@ -378,17 +352,7 @@ final class E2ETests: XCTestCase {
     wait(for: [expectation], timeout: 90)
     // 切断
     if let channel = sora?.mediaChannels.first {
-      let disconnectExpectation = self.expectation(description: "切断が完了すること")
-      channel.handlers.onDisconnect = { event in
-        if case .ok(let code, _) = event {
-          XCTAssertEqual(code, 1000, "正常切断コードであること")
-        } else {
-          XCTFail("予期しない切断: \(event)")
-        }
-        disconnectExpectation.fulfill()
-      }
-      channel.disconnect(error: nil)
-      wait(for: [disconnectExpectation], timeout: 10)
+      disconnectAndVerify(channel: channel)
     }
   }
 
@@ -538,17 +502,7 @@ final class E2ETests: XCTestCase {
     // 切断 (capturer を停止してから切断する)
     stopCapturers()
     for channel in [channel1, channel2] {
-      let disconnectExpectation = self.expectation(description: "切断が完了すること")
-      channel.handlers.onDisconnect = { event in
-        if case .ok(let code, _) = event {
-          XCTAssertEqual(code, 1000, "正常切断コードであること")
-        } else {
-          XCTFail("予期しない切断: \(event)")
-        }
-        disconnectExpectation.fulfill()
-      }
-      channel.disconnect(error: nil)
-      wait(for: [disconnectExpectation], timeout: 10)
+      disconnectAndVerify(channel: channel)
     }
   }
 
