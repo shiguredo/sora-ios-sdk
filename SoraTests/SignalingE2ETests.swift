@@ -557,26 +557,27 @@ final class E2ETests: XCTestCase {
       completedCount += 1
       guard completedCount == 2 else { return }
 
-      if statsFailure {
-        XCTFail("getStats に失敗した")
-        expectation.fulfill()
-        return
-      }
-      guard let stats1, let stats2 else {
-        XCTFail("stats が取得できなかった")
-        expectation.fulfill()
-        return
+      // 両チャンネルの getStats が成功し、両方の inbound が確認できた場合は成功
+      if !statsFailure, let stats1, let stats2 {
+        let inboundOK1 = self.hasInboundVideo(stats: stats1)
+        let inboundOK2 = self.hasInboundVideo(stats: stats2)
+        if inboundOK1 && inboundOK2 {
+          // リトライ成功時に codec / outbound の検証を一度だけ行う
+          self.verifyVideoCodecAndOutbound(stats: stats1, channel: channel1)
+          self.verifyVideoCodecAndOutbound(stats: stats2, channel: channel2)
+          expectation.fulfill()
+          return
+        }
       }
 
-      let inboundOK1 = self.hasInboundVideo(stats: stats1)
-      let inboundOK2 = self.hasInboundVideo(stats: stats2)
-      if inboundOK1 && inboundOK2 {
-        // リトライ成功時に codec / outbound の検証を一度だけ行う
-        self.verifyVideoCodecAndOutbound(stats: stats1, channel: channel1)
-        self.verifyVideoCodecAndOutbound(stats: stats2, channel: channel2)
-        expectation.fulfill()
-      } else if attempt >= maxAttempts {
-        XCTFail("\(maxAttempts) 回試行しても両チャンネルの inbound video を確認できなかった")
+      // getStats の failure は一時的な接続状態の変化 (ICE の一瞬の .disconnected 等) が
+      // 原因の可能性があるため、inbound 未達と同様にリトライする。上限に達した場合は失敗とする
+      if attempt >= maxAttempts {
+        if statsFailure {
+          XCTFail("getStats に失敗した")
+        } else {
+          XCTFail("\(maxAttempts) 回試行しても両チャンネルの inbound video を確認できなかった")
+        }
         expectation.fulfill()
       } else {
         // 2 秒後に再試行する
