@@ -480,20 +480,22 @@ final class E2ETests: XCTestCase {
     }
 
     // sendrecv1 の接続完了を待つ
-    wait(for: [connect1Expectation], timeout: 30)
-    guard !connectFailed else {
+    // ConnectionTimer (Configuration.connectionTimeout = 30 秒) の発火を wait 内で処理し、
+    // テスト終了後に遅延コールバックが残らないよう、wait のタイムアウトを 35 秒とする
+    wait(for: [connect1Expectation], timeout: 35)
+    guard !connectFailed, let channel1 else {
       // 後始末: capturer 停止 + 切断
       capturer1?.stop()
       channel1?.disconnect(error: nil)
       return
     }
     // sendrecv2 の接続完了を待つ
-    wait(for: [connect2Expectation], timeout: 30)
-    guard !connectFailed, let channel1, let channel2, let capturer1, let capturer2 else {
+    wait(for: [connect2Expectation], timeout: 35)
+    guard !connectFailed, let channel2, let capturer1, let capturer2 else {
       // 後始末: capturer 停止 + 切断
       capturer1?.stop()
       capturer2?.stop()
-      channel1?.disconnect(error: nil)
+      channel1.disconnect(error: nil)
       return
     }
 
