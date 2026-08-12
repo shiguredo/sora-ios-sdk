@@ -521,7 +521,7 @@ final class E2ETests: XCTestCase {
   /// 時点で打ち切り、codec / outbound の検証を行う。
   ///
   /// このヘルパーは main queue 上で実行される。2 本の getStats コールバックは実行キューが固定されて
-  /// いないため、completedCount / stats1 / stats2 / statsFailure の更新は main queue に束ねて
+  /// いないため、completedCount / stats1 / stats2 / statsFailures の更新は main queue に束ねて
   /// データ競合を防ぐ。
   private func verifyVideoStats(
     channel1: MediaChannel,
@@ -533,7 +533,9 @@ final class E2ETests: XCTestCase {
     var completedCount = 0
     var stats1: Statistics?
     var stats2: Statistics?
-    var statsFailure = false
+    // getStats の失敗理由を保持する (一時的な failure は次のリトライで回復し得るため、
+    // 上限到達時にこの内容を診断メッセージとして出力する)
+    var statsFailures: [String] = []
 
     // 両チャンネルの getStats の完了を待ち合わせる (カウンタ方式)
     let check: () -> Void = {
@@ -541,7 +543,7 @@ final class E2ETests: XCTestCase {
       guard completedCount == 2 else { return }
 
       // 両チャンネルの getStats が成功し、両方の inbound が確認できた場合は成功
-      if !statsFailure, let stats1, let stats2 {
+      if statsFailures.isEmpty, let stats1, let stats2 {
         let inboundOK1 = self.hasInboundVideo(stats: stats1)
         let inboundOK2 = self.hasInboundVideo(stats: stats2)
         if inboundOK1 && inboundOK2 {
@@ -556,10 +558,16 @@ final class E2ETests: XCTestCase {
       // getStats の failure は一時的な接続状態の変化 (ICE の一瞬の .disconnected 等) が
       // 原因の可能性があるため、inbound 未達と同様にリトライする。上限に達した場合は失敗とする
       if attempt >= maxAttempts {
-        if statsFailure {
-          XCTFail("getStats に失敗した")
+        if !statsFailures.isEmpty {
+          XCTFail("getStats に失敗した: \(statsFailures.joined(separator: "、"))")
         } else {
-          XCTFail("\(maxAttempts) 回試行しても両チャンネルの inbound video を確認できなかった")
+          // 最後に観測した受信量を出力し、原因切り分けに役立てる
+          let inbound1 = self.inboundVideoByteCounts(stats: stats1)
+          let inbound2 = self.inboundVideoByteCounts(stats: stats2)
+          XCTFail(
+            "\(maxAttempts) 回試行しても両チャンネルの inbound video を確認できなかった"
+              + " (sendrecv1: \(inbound1.bytesReceived) bytes / \(inbound1.packetsReceived) packets、"
+              + "sendrecv2: \(inbound2.bytesReceived) bytes / \(inbound2.packetsReceived) packets)")
         }
         expectation.fulfill()
       } else {
@@ -577,37 +585,48 @@ final class E2ETests: XCTestCase {
 
     channel1.getStats { result in
       DispatchQueue.main.async {
-        guard case .success(let stats) = result else {
-          statsFailure = true
+        switch result {
+        case .success(let stats):
+          stats1 = stats
           check()
-          return
+        case .failure(let error):
+          statsFailures.append("sendrecv1 の getStats に失敗した (\(error))")
+          check()
         }
-        stats1 = stats
-        check()
       }
     }
     channel2.getStats { result in
       DispatchQueue.main.async {
-        guard case .success(let stats) = result else {
-          statsFailure = true
+        switch result {
+        case .success(let stats):
+          stats2 = stats
           check()
-          return
+        case .failure(let error):
+          statsFailures.append("sendrecv2 の getStats に失敗した (\(error))")
+          check()
         }
-        stats2 = stats
-        check()
       }
     }
   }
 
-  /// inbound-rtp (video) の bytesReceived / packetsReceived が 0 より大きいかを確認する
-  private func hasInboundVideo(stats: Statistics) -> Bool {
-    let inbound = stats.entries.first {
+  /// inbound-rtp (video) の bytesReceived / packetsReceived を返す (存在しない場合は 0)
+  private func inboundVideoByteCounts(stats: Statistics?) -> (
+    bytesReceived: Int, packetsReceived: Int
+  ) {
+    let inbound = stats?.entries.first {
       $0.type == "inbound-rtp"
         && ($0.values["kind"] as? NSString) == "video"
     }
-    let bytesReceived = inbound?.values["bytesReceived"] as? NSNumber
-    let packetsReceived = inbound?.values["packetsReceived"] as? NSNumber
-    return (bytesReceived?.intValue ?? 0) > 0 && (packetsReceived?.intValue ?? 0) > 0
+    return (
+      bytesReceived: (inbound?.values["bytesReceived"] as? NSNumber)?.intValue ?? 0,
+      packetsReceived: (inbound?.values["packetsReceived"] as? NSNumber)?.intValue ?? 0
+    )
+  }
+
+  /// inbound-rtp (video) の bytesReceived / packetsReceived が 0 より大きいかを確認する
+  private func hasInboundVideo(stats: Statistics) -> Bool {
+    let counts = inboundVideoByteCounts(stats: stats)
+    return counts.bytesReceived > 0 && counts.packetsReceived > 0
   }
 
   /// video codec stats (VP8) と outbound-rtp (video) の stats を検証する
