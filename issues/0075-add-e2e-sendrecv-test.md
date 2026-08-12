@@ -34,7 +34,7 @@
 7. 両方の `getStats` を取得し、`type == "codec"` の `mimeType == "video/VP8"`・`type == "outbound-rtp"` の `kind == "video"` の `bytesSent` / `packetsSent`・`type == "inbound-rtp"` の `kind == "video"` の `bytesReceived` / `packetsReceived` を確認する
 8. 両方を切断し、`onDisconnect` で正常切断コード (1000) を確認する
 
-映像の受信は送信側エンコーダが最初の keyframe を送出するまで受信パケットが存在しない。そのため、5 秒待機後に `getStats` を取得し、**両チャンネルの inbound-rtp で `bytesReceived` / `packetsReceived` が 0 より大きいことを確認できた時点で打ち切る**。確認できない場合は 2 秒後に再取得し、初回を含めて最大 3 回試行する。3 回目の試行でも確認できない場合は `XCTFail` して expectation を fulfill し、codec / outbound 検証と切断確認をスキップしてテストを終了する。
+映像の受信は送信側エンコーダが最初の keyframe を送出するまで受信パケットが存在しない。そのため、5 秒待機後に `getStats` を取得し、**両チャンネルの inbound-rtp で `bytesReceived` / `packetsReceived` が 0 より大きいことを確認できた時点で打ち切る**。確認できない場合は 5 秒後に再取得し、初回を含めて最大 3 回試行する（keyframe の送出間隔がエンコーダ設定によって 10 秒超に伸びる可能性があるため、リトライ間隔は 2 秒ではなく 5 秒とし、試行窓を 15 秒まで広げる）。3 回目の試行でも確認できない場合は `XCTFail` して expectation を fulfill し、codec / outbound 検証と切断確認をスキップしてテストを終了する。
 
 codec stats と outbound-rtp の検証は、リトライが成功した場合のみ一度だけ行う。
 

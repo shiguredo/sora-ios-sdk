@@ -514,7 +514,7 @@ final class E2ETests: XCTestCase {
     }
   }
 
-  /// 両チャンネルの video stats を検証する (2 秒間隔で最大 maxAttempts 回リトライする)
+  /// 両チャンネルの video stats を検証する (5 秒間隔で最大 maxAttempts 回リトライする)
   ///
   /// 映像の受信は送信側エンコーダが最初の keyframe を送出するまで受信パケットが存在しないため、
   /// 両チャンネルの inbound-rtp で bytesReceived / packetsReceived が 0 より大きいことを確認できた
@@ -563,8 +563,8 @@ final class E2ETests: XCTestCase {
         }
         expectation.fulfill()
       } else {
-        // 2 秒後に再試行する
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        // keyframe 到着を待つため、5 秒後に再試行する
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
           self.verifyVideoStats(
             channel1: channel1,
             channel2: channel2,
