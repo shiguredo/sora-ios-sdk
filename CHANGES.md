@@ -44,6 +44,9 @@
 - [ADD] sendrecv E2E テストを追加する
   - 同一チャンネルに 2 台の sendrecv クライアントを接続し、互いの映像を送受信できることを検証する
   - @t-miya
+- [ADD] simulcast E2E テストを追加する
+  - sendonly と recvonly を同一チャンネルに接続し、3 レイヤー (r0 / r1 / r2) の simulcast 送信と受信を検証する
+  - @t-miya
 
 ## 2026.2.0
 
