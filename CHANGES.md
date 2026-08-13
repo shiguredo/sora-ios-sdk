@@ -50,6 +50,9 @@
 - [CHANGE] E2E テストをテスト種別ごとに分割する
   - テストクラスを recvonly / sendonly / sendrecv / simulcast の 4 つに分割し、共通処理は E2ETestBase に集約した
   - @t-miya
+- [ADD] reconnect E2E テストを追加する
+  - Sora API (DisconnectConnection) でサーバー側から切断し、再接続できることを検証する
+  - @t-miya
 
 ## 2026.2.0
 
