@@ -612,7 +612,9 @@ final class E2ETests: XCTestCase {
           return
         }
         sendonlyChannel = channel
-        let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+        // simulcast は 3 レイヤーを同時エンコードするため、Simulator の CPU 負荷を抑えて
+        // 高解像度レイヤー (r2) がエンコードから外れないよう、frameRate を 15 に下げる
+        let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 15)
         currentCapturer.stream = stream
         currentCapturer.start()
         capturer = currentCapturer
@@ -688,14 +690,15 @@ final class E2ETests: XCTestCase {
     }
 
     // 5 秒待機後に getStats を取得し、simulcast の video stats を確認する
-    // (受信は keyframe 供給に依存するため、リトライ付きで確認する)
+    // (受信は keyframe 供給に依存し、高解像度レイヤーのエンコード開始は CPU 負荷の影響を
+    // 受けるため、リトライ付きで確認する)
     let statsExpectation = self.expectation(description: "simulcast の video stats を確認できること")
     DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
       self.verifySimulcastStats(
         sendonlyChannel: sendonlyChannel,
         recvonlyChannel: recvonlyChannel,
         attempt: 1,
-        maxAttempts: 3,
+        maxAttempts: 5,
         expectation: statsExpectation)
     }
     wait(for: [statsExpectation], timeout: 30)
