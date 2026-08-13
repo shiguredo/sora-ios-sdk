@@ -4,6 +4,15 @@ import XCTest
 
 /// sendonly ダミー映像・音声テスト
 final class SendonlyE2ETests: E2ETestBase {
+  // Sora API (DisconnectConnection) の切断が成功したかどうか (testSendonlyReconnect 用。
+  // URLSession のコールバックから書き込むため、main queue に束ねた上でクラスプロパティに保持する)
+  private var apiDisconnectSucceeded = false
+
+  override func setUp() {
+    super.setUp()
+    apiDisconnectSucceeded = false
+  }
+
   /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
   func testSendonlyDummyVideo() throws {
     var config = try buildConfiguration(role: .sendonly)
@@ -152,6 +161,187 @@ final class SendonlyE2ETests: E2ETestBase {
     wait(for: [expectation], timeout: 90)
     // 切断
     if let channel = sora?.mediaChannels.first {
+      disconnectAndVerify(channel: channel)
+    }
+  }
+
+  /// サーバー側からの切断後に再接続できることを確認する
+  func testSendonlyReconnect() throws {
+    // Sora API のエンドポイントが未設定の場合はスキップする
+    guard
+      let apiUrlString = ProcessInfo.processInfo.environment["TEST_API_URL"],
+      !apiUrlString.isEmpty,
+      let apiUrl = URL(string: apiUrlString)
+    else {
+      throw XCTSkip("TEST_API_URL が未設定のためスキップします")
+    }
+
+    // テスト固有の一意なチャンネル ID を生成する (Sora API は channel_id を指定するため、
+    // 他テストのチャンネルを誤って切断しないよう一意化が必須)
+    let channelId = buildChannelId(unique: true)
+
+    // 初回接続・サーバー切断検知・再接続の完了を待つ expectation
+    let connect1Expectation = self.expectation(description: "初回接続が完了すること")
+    let disconnectExpectation = self.expectation(description: "サーバー切断を検知すること")
+    let connect2Expectation = self.expectation(description: "再接続が完了すること")
+
+    // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
+    var channel1: MediaChannel?
+    var channel2: MediaChannel?
+    var capturer: DummyVideoCapturer?
+    // 初回接続時の接続 ID とサーバー切断時の切断理由を保持する
+    var connectionId1: String?
+    var disconnectEvent: SoraCloseEvent?
+
+    // sendonly 用の Configuration (channelId は一意な値に上書きする)
+    var config = try buildConfiguration(role: .sendonly)
+    config.channelId = channelId
+    config.videoEnabled = true
+    config.audioEnabled = false
+    config.videoCodec = .vp8
+    config.initialCameraEnabled = false
+
+    // 初回接続
+    // connect コールバックは実行キューが固定されていないため、共有状態の更新と
+    // 後続処理は main queue に束ねる
+    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("初回接続に失敗した : \(error)")
+          connect1Expectation.fulfill()
+          return
+        }
+        guard let channel = mediaChannel, let stream = channel.senderStream else {
+          XCTFail("初回接続の senderStream が nil")
+          connect1Expectation.fulfill()
+          return
+        }
+        channel1 = channel
+        connectionId1 = channel.connectionId
+        // サーバー切断を検知する onDisconnect ハンドラを設定する
+        // (切断理由の確認と切断検知 expectation の fulfill のみを行う)
+        channel.handlers.onDisconnect = { event in
+          DispatchQueue.main.async {
+            disconnectEvent = event
+            disconnectExpectation.fulfill()
+          }
+        }
+        let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+        currentCapturer.stream = stream
+        currentCapturer.start()
+        capturer = currentCapturer
+        connect1Expectation.fulfill()
+      }
+    }
+
+    // 初回接続の完了を待つ
+    wait(for: [connect1Expectation], timeout: 35)
+    guard let channel1, let connectionId1 else {
+      XCTFail("初回接続に失敗した")
+      capturer?.stop()
+      disconnectAll(channels: [channel1, channel2])
+      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
+      // 報告を防ぐ
+      disconnectExpectation.fulfill()
+      connect2Expectation.fulfill()
+      return
+    }
+
+    // Sora API (DisconnectConnection) でサーバー側から切断する
+    let apiExpectation = self.expectation(description: "Sora API の切断が成功すること")
+    var request = URLRequest(url: apiUrl)
+    request.httpMethod = "POST"
+    request.setValue("Sora_20151104.DisconnectConnection", forHTTPHeaderField: "X-Sora-Target")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONSerialization.data(
+      withJSONObject: ["channel_id": channelId, "connection_id": connectionId1])
+    request.timeoutInterval = 10
+    URLSession.shared.dataTask(with: request) { _, response, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("Sora API の呼び出しに失敗した : \(error)")
+        } else if let httpResponse = response as? HTTPURLResponse,
+          (200..<300).contains(httpResponse.statusCode)
+        {
+          self.apiDisconnectSucceeded = true
+        } else {
+          XCTFail("Sora API がエラーを返した : \(String(describing: response))")
+        }
+        apiExpectation.fulfill()
+      }
+    }.resume()
+    wait(for: [apiExpectation], timeout: 10)
+    guard apiDisconnectSucceeded else {
+      // 後始末 (サーバー切断は発生しないため、切断検知 expectation を fulfill する)
+      capturer?.stop()
+      disconnectAll(channels: [channel1, channel2])
+      disconnectExpectation.fulfill()
+      connect2Expectation.fulfill()
+      return
+    }
+
+    // サーバー切断の検知を待つ
+    wait(for: [disconnectExpectation], timeout: 10)
+    guard let disconnectEvent else {
+      XCTFail("サーバー切断を検知できなかった")
+      capturer?.stop()
+      disconnectAll(channels: [channel1, channel2])
+      connect2Expectation.fulfill()
+      return
+    }
+    // 切断理由を確認する (Sora API 切断では code 1000 / reason "DISCONNECTED-API" が期待される。
+    // サーバー実装依存のため、実測して確定する)
+    if case .ok(let code, let reason) = disconnectEvent {
+      XCTAssertEqual(code, 1000, "正常切断コードであること")
+      XCTAssertEqual(reason, "DISCONNECTED-API", "切断理由が DISCONNECTED-API であること")
+    } else {
+      XCTFail("予期しない切断: \(disconnectEvent)")
+    }
+
+    // 1 秒待機してから再接続する (即時再接続による DUPLICATED-CHANNEL-ID レースを避ける)
+    // 1 秒の待機は main RunLoop 上で行い、Thread.sleep は使用しない
+    // (main RunLoop を止めると DummyVideoCapturer のフレーム送信が停止するため)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+      _ = self.sora?.connect(configuration: config) { mediaChannel, error in
+        DispatchQueue.main.async {
+          if let error {
+            XCTFail("再接続に失敗した : \(error)")
+            connect2Expectation.fulfill()
+            return
+          }
+          guard let channel = mediaChannel, let stream = channel.senderStream else {
+            XCTFail("再接続の senderStream が nil")
+            connect2Expectation.fulfill()
+            return
+          }
+          channel2 = channel
+          // DummyVideoCapturer を新しい senderStream に付け替える
+          // (既存 capturer を再利用し、stop() → stream 差し替え → start())
+          capturer?.stop()
+          capturer?.stream = stream
+          capturer?.start()
+          connect2Expectation.fulfill()
+        }
+      }
+    }
+    // 再接続の完了を待つ
+    wait(for: [connect2Expectation], timeout: 35)
+    guard let channel2 else {
+      XCTFail("再接続に失敗した")
+      capturer?.stop()
+      disconnectAll(channels: [channel1, channel2])
+      return
+    }
+
+    // 再接続後の接続 ID が初回と異なることを確認する
+    XCTAssertNotEqual(
+      channel2.connectionId, connectionId1,
+      "再接続後の connectionId が初回と異なること")
+
+    // 後始末: capturer を停止し、接続済みチャンネルを切断する
+    // (旧チャンネルはサーバー切断済みのため、disconnectAndVerify の state チェックでスキップされる)
+    capturer?.stop()
+    for channel in [channel1, channel2] {
       disconnectAndVerify(channel: channel)
     }
   }
