@@ -588,9 +588,9 @@ final class E2ETests: XCTestCase {
     sendonlyConfig.videoCodec = .vp8
     // simulcast では帯域制御がレイヤーごとにビットレートを割り当てるため、無指定だと
     // 高解像度レイヤー (r2) に 0 が割り当てられエンコードされない (r2 の bytesSent が
-    // 0 のままになる事象を確認済み)。js-sdk と同様にビットレートを明示指定して
-    // 全レイヤーへの割り当てを保証する
-    sendonlyConfig.videoBitRate = 1500
+    // 0 のままになる事象を確認済み)。ビットレートは 3 レイヤーで分割して割り当てられる
+    // ため、各レイヤーに十分な値が確保できるよう 5000 を指定する
+    sendonlyConfig.videoBitRate = 5000
     sendonlyConfig.initialCameraEnabled = false
 
     // recvonly は各レイヤー (r0 / r1 / r2) に購読者を 1 台ずつ配置する (js-sdk と同構成)。
