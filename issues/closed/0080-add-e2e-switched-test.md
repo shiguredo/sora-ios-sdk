@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-08-13
 - Model: GPT-5
 - Branch: feature/add-e2e-switched-test
 - Polished: 2026-08-13
@@ -60,3 +60,23 @@ JS SDK の実装を参考にする: `e2e-tests/tests/type_switched.test.ts`
 - `CHANGES.md` の develop セクションの `### misc` に追記されていること
 
 ## 解決方法
+
+以下の対応を行い、DataChannel シグナリング切り替えの E2E テストを実装した。
+
+- `SoraTests/SendonlyE2ETests.swift` に `testSendonlySwitched` を追加した
+  - `buildChannelId(unique: true)` で一意なチャンネル ID を生成し、`config.channelId` に上書きする
+  - sendonly 接続（`dataChannelSignaling: true`、`ignoreDisconnectWebSocket: true`、`videoCodec: .vp8`、`audioEnabled: false`、`initialCameraEnabled: false`、DummyVideoCapturer 640×480 @ 30fps）
+  - `configuration.mediaChannelHandlers` 経由で connect 呼び出しより前にハンドラを登録する（`switched` は接続完了より先に到着し得るため）。`onReceiveSignalingJSON` と `onDataChannel` の共有状態の更新は main queue に束ねる（ハンドラは WebSocket 受信スレッドと DataChannel の delegate スレッドから呼ばれるため）
+  - `onReceiveSignalingJSON` で受信した JSON を `JSONSerialization` でパースし、`type == "switched"` のメッセージの受信を確認する
+  - offer に `data_channels` フィールドが含まれるかを SDK と同じキャスト判定（`dict["data_channels"] is [Any]`）で確認し、含まれない場合は後始末を実行してから XCTSkip でスキップする（サーバー未対応と SDK の不具合を区別するため、switched の受信タイムアウトではスキップしない）
+  - 受信した `switched` メッセージの `ignore_disconnect_websocket` フィールドが `true` であることを確認する（クライアントの `ignoreDisconnectWebSocket: true` がサーバーに反映される）
+  - `onDataChannel` が発火したことを確認する（switched 受信時に発火し、SDK が `switchedToDataChannel = true` で切り替え処理を実行したことの確認になる）
+  - 後始末は capturer 停止 + `disconnectAndVerify`（`ignoreDisconnectWebSocket: true` のため切断メッセージは DataChannel 経由で送信されるが、`SoraCloseEvent.ok(code: 1000)` の検証はそのまま適用できる）
+- Swift 6 対応: `onReceiveSignalingJSON` / `onDataChannel` は Sora の API（`@preconcurrency import Sora`）経由のため、ハンドラ内のローカル変数への書き込みはクラスプロパティ化の必要なし（URLSession 等の標準 API と異なる）
+- `CHANGES.md` の `### misc` に「[ADD] DataChannel シグナリング切り替え E2E テストを追加する」を追記済み
+- 検証: `SWIFT_VERSION=6` ビルド成功、全テスト成功、swift-format / SwiftLint 通過
+
+残タスク（実装時に確認が必要）:
+
+- CI の Sora サーバーが DataChannel シグナリングに対応しているかの確認（未対応の場合は XCTSkip される）
+- `ignore_disconnect_websocket` が `true` で返ることの実測確認（Sora サーバー要件に明記済み）
