@@ -553,8 +553,8 @@ final class E2ETests: XCTestCase {
 
   // MARK: - simulcast ダミー映像テスト
 
-  /// simulcast の sendonly 1 台 + recvonly 1 台で、3 レイヤー (r0 / r1 / r2) の送信と
-  /// recvonly 側の受信を確認する
+  /// simulcast の sendonly 1 台 + recvonly 3 台 (r0 / r1 / r2) で、3 レイヤーの送信と
+  /// 各レイヤーの受信を確認する
   func testSimulcastDummyVideo() throws {
     // テスト固有の一意なチャンネル ID を生成する (残留接続との混在を防ぐ)。
     // CI の Sora サーバーは channelId の prefix / suffix で接続を許可するため、
@@ -566,16 +566,20 @@ final class E2ETests: XCTestCase {
 
     // 接続完了を待つ expectation (各接続ごとに wait を分けて直列に実行する)
     let sendonlyExpectation = self.expectation(description: "sendonly の接続が完了すること")
-    let recvonlyExpectation = self.expectation(description: "recvonly の接続が完了すること")
+    let recvonlyR0Expectation = self.expectation(description: "recvonly (r0) の接続が完了すること")
+    let recvonlyR1Expectation = self.expectation(description: "recvonly (r1) の接続が完了すること")
+    let recvonlyR2Expectation = self.expectation(description: "recvonly (r2) の接続が完了すること")
 
     // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
     var sendonlyChannel: MediaChannel?
-    var recvonlyChannel: MediaChannel?
+    var recvonlyR0Channel: MediaChannel?
+    var recvonlyR1Channel: MediaChannel?
+    var recvonlyR2Channel: MediaChannel?
     var capturer: DummyVideoCapturer?
 
     // sendonly / recvonly 用の Configuration
     // (simulcast は WrapperVideoEncoderFactory.shared.simulcastEnabled を共有するため、
-    // 両チャンネルとも simulcastEnabled = true で統一する)
+    // すべてのチャンネルで simulcastEnabled = true で統一する)
     var sendonlyConfig = try buildConfiguration(role: .sendonly)
     sendonlyConfig.channelId = channelId
     sendonlyConfig.simulcastEnabled = true
@@ -584,17 +588,23 @@ final class E2ETests: XCTestCase {
     sendonlyConfig.videoCodec = .vp8
     sendonlyConfig.initialCameraEnabled = false
 
-    var recvonlyConfig = try buildConfiguration(role: .recvonly)
-    recvonlyConfig.channelId = channelId
-    recvonlyConfig.simulcastEnabled = true
-    // 受信するレイヤーは r0 のみに限定する (inbound-rtp に rid がなく「レイヤー選択の動作確認」には
-    // ならないため、到達の確実性が高い r0 を選択する)
-    recvonlyConfig.simulcastRequestRid = .r0
-    recvonlyConfig.videoEnabled = true
-    recvonlyConfig.audioEnabled = false
-    recvonlyConfig.videoCodec = .vp8
+    // recvonly は各レイヤー (r0 / r1 / r2) に購読者を 1 台ずつ配置する (js-sdk と同構成)。
+    // 購読者のいないレイヤーは Sora サーバーがエンコードを維持しない可能性があるため
+    let makeRecvonlyConfig: (SimulcastRequestRid) throws -> Configuration = { rid in
+      var config = try self.buildConfiguration(role: .recvonly)
+      config.channelId = channelId
+      config.simulcastEnabled = true
+      config.simulcastRequestRid = rid
+      config.videoEnabled = true
+      config.audioEnabled = false
+      config.videoCodec = .vp8
+      return config
+    }
+    let recvonlyR0Config = try makeRecvonlyConfig(.r0)
+    let recvonlyR1Config = try makeRecvonlyConfig(.r1)
+    let recvonlyR2Config = try makeRecvonlyConfig(.r2)
 
-    // sendonly を接続し、接続完了後に recvonly を接続する (直列)
+    // sendonly を接続し、接続完了後に recvonly を r0 → r1 → r2 の順で接続する (直列)
     // connect コールバックは実行キューが固定されていないため、connectFailed の更新と
     // 後続処理 (capturer 開始・recvonly 接続) は main queue に束ねる
     _ = sora?.connect(configuration: sendonlyConfig) { [self] mediaChannel, error in
@@ -620,23 +630,63 @@ final class E2ETests: XCTestCase {
         capturer = currentCapturer
         sendonlyExpectation.fulfill()
 
-        // recvonly を接続する (送信しないため senderStream の確認は不要)
-        _ = self.sora?.connect(configuration: recvonlyConfig) { mediaChannel2, error2 in
+        // recvonly (r0) を接続する (送信しないため senderStream の確認は不要)
+        _ = self.sora?.connect(configuration: recvonlyR0Config) { mediaChannel2, error2 in
           DispatchQueue.main.async {
             if let error2 {
-              XCTFail("recvonly の接続に失敗した : \(error2)")
+              XCTFail("recvonly (r0) の接続に失敗した : \(error2)")
               connectFailed = true
-              recvonlyExpectation.fulfill()
+              recvonlyR0Expectation.fulfill()
               return
             }
             guard let channel2 = mediaChannel2 else {
-              XCTFail("recvonly のメディアチャネルが nil")
+              XCTFail("recvonly (r0) のメディアチャネルが nil")
               connectFailed = true
-              recvonlyExpectation.fulfill()
+              recvonlyR0Expectation.fulfill()
               return
             }
-            recvonlyChannel = channel2
-            recvonlyExpectation.fulfill()
+            recvonlyR0Channel = channel2
+            recvonlyR0Expectation.fulfill()
+
+            // recvonly (r1) を接続する
+            _ = self.sora?.connect(configuration: recvonlyR1Config) { mediaChannel3, error3 in
+              DispatchQueue.main.async {
+                if let error3 {
+                  XCTFail("recvonly (r1) の接続に失敗した : \(error3)")
+                  connectFailed = true
+                  recvonlyR1Expectation.fulfill()
+                  return
+                }
+                guard let channel3 = mediaChannel3 else {
+                  XCTFail("recvonly (r1) のメディアチャネルが nil")
+                  connectFailed = true
+                  recvonlyR1Expectation.fulfill()
+                  return
+                }
+                recvonlyR1Channel = channel3
+                recvonlyR1Expectation.fulfill()
+
+                // recvonly (r2) を接続する
+                _ = self.sora?.connect(configuration: recvonlyR2Config) { mediaChannel4, error4 in
+                  DispatchQueue.main.async {
+                    if let error4 {
+                      XCTFail("recvonly (r2) の接続に失敗した : \(error4)")
+                      connectFailed = true
+                      recvonlyR2Expectation.fulfill()
+                      return
+                    }
+                    guard let channel4 = mediaChannel4 else {
+                      XCTFail("recvonly (r2) のメディアチャネルが nil")
+                      connectFailed = true
+                      recvonlyR2Expectation.fulfill()
+                      return
+                    }
+                    recvonlyR2Channel = channel4
+                    recvonlyR2Expectation.fulfill()
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -651,7 +701,7 @@ final class E2ETests: XCTestCase {
     // (切断が完了する前にテストが終了して、残留チャンネルの onDisconnect が次のテストに
     // 発火しないようにする)
     let disconnectAll: () -> Void = {
-      for channel in [sendonlyChannel, recvonlyChannel] {
+      for channel in [sendonlyChannel, recvonlyR0Channel, recvonlyR1Channel, recvonlyR2Channel] {
         guard let channel else { continue }
         // 切断済みのチャンネルでは onDisconnect が発火しないため、待たずにスキップする
         guard !channel.state.isDisconnected else { continue }
@@ -667,6 +717,14 @@ final class E2ETests: XCTestCase {
       }
     }
 
+    // 接続失敗時に、未 fulfill の recvonly expectation を fulfill して
+    // テスト終了時の unwaited expectation 報告を防ぐ (再 fulfill は無害)
+    let fulfillPendingRecvonlyExpectations: () -> Void = {
+      for expectation in [recvonlyR0Expectation, recvonlyR1Expectation, recvonlyR2Expectation] {
+        expectation.fulfill()
+      }
+    }
+
     // sendonly の接続完了を待つ
     // ConnectionTimer (Configuration.connectionTimeout = 30 秒) の発火を wait 内で処理し、
     // テスト終了後に遅延コールバックが残らないよう、wait のタイムアウトを 35 秒とする
@@ -675,15 +733,28 @@ final class E2ETests: XCTestCase {
       // 後始末: capturer 停止 + 接続済みチャンネルの切断
       stopCapturers()
       disconnectAll()
-      // recvonly は接続を開始していないため、未 fulfill の expectation が残って
-      // テスト終了時に unwaited expectation として報告されるのを防ぐ
-      recvonlyExpectation.fulfill()
+      fulfillPendingRecvonlyExpectations()
       return
     }
-    // recvonly の接続完了を待つ
-    wait(for: [recvonlyExpectation], timeout: 35)
-    guard !connectFailed, let recvonlyChannel, let capturer else {
-      // 後始末: capturer 停止 + 接続済みチャンネルの切断
+    // recvonly (r0) の接続完了を待つ
+    wait(for: [recvonlyR0Expectation], timeout: 35)
+    guard !connectFailed, let recvonlyR0Channel else {
+      stopCapturers()
+      disconnectAll()
+      fulfillPendingRecvonlyExpectations()
+      return
+    }
+    // recvonly (r1) の接続完了を待つ
+    wait(for: [recvonlyR1Expectation], timeout: 35)
+    guard !connectFailed, let recvonlyR1Channel else {
+      stopCapturers()
+      disconnectAll()
+      fulfillPendingRecvonlyExpectations()
+      return
+    }
+    // recvonly (r2) の接続完了を待つ
+    wait(for: [recvonlyR2Expectation], timeout: 35)
+    guard !connectFailed, let recvonlyR2Channel, let capturer else {
       stopCapturers()
       disconnectAll()
       return
@@ -696,7 +767,7 @@ final class E2ETests: XCTestCase {
     DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
       self.verifySimulcastStats(
         sendonlyChannel: sendonlyChannel,
-        recvonlyChannel: recvonlyChannel,
+        recvonlyChannels: [recvonlyR0Channel, recvonlyR1Channel, recvonlyR2Channel],
         attempt: 1,
         maxAttempts: 5,
         expectation: statsExpectation)
@@ -710,7 +781,7 @@ final class E2ETests: XCTestCase {
 
     // 切断 (capturer を停止してから切断する)
     stopCapturers()
-    for channel in [sendonlyChannel, recvonlyChannel] {
+    for channel in [sendonlyChannel, recvonlyR0Channel, recvonlyR1Channel, recvonlyR2Channel] {
       disconnectAndVerify(channel: channel)
     }
   }
@@ -885,36 +956,40 @@ final class E2ETests: XCTestCase {
 
   /// simulcast の video stats を検証する (5 秒間隔で最大 maxAttempts 回リトライする)
   ///
-  /// sendonly 側は outbound-rtp を rid (r0 / r1 / r2) ごとに、recvonly 側は inbound-rtp の
-  /// 受信量を確認する。両方確認できた時点で打ち切り、codec / scalabilityMode の検証を行う。
+  /// sendonly 側は outbound-rtp を rid (r0 / r1 / r2) ごとに、recvonly 側は各レイヤーの
+  /// 購読チャンネルの inbound-rtp を確認する。すべて確認できた時点で打ち切り、
+  /// codec / scalabilityMode の検証を行う。
   ///
-  /// このヘルパーは main queue 上で実行される。2 本の getStats コールバックは実行キューが
+  /// このヘルパーは main queue 上で実行される。複数の getStats コールバックは実行キューが
   /// 固定されていないため、completedCount / sendonlyStats / recvonlyStats / statsFailures の
   /// 更新は main queue に束ねてデータ競合を防ぐ。
   private func verifySimulcastStats(
     sendonlyChannel: MediaChannel,
-    recvonlyChannel: MediaChannel,
+    recvonlyChannels: [MediaChannel],
     attempt: Int,
     maxAttempts: Int,
     expectation: XCTestExpectation
   ) {
     var completedCount = 0
     var sendonlyStats: Statistics?
-    var recvonlyStats: Statistics?
+    var recvonlyStats: [Statistics?] = Array(repeating: nil, count: recvonlyChannels.count)
     // getStats の失敗理由を保持する (一時的な failure は次のリトライで回復し得るため、
     // 上限到達時にこの内容を診断メッセージとして出力する)
     var statsFailures: [String] = []
 
-    // 両チャンネルの getStats の完了を待ち合わせる (カウンタ方式)
+    // 全チャンネルの getStats の完了を待ち合わせる (カウンタ方式)
     let check: () -> Void = {
       completedCount += 1
-      guard completedCount == 2 else { return }
+      guard completedCount == 1 + recvonlyChannels.count else { return }
 
-      // 両チャンネルの getStats が成功し、sendonly の 3 レイヤー送信と recvonly の
-      // 受信が確認できた場合は成功
-      if statsFailures.isEmpty, let sendonlyStats, let recvonlyStats {
+      // 全チャンネルの getStats が成功し、sendonly の 3 レイヤー送信と recvonly の
+      // 全レイヤー受信が確認できた場合は成功
+      if statsFailures.isEmpty, let sendonlyStats {
         let sendonlyOK = self.hasSimulcastOutboundVideo(stats: sendonlyStats)
-        let recvonlyOK = self.hasInboundVideo(stats: recvonlyStats)
+        let recvonlyOK = recvonlyStats.allSatisfy { stats in
+          guard let stats else { return false }
+          return self.hasInboundVideo(stats: stats)
+        }
         if sendonlyOK && recvonlyOK {
           // リトライ成功時に codec / scalabilityMode の検証を一度だけ行う
           self.verifySimulcastCodecAndOutbound(stats: sendonlyStats)
@@ -932,11 +1007,11 @@ final class E2ETests: XCTestCase {
           // 最後に観測した送受信量を出力し、原因切り分けに役立てる
           let sendonlyCounts =
             sendonlyStats.map { self.simulcastOutboundVideoStats(stats: $0) } ?? []
-          let recvonlyCounts = self.inboundVideoByteCounts(stats: recvonlyStats)
+          let recvonlyCounts = recvonlyStats.map { self.inboundVideoByteCounts(stats: $0) }
           XCTFail(
             "\(maxAttempts) 回試行しても simulcast の video stats を確認できなかった"
               + " (sendonly: \(sendonlyCounts.map { "\($0.rid)=\($0.bytesSent)/\($0.packetsSent)" }.joined(separator: "、"))、"
-              + "recvonly: \(recvonlyCounts.bytesReceived) bytes / \(recvonlyCounts.packetsReceived) packets)"
+              + "recvonly: \(recvonlyCounts.map { "\($0.bytesReceived) bytes / \($0.packetsReceived) packets" }.joined(separator: "、")))"
           )
         }
         expectation.fulfill()
@@ -945,7 +1020,7 @@ final class E2ETests: XCTestCase {
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
           self.verifySimulcastStats(
             sendonlyChannel: sendonlyChannel,
-            recvonlyChannel: recvonlyChannel,
+            recvonlyChannels: recvonlyChannels,
             attempt: attempt + 1,
             maxAttempts: maxAttempts,
             expectation: expectation)
@@ -965,15 +1040,17 @@ final class E2ETests: XCTestCase {
         }
       }
     }
-    recvonlyChannel.getStats { result in
-      DispatchQueue.main.async {
-        switch result {
-        case .success(let stats):
-          recvonlyStats = stats
-          check()
-        case .failure(let error):
-          statsFailures.append("recvonly の getStats に失敗した (\(error))")
-          check()
+    for (index, channel) in recvonlyChannels.enumerated() {
+      channel.getStats { result in
+        DispatchQueue.main.async {
+          switch result {
+          case .success(let stats):
+            recvonlyStats[index] = stats
+            check()
+          case .failure(let error):
+            statsFailures.append("recvonly (r\(index)) の getStats に失敗した (\(error))")
+            check()
+          }
         }
       }
     }
