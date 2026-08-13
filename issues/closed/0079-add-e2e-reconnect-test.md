@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-08-13
 - Model: GPT-5
 - Branch: feature/add-e2e-reconnect-test
 - Polished: 2026-08-13
@@ -67,3 +67,24 @@ JS SDK の実装を参考にする: `e2e-tests/tests/reconnect.test.ts`
 - `CHANGES.md` の develop セクションの `### misc` に追記されていること
 
 ## 解決方法
+
+以下の対応を行い、reconnect の E2E テストを実装した。
+
+- `SoraTests/SendonlyE2ETests.swift` に `testSendonlyReconnect` を追加した
+  - `TEST_API_URL` 環境変数（Sora API のエンドポイント URL）を新設し、未設定の場合は XCTSkip でスキップする
+  - `buildChannelId(unique: true)` で一意なチャンネル ID を生成し、`config.channelId` に上書きする（Sora API は `channel_id` を指定するため、他テストのチャンネルを誤って切断しないようにする）
+  - sendonly 接続（`videoCodec: .vp8`、`audioEnabled: false`、`initialCameraEnabled: false`、DummyVideoCapturer 640×480 @ 30fps）後、`MediaChannel.connectionId` を保存して `onDisconnect` ハンドラを設定する
+  - Sora API（DisconnectConnection）でサーバー側から切断する（`POST {TEST_API_URL}`、ヘッダ `X-Sora-Target: Sora_20151104.DisconnectConnection`、ボディ `{"channel_id": ..., "connection_id": ...}`、タイムアウト 10 秒、HTTP 2xx を確認）
+  - `onDisconnect` 発火（wait 10 秒）で切断理由（`SoraCloseEvent`）を確認する（code 1000 / reason "DISCONNECTED-API" が期待される。サーバー実装依存のため実測して確定する）
+  - 1 秒待機（main RunLoop 上の `asyncAfter`、`Thread.sleep` 不使用）後に、同じ channelId の新 Configuration で `sora?.connect(configuration:)` を再呼び出しして再接続する。DummyVideoCapturer は新しい `senderStream` に付け替える（`stop()` → `stream` 差し替え → `start()`）
+  - 再接続後の `connectionId` が初回と異なることを確認する（js-sdk のテストと同様）
+  - 後始末は capturer 停止 + `disconnectAndVerify`（旧チャンネルはサーバー切断済みのため state チェックでスキップされる）
+- Swift 6 対応: URLSession のコールバックから書き込む `apiDisconnectSucceeded` は、Sora の API と違い `@preconcurrency` の緩和が効かないため、クラスの @MainActor プロパティにし、setUp でリセットする
+- 失敗パス（初回接続失敗・API 失敗・切断検知タイムアウト・再接続失敗）ごとに後始末と未 fulfill expectation の処理を実装した
+- `CHANGES.md` の `### misc` に「[ADD] reconnect E2E テストを追加する」を追記済み
+- 検証: `SWIFT_VERSION=6` ビルド成功、全テスト成功、swift-format / SwiftLint 通過
+
+残タスク（実装時に確認が必要）:
+
+- CI の e2e ジョブへの `TEST_API_URL` の注入（self-hosted ランナーから Sora API へ到達できるかの確認。js-sdk は Tailscale が利用できない self-hosted では実行しない方針のため）
+- 切断理由の期待値（code 1000 / reason "DISCONNECTED-API"）の実測による確定
