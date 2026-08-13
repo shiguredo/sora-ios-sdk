@@ -47,6 +47,9 @@
 - [ADD] simulcast E2E テストを追加する
   - sendonly と recvonly を同一チャンネルに接続し、3 レイヤー (r0 / r1 / r2) の simulcast 送信と受信を検証する
   - @t-miya
+- [CHANGE] E2E テストをテスト種別ごとに分割する
+  - テストクラスを recvonly / sendonly / sendrecv / simulcast の 4 つに分割し、共通処理は E2ETestBase に集約した
+  - @t-miya
 
 ## 2026.2.0
 
