@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-08-13
 - Model: GPT-5
 - Branch: feature/add-e2e-simulcast-test
 - Polished: 2026-08-13
@@ -70,3 +70,23 @@ JS SDK の実装を参考にする: `e2e-tests/tests/simulcast.test.ts`
 - `CHANGES.md` の develop セクションの `### misc` に追記されていること
 
 ## 解決方法
+
+以下の対応を行い、simulcast の E2E テストを実装した。
+
+- `SoraTests/SignalingE2ETests.swift` に `testSimulcastDummyVideo` を追加した
+  - sendonly 1 台 + recvonly 3 台（r0 / r1 / r2）を同一 `Sora()` インスタンスから直列に接続する（各レイヤーに購読者を配置するため recvonly は 3 台。js-sdk と同構成）
+  - sendonly は `simulcastEnabled: true`・`videoCodec: .vp8`・`videoBitRate: 1200`・`initialCameraEnabled: false`・DummyVideoCapturer（960×540 @ 15fps）
+  - recvonly は `simulcastEnabled: true`・`simulcastRequestRid: .r0` / `.r1` / `.r2` で接続
+  - チャンネル ID は `buildChannelId(unique: true)` で一意化（`TEST_CHANNEL_ID_PREFIX` / `TEST_CHANNEL_ID_SUFFIX` を組み合わせる）
+- 検証は `verifySimulcastStats` ヘルパー（既存 `verifyVideoStats` と同じカウンタ方式）で行う
+  - sendonly 側: codec stats（video/VP8）と、outbound-rtp を rid（r0 / r1 / r2）ごとに `bytesSent` / `packetsSent` > 0 を確認（3 レイヤー送信の確認）
+  - recvonly 側: 3 台それぞれの inbound-rtp で `bytesReceived` / `packetsReceived` > 0 を確認（各レイヤーの受信確認）
+  - `scalabilityMode == "L1T1"` はリトライ成功時のみ一度だけ確認
+  - 5 秒間隔で初回を含めて最大 5 回試行（keyframe 到着待ち、試行窓 25 秒）
+- 実装中に確認された事象と対処:
+  - recvonly 1 台（r0 のみ購読）では sendonly の r2（高解像度レイヤー）の `bytesSent` が 0 のままになる → recvonly 3 台構成（各レイヤーに購読者を配置）に変更
+  - `videoBitRate` 無指定では帯域制御がレイヤーごとにビットレートを割り当てるため、r2 に 0 が割り当てられエンコードされない → Sora ドキュメントの simulcast の「映像ビットレート」セクション（960x540 で 3 ストリームに必要な 1200 kbps）に従い明示指定
+  - 30fps では Simulator の CPU 負荷でレイヤーエンコードが維持されない可能性があるため、frameRate は 15 に下げる
+- 失敗時の診断メッセージに rid ごとの送信量と各 recvonly の受信量を含め、原因切り分けを容易にした
+- 後始末（capturer 停止・切断・未 fulfill expectation の処理）は 0075 と同じパターンを適用した
+- `CHANGES.md` の `### misc` に「[ADD] simulcast E2E テストを追加する」を追記済み
