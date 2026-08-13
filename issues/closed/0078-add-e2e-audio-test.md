@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-08-12
 - Model: GPT-5
 - Branch: feature/add-e2e-audio-test
 - Polished:
@@ -37,3 +37,11 @@ JS SDK の実装を参考にする: `e2e-tests/tests/sendonly_audio.test.ts`
 - `getStats` の outbound audio stats で bytes/packets が確認できること
 
 ## 解決方法
+
+本 issue は issue 0068（ダミー音声デバイス）の実装で解決済みのため、新規実装は行わずクローズした。
+
+- `SoraTests/SignalingE2ETests.swift` の `testSendonlyDummyAudio` として実装済み（コミット `5ed26b6`「0068 ダミー音声デバイス (RTCAudioDevice 実装) を追加する」で追加）
+- `role = .sendonly`・`videoEnabled = false`・`audioEnabled = true` で接続し、`getStats` の outbound audio stats で `bytesSent > 0` かつ `packetsSent > 0` を確認している（本 issue の「テストの流れ」1 〜 3 に一致）
+- 加えて audio codec（`audio/opus`）の確認も行っている（コミット `3db5d89`）
+- 音声は `SineWaveGenerator`（440Hz 正弦波）を `DummyAudioDevice` の `pcmGenerator` に注入して送信する（0068 の設計で確立された方式）
+- CHANGES.md の `### misc` に「[ADD] E2E テスト用にダミー音声デバイスを追加する」として記録済み
