@@ -628,8 +628,9 @@ final class E2ETests: XCTestCase {
         }
         sendonlyChannel = channel
         // simulcast は 3 レイヤーを同時エンコードするため、Simulator の CPU 負荷を抑えて
-        // 高解像度レイヤー (r2) がエンコードから外れないよう、frameRate を 15 に下げる
-        let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 15)
+        // 高解像度レイヤー (r2) がエンコードから外れないよう、frameRate を 15 に下げる。
+        // 送信元解像度は r2 (スケールダウンなし) の解像度になるため、js-sdk と同じ 960×540 にする
+        let currentCapturer = DummyVideoCapturer(width: 960, height: 540, frameRate: 15)
         currentCapturer.stream = stream
         currentCapturer.start()
         capturer = currentCapturer
