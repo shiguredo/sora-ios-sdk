@@ -24,6 +24,7 @@ jobs:
       TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
       TEST_CHANNEL_ID_PREFIX: ${{ secrets.TEST_CHANNEL_ID_PREFIX }}
       TEST_CHANNEL_ID_SUFFIX: _${{ github.run_id }}
+      TEST_API_URL: ${{ secrets.TEST_API_URL }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: Show Xcode Version
@@ -78,6 +79,8 @@ jobs:
           -string "$TEST_CHANNEL_ID_PREFIX" "$XCTESTRUN"
         plutil -insert TestConfigurations.0.TestTargets.0.EnvironmentVariables.TEST_CHANNEL_ID_SUFFIX \
           -string "$TEST_CHANNEL_ID_SUFFIX" "$XCTESTRUN"
+        plutil -insert TestConfigurations.0.TestTargets.0.EnvironmentVariables.TEST_API_URL \
+          -string "$TEST_API_URL" "$XCTESTRUN"
 
         xcodebuild test-without-building \
             -xctestrun "$XCTESTRUN" \

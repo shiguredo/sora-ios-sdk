@@ -53,6 +53,9 @@
 - [ADD] reconnect E2E テストを追加する
   - Sora API (DisconnectConnection) でサーバー側から切断し、再接続できることを検証する
   - @t-miya
+- [ADD] DataChannel シグナリング切り替え E2E テストを追加する
+  - DataChannel シグナリング有効時に type: "switched" メッセージの受信とシグナリングの切り替えを検証する
+  - @t-miya
 
 ## 2026.2.0
 

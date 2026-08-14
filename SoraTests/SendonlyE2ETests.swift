@@ -345,4 +345,130 @@ final class SendonlyE2ETests: E2ETestBase {
       disconnectAndVerify(channel: channel)
     }
   }
+
+  /// DataChannel シグナリング有効時に type: "switched" メッセージを受信し、
+  /// シグナリングが WebSocket から DataChannel へ切り替わることを確認する
+  func testSendonlySwitched() throws {
+    // テスト固有の一意なチャンネル ID を生成する (残留接続との混在を防ぐ)
+    let channelId = buildChannelId(unique: true)
+
+    // 接続完了・switched 受信・onDataChannel 発火を待つ expectation
+    let connectExpectation = self.expectation(description: "接続が完了すること")
+    let switchedExpectation = self.expectation(description: "switched メッセージを受信すること")
+    let dataChannelExpectation = self.expectation(description: "onDataChannel が発火すること")
+
+    // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
+    var channel: MediaChannel?
+    var capturer: DummyVideoCapturer?
+    // offer に data_channels フィールドが含まれるかと switched メッセージの内容を保持する
+    var offerContainsDataChannels = false
+    var switchedIgnoreDisconnectWebSocket: Bool?
+
+    // sendonly 用の Configuration
+    var config = try buildConfiguration(role: .sendonly)
+    config.channelId = channelId
+    config.dataChannelSignaling = true
+    config.ignoreDisconnectWebSocket = true
+    config.videoEnabled = true
+    config.audioEnabled = false
+    config.videoCodec = .vp8
+    config.initialCameraEnabled = false
+
+    // ハンドラは connect 呼び出しより前に登録する (switched は接続完了より先に到着し得る)
+    // onReceiveSignalingJSON は WebSocket 受信スレッドと DataChannel の delegate スレッドから
+    // 呼ばれるため、共有状態の更新は main queue に束ねる
+    config.mediaChannelHandlers.onReceiveSignalingJSON = { json in
+      DispatchQueue.main.async {
+        guard let data = json.data(using: .utf8),
+          let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+          return
+        }
+        // offer に data_channels フィールドが含まれるかを記録する (SDK と同じキャスト判定)
+        if dict["type"] as? String == "offer", dict["data_channels"] is [Any] {
+          offerContainsDataChannels = true
+        }
+        // type: "switched" メッセージの ignore_disconnect_websocket フィールドを記録する
+        if dict["type"] as? String == "switched" {
+          switchedIgnoreDisconnectWebSocket = dict["ignore_disconnect_websocket"] as? Bool
+          switchedExpectation.fulfill()
+        }
+      }
+    }
+    config.mediaChannelHandlers.onDataChannel = { _ in
+      DispatchQueue.main.async {
+        dataChannelExpectation.fulfill()
+      }
+    }
+
+    // 接続する
+    // connect コールバックは実行キューが固定されていないため、共有状態の更新と
+    // 後続処理は main queue に束ねる
+    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("接続に失敗した : \(error)")
+          connectExpectation.fulfill()
+          return
+        }
+        guard let connectedChannel = mediaChannel,
+          let stream = connectedChannel.senderStream
+        else {
+          XCTFail("senderStream が nil")
+          connectExpectation.fulfill()
+          return
+        }
+        channel = connectedChannel
+        let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+        currentCapturer.stream = stream
+        currentCapturer.start()
+        capturer = currentCapturer
+        connectExpectation.fulfill()
+      }
+    }
+
+    // 接続完了を待つ
+    wait(for: [connectExpectation], timeout: 35)
+    guard let channel, let capturer else {
+      XCTFail("接続に失敗した")
+      disconnectAll(channels: [channel])
+      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
+      // 報告を防ぐ
+      switchedExpectation.fulfill()
+      dataChannelExpectation.fulfill()
+      return
+    }
+
+    // offer に data_channels フィールドが含まれるかを確認する
+    // (Sora サーバーが DataChannel シグナリング未対応の場合は XCTSkip でスキップする)
+    guard offerContainsDataChannels else {
+      // 残留チャンネルを残さないよう、後始末を実行してからスキップする
+      capturer.stop()
+      disconnectAll(channels: [channel])
+      switchedExpectation.fulfill()
+      dataChannelExpectation.fulfill()
+      throw XCTSkip("Sora サーバーが DataChannel シグナリング未対応のためスキップします")
+    }
+
+    // type: "switched" メッセージの受信を待つ
+    wait(for: [switchedExpectation], timeout: 10)
+    guard let switchedIgnoreDisconnectWebSocket else {
+      XCTFail("switched メッセージを受信できなかった")
+      capturer.stop()
+      disconnectAll(channels: [channel])
+      dataChannelExpectation.fulfill()
+      return
+    }
+    // ignore_disconnect_websocket フィールドが true であることを確認する
+    XCTAssertTrue(
+      switchedIgnoreDisconnectWebSocket, "ignore_disconnect_websocket が true であること")
+
+    // onDataChannel が発火したことを確認する
+    // (switched 受信時に発火し、SDK が切り替え処理を実行したことの確認になる)
+    wait(for: [dataChannelExpectation], timeout: 10)
+
+    // 後始末: capturer を停止し、チャンネルを切断する
+    capturer.stop()
+    disconnectAndVerify(channel: channel)
+  }
 }
