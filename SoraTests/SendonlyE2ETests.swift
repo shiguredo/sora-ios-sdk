@@ -352,18 +352,17 @@ final class SendonlyE2ETests: E2ETestBase {
     // テスト固有の一意なチャンネル ID を生成する (残留接続との混在を防ぐ)
     let channelId = buildChannelId(unique: true)
 
-    // 接続完了・switched 受信を待つ expectation
+    // 接続完了・switched 受信・onDataChannel 発火を待つ expectation
     let connectExpectation = self.expectation(description: "接続が完了すること")
     let switchedExpectation = self.expectation(description: "switched メッセージを受信すること")
+    let dataChannelExpectation = self.expectation(description: "onDataChannel が発火すること")
 
     // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
     var channel: MediaChannel?
     var capturer: DummyVideoCapturer?
-    // offer に data_channels フィールドが含まれるか、switched メッセージの内容、
-    // onDataChannel の発火を保持する
+    // offer に data_channels フィールドが含まれるかと switched メッセージの内容を保持する
     var offerContainsDataChannels = false
     var switchedIgnoreDisconnectWebSocket: Bool?
-    var dataChannelFired = false
 
     // sendonly 用の Configuration
     var config = try buildConfiguration(role: .sendonly)
@@ -398,7 +397,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
     config.mediaChannelHandlers.onDataChannel = { _ in
       DispatchQueue.main.async {
-        dataChannelFired = true
+        dataChannelExpectation.fulfill()
       }
     }
 
@@ -436,6 +435,7 @@ final class SendonlyE2ETests: E2ETestBase {
       // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
       // 報告を防ぐ
       switchedExpectation.fulfill()
+      dataChannelExpectation.fulfill()
       return
     }
 
@@ -446,6 +446,7 @@ final class SendonlyE2ETests: E2ETestBase {
       capturer.stop()
       disconnectAll(channels: [channel])
       switchedExpectation.fulfill()
+      dataChannelExpectation.fulfill()
       throw XCTSkip("Sora サーバーが DataChannel シグナリング未対応のためスキップします")
     }
 
@@ -455,6 +456,7 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("switched メッセージを受信できなかった")
       capturer.stop()
       disconnectAll(channels: [channel])
+      dataChannelExpectation.fulfill()
       return
     }
     // ignore_disconnect_websocket フィールドが true であることを確認する
@@ -463,7 +465,7 @@ final class SendonlyE2ETests: E2ETestBase {
 
     // onDataChannel が発火したことを確認する
     // (switched 受信時に発火し、SDK が切り替え処理を実行したことの確認になる)
-    XCTAssertTrue(dataChannelFired, "onDataChannel が発火すること")
+    wait(for: [dataChannelExpectation], timeout: 10)
 
     // 後始末: capturer を停止し、チャンネルを切断する
     capturer.stop()
