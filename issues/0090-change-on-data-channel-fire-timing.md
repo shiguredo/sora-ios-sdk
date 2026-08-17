@@ -5,7 +5,7 @@
 - Completed:
 - Model: deepseek-v4-flash
 - Branch: feature/change-on-data-channel-fire-timing
-- Polished:
+- Polished: 2026-08-17
 
 ## 目的
 
@@ -35,7 +35,7 @@ case .switched(let switched):
   }
 ```
 
-個々の DataChannel がクライアント側で OPEN になったことは `BasicDataChannelDelegate.dataChannelDidChangeState`（DataChannel.swift:130-144）で検知できるが、現状では CLOSED のみを処理しており、OPEN 遷移の検知も `onDataChannel` の発火も行っていない。
+個々の DataChannel がクライアント側で OPEN になったことは `BasicDataChannelDelegate.dataChannelDidChangeState` で検知できるが、現状では CLOSED のみを処理しており、OPEN 遷移の検知も `onDataChannel` の発火も行っていない。
 
 ```swift
 // DataChannel.swift dataChannelDidChangeState
@@ -64,8 +64,10 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 
 ### 1. 一括通知（`onDataChannel`）の発火タイミング修正
 
-- `BasicDataChannelDelegate.dataChannelDidChangeState` で `RTCDataChannelState.open` への遷移を検知する。現在は CLOSED のみを処理しているため、OPEN 遷移の検知を追加する
-- メッセージング用ラベル（`#` で始まるラベル。`MediaChannel.sendMessage` と同じ判定）の DataChannel が**すべて** OPEN になったタイミングで `MediaChannelHandlers.onDataChannel` を発火する
+- OPEN 検知の経路は `BasicDataChannelDelegate.dataChannelDidChangeState` の `RTCDataChannelState.open` 遷移を正とする。`RTCPeerConnectionDelegate.peerConnection(_:didOpen:)` は DataChannel オブジェクトの生成通知であり OPEN 遷移の通知ではないため、OPEN 検知には使わない
+- `dataChannelDidChangeState` で `RTCDataChannelState.open` への遷移を検知する。現在は CLOSED のみを処理しているため、OPEN 遷移の検知を追加する
+- 判定基準のラベル集合は offer の `data_channels`（`PeerChannel.signalingOfferMessageDataChannels`）から `#` 始まりのラベルを抽出したものとする
+- 判定基準のラベル集合に含まれる DataChannel が**すべて** OPEN になったタイミングで `MediaChannelHandlers.onDataChannel` を発火する
 - `type: switched` 受信時には `onDataChannel` を発火しない
 - 既に OPEN 済みのメッセージング用ラベルがある場合は、その状態を保持し、最後の 1 つが OPEN になった時点で発火する
 - 後方互換: API シグネチャは不変であり、発火タイミングのみの変更となる
@@ -73,7 +75,7 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 ### 2. ラベル個別の OPEN 通知コールバック追加（C++ 踏襲）
 
 - `MediaChannelHandlers` に `onDataChannelOpened((MediaChannel, String) -> Void)?` を追加する。これは C++ SDK の `OnDataChannel`（OPEN 遷移時・ラベル個別・全ラベル対象・引数はラベル文字列）とタイミング・粒度を一致させる
-- 発火条件: 受け取った**すべての** DataChannel がクライアント側で OPEN になった時点で、ラベルごとに 1 回発火する。`#` 始まりのラベルに限定しない
+- 発火条件: 受け取った各 DataChannel がクライアント側で OPEN へ遷移した時点で、そのラベルについて 1 回発火する。`#` 始まりのラベルに限定しない
 - 当初は Rust SDK の `on_data_channel_open` に合わせて `#` ラベルのみ対象とする方針だったが、Android issue 0051 の実装で C++ / Python SDK が全ラベル対象であることが確認されたため、全ラベル対象に変更する
 - 重複通知は OPEN 済みラベルの集合で防止する
 - 既存の `onDataChannel`（一括通知）は維持し、後方互換を保つ
@@ -84,13 +86,23 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 - offer 再送（リダイレクト等）・切断時に OPEN 追跡集合と一括通知済みフラグをリセットする
 - メッセージング用ラベルが存在しない場合は一括通知（`onDataChannel`）を発火しない
 - ラベル個別通知は受信基準（offer の `data_channels` との突合は行わない）を採用する。Sora サーバは offer に含めた DataChannel しか作成しないため実用上は一致するが、予期しないラベルが届いた場合もユーザーに通知される受信基準を採用する
+- `MediaChannel.sendMessage` は `type: switched` 受信時に true になる `switchedToDataChannel` をゲートにしている。メッセージング用ラベルの OPEN は `switched` 受信より先に成立し得るため、`onDataChannel` 発火直後に `sendMessage` を呼ぶと "DataChannel is not open yet" エラーになり得る。Android 0051 と同一の挙動を保つためゲートは変更せず、`switched` 受信前は送信できない旨を `onDataChannel` の doc comment に明記する
+- PeerChannel には既存の内部フック `PeerChannelHandlers.onOpenDataChannel`（宣言のみで現在は未使用）が存在する。`dataChannelDidChangeState` で検知した OPEN 遷移をこのフック経由で MediaChannel に通知して `onDataChannelOpened` を発火する構成とし、`peerConnection(_:didOpen:)` との二重経路にしない。同様に未使用の `PeerChannelHandlers.onCloseDataChannel` は本 issue のスコープ外とする
+
+### 4. 影響範囲
+
+- `MediaChannelHandlers.onDataChannel` の doc comment（「シグナリングが DataChannel 経由に切り替わったタイミングで呼ばれるクロージャー」）を新仕様に合わせて更新する
+- `SendonlyE2ETests` の `testSendonlySwitched` は onDataChannel が `switched` 受信時に発火する前提（`onDataChannel` の expectation を `switched` 受信後に fulfill している）で書かれているため、新仕様に合わせて検証内容とコメントを更新する。メッセージング用ラベルは `Configuration.dataChannels`（`SignalingChannel.send(message:)` による connect メッセージへの `data_channels` 注入）またはサーバ側（認証ウェブフック等）で払い出す。`#` ラベルが存在しない接続では `onDataChannel` は発火しないため、テストはこの前提を考慮する
+- ドキュメントサイト（sora-ios-sdk-doc リポジトリ）の `onDataChannel` の説明も新仕様に合わせて更新する（別リポジトリのため対応は別途）
 
 ## 完了条件
 
-- メッセージング用ラベルの DataChannel がすべてクライアント側で OPEN になった時点で `onDataChannel` が発火すること
+- メッセージング用ラベル（offer の `data_channels` から `#` 始まりを抽出した集合）の DataChannel がすべてクライアント側で OPEN になった時点で `onDataChannel` が発火すること
 - `type: switched` 受信時には `onDataChannel` が発火しないこと
-- 受け取ったすべての DataChannel（`#` 始まりのラベルに限定しない）が OPEN になった時点で `onDataChannelOpened` がラベルごとに一度だけ発火すること
+- 受け取った各 DataChannel が OPEN へ遷移した時点で `onDataChannelOpened` がラベルごとに一度だけ発火すること（`#` 始まりのラベルに限定しない）
 - 発火タイミングの変更と `onDataChannelOpened` の追加を、`CHANGES.md` の `develop` セクションにエントリとして追記すること（`onDataChannel` のタイミング変更は `[UPDATE]`、`onDataChannelOpened` の追加は `[ADD]`）
-- 単体テストまたは E2E テストで上記の発火タイミングを検証すること
+- `MediaChannelHandlers.onDataChannel` の doc comment と `SendonlyE2ETests` の `testSendonlySwitched` を新仕様に合わせて更新すること
+- `testSendonlySwitched` の更新では、`Configuration.dataChannels` でメッセージング用ラベル（`#` 始まり）を明示的に払い出して検証すること。ラベルを払い出さない「発火するかもしれない」前提のテストにしないこと（スキップ依存・非決定的なテストを防ぐ）
+- 単体テストまたは E2E テストで上記の発火タイミングを検証すること。検証項目は「`switched` 受信時には `onDataChannel` が発火しないこと」「全メッセージング用ラベルが OPEN になった後に `onDataChannel` が発火すること」「`onDataChannelOpened` がラベルごとに 1 回のみ発火すること（重複なし）」
 
 ## 解決方法
