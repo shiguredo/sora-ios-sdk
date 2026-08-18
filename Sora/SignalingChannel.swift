@@ -121,9 +121,10 @@ class SignalingChannel {
       }
 
       // リダイレクトで開始した接続試行が切断後に遅れて成功した場合は受け入れない。
-      // (切断済みの状態で受け入れると、connect メッセージの再送や
+      // (正当な採用時点は .connecting (初回接続・リダイレクト) と .connected のみ。
+      // .disconnecting / .disconnected で受け入れると、connect メッセージの再送や
       // サーバーセッションの残留につながるため)
-      guard weakSelf.state != .disconnected else {
+      guard weakSelf.state == .connecting || weakSelf.state == .connected else {
         webSocketChannel.disconnect(error: nil)
         return
       }

@@ -372,6 +372,12 @@ final class SendonlyE2ETests: E2ETestBase {
     var duplicateLabelNotification = false
     // onDataChannel の発火回数を記録する (switched 受信時の発火を検出するため)
     var onDataChannelFireCount = 0
+    // expectation の二重 fulfill (XCTest の API violation) を防ぐためのフラグ。
+    // ハンドラ経由の fulfill と後始末 (XCTSkip / エラー分岐) の fulfill が重複すると、
+    // "API violation - multiple calls made to fulfill" としてテスト失敗になるため
+    var switchedExpectationFulfilled = false
+    var dataChannelExpectationFulfilled = false
+    var signalingOpenedExpectationFulfilled = false
 
     // sendonly 用の Configuration
     var config = try buildConfiguration(role: .sendonly)
@@ -411,7 +417,11 @@ final class SendonlyE2ETests: E2ETestBase {
         // type: "switched" メッセージの ignore_disconnect_websocket フィールドを記録する
         if dict["type"] as? String == "switched" {
           switchedIgnoreDisconnectWebSocket = dict["ignore_disconnect_websocket"] as? Bool
-          switchedExpectation.fulfill()
+          // 後始末 (XCTSkip / エラー分岐) での fulfill と重複しないよう、一度だけ fulfill する
+          if !switchedExpectationFulfilled {
+            switchedExpectationFulfilled = true
+            switchedExpectation.fulfill()
+          }
         }
       }
     }
@@ -427,7 +437,11 @@ final class SendonlyE2ETests: E2ETestBase {
         XCTAssertTrue(
           openedLabels.contains("#spam"),
           "onDataChannel の発火時点で #spam が OPEN 済みであること")
-        dataChannelExpectation.fulfill()
+        // 後始末 (XCTSkip / エラー分岐) での fulfill と重複しないよう、一度だけ fulfill する
+        if !dataChannelExpectationFulfilled {
+          dataChannelExpectationFulfilled = true
+          dataChannelExpectation.fulfill()
+        }
       }
     }
     // onDataChannelOpened は全ラベル対象でラベルごとに 1 回発火することを確認する
@@ -445,7 +459,11 @@ final class SendonlyE2ETests: E2ETestBase {
         }
         // signaling ラベルの OPEN を記録する (全ラベル対象の検証で使用)
         if label == "signaling" {
-          signalingOpenedExpectation.fulfill()
+          // 後始末 (XCTSkip / エラー分岐) での fulfill と重複しないよう、一度だけ fulfill する
+          if !signalingOpenedExpectationFulfilled {
+            signalingOpenedExpectationFulfilled = true
+            signalingOpenedExpectation.fulfill()
+          }
         }
       }
     }
@@ -482,10 +500,19 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("接続に失敗した")
       disconnectAll(channels: [channel])
       // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
-      // 報告を防ぐ
-      switchedExpectation.fulfill()
-      dataChannelExpectation.fulfill()
-      signalingOpenedExpectation.fulfill()
+      // 報告を防ぐ (ハンドラ経由で fulfill 済みの場合は何もしない)
+      if !switchedExpectationFulfilled {
+        switchedExpectationFulfilled = true
+        switchedExpectation.fulfill()
+      }
+      if !dataChannelExpectationFulfilled {
+        dataChannelExpectationFulfilled = true
+        dataChannelExpectation.fulfill()
+      }
+      if !signalingOpenedExpectationFulfilled {
+        signalingOpenedExpectationFulfilled = true
+        signalingOpenedExpectation.fulfill()
+      }
       return
     }
 
@@ -498,9 +525,20 @@ final class SendonlyE2ETests: E2ETestBase {
       // 残留チャンネルを残さないよう、後始末を実行してからスキップする
       capturer.stop()
       disconnectAll(channels: [channel])
-      switchedExpectation.fulfill()
-      dataChannelExpectation.fulfill()
-      signalingOpenedExpectation.fulfill()
+      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
+      // 報告を防ぐ (ハンドラ経由で fulfill 済みの場合は何もしない)
+      if !switchedExpectationFulfilled {
+        switchedExpectationFulfilled = true
+        switchedExpectation.fulfill()
+      }
+      if !dataChannelExpectationFulfilled {
+        dataChannelExpectationFulfilled = true
+        dataChannelExpectation.fulfill()
+      }
+      if !signalingOpenedExpectationFulfilled {
+        signalingOpenedExpectationFulfilled = true
+        signalingOpenedExpectation.fulfill()
+      }
       if !offerContainsDataChannels {
         throw XCTSkip("Sora サーバーが DataChannel シグナリング未対応のためスキップします")
       }
@@ -513,8 +551,19 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("switched メッセージを受信できなかった")
       capturer.stop()
       disconnectAll(channels: [channel])
-      dataChannelExpectation.fulfill()
-      signalingOpenedExpectation.fulfill()
+      // 未 fulfill の expectation (dataChannel / signalingOpened) を fulfill して、
+      // テスト終了時の unwaited expectation 報告を防ぐ。
+      // (ハンドラ経由で fulfill 済みの場合は何もしない。switchedExpectation は
+      // 直上の wait で消費済みのため後始末の対象外。wait 済みの expectation を
+      // fulfill すると API violation になる)
+      if !dataChannelExpectationFulfilled {
+        dataChannelExpectationFulfilled = true
+        dataChannelExpectation.fulfill()
+      }
+      if !signalingOpenedExpectationFulfilled {
+        signalingOpenedExpectationFulfilled = true
+        signalingOpenedExpectation.fulfill()
+      }
       return
     }
     // ignore_disconnect_websocket フィールドが true であることを確認する
@@ -581,6 +630,12 @@ final class SendonlyE2ETests: E2ETestBase {
     _ = sora?.connect(configuration: config) { _, error in
       DispatchQueue.main.async {
         XCTAssertNotNil(error, "接続失敗時は error が渡ること")
+        // 新実装では接続失敗が即時検出され、接続タイムアウトではないエラーで終端する。
+        // 旧実装 (ignoreDisconnectWebSocket を接続確立前に適用) では接続失敗が検出されず、
+        // connectionTimeout (30 秒) で終端するため、error 種別で回帰を検出できる。
+        if let error = error as? SoraError, case .connectionTimeout = error {
+          XCTFail("接続失敗がタイムアウトで終端しないこと (旧実装の挙動)")
+        }
         connectExpectation.fulfill()
       }
     }
