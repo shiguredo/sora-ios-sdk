@@ -389,8 +389,11 @@ final class SendonlyE2ETests: E2ETestBase {
     config.videoCodec = .vp8
     config.initialCameraEnabled = false
     // onDataChannel の発火を検証するため、メッセージング用ラベルを明示的に払い出す
-    // (メッセージング用ラベルが存在しない接続では onDataChannel は発火しない)
-    config.dataChannels = [["label": "#spam", "compress": false]]
+    // (メッセージング用ラベルが存在しない接続では onDataChannel は発火しない。
+    // direction は Sora の data_channels 仕様の必須項目)
+    config.dataChannels = [
+      ["label": "#spam", "direction": "sendrecv", "compress": false]
+    ]
 
     // ハンドラは connect 呼び出しより前に登録する (switched は接続完了より先に到着し得る)
     // onReceiveSignalingJSON は WebSocket 受信スレッドと DataChannel の delegate スレッドから
@@ -499,20 +502,12 @@ final class SendonlyE2ETests: E2ETestBase {
     guard let channel, let capturer else {
       XCTFail("接続に失敗した")
       disconnectAll(channels: [channel])
-      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
-      // 報告を防ぐ (ハンドラ経由で fulfill 済みの場合は何もしない)
-      if !switchedExpectationFulfilled {
-        switchedExpectationFulfilled = true
-        switchedExpectation.fulfill()
-      }
-      if !dataChannelExpectationFulfilled {
-        dataChannelExpectationFulfilled = true
-        dataChannelExpectation.fulfill()
-      }
-      if !signalingOpenedExpectationFulfilled {
-        signalingOpenedExpectationFulfilled = true
-        signalingOpenedExpectation.fulfill()
-      }
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ。XCTWaiter.wait はタイムアウト (0 秒) でも failure を報告しない。
+      // 接続失敗時は SDK の接続が終了しているため、以降の fulfill は発生しない
+      _ = XCTWaiter.wait(
+        for: [switchedExpectation, dataChannelExpectation, signalingOpenedExpectation],
+        timeout: 0)
       return
     }
 
@@ -525,20 +520,7 @@ final class SendonlyE2ETests: E2ETestBase {
       // 残留チャンネルを残さないよう、後始末を実行してからスキップする
       capturer.stop()
       disconnectAll(channels: [channel])
-      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
-      // 報告を防ぐ (ハンドラ経由で fulfill 済みの場合は何もしない)
-      if !switchedExpectationFulfilled {
-        switchedExpectationFulfilled = true
-        switchedExpectation.fulfill()
-      }
-      if !dataChannelExpectationFulfilled {
-        dataChannelExpectationFulfilled = true
-        dataChannelExpectation.fulfill()
-      }
-      if !signalingOpenedExpectationFulfilled {
-        signalingOpenedExpectationFulfilled = true
-        signalingOpenedExpectation.fulfill()
-      }
+      // XCTSkip では expectation のチェックが行われないため、fulfill は不要
       if !offerContainsDataChannels {
         throw XCTSkip("Sora サーバーが DataChannel シグナリング未対応のためスキップします")
       }
@@ -551,19 +533,14 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("switched メッセージを受信できなかった")
       capturer.stop()
       disconnectAll(channels: [channel])
-      // 未 fulfill の expectation (dataChannel / signalingOpened) を fulfill して、
-      // テスト終了時の unwaited expectation 報告を防ぐ。
-      // (ハンドラ経由で fulfill 済みの場合は何もしない。switchedExpectation は
-      // 直上の wait で消費済みのため後始末の対象外。wait 済みの expectation を
-      // fulfill すると API violation になる)
-      if !dataChannelExpectationFulfilled {
-        dataChannelExpectationFulfilled = true
-        dataChannelExpectation.fulfill()
-      }
-      if !signalingOpenedExpectationFulfilled {
-        signalingOpenedExpectationFulfilled = true
-        signalingOpenedExpectation.fulfill()
-      }
+      // 未 wait の expectation (dataChannel / signalingOpened) を wait 済みにして、
+      // テスト終了時の unwaited expectation 報告を防ぐ。XCTWaiter.wait はタイムアウト
+      // (0 秒) でも failure を報告しない。switchedExpectation は直上の wait で消費済みの
+      // ため対象外。switched が来ない = DataChannel シグナリングが確立していないため、
+      // 以降の fulfill は発生しない
+      _ = XCTWaiter.wait(
+        for: [dataChannelExpectation, signalingOpenedExpectation],
+        timeout: 0)
       return
     }
     // ignore_disconnect_websocket フィールドが true であることを確認する
