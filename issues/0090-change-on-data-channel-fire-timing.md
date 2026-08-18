@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-08-14
-- Completed:
+- Completed: 2026-08-18
 - Model: deepseek-v4-flash
 - Branch: feature/change-on-data-channel-fire-timing
 - Polished: 2026-08-17
@@ -138,3 +138,23 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 - `SoraTests/DataChannelNotificationTests.swift`（単体テスト 9 件）を追加した
 - `SoraTests/SendonlyE2ETests.swift` の `testSendonlySwitched` を新仕様に合わせて更新した（`Configuration.dataChannels` による `#spam` の明示払い出し・発火回数と順序の検証・expectation の二重 fulfill 防止）
 - `testSendonlyConnectionFailureWithIgnoreDisconnectWebSocket` を追加し、接続確立前の接続失敗がタイムアウトではなく即時エラーで終端することを検証した
+
+### 実機での動作確認
+
+- 環境: iPhone 14 / sora-ios-sdk-samples の DataChannel サンプル（`direction: sendrecv` で `#spam` / `#egg` を払い出し）
+- 確認日: 2026-08-18
+- 結果: 期待どおりの動作を確認
+  - `onDataChannelOpened` が全ラベル対象（signaling / notify / push / stats / rpc / `#spam` / `#egg`）でラベルごとに 1 回発火した
+  - 最後の `#` ラベル（`#egg`）の OPEN 処理内で `onDataChannelOpened` → `onDataChannel` の順に発火した
+  - `onDataChannel` が全 `#` ラベル OPEN 時に 1 回のみ発火した（`switched` 受信とは独立）
+
+### 完了条件の充足
+
+- メッセージング用ラベル（offer の `data_channels` から `#` 始まりを抽出した集合）の DataChannel がすべて OPEN になった時点で `onDataChannel` が発火する: 実装済み・実機で確認
+- `type: switched` 受信時には `onDataChannel` が発火しない: 実装済み（`.switched` ケースからの発火を削除）・実機で確認
+- `onDataChannelOpened` がラベルごとに一度だけ発火する（`#` 始まりのラベルに限定しない）: 実装済み・実機で確認
+- CHANGES.md の `develop` セクションにエントリを追記: `[UPDATE]` / `[ADD]` 追記済み
+- doc comment と `testSendonlySwitched` を新仕様に合わせて更新: 完了
+- `testSendonlySwitched` で `Configuration.dataChannels` による明示的な払い出し: 完了
+- 単体テストまたは E2E テストで発火タイミングを検証: `DataChannelNotificationTests`（9 件）+ E2E で完了
+- リダイレクト時のガード機構が正しく機能する: リダイレクトを発生させる Sora サーバ構成が必要なためテスト対象外とし、実機での手動確認による。リダイレクトの実機確認は別途実施する（データチャンネルの通常接続・発火タイミングは確認済み）
