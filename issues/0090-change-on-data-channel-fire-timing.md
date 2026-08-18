@@ -90,13 +90,13 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 - PeerChannel の内部フック `PeerChannelInternalHandlers.onOpenDataChannel` を利用する。`dataChannelDidChangeState` で検知した OPEN 遷移をこのフック経由で MediaChannel に通知して `onDataChannelOpened` を発火する（OPEN 遷移の検知の正は `dataChannelDidChangeState` であり、`peerConnection(_:didOpen:)` 内の防御的チェックも同じフックを通す）。防御的チェックは `rpcChannel` の設定より後に行い、`onDataChannelOpened` の発火時点で rpc 呼び出しが可能であることを保証する。同様に未使用だった `PeerChannelInternalHandlers.onCloseDataChannel` は削除する
 - リダイレクト時の旧接続からの遅延通知を遮断するため、次のガードを実装する:
   - リダイレクト時に旧 RTCPeerConnection を明示的にクローズする。世代（`PeerChannel.dataChannelGeneration`）を先に進めてから close() し、close に伴う旧 DataChannel の `.closed` / `.open` 通知が切断として誤認されたり、OPEN 追跡状態を汚染したりするのを防ぐ
-  - 旧 DataChannel の delegate は生成時点の世代を記録し、`dataChannelDidChangeState` / `dataChannel(_:didReceiveMessageWith:)` で現在の世代と照合して、旧接続の状態通知・遅延メッセージを無視する。answer の非同期処理（`createAndSendAnswer` / `createAndSendReAnswer` / `createAndSendReAnswerOverDataChannel`）は受信時点の世代を記録し、完了時に再照合して旧接続の answer が新接続に適用されるのを防ぐ
-  - リダイレクトから新 PC 生成までの窓は `isRedirecting` フラグで、新 PC 生成後は PC アイデンティティ（`isCurrentPeerConnection`）で、`peerConnection(_:didOpen:)` / `peerConnection(_:didChange:)` の旧 PC からの通知を無視する
+  - 旧 DataChannel の delegate は生成時点の世代を記録し、`dataChannelDidChangeState` / `dataChannel(_:didReceiveMessageWith:)` で現在の世代と照合して、旧接続の状態通知・遅延メッセージを無視する。answer の非同期処理（`createAndSendAnswer` / `createAndSendUpdateAnswer` / `createAndSendReAnswer` / `createAndSendReAnswerOverDataChannel`）は受信時点の世代を記録し、`setRemoteDescription` 完了直後・`answer(for:)` 完了直後・最終クロージャの 3 箇所で再照合して、旧接続の answer が新接続に適用・送信されるのを防ぐ（チェーンの各ステップは `self.nativeChannel` を再読取するため、最終クロージャのみの照合では旧 offer の SDP・mid・encodings が新 PC に適用される窓が残る）
+  - リダイレクトから新 PC 生成までの窓は `isRedirecting` フラグで、新 PC 生成後は PC アイデンティティ（`isCurrentPeerConnection`）で、`peerConnection(_:didOpen:)` / `peerConnection(_:didChange:)` / `peerConnection(_:didGenerateCandidate:)` の旧 PC からの通知を無視する（`didGenerateCandidate` は旧 PC の close() 後に遅延して届く candidate が新接続のシグナリングに送信されるのを防ぐため）
   - リダイレクト窓では旧 PC の close() により `PeerChannel.state` が `.closed` を返すため、切断要求（ユーザー切断・リダイレクト先への接続失敗）が握り潰されないよう、`isRedirecting` 中は切断処理を続行し、`basicDisconnect` でフラグを解除する（`Lock.unlock()` の遅延切断パスも同様に `isRedirecting` を考慮する）
-  - リダイレクトで開始した WebSocket の接続試行が切断後に遅れて成功した場合に備え、SignalingChannel の接続成功ハンドラで `state == .disconnected` なら受け入れずに切断する。あわせて、切断後にリダイレクト先の WebSocket が接続成功しても connect メッセージを再送しないガードを入れる
+  - リダイレクトで開始した WebSocket の接続試行が切断後に遅れて成功した場合に備え、SignalingChannel の接続成功ハンドラで `.connecting`（初回接続・リダイレクト）と `.connected` のみ受け入れ、`.disconnecting` / `.disconnected` は受け入れずに切断する（切断処理中の遅延接続成功も拒否するため、ホワイトリスト方式を採用する）。あわせて、切断後にリダイレクト先の WebSocket が接続成功しても connect メッセージを再送しないガードを入れる
   - `ignoreDisconnectWebSocket` は接続確立後の WebSocket 切断に対する扱いであり、接続確立前（`webSocketChannel == nil`）の候補枯渇による接続失敗には適用しない（適用するとリダイレクト先への接続失敗が検出不能になる）
   - リダイレクト窓で切断が実行された後に新 offer が届いた場合、`createAndSendAnswer` の `lock.lock()` が失敗（切断済み）するため、生成済みの RTCPeerConnection を close() してリークを防ぐ。新 PC 生成時には `isRedirecting` と `webSocketDisconnectScheduled` をリセットし、リダイレクト窓で発火をスキップした WebSocket 切断タイマーを新接続でもスケジュールできるようにする
-- リダイレクト関連のガード（世代カウンタ（re-answer の完了時再照合を含む）・`isRedirecting`・`isCurrentPeerConnection`・旧 PC の明示クローズ・切断ガード・`webSocketDisconnectScheduled` のリセット・`resetDataChannelNotificationState`（offer 再送による追跡状態リセット）・SignalingChannel の WS 接続成功ガード・`ignoreDisconnectWebSocket` の接続確立前非適用）は、リダイレクトを発生させる Sora サーバ構成が必要なためテスト対象外とし、実機での手動確認とする。なお、`ignoreDisconnectWebSocket` の接続確立前非適用のみ、`ignoreDisconnectWebSocket = true` で存在しない URL への接続 E2E（connect がエラーで終端すること）で検証可能
+- リダイレクト関連のガード（世代カウンタ（4 つの answer 処理の完了時再照合を含む）・`isRedirecting`・`isCurrentPeerConnection`・旧 PC の明示クローズ・切断ガード・`webSocketDisconnectScheduled` のリセット・`resetDataChannelNotificationState`（offer 再送による追跡状態リセット）・SignalingChannel の WS 接続成功ガード・`ignoreDisconnectWebSocket` の接続確立前非適用）は、リダイレクトを発生させる Sora サーバ構成が必要なためテスト対象外とし、実機での手動確認とする。なお、`ignoreDisconnectWebSocket` の接続確立前非適用のみ、`ignoreDisconnectWebSocket = true` で存在しない URL への接続 E2E（connect がエラーで終端すること）で検証可能
 
 ### 4. 影響範囲
 
@@ -113,6 +113,28 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 - `MediaChannelHandlers.onDataChannel` の doc comment と `SendonlyE2ETests` の `testSendonlySwitched` を新仕様に合わせて更新すること
 - `testSendonlySwitched` の更新では、`Configuration.dataChannels` でメッセージング用ラベル（`#` 始まり）を明示的に払い出して検証すること。ラベルを払い出さない「発火するかもしれない」前提のテストにしないこと（スキップ依存・非決定的なテストを防ぐ）
 - 単体テストまたは E2E テストで上記の発火タイミングを検証すること。検証項目は「`switched` 受信時には `onDataChannel` が発火しないこと」「全メッセージング用ラベルが OPEN になった後に `onDataChannel` が発火すること」「`onDataChannelOpened` がラベルごとに 1 回のみ発火すること（重複なし）」
-- リダイレクト時のガード機構（旧 PC の明示クローズ・世代カウンタ（re-answer の完了時再照合を含む）・`isRedirecting`・`isCurrentPeerConnection`・切断ガード・`webSocketDisconnectScheduled` のリセット・SignalingChannel の WS 接続成功ガード・`ignoreDisconnectWebSocket` の接続確立前非適用）が正しく機能すること。リダイレクトを発生させる Sora サーバ構成が必要なためテスト対象外とし、実機での手動確認による
+- リダイレクト時のガード機構（設計方針 3 に列挙）が正しく機能すること。リダイレクトを発生させる Sora サーバ構成が必要なためテスト対象外とし、実機での手動確認による
 
 ## 解決方法
+
+### onDataChannel の発火タイミング変更
+
+- `.switched` ケースからの `onDataChannel` 発火を削除し、メッセージング用ラベル（offer の `data_channels` の `#` 始まり）がすべてクライアント側で OPEN になった時点で発火するように変更した
+- 発火判定は `MediaChannel.shouldNotifyDataChannelAvailable`（状態を持たない純粋関数）に分離し、単体テストで全分岐を検証した
+- `MediaChannelHandlers.onDataChannelOpened` を追加し、ラベル個別の OPEN 通知を実装した（`#` 始まりのラベルに限定しない全ラベル対象）
+- `sendMessage` のゲート（`switchedToDataChannel`）は変更せず、`switched` 受信前の送信失敗を `onDataChannel` の doc comment に明記した
+
+### リダイレクト対策
+
+- 旧接続からの遅延通知を遮断するため、世代カウンタ（`dataChannelGeneration`）・`isRedirecting` フラグ・`isCurrentPeerConnection` の 3 層のガードを実装した
+- リダイレクト窓（旧 PC close 済み・新 PC 未生成）の切断要求を処理できるよう、`disconnect` / `Lock.unlock` の `.closed` ガードを `isRedirecting` 考慮に修正した
+- answer の非同期チェーン（`createAnswer`）に世代照合を追加し、旧 offer の SDP・mid・encodings が新 PC に適用・送信されるのを防いだ
+- `didGenerateCandidate` にガードを追加し、旧 PC の遅延 candidate が新接続のシグナリングに送信されるのを防いだ
+- SignalingChannel の WS 接続成功ガードをホワイトリスト方式に変更し、`ignoreDisconnectWebSocket` を接続確立前の接続失敗に適用しないようにした
+- リダイレクト時に切断検出の猶予タイマー（`cancelDisconnectTimer`）を無効化し、旧接続のタイマーが新接続を誤切断するのを防いだ
+
+### テスト
+
+- `SoraTests/DataChannelNotificationTests.swift`（単体テスト 9 件）を追加した
+- `SoraTests/SendonlyE2ETests.swift` の `testSendonlySwitched` を新仕様に合わせて更新した（`Configuration.dataChannels` による `#spam` の明示払い出し・発火回数と順序の検証・expectation の二重 fulfill 防止）
+- `testSendonlyConnectionFailureWithIgnoreDisconnectWebSocket` を追加し、接続確立前の接続失敗がタイムアウトではなく即時エラーで終端することを検証した
