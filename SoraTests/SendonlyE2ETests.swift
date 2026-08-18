@@ -352,17 +352,26 @@ final class SendonlyE2ETests: E2ETestBase {
     // テスト固有の一意なチャンネル ID を生成する (残留接続との混在を防ぐ)
     let channelId = buildChannelId(unique: true)
 
-    // 接続完了・switched 受信・onDataChannel 発火を待つ expectation
+    // 接続完了・switched 受信・onDataChannel 発火・signaling ラベルの OPEN を待つ expectation
     let connectExpectation = self.expectation(description: "接続が完了すること")
     let switchedExpectation = self.expectation(description: "switched メッセージを受信すること")
-    let dataChannelExpectation = self.expectation(description: "onDataChannel が発火すること")
+    let dataChannelExpectation = self.expectation(
+      description: "メッセージング用ラベルの DataChannel がすべて OPEN になった後に onDataChannel が発火すること")
+    let signalingOpenedExpectation = self.expectation(
+      description: "signaling ラベルの DataChannel が OPEN すること")
 
     // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
     var channel: MediaChannel?
     var capturer: DummyVideoCapturer?
     // offer に data_channels フィールドが含まれるかと switched メッセージの内容を保持する
     var offerContainsDataChannels = false
+    var offerContainsMessagingLabel = false
     var switchedIgnoreDisconnectWebSocket: Bool?
+    // onDataChannelOpened で通知されたラベルと重複通知の有無を記録する
+    var openedLabels: Set<String> = []
+    var duplicateLabelNotification = false
+    // onDataChannel の発火回数を記録する (switched 受信時の発火を検出するため)
+    var onDataChannelFireCount = 0
 
     // sendonly 用の Configuration
     var config = try buildConfiguration(role: .sendonly)
@@ -373,6 +382,9 @@ final class SendonlyE2ETests: E2ETestBase {
     config.audioEnabled = false
     config.videoCodec = .vp8
     config.initialCameraEnabled = false
+    // onDataChannel の発火を検証するため、メッセージング用ラベルを明示的に払い出す
+    // (メッセージング用ラベルが存在しない接続では onDataChannel は発火しない)
+    config.dataChannels = [["label": "#spam", "compress": false]]
 
     // ハンドラは connect 呼び出しより前に登録する (switched は接続完了より先に到着し得る)
     // onReceiveSignalingJSON は WebSocket 受信スレッドと DataChannel の delegate スレッドから
@@ -388,6 +400,14 @@ final class SendonlyE2ETests: E2ETestBase {
         if dict["type"] as? String == "offer", dict["data_channels"] is [Any] {
           offerContainsDataChannels = true
         }
+        // 払い出したメッセージング用ラベル (#spam) が offer に含まれるかを記録する
+        if dict["type"] as? String == "offer",
+          let dataChannels = dict["data_channels"] as? [[String: Any]]
+        {
+          if dataChannels.contains(where: { ($0["label"] as? String) == "#spam" }) {
+            offerContainsMessagingLabel = true
+          }
+        }
         // type: "switched" メッセージの ignore_disconnect_websocket フィールドを記録する
         if dict["type"] as? String == "switched" {
           switchedIgnoreDisconnectWebSocket = dict["ignore_disconnect_websocket"] as? Bool
@@ -397,7 +417,36 @@ final class SendonlyE2ETests: E2ETestBase {
     }
     config.mediaChannelHandlers.onDataChannel = { _ in
       DispatchQueue.main.async {
+        onDataChannelFireCount += 1
+        // onDataChannel の発火が #spam の OPEN に起因することを確認する。
+        // (#spam の OPEN 通知処理 (onDataChannelOpened) が同一イベント内で先に main queue へ
+        // 積まれ、main queue の FIFO で先に処理されるため、この時点で #spam は OPEN 済み。
+        // 同一スレッドからのエンキュー順序に依存するため、クロススレッドのレースはない。
+        // ここで #spam が未 OPEN なら、#spam の OPEN に起因しない発火 (switched のみで
+        // 発火する実装等) への回帰を検出できる)
+        XCTAssertTrue(
+          openedLabels.contains("#spam"),
+          "onDataChannel の発火時点で #spam が OPEN 済みであること")
         dataChannelExpectation.fulfill()
+      }
+    }
+    // onDataChannelOpened は全ラベル対象でラベルごとに 1 回発火することを確認する
+    config.mediaChannelHandlers.onDataChannelOpened = { _, label in
+      DispatchQueue.main.async {
+        if !openedLabels.insert(label).inserted {
+          duplicateLabelNotification = true
+        }
+        // メッセージング用ラベル (#spam) の OPEN 時点で onDataChannel が未発火であることを確認する。
+        // (onDataChannel は #spam の OPEN に起因して発火するため、この時点では必ず未発火。
+        // ここで発火済み (1 以上) なら、#spam の OPEN より前に発火する実装への回帰を検出できる)
+        if label == "#spam" {
+          XCTAssertEqual(
+            onDataChannelFireCount, 0, "#spam の OPEN 時点では onDataChannel が未発火であること")
+        }
+        // signaling ラベルの OPEN を記録する (全ラベル対象の検証で使用)
+        if label == "signaling" {
+          signalingOpenedExpectation.fulfill()
+        }
       }
     }
 
@@ -436,18 +485,26 @@ final class SendonlyE2ETests: E2ETestBase {
       // 報告を防ぐ
       switchedExpectation.fulfill()
       dataChannelExpectation.fulfill()
+      signalingOpenedExpectation.fulfill()
       return
     }
 
     // offer に data_channels フィールドが含まれるかを確認する
     // (Sora サーバーが DataChannel シグナリング未対応の場合は XCTSkip でスキップする)
-    guard offerContainsDataChannels else {
+    // offer に data_channels フィールドが含まれない場合 (DataChannel シグナリング未対応) と、
+    // 払い出したメッセージング用ラベル (#spam) が offer に含まれない場合は、
+    // onDataChannel の発火検証ができないため XCTSkip でスキップする
+    guard offerContainsDataChannels, offerContainsMessagingLabel else {
       // 残留チャンネルを残さないよう、後始末を実行してからスキップする
       capturer.stop()
       disconnectAll(channels: [channel])
       switchedExpectation.fulfill()
       dataChannelExpectation.fulfill()
-      throw XCTSkip("Sora サーバーが DataChannel シグナリング未対応のためスキップします")
+      signalingOpenedExpectation.fulfill()
+      if !offerContainsDataChannels {
+        throw XCTSkip("Sora サーバーが DataChannel シグナリング未対応のためスキップします")
+      }
+      throw XCTSkip("Sora サーバーがメッセージング用ラベルを払い出さないためスキップします")
     }
 
     // type: "switched" メッセージの受信を待つ
@@ -457,6 +514,7 @@ final class SendonlyE2ETests: E2ETestBase {
       capturer.stop()
       disconnectAll(channels: [channel])
       dataChannelExpectation.fulfill()
+      signalingOpenedExpectation.fulfill()
       return
     }
     // ignore_disconnect_websocket フィールドが true であることを確認する
@@ -464,11 +522,69 @@ final class SendonlyE2ETests: E2ETestBase {
       switchedIgnoreDisconnectWebSocket, "ignore_disconnect_websocket が true であること")
 
     // onDataChannel が発火したことを確認する
-    // (switched 受信時に発火し、SDK が切り替え処理を実行したことの確認になる)
+    // (メッセージング用ラベル (#spam) の DataChannel がクライアント側で OPEN になった時点で発火する)
     wait(for: [dataChannelExpectation], timeout: 10)
+
+    // onDataChannelOpened が全ラベル対象で発火し、払い出したメッセージング用ラベル (#spam) が
+    // 含まれることを確認する。重複通知は SDK 側で防止されている。
+    XCTAssertFalse(
+      duplicateLabelNotification, "onDataChannelOpened が重複して発火した: \(openedLabels)")
+    XCTAssertTrue(
+      openedLabels.contains("#spam"), "メッセージング用ラベル (#spam) が通知されること: \(openedLabels)")
+    // onDataChannelOpened は # 始まりのラベルに限定しない (全ラベル対象) ことを確認する。
+    // signaling ラベルの OPEN は onDataChannel の発火条件 (全 # ラベル OPEN) とは独立のため、
+    // assertion 前に明示的に signaling の OPEN を待つ (タイミング依存のレースを防ぐ)。
+    wait(for: [signalingOpenedExpectation], timeout: 10)
+    XCTAssertTrue(
+      openedLabels.contains("signaling"),
+      "非メッセージング用ラベル (signaling) も通知されること: \(openedLabels)")
+
+    // onDataChannel は 1 回のみ発火すること (switched 受信時の発火が復活した場合は 2 回発火する)。
+    // onDataChannelFireCount の更新は main queue に束ねられているため、検証も main queue 上で
+    // 行い、先行して積まれた全発火処理が FIFO で処理済みになってから評価する。
+    // (テストスレッドで直接評価すると、switched 受信時の 2 回目の発火が未処理のまま
+    // 評価されるレースがあり、回帰を検出し損なう)
+    let finalVerifyExpectation = self.expectation(description: "最終発火回数の検証が完了すること")
+    DispatchQueue.main.async {
+      XCTAssertEqual(
+        onDataChannelFireCount, 1, "onDataChannel が 1 回のみ発火すること")
+      finalVerifyExpectation.fulfill()
+    }
+    wait(for: [finalVerifyExpectation], timeout: 10)
 
     // 後始末: capturer を停止し、チャンネルを切断する
     capturer.stop()
     disconnectAndVerify(channel: channel)
+  }
+
+  /// ignoreDisconnectWebSocket = true でも、接続確立前の接続失敗はエラーで終端することを確認する。
+  /// (SignalingChannel は接続確立前 (webSocketChannel == nil) の候補枯渇時に、
+  /// ignoreDisconnectWebSocket に関係なく切断する。これを適用しないと、
+  /// リダイレクト先への接続失敗が検出不能になり、state が .connecting のまま終端しない。
+  /// 本テストは Sora サーバに接続せず、接続できない URL への接続失敗で検証する)
+  func testSendonlyConnectionFailureWithIgnoreDisconnectWebSocket() throws {
+    // 接続失敗を検証するため、接続できない URL を urlCandidates に設定する
+    guard let url = URL(string: "wss://127.0.0.1:9/signaling") else {
+      XCTFail("テスト用 URL が不正です")
+      return
+    }
+    var config = Configuration(
+      urlCandidates: [url],
+      channelId: buildChannelId(unique: true),
+      role: .sendonly)
+    config.ignoreDisconnectWebSocket = true
+
+    // connect がエラーで終端することを待つ expectation
+    let connectExpectation = self.expectation(
+      description: "接続失敗がエラーで終端すること")
+
+    _ = sora?.connect(configuration: config) { _, error in
+      DispatchQueue.main.async {
+        XCTAssertNotNil(error, "接続失敗時は error が渡ること")
+        connectExpectation.fulfill()
+      }
+    }
+
+    wait(for: [connectExpectation], timeout: 35)
   }
 }

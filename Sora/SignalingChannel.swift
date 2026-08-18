@@ -120,6 +120,14 @@ class SignalingChannel {
         return
       }
 
+      // リダイレクトで開始した接続試行が切断後に遅れて成功した場合は受け入れない。
+      // (切断済みの状態で受け入れると、connect メッセージの再送や
+      // サーバーセッションの残留につながるため)
+      guard weakSelf.state != .disconnected else {
+        webSocketChannel.disconnect(error: nil)
+        return
+      }
+
       // 最初に接続に成功した WebSocket 以外は無視する
       guard weakSelf.webSocketChannel == nil else {
         // (接続に失敗した WebSocket と同様に、) 無視した WebSocket を webSocketChannelCandidates から削除することを検討したが、不要と判断した
@@ -181,11 +189,13 @@ class SignalingChannel {
 
         // 候補が無くなり、かつ SignalingChannel で利用する WebSocket が決まっていない場合、
         // Sora への接続に失敗したので SDK の接続処理を終了する
+        // (ignoreDisconnectWebSocket は接続確立後の WebSocket 切断に対する扱いであり、
+        // 接続確立前 (webSocketChannel == nil) の接続失敗には適用しない。
+        // 適用すると redirect 先への接続失敗が検出不能になり、state が .connecting のまま
+        // 終端しないため)
         if weakSelf.webSocketChannelCandidates.count == 0, weakSelf.webSocketChannel == nil {
           Logger.info(type: .signalingChannel, message: "failed to connect to Sora")
-          if !weakSelf.ignoreDisconnectWebSocket {
-            weakSelf.disconnect(error: error, reason: .webSocket)
-          }
+          weakSelf.disconnect(error: error, reason: .webSocket)
         }
       }
     }

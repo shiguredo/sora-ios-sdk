@@ -49,8 +49,17 @@ public final class MediaChannelHandlers {
   )
   public var onReceiveSignaling: ((Signaling) -> Void)?
 
-  /// シグナリングが DataChannel 経由に切り替わったタイミングで呼ばれるクロージャー
+  /// メッセージング用 DataChannel がすべてクライアント側で OPEN になったタイミングで呼ばれるクロージャー。
+  /// メッセージング用ラベル（offer の `data_channels` の `#` 始まり）が存在しない場合は発火しない。
+  /// この時点ではまだ `type: switched` を受信していない場合があり、
+  /// その場合 `sendMessage` は "DataChannel is not open yet" エラーを返す。
+  /// 呼び出し元のスレッドは保証されないため、必要に応じて main キューに束ねること。
   public var onDataChannel: ((MediaChannel) -> Void)?
+
+  /// DataChannel がクライアント側で OPEN になったタイミングで、ラベルごとに 1 回呼ばれるクロージャー。
+  /// クライアント側で OPEN になったすべての DataChannel（`#` 始まりのラベルに限定しない）が対象。
+  /// 呼び出し元のスレッドは保証されないため、必要に応じて main キューに束ねること。
+  public var onDataChannelOpened: ((MediaChannel, String) -> Void)?
 
   /// DataChannel のメッセージ受信時に呼ばれるクロージャー
   public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?
@@ -176,6 +185,28 @@ public final class MediaChannel {
 
   // PeerChannel に mediaChannel を保持させる際にこの書き方が必要になった
   private var _peerChannel: PeerChannel?
+
+  // MARK: - DataChannel の OPEN 追跡
+
+  /// OPEN になった DataChannel のラベル集合。
+  /// `onDataChannelOpened` の発火済みラベル (重複通知の防止用) を兼ねる。
+  /// メッセージング用ラベル（`#` 始まり）も必ずここに含まれるため、
+  /// `onDataChannel` の一括通知判定 (全メッセージング用ラベルが OPEN になったか) にも利用する。
+  private var openedDataChannelLabels: Set<String> = []
+
+  /// メッセージング用ラベル（offer の `data_channels` の `#` 始まり）の集合。
+  /// offer 受信時 (resetDataChannelNotificationState 経由) に更新される。
+  /// リダイレクト等で offer が再送された場合は常に最新の offer を基準に判定できる。
+  private var messagingLabels: Set<String> = []
+
+  /// `onDataChannel` の一括通知済みフラグ
+  private var onDataChannelNotified = false
+
+  /// DataChannel の OPEN 追跡状態を保護するロック。
+  /// 状態の更新は libwebrtc の delegate スレッド (DataChannel の状態通知) と
+  /// WebSocket 受信スレッド (offer 受信時のリセット) から並行して行われるため、
+  /// NSLock で排他する。ハンドラ呼び出しはロックの外で行うこと。
+  private let dataChannelOpenLock = NSLock()
 
   /// ストリームのリスト
   public var streams: [MediaStream] {
@@ -442,6 +473,34 @@ public final class MediaChannel {
       weakSelf.handlers.onRemoveStream?(stream)
     }
 
+    peerChannel.internalHandlers.onOpenDataChannel = { [weak self] label in
+      guard let weakSelf = self else {
+        return
+      }
+
+      // 状態の更新と発火判定はロックで排他し、ハンドラ呼び出しはロックの外で行う
+      // (ユーザーコードがロックを保持したまま実行されないようにする)。
+      weakSelf.dataChannelOpenLock.lock()
+      // onDataChannelOpened はラベルごとに 1 回だけ発火する
+      let isFirstOpen = weakSelf.openedDataChannelLabels.insert(label).inserted
+      var shouldNotifyBatch = false
+      // メッセージング用ラベル（# 始まり）の DataChannel がすべて OPEN になった時点で
+      // onDataChannel を一括通知する
+      if label.hasPrefix("#") {
+        shouldNotifyBatch = weakSelf.shouldNotifyDataChannelAvailableLocked()
+      }
+      weakSelf.dataChannelOpenLock.unlock()
+
+      if isFirstOpen {
+        Logger.debug(type: .mediaChannel, message: "call onDataChannelOpened")
+        weakSelf.handlers.onDataChannelOpened?(weakSelf, label)
+      }
+      if shouldNotifyBatch {
+        Logger.debug(type: .mediaChannel, message: "call onDataChannel")
+        weakSelf.handlers.onDataChannel?(weakSelf)
+      }
+    }
+
     peerChannel.internalHandlers.onReceiveSignalingJSON = { [weak self] json in
       guard let weakSelf = self else {
         return
@@ -661,6 +720,77 @@ public final class MediaChannel {
 
     return result
       ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
+  }
+
+  /// メッセージング用ラベル（offer の `data_channels` から抽出した `#` 始まりのラベル）が
+  /// すべてクライアント側で OPEN になった場合に `onDataChannel` を発火すべきかを判定します。
+  /// 状態を持たない純粋関数であり、単体テストの対象です。
+  ///
+  /// - Parameters:
+  ///   - messagingLabels: offer の `data_channels` から抽出した `#` 始まりのラベル集合
+  ///   - openedLabels: クライアント側で OPEN になった DataChannel のラベル集合
+  ///     (メッセージング用ラベルは必ず含まれる)
+  ///   - notified: 一括通知済みかどうか (`true` の場合は二重発火を防ぐため発火しない)
+  /// - Returns: `onDataChannel` を発火すべきか
+  static func shouldNotifyDataChannelAvailable(
+    messagingLabels: Set<String>,
+    openedLabels: Set<String>,
+    notified: Bool
+  ) -> Bool {
+    // 一括通知済みの場合は発火しない (二重発火の防止)
+    guard !notified else {
+      return false
+    }
+
+    // メッセージング用ラベルが存在しない場合は発火しない
+    guard !messagingLabels.isEmpty else {
+      return false
+    }
+
+    // すべてのメッセージング用ラベルが OPEN になった場合のみ発火する
+    guard messagingLabels.isSubset(of: openedLabels) else {
+      return false
+    }
+
+    return true
+  }
+
+  /// offer の `data_channels` からメッセージング用ラベル（`#` 始まり）の集合を抽出します。
+  /// 状態を持たない純粋関数であり、単体テストの対象です。
+  ///
+  /// - Parameter dataChannels: offer の `data_channels` の値
+  /// - Returns: メッセージング用ラベルの集合 (`label` キーが欠落・非 String の要素は無視)
+  static func messagingLabels(from dataChannels: [[String: Any]]) -> Set<String> {
+    Set(
+      dataChannels.compactMap { $0["label"] as? String }.filter {
+        $0.hasPrefix("#")
+      })
+  }
+
+  /// メッセージング用ラベルがすべてクライアント側で OPEN になった場合に true を返し、
+  /// 一括通知済みフラグを立てます。呼び出し元は `dataChannelOpenLock` を保持していること。
+  private func shouldNotifyDataChannelAvailableLocked() -> Bool {
+    let shouldNotify = Self.shouldNotifyDataChannelAvailable(
+      messagingLabels: messagingLabels,
+      openedLabels: openedDataChannelLabels,
+      notified: onDataChannelNotified)
+    if shouldNotify {
+      onDataChannelNotified = true
+    }
+    return shouldNotify
+  }
+
+  /// DataChannel の OPEN 追跡状態と一括通知フラグをリセットします。
+  /// リダイレクト等で offer が再送された場合に PeerChannel から呼ばれます。
+  ///
+  /// - Parameter messagingLabels: 新しい offer の `data_channels` から抽出した
+  ///   メッセージング用ラベルの集合
+  func resetDataChannelNotificationState(messagingLabels: Set<String>) {
+    dataChannelOpenLock.lock()
+    self.messagingLabels = messagingLabels
+    openedDataChannelLabels = []
+    onDataChannelNotified = false
+    dataChannelOpenLock.unlock()
   }
 
   /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します

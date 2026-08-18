@@ -64,9 +64,9 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 
 ### 1. 一括通知（`onDataChannel`）の発火タイミング修正
 
-- OPEN 検知の経路は `BasicDataChannelDelegate.dataChannelDidChangeState` の `RTCDataChannelState.open` 遷移を正とする。`RTCPeerConnectionDelegate.peerConnection(_:didOpen:)` は DataChannel オブジェクトの生成通知であり OPEN 遷移の通知ではないため、OPEN 検知には使わない
+- OPEN 検知の経路は `BasicDataChannelDelegate.dataChannelDidChangeState` の `RTCDataChannelState.open` 遷移を正とする。`RTCPeerConnectionDelegate.peerConnection(_:didOpen:)` は DataChannel オブジェクトの生成通知であり OPEN 遷移の通知ではないため、OPEN 遷移の検知の正としない（登録時点で既に OPEN の場合の防御的チェックは別途 `peerConnection(_:didOpen:)` 内で行う）
 - `dataChannelDidChangeState` で `RTCDataChannelState.open` への遷移を検知する。現在は CLOSED のみを処理しているため、OPEN 遷移の検知を追加する
-- 判定基準のラベル集合は offer の `data_channels`（`PeerChannel.signalingOfferMessageDataChannels`）から `#` 始まりのラベルを抽出したものとする
+- 判定基準のラベル集合は offer の `data_channels`（`SignalingOffer.dataChannels`）から `MediaChannel.messagingLabels(from:)` で `#` 始まりのラベルを抽出したものとする
 - 判定基準のラベル集合に含まれる DataChannel が**すべて** OPEN になったタイミングで `MediaChannelHandlers.onDataChannel` を発火する
 - `type: switched` 受信時には `onDataChannel` を発火しない
 - 既に OPEN 済みのメッセージング用ラベルがある場合は、その状態を保持し、最後の 1 つが OPEN になった時点で発火する
@@ -83,11 +83,20 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 ### 3. 実装上の注意点（Android issue 0051 の実装知見）
 
 - libwebrtc の `RTCDataChannelDelegate` は登録時に現在の state を即時通知しない実装であるため、登録時点で既に OPEN の場合の防御的チェックを追加する
-- offer 再送（リダイレクト等）・切断時に OPEN 追跡集合と一括通知済みフラグをリセットする
+- リセットは `data_channels` の有無に関わらず offer 受信時に行う（`data_channels` なしの offer で前接続の追跡状態が残留すると、新接続の `onDataChannelOpened` / `onDataChannel` が抑止されるため）。切断時は MediaChannel が再利用不可のためリセットを必要としない
 - メッセージング用ラベルが存在しない場合は一括通知（`onDataChannel`）を発火しない
 - ラベル個別通知は受信基準（offer の `data_channels` との突合は行わない）を採用する。Sora サーバは offer に含めた DataChannel しか作成しないため実用上は一致するが、予期しないラベルが届いた場合もユーザーに通知される受信基準を採用する
 - `MediaChannel.sendMessage` は `type: switched` 受信時に true になる `switchedToDataChannel` をゲートにしている。メッセージング用ラベルの OPEN は `switched` 受信より先に成立し得るため、`onDataChannel` 発火直後に `sendMessage` を呼ぶと "DataChannel is not open yet" エラーになり得る。Android 0051 と同一の挙動を保つためゲートは変更せず、`switched` 受信前は送信できない旨を `onDataChannel` の doc comment に明記する
-- PeerChannel には既存の内部フック `PeerChannelHandlers.onOpenDataChannel`（宣言のみで現在は未使用）が存在する。`dataChannelDidChangeState` で検知した OPEN 遷移をこのフック経由で MediaChannel に通知して `onDataChannelOpened` を発火する構成とし、`peerConnection(_:didOpen:)` との二重経路にしない。同様に未使用の `PeerChannelHandlers.onCloseDataChannel` は本 issue のスコープ外とする
+- PeerChannel の内部フック `PeerChannelInternalHandlers.onOpenDataChannel` を利用する。`dataChannelDidChangeState` で検知した OPEN 遷移をこのフック経由で MediaChannel に通知して `onDataChannelOpened` を発火する（OPEN 遷移の検知の正は `dataChannelDidChangeState` であり、`peerConnection(_:didOpen:)` 内の防御的チェックも同じフックを通す）。防御的チェックは `rpcChannel` の設定より後に行い、`onDataChannelOpened` の発火時点で rpc 呼び出しが可能であることを保証する。同様に未使用だった `PeerChannelInternalHandlers.onCloseDataChannel` は削除する
+- リダイレクト時の旧接続からの遅延通知を遮断するため、次のガードを実装する:
+  - リダイレクト時に旧 RTCPeerConnection を明示的にクローズする。世代（`PeerChannel.dataChannelGeneration`）を先に進めてから close() し、close に伴う旧 DataChannel の `.closed` / `.open` 通知が切断として誤認されたり、OPEN 追跡状態を汚染したりするのを防ぐ
+  - 旧 DataChannel の delegate は生成時点の世代を記録し、`dataChannelDidChangeState` / `dataChannel(_:didReceiveMessageWith:)` で現在の世代と照合して、旧接続の状態通知・遅延メッセージを無視する。answer の非同期処理（`createAndSendAnswer` / `createAndSendReAnswer` / `createAndSendReAnswerOverDataChannel`）は受信時点の世代を記録し、完了時に再照合して旧接続の answer が新接続に適用されるのを防ぐ
+  - リダイレクトから新 PC 生成までの窓は `isRedirecting` フラグで、新 PC 生成後は PC アイデンティティ（`isCurrentPeerConnection`）で、`peerConnection(_:didOpen:)` / `peerConnection(_:didChange:)` の旧 PC からの通知を無視する
+  - リダイレクト窓では旧 PC の close() により `PeerChannel.state` が `.closed` を返すため、切断要求（ユーザー切断・リダイレクト先への接続失敗）が握り潰されないよう、`isRedirecting` 中は切断処理を続行し、`basicDisconnect` でフラグを解除する（`Lock.unlock()` の遅延切断パスも同様に `isRedirecting` を考慮する）
+  - リダイレクトで開始した WebSocket の接続試行が切断後に遅れて成功した場合に備え、SignalingChannel の接続成功ハンドラで `state == .disconnected` なら受け入れずに切断する。あわせて、切断後にリダイレクト先の WebSocket が接続成功しても connect メッセージを再送しないガードを入れる
+  - `ignoreDisconnectWebSocket` は接続確立後の WebSocket 切断に対する扱いであり、接続確立前（`webSocketChannel == nil`）の候補枯渇による接続失敗には適用しない（適用するとリダイレクト先への接続失敗が検出不能になる）
+  - リダイレクト窓で切断が実行された後に新 offer が届いた場合、`createAndSendAnswer` の `lock.lock()` が失敗（切断済み）するため、生成済みの RTCPeerConnection を close() してリークを防ぐ。新 PC 生成時には `isRedirecting` と `webSocketDisconnectScheduled` をリセットし、リダイレクト窓で発火をスキップした WebSocket 切断タイマーを新接続でもスケジュールできるようにする
+- リダイレクト関連のガード（世代カウンタ（re-answer の完了時再照合を含む）・`isRedirecting`・`isCurrentPeerConnection`・旧 PC の明示クローズ・切断ガード・`webSocketDisconnectScheduled` のリセット・`resetDataChannelNotificationState`（offer 再送による追跡状態リセット）・SignalingChannel の WS 接続成功ガード・`ignoreDisconnectWebSocket` の接続確立前非適用）は、リダイレクトを発生させる Sora サーバ構成が必要なためテスト対象外とし、実機での手動確認とする。なお、`ignoreDisconnectWebSocket` の接続確立前非適用のみ、`ignoreDisconnectWebSocket = true` で存在しない URL への接続 E2E（connect がエラーで終端すること）で検証可能
 
 ### 4. 影響範囲
 
@@ -104,5 +113,6 @@ API の後方互換を維持しつつ（`onDataChannel` のシグネチャは不
 - `MediaChannelHandlers.onDataChannel` の doc comment と `SendonlyE2ETests` の `testSendonlySwitched` を新仕様に合わせて更新すること
 - `testSendonlySwitched` の更新では、`Configuration.dataChannels` でメッセージング用ラベル（`#` 始まり）を明示的に払い出して検証すること。ラベルを払い出さない「発火するかもしれない」前提のテストにしないこと（スキップ依存・非決定的なテストを防ぐ）
 - 単体テストまたは E2E テストで上記の発火タイミングを検証すること。検証項目は「`switched` 受信時には `onDataChannel` が発火しないこと」「全メッセージング用ラベルが OPEN になった後に `onDataChannel` が発火すること」「`onDataChannelOpened` がラベルごとに 1 回のみ発火すること（重複なし）」
+- リダイレクト時のガード機構（旧 PC の明示クローズ・世代カウンタ（re-answer の完了時再照合を含む）・`isRedirecting`・`isCurrentPeerConnection`・切断ガード・`webSocketDisconnectScheduled` のリセット・SignalingChannel の WS 接続成功ガード・`ignoreDisconnectWebSocket` の接続確立前非適用）が正しく機能すること。リダイレクトを発生させる Sora サーバ構成が必要なためテスト対象外とし、実機での手動確認による
 
 ## 解決方法

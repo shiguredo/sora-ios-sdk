@@ -11,6 +11,10 @@
 
 ## develop
 
+- [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
+  - `type: switched` 受信時には発火しない
+  - メッセージング用ラベル（`#` 始まり）が存在しない接続では発火しない
+  - @t-miya
 - [UPDATE] `TLSSecurityPolicy` と `ICEServerInfo.tlsSecurityPolicy` を非推奨化する
   - 2027 年中に廃止予定
   - 移行先は `Configuration.insecure`
@@ -18,6 +22,9 @@
 - [UPDATE] enum 型の `Configuration.spotlightEnabled` を非推奨にする
   - 移行先は `Configuration.isSpotlightEnabled`
   - Configuration 内のプロパティで型の一貫性を持たせるため変更
+  - @t-miya
+- [ADD] DataChannel がラベルごとに OPEN になった時点で呼ばれる `onDataChannelOpened` を追加する
+  - 受け取ったすべての DataChannel（`#` 始まりのラベルに限定しない）が対象
   - @t-miya
 - [ADD] WebSocket シグナリングと TURN-TLS で insecure モードを利用できるようにする
   - `Configuration.insecure = true` の場合はサーバー証明書の検証をスキップする

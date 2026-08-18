@@ -121,10 +121,18 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
   weak var peerChannel: PeerChannel?
   weak var mediaChannel: MediaChannel?
 
-  init(compress: Bool, mediaChannel: MediaChannel?, peerChannel: PeerChannel?) {
+  /// この DataChannel が生成された時点の PeerChannel の世代。
+  /// リダイレクト時の旧接続の通知を無視するために dataChannelDidChangeState で照合する。
+  let generation: Int
+
+  init(
+    compress: Bool, mediaChannel: MediaChannel?, peerChannel: PeerChannel?,
+    generation: Int
+  ) {
     self.compress = compress
     self.mediaChannel = mediaChannel
     self.peerChannel = peerChannel
+    self.generation = generation
   }
 
   func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
@@ -133,7 +141,19 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
       message:
         "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
 
-    if dataChannel.readyState == .closed {
+    // リダイレクト前に生成された DataChannel からの通知は無視する。
+    // これにより、旧 RTCPeerConnection の close() に伴う .closed 通知が
+    // 切断 (DisconnectReason.dataChannelClosed) として誤認されたり、
+    // 旧接続の .open 通知が新接続の OPEN 追跡状態を汚染したりするのを防ぐ。
+    guard generation == peerChannel?.dataChannelGeneration else {
+      return
+    }
+
+    if dataChannel.readyState == .open {
+      // DataChannel がクライアント側で OPEN になったことを通知する。
+      // onDataChannel / onDataChannelOpened の発火は MediaChannel 側で行う。
+      peerChannel?.internalHandlers.onOpenDataChannel?(dataChannel.label)
+    } else if dataChannel.readyState == .closed {
       if let peerChannel {
         // DataChannel が切断されたタイミングで PeerChannel を切断する
         // PeerChannel -> DataChannel の順に切断されるパターンも存在するが、
@@ -151,6 +171,14 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
 
   func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
     Logger.debug(type: .dataChannel, message: "\(#function): label => \(dataChannel.label)")
+
+    // リダイレクト前に生成された DataChannel からのメッセージは無視する。
+    // (リダイレクト前に配送済みだったメッセージが遅延到着すると、
+    // signaling ラベル経由の旧 reOffer が新接続に誤適用されたり、
+    // WebSocket 切断スケジュールが誤って実行されたりするため)
+    guard generation == peerChannel?.dataChannelGeneration else {
+      return
+    }
 
     guard let peerChannel else {
       Logger.error(type: .dataChannel, message: "peerChannel is unavailable")
@@ -246,7 +274,7 @@ class DataChannel {
 
   init(
     dataChannel: RTCDataChannel, compress: Bool, mediaChannel: MediaChannel?,
-    peerChannel: PeerChannel?
+    peerChannel: PeerChannel?, generation: Int
   ) {
     Logger.info(
       type: .dataChannel,
@@ -254,7 +282,8 @@ class DataChannel {
         "initialize DataChannel: label => \(dataChannel.label), compress => \(compress)")
     native = dataChannel
     delegate = BasicDataChannelDelegate(
-      compress: compress, mediaChannel: mediaChannel, peerChannel: peerChannel)
+      compress: compress, mediaChannel: mediaChannel, peerChannel: peerChannel,
+      generation: generation)
     native.delegate = delegate
   }
 
