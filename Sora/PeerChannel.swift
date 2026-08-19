@@ -71,9 +71,6 @@ final class PeerChannelInternalHandlers {
   /// DataChannel のメッセージ受信時に呼ばれるクロージャー
   var onDataChannelMessage: ((String, Data) -> Void)?
 
-  /// DataChannel の close 時に呼ばれるクロージャー
-  var onCloseDataChannel: ((String) -> Void)?
-
   /// DataChannel の bufferedAmount 変更時に呼ばれるクロージャー
   var onDataChannelBufferedAmount: ((String, UInt64) -> Void)?
 
@@ -214,7 +211,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
       if let (error, reason) = disconnectParams {
         if let context {
-          if context.state != .closed {
+          // リダイレクト中は旧 RTCPeerConnection の close() により state が .closed を返すため、
+          // disconnect() と同じく isRedirecting 中は basicDisconnect を実行する。
+          // (実行しないと isDisconnecting = true が設定されたまま Lock が恒久的に破壊され、
+          // 以後の waitDisconnect / lock がすべて無視される)
+          if context.state != .closed || context.isRedirecting {
             context.basicDisconnect(error: error, reason: reason)
           }
         }
@@ -250,6 +251,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // 発火を防ぐ (キャンセル後に再 .disconnected で新たなタイマーを開始した場合、
   // 古いタイマーが先に発火して猶予時間が短縮される問題の対策)
   nonisolated(unsafe) private var disconnectTimerGeneration: Int = 0
+
+  // DataChannel 通知の世代 (トークン)。リダイレクトのたびに +1 し、
+  // 旧接続の DataChannel からの遅延通知を無視するために BasicDataChannelDelegate と照合する。
+  // disconnectTimerGeneration と同じく nonisolated(unsafe) で扱う (ベストエフォート)。
+  // BasicDataChannelDelegate から現在の世代を確認するため internal にしている。
+  nonisolated(unsafe) var dataChannelGeneration: Int = 0
+
+  // リダイレクト中フラグ。リダイレクトから新 offer 受信までの窓で、
+  // 旧 RTCPeerConnection からの遅延 didOpen 通知を無視するために使用する。
+  // この間 nativeChannel は旧 PC のままのため、PC アイデンティティの一致だけでは
+  // 旧 PC の通知を防げない。disconnectTimerGeneration と同じく nonisolated(unsafe) で
+  // 扱う (ベストエフォート)。Lock.unlock の遅延切断パスからも参照するため internal にしている。
+  nonisolated(unsafe) var isRedirecting = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
   var rpcChannel: RPCChannel?
 
@@ -354,6 +368,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
+      // 切断後にリダイレクト先の WebSocket が接続成功した場合は connect メッセージを再送しない。
+      // (リダイレクト窓 (isRedirecting) では再接続のため再送し、切断済み
+      // (isRedirecting == false かつ state == .closed) では再送しない。
+      // 再送するとサーバーが offer を返し、新 PC の生成・リークにつながる)
+      guard weakSelf.isRedirecting || weakSelf.state != .closed else {
+        return
+      }
+
       if let sdp = weakSelf.sdp {
         weakSelf.sendConnectMessage(with: sdp, error: error, redirect: true)
       } else {
@@ -390,13 +412,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   func disconnect(error: Error?, reason: DisconnectReason) {
-    switch state {
-    case .closed:
-      break
-    default:
-      Logger.debug(type: .peerChannel, message: "wait to disconnect")
-      lock.waitDisconnect(error: error, reason: reason)
+    // リダイレクト中は旧 RTCPeerConnection の close() により state が .closed を返す。
+    // そのまま .closed ガードで返すと、リダイレクト窓の切断要求 (ユーザー切断や
+    // リダイレクト先への接続失敗) が後始末なしで握り潰されるため、
+    // isRedirecting 中は切断処理を続行する。
+    if state == .closed, !isRedirecting {
+      return
     }
+    Logger.debug(type: .peerChannel, message: "wait to disconnect")
+    lock.waitDisconnect(error: error, reason: reason)
   }
 
   // MARK: - Private methods
@@ -825,6 +849,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     constraints: RTCMediaConstraints,
     initialOffer: Bool = false,
     mid: [String: String]? = nil,
+    generation: Int,
     handler: @escaping (String?, Error?) -> Void
   ) {
     guard let nativeChannel else {
@@ -848,6 +873,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           // swiftlint:disable:next force_unwrapping
           message: "failed setting remote description: (\(error!.localizedDescription)")
         handler(nil, error)
+        return
+      }
+
+      // リダイレクト等で接続が切り替わった場合は、以後の SDP パイプライン
+      // (initializeSenderStream / updateSenderOfferEncodings / answer / setLocalDescription)
+      // を実行せずに破棄する。
+      // (チェーンの各ステップは self.nativeChannel を再読取するため、世代照合が
+      // 最終クロージャのみだと、旧 offer の SDP・mid・encodings が新 PC に適用される)
+      guard generation == self.dataChannelGeneration else {
+        handler(nil, nil)
         return
       }
 
@@ -875,6 +910,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             // swiftlint:disable:next force_unwrapping
             message: "failed creating native answer (\(error!.localizedDescription)")
           handler(nil, error)
+          return
+        }
+
+        // リダイレクト等で接続が切り替わった場合は、以後の SDP パイプライン
+        // (setLocalDescription) を実行せずに破棄する。
+        // (answer 作成中にリダイレクトが発生した場合、以下の再読取で新 PC を取得し、
+        // 旧 offer の answer が新 PC に適用されるのを防ぐ)
+        guard generation == self.dataChannelGeneration else {
+          handler(nil, nil)
           return
         }
 
@@ -935,6 +979,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     Logger.debug(type: .peerChannel, message: "try sending answer")
     offerEncodings = offer.encodings
 
+    // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
+    // (リダイレクトで接続が切り替わった場合に、旧接続の answer が新接続に送信されるのを防ぐ)
+    let generation = dataChannelGeneration
+
     if let config = offer.configuration {
       Logger.debug(type: .peerChannel, message: "update configuration")
       Logger.debug(
@@ -986,10 +1034,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         reason: .signalingFailure)
       return
     }
+    // リダイレクト中フラグを解除する (新 PC が生成された時点で解除)。
+    // リダイレクト窓で state == .closed のため発火をスキップした WebSocket 切断タイマーの
+    // フラグもリセットし、新接続でも WebSocket 切断をスケジュールできるようにする
+    // (リセットしないと、新接続の signaling ラベル受信後に WebSocket が切断されず
+    // サーバーセッションが残留する)
+    isRedirecting = false
+    webSocketDisconnectScheduled = false
     nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
 
     guard lock.lock() else {
+      // 切断済みのため answer 作成をスキップする。
+      // 生成済みの RTCPeerConnection は未クローズで残るため、ここでクローズする
+      // (リダイレクト窓で切断が実行された後に新 offer が届いた場合に到達する)。
       Logger.debug(type: .peerChannel, message: "already disconnecting, skip create answer")
+      nativeChannel.close()
       return
     }
     createAnswer(
@@ -997,8 +1056,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       offer: offer.sdp,
       constraints: webRTCConfiguration.nativeConstraints,
       initialOffer: true,
-      mid: offer.mid
+      mid: offer.mid,
+      generation: generation
     ) { sdp, error in
+      // リダイレクト等で接続が切り替わった場合は、旧接続の answer を破棄する。
+      // (setRemoteDescription 等の非同期処理の完了前にリダイレクトが実行された場合に、
+      // 旧 offer の answer が新接続に送信されるのを防ぐ)
+      guard generation == self.dataChannelGeneration else {
+        Logger.debug(type: .peerChannel, message: "generation changed, skip create answer")
+        self.lock.unlock()
+        return
+      }
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
@@ -1027,11 +1095,22 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(type: .peerChannel, message: "already disconnecting, skip create update-answer")
       return
     }
+    // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
+    // (リダイレクトで接続が切り替わった場合に、旧接続の update-answer が新接続に
+    // 送信されるのを防ぐ。type: update は Sora 2022.1.0 で廃止されたメッセージだが、
+    // 他の answer 処理との一貫性のため同様にガードする)
+    let generation = dataChannelGeneration
     createAnswer(
       isSender: false,
       offer: offer,
-      constraints: webRTCConfiguration.nativeConstraints
+      constraints: webRTCConfiguration.nativeConstraints,
+      generation: generation
     ) { answer, error in
+      // リダイレクト等で接続が切り替わった場合は、旧接続の update-answer を破棄する。
+      guard generation == self.dataChannelGeneration else {
+        self.lock.unlock()
+        return
+      }
       guard error == nil else {
         Logger.error(
           type: .peerChannel,
@@ -1066,10 +1145,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   private func createAndSendReAnswer(forReOffer reOffer: String) {
     Logger.debug(type: .peerChannel, message: "create and send re-answer")
 
+    // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
+    // (リダイレクトで接続が切り替わった場合に、旧接続の re-answer が新接続に
+    // 適用されたり、リダイレクトを中断したりするのを防ぐ)
+    let generation = dataChannelGeneration
+
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: webRTCConfiguration.nativeConstraints
+      constraints: webRTCConfiguration.nativeConstraints,
+      generation: generation
     ) { answer, error in
       // 2025.1.1 までは lock() 呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
       // この場合、 SDP 再ハンドシェイク時に SDP を local description に設定する際に EXC_BAD_ACCESS (不正なメモリアクセス) が発生し、
@@ -1077,6 +1162,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で lock() の位置を移動)
       guard self.lock.lock() else {
         Logger.debug(type: .peerChannel, message: "already disconnecting, skip re-answer")
+        return
+      }
+      // リダイレクト等で接続が切り替わった場合は、旧接続の re-answer を破棄する。
+      // (setRemoteDescription 等の非同期処理の完了前にリダイレクトが実行された場合に、
+      // 旧 offer の answer が新接続に適用されるのを防ぐ)
+      guard generation == self.dataChannelGeneration else {
+        Logger.debug(type: .peerChannel, message: "generation changed, skip re-answer")
+        self.lock.unlock()
         return
       }
       guard error == nil else {
@@ -1118,15 +1211,31 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
+    // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
+    // (リダイレクトで接続が切り替わった場合に、旧接続の re-answer が新接続に
+    // 適用されたり、旧 signaling DataChannel への送信失敗でリダイレクトを中断したり
+    // するのを防ぐ)
+    let generation = dataChannelGeneration
+
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: webRTCConfiguration.nativeConstraints
+      constraints: webRTCConfiguration.nativeConstraints,
+      generation: generation
     ) { answer, error in
       // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
       guard self.lock.lock() else {
         Logger.debug(
           type: .peerChannel, message: "already disconnecting, skip re-answer over DataChannel")
+        return
+      }
+      // リダイレクト等で接続が切り替わった場合は、旧接続の re-answer を破棄する。
+      // (setRemoteDescription 等の非同期処理の完了前にリダイレクトが実行された場合に、
+      // 旧 offer の answer が新接続に適用されるのを防ぐ)
+      guard generation == self.dataChannelGeneration else {
+        Logger.debug(
+          type: .peerChannel, message: "generation changed, skip re-answer over DataChannel")
+        self.lock.unlock()
         return
       }
       guard error == nil else {
@@ -1204,6 +1313,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         signalingChannel.dataChannelSignaling = true
         signalingOfferMessageDataChannels = dataChannels
       }
+      // リダイレクト等で offer が再送された場合に備えて
+      // DataChannel の OPEN 追跡状態をリセットする。
+      // data_channels の有無に関わらずリセットする
+      // (data_channels なしの offer で前接続の追跡状態が残留すると、
+      // 新接続の onDataChannelOpened / onDataChannel が抑止されるため)
+      mediaChannel?.resetDataChannelNotificationState(
+        messagingLabels: MediaChannel.messagingLabels(from: offer.dataChannels ?? []))
 
       // offer.simulcast が設定されている場合、WrapperVideoEncoderFactory.shared.simulcastEnabled を上書きする
       if let simulcast = offer.simulcast {
@@ -1248,11 +1364,26 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .switched(let switched):
       switchedToDataChannel = true
       signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
-
-      if let mediaChannel, let onDataChannel = mediaChannel.handlers.onDataChannel {
-        onDataChannel(mediaChannel)
-      }
     case .redirect(let redirect):
+      // リダイレクト時の旧接続からの遅延通知の遮断方針:
+      // - DataChannel delegate (dataChannelDidChangeState / didReceiveMessageWith):
+      //   生成時点の世代と現在の世代の照合で無視
+      // - PC delegate (didOpen / didChange): isCurrentPeerConnection
+      //   (リダイレクト窓は isRedirecting、新 PC 生成後は PC アイデンティティ)
+      // - 切断 (disconnect / Lock.unlock): isRedirecting 中は切断処理を続行
+      // - WS 接続 (SignalingChannel): 切断後は state == .disconnected で受け入れ拒否
+      //
+      // 旧 PC を明示的にクローズする (遅延 OPEN 通知による OPEN 追跡状態の汚染防止と
+      // リソースリーク解消)。先に世代を進めてから close() し、close に伴う
+      // 旧 DataChannel の .closed 通知を無視させる。
+      // 旧接続で開始された切断検出の猶予タイマーも無効化する
+      // (旧接続の .disconnected を契機に開始されたタイマーがリダイレクト後も発火し、
+      // 新接続を誤切断するのを防ぐ。また、disconnectTimerScheduled が true のまま
+      // 残留すると新接続のタイマー開始が抑止される)
+      dataChannelGeneration += 1
+      isRedirecting = true
+      cancelDisconnectTimer()
+      nativeChannel?.close()
       signalingChannel.redirect(location: redirect.location)
     default:
       break
@@ -1349,6 +1480,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func basicDisconnect(error: Error?, reason: DisconnectReason) {
+    // 切断によりリダイレクトを中止する。
+    // (リダイレクト窓で切断が実行された場合、以降は通常の切断状態に戻す)
+    isRedirecting = false
+
     Logger.debug(
       type: .peerChannel,
       message:
@@ -1605,10 +1740,27 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       message: "ICE gathering state: \(newState)")
   }
 
+  /// 通知元の RTCPeerConnection が現在の接続のものであるかを判定する。
+  /// リダイレクトから新 PC 生成までの窓では nativeChannel が旧 PC のままのため、
+  /// PC アイデンティティの一致だけでは旧 PC の遅延通知を防げない。
+  /// そのため、リダイレクト中は isRedirecting、新 PC 生成後は PC アイデンティティで判定する。
+  /// (本ヘルパーは PC delegate (didOpen / didChange / didGenerateCandidate) 専用。
+  /// DataChannel delegate は世代照合 (generation == dataChannelGeneration) で別途ガードするため、
+  /// DataChannel 側の通知にこのヘルパーを使わないこと)
+  private func isCurrentPeerConnection(_ nativePeerConnection: RTCPeerConnection) -> Bool {
+    !isRedirecting && nativePeerConnection === nativeChannel
+  }
+
   func peerConnection(
     _ peerConnection: RTCPeerConnection,
     didChange newState: RTCPeerConnectionState
   ) {
+    // リダイレクト中または旧 RTCPeerConnection からの状態通知は無視する。
+    // 旧 PC を close() した後に届く遅延 .failed / .disconnected 通知が、
+    // 新接続の状態として処理されるとリダイレクトが失敗扱いになるため。
+    guard isCurrentPeerConnection(peerConnection) else {
+      return
+    }
     Logger.debug(
       type: .peerChannel,
       message: "peer connection state: \(String(describing: newState))")
@@ -1696,6 +1848,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     _ nativePeerConnection: RTCPeerConnection,
     didGenerate candidate: RTCIceCandidate
   ) {
+    // リダイレクト中または旧 RTCPeerConnection からの ICE candidate は無視する。
+    // 旧 PC を close() した後に届く遅延 candidate が新接続のシグナリングに
+    // 送信されるのを防ぐ。
+    guard isCurrentPeerConnection(nativePeerConnection) else {
+      return
+    }
     Logger.debug(
       type: .peerChannel,
       message: "generated ICE candidate \(candidate)")
@@ -1731,6 +1889,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     _ nativePeerConnection: RTCPeerConnection,
     didOpen dataChannel: RTCDataChannel
   ) {
+    // リダイレクト中または旧 RTCPeerConnection からの didOpen 通知は無視する。
+    // 旧 PC を close() した後に届く遅延 didOpen 通知が新接続の状態を汚染するため。
+    guard isCurrentPeerConnection(nativePeerConnection) else {
+      return
+    }
+
     let label = dataChannel.label
     Logger.debug(type: .peerChannel, message: "didOpen: label => \(label)")
 
@@ -1747,11 +1911,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     let dc = DataChannel(
       dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel,
-      peerChannel: self)
+      peerChannel: self, generation: dataChannelGeneration)
     dataChannels[dataChannel.label] = dc
 
+    // rpc ラベルは防御的通知より先に rpcChannel を設定する。
+    // (onDataChannelOpened の発火時点で rpc 呼び出しが可能であることを保証するため)
     if label == "rpc" {
       rpcChannel = RPCChannel(dataChannel: dc)
+    }
+
+    // libwebrtc の RTCDataChannelDelegate は登録時に現在の state を即時通知しないため、
+    // 登録時点で既に OPEN の場合に通知が失われる。そのため防御的に通知する。
+    // dataChannels への登録後に通知することで、通知を受けた側が sendMessage を利用できる。
+    // MediaChannel 側の openedDataChannelLabels で重複通知は防止される。
+    if dataChannel.readyState == .open {
+      internalHandlers.onOpenDataChannel?(dataChannel.label)
     }
   }
 }
