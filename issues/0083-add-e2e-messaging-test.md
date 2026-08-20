@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-08-20
 - Model: GPT-5
 - Branch: feature/add-e2e-messaging-test
 - Polished: 2026-08-19
@@ -80,3 +80,14 @@ iOS SDK は `DataChannel` クラスで DataChannel 経由のメッセージ送�
 - `CHANGES.md` の develop セクションの `### misc` に追記されていること
 
 ## 解決方法
+
+`SoraTests/MessagingE2ETests.swift` を新規作成し、`testSendrecvDataChannelMessaging` を追加した。
+
+- 2 台の sendrecv クライアント（`videoEnabled` / `audioEnabled` / `initialCameraEnabled` を false に設定）を `buildChannelId(unique: true)` の一意なチャンネル ID で接続する
+- `dataChannelSignaling = true` / `ignoreDisconnectWebSocket = true` を設定し、`dataChannels` で `#spam`（`direction: "sendrecv"`、`compress: false`）を払い出す
+- ハンドラ（`onReceiveSignalingJSON` / `onDataChannelOpened` / `onDataChannelMessage`）は connect 呼び出しより前に登録し、状態更新は main queue に束ねる
+- 両クライアントの `switched` 受信と `#spam` の OPEN を 1 回の `XCTWaiter.wait` で待ってから、双方向でメッセージを送信し、受信内容が送信内容と一致することを検証する
+- `getStats` で `type == "data-channel"` かつ `values["label"] == "#spam"` のエントリを特定し、`bytesSent` / `bytesReceived` / `messagesSent` / `messagesReceived` がすべて 0 より大きいことをリトライ付きで検証する
+- offer に `data_channels` フィールドが含まれない場合（DataChannel シグナリング未対応）と、`#spam` が offer に含まれない場合（メッセージング未対応）は、後始末を実行してから XCTSkip でスキップする
+- ローカル E2E 実行で、メッセージの双方向送受信と DataChannel stats の検証が成功することを確認した
+- `CHANGES.md` の develop セクションの `### misc` に追記した
