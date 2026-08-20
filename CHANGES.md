@@ -63,6 +63,9 @@
 - [ADD] DataChannel シグナリング切り替え E2E テストを追加する
   - DataChannel シグナリング有効時に type: "switched" メッセージの受信とシグナリングの切り替えを検証する
   - @t-miya
+- [ADD] DataChannel messaging E2E テストを追加する
+  - 同一チャンネルに 2 台の sendrecv クライアントを接続し、DataChannel 経由のメッセージ送受信と DataChannel stats を検証する
+  - @t-miya
 
 ## 2026.2.0
 
