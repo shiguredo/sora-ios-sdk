@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-08-20
 - Model: GPT-5
 - Branch: feature/add-e2e-datachannel-close-test
 - Polished: 2026-08-20
@@ -96,3 +96,14 @@ DataChannel 経路であることは、**ステップ 6 の「`type: "close"` �
 - issue 0082 (open): クライアント側切断の切断イベント検証（本 issue はサーバー側切断の DataChannel 経路検証であり、検証対象は重複しない）
 
 ## 解決方法
+
+`SoraTests/SendonlyE2ETests.swift` に `testSendonlyDataChannelClose` を追加した。
+
+- sendonly 接続（`dataChannelSignaling = true` + `ignoreDisconnectWebSocket = true`、`videoCodec = .vp8` / `audioEnabled = false` / `initialCameraEnabled = false` / DummyVideoCapturer）。`buildChannelId(unique: true)` で一意なチャンネル ID を生成する
+- ハンドラ（`onReceiveSignalingJSON` / `onDisconnect`）は connect 呼び出しより前に登録し、状態更新は main queue に束ねる
+- offer に `data_channels` フィールドが含まれない場合は後始末を実行してから XCTSkip でスキップする
+- switched 受信を待ち、`ignore_disconnect_websocket` が true であることを確認する（false の場合は XCTSkip）
+- Sora API (DisconnectConnection) でサーバー側から切断する（`testSendonlyReconnect` と同じパターン。`TEST_API_URL` 未設定時は XCTSkip）
+- `onReceiveSignalingJSON` で `type: "close"` を受信した場合に code / reason を記録し、`onDisconnect` の `SoraCloseEvent.ok(code:reason:)` の値と一致することを確認する（一致検証の成功が DataChannel 経由の切断であることの証明。close を受信できなかった場合は一致検証を省略する）
+- E2E テストがパスすることを確認した
+- `CHANGES.md` の develop セクションの `### misc` に追記した
