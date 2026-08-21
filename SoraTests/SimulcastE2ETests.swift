@@ -233,26 +233,6 @@ final class SimulcastE2ETests: E2ETestBase {
 
   // MARK: - 検証ヘルパー
 
-  /// outbound-rtp (video) の rid ごとの送信量と scalabilityMode を返す
-  private func simulcastOutboundVideoStats(stats: Statistics) -> [(
-    rid: String, bytesSent: Int, packetsSent: Int, scalabilityMode: String
-  )] {
-    stats.entries.compactMap { entry in
-      guard entry.type == "outbound-rtp",
-        (entry.values["kind"] as? NSString) == "video",
-        let rid = entry.values["rid"] as? String
-      else {
-        return nil
-      }
-      return (
-        rid: rid,
-        bytesSent: (entry.values["bytesSent"] as? NSNumber)?.intValue ?? 0,
-        packetsSent: (entry.values["packetsSent"] as? NSNumber)?.intValue ?? 0,
-        scalabilityMode: (entry.values["scalabilityMode"] as? String) ?? ""
-      )
-    }
-  }
-
   /// 3 レイヤー (r0 / r1 / r2) の outbound-rtp がすべて存在し、送信量が 0 より大きいかを確認する
   private func hasSimulcastOutboundVideo(stats: Statistics) -> Bool {
     let outbounds = simulcastOutboundVideoStats(stats: stats)
