@@ -69,6 +69,9 @@
 - [ADD] RPC E2E テストを追加する
   - recvonly クライアントが RequestSimulcastRid で受信 rid を切り替え、解像度変化で確認できることを検証する
   - @t-miya
+- [ADD] DataChannel シグナリング切断経路 E2E テストを追加する
+  - DataChannel シグナリング有効時にサーバー側切断が DataChannel 経由で伝播し、切断理由が SoraCloseEvent で通知されることを検証する
+  - @t-miya
 
 ## 2026.2.0
 

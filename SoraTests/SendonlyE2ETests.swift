@@ -619,4 +619,243 @@ final class SendonlyE2ETests: E2ETestBase {
 
     wait(for: [connectExpectation], timeout: 35)
   }
+
+  /// サーバー側切断が DataChannel 経由で伝播し、切断理由が SoraCloseEvent で通知されることを確認する
+  ///
+  /// dataChannelSignaling = true + ignoreDisconnectWebSocket = true で接続し、Sora API
+  /// (DisconnectConnection) でサーバー側から切断する。type: "close" を DataChannel 経由で
+  /// 受信し、onDisconnect の SoraCloseEvent.ok(code:reason:) の値と一致することを確認する。
+  /// (SoraError.dataChannelClosed は SoraCloseEvent.ok に変換されて onDisconnect で通知される。
+  /// code / reason の一致は DataChannel 経由の切断であることの証明になる。
+  /// type: "close" はサーバー側の data_channel_signaling_close_message 設定に依存するため、
+  /// 受信できなかった場合は一致検証を省略する)
+  func testSendonlyDataChannelClose() throws {
+    // Sora API のエンドポイントが未設定の場合はスキップする
+    guard
+      let apiUrlString = ProcessInfo.processInfo.environment["TEST_API_URL"],
+      !apiUrlString.isEmpty,
+      let apiUrl = URL(string: apiUrlString)
+    else {
+      throw XCTSkip("TEST_API_URL が未設定のためスキップします")
+    }
+
+    // テスト固有の一意なチャンネル ID を生成する (Sora API は channel_id を指定するため、
+    // 他テストのチャンネルを誤って切断しないよう一意化が必須)
+    let channelId = buildChannelId(unique: true)
+
+    // 接続完了・switched 受信・close 受信・切断の完了を待つ expectation
+    let connectExpectation = self.expectation(description: "接続が完了すること")
+    let switchedExpectation = self.expectation(description: "switched メッセージを受信すること")
+    let closeReceivedExpectation = self.expectation(description: "type: close を受信すること")
+    let disconnectExpectation = self.expectation(description: "切断が完了すること")
+
+    // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
+    var channel: MediaChannel?
+    var capturer: DummyVideoCapturer?
+    // offer に data_channels フィールドが含まれるかと switched の内容を保持する
+    var offerContainsDataChannels = false
+    var switchedIgnoreDisconnectWebSocket: Bool?
+    // type: close で受信した code / reason と切断イベントを保持する
+    var closeCode: Int?
+    var closeReason: String?
+    var disconnectEvent: SoraCloseEvent?
+    // expectation の二重 fulfill (XCTest の API violation) を防ぐためのフラグ
+    var switchedExpectationFulfilled = false
+    var closeReceivedExpectationFulfilled = false
+    var disconnectExpectationFulfilled = false
+
+    // sendonly 用の Configuration (DataChannel シグナリング有効 + WebSocket 切断の無視)
+    var config = try buildConfiguration(role: .sendonly)
+    config.channelId = channelId
+    config.dataChannelSignaling = true
+    config.ignoreDisconnectWebSocket = true
+    config.videoEnabled = true
+    config.audioEnabled = false
+    config.videoCodec = .vp8
+    config.initialCameraEnabled = false
+
+    // ハンドラは connect 呼び出しより前に登録する (switched は接続完了より先に到着し得る)
+    // ハンドラは WebSocket 受信スレッドと DataChannel の delegate スレッドから呼ばれるため、
+    // 共有状態の更新は main queue に束ねる
+    config.mediaChannelHandlers.onReceiveSignalingJSON = { json in
+      DispatchQueue.main.async {
+        guard let data = json.data(using: .utf8),
+          let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+          return
+        }
+        // offer に data_channels フィールドが含まれるかを記録する (SDK と同じキャスト判定)
+        if dict["type"] as? String == "offer", dict["data_channels"] is [Any] {
+          offerContainsDataChannels = true
+        }
+        // type: "switched" メッセージの ignore_disconnect_websocket フィールドを記録する
+        if dict["type"] as? String == "switched" {
+          switchedIgnoreDisconnectWebSocket = dict["ignore_disconnect_websocket"] as? Bool
+          // 後始末 (XCTSkip / エラー分岐) での fulfill と重複しないよう、一度だけ fulfill する
+          if !switchedExpectationFulfilled {
+            switchedExpectationFulfilled = true
+            switchedExpectation.fulfill()
+          }
+        }
+        // type: "close" メッセージの code / reason を記録する
+        // (WebSocket 経由の close もここには届くが、一致検証の成否で DataChannel 経路を判定する)
+        if dict["type"] as? String == "close" {
+          closeCode = dict["code"] as? Int
+          closeReason = dict["reason"] as? String
+          // 後始末 (XCTSkip / エラー分岐) での fulfill と重複しないよう、一度だけ fulfill する
+          if !closeReceivedExpectationFulfilled {
+            closeReceivedExpectationFulfilled = true
+            closeReceivedExpectation.fulfill()
+          }
+        }
+      }
+    }
+    config.mediaChannelHandlers.onDisconnect = { event in
+      DispatchQueue.main.async {
+        disconnectEvent = event
+        // 後始末 (XCTSkip / エラー分岐) での fulfill と重複しないよう、一度だけ fulfill する
+        if !disconnectExpectationFulfilled {
+          disconnectExpectationFulfilled = true
+          disconnectExpectation.fulfill()
+        }
+      }
+    }
+
+    // 接続する
+    // connect コールバックは実行キューが固定されていないため、共有状態の更新と
+    // 後続処理は main queue に束ねる
+    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("接続に失敗した : \(error)")
+          connectExpectation.fulfill()
+          return
+        }
+        guard let connectedChannel = mediaChannel, let stream = connectedChannel.senderStream else {
+          XCTFail("senderStream が nil")
+          connectExpectation.fulfill()
+          return
+        }
+        channel = connectedChannel
+        let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+        currentCapturer.stream = stream
+        currentCapturer.start()
+        capturer = currentCapturer
+        connectExpectation.fulfill()
+      }
+    }
+
+    // 接続完了を待つ
+    wait(for: [connectExpectation], timeout: 35)
+    guard let channel, let capturer else {
+      XCTFail("接続に失敗した")
+      disconnectAll(channels: [channel])
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ。XCTWaiter.wait はタイムアウト (0 秒) でも failure を報告しない。
+      // 接続失敗時は SDK の接続が終了しているため、以降の fulfill は発生しない
+      _ = XCTWaiter.wait(
+        for: [switchedExpectation, closeReceivedExpectation, disconnectExpectation],
+        timeout: 0)
+      return
+    }
+
+    // offer に data_channels フィールドが含まれるかを確認する
+    // (Sora サーバーが DataChannel シグナリング未対応の場合は XCTSkip でスキップする)
+    guard offerContainsDataChannels else {
+      // 残留チャンネルを残さないよう、後始末を実行してからスキップする
+      capturer.stop()
+      disconnectAll(channels: [channel])
+      // XCTSkip では expectation のチェックが行われないため、fulfill は不要
+      throw XCTSkip("Sora サーバーが DataChannel シグナリング未対応のためスキップします")
+    }
+
+    // switched 受信を待つ
+    let switchedResult = XCTWaiter.wait(for: [switchedExpectation], timeout: 10)
+    guard switchedResult == .completed else {
+      XCTFail("switched メッセージを受信できなかった")
+      capturer.stop()
+      disconnectAll(channels: [channel])
+      _ = XCTWaiter.wait(
+        for: [closeReceivedExpectation, disconnectExpectation],
+        timeout: 0)
+      return
+    }
+    // ignore_disconnect_websocket が true であることを確認する
+    // (false の場合はサーバーが ignoreDisconnectWebSocket を尊重しないため、本テストの
+    // 検証が成立しない。後始末を実行してからスキップする)
+    guard switchedIgnoreDisconnectWebSocket == true else {
+      capturer.stop()
+      disconnectAll(channels: [channel])
+      throw XCTSkip("switched の ignore_disconnect_websocket が false のためスキップします")
+    }
+
+    // Sora API (DisconnectConnection) でサーバー側から切断する
+    let apiExpectation = self.expectation(description: "Sora API の切断が成功すること")
+    var request = URLRequest(url: apiUrl)
+    request.httpMethod = "POST"
+    request.setValue("Sora_20151104.DisconnectConnection", forHTTPHeaderField: "X-Sora-Target")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONSerialization.data(
+      withJSONObject: ["channel_id": channelId, "connection_id": channel.connectionId])
+    request.timeoutInterval = 10
+    URLSession.shared.dataTask(with: request) { _, response, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("Sora API の呼び出しに失敗した : \(error)")
+        } else if let httpResponse = response as? HTTPURLResponse,
+          (200..<300).contains(httpResponse.statusCode)
+        {
+          self.apiDisconnectSucceeded = true
+        } else {
+          XCTFail("Sora API がエラーを返した : \(String(describing: response))")
+        }
+        apiExpectation.fulfill()
+      }
+    }.resume()
+    wait(for: [apiExpectation], timeout: 10)
+    guard self.apiDisconnectSucceeded else {
+      // 後始末 (サーバー切断は発生しないため、close / 切断待機の expectation を wait 済みにする)
+      capturer.stop()
+      disconnectAll(channels: [channel])
+      _ = XCTWaiter.wait(
+        for: [closeReceivedExpectation, disconnectExpectation],
+        timeout: 0)
+      return
+    }
+
+    // type: "close" の受信を待つ
+    // (サーバー側の data_channel_signaling_close_message 設定に依存するため、
+    // 受信できない場合も失敗にはしない)
+    let closeResult = XCTWaiter.wait(for: [closeReceivedExpectation], timeout: 10)
+    let closeReceived = closeResult == .completed
+
+    // 切断 (onDisconnect) を待つ
+    let disconnectResult = XCTWaiter.wait(for: [disconnectExpectation], timeout: 10)
+    guard disconnectResult == .completed, let disconnectEvent else {
+      XCTFail("切断が完了しなかった")
+      capturer.stop()
+      disconnectAll(channels: [channel])
+      return
+    }
+
+    // SoraCloseEvent を検証する
+    // (DataChannel 経由の close は dataChannelSignalingClose に格納され、
+    // SoraError.dataChannelClosed → SoraCloseEvent.ok(code:reason:) へ無変換で伝播する。
+    // WebSocket 経由の close は SDK が処理しないため .ok(1000, "NO-ERROR") になり、
+    // 一致しない。したがって一致検証の成功は DataChannel 経由の切断であることの証明になる)
+    if case .ok(let code, let reason) = disconnectEvent {
+      if closeReceived {
+        XCTAssertEqual(code, closeCode, "onDisconnect の code が close の code と一致すること")
+        XCTAssertEqual(
+          reason, closeReason, "onDisconnect の reason が close の reason と一致すること")
+      }
+    } else {
+      XCTFail("予期しない切断: \(disconnectEvent)")
+    }
+
+    // 後始末: capturer を停止し、チャンネルを切断する
+    // (サーバー切断済みのため、disconnectAndVerify の state チェックでスキップされる)
+    capturer.stop()
+    disconnectAndVerify(channel: channel)
+  }
 }
