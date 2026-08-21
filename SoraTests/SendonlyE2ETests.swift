@@ -659,9 +659,6 @@ final class SendonlyE2ETests: E2ETestBase {
     var closeCode: Int?
     var closeReason: String?
     var disconnectEvent: SoraCloseEvent?
-    // Sora API (DisconnectConnection) の切断が成功したかどうか
-    // (URLSession のコールバックから書き込むため、main queue に束ねた上でローカル変数に保持する)
-    var apiDisconnectSucceeded = false
     // expectation の二重 fulfill (XCTest の API violation) を防ぐためのフラグ
     var switchedExpectationFulfilled = false
     var closeReceivedExpectationFulfilled = false
@@ -808,7 +805,7 @@ final class SendonlyE2ETests: E2ETestBase {
         } else if let httpResponse = response as? HTTPURLResponse,
           (200..<300).contains(httpResponse.statusCode)
         {
-          apiDisconnectSucceeded = true
+          self.apiDisconnectSucceeded = true
         } else {
           XCTFail("Sora API がエラーを返した : \(String(describing: response))")
         }
@@ -816,7 +813,7 @@ final class SendonlyE2ETests: E2ETestBase {
       }
     }.resume()
     wait(for: [apiExpectation], timeout: 10)
-    guard apiDisconnectSucceeded else {
+    guard self.apiDisconnectSucceeded else {
       // 後始末 (サーバー切断は発生しないため、close / 切断待機の expectation を wait 済みにする)
       capturer.stop()
       disconnectAll(channels: [channel])
