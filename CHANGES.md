@@ -66,6 +66,9 @@
 - [ADD] DataChannel messaging E2E テストを追加する
   - 同一チャンネルに 2 台の sendrecv クライアントを接続し、DataChannel 経由のメッセージ送受信と DataChannel stats を検証する
   - @t-miya
+- [ADD] RPC E2E テストを追加する
+  - recvonly クライアントが RequestSimulcastRid で受信 rid を切り替え、解像度変化で確認できることを検証する
+  - @t-miya
 
 ## 2026.2.0
 

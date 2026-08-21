@@ -1,4 +1,5 @@
 import AVFoundation
+import CryptoKit
 import XCTest
 
 @testable @preconcurrency import Sora
@@ -26,6 +27,7 @@ class E2ETestBase: XCTestCase {
   // AVAudioSession に触れない他の E2E テストに影響しないよう、フラグで限定する
   internal var audioSessionActivatedByTest = false
   private struct InvalidURLError: Error {}
+  private struct InvalidJSONError: Error {}
 
   override func setUp() {
     super.setUp()
@@ -120,6 +122,44 @@ class E2ETestBase: XCTestCase {
     return config
   }
 
+  /// E2E テスト用の HS256 JWT を生成する
+  ///
+  /// private claims を付与した access token が必要なテストから利用する。
+  /// channel_id は引数の値で必ず上書きされる (privateClaims に含めても無視される)。
+  internal func buildJWTAccessToken(
+    channelId: String,
+    privateClaims: [String: Any] = [:]
+  ) throws -> String {
+    // buildConfiguration と同じガードを意図的に維持する。
+    // 本ヘルパーは buildConfiguration を通らない単独利用も想定しており、ガードが無いと
+    // 空キーで HMAC 署名され「接続に失敗した」という不可解なエラーになる
+    guard
+      let secretKey = ProcessInfo.processInfo.environment["TEST_SECRET_KEY"],
+      !secretKey.isEmpty
+    else {
+      throw XCTSkip("TEST_SECRET_KEY が未設定のためスキップします")
+    }
+
+    let header: [String: Any] = [
+      "alg": "HS256",
+      "typ": "JWT",
+    ]
+    var payload = privateClaims
+    payload["channel_id"] = channelId
+
+    let headerData = try jsonData(header)
+    let payloadData = try jsonData(payload)
+    let headerPart = base64URLEncoded(headerData)
+    let payloadPart = base64URLEncoded(payloadData)
+    let signingInput = "\(headerPart).\(payloadPart)"
+    let key = SymmetricKey(data: Data(secretKey.utf8))
+    let signature = HMAC<SHA256>.authenticationCode(
+      for: Data(signingInput.utf8),
+      using: key)
+
+    return "\(signingInput).\(base64URLEncoded(Data(signature)))"
+  }
+
   /// チャンネルを切断し、正常切断コード (1000) が onDisconnect で通知されることを確認する
   ///
   /// 切断済みのチャンネルでは onDisconnect が発火しない (MediaChannel.internalDisconnect は
@@ -185,5 +225,46 @@ class E2ETestBase: XCTestCase {
   internal func hasInboundVideo(stats: Statistics) -> Bool {
     let counts = inboundVideoByteCounts(stats: stats)
     return counts.bytesReceived > 0 && counts.packetsReceived > 0
+  }
+
+  /// outbound-rtp (video) の rid ごとの送信量と scalabilityMode を返す
+  internal func simulcastOutboundVideoStats(stats: Statistics) -> [(
+    rid: String, bytesSent: Int, packetsSent: Int, scalabilityMode: String
+  )] {
+    stats.entries.compactMap { entry in
+      guard entry.type == "outbound-rtp",
+        (entry.values["kind"] as? NSString) == "video",
+        let rid = entry.values["rid"] as? String
+      else {
+        return nil
+      }
+      return (
+        rid: rid,
+        bytesSent: (entry.values["bytesSent"] as? NSNumber)?.intValue ?? 0,
+        packetsSent: (entry.values["packetsSent"] as? NSNumber)?.intValue ?? 0,
+        scalabilityMode: (entry.values["scalabilityMode"] as? String) ?? ""
+      )
+    }
+  }
+
+  /// JSON オブジェクトを Data に変換する
+  ///
+  /// data(withJSONObject:) は JSON 化できない値 (Date / NaN 等) を渡すと NSException
+  /// (NSInvalidArgumentException) でプロセスが終了する (Swift の do-catch では捕まえられない)。
+  /// 事前の isValidJSONObject チェックで検出し、クラッシュではなくテスト失敗に変換する
+  private func jsonData(_ object: [String: Any]) throws -> Data {
+    guard JSONSerialization.isValidJSONObject(object) else {
+      XCTFail("JWT ペイロードに JSON 化できない値が含まれている")
+      throw InvalidJSONError()
+    }
+    return try JSONSerialization.data(withJSONObject: object)
+  }
+
+  /// Base64URL 形式へエンコードする
+  private func base64URLEncoded(_ data: Data) -> String {
+    data.base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-")
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
   }
 }

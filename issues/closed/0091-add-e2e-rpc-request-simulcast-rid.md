@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-08-20
-- Completed:
+- Completed: 2026-08-20
 - Model: deepseek-v4-pro
 - Branch: feature/add-e2e-rpc-request-simulcast-rid
 - Polished: 2026-08-20
@@ -131,3 +131,30 @@ sendonly クライアントは通常の JWT（private claims なし）で接続�
 - issue 0090 (closed 済み。`onDataChannelOpened` の追加): rpc ラベルの OPEN を `onDataChannelOpened` で検知するため。現行実装では `rpcChannel` 設定後に防御的通知が行われるため、`onDataChannelOpened` 発火時点で `rpc()` が利用可能
 
 ## 解決方法
+
+`SoraTests/RpcE2ETests.swift` に `testSendrecvDataChannelMessaging` を追加した。
+
+- sendonly（simulcast 送信）+ recvonly（RPC 実行）の 2 チャネル構成。
+  - sendonly: `simulcastEnabled` + `videoBitRate = 1200` + `videoCodec = .vp8` + `audioEnabled = false` + `initialCameraEnabled = false` + DummyVideoCapturer（960x540 / 15fps）。SimulcastE2ETests の構成を踏襲
+  - recvonly: `simulcastEnabled` + `simulcastRequestRid = .r2` + `dataChannelSignaling` + `ignoreDisconnectWebSocket` + `videoCodec = .vp8` + `audioEnabled = false`
+- claims 付き JWT は `E2ETestBase.buildJWTAccessToken` でテスト内生成する（HS256 / CryptoKit）。payload の `channel_id` は引数の値で強制上書きする（テストサーバーの検証に使用）
+- `E2ETestBase` に `simulcastOutboundVideoStats` を移動し、SimulcastE2ETests と共有する（0089 の方針）
+- 検証フロー:
+  1. recvonly の offer で `rpc` ラベル / `rpc_methods` / `simulcast` を確認（満たさなければ XCTSkip）
+  2. recvonly の switched 受信と `rpc` ラベルの OPEN を待機
+  3. sendonly の outbound-rtp を rid 別に分類し、r0 / r2 の両方で `bytesSent > 0` を確認（立ち上がらなければ XCTSkip）
+  4. recvonly の inbound-rtp で frameWidth / frameHeight を 2 回サンプルして初期解像度（r2）を確定
+  5. `rpc()` で r0 に切替 → frameWidth / frameHeight が初期解像度より小さくなることを確認
+  6. `rpc()` で r2 に戻す → frameWidth / frameHeight が r0 より大きくなることを確認
+- 検証ヘルパー: `waitForOutboundR0AndR2`（rid 立ち上がり待機）、`waitForStableInboundFrameSize`（初期解像度サンプル）、`waitForInboundFrameSize`（解像度変化ポーリング、predicate と失敗メッセージを `InboundFrameSizeCondition` で対に保持）。`getStats` の一時的な failure はリトライで吸収する（SimulcastE2ETests と同じ方針）
+- タイムアウト: シナリオ全体 150 秒（ポーリングの最悪系所要時間を吸収）
+- ビルド（build-for-testing）と SwiftLint は通過済み
+
+### 検証結果（E2E テスト実行）
+
+ローカル E2E 実行（シミュレータ）でテストがパスすることを確認した。これにより、着手時の確認タスクはすべて解決済み:
+
+- テストサーバーの `rpc_methods` 払い出し: 対応済みであることを確認（offer の `rpc_methods` に `2025.2.0/RequestSimulcastRid` が含まれる）
+- `frameWidth` / `frameHeight` の取得: VideoRenderer 装着なしで `getStats` から取得できることを確認
+- recvonly 1 台構成での r0 / r2 エンコード維持: 両方立ち上がることを確認（構成変更は不要）
+- `senderConnectionId` 省略: 省略で機能することを確認
