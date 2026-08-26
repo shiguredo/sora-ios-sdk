@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-08-25
 - Model: Sonnet 4.6
 - Branch: feature/fix-duplicated-channel-id
 - Polished: 2026-08-25
@@ -63,6 +63,12 @@
 - 本 issue は SDK のコード変更を含まない。方針 A の実装（`onDisconnectComplete` の追加）は `0047` で行い、本 issue は 0047 の実装完了をもって解決とする
 - 検証（`testSendonlyReconnect` の変更と「onDisconnectComplete 発火をトリガーとした再接続の成功」、既存 E2E のリーグレッション確認）は 0047 の完了条件・解決方法に委譲する
 - 本 issue を close する時点で、検証結果（E2E の成功の有無）と `CHANGES.md` の `[FIX]` エントリ追記状況を本セクションに記録する
+
+### 実装結果
+
+- 方針 A は `0047`（closed）で実装済み。`Sora/MediaChannel.swift` / `Sora/PeerChannel.swift` / `SoraTests/` への反映と、Swift 6 モードのビルド・単体テスト 5 件の実行済みを確認
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを追記済み（`onDisconnectComplete` ハンドラ追加による原因対処を説明。対応者: @t-miya）
+- E2E 検証（`testSendonlyReconnect` の変更）は実サーバーが必要なため未実行。`SORA_SIGNALING_URL` / `TEST_API_URL` / `TEST_SECRET_KEY` を設定した CI で 0047 側の完了条件と併せて確認すること
 
 ## 関連 issue
 
