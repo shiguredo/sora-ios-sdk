@@ -49,6 +49,11 @@ final class PeerChannelInternalHandlers {
   /// 接続解除時に呼ばれるクロージャー
   var onDisconnect: ((Error?, DisconnectReason) -> Void)?
 
+  /// 基本切断処理 (basicDisconnect()) の通知系処理実行後に呼ばれるクロージャー。
+  /// 接続試行中に切断した場合は `onConnect?(error)` 呼び出しの後、
+  /// それ以外の切断では `internalHandlers.onDisconnect?` 呼び出しの後に呼ばれる。
+  var onBasicDisconnectComplete: (() -> Void)?
+
   /// ストリームの追加時に呼ばれるクロージャー
   var onAddStream: ((MediaStream) -> Void)?
 
@@ -1557,6 +1562,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       onConnect!(error)
       onConnect = nil
     }
+
+    // 通知系処理 (内部 onDisconnect と onConnect 呼び出し) がすべて完了したことを
+    // MediaChannel へ伝える。
+    internalHandlers.onBasicDisconnectComplete?()
 
     // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
     dataChannelSignalingClose = nil

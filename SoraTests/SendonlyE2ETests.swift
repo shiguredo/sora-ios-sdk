@@ -13,6 +13,24 @@ final class SendonlyE2ETests: E2ETestBase {
     apiDisconnectSucceeded = false
   }
 
+  /// 切断ハンドラの発火順序 (onDisconnect -> onDisconnectComplete、各 1 回) を main queue 上で
+  /// 最終検証する。
+  /// 本テストは同期パス (切断時に非同期処理が進行していない) が対象のため、発火記録と評価が
+  /// 同一スレッド (main) に束ねられ、FIFO で処理済みになってから評価される。
+  /// (テストスレッドで直接評価すると、onDisconnectComplete の発火記録が未処理のまま
+  /// 評価されるレースがあり、回帰を検出し損なう)
+  private func verifyDisconnectOrderOnMainQueue(_ order: [String]) {
+    let finalVerifyExpectation = self.expectation(
+      description: "切断ハンドラの発火順序と回数の最終検証が完了すること")
+    DispatchQueue.main.async {
+      XCTAssertEqual(
+        order, ["onDisconnect", "onDisconnectComplete"],
+        "onDisconnect が onDisconnectComplete より先に各 1 回発火すること: \(order)")
+      finalVerifyExpectation.fulfill()
+    }
+    wait(for: [finalVerifyExpectation], timeout: 10)
+  }
+
   /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
   func testSendonlyDummyVideo() throws {
     var config = try buildConfiguration(role: .sendonly)
@@ -165,6 +183,86 @@ final class SendonlyE2ETests: E2ETestBase {
     }
   }
 
+  /// ユーザー起因の切断で onDisconnect が onDisconnectComplete より先に各 1 回発火することを
+  /// 確認する
+  func testSendonlyDisconnectComplete() throws {
+    var config = try buildConfiguration(role: .sendonly)
+    config.channelId = buildChannelId(unique: true)
+    // 接続と切断のみを検証するため、映像と音声は無効にする
+    config.videoEnabled = false
+    config.audioEnabled = false
+
+    let connectExpectation = self.expectation(description: "接続が完了すること")
+    let disconnectExpectation = self.expectation(description: "onDisconnect が発火すること")
+    let disconnectCompleteExpectation = self.expectation(
+      description: "onDisconnectComplete が発火すること")
+
+    var channel1: MediaChannel?
+    // 切断ハンドラの発火順序を記録する (main queue 上で追記する)
+    var disconnectOrder: [String] = []
+    // ユーザー起因切断で通知される SoraCloseEvent を保持する
+    var disconnectEvent: SoraCloseEvent?
+
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("接続に失敗した : \(error)")
+          connectExpectation.fulfill()
+          return
+        }
+        guard let channel = mediaChannel else {
+          XCTFail("接続した MediaChannel が nil")
+          connectExpectation.fulfill()
+          return
+        }
+        channel1 = channel
+        channel.handlers.onDisconnect = { event in
+          DispatchQueue.main.async {
+            disconnectEvent = event
+            disconnectOrder.append("onDisconnect")
+            disconnectExpectation.fulfill()
+          }
+        }
+        channel.handlers.onDisconnectComplete = {
+          DispatchQueue.main.async {
+            disconnectOrder.append("onDisconnectComplete")
+            disconnectCompleteExpectation.fulfill()
+          }
+        }
+        connectExpectation.fulfill()
+      }
+    }
+    wait(for: [connectExpectation], timeout: 35)
+    guard let channel1 else {
+      XCTFail("接続に失敗した")
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ。XCTWaiter.wait はタイムアウト (0 秒) でも failure を報告しない。
+      // 接続失敗 (コールバックが error または nil) 時は SDK の接続が終了しているため、
+      // 以降の fulfill は発生しない。タイムアウト時は接続が進行中の場合があるが、
+      // ハンドラ登録は接続コールバック内で行われるため、この時点では未登録である
+      _ = XCTWaiter.wait(
+        for: [disconnectExpectation, disconnectCompleteExpectation], timeout: 0)
+      return
+    }
+
+    // ユーザー起因の切断を実行する
+    channel1.disconnect(error: nil)
+
+    // onDisconnect と onDisconnectComplete の発火を待つ
+    wait(for: [disconnectExpectation, disconnectCompleteExpectation], timeout: 10)
+
+    // 正常切断であることを確認する
+    // (ユーザー起因の disconnect(error: nil) は SoraCloseEvent.ok(code: 1000) で通知される)
+    if case .ok(let code, _) = disconnectEvent {
+      XCTAssertEqual(code, 1000, "正常切断コードであること")
+    } else {
+      XCTFail(
+        "予期しない切断イベント: \(String(describing: disconnectEvent)) (期待値: .ok(code: 1000))")
+    }
+
+    verifyDisconnectOrderOnMainQueue(disconnectOrder)
+  }
+
   /// サーバー側からの切断後に再接続できることを確認する
   func testSendonlyReconnect() throws {
     // Sora API のエンドポイントが未設定の場合はスキップする
@@ -180,9 +278,10 @@ final class SendonlyE2ETests: E2ETestBase {
     // 他テストのチャンネルを誤って切断しないよう一意化が必須)
     let channelId = buildChannelId(unique: true)
 
-    // 初回接続・サーバー切断検知・再接続の完了を待つ expectation
+    // 初回接続・サーバー切断検知・切断処理完了検知・再接続の完了を待つ expectation
     let connect1Expectation = self.expectation(description: "初回接続が完了すること")
     let disconnectExpectation = self.expectation(description: "サーバー切断を検知すること")
+    let disconnectCompleteExpectation = self.expectation(description: "サーバー切断の処理完了を検知すること")
     let connect2Expectation = self.expectation(description: "再接続が完了すること")
 
     // 接続したチャンネルと capturer を保持する (切断・停止に使用する)
@@ -192,6 +291,8 @@ final class SendonlyE2ETests: E2ETestBase {
     // 初回接続時の接続 ID とサーバー切断時の切断理由を保持する
     var connectionId1: String?
     var disconnectEvent: SoraCloseEvent?
+    // 切断ハンドラの発火順序を記録する (main queue 上で追記する)
+    var disconnectOrder: [String] = []
 
     // sendonly 用の Configuration (channelId は一意な値に上書きする)
     var config = try buildConfiguration(role: .sendonly)
@@ -219,11 +320,19 @@ final class SendonlyE2ETests: E2ETestBase {
         channel1 = channel
         connectionId1 = channel.connectionId
         // サーバー切断を検知する onDisconnect ハンドラを設定する
-        // (切断理由の確認と切断検知 expectation の fulfill のみを行う)
+        // (切断理由の確認、発火順序の記録、切断検知 expectation の fulfill を行う)
         channel.handlers.onDisconnect = { event in
           DispatchQueue.main.async {
             disconnectEvent = event
+            disconnectOrder.append("onDisconnect")
             disconnectExpectation.fulfill()
+          }
+        }
+        // 切断処理の完了通知を記録する (onDisconnectComplete は onDisconnect の後に発火する)
+        channel.handlers.onDisconnectComplete = {
+          DispatchQueue.main.async {
+            disconnectOrder.append("onDisconnectComplete")
+            disconnectCompleteExpectation.fulfill()
           }
         }
         let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
@@ -240,10 +349,14 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("初回接続に失敗した")
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
-      // 報告を防ぐ
-      disconnectExpectation.fulfill()
-      connect2Expectation.fulfill()
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ。XCTWaiter.wait はタイムアウト (0 秒) でも failure を報告しない。
+      // 接続失敗 (コールバックが error または nil) 時は SDK の接続が終了しているため、
+      // 以降の fulfill は発生しない。タイムアウト時は接続が進行中の場合があるが、
+      // ハンドラ登録は接続コールバック内で行われるため、この時点では未登録である
+      _ = XCTWaiter.wait(
+        for: [disconnectExpectation, disconnectCompleteExpectation, connect2Expectation],
+        timeout: 0)
       return
     }
 
@@ -272,11 +385,17 @@ final class SendonlyE2ETests: E2ETestBase {
     }.resume()
     wait(for: [apiExpectation], timeout: 10)
     guard apiDisconnectSucceeded else {
-      // 後始末 (サーバー切断は発生しないため、切断検知 expectation を fulfill する)
+      // 後始末 (サーバー切断は発生しないため、切断検知 expectation を wait 済みにする)
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      disconnectExpectation.fulfill()
-      connect2Expectation.fulfill()
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ。XCTWaiter.wait は fulfill を行わないため、ここで二重に fulfill される
+      // ことはない。未 fulfill のままでもタイムアウト (0 秒) は failure を報告しない。
+      // disconnectAll はこのテスト側の onDisconnect ハンドラを上書きするため、
+      // disconnectExpectation は未 fulfill のまま渡る (タイムアウト 0 秒は無害)
+      _ = XCTWaiter.wait(
+        for: [disconnectExpectation, disconnectCompleteExpectation, connect2Expectation],
+        timeout: 0)
       return
     }
 
@@ -286,7 +405,14 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("サーバー切断を検知できなかった")
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      connect2Expectation.fulfill()
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ。XCTWaiter.wait は fulfill を行わないため、ここで二重に fulfill される
+      // ことはない。未 fulfill のままでもタイムアウト (0 秒) は failure を報告しない。
+      // disconnectAll はこのテスト側の onDisconnect ハンドラを上書きするため、
+      // disconnectExpectation は未 fulfill のまま渡る (タイムアウト 0 秒は無害)
+      _ = XCTWaiter.wait(
+        for: [disconnectExpectation, disconnectCompleteExpectation, connect2Expectation],
+        timeout: 0)
       return
     }
     // 切断理由を確認する (Sora API 切断では code 1000 / reason "DISCONNECTED-API" が期待される。
@@ -295,13 +421,23 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTAssertEqual(code, 1000, "正常切断コードであること")
       XCTAssertEqual(reason, "DISCONNECTED-API", "切断理由が DISCONNECTED-API であること")
     } else {
-      XCTFail("予期しない切断: \(disconnectEvent)")
+      XCTFail("予期しない切断: \(disconnectEvent) (期待値: .ok(code: 1000))")
+      // 後続アサーションで失敗を重ねないよう、後始末して終了する
+      capturer?.stop()
+      disconnectAll(channels: [channel1, channel2])
+      _ = XCTWaiter.wait(
+        for: [disconnectCompleteExpectation, connect2Expectation], timeout: 0)
+      return
     }
 
-    // 1 秒待機してから再接続する (即時再接続による DUPLICATED-CHANNEL-ID レースを避ける)
-    // 1 秒の待機は main RunLoop 上で行い、Thread.sleep は使用しない
-    // (main RunLoop を止めると DummyVideoCapturer のフレーム送信が停止するため)
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+    // 切断処理の完了通知 (onDisconnectComplete) を待つ
+    // (即時再接続による DUPLICATED-CHANNEL-ID レース回避のための 1 秒待機を、
+    // クライアント側で確認できる切断処理の完了に置き換える)
+    wait(for: [disconnectCompleteExpectation], timeout: 10)
+
+    verifyDisconnectOrderOnMainQueue(disconnectOrder)
+
+    DispatchQueue.main.async {
       _ = self.sora?.connect(configuration: config) { mediaChannel, error in
         DispatchQueue.main.async {
           if let error {

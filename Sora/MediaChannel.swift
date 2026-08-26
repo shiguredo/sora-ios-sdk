@@ -30,7 +30,20 @@ public final class MediaChannelHandlers {
   public var onDisconnectLegacy: ((Error?) -> Void)?
 
   /// 接続解除時に呼ばれるクロージャー
+  /// 呼び出し元のスレッドは保証されないため、必要に応じて main キューに束ねること。
   public var onDisconnect: ((SoraCloseEvent) -> Void)?
+
+  /// 切断処理のクリーンアップを実行した後に呼ばれるクロージャー。
+  /// `onDisconnect` の発火後に呼ばれ、`PeerChannel.basicDisconnect()` の主要なクリーンアップ
+  /// （WebSocket クローズ要求の発行を含む）を実行した後で 1 回だけ発火します。
+  /// WebSocket のクローズ要求は発行しますが、その完了は OS 依存であり保証しません。
+  /// サーバー側の旧接続解放には TCP レベルのラグが存在するため、完全な保証ではありません。
+  /// 切断時に非同期処理が進行中だった場合（遅延パス）は、`onDisconnect` 発火時点で
+  /// MediaChannel は Sora の管理から除去済みのため、このクロージャーが発火するまで
+  /// MediaChannel への強参照を保持する必要があります。
+  /// basicDisconnect() が実行されない場合（猶予タイマー由来の切断の回復キャンセル等）は
+  /// 発火しません。呼び出し元のスレッドは保証されないため、必要に応じて main キューに束ねること。
+  public var onDisconnectComplete: (() -> Void)?
 
   /// ストリームが追加されたときに呼ばれるクロージャー
   public var onAddStream: ((MediaStream) -> Void)?
@@ -207,6 +220,25 @@ public final class MediaChannel {
   /// WebSocket 受信スレッド (offer 受信時のリセット) から並行して行われるため、
   /// NSLock で排他する。ハンドラ呼び出しはロックの外で行うこと。
   private let dataChannelOpenLock = NSLock()
+
+  // MARK: - 切断完了通知の追跡
+
+  // 切断処理の完了通知 (onDisconnectComplete) の状態です。
+  // 切断処理には basicDisconnect() を同期実行するパスと、
+  // 進行中の非同期処理の完了後に実行する遅延パスがあり、実行スレッドとタイミングが異なるため、
+  // 発火の 1 回性と順序 (onDisconnect -> onDisconnectComplete) を以下で保証します。
+  private var basicDisconnectCompleted = false
+  private var onDisconnectNotified = false
+  private var onDisconnectCompleteNotified = false
+  // 上記フラグの読み書きのみを保護し、ハンドラ呼び出しはロックの外で行うこと
+  private let disconnectCompleteLock = NSLock()
+
+  // disconnectCompleteLock を保持したまま block を実行します
+  private func withDisconnectCompleteLock<T>(_ block: () throws -> T) rethrows -> T {
+    disconnectCompleteLock.lock()
+    defer { disconnectCompleteLock.unlock() }
+    return try block()
+  }
 
   /// ストリームのリスト
   public var streams: [MediaStream] {
@@ -433,6 +465,14 @@ public final class MediaChannel {
     connectionStartTime = nil
     connectionTask.peerChannel = peerChannel
 
+    // 切断完了通知の状態をリセットします
+    // Sora.connect() は毎回新しい MediaChannel を生成するため防御的配置です
+    withDisconnectCompleteLock {
+      basicDisconnectCompleted = false
+      onDisconnectNotified = false
+      onDisconnectCompleteNotified = false
+    }
+
     signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
       guard let weakSelf = self else {
         return
@@ -451,6 +491,19 @@ public final class MediaChannel {
         weakSelf.internalDisconnect(error: error, reason: reason)
       }
       connectionTask.complete()
+    }
+
+    peerChannel.internalHandlers.onBasicDisconnectComplete = { [weak self] in
+      guard let weakSelf = self else {
+        return
+      }
+      let shouldFire = weakSelf.withDisconnectCompleteLock {
+        weakSelf.markBasicDisconnectCompletedLocked()
+      }
+      if shouldFire {
+        Logger.debug(type: .mediaChannel, message: "call onDisconnectComplete")
+        weakSelf.handlers.onDisconnectComplete?()
+      }
     }
 
     peerChannel.internalHandlers.onAddStream = { [weak self] stream in
@@ -639,6 +692,16 @@ public final class MediaChannel {
       }()
 
       handlers.onDisconnect?(disconnectEvent)
+
+      // 同期パスでは basicDisconnect() が既に完了しているため、
+      // onDisconnect の発火と併せて onDisconnectComplete もここで発火します。
+      let shouldFire = withDisconnectCompleteLock {
+        markOnDisconnectNotifiedLocked()
+      }
+      if shouldFire {
+        Logger.debug(type: .mediaChannel, message: "call onDisconnectComplete")
+        handlers.onDisconnectComplete?()
+      }
     }
   }
 
@@ -791,6 +854,60 @@ public final class MediaChannel {
     openedDataChannelLabels = []
     onDataChannelNotified = false
     dataChannelOpenLock.unlock()
+  }
+
+  /// basicDisconnect() の完了後に onDisconnectComplete を発火すべきかを判定します。
+  /// 状態を持たない純粋関数であり、単体テストの対象です。
+  ///
+  /// - Parameters:
+  ///   - basicDisconnectCompleted: `PeerChannel.basicDisconnect()` が実行されたかどうか
+  ///   - onDisconnectNotified: `handlers.onDisconnect?` が発火済みかどうか
+  ///   - onDisconnectCompleteNotified: `handlers.onDisconnectComplete?` が発火済みかどうか
+  ///     (`true` の場合は二重発火を防ぐため発火しない)
+  /// - Returns: `onDisconnectComplete` を発火すべきか
+  static func shouldNotifyDisconnectComplete(
+    basicDisconnectCompleted: Bool,
+    onDisconnectNotified: Bool,
+    onDisconnectCompleteNotified: Bool
+  ) -> Bool {
+    // 発火済みの場合は発火しない (二重発火の防止)
+    guard !onDisconnectCompleteNotified else {
+      return false
+    }
+    // onDisconnect より先には発火しない
+    guard onDisconnectNotified else {
+      return false
+    }
+    // basicDisconnect() が実行された場合のみ発火する
+    return basicDisconnectCompleted
+  }
+
+  /// basicDisconnect() の完了をマークし、onDisconnectComplete を発火すべきかを判定します。
+  /// 呼び出し元は `disconnectCompleteLock` を保持していること。
+  private func markBasicDisconnectCompletedLocked() -> Bool {
+    basicDisconnectCompleted = true
+    return shouldNotifyDisconnectCompleteLocked()
+  }
+
+  /// onDisconnect の発火をマークし、onDisconnectComplete を発火すべきかを判定します。
+  /// 呼び出し元は `disconnectCompleteLock` を保持していること。
+  private func markOnDisconnectNotifiedLocked() -> Bool {
+    onDisconnectNotified = true
+    return shouldNotifyDisconnectCompleteLocked()
+  }
+
+  /// フラグの現在値から onDisconnectComplete を発火すべきかを判定します。
+  /// 発火する場合は onDisconnectCompleteNotified を立てます (二重発火の防止)。
+  /// 呼び出し元は `disconnectCompleteLock` を保持していること。
+  private func shouldNotifyDisconnectCompleteLocked() -> Bool {
+    let shouldFire = Self.shouldNotifyDisconnectComplete(
+      basicDisconnectCompleted: basicDisconnectCompleted,
+      onDisconnectNotified: onDisconnectNotified,
+      onDisconnectCompleteNotified: onDisconnectCompleteNotified)
+    if shouldFire {
+      onDisconnectCompleteNotified = true
+    }
+    return shouldFire
   }
 
   /// MediaChannel の接続中にマイクをハードミュート有効化/無効化します

@@ -32,6 +32,11 @@
 - [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
   - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
   - @t-miya
+- [ADD] 切断処理完了後に呼ばれる MediaChannelHandlers.onDisconnectComplete ハンドラを追加する
+  - @t-miya
+- [FIX] 切断・接続を繰り返すと DUPLICATED-CHANNEL-ID が発生する問題を修正する
+  - `onDisconnectComplete` ハンドラを追加し、切断処理の完了前にアプリが即座に再接続してサーバー側セッションの解放未完了のまま同一チャンネル ID で接続が試みられることを防ぐ
+  - @t-miya
 - [FIX] TURN-TLS の証明書エラーで接続失敗した後も libwebrtc のログが流れ続ける問題を修正する
   - 接続試行中の切断要求で `connect()` の初期ロックを確実に解放し、 `RTCPeerConnection` をクローズする
   - 接続失敗時のエラー通知が二重に呼ばれないようにする
@@ -45,6 +50,9 @@
 
 ### misc
 
+- [CHANGE] E2E テストをテスト種別ごとに分割する
+  - テストクラスを recvonly / sendonly / sendrecv / simulcast の 4 つに分割し、共通処理は E2ETestBase に集約した
+  - @t-miya
 - [ADD] E2E テスト用にダミー音声デバイスを追加する
   - テストから internal な `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
   - @t-miya
@@ -53,9 +61,6 @@
   - @t-miya
 - [ADD] simulcast E2E テストを追加する
   - sendonly と recvonly を同一チャンネルに接続し、3 レイヤー (r0 / r1 / r2) の simulcast 送信と受信を検証する
-  - @t-miya
-- [CHANGE] E2E テストをテスト種別ごとに分割する
-  - テストクラスを recvonly / sendonly / sendrecv / simulcast の 4 つに分割し、共通処理は E2ETestBase に集約した
   - @t-miya
 - [ADD] reconnect E2E テストを追加する
   - Sora API (DisconnectConnection) でサーバー側から切断し、再接続できることを検証する
@@ -71,6 +76,10 @@
   - @t-miya
 - [ADD] DataChannel シグナリング切断経路 E2E テストを追加する
   - DataChannel シグナリング有効時にサーバー側切断が DataChannel 経由で伝播し、切断理由が SoraCloseEvent で通知されることを検証する
+  - @t-miya
+- [ADD] 切断処理完了通知（onDisconnectComplete）と切断ハンドラ発火順序の E2E テストを追加する
+  - ユーザー起因・サーバー起因の切断で onDisconnect が onDisconnectComplete より先に各 1 回発火することを検証する
+  - onDisconnectComplete の発火を再接続トリガーにできることを検証する（testSendonlyReconnect の 1 秒待機を置き換え）
   - @t-miya
 
 ## 2026.2.0
