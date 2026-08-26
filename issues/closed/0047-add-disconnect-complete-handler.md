@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-08-25
 - Model: Sonnet 4.6
 - Branch: feature/add-disconnect-complete-handler
 - Polished: 2026-08-25
@@ -197,3 +197,14 @@ if shouldFire {
   - `onDisconnectComplete` 発火を再接続トリガーにし、接続が成功することを検証する（1 秒待機を発火待ちに置き換える。これは上記の `testSendonlyReconnect` の変更に組み込む）
 - 発火回数と順序の確定は、main queue 上で発火履歴を配列に記録し、すべての期待発火が終息した後に行う最終検証（`finalVerify` 方式、`SendonlyE2ETests.swift:573-579` の前例）で行う
 - 遅延パス（`count >= 2` 中の切断）は E2E での意図的な再現が難しいため、純粋関数の真理値表と実装レビュー（発火経路のトレース）で担保する
+
+### 実装結果
+
+- ブランチ `feature/add-disconnect-complete-handler` で実装済み。変更ファイル:
+  - `Sora/MediaChannel.swift`: `MediaChannelHandlers.onDisconnectComplete` 追加、3 フラグ + `NSLock`（`withDisconnectCompleteLock`）、純粋関数 `shouldNotifyDisconnectComplete` と `mark*Locked`、発火チェック
+  - `Sora/PeerChannel.swift`: `PeerChannelInternalHandlers.onBasicDisconnectComplete` 追加、`basicDisconnect()` 内での呼び出し
+  - `SoraTests/DisconnectCompleteNotificationTests.swift`: 真理値表 5 組（到達不能 3 組を除外）の単体テスト
+  - `SoraTests/SendonlyE2ETests.swift`: `testSendonlyDisconnectComplete` 追加、`testSendonlyReconnect` の 1 秒待機を発火待ちに置き換え
+  - `CHANGES.md`: `[ADD]` エントリ、0042 の `[FIX]` エントリ、misc の E2E エントリ
+- 検証済み: Swift 6 モードのビルド（BUILD SUCCEEDED）、単体テスト 5 件（iPhone シミュレータで TEST SUCCEEDED）、swift-format / SwiftLint
+- 未実行: E2E テストは実サーバー（Sora + Sora API）が必要なため未実行。`SORA_SIGNALING_URL` / `TEST_API_URL` / `TEST_SECRET_KEY` を設定した CI で確認すること
