@@ -188,9 +188,11 @@ final class SendonlyE2ETests: E2ETestBase {
   func testSendonlyDisconnectComplete() throws {
     var config = try buildConfiguration(role: .sendonly)
     config.channelId = buildChannelId(unique: true)
-    // 接続と切断のみを検証するため、映像と音声は無効にする
-    config.videoEnabled = false
+    // 接続と切断のみを検証するため、音声は無効にする。
+    // 映像・音声の両方を無効にすると Sora サーバーが INVALID-MESSAGE を返すため、
+    // 映像は有効のままカメラの自動起動のみ無効にする (capturer は接続しない)
     config.audioEnabled = false
+    config.initialCameraEnabled = false
 
     let connectExpectation = self.expectation(description: "接続が完了すること")
     let disconnectExpectation = self.expectation(description: "onDisconnect が発火すること")
@@ -261,6 +263,11 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     verifyDisconnectOrderOnMainQueue(disconnectOrder)
+
+    // 遅延したハンドラ発火がテスト完了後に main queue で実行されても
+    // 次のテストに影響しないよう、ハンドラを解放する
+    channel1.handlers.onDisconnect = nil
+    channel1.handlers.onDisconnectComplete = nil
   }
 
   /// サーバー側からの切断後に再接続できることを確認する
@@ -293,6 +300,16 @@ final class SendonlyE2ETests: E2ETestBase {
     var disconnectEvent: SoraCloseEvent?
     // 切断ハンドラの発火順序を記録する (main queue 上で追記する)
     var disconnectOrder: [String] = []
+    // disconnectCompleteExpectation の二重 fulfill を防ぐためのフラグです
+    // (遅延した発火がテスト完了後に main queue で実行されても、
+    // 次のテストで NSInternalInconsistencyException が発生しないようにする)
+    var disconnectCompleteExpectationFulfilled = false
+    func fulfillDisconnectCompleteExpectationIfNeeded() {
+      if !disconnectCompleteExpectationFulfilled {
+        disconnectCompleteExpectationFulfilled = true
+        disconnectCompleteExpectation.fulfill()
+      }
+    }
 
     // sendonly 用の Configuration (channelId は一意な値に上書きする)
     var config = try buildConfiguration(role: .sendonly)
@@ -332,7 +349,7 @@ final class SendonlyE2ETests: E2ETestBase {
         channel.handlers.onDisconnectComplete = {
           DispatchQueue.main.async {
             disconnectOrder.append("onDisconnectComplete")
-            disconnectCompleteExpectation.fulfill()
+            fulfillDisconnectCompleteExpectationIfNeeded()
           }
         }
         let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
@@ -477,6 +494,12 @@ final class SendonlyE2ETests: E2ETestBase {
     // 後始末: capturer を停止し、接続済みチャンネルを切断する
     // (旧チャンネルはサーバー切断済みのため、disconnectAndVerify の state チェックでスキップされる)
     capturer?.stop()
+    // 遅延したハンドラ発火がテスト完了後に main queue で実行されても
+    // 次のテストに影響しないよう、ハンドラを解放してから切断する
+    channel1.handlers.onDisconnect = nil
+    channel1.handlers.onDisconnectComplete = nil
+    channel2.handlers.onDisconnect = nil
+    channel2.handlers.onDisconnectComplete = nil
     for channel in [channel1, channel2] {
       disconnectAndVerify(channel: channel)
     }
