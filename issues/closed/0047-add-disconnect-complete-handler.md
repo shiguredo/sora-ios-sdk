@@ -207,4 +207,5 @@ if shouldFire {
   - `SoraTests/SendonlyE2ETests.swift`: `testSendonlyDisconnectComplete` 追加、`testSendonlyReconnect` の 1 秒待機を発火待ちに置き換え
   - `CHANGES.md`: `[ADD]` エントリ、0042 の `[FIX]` エントリ、misc の E2E エントリ
 - 検証済み: Swift 6 モードのビルド（BUILD SUCCEEDED）、単体テスト 5 件（iPhone シミュレータで TEST SUCCEEDED）、swift-format / SwiftLint
+- 実機確認（手動）: 接続と切断を数回繰り返し、エラーなし
 - 未実行: E2E テストは実サーバー（Sora + Sora API）が必要なため未実行。`SORA_SIGNALING_URL` / `TEST_API_URL` / `TEST_SECRET_KEY` を設定した CI で確認すること

@@ -68,6 +68,7 @@
 
 - 方針 A は `0047`（closed）で実装済み。`Sora/MediaChannel.swift` / `Sora/PeerChannel.swift` / `SoraTests/` への反映と、Swift 6 モードのビルド・単体テスト 5 件の実行済みを確認
 - `CHANGES.md` の `## develop` に `[FIX]` エントリを追記済み（`onDisconnectComplete` ハンドラ追加による原因対処を説明。対応者: @t-miya）
+- 実機確認（手動）: 接続と切断を数回繰り返し、エラーなし
 - E2E 検証（`testSendonlyReconnect` の変更）は実サーバーが必要なため未実行。`SORA_SIGNALING_URL` / `TEST_API_URL` / `TEST_SECRET_KEY` を設定した CI で 0047 側の完了条件と併せて確認すること
 
 ## 関連 issue
