@@ -6,6 +6,7 @@
 - Model: Opus 4.8
 - Branch: feature/refactor-singleton-usage-review
 - Polished: 2026-06-06
+- Updated: 2026-08-27
 
 ## 目的
 
@@ -17,84 +18,73 @@
 
 - 複数接続が並行するユースケースで `simulcastEnabled` が上書きされるリスクがあるが、単一接続の通常利用では問題が顕在化しない。
 - `NativePeerChannelFactory` 自体は既に接続単位インスタンス化されており、残る影響範囲は `simulcastEnabled` の一変数に限られる。急ぐ必要がないため Low とする。
+- 現在の simulcast E2E は shared state の混線を避けるため、同一プロセス内の全接続で `simulcastEnabled = true` に統一しており、異なる設定の並行利用は検証できていない。
 
 ## 現状
 
-`WrapperVideoEncoderFactory` はシングルトンで `simulcastEnabled` を可変プロパティとして保持している（`Sora/NativePeerChannelFactory.swift:6`・`Sora/NativePeerChannelFactory.swift:16`）。
+`Sora/NativePeerChannelFactory.swift` の `WrapperVideoEncoderFactory` はシングルトンで `simulcastEnabled` を可変プロパティとして保持している。
 
-`NativePeerChannelFactory.init()` はこのシングルトンを `RTCPeerConnectionFactory` の `encoderFactory:` 引数に渡す。
+`NativePeerChannelFactory.init(bypassVoiceProcessing:audioDevice:)` は、custom `RTCAudioDevice` を利用する経路と通常の `RTCAudioDeviceModule` を利用する経路の両方で、このシングルトンを `RTCPeerConnectionFactory` の `encoderFactory:` 引数に渡す。
 
-```swift
-// Sora/NativePeerChannelFactory.swift:50-56
-let encoder = WrapperVideoEncoderFactory.shared
-let decoder = RTCDefaultVideoDecoderFactory()
-nativeFactory =
-  RTCPeerConnectionFactory(
-    encoderFactory: encoder,
-    decoderFactory: decoder,
-    audioDeviceModule: audioDeviceModule)
-```
+`Sora/PeerChannel.swift` の `PeerChannel.connect(handler:)` と `PeerChannel.handleSignalingOverWebSocket(_:)` は、接続開始時と `type: offer` 受信時にこのグローバル状態を書き換える。
 
-`PeerChannel` は接続のたびにこのグローバル状態を 2 箇所で書き換える。
-
-```swift
-// Sora/PeerChannel.swift:260
-WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
-```
-
-```swift
-// Sora/PeerChannel.swift:1035
-WrapperVideoEncoderFactory.shared.simulcastEnabled = simulcast
-```
-
-`PeerChannel.swift:258` 付近には次の TODO コメントが存在する。
+`PeerChannel.connect(handler:)` には次の TODO コメントが存在する。
 
 ```swift
 // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに
 // 設定されるので、ここでの設定は不要かもしれない
 ```
 
-この TODO が示すとおり、行 260 の設定は行 1035（`type: offer` 受信時）と二重になっている可能性がある。実装前に要否を確認し、不要であれば行 260 の設定も合わせて削除する。
+この TODO が示すとおり、接続開始時の設定は `type: offer` 受信時の設定と二重になっている可能性がある。実装前に要否を確認し、不要であれば接続開始時の設定も削除する。
+
+`SoraTests/SimulcastE2ETests.swift` の `testSimulcastDummyVideo` は同一プロセスで複数接続を作るが、shared state の混線を避けるため全接続で `simulcastEnabled = true` に統一している。
 
 ## 設計方針
 
 **`WrapperVideoEncoderFactory` を接続単位インスタンスにする**:
 
-- `NativePeerChannelFactory` に `private let videoEncoderFactory: WrapperVideoEncoderFactory` を追加し、`init()` 内で `WrapperVideoEncoderFactory()` をインスタンス化する（`WrapperVideoEncoderFactory.shared` の参照を削除）。
-- `NativePeerChannelFactory.init()` 行 50 の `let encoder = WrapperVideoEncoderFactory.shared` は `videoEncoderFactory` に置き換える。同 init の行 58 の `encoder.supportedCodecs()` も `videoEncoderFactory.supportedCodecs()` に更新する。
+- `NativePeerChannelFactory` に `private let videoEncoderFactory: WrapperVideoEncoderFactory` を追加し、`init(bypassVoiceProcessing:audioDevice:)` 内で `WrapperVideoEncoderFactory()` をインスタンス化する。
+- custom `RTCAudioDevice` と通常の `RTCAudioDeviceModule` の両方の初期化経路へ、同じ接続単位の `videoEncoderFactory` を渡す。
+- `NativePeerChannelFactory.init(bypassVoiceProcessing:audioDevice:)` の codec log も `videoEncoderFactory.supportedCodecs()` を使用する。
 - `NativePeerChannelFactory` に `var simulcastEnabled: Bool` を forwarding プロパティとして追加し、`videoEncoderFactory.simulcastEnabled` への委譲とする。
-- `PeerChannel.swift:260` と `:1035` の `WrapperVideoEncoderFactory.shared.simulcastEnabled = ...` を `self.nativePeerChannelFactory.simulcastEnabled = ...` に変更する（`PeerChannel.swift:156` で `let nativePeerChannelFactory: NativePeerChannelFactory` として保持されている）。
-- `WrapperVideoEncoderFactory.shared`（`NativePeerChannelFactory.swift:6`）への参照がなくなった時点で `static let shared` 宣言を削除する。
-- `WrapperVideoEncoderFactory` の行 4 のクラスコメント（`// WebRTC のエンコーダーファクトリーを共有して扱うため、@unchecked Sendable を付与します`）を実態に合わせて更新する。`@unchecked Sendable` を引き続き付与する場合は、付与理由（WebRTC の非 Sendable 型を保持するため）を正しく記載する。
+- `PeerChannel.connect(handler:)` と `PeerChannel.handleSignalingOverWebSocket(_:)` の shared 参照を `nativePeerChannelFactory.simulcastEnabled` への設定に変更する。
+- `WrapperVideoEncoderFactory.shared` への参照がなくなった時点で `static let shared` 宣言を削除する。
+- `WrapperVideoEncoderFactory` のクラスコメントを接続単位インスタンスの実態に合わせて更新する。
 
 **スレッドセーフ性**:
 
-`NativePeerChannelFactory` は `@unchecked Sendable`（行 36）であり、コメントに「呼び出し側でスレッド安全性を担保する前提」と明記されている。`PeerChannel.swift:260` と `:1035` での書き込みが既存の `PeerChannel` のスレッドモデル（接続処理のキュー）上で行われているかを実装前に確認し、既存の担保方針の範囲内であれば追加の排他制御は不要とする。
+`PeerChannel.connect(handler:)` と `PeerChannel.handleSignalingOverWebSocket(_:)` は、同じ接続専用 queue から呼ばれるとは限らない。さらに `WrapperVideoEncoderFactory.createEncoder(_:)` の read 側は libwebrtc から呼ばれる。接続単位化に加えて、初期化後に設定を不変にするか、read / write を同じ同期機構で保護するなどの不変条件を定める。
 
-**行 260 の TODO 調査**:
+`@unchecked Sendable` を残す場合は、WebRTC の non-Sendable object を保持するという理由だけでなく、`simulcastEnabled` を含む全 mutable state の同期根拠を日本語コメントに記載する。
 
-行 1035 の `type: offer` 受信時の設定だけで `simulcastEnabled` が正しく機能するかを確認し、行 260 が冗長であれば削除する。どちらのパスが先に呼ばれるか（`NativePeerChannelFactory` の作成タイミングと接続フローの順序）を `PeerChannel.swift` の初期化シーケンスで確認すること。調査結果と判断根拠を `## 解決方法` に記載すること。
+**接続開始時の TODO 調査**:
+
+`type: offer` 受信時の設定だけで `simulcastEnabled` が正しく機能するかを確認し、接続開始時の設定が冗長であれば削除する。`NativePeerChannelFactory.createClientOfferSDP` による一時 PeerConnection の生成を含む初期化順序を確認し、判断根拠を `## 解決方法` に記載する。
 
 **本 issue のスコープ外**:
 
-- `CameraVideoCapturer.current` / `front` / `back` / `handlers` の共有静的状態は公開 API であり、本 issue では扱わない。
-- `Logger.shared` および `Sora.shared` は本 issue では扱わない。
+- `CameraVideoCapturer` の共有状態は `0103` で扱う。
+- `Logger.shared` は `0106`、`Sora.shared` は `0111` で扱う。
+- 接続状態の owner は `0100`、接続設定の snapshot は `0102` で扱う。
+- WebRTC C API への移行は `0070` で扱う。`0026` を先行する場合は接続単位の ownership を移行後も維持し、`0070` が先行する場合は C bridge に global mutable flag を再導入しない。
 
 ## テスト方針
 
 モック・スタブは使用しない。
 
-- `simulcastEnabled` の設定が接続単位に分離されていることを、サイマルキャスト設定の異なる 2 接続を並行して行う手動テストで確認する。
+- `SoraTests/SimulcastE2ETests` で、サイマルキャスト設定の異なる 2 接続を同一プロセス内で並行して実行する。
+- 現在の「全接続で `simulcastEnabled = true` に統一する」workaround を削除してもテストが成功することを確認する。
 - 既存の全テストがパスすること（`swift test` または Xcode でテストを実行）。
 - 単一接続での通常の映像送受信（サイマルキャストあり・なし両方）が引き続き正常に動作することを実機または Simulator で手動確認すること。
 
 ## 完了条件
 
 - `WrapperVideoEncoderFactory` が `NativePeerChannelFactory` 内で接続単位インスタンスとして保持され、`static let shared` が削除されていること。
-- `PeerChannel.swift` から `WrapperVideoEncoderFactory.shared` への直接参照がなくなっていること。
-- `PeerChannel.swift:260` 付近の TODO を調査し、判断根拠を `## 解決方法` に記載していること。不要であれば該当行を削除していること。
-- スレッドセーフ性の調査結果（`PeerChannel` のどのキューで `simulcastEnabled` が書き換えられているか、追加の排他制御が必要か否か）を `## 解決方法` に記載していること。
-- `WrapperVideoEncoderFactory` のクラスコメントが接続単位インスタンスの実態を反映した内容に更新され、`@unchecked Sendable` の付与理由（WebRTC の非 Sendable 型を保持するため）が明記されていること。
+- `PeerChannel` から `WrapperVideoEncoderFactory.shared` への直接参照がなくなっていること。
+- `PeerChannel.connect(handler:)` の TODO を調査し、判断根拠を `## 解決方法` に記載していること。不要であれば接続開始時の設定を削除していること。
+- `simulcastEnabled` の read / write が初期化後不変または同じ同期機構で保護され、libwebrtc callback を含む安全性の根拠が記載されていること。
+- `WrapperVideoEncoderFactory` のクラスコメントが接続単位インスタンスの実態を反映し、`@unchecked Sendable` を残す場合は全 mutable state の同期根拠が明記されていること。
+- 異なる `simulcastEnabled` を持つ複数接続の E2E が成功し、全接続を同じ設定へ揃える workaround が削除されていること。
 - 既存の全テストがパスすること。
 - 単一接続での映像送受信の挙動が変わらないこと。
 - `CHANGES.md` の `## develop` セクションの `### misc` に以下を追記すること（`### misc` セクションが存在しない場合は新設すること）:
