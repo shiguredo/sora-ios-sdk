@@ -5,7 +5,7 @@
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/fix-ipad-soloambient-no-audio
-- Polished: 2026-07-27
+- Polished: 2026-08-27
 
 ## 目的
 
@@ -19,7 +19,7 @@
 
 ### コードの実態
 
-`initializeSenderStream()` の中で `configuration.audioEnabled` が `true` のとき `initializeAudioInput()` が呼ばれる。`initializeAudioInput()` は以下を順番に行う:
+`initializeSenderStream()` の中で `configuration.audioEnabled` が `true` かつ `configuration.audioDevice == nil` のとき `initializeAudioInput()` が呼ばれる。カスタム音声デバイス（`DummyAudioDevice` 等）が設定されている場合は `initializeAudioInput()` は呼ばれず、`AVAudioSession` の設定はデバイス側の `RTCAudioDevice` 実装が行う。`initializeAudioInput()` は以下を順番に行う:
 
 1. `session.setInitialMicrophoneMute(...)` でマイクミュートの初期状態を設定する（`initializeInput` の前にしか変更できないためこの順序が必要）
 2. `RTCAudioSessionConfiguration.webRTC().category = AVAudioSession.Category.playAndRecord.rawValue` で WebRTC 設定オブジェクトのカテゴリーを変更する
@@ -60,14 +60,19 @@
 1. 再現端末・iOS バージョン・libwebrtc バージョンを特定し、本 issue の再現条件セクションを更新する
 2. `initializeInput` のエラーコールバックが呼ばれているか確認する（デバッグログで `failed to initialize audio input` が出力されるか）
 3. `initializeInput` が音声再生を阻害するメカニズムを特定する（タイミング問題か、音声セッション状態の破壊か）
+4. `initializeInput` を呼ばない状態で、相手への音声送信（マイク入力）と受信の両方が機能するか実機の `sendrecv` 送受信で確認する（実験結果は受信再生のみ観測しており、送信側は未検証のため）
 
-フェーズ 2 移行条件: 項目 1（再現端末・バージョン特定）と項目 2（エラーコールバック確認）が完了し、修正方針を選択できる状態になった時点でフェーズ 2 に着手する。項目 3（阻害メカニズム特定）は方針選択の精度向上に寄与するが必須ではない。
+フェーズ 2 移行条件: 項目 1（再現端末・バージョン特定）と項目 2（エラーコールバック確認）が完了し、修正方針を選択できる状態になった時点でフェーズ 2 に着手する。項目 3（阻害メカニズム特定）は方針選択の精度向上に寄与するが必須ではない。項目 4（`initializeInput` なしの送受信検証）は、後述の方針 A を選択する場合の必須条件とする。
 
 **フェーズ 2（修正）**:
 
-調査結果に応じて以下の候補から方針を選択する:
+調査結果に応じて以下の候補から方針を選択する。選択基準は次のとおり。
 
-**方針 A**: `initializeInput` を呼ばない構成オプションを追加する。この方針を採用する場合、`initializeInput` 前にしか設定できない `setInitialMicrophoneMute` が機能しなくなる副作用がある。また `Configuration.initialMicrophoneEnabled` との役割の重複を整理する必要がある
+- **方針 A を選択する条件**: 項目 2 の結果に関わらず、再現端末で「`initializeInput` を呼ばないとリモート音声が再生される」ことが安定して確認でき、かつ項目 4 で `initializeInput` なしでも送受信の両方が機能することが確認できた場合。
+- **方針 B を選択する条件**: 項目 3 の調査で阻害メカニズムがタイミング問題と特定され、呼び出しタイミングの変更だけで再生とマイク送信の両方が成立すると判断できる場合。
+- **方針 C を選択する条件**: 項目 2 で `initializeInput` のエラーコールバック（`failed to initialize audio input`）が確認され、かつエラー後のリカバリーで再生とマイク送信の両方が成立すると判断できる場合。
+
+**方針 A**: `initializeInput` を呼ばない構成オプションを追加する。カスタム音声デバイスを `Configuration.audioDevice` に設定した場合は既に `initializeAudioInput()` を呼ばずに音声送信が E2E で確認されており、これを参考に設計する（ただしカスタム `RTCAudioDevice` 経路であり、デフォルトの ADM 経路で `initializeInput` を呼ばない場合の影響は項目 4 で確認する）。この方針を採用する場合、`initializeInput` 前にしか設定できない `setInitialMicrophoneMute` が機能しなくなる副作用がある。また `Configuration.initialMicrophoneEnabled` との役割の重複を整理する必要がある
 
 **方針 B**: `initializeInput` の呼び出しタイミングを変更する（例: カテゴリー変更後に適切な同期処理を挟む、または接続確立後に遅延呼び出しする）
 
