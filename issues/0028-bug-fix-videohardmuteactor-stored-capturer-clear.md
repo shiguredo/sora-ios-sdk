@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/fix-videohardmuteactor-stored-capturer-clear
-- Polished: 2026-07-27
+- Polished: 2026-08-27
 - Updated: 2026-08-27
 
 ## 目的
@@ -35,6 +35,8 @@
 
 `0098` より先に共有 `storedCapturer` を無条件で nil にすると、別接続がカメラを起動しただけで元接続の保存状態を破棄する可能性があるため、本 issue は `0098` の後に実施する。
 
+`0103` は本 issue で確定する保存状態のクリア挙動を維持したままカメラ状態を owner へ集約する refactor であるため、本 issue を先に実施し、`0103` がその挙動を引き継ぐ。
+
 ## 設計方針
 
 `0098` で導入する connection lease ごとの保存状態について、同一 lease の unmute が成功した場合だけ保存状態をクリアする。
@@ -42,18 +44,18 @@
 - 経路 A は、active capturer が同じ lease、operation generation、sender stream に属すると確認できた場合だけ成功とする。
 - 経路 B は、同じ lease が所有する capturer の restart 成功後にクリアする。
 - 経路 C は、新規 start 成功後に同じ lease の保存状態が残っていないことを保証する。
-- 別接続の active capturer を観測した場合は元接続の保存状態をクリアせず、`0098` で定める競合エラーとして扱う。
+- 別接続の active capturer を観測した場合は元接続の保存状態をクリアせず、`0098` の設計方針が定める別 lease の capturer 操作に対する明示的な `SoraError.mediaChannelError` による拒否に従う。
 - disconnect または logical connection ID の変更後は、古い lease の保存状態を再利用しない。
 
 **解除失敗時の挙動**:
 
 `restartCameraVideoCapture` が throw した場合は、同じ connection lease が有効な間だけ保存状態を保持し、同じ lease の再試行に利用する。disconnect、generation 変更、別 lease からの操作では利用しない。再試行不能なエラーで保存状態を破棄するかは実装時にエラー分類を確認し、判断根拠を `## 解決方法` に記載する。
 
-**後方互換性**: 公開 API の `setVideoHardMute` の外形的な挙動は変えない。内部状態のクリアのみ。
+**後方互換性**: 本 issue の変更は内部状態のクリアのみであり、公開 API の `setVideoHardMute` の外形的な挙動は変えない。別 lease 起因のエラー化は `0098` が導入する。
 
 ## テスト方針
 
-モック・スタブは使用しない。接続済みの sender role、映像有効、`cameraSettings.isEnabled == true`、sender stream と video track が存在する条件で、実カメラを使って確認する。
+モック・スタブは使用しない。接続済みの sender role、映像有効、`cameraSettings.isEnabled == true`、sender stream と video track が存在する条件で、実カメラを使って確認する。実カメラが必要な検証は iOS Simulator では実行できないため、実機または実カメラが利用可能な環境で確認する。
 
 - `mute = true` → `mute = false`（restart 経路）の順で呼び出し後、映像が再開されること。
 - `initialCameraEnabled = false` で接続し、最初に `mute = false` を呼ぶ start 経路で映像が起動すること。
@@ -72,6 +74,7 @@
 - disconnect と connection generation 変更時に古い保存状態が残らないこと。
 - 連続した `mute true/false` の切り替えで、期待どおり再開できること。
 - 既存の `setVideoHardMute` の挙動を壊さないこと。
+- 追加したテストと既存テストがすべて成功すること。
 - `CHANGES.md` の `## develop` セクションに以下を追記すること:
   ```
   - [FIX] VideoHardMuteActor のミュート解除成功後に storedCapturer をクリアする
