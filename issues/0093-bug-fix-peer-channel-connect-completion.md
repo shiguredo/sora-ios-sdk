@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/fix-peer-channel-connect-completion
-- Polished:
+- Polished: 2026-08-27
 
 ## 目的
 
@@ -19,7 +19,7 @@
 
 外側の `error` は関数冒頭の分岐を通過した時点で `nil` であるため、SDP 生成が失敗してもエラーが伝播せず、`nil` の SDP を使った接続処理へ進む。
 
-### `createAnswer` が handler を呼ばずに終了する
+### `createAnswer` が handler を呼ばずに return する契約違反がある
 
 `createAnswer(isSender:offer:constraints:initialOffer:mid:generation:handler:)` は、次の段階で `nativeChannel` が存在しない場合にログだけを出して return する。
 
@@ -27,7 +27,9 @@
 - `setRemoteDescription` 完了後
 - `answer` 生成完了後
 
-呼び出し元が `Lock.lock()` を取得してから `createAnswer` を呼んでいる経路では、handler が呼ばれないため `Lock.unlock()` に到達せず、切断処理が残留する。
+呼び出し元は `lock.lock()` 取得後に `createAnswer` を呼び、handler 内で `lock.unlock()` を実行する。handler が呼ばれないと lock が解放されず、進行中の切断要求が実行されないまま残留するため、この return は契約違反である。
+
+現行コードでは `nativeChannel` は `createAndSendAnswer` 内の代入のみで nil 化されず、redirect 中の切り替えは世代照合（`generation` の不整合時は `handler(nil, nil)` を呼んで正常終端）が先に捕捉する。このためこれらの nil guard 経路は現在は実質到達しない防御コードだが、handler を必ず 1 回呼ぶ契約は lock 残留を防ぐ不変条件として、到達状況に関わらず満たす。
 
 ### callback からの再入で二重実行される
 
@@ -41,38 +43,38 @@
 
 次の各経路を個別に確認する。
 
-1. Offer SDP の生成が失敗する接続条件を用意し、元のエラーが接続 callback に届くか確認する。
-2. answer pipeline の各非同期段階と切断または redirect を競合させ、`nativeChannel` が切り替わる経路を確認する。
+1. Offer SDP の生成が失敗する接続条件を用意し、元のエラーが接続 callback に届くか確認する。実環境で失敗条件を再現できない場合は、その事実と代替の検証方法を `## 解決方法` に記録する。
+2. answer pipeline の各非同期段階と redirect を競合させ、世代照合で `handler(nil, nil)` が呼ばれて呼び出し元の lock が解放されることを確認する。
 3. 接続成功 callback 内から直ちに `disconnect()` を呼び、接続 callback の呼び出し回数を記録する。
 4. 接続失敗 callback 内から切断処理へ再入し、同じ callback が再実行されないか確認する。
 
 ## 設計方針
 
-- 接続試行ごとに一意な ID と完了済み状態を持たせ、成功、失敗、timeout、redirect、利用者切断を 1 つの終端処理へ集約する。
+- 1 回の `Sora.connect()` を表す論理接続 ID（`0095` の用語に合わせる）と完了済み状態を持たせ、成功、失敗、timeout、利用者切断を 1 つの終端処理へ集約する。redirect は接続試行を終端しない。redirect は `0095` が定める transport epoch として扱い、redirect 中に in-flight の answer pipeline を破棄するのは現行の世代照合（`dataChannelGeneration`）の役割を維持して対応する。timeout は `PeerChannel` 内ではなく、`MediaChannel` 側の `ConnectionTimer` が `SoraError.connectionTimeout` を `signalingFailure` の切断として `PeerChannel` へ入力する。
 - 終端処理では、先に callback を take-and-clear し、状態と lock を確定してから利用者コードを呼ぶ。
-- `createAnswer` の handler を `Result<String, Error>` 相当の契約に整理し、すべての return 経路で厳密に 1 回呼ぶ。
-- `nativeChannel` が存在しない場合を明示的な接続失敗として扱う。世代不一致を正常終了相当の `nil, nil` として扱う場合も、呼び出し元が必ず lock を解放できる結果を返す。
+- `createAnswer` の handler を `Result<String, Error>` 相当の契約に整理し、すべての return 経路で厳密に 1 回呼ぶ。handler が返す「sdp 取得成功」「エラー」「世代不一致（`nil, nil`）」を呼び出し元が判別できる契約にする。lock の解放は呼び出し元の handler 側に一本化し、`createAnswer` 内部では lock を操作しない。
+- `nativeChannel` が存在しない場合は明示的な接続失敗として handler へ渡す。世代不一致は正常終了相当の `nil, nil` として返し、呼び出し元の世代照合で lock を解放して破棄する。現在 `createAnswer` 内と各呼び出し元に二重で存在する世代照合は、呼び出し元側へ集約する。
 - Offer SDP callback では `sdpError` をそのまま終端処理へ渡す。
 - callback は internal lock または接続状態 executor の外で呼ぶ。
-- 本 issue は接続試行の終端保証に限定する。`ConnectionTask.cancel()` 自体の状態競合は `0092`、接続状態全体の executor 集約は別 issue とする。
+- 本 issue は接続試行の終端保証に限定する。`ConnectionTask.cancel()` 自体の状態競合は `0092`、redirect 中の旧 transport 無効化は `0095`、接続状態全体の executor 集約は `0100` で扱う。`0047` は `basicDisconnect()` 内の `onConnect?(error)` 呼び出しの直後に `onBasicDisconnectComplete` を追加する計画があり、本 issue が同じ区間を take-and-clear 化するため `0047` を先に実施し、本 issue は onConnect の取り出しと呼び出しを 1 つの明示的な発火点として残して `0047` の挿入位置（onConnect 後）を維持する。
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
-- production code の接続完了台帳を使い、成功、各 SDP 失敗、timeout、切断、redirect のイベント列を入力して完了回数を検証する。
+- production code の接続完了台帳を使い、成功、各 SDP 失敗、timeout（`MediaChannel` の `ConnectionTimer` が `signalingFailure` の切断として入力する）、利用者切断、redirect 中の世代照合破棄のイベント列を入力し、1 回の論理接続で完了が 1 回だけ記録されることを検証する。
 - 実際の `PeerChannel` と WebRTC を使い、接続 callback 内からの即時 disconnect を検証する。
 - 実 Sora への接続で成功 callback と切断 callback がそれぞれ 1 回だけ発火することを確認する。
-- エラー経路の検証では、実際に失敗する入力または接続条件を使用し、成功結果を返す代替実装は使用しない。
+- `createClientOfferSDP` や `answer` の失敗経路は、実際に失敗する入力または接続条件で検証する。実環境で失敗条件を再現できない経路は、その事実と代替の検証方法を `## 解決方法` に記録する。成功結果を返す代替実装は使用しない。
 - テストには、callback を呼ぶ前に状態を確定させる理由を日本語コメントで明記する。
 
 ## 完了条件
 
 - Offer SDP 生成失敗時に元の `sdpError` が利用者へ通知されること。
 - `createAnswer` のすべての return 経路で handler が厳密に 1 回呼ばれること。
-- answer pipeline の途中で `nativeChannel` が失われても lock が残らないこと。
+- 世代不一致時の lock 解放が一意に定まり、二重解放や未解放が起きないこと。
 - 接続 callback 内から `disconnect()` を呼んでも接続 callback が二重実行されないこと。
-- 成功、失敗、timeout、redirect、切断の競合時も 1 回の接続試行が厳密に 1 回だけ終端すること。
+- 成功、失敗、timeout、利用者切断の競合時も、1 回の論理接続が厳密に 1 回だけ終端すること。redirect は接続試行を終端しないこと。
 - callback 呼び出し中に internal lock を保持していないこと。
 - 追加したテストと既存テストがすべて成功すること。
 
