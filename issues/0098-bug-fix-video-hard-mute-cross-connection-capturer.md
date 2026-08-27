@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/fix-video-hard-mute-cross-connection-capturer
-- Polished:
+- Polished: 2026-08-28
 
 ## 目的
 
@@ -40,12 +40,12 @@ open の `0028` はミュート解除成功後に `storedCapturer` をクリア�
 
 ## 設計方針
 
-- カメラ操作の所有者を示す lease を導入し、少なくとも `MediaChannel identity + logical connection ID` を含める。
+- カメラ操作の所有者を示す lease を導入する。`MediaChannel` は単回使用で 1 つの `MediaChannel` が 1 回の `Sora.connect()` に対応するため、lease の接続識別は `MediaChannel` identity で表現する（`0095` / `0093` が定義する論理接続 ID と同義であり、用語を揃える）。
 - 保存する capturer、停止時の stream、操作 generation を lease に紐付ける。
-- mute、unmute、disconnect、camera flip、画面共有への切り替えでは、操作開始時と各 `await` 復帰後に lease と generation を再確認する。
-- 別 lease が保存した capturer を restart しようとした場合は、明示的な `SoraError.mediaChannelError` で拒否する。
+- mute、unmute、disconnect では、操作開始時と各 `await` 復帰後に lease と generation を再確認する。camera flip の stream 設定順・generation 照合と hard mute の交差は `0099` が担当し、本 issue では扱わない。画面共有中は既存の `isScreenCaptureActive` チェックで unmute をブロックする挙動と整合させる。
+- 別 lease が保存した capturer を restart しようとした場合、または別 lease が保存状態を持つ間に start 経路で共有カメラを起動しようとした場合は、明示的な `SoraError.mediaChannelError` で拒否する。共有カメラの取得・停止・再開は lease の所有に紐付け、別 lease が保存状態を持つ間は start・restart のどちらの経路でも共有カメラを別の sender stream へ付け替えられないことを保証する。
 - 接続切断時に、その接続が所有する保存状態を破棄する。
-- `MediaStream` を `SenderStreamBox: @unchecked Sendable` で広域に渡す構造は拡大しない。接続に紐付いた内部 handle を利用できる場合は、handle を actor へ渡す。
+- `MediaStream` を `SenderStreamBox: @unchecked Sendable` で広域に渡す構造は拡大しない。現状は該当する内部 handle が存在しないため、`SenderStreamBox` による受け渡しを維持する。`0105` が stream 用の内部 handle を導入した場合は、それを actor へ渡す方式へ変更できる。
 - 利用者 callback と WebRTC オブジェクトの操作は、lease state を保護する actor 内へ無制限に持ち込まない。
 - 本 issue は接続間の capturer 混線というバグに限定する。カメラ状態全体の executor 所有と `SenderStreamBox` の削除は別 issue とする。
 
@@ -54,6 +54,7 @@ open の `0028` はミュート解除成功後に `storedCapturer` をクリア�
 モックやスタブは使用しない。
 
 - 2 つの実 `MediaChannel` と実カメラを使い、A mute、B mute / unmute、A unmute を交差させる。
+- A が mute でカメラを停止・保存した状態で B が unmute を呼び、start / restart どちらの経路でも共有カメラが起動されず、明示的な `SoraError.mediaChannelError` で拒否されることを確認する。
 - capturer と sender stream の identity を記録し、別接続の組み合わせにならないことを確認する。
 - stop または restart の完了待ち中に別接続から操作し、`await` 復帰後の lease 再確認が機能することを検証する。
 - 接続切断後、その接続が保存した capturer を別接続が取得できないことを確認する。
@@ -63,7 +64,7 @@ open の `0028` はミュート解除成功後に `storedCapturer` をクリア�
 ## 完了条件
 
 - 保存する capturer が接続 lease と操作 generation に紐付いていること。
-- 別の `MediaChannel` が保存した capturer を取得または restart できないこと。
+- 別の `MediaChannel` が保存した capturer を取得または restart できず、別 lease が保存状態を持つ間に start 経路で共有カメラを起動しないこと。
 - `await` 復帰後に lease と generation を再確認していること。
 - disconnect 時に該当接続の保存状態が破棄されること。
 - 複数接続の mute / unmute を交差させても capturer と sender stream が混線しないこと。
