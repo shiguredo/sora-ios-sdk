@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/fix-connection-task-cancel-race
-- Polished:
+- Polished: 2026-08-27
 
 ## 目的
 
@@ -17,6 +17,33 @@
 
 `ConnectionTask.peerChannel` は、バックグラウンド側の `basicConnect` が開始してから設定される。一方、`Sora/Sora.swift` の `ConnectionTask.cancel()` は、`peerChannel` が存在する場合にだけ `disconnect` を呼び、その後 `state` を `.canceled` にする。
 
+```swift
+// Sora/Sora.swift 現行実装
+public final class ConnectionTask {
+  public enum State {
+    case connecting
+    case completed   // 接続試行が終端した。成功・接続失敗・切断を区別しない
+    case canceled
+  }
+
+  weak var peerChannel: PeerChannel?
+  public private(set) var state: State
+
+  public func cancel() {
+    if state == .connecting {
+      peerChannel?.disconnect(error: SoraError.connectionCancelled, reason: .user)
+      state = .canceled
+    }
+  }
+
+  func complete() {
+    if state != .completed {
+      state = .completed
+    }
+  }
+}
+```
+
 このため、次の実行順が成立する。
 
 1. `MediaChannel.connect` が `ConnectionTask` を返す。
@@ -24,6 +51,8 @@
 3. `peerChannel` が `nil` のため、切断処理は実行されない。
 4. バックグラウンド側の `basicConnect` がキャンセル状態を確認せず、接続を開始する。
 5. 後続の接続または切断 callback が `ConnectionTask.complete()` を呼び、`.canceled` を `.completed` に上書きする。
+
+なお、現行実装では `complete()` が接続失敗・切断経路でも呼ばれるため、接続試行が失敗しても利用者は `state == .completed` を観測する(この意味論は本 issue では維持する。詳細は設計方針参照)。
 
 `ConnectionTask.state` と `peerChannel` は利用者のスレッドとバックグラウンド処理から同期なしで読み書きされるため、状態確認自体にもデータ競合がある。
 
@@ -40,9 +69,11 @@
 
 - `ConnectionTask` の状態と `PeerChannel` への紐付けを、1 つの lock または接続専用 executor の下で管理する。
 - 状態遷移を少なくとも `connecting`、`cancelRequested`、`completed`、`canceled` に分け、終端状態から別の終端状態へ遷移させない。
+  - `completed` の意味は現行実装を維持し、「接続試行が終端した(成功・接続失敗・切断を区別しない)」とする。接続失敗時に別状態を新設する場合は、`ConnectionTask.State` が公開 API であるため API 変更として別 issue で扱う。
 - `PeerChannel` の設定前にキャンセルされた場合はキャンセル要求を保持し、接続開始前なら `basicConnect` を開始しない。
 - 接続開始後にキャンセルされた場合は、`PeerChannel` の設定と同じ排他単位でキャンセル要求を確認し、確実に `disconnect` を呼ぶ。
-- `complete()` は接続が正常に終端した場合だけ `.completed` へ遷移させ、`.canceled` を上書きしない。
+- `complete()` は接続試行の終端として `.completed` へ遷移させるが、`.canceled` から `.completed` へは上書きしない。
+- キャンセル成立時の接続 callback 通知は、`Sora.connect()` の handler へ `SoraError.connectionCancelled` を渡し、厳密に 1 回だけ発火させる。キャンセル後は接続成功 callback を発火させない。
 - 利用者 callback は lock の外で呼び出し、callback から `cancel()` や `disconnect()` が再入しても deadlock しないようにする。
 - 本 issue では公開 `Sora.connect()` のシグネチャを変更しない。async 接続 API の追加は `issues/0058-add-async-await.md` のスコープとする。
 
@@ -62,6 +93,7 @@
 - `connect()` の戻り値を直ちに cancel しても接続処理が開始されないこと。
 - `PeerChannel` 設定と cancel が競合しても、接続が確実に停止すること。
 - `.canceled` が `.completed` に上書きされないこと。
+- キャンセル成立時に `SoraError.connectionCancelled` の接続失敗 callback が厳密に 1 回だけ発火し、接続成功 callback が発火しないこと。
 - cancel、接続成功、接続失敗、切断 callback が競合しても終端処理が厳密に 1 回であること。
 - callback から `cancel()` または `disconnect()` を呼んでも deadlock しないこと。
 - 追加したテストと既存テストがすべて成功すること。
