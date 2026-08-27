@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-08-27
 - Model: Sonnet 4.6
 - Branch: feature/fix-duplicated-channel-id
 - Polished: 2026-08-25
@@ -60,9 +60,12 @@
 
 ## 解決方法
 
-- 本 issue は SDK のコード変更を含まない。方針 A の実装（`onDisconnectComplete` の追加）は `0047` で行い、本 issue は 0047 の実装完了をもって解決とする
-- 検証（`testSendonlyReconnect` の変更と「onDisconnectComplete 発火をトリガーとした再接続の成功」、既存 E2E のリーグレッション確認）は 0047 の完了条件・解決方法に委譲する
-- 本 issue を close する時点で、検証結果（E2E の成功の有無）と `CHANGES.md` の `[FIX]` エントリ追記状況を本セクションに記録する
+対応不要として closed にする。
+
+- `DUPLICATED-CHANNEL-ID` は Sora サーバーが返すシグナリングエラーであり、マルチストリームと非マルチストリームで同一 channelId に接続しようとしたときに返されていた
+- 当該エラーは Sora 側で廃止済みであり、現行 Sora では発生しない
+- iOS SDK に `DUPLICATED-CHANNEL-ID` 専用のエラー定義や特別なハンドリングは存在せず、サーバーが返した場合は WebSocket Close の `reason` 文字列として汎用経路（`SoraError.webSocketClosed` → `SoraCloseEvent.ok`）で通知されるだけである
+- 本 issue が想定していた切断 → 即時再接続レースによる `DUPLICATED-CHANNEL-ID` も、サーバー側エラーが存在しないため SDK での修正は不要
 
 ## 関連 issue
 
