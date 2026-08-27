@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/fix-connection-timer-lifecycle
-- Polished:
+- Polished: 2026-08-27
 
 ## 目的
 
@@ -25,9 +25,11 @@ Timer の生成、停止、再実行、破棄を一貫して管理し、過去�
 4. main RunLoop に残っている接続 A の Timer が発火する。
 5. 接続 A の callback が現在の monitor を timeout として切断し、`stop()` が接続 B の Timer を停止する。
 
-また、`ConnectionTimer` が Timer を保持し、Timer closure が `self` を強参照しているため、Timer が発火または invalidate されない場合は循環参照が残る。
+また、`ConnectionTimer` が Timer を保持し、Timer closure が `self` を強参照しているため、`stop()` が `timer` プロパティを nil にしない限り循環参照が残る。現行の `stop()` は `invalidate()` のみで `timer` を nil 化しないため、接続完了・切断後の `ConnectionTimer` とその `monitors` が解放されず残る。
 
 `run()` と `stop()` は `MediaChannel` の接続処理、PeerChannel callback、切断処理、Timer callback から呼ばれ、`timer` と `isRunning` の読み書きも同期されていない。
+
+現行の SDK フローでは `connectionTimer.run()` は `MediaChannel.basicConnect` からのみ呼ばれ、`MediaChannel` は単回使用のため、公開 API 経由では同一 `ConnectionTimer` の `run()` が再実行される経路はない。一方、`run` と `stop` は異なるスレッドの callback（接続処理・切断処理・Timer callback）から同期なしで呼ばれるため、`timer` と `isRunning` の競合は現行コードに存在する。`run()` の再実行は直接 `ConnectionTimer` を操作するテストで再現し、防御的な修正として扱う。
 
 ## 再現手順
 
@@ -38,15 +40,17 @@ Timer の生成、停止、再実行、破棄を一貫して管理し、過去�
 
 `run`、`stop`、`run` の順序や、新旧 deadline が逆転する条件も反復して確認する。
 
+`ConnectionTimer` は internal 型のため、テストから直接インスタンス化して `run` / `stop` を呼べる。現行の SDK フローでは `run()` は接続ごとに 1 回しか呼ばれないため、`run` → `run` の再実行はテストで直接再現する（公開 `Sora.connect()` 経由では再現できない）。`run` と `stop` を異なるスレッドから呼んで競合させることもテストで再現する。
+
 ## 設計方針
 
 - `run()` の開始時に既存 Timer を必ず invalidate し、プロパティを nil にする。
-- Timer ごとに generation または接続試行 ID を保持し、callback 発火時に現在の generation と一致する場合だけ timeout 処理を行う。
+- `run()` のたびに進める Timer ごとの生成世代（generation）を保持し、callback 発火時に現在の generation と一致する場合だけ timeout 処理を行う。この generation は `ConnectionTimer` 内部のローカルカウンタであり、`0095` の transport epoch（redirect ごとに進む）や `0093` の論理接続 ID（`Sora.connect()` ごとに一意）とは独立した概念として扱う。
 - Timer closure は `self` を weak capture する。
 - `stop()` は対象 Timer を invalidate した後、同じ排他領域で `timer = nil` と `isRunning = false` を設定する。
 - Timer の状態を 1 つの executor または lock の下で管理する。main RunLoop への登録が必要な場合も、呼び出し元のスレッドから直接 Timer state を変更しない。
 - timeout handler と monitor の `disconnect()` は内部 lock の外で呼ぶ。
-- 本 issue では `ConnectionTimer` の lifecycle bug だけを修正する。接続状態全体の actor / serial executor への集約は別 issue とする。
+- 本 issue では `ConnectionTimer` の lifecycle bug だけを修正する。接続状態全体の actor / serial executor への集約は `0100` で扱う。
 
 ## テスト方針
 
@@ -56,7 +60,7 @@ Timer の生成、停止、再実行、破棄を一貫して管理し、過去�
 - 旧 deadline が新 deadline より先に来る場合と後に来る場合の両方を検証する。
 - generation が一致しない Timer callback が handler と monitor の切断を実行しないことを確認する。
 - Timer 停止後に `ConnectionTimer` が解放されることを weak 参照で確認する。
-- 実接続で timeout Timer の再設定を行い、旧 timeout による切断が起きないことを確認する。
+- 実接続では `run()` が接続ごとに 1 回のため `run` → `run` の再設定は再現できない。実欠陥である Timer 停止後の解放漏れは実接続の接続・切断で確認し、`run` の再実行と競合は直接 `ConnectionTimer` を操作するテストで検証する。
 - テストには、新旧 Timer のどちらを発火させる順序なのかを日本語コメントで明記する。
 
 ## 完了条件
