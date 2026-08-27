@@ -42,6 +42,13 @@
     - WebSocket シグナリング構成ではサーバー側セッションを即時解放できる
     - DataChannel シグナリング構成では切断中は同じ ICE 上を流れるため届かない
   - @t-miya
+- [FIX] `ConnectionTask` の即時キャンセルが接続開始を止めない競合を修正する
+  - `ConnectionTask` の状態と `PeerChannel` の紐付けを排他ロックで保護する
+  - キャンセル要求を受領した状態 (`cancelRequested`) を保持し、`PeerChannel` の設定と接続開始の前後でキャンセルを確認する
+  - 接続開始前にキャンセルされた場合は接続を開始せず、通常の接続失敗と同様に `connectionCancelled` を通知する
+  - 接続完了コールバックでもキャンセル済みか確認し、キャンセル後の接続成功通知を発火しない
+  - cancel 済みの接続の状態を `.canceled` のまま保持する (`.completed` に上書きしない)
+  - @t-miya
 
 ### misc
 

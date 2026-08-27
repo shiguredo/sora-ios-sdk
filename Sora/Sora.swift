@@ -409,42 +409,113 @@ public final class Sora: @unchecked Sendable {
 /// `cancel()` で接続をキャンセル可能です。
 public final class ConnectionTask {
   /// 接続状態を表します。
+  ///
+  /// 公開 API であるため、利用者が switch で全ケースを網羅している場合に備えて
+  /// ケースは追加しない。内部でキャンセル処理中の `cancelRequested` 状態を
+  /// 持つ場合も、外部からは `.canceled` として観測される。
   public enum State {
     /// 接続試行中
     case connecting
 
-    /// 接続済み
+    /// 接続試行が終端した。成功・接続失敗・切断を区別しない
     case completed
 
     /// キャンセル済み
     case canceled
   }
 
-  weak var peerChannel: PeerChannel?
+  /// 内部の状態遷移を表します。
+  /// `cancelRequested` (キャンセル要求を受領し、キャンセル処理中) を公開 enum から
+  /// 分離するために、公開 `State` とは別に管理する。
+  private enum InternalState {
+    case connecting
+    case cancelRequested
+    case completed
+    case canceled
+  }
+
+  private let stateLock = NSLock()
+  private weak var _peerChannel: PeerChannel?
+  private var _internalState: InternalState
 
   /// 接続状態
-  public private(set) var state: State
+  public var state: State {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    switch _internalState {
+    case .connecting:
+      return .connecting
+    case .cancelRequested:
+      return .canceled
+    case .completed:
+      return .completed
+    case .canceled:
+      return .canceled
+    }
+  }
 
   init() {
-    state = .connecting
+    _internalState = .connecting
+  }
+
+  /// 接続処理を開始するために PeerChannel を設定します。
+  /// キャンセル要求済みの場合は false を返し、呼び出し元は接続処理を開始してはいけません。
+  func attach(peerChannel: PeerChannel) -> Bool {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    guard _internalState == .connecting else {
+      return false
+    }
+    _peerChannel = peerChannel
+    return true
+  }
+
+  /// キャンセル要求を受領済みかどうかの確認を伴わず、キャンセル状態を確定させます。
+  /// `attach` が false を返した場合、または `cancel()` が peerChannel を切断した場合に、
+  /// 呼び出し元がキャンセルとして終端するために使います。
+  func markCanceled() {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    if _internalState == .cancelRequested {
+      _internalState = .canceled
+    }
   }
 
   /// 接続試行をキャンセルします。
   /// すでに接続済みであれば何もしません。
   public func cancel() {
-    if state == .connecting {
+    // peerChannel の取得はロック下で行い、disconnect の呼び出しはロックの外で行う。
+    // ロックを保持したまま disconnect を呼ぶと、切断時の callback から complete() や
+    // cancel() が再入した場合に deadlock するためである。
+    let peerChannel: PeerChannel?
+    stateLock.lock()
+    if _internalState == .connecting {
       Logger.debug(type: .mediaChannel, message: "connection task cancelled")
-      // reason: .user としているため、 cancel は SDK 内部で使用してはならない
-      peerChannel?.disconnect(error: SoraError.connectionCancelled, reason: .user)
-      state = .canceled
+      _internalState = .cancelRequested
+      peerChannel = _peerChannel
+    } else {
+      peerChannel = nil
     }
+    stateLock.unlock()
+
+    if let peerChannel {
+      // reason: .user としているため、 cancel は SDK 内部で使用してはならない
+      peerChannel.disconnect(error: SoraError.connectionCancelled, reason: .user)
+    }
+    // peerChannel の有無にかかわらず、キャンセル要求を必ず確定させる。
+    // (peerChannel が nil の場合は disconnect が行われないため、ここで確定しないと
+    // attach の呼び出し元が markCanceled() を呼ぶまで .cancelRequested のまま残る)
+    markCanceled()
   }
 
   func complete() {
-    if state != .completed {
-      Logger.debug(type: .mediaChannel, message: "connection task completed")
-      state = .completed
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    guard _internalState == .connecting else {
+      return
     }
+    Logger.debug(type: .mediaChannel, message: "connection task completed")
+    _internalState = .completed
   }
 }
 
