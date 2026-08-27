@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/fix-rpc-pending-invalidation-race
-- Polished:
+- Polished: 2026-08-27
 
 ## 目的
 
@@ -46,10 +46,11 @@ response、timeout、invalidate が既に登録された同一 pending を取り
 - `RPCChannel` に invalidated 状態を持たせ、利用可能性確認と pending 登録を `invalidate` と同じ排他単位で行う。
 - invalidated 後の `call` は pending を登録せず、直ちに `rpcDataChannelClosed` または対応するエラーで失敗させる。
 - pending ごとに 1 回だけ遷移できる終端状態を持たせ、response、timeout、invalidate、送信失敗、Task cancellation を同じ `finishPending` 経路へ集約する。
+- Task cancellation は `MediaChannel.rpc` が `withTaskCancellationHandler`（または同等のキャンセル検知）で受け、キャンセル時に対応する pending を `finishPending` 経路で `CancellationError` により終端する。公開 API のシグネチャは変えず、キャンセルされた Task が永久に待たされないという挙動を追加する。
 - timeout の実行を `RPCChannel` の weak 参照だけに依存させない。所有者が解放される場合も pending の completion が終端する構造にする。
 - timeout work item は pending 終端時に必ずキャンセルし、pending からも参照を切る。
 - 利用者 completion は barrier または lock の外で呼ぶ。
-- 本 issue では公開 RPC の `Any` / `Sendable` 契約は変更しない。公開 RPC API の Swift 6 対応は別 issue とする。
+- 本 issue では公開 RPC の `Any` / `Sendable` 契約は変更しない。公開 RPC API の Swift 6 対応は `0109` で扱う。redirect 時に旧 `rpcChannel` を invalidate して全 pending を終端する処理は `0095` が行い、本 issue はその invalidate が pending 登録と競合しても全 pending を確実に終端できる下位レイヤの保証を提供する。
 
 ## テスト方針
 
@@ -59,7 +60,7 @@ response、timeout、invalidate が既に登録された同一 pending を取り
 - response、timeout、invalidate、送信失敗の各終端で completion の呼び出し回数を記録する。
 - notification request は pending を作らず、送信結果だけで 1 回終端することを確認する。
 - production の pending 管理実装へ実際のイベント順を入力し、すべての順列で pending が空になることを検証する。
-- Task cancellation を対応範囲に含める場合は、キャンセル後に timeout work item と pending が残らないことを確認する。
+- `MediaChannel.rpc` を呼ぶ Task をキャンセルし、キャンセル後に timeout work item と pending が残らず、continuation が `CancellationError` で再開されることを確認する。
 - テストには、invalidate 後の pending 登録を再現するためのイベント順を日本語コメントで明記する。
 
 ## 完了条件
