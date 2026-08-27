@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/fix-redirect-stale-transport
-- Polished:
+- Polished: 2026-08-27
 
 ## 目的
 
@@ -38,14 +38,15 @@ closed の `0090` では、旧 PeerConnection callback を世代と identity で
 
 ## 設計方針
 
-- 1 回の `Sora.connect()` を表す論理接続 ID と、redirect ごとに変わる transport epoch を分離する。
+- 1 回の `Sora.connect()` を表す論理接続 ID と、redirect ごとに変わる transport epoch を分離する。論理接続 ID は 1 回の `Sora.connect()` ごとに一意で redirect を経ても変わらない識別子であり、状態の所有者が旧論理接続と新論理接続を区別するために使う。transport epoch は現行の `dataChannelGeneration` を実体として再定義し（redirect ごとに +1 される既存カウンタ）、新たなカウンタは追加しない。`0093` の世代照合（`dataChannelGeneration`）に関する維持方針と整合させる。
 - redirect を受理した同じ排他領域で、旧 transport の論理的な無効化と epoch 更新を不可分に実行する。
 - 無効化では少なくとも次を行う。
   - `switchedToDataChannel` を false にする。
   - 旧 DataChannel の delegate を切り離す。
   - `dataChannels` を take-and-clear する。
-  - `rpcChannel` を invalidate してから nil にする。
+  - `rpcChannel` を `SoraError.rpcDataChannelClosed` で invalidate してから nil にする（切断時と同じエラー種別を使い、新設しない）。
   - DataChannel の通知追跡状態と旧 offer 情報を破棄する。
+  - 旧 `streams`（旧 nativeChannel に紐づく MediaStream が配信する映像・音声フレーム）を `PeerChannel.streams` から取り除いて terminate する。新 PC 用の stream は新 offer に基づく `initializeSenderStream` が作成する。カメラ capturer の所有権と stream 付け替えは `0098` / `0099` / `0103` が担当する。
 - DataChannel 送信、RPC、stats callback は、処理開始時に取得した transport epoch と identity を送信直前にも照合する。
 - 旧 transport の cleanup と利用者 callback は分離し、内部 lock を保持したまま callback を呼ばない。
 - 本 issue は既存 redirect 処理のバグ修正に限定する。接続状態全体を actor または serial executor へ移す作業は別 issue とする。
@@ -54,11 +55,11 @@ closed の `0090` では、旧 PeerConnection callback を世代と identity で
 
 モックやスタブは使用しない。
 
-- redirect が発生する実 Sora 環境で DataChannel 送信、RPC、stats を継続し、旧 transport へ送信されないことを確認する。
 - production code の transport epoch 管理へ redirect、送信、callback のイベント列を入力し、epoch 不一致の操作が必ず拒否されることを検証する。
-- redirect 前に開始した RPC が、成功または redirect に対応するエラーのどちらかで厳密に 1 回終端することを確認する。
+- redirect 前に開始した RPC が、成功または `SoraError.rpcDataChannelClosed`（redirect 時の invalidate で返すエラー種別）のどちらかで厳密に 1 回終端することを確認する。
 - redirect 前の stats callback が新しい signaling transport へ送信されないことを確認する。
-- 既存の redirect、reconnect、DataChannel E2E テストを継続して実行する。
+- 実 Sora 環境での redirect 検証は、`0090` と同じくリダイレクトを発生させるサーバー構成が必要なためテスト対象外とし、実機での手動確認とする。
+- 既存の reconnect、DataChannel、RPC の E2E テストを継続して実行する。
 - テストには、論理接続 ID と transport epoch を分ける理由を日本語コメントで明記する。
 
 ## 完了条件
