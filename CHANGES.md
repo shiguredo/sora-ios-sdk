@@ -49,6 +49,11 @@
   - 接続完了コールバックでもキャンセル済みか確認し、キャンセル後の接続成功通知を発火しない
   - cancel 済みの接続の状態を `.canceled` のまま保持する (`.completed` に上書きしない)
   - @t-miya
+- [FIX] `PeerChannel` の接続完了ハンドラーが厳密に 1 回だけ終端しない問題を修正する
+  - offer SDP の生成エラーが外側の `error` へ置き換わり、`sdpError` が利用者へ伝播しない問題を修正する
+  - `createAnswer` で `nativeChannel` が nil の場合に handler を呼ばずに return し、切断処理が行われず接続が残ってしまう問題を修正する
+  - 接続成功・失敗・切断の各経路で callback を先に取り出してクリアする take-and-clear に統一し、callback 内から同期的に `disconnect()` されても二重実行されないようにする
+  - @t-miya
 
 ### misc
 

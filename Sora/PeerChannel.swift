@@ -425,14 +425,31 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   // MARK: - Private methods
 
+  /// 接続完了 callback を 1 回だけ取り出して呼び出します。
+  ///
+  /// 接続成功 (finishConnecting)、接続失敗 (sendConnectMessage(error:))、
+  /// 接続完了後の切断 (basicDisconnect) のどの経路から呼ばれても、
+  /// callback は最初の呼び出しで取り出され、以降の呼び出しでは何も実行しない。
+  /// (callback 内から同期的に disconnect() された場合でも、二重実行を防ぐための
+  /// take-and-clear である。onConnect は呼び出し前に必ず nil へクリアされる)
+  ///
+  /// テストから呼び出すため internal としている。
+  func invokeConnectHandler(_ error: Error?) {
+    let connectHandler = onConnect
+    onConnect = nil
+    if let connectHandler {
+      Logger.debug(type: .peerChannel, message: "call connect(handler:)")
+      connectHandler(error)
+    }
+  }
+
   private func sendConnectMessage(error: Error?) {
     if let error {
       lock.unlock()
       Logger.error(
         type: .peerChannel,
         message: "failed connecting to signaling channel (\(error.localizedDescription))")
-      onConnect?(error)
-      onConnect = nil
+      invokeConnectHandler(error)
       return
     }
 
@@ -450,13 +467,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(
               type: .peerChannel,
               message: "failed to create offer SDP (\(error.localizedDescription))")
-          } else {
-            self.sdp = sdp
-            Logger.debug(
-              type: .peerChannel,
-              message: "did create offer SDP")
+            // callback の引数 sdpError をそのまま終端処理へ渡す。
+            // (外側の error を渡すと、関数冒頭の分岐を通過した時点で nil のため
+            // エラーが伝播せず、nil の SDP で接続処理が進んでしまう)
+            self.sendConnectMessage(with: nil, error: error)
+            return
           }
-          self.sendConnectMessage(with: sdp, error: error)
+          self.sdp = sdp
+          Logger.debug(
+            type: .peerChannel,
+            message: "did create offer SDP")
+          self.sendConnectMessage(with: sdp, error: nil)
         }
     } else {
       sendConnectMessage(with: nil, error: nil)
@@ -464,15 +485,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func sendConnectMessage(with sdp: String?, error: Error?, redirect: Bool? = nil) {
-    if error != nil {
+    if let error {
       Logger.error(
         type: .peerChannel,
-        // nil チェック直後のため安全
-        // swiftlint:disable:next force_unwrapping
-        message: "failed connecting to signaling channel (\(error!.localizedDescription))")
-      disconnect(
-        error: SoraError.peerChannelError(reason: "failed connecting to signaling channel"),
-        reason: .signalingFailure)
+        message: "failed connecting to signaling channel (\(error.localizedDescription))")
+      // 元のエラーをそのまま利用者へ伝播させる。
+      // (offer SDP 生成エラー等の原因を固定文字列に置き換えると、
+      // 利用者が onConnect のエラーから原因を判別できなくなる)
+      disconnect(error: error, reason: .signalingFailure)
       return
     }
 
@@ -545,7 +565,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func initializeSenderStream(mid: [String: String]? = nil) {
     guard let nativeChannel else {
-      Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+      Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
       return
     }
 
@@ -853,7 +873,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     handler: @escaping (String?, Error?) -> Void
   ) {
     guard let nativeChannel else {
-      Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+      // handler を呼ばずに return すると、呼び出し元が lock を解放できない (ロック残留)。
+      // 明示的な接続失敗として handler を必ず 1 回呼ぶ。
+      Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
+      handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
       return
     }
 
@@ -887,7 +910,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       guard let nativeChannel = self.nativeChannel else {
-        Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+        // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
+        Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
+        handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
         return
       }
 
@@ -923,7 +948,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
 
         guard let nativeChannel = self.nativeChannel else {
-          Logger.debug(type: .peerChannel, message: "nativeChannel shoud not be nil")
+          // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
+          Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
+          handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
           return
         }
 
@@ -1469,13 +1496,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "native receivers = \(nativeChannel?.receivers.count ?? 0)")
 
-    if onConnect != nil {
-      Logger.debug(type: .peerChannel, message: "call connect(handler:)")
-      // nil チェック直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      onConnect!(nil)
-      onConnect = nil
-    }
+    // (callback 内から同期的に disconnect() されても二重実行されない)
+    invokeConnectHandler(nil)
     lock.unlock()
   }
 
@@ -1550,13 +1572,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     Logger.debug(type: .peerChannel, message: "call onDisconnect")
     internalHandlers.onDisconnect?(error, reason)
 
-    if onConnect != nil {
-      Logger.debug(type: .peerChannel, message: "call connect(handler:)")
-      // nil チェック直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      onConnect!(error)
-      onConnect = nil
-    }
+    // (接続失敗 callback 内から切断処理へ再入しても二重実行されない)
+    invokeConnectHandler(error)
 
     // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
     dataChannelSignalingClose = nil
