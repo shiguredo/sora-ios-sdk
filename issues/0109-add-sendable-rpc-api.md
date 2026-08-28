@@ -31,11 +31,16 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
 
 既存 protocol に直接 `Sendable` 制約を追加すると、利用者が定義した RPC method、params、result の準拠が compile できなくなるため破壊的変更になる。
 
-## 前提となる issue
+## 前提となる変更
 
-- `0094`: RPC pending、invalidate、timeout、Task cancellation の終端競合を修正する。
+- `0094` (実装済み): RPC pending、invalidate、timeout、Task cancellation の終端競合を修正する。
+  - `RPCChannel` は concurrent queue の barrier 配下で `pendings` / `isInvalidated` を保護し、`@unchecked Sendable` で宣言している。
+  - Task cancellation は `CancelledRPCIDStore` (NSLock 保護の `Int?` ストア) 経由で `rpcChannel.cancel(identifier:)` を呼び、`finishPending` で厳密に 1 回終端する。
+  - `RPCChannel.call` のシグネチャ変更 (戻り値 `Int?`、completion の `Error` 型) は内部 API のみの変更で、public API の source compatibility には影響しない。
 
-本 issue は RPC lifecycle が厳密に 1 回終端する状態を前提に、公開 data model の Sendable 対応だけを追加する。
+本 issue は RPC lifecycle が厳密に 1 回終端する状態 (0094 で実装済み) を前提に、公開 data model の Sendable 対応だけを追加する。
+
+- 0094 の `RPCChannel` は barrier + `@unchecked Sendable` の構造を残している。0109 で `RPCRawResponse.result: Any` を排除する際、barrier 保護は維持したまま response の持ち方を `Data` ベースへ移せるか、または RPCChannel 自体を actor へ移行するか、実装の過程で判断する。
 
 ## 設計方針
 
