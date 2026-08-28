@@ -1,7 +1,7 @@
 # PeerChannel の接続完了ハンドラーを厳密に 1 回だけ終端する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-08-28
 - Branch: feature/fix-peer-channel-connect-completion
 - Polished: 2026-08-27
 
@@ -88,3 +88,13 @@
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+`PeerChannel` の接続完了ハンドラーを `invokeConnectHandler(_:)` に集約し、take-and-clear で厳密に 1 回だけ呼び出せるようにした。3 つの終端経路 (接続成功 / 接続失敗 / 利用者切断) はすべてこのメソッドを経由する。callback を取り出した時点で `onConnect` は `nil` になるため、callback 内から同期的に `disconnect()` して再入しても二重実行されない。
+
+あわせて以下の修正を行った。
+
+- Offer SDP 生成失敗時 (`createClientOfferSDP`) は元の `sdpError` を `sendConnectMessage(with:error:)` 経由でそのまま接続 callback へ伝播するよう修正した。従来は接続失敗時に固定の `SoraError.peerChannelError` を返しており、元のエラーが失われていた。
+- `createAnswer` の `nativeChannel` が `nil` の 3 つの return 経路で、handler を必ず 1 回だけ呼ぶよう修正した。従来は handler を呼ばずに return していたため、呼び出し元で lock が解放されない (ロック残留) 問題があった。
+- 終端経路の呼び出し元 (`finishConnecting` / `sendConnectMessage(error:)` / `basicDisconnect`) を `invokeConnectHandler(_:)` 経由に統一し、`onConnect` を直接操作するコードをすべて置き換えた。あわせて `nativeChannel shoud not be nil` のタイポを `should` に修正した。
+
+検証は `PeerChannelConnectCompletionTests` のユニットテスト 4 件 (take-and-clear / 再入 disconnect / エラー伝播 / 実経路の接続失敗) と、既存テストの実行で完了している。
