@@ -1,7 +1,7 @@
 # ConnectionTask の即時キャンセルが接続開始を止めない競合を修正する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-08-27
 - Branch: feature/fix-connection-task-cancel-race
 - Polished: 2026-08-27
 
@@ -99,3 +99,26 @@ public final class ConnectionTask {
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+### ConnectionTask の状態管理 (Sora/Sora.swift)
+
+- `ConnectionTask` に `NSLock` (stateLock) を導入し、`state` と `peerChannel` の読み書きを排他する。
+- 内部状態として `InternalState` (connecting / cancelRequested / completed / canceled) を持つ。公開 `State` は従来の 3 ケース (connecting / completed / canceled) のまま維持し、公開 enum のケース追加による利用者側の exhaustive switch の破壊を避ける。`cancelRequested` は外部からは `.canceled` として観測される。
+- 状態遷移:
+  - attach による紐付け (connecting の場合のみ成功、キャンセル要求済みなら false)
+  - cancel による cancelRequested へ遷移
+  - markCanceled による cancelRequested → canceled へ確定
+  - complete による connecting → completed へ遷移 (cancelRequested / canceled / completed からは遷移しない)
+- `cancel()` はロック下で状態遷移と peerChannel の取得を行い、`disconnect` はロック外で実行する (切断時の callback から complete / cancel が再入しても deadlock しないようにするため)。disconnect の有無にかかわらず markCanceled で確定させる。
+
+### 接続開始前後のキャンセル確認 (Sora/MediaChannel.swift)
+
+- `basicConnect` の開始時に `connectionTask.attach(peerChannel:)` で peerChannel の設定とキャンセル要求の確認を同一排他領域で行う。
+- attach が false の場合 (キャンセル要求済み) は接続を開始せず、markCanceled + `internalDisconnect(connectionCancelled)` で終端する (通常の接続失敗と同じ後始末経路を通る)。
+- attach 成功後、`peerChannel.connect` の直前に再接続前確認を行う。attach 成功後に cancel() が割り込んだ場合も、接続開始を防ぎ markCanceled + internalDisconnect で終端する。
+- `peerChannel.connect` の完了ハンドラ冒頭で state を確認し、キャンセル済みなら接続成功通知 (handler(nil)) を発火せず終端する。
+
+### テスト (SoraTests)
+
+- `ConnectionTaskTests`: 状態遷移のユニットテスト 7 件 (公開 state の観測、cancel 要求保持と attach 拒否、complete の遷移、complete による上書き防止、completed 後の cancel、attach と cancel の競合終端)。
+- `ConnectionTaskCancelE2ETests`: 実 Sora 接続での即時キャンセル反復テスト 2 件 (接続しないこと、canceled が保持されること)。シグナリング URL 未設定時はスキップする。
