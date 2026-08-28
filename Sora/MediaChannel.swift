@@ -431,7 +431,18 @@ public final class MediaChannel {
     _handler = handler
     state = .connecting
     connectionStartTime = nil
-    connectionTask.peerChannel = peerChannel
+
+    // 接続開始前にキャンセル要求を受領していた場合は、接続処理を開始しない。
+    // attach は peerChannel の設定とキャンセル要求の確認を同じ排他領域で行う。
+    guard connectionTask.attach(peerChannel: peerChannel) else {
+      Logger.debug(type: .mediaChannel, message: "connection task cancelled before connect")
+      connectionTask.markCanceled()
+      // 通常の接続失敗と同じく切断フローで後始末する。
+      // これにより executeHandler 経由の接続エラー通知と mediaChannel の
+      // remove (Sora.connect が設定した internalHandlers.onDisconnectLegacy) が行われる
+      internalDisconnect(error: SoraError.connectionCancelled, reason: .user)
+      return
+    }
 
     signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
       guard let weakSelf = self else {
@@ -539,8 +550,28 @@ public final class MediaChannel {
       weakSelf.handlers.onReceiveSignaling?(message)
     }
 
+    // attach 成功後〜ここまでの間に cancel() が割り込んだ場合は、接続を開始しない。
+    // (attach の瞬間だけを確認すると、ハンドラ設定などの間に割り込んだ cancel を
+    // 検出できず、次の peerChannel.connect で接続が開始されてしまう)
+    guard connectionTask.state == .connecting else {
+      Logger.debug(type: .mediaChannel, message: "connection task cancelled before connect")
+      connectionTask.markCanceled()
+      internalDisconnect(error: SoraError.connectionCancelled, reason: .user)
+      return
+    }
+
     peerChannel.connect { [weak self] error in
       guard let weakSelf = self else {
+        return
+      }
+
+      // cancel() が接続成功より先に成立していた場合は、成功通知を発火させない。
+      // complete() を先に呼ぶと _state == .completed になり、判定できないため
+      // complete() の前に状態を確認する。
+      if connectionTask.state != .connecting {
+        connectionTask.markCanceled()
+        weakSelf.connectionTimer.stop()
+        weakSelf.internalDisconnect(error: SoraError.connectionCancelled, reason: .user)
         return
       }
 
