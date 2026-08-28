@@ -1154,6 +1154,10 @@ extension MediaChannel: Equatable {
 /// `withTaskCancellationHandler` の `onCancel` は別スレッドから実行されるため、
 /// `NSLock` で保護した単一の `Int?` を共有する。ID は 1 回の `rpc()` 呼び出しに
 /// つき 1 つだけ登録され、読み取りは 1 回だけ行われる。
+///
+/// `@unchecked Sendable` を付与しているのは、可変状態が `value` (単一の `Int?`) のみで、
+/// その読み書きはすべて `stateLock` 配下で行われるため。Swift コンパイラは
+/// `NSLock` による保護を認識できないため、手動で安全を宣言する。
 final class CancelledRPCIDBox: @unchecked Sendable {
   private let stateLock = NSLock()
   private var value: Int?
