@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-08-28
 - Model: Sonnet 4.6
 - Branch: feature/add-disconnect-complete-handler
 - Polished: 2026-08-25
@@ -170,7 +170,13 @@ if shouldFire {
 
 ## 解決方法
 
-### 実装
+対応不要として closed にする。
+
+- `onDisconnectComplete` を追加して通知を 2 段に分ける案は、利用者にアプリ側タイムアウトや MediaChannel 強参照保持を要求し、発火しない経路も残る。`onDisconnect` 自体をクリーンアップ完了後の終端イベントとして正す方が API として自然である
+- 上記方針は `0126-change-disconnect-cleanup-semantics.md` に引き継ぎ、`onDisconnectComplete` は追加しない
+- 0042（DUPLICATED-CHANNEL-ID）は現行 Sora ではサーバー側エラーが廃止済みであり対応不要として closed 済みである。本 issue の優先度根拠に含まれていた DUPLICATED-CHANNEL-ID 回避は動機から外す
+
+### 実装（未着手・0126 に supersede）
 
 設計方針のコード例どおりに、以下の 8 項目を実装する。要点のみ:
 
