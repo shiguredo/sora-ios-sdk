@@ -571,4 +571,281 @@ final class RpcE2ETests: E2ETestBase {
     case success(InboundVideoFrameSize)
     case failure(String)
   }
+
+  // MARK: - RPC と切断の競合
+
+  /// RPC 呼び出しと disconnect を競合させても、RPC が必ず終端することを確認する
+  ///
+  /// 旧実装では、`call()` が DataChannel の open を確認した後に disconnect の
+  /// `invalidate()` が入り、その後に pending が登録されると、RPCChannel の解放後に
+  /// timeout work item が実行されず、completion が永久に呼ばれない問題があった。
+  /// (timeout work item は RPCChannel を weak capture しているため)
+  ///
+  /// 修正後は、`isInvalidated` の確認と pending 登録が `invalidate()` と同じ
+  /// barrier 配下で行われるため、invalidate 後に pending は登録されない。
+  /// このテストでは、実 DataChannel で複数回 RPC を呼び、その直後に disconnect することで
+  /// 旧実装の再現を試みる。すべての RPC が終端する (completion が呼ばれる) ことを確認する。
+  func testRPCRaceWithDisconnectTerminatesAll() throws {
+    // RPC 用に rpc_methods を許可した recvonly 接続を確立するために、
+    // RequestSimulcastRid 用と同じように sendonly + recvonly を接続する。
+    // (連続して RPC を呼ぶには Sora の RPC DataChannel が必要で、
+    // RPC ラベルが open になるには サーバー側の rpc_methods 設定が必要)
+    let channelId = buildChannelId(unique: true)
+
+    let sendonlyExpectation = self.expectation(description: "sendonly の接続が完了すること")
+    let recvonlyExpectation = self.expectation(description: "recvonly の接続が完了すること")
+    let switchedExpectation = self.expectation(description: "recvonly が switched を受信すること")
+    let rpcOpenedExpectation = self.expectation(description: "recvonly の rpc ラベルが OPEN すること")
+
+    var sendonlyChannel: MediaChannel?
+    var recvonlyChannel: MediaChannel?
+    var reconnectChannel: MediaChannel?
+
+    // expectation の二重 fulfill を防ぐためのフラグ
+    var switchedExpectationFulfilled = false
+    var rpcOpenedExpectationFulfilled = false
+
+    let cleanupChannels: () -> Void = {
+      self.disconnectAll(channels: [sendonlyChannel, recvonlyChannel, reconnectChannel])
+    }
+
+    var sendonlyConfig = try buildConfiguration(role: .sendonly)
+    sendonlyConfig.channelId = channelId
+    sendonlyConfig.simulcastEnabled = true
+    sendonlyConfig.audioEnabled = false
+    sendonlyConfig.videoCodec = .vp8
+    sendonlyConfig.videoBitRate = 1200
+    sendonlyConfig.initialCameraEnabled = false
+
+    var recvonlyConfig = try buildConfiguration(role: .recvonly)
+    recvonlyConfig.channelId = channelId
+    recvonlyConfig.simulcastEnabled = true
+    recvonlyConfig.simulcastRequestRid = .r2
+    recvonlyConfig.dataChannelSignaling = true
+    recvonlyConfig.ignoreDisconnectWebSocket = true
+    recvonlyConfig.audioEnabled = false
+    recvonlyConfig.videoCodec = .vp8
+
+    struct RPCTestMetadata: Encodable {
+      // swift-format-ignore: AlwaysUseLowerCamelCase
+      let access_token: String
+    }
+    let recvonlyAccessToken = try buildJWTAccessToken(
+      channelId: channelId,
+      privateClaims: [
+        "rpc_methods": [RequestSimulcastRid.name],
+        "simulcast": true,
+        "simulcast_request_rid": "r2",
+        "simulcast_rpc_rids": ["none", "r0", "r1", "r2"],
+      ])
+    recvonlyConfig.signalingConnectMetadata = RPCTestMetadata(access_token: recvonlyAccessToken)
+
+    recvonlyConfig.mediaChannelHandlers.onReceiveSignalingJSON = { json in
+      DispatchQueue.main.async {
+        guard
+          let dict =
+            (try? JSONSerialization.jsonObject(
+              with: Data(json.utf8), options: []) as? [String: Any])
+        else {
+          return
+        }
+        if dict["type"] as? String == "switched", !switchedExpectationFulfilled {
+          switchedExpectationFulfilled = true
+          switchedExpectation.fulfill()
+        }
+      }
+    }
+    recvonlyConfig.mediaChannelHandlers.onDataChannelOpened = { _, label in
+      DispatchQueue.main.async {
+        guard label == "rpc", !rpcOpenedExpectationFulfilled else { return }
+        rpcOpenedExpectationFulfilled = true
+        rpcOpenedExpectation.fulfill()
+      }
+    }
+
+    _ = sora?.connect(configuration: sendonlyConfig) { [self] mediaChannel, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("sendonly の接続に失敗した : \(error)")
+          sendonlyExpectation.fulfill()
+          return
+        }
+        guard let channel = mediaChannel else {
+          XCTFail("sendonly のメディアチャネルが nil")
+          sendonlyExpectation.fulfill()
+          return
+        }
+        sendonlyChannel = channel
+        sendonlyExpectation.fulfill()
+
+        _ = self.sora?.connect(configuration: recvonlyConfig) { mediaChannel2, error2 in
+          DispatchQueue.main.async {
+            if let error2 {
+              XCTFail("recvonly の接続に失敗した : \(error2)")
+              recvonlyExpectation.fulfill()
+              return
+            }
+            guard let channel2 = mediaChannel2 else {
+              XCTFail("recvonly のメディアチャネルが nil")
+              recvonlyExpectation.fulfill()
+              return
+            }
+            recvonlyChannel = channel2
+            recvonlyExpectation.fulfill()
+          }
+        }
+      }
+    }
+
+    wait(for: [sendonlyExpectation], timeout: 35)
+    guard let sendonlyChannel else {
+      cleanupChannels()
+      return
+    }
+    wait(for: [recvonlyExpectation], timeout: 35)
+    guard let firstRecvonlyChannel = recvonlyChannel else {
+      cleanupChannels()
+      return
+    }
+
+    // switched 受信を待ち、RPC ラベルの OPEN を待つ
+    let switchedResult = XCTWaiter.wait(for: [switchedExpectation], timeout: 10)
+    guard switchedResult == .completed else {
+      XCTFail("switched メッセージを受信できなかった")
+      cleanupChannels()
+      return
+    }
+    let rpcOpenedResult = XCTWaiter.wait(for: [rpcOpenedExpectation], timeout: 10)
+    guard rpcOpenedResult == .completed else {
+      XCTFail("rpc ラベルの DataChannel が OPEN しなかった")
+      cleanupChannels()
+      return
+    }
+
+    // 複数回、RPC 呼び出しと disconnect を競合させる。
+    // 各回で RPC 呼び出しを開始し、その直後に disconnect を呼ぶ。
+    // すべての RPC 呼び出しは timeout 以内にどれかのエラーで完了する必要がある。
+    // (完了の内容は問わない。RPC が一度も開始されない rpcUnavailable ではなく、
+    // pending 登録後に disconnect されるケースを確率的に含む)
+    // 12 回試行すると、旧実装の pending 残存 (RPC が永遠に完了しない) を高い確率で検出できる。
+    // 各回の接続確立コストが高いため、RPC 呼び出しを行ったまま切断して、
+    // 再接続し直して繰り返す。
+    for attempt in 1...12 {
+      // 前回の切断後のチャンネルを再利用できないため、再接続する
+      // (1 回目は上で接続済みの recvonlyChannel を使う)
+      let currentChannel: MediaChannel
+      if attempt > 1 {
+        reconnectChannel = nil
+        let reconnectExpectation = self.expectation(description: "再接続が完了すること")
+        _ = sora?.connect(configuration: recvonlyConfig) { mediaChannel, error in
+          DispatchQueue.main.async {
+            if let error {
+              XCTFail("再接続に失敗した : \(error)")
+              reconnectExpectation.fulfill()
+              return
+            }
+            guard let channel = mediaChannel else {
+              XCTFail("メディアチャネルが nil")
+              reconnectExpectation.fulfill()
+              return
+            }
+            reconnectChannel = channel
+            reconnectExpectation.fulfill()
+          }
+        }
+        wait(for: [reconnectExpectation], timeout: 35)
+        guard let reconnected = reconnectChannel else {
+          XCTFail("再接続後にメディアチャネルが nil")
+          cleanupChannels()
+          return
+        }
+        currentChannel = reconnected
+      } else {
+        currentChannel = firstRecvonlyChannel
+      }
+
+      // 再接続では RPC ラベルが open になるまで待つ。接続直後は DataChannel が
+      // まだ open でないため rpcUnavailable になり、RPC が送信されず pending が
+      // 作られない可能性が高い。
+      // (RPC が送信されて pending 登録後に disconnect するケースを含めるため)
+      if currentChannel.peerChannel.rpcChannel == nil {
+        let reconnectRpcOpenedExpectation = self.expectation(
+          description: "再接続後の rpc ラベルが OPEN すること")
+        currentChannel.handlers.onDataChannelOpened = { _, label in
+          DispatchQueue.main.async {
+            guard label == "rpc" else { return }
+            reconnectRpcOpenedExpectation.fulfill()
+          }
+        }
+        // onDataChannelOpened が設定される前に OPEN 済みの場合は、
+        // rpcChannel が nil でないことを確認して待ち終える
+        if currentChannel.peerChannel.rpcChannel != nil {
+          reconnectRpcOpenedExpectation.fulfill()
+        }
+        let reconnectRpcOpenedResult = XCTWaiter.wait(
+          for: [reconnectRpcOpenedExpectation], timeout: 10)
+        if reconnectRpcOpenedResult != .completed {
+          XCTFail("再接続後の rpc ラベルが OPEN しなかった")
+          cleanupChannels()
+          return
+        }
+      }
+
+      // 接続直後に、複数の RPC 呼び出しを開始する (RPC DataChannel がまだ有効なうちに)
+      // RPC 呼び出しは RequestSimulcastRid を使用する。
+      // これは接続時点で rpc_methods が許可されている必要があるが、この設定は
+      // 接続の度に再確立されている。
+      let rpcAttempt = attempt
+      let callExpectation = self.expectation(
+        description: "RPC 呼び出しが完了すること (試行 \(rpcAttempt))")
+      callRPCAndDisconnect(
+        channel: currentChannel,
+        attempt: rpcAttempt,
+        completion: {
+          callExpectation.fulfill()
+        })
+      // RPC 呼び出しの完了を待つ (timeout 5 秒 at most)
+      let callResult = XCTWaiter.wait(for: [callExpectation], timeout: 8)
+      if callResult != .completed {
+        XCTFail(
+          "RPC 呼び出しが完了しない (試行 \(rpcAttempt)): pending が残存している可能性が高い")
+        cleanupChannels()
+        return
+      }
+    }
+
+    // 後始末
+    cleanupChannels()
+  }
+
+  /// RPC 呼び出しを開始し、即座に disconnect する。
+  ///
+  /// RPC 呼び出しが終端するまで待つことはせず、RPC の完了時に completion を呼ぶ。
+  /// この競合を複数回試行することで、RPC が永遠に完了しないバグを検出する。
+  private func callRPCAndDisconnect(
+    channel: MediaChannel,
+    attempt: Int,
+    completion: @escaping () -> Void
+  ) {
+    // 接続確認済みメディアチャネルを使用して RPC を開始する。
+    // RPC は 2025.2.0/RequestSimulcastRid、rid は r0 を使用する (シミュレーション用)
+    let rpcTask: Task<Void, Never> = Task {
+      do {
+        _ = try await channel.rpc(
+          method: RequestSimulcastRid.self,
+          params: RequestSimulcastRidParams(rid: .r0),
+          timeout: 5)
+      } catch {
+        // RPC が失敗することは問題ではない。重要なのは RPC が終端する (エラーが返る) こと。
+      }
+      DispatchQueue.main.async {
+        completion()
+      }
+    }
+    // RPC の start と disconnect の競合を発生させるために、少し待つ (RPC が送信された後に切断)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+      channel.disconnect(error: nil)
+      _ = rpcTask
+    }
+  }
 }

@@ -1,7 +1,7 @@
 # RPC の pending 登録と invalidate の競合を修正する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-08-31
 - Branch: feature/fix-rpc-pending-invalidation-race
 - Polished: 2026-08-27
 
@@ -74,3 +74,11 @@ response、timeout、invalidate が既に登録された同一 pending を取り
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+`RPCChannel` に `isInvalidated` 状態を追加し、`call()` の利用可能性確認と pending 登録を、`invalidate()` と同じ concurrent queue の barrier 配下で行うようにした。これにより、invalidate と call の間に pending 登録が割り込むことはなくなり、invalidate 後の call は pending を登録せず即時に失敗する。
+
+- `RPCChannel` に対して `@unchecked Sendable` を付与した。可変状態 (`pendings` / `nextId` / `isInvalidated`) が barrier 配下でのみアクセスされるため。
+- 終端経路 (response / timeout / invalidate / 送信失敗) を `finishPending` に集約し、barrier 下で「取り出し + 削除」を行い、競合しても 1 回だけ完了する。
+- `MediaChannel.rpc` に `withTaskCancellationHandler` を追加し、Task キャンセル時は `CancelledRPCIDStore` (NSLock 保護の `Int?` ストア) 経由で `rpcChannel.cancel(identifier:)` を呼び、`CancellationError` で完了する。
+- `RPCChannel.call` のシグネチャも変更 (戻り値 `Bool` → `Int?`、completion の `SoraError` → `Error` に一般化) した。これは内部 API のみの変更で、public API の source compatibility には影響しない。
+- テスト: `RpcE2ETests.testRPCRaceWithDisconnectTerminatesAll` (実 DataChannel + 実 Sora サーバーで RPC 開始と disconnect を 12 回競合させ、全 RPC が完了することを確認)。CI で実行され、通過済み。

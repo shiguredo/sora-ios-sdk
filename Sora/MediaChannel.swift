@@ -333,27 +333,52 @@ public final class MediaChannel {
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
-    let response = try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<RPCRawResponse?, Error>) in
-      guard let rpcChannel = self.peerChannel.rpcChannel else {
-        continuation.resume(
-          throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
-        return
-      }
-      _ = rpcChannel.call(
-        methodName: method.name,
-        params: params,
-        isNotificationRequest: isNotificationRequest,
-        timeout: timeout
-      ) { result in
-        switch result {
-        case .success(let response):
-          continuation.resume(returning: response)
-        case .failure(let error):
-          continuation.resume(throwing: error)
+    // タスクキャンセル時に rpcChannel へ通知するための RPC ID を保持する。
+    // (withTaskCancellationHandler の onCancel は別スレッドから呼ばれるため、
+    // ロックで保護して共有する)
+    let cancelledRPCID = CancelledRPCIDStore()
+    let rpcChannel = self.peerChannel.rpcChannel
+    let response = try await withTaskCancellationHandler(
+      operation: {
+        try await withCheckedThrowingContinuation {
+          (continuation: CheckedContinuation<RPCRawResponse?, Error>) in
+          guard let rpcChannel else {
+            continuation.resume(
+              throwing: SoraError.rpcUnavailable(reason: "rpc channel is not available"))
+            return
+          }
+          let id = rpcChannel.call(
+            methodName: method.name,
+            params: params,
+            isNotificationRequest: isNotificationRequest,
+            timeout: timeout
+          ) { result in
+            switch result {
+            case .success(let response):
+              continuation.resume(returning: response)
+            case .failure(let error):
+              continuation.resume(throwing: error)
+            }
+          }
+          // call が失敗 (nil を返す) した場合は完了済みのため何もしない
+          guard let id else {
+            return
+          }
+          // キャンセル済みのタスクによって登録された RPC は即時にキャンセルする。
+          // (onCancel が id の確定前に実行された場合も、ここで検出できる)
+          cancelledRPCID.set(id)
+          if Task.isCancelled {
+            rpcChannel.cancel(identifier: id)
+          }
         }
-      }
-    }
+      },
+      onCancel: {
+        // キャンセルされた場合は、対応する RPC をキャンセルして pending を終端する
+        // (RPCChannel が解放済みの場合は invalidate() で全 pending が終端済み)
+        if let id = cancelledRPCID.get() {
+          rpcChannel?.cancel(identifier: id)
+        }
+      })
     guard let response else {
       return nil
     }

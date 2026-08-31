@@ -39,10 +39,16 @@ struct RPCRawResponse: @unchecked Sendable {
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
-final class RPCChannel {
+///
+/// `@unchecked Sendable` を付与しているのは、`RPCChannel` の可変状態
+/// (`pendings` / `nextId` / `isInvalidated`) は concurrent dispatch queue の
+/// barrier 配下でのみアクセスされ、`RPCChannel` 外部からは参照されないため。
+/// Swift コンパイラは concurrent dispatch queue の保護を認識できないため、
+/// ベースクラスは `@unchecked Sendable` と宣言し、更新は必ず barrier 配下で行う。
+final class RPCChannel: @unchecked Sendable {
   /// pending 管理用の構造体
   private struct Pending {
-    let completion: (Result<RPCRawResponse?, SoraError>) -> Void
+    let completion: (Result<RPCRawResponse?, Error>) -> Void
     let timeoutWorkItem: DispatchWorkItem
   }
 
@@ -51,6 +57,9 @@ final class RPCChannel {
     label: "jp.shiguredo.sora-ios-sdk.rpc.channel", attributes: .concurrent)
   private var nextId: Int = 1
   private var pendings: [Int: Pending] = [:]
+  /// invalidate() が呼ばれたかどうか。invalidate 後の call() を拒否するために保持する。
+  /// アクセスは queue の barrier 配下で行う
+  private var isInvalidated = false
 
   init(dataChannel: DataChannel) {
     self.dataChannel = dataChannel
@@ -62,17 +71,20 @@ final class RPCChannel {
   }
 
   /// RPC を送信する。
+  ///
+  /// - Returns: リクエストとして登録された RPC ID (notification は nil)。
+  ///   登録されなかった場合は nil を返し、completion に失敗結果を渡す
   @discardableResult
   func call(
     methodName: String,
     params: Encodable? = nil,
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0,
-    completion: ((Result<RPCRawResponse?, SoraError>) -> Void)? = nil
-  ) -> Bool {
+    completion: ((Result<RPCRawResponse?, Error>) -> Void)? = nil
+  ) -> Int? {
     guard isAvailable else {
       completion?(.failure(SoraError.rpcUnavailable(reason: "DataChannel is not open")))
-      return false
+      return nil
     }
 
     var payload: [String: Any] = [
@@ -85,7 +97,7 @@ final class RPCChannel {
         payload["params"] = try encodeParams(params)
       } catch {
         completion?(.failure(SoraError.rpcEncodingError(reason: error.localizedDescription)))
-        return false
+        return nil
       }
     }
 
@@ -98,7 +110,7 @@ final class RPCChannel {
 
     guard JSONSerialization.isValidJSONObject(payload) else {
       completion?(.failure(SoraError.rpcEncodingError(reason: "invalid JSON payload")))
-      return false
+      return nil
     }
 
     let data: Data
@@ -106,47 +118,77 @@ final class RPCChannel {
       data = try JSONSerialization.data(withJSONObject: payload, options: [])
     } catch {
       completion?(.failure(SoraError.rpcEncodingError(reason: error.localizedDescription)))
-      return false
+      return nil
     }
 
-    var pending: Pending?
-    if !isNotificationRequest, let identifier {
-      // タイムアウト時に実行されるタスク
-      let workItem = DispatchWorkItem { [weak self] in
-        self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
+    // 利用可能性の確認と pending の登録を 1 つの barrier で行い、
+    // その間に呼び出し側の invalidate() が割り込まないようにする。
+    // invalidate が終わった後に登録された pending は、timeout work item 経由で
+    // 必ず完了されるが、RPCChannel が解放済みの場合は weakly captured された
+    // work item が実行されないため、登録自体を拒否する
+    if let identifier {
+      let createdPending = makePending(identifier: identifier, completion: completion)
+      let registered = queue.sync(flags: .barrier) { () -> Pending? in
+        if isInvalidated {
+          return nil
+        }
+        pendings[identifier] = createdPending
+        return createdPending
       }
-      let createdPending = Pending(
-        completion: { result in completion?(result) },
-        timeoutWorkItem: workItem)
-      pending = createdPending
-      queue.sync(flags: .barrier) {
-        self.pendings[identifier] = createdPending
+      guard let registered else {
+        completion?(
+          .failure(SoraError.rpcDataChannelClosed(reason: "RPC channel is invalidated")))
+        return nil
       }
+      let sent = dataChannel.send(data)
+      if !sent {
+        finishPending(
+          id: identifier,
+          result: .failure(SoraError.rpcDataChannelClosed(reason: "failed to send rpc message")))
+        return nil
+      }
+      // リクエストのタイムアウトをスケジュール
+      DispatchQueue.global().asyncAfter(
+        deadline: .now() + timeout, execute: registered.timeoutWorkItem)
+      return identifier
+    }
+
+    // notification は id を持たず pending も作らない。登録の有無の代わりに
+    // invalidate 後の送信を拒否する
+    let stillValid = queue.sync(flags: .barrier) { () -> Bool in
+      !isInvalidated
+    }
+    guard stillValid else {
+      completion?(
+        .failure(SoraError.rpcDataChannelClosed(reason: "RPC channel is invalidated")))
+      return nil
     }
 
     Logger.debug(type: .dataChannel, message: "send rpc: \(payload)")
     let sent = dataChannel.send(data)
     if !sent {
-      if let identifier {
-        finishPending(
-          id: identifier,
-          result: .failure(SoraError.rpcDataChannelClosed(reason: "failed to send rpc message")))
-      } else {
-        completion?(.failure(SoraError.rpcDataChannelClosed(reason: "failed to send rpc message")))
-      }
-      return false
+      completion?(.failure(SoraError.rpcDataChannelClosed(reason: "failed to send rpc message")))
+      return nil
     }
 
-    if !isNotificationRequest, let pending {
-      // リクエストのタイムアウトをスケジュール
-      DispatchQueue.global().asyncAfter(
-        deadline: .now() + timeout, execute: pending.timeoutWorkItem)
-    } else {
-      // notification の場合は即座に完了
-      completion?(.success(nil))
-    }
+    // notification の場合は即座に完了
+    completion?(.success(nil))
+    return nil
+  }
 
-    return true
+  /// timeout 用の pending を作成して返す
+  private func makePending(
+    identifier: Int,
+    completion: ((Result<RPCRawResponse?, Error>) -> Void)?
+  ) -> Pending {
+    let workItem = DispatchWorkItem { [weak self] in
+      // RPCChannel が解放済みの場合、invalidate が全 pending を終端済みである
+      // (invalidate 後に登録されないことを barrier で保証しているため)
+      self?.finishPending(id: identifier, result: .failure(SoraError.rpcTimeout))
+    }
+    return Pending(
+      completion: { result in completion?(result) },
+      timeoutWorkItem: workItem)
   }
 
   /// DataChannel で受信したメッセージを処理する。
@@ -211,9 +253,17 @@ final class RPCChannel {
     Logger.warn(type: .dataChannel, message: "rpc response is unknown format")
   }
 
-  /// すべての pending を失敗扱いで終了する。
+  /// RPC チャンネルを無効化し、すべての pending を失敗扱いで終了する。
+  ///
+  /// 呼び出し後は isInvalidated になり、以降の call() は pending を登録せず失敗する。
+  /// 利用者からは、RPC の DataChannel が切断されたことを示す理由が渡される。
   func invalidate(reason: SoraError) {
     let snapshots: [Int: Pending] = queue.sync(flags: .barrier) {
+      if isInvalidated {
+        return [:]
+      }
+      // invalidate 後の pending 登録を拒否する
+      isInvalidated = true
       let current = pendings
       pendings.removeAll()
       return current
@@ -222,6 +272,13 @@ final class RPCChannel {
       pending.timeoutWorkItem.cancel()
       pending.completion(.failure(reason))
     }
+  }
+
+  /// 指定された pending をキャンセルし、CancellationError で終端する。
+  ///
+  /// タスクキャンセルによりレスポンスを待たなくなった場合に呼ぶ。
+  func cancel(identifier: Int) {
+    finishPending(id: identifier, result: .failure(CancellationError()))
   }
 
   private func nextIdentifier() -> Int {
@@ -238,7 +295,7 @@ final class RPCChannel {
     return object
   }
 
-  private func finishPending(id: Int, result: Result<RPCRawResponse?, SoraError>) {
+  private func finishPending(id: Int, result: Result<RPCRawResponse?, Error>) {
     let pending = queue.sync(flags: .barrier) { () -> Pending? in
       let value = pendings[id]
       pendings.removeValue(forKey: id)
@@ -282,5 +339,33 @@ private struct EncodableBox: Encodable {
 
   func encode(to encoder: Encoder) throws {
     try encodeClosure(encoder)
+  }
+}
+
+/// `MediaChannel.rpc()` 内でタスクキャンセル通知に使う RPC ID をスレッドセーフに保持するストア。
+///
+/// `withTaskCancellationHandler` の `onCancel` は別スレッドから実行されるため、
+/// `NSLock` で保護した単一の `Int?` を共有する。ID は 1 回の `rpc()` 呼び出しに
+/// つき 1 つだけ登録され、読み取りは 1 回だけ行われる。
+///
+/// `@unchecked Sendable` を付与しているのは、可変状態が `value` (単一の `Int?`) のみで、
+/// その読み書きはすべて `stateLock` 配下で行われるため。Swift コンパイラは
+/// `NSLock` による保護を認識できないため、手動で安全を宣言する。
+final class CancelledRPCIDStore: @unchecked Sendable {
+  private let stateLock = NSLock()
+  private var value: Int?
+
+  init() {}
+
+  func set(_ value: Int) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    self.value = value
+  }
+
+  func get() -> Int? {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return value
   }
 }
