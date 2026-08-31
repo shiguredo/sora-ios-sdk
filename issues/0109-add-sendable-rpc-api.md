@@ -41,6 +41,7 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
 本 issue は RPC lifecycle が厳密に 1 回終端する状態 (0094 で実装済み) を前提に、公開 data model の Sendable 対応だけを追加する。
 
 - 0094 の `RPCChannel` は barrier + `@unchecked Sendable` の構造を残している。0109 で `RPCRawResponse.result: Any` を排除する際、barrier 保護は維持したまま response の持ち方を `Data` ベースへ移せるか、または RPCChannel 自体を actor へ移行するか、実装の過程で判断する。
+- actor へ移行することで `@unchecked Sendable` は外せる (コンパイラが可変状態の保護を検証できる)。ただし `call()` が同期 API のため、actor 化する場合は `MediaChannel.rpc` への波及を含めて検討する。actor 化しない場合は barrier + `@unchecked Sendable` を維持する。
 
 ## 設計方針
 
