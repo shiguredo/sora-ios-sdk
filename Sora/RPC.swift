@@ -121,11 +121,11 @@ final class RPCChannel: @unchecked Sendable {
       return nil
     }
 
-    // 利用可能性の確認と pending の登録を原子的に行う。
-    // (呼び出し側の invalidate() との間に、pending 登録だけが入らないようにする。
+    // 利用可能性の確認と pending の登録を 1 つの barrier で行い、
+    // その間に呼び出し側の invalidate() が割り込まないようにする。
     // invalidate が終わった後に登録された pending は、timeout work item 経由で
-    // 必ず終端されるが、RPCChannel が解放済みの場合は weakly captured された
-    // work item が実行されないため、登録自体を拒否する)
+    // 必ず完了されるが、RPCChannel が解放済みの場合は weakly captured された
+    // work item が実行されないため、登録自体を拒否する
     if let identifier {
       let createdPending = makePending(identifier: identifier, completion: completion)
       let registered = queue.sync(flags: .barrier) { () -> Pending? in
@@ -253,9 +253,10 @@ final class RPCChannel: @unchecked Sendable {
     Logger.warn(type: .dataChannel, message: "rpc response is unknown format")
   }
 
-  /// すべての pending を失敗扱いで終了する。
+  /// RPC チャンネルを無効化し、すべての pending を失敗扱いで終了する。
   ///
   /// 呼び出し後は isInvalidated になり、以降の call() は pending を登録せず失敗する。
+  /// 利用者からは、RPC の DataChannel が切断されたことを示す理由が渡される。
   func invalidate(reason: SoraError) {
     let snapshots: [Int: Pending] = queue.sync(flags: .barrier) {
       if isInvalidated {

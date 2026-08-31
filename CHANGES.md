@@ -54,11 +54,11 @@
   - `createAnswer` で `nativeChannel` が nil の場合に handler を呼ばずに return し、切断処理が行われず接続が残ってしまう問題を修正する
   - 接続成功・失敗・切断の各経路で callback を先に取り出してクリアする take-and-clear に統一し、callback 内から同期的に `disconnect()` されても二重実行されないようにする
   - @t-miya
-- [FIX] RPC の pending 登録と切断の invalidate が競合して RPC が終端しない問題を修正する
+- [FIX] 切断時の invalidate と RPC 呼び出しが競合して、RPC が完了しない問題を修正する
   - `RPCChannel` に invalidated 状態を持たせ、`call()` の利用可能性確認と pending 登録を `invalidate()` と同じ排他単位で行うようにする
   - invalidate 後の `call()` は pending を登録せず、`rpcDataChannelClosed` で即時に失敗させる
-  - pending の終端 (response / timeout / invalidate / 送信失敗) を `finishPending` に集約し、競合しても 1 回だけ終端する
-  - `MediaChannel.rpc` の Task がキャンセルされた場合は `CancellationError` で終端するようにする
+  - pending の完了 (response / timeout / invalidate / 送信失敗) を `finishPending` に集約し、競合しても 1 回だけ完了する
+  - `MediaChannel.rpc` の Task がキャンセルされた場合は `CancellationError` で完了するようにする
   - @t-miya
 
 ### misc
