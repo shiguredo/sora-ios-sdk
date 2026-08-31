@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/update-swiftpm-language-mode
-- Polished:
+- Polished: 2026-08-31
 
 ## 目的
 
@@ -19,11 +19,14 @@ SDK target と downstream consumer が同じ Swift language mode で compile さ
 
 一方、README は Swift 6 言語モードでビルドしていると説明し、GitHub Actions は `xcodebuild` に `SWIFT_VERSION=6` を渡している。この override は通常の SwiftPM consumer へ伝播しない。
 
+現行 CI の override により、SDK target と test target は既に Swift 6 言語モード相当で build されている。manifest 更新の直接的な影響は、SwiftPM consumer 側の compile 条件の正本化であり、repository 内の build 条件の一新ではない。
+
 manifest を変更せずに CI だけで Swift 6 を指定すると、SDK repository 内の build と利用者の package resolution / compile condition が一致しない。
 
 ## 前提となる issue
 
 - `0107`: Swift 6 consumer fixture と strict concurrency CI を追加する。
+- `0118`: E2E テストの concurrency 診断抑止を除去する。
 
 加えて、manifest の更新で concurrency warning が一斉に gate されるため、少なくとも次の runtime bug と内部 ownership の対応状況を確認してから着手する。
 
@@ -34,7 +37,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 
 ## 設計方針
 
-- `swift-tools-version` を現在の最低開発環境で利用できる `6.x` へ更新する。
+- `swift-tools-version` を現在の最低開発環境で利用できる `6.x` へ更新する。最低開発環境は README のシステム条件の Xcode 26.2 とし、Xcode 26.2 が読み取れる tools version を上限に選ぶ。
 - package initializer に `swiftLanguageModes: [.v6]` を明示する。
 - manifest API の正確なシグネチャを採用 Xcode の `PackageDescription` で確認する。
 - iOS deployment target の `.iOS(.v14)` は維持する。
@@ -49,7 +52,8 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 
 - `swift package dump-package` で tools version と Swift 6 language mode を確認する。
 - `0107` の consumer fixture を Xcode 26.2 と最新 26.x で build する。
-- SDK target と test target を strict concurrency / warnings-as-errors で build する。
+- SDK target を strict concurrency / warnings-as-errors で build する。
+- test target は現行 CI 相当で build が成功することを確認する。test target の strict concurrency / warnings-as-errors gate の本対応は `0118` の管轄とする。
 - binary `WebRTC.xcframework` の import と iOS 14 deployment target が維持されることを確認する。
 - package product `Sora` と `WebRTC` の名前および依存関係が変わっていないことを確認する。
 - API baseline に意図しない削除・変更がないことを確認する。
@@ -58,7 +62,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 
 - `Package.swift` の tools version が Swift 6 対応の `6.x` であること。
 - `swiftLanguageModes: [.v6]` が manifest に明示されていること。
-- `swift package dump-package` が tools 6.x と Swift 6 language mode を示すこと。
+- `swift package dump-package` が tools 6.x と Swift 6 language mode を示すこと。出力キーは `swiftLanguageVersions` のまま、値として `["6"]` が現れる。
 - iOS 14 deployment target が維持されていること。
 - package product、target、binary dependency の構成が意図せず変わっていないこと。
 - target 全体を MainActor default にして concurrency 問題を隠していないこと。
