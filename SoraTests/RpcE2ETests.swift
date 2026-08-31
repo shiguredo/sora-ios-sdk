@@ -607,9 +607,6 @@ final class RpcE2ETests: E2ETestBase {
 
     let cleanupChannels: () -> Void = {
       self.disconnectAll(channels: [sendonlyChannel, recvonlyChannel, reconnectChannel])
-      _ = XCTWaiter.wait(
-        for: [switchedExpectation, rpcOpenedExpectation],
-        timeout: 0)
     }
 
     var sendonlyConfig = try buildConfiguration(role: .sendonly)
