@@ -753,6 +753,13 @@ public final class MediaChannel {
   /// DataChannel を利用してメッセージを送信します
   public func sendMessage(label: String, data: Data) -> Error? {
     guard peerChannel.switchedToDataChannel else {
+      // redirect 中は旧 DataChannel への送信を防ぐため false にしている。
+      // 利用者には「まだ指定した DataChannel に接続されていない」として通知する。
+      if peerChannel.isRedirecting {
+        Logger.debug(
+          type: .mediaChannel,
+          message: "sendMessage: rejected (redirecting): label => \(label)")
+      }
       return SoraError.messagingError(reason: "DataChannel is not open yet")
     }
 

@@ -1,7 +1,7 @@
 # redirect 中に旧 DataChannel と RPC を利用できる問題を修正する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-01
 - Branch: feature/fix-redirect-stale-transport
 - Polished: 2026-08-27
 
@@ -73,3 +73,29 @@ closed の `0090` では、旧 PeerConnection callback を世代と identity で
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+`PeerChannel` の redirect 受理処理 (`handleSignalingOverWebSocket` の `case .redirect`) で、旧 transport を論理的に無効化する処理を追加した。既存の `dataChannelGeneration` (transport epoch) を redirect ごとに進める機構をそのまま利用し、epoch 更新と同じ排他領域で以下を実行する。
+
+- `switchedToDataChannel` を false にする。これにより redirect 中の `sendMessage` は「DataChannel is not open yet」を返し、旧 DataChannel への送信を防ぐ。
+- 旧 `dataChannels` の参照を take-and-clear する。新しい offer 受信時に再構築される。
+- 旧 `rpcChannel` を `SoraError.rpcDataChannelClosed` で invalidate してから nil にする。redirect 中の RPC は `rpcUnavailable` または `rpcDataChannelClosed` で即時失敗する。
+- 旧 `streams` を `terminate()` して解放する。旧 PeerConnection の映像・音声フレームが新接続へ混入するのを防ぐ。
+
+あわせて、リダイレクトの挙動を確認できるログを追加した。
+
+- `redirect: invalidating old transport (generation => X)`
+- `redirect: invalidated rpcChannel`
+- `switched: switchedToDataChannel => true (generation => X)`
+- `didOpen: created rpcChannel (generation => X)`
+- `sendMessage: rejected (redirecting): label => X` (MediaChannel)
+
+### 検証
+
+- ユニットテスト (`PeerChannelRedirectInvalidationTests`):
+  - redirect 受理時に `switchedToDataChannel` / `dataChannelGeneration` / `isRedirecting` が更新されること
+  - redirect 中の `sendMessage` が旧 DataChannel へ送信されないこと
+- 実機確認 (クラスター構成の Sora サーバーでリダイレクトを発生させ、実装直後に送信を試行):
+  - `sendMessage` → `DataChannel is not open yet` (旧 DataChannel への送信拒否)
+  - RPC → `rpcUnavailable` (旧 rpcChannel の利用拒否)
+  - リダイレクト後の新接続で `sendMessage` / RPC が正常に機能する (回帰なし)
+- 既存の全テストが成功することを確認済み。
