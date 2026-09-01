@@ -60,6 +60,12 @@
   - pending の完了 (response / timeout / invalidate / 送信失敗) を `finishPending` に集約し、競合しても 1 回だけ完了する
   - `MediaChannel.rpc` の Task がキャンセルされた場合は `CancellationError` で完了するようにする
   - @t-miya
+- [FIX] redirect 受理後も旧 DataChannel と RPC を利用できる問題を修正する
+  - redirect 受理時に旧 transport を論理的に無効化し、以後の `sendMessage` / RPC / stats が旧 DataChannel / 旧 PeerConnection を参照しないようにする
+  - `switchedToDataChannel` を false にし、旧 DataChannel の参照を解放する
+  - 旧 `rpcChannel` を invalidate して nil にする
+  - 旧 `MediaStream` を終端して解放する
+  - @t-miya
 
 ### misc
 
