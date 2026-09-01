@@ -1,7 +1,7 @@
 # 画面共有の再開始後に旧フレームが送信される問題を修正する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-01
 - Branch: feature/fix-screen-capture-frame-generation
 - Polished: 2026-08-27
 
@@ -74,3 +74,25 @@ transformer 実行中に stop / restart が完了する間合いを作るため�
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+`ScreenCaptureController` のフレーム送信に capture ID の世代照合を導入した。
+
+- `CaptureContext` に capture ID を持たせ、context 作成時点の capture ID を保持する。
+- `captureContext()` は `activeCaptureID`、sender stream、transformer を同じ lock 区間で snapshot 化する。
+- 送信直前に context の capture ID と現在の `activeCaptureID` を照合する (`isActiveCaptureID(_:)`)。transformer 実行・VideoFrame 生成などの送信準備中に stop / restart が完了した場合でも、旧 capture のフレームを送信しない。
+- `markVideoFrameSent` (PTS / uptime の記録) を ID 照合通過後の送信直前へ移動し、破棄された stale frame で throttle 状態を汚染しないようにする。
+- 旧世代の start 完了が遅延して届いた場合に、新世代のキャプチャを誤って停止しないよう、`.cancelled` 分岐の `stopCapture()` を削除した。
+
+あわせて、テストからイベント列 (start / complete / stop / restart) を入力できるよう、`beginStartCapture` / `completeStartCapture` / `beginStopCapture` / `completeStopCapture` / `isActiveCaptureID` を internal 化した。
+
+### 検証
+
+- ユニットテスト (`ScreenCaptureFrameGenerationTests`):
+  - 停止後の旧 capture の frame が拒否されること (`testFrameForStoppedCaptureIsRejected`)
+  - 停止 → 再開始 (capture A → B) 後の旧 capture の frame が拒否され、新 capture の frame が送信できること (`testFrameForRestartedCaptureIsRejected`)
+  - 現在の capture ID と不一致の ID が拒否されること (`testFrameForMismatchedCaptureIDIsRejected`)
+- 実機確認 (ScreenCast サンプル、停止 → 即再開始):
+  - capture ID が世代ごとに進み (1 → 2)、再開始が正常に完了すること
+  - 旧世代の誤停止が起きないこと
+  - フレーム送信が継続すること
+- 既存の全テストが成功することを確認済み。
