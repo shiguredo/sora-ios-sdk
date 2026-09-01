@@ -121,9 +121,9 @@ final class ScreenCaptureController: @unchecked Sendable {
             case .failed(let error):
               continuation.resume(throwing: error)
             case .cancelled:
-              Task { [weak self] in
-                await self?.stopCapture()
-              }
+              // 旧世代の start コールバックが遅延して到着した場合。
+              // .cancelled は「何らかの停止が既に開始済み (activeCaptureID が不一致)」のときだけ
+              // 返るため、ここで stopCapture() を呼ぶと新世代を誤って停止させる。何もしない。
               continuation.resume(
                 throwing: SoraError.mediaChannelError(reason: "screen capture start was cancelled")
               )
