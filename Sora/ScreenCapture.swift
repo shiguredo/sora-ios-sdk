@@ -148,12 +148,18 @@ final class ScreenCaptureController: @unchecked Sendable {
               message: "failed to stop screen capture: \(error.localizedDescription)"
             )
           }
-          self.withLock {
-            self.captureState = .stopped
-          }
+          self.completeStopCapture()
           continuation.resume(returning: ())
         }
       }
+    }
+  }
+
+  // stopCapture のコールバックが返ってきた後に state を .stopped へ遷移させます。
+  // テストからイベント列 (start / complete / stop / restart) を入力するため internal とする。
+  func completeStopCapture() {
+    withLock {
+      captureState = .stopped
     }
   }
 
@@ -175,7 +181,8 @@ final class ScreenCaptureController: @unchecked Sendable {
 
   // MARK: - Private
 
-  private enum StartCaptureResult {
+  // completeStartCapture の戻り値として使用する。テストから比較するため internal とする。
+  enum StartCaptureResult {
     case success
     case failed(Error)
     case cancelled
@@ -214,7 +221,8 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // startCapture のコールバックが返ってきた後に state 更新等を行います
-  private func completeStartCapture(captureID: UInt64, error: Error?) -> StartCaptureResult {
+  // テストからイベント列 (start / complete / stop / restart) を入力するため internal とする。
+  func completeStartCapture(captureID: UInt64, error: Error?) -> StartCaptureResult {
     withLock {
       // startCapture 終了前に stopCapture が実行された場合はキャンセルします
       // この時 activeCaptureID は nil となっています
