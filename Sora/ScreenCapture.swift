@@ -53,6 +53,9 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   private struct CaptureContext {
+    // この context を取得した時点の capture ID。
+    // 停止・再開始の競合で旧 capture のフレームを送信しないために使用する。
+    let captureID: UInt64
     let senderStream: MediaStream
     let videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
   }
@@ -118,9 +121,9 @@ final class ScreenCaptureController: @unchecked Sendable {
             case .failed(let error):
               continuation.resume(throwing: error)
             case .cancelled:
-              Task { [weak self] in
-                await self?.stopCapture()
-              }
+              // 旧世代の start コールバックが遅延して到着した場合。
+              // .cancelled は「何らかの停止が既に開始済み (activeCaptureID が不一致)」のときだけ
+              // 返るため、ここで stopCapture() を呼ぶと新世代を誤って停止させる。何もしない。
               continuation.resume(
                 throwing: SoraError.mediaChannelError(reason: "screen capture start was cancelled")
               )
@@ -145,12 +148,20 @@ final class ScreenCaptureController: @unchecked Sendable {
               message: "failed to stop screen capture: \(error.localizedDescription)"
             )
           }
-          self.withLock {
-            self.captureState = .stopped
-          }
+          self.completeStopCapture()
           continuation.resume(returning: ())
         }
       }
+    }
+  }
+
+  // stopCapture のコールバックが返ってきた後に state を .stopped へ遷移させます。
+  // 本番では stopCapture() の完了コールバックからのみ呼ばれる。
+  // テストからイベント列 (start / complete / stop / restart) を入力するため internal とする。
+  // (beginStopCapture() と対で呼ぶ必要がある。単体で呼ぶと state が不正になる)
+  func completeStopCapture() {
+    withLock {
+      captureState = .stopped
     }
   }
 
@@ -172,7 +183,8 @@ final class ScreenCaptureController: @unchecked Sendable {
 
   // MARK: - Private
 
-  private enum StartCaptureResult {
+  // completeStartCapture の戻り値として使用する。テストから比較するため internal とする。
+  enum StartCaptureResult {
     case success
     case failed(Error)
     case cancelled
@@ -185,7 +197,10 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // startCapture 前に state チェック、更新を行います
-  private func beginStartCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) throws
+  // 本番では startCapture() からのみ呼ばれる。
+  // テストからイベント列 (start / stop / restart) を入力するため internal とする。
+  // (completeStartCapture() と対で呼ぶ必要がある。単体で呼ぶと state が .starting で止まる)
+  func beginStartCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) throws
     -> UInt64
   {
     try withLock {
@@ -210,7 +225,10 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // startCapture のコールバックが返ってきた後に state 更新等を行います
-  private func completeStartCapture(captureID: UInt64, error: Error?) -> StartCaptureResult {
+  // 本番では startCapture() の完了コールバックからのみ呼ばれる。
+  // テストからイベント列 (start / complete / stop / restart) を入力するため internal とする。
+  // (beginStartCapture() と対で呼ぶ必要がある。単体で呼ぶと state が不正になる)
+  func completeStartCapture(captureID: UInt64, error: Error?) -> StartCaptureResult {
     withLock {
       // startCapture 終了前に stopCapture が実行された場合はキャンセルします
       // この時 activeCaptureID は nil となっています
@@ -233,7 +251,10 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // stopCapture 実行前に state チェック等を行います
-  private func beginStopCapture() -> Bool {
+  // 本番では stopCapture() / stopCaptureForDisconnect() からのみ呼ばれる。
+  // テストからイベント列 (start / stop / restart) を入力するため internal とする。
+  // (completeStopCapture() と対で呼ぶ必要がある。単体で呼ぶと state が .stopping で止まる)
+  func beginStopCapture() -> Bool {
     withLock {
       switch captureState {
       case .stopped, .stopping:
@@ -292,8 +313,6 @@ final class ScreenCaptureController: @unchecked Sendable {
         return
       }
 
-      self.markVideoFrameSent(presentationTimestamp: presentationTimestamp)
-
       var sampleBufferToSend = sampleBuffer
       if let transformedBuffer = context.videoSampleBufferTransformer?(sampleBuffer) {
         sampleBufferToSend = transformedBuffer
@@ -306,6 +325,17 @@ final class ScreenCaptureController: @unchecked Sendable {
         return
       }
 
+      // 送信直前に capture ID を照合する。送信準備中 (transformer 実行・VideoFrame 生成など)
+      // に stop / restart が完了した場合、旧 capture のフレームを送信しない
+      // (isReadyToSend は実行時点の captureState のみを確認するため、stop / restart 後の
+      // .running では旧 capture の frame を識別できない)
+      guard self.isActiveCaptureID(context.captureID) else {
+        return
+      }
+
+      // 送信直前のみ PTS / uptime を記録する (ID 照合を通過しなかった stale frame の破棄で
+      // throttle 状態を汚染しない)
+      self.markVideoFrameSent(presentationTimestamp: presentationTimestamp)
       context.senderStream.send(videoFrame: videoFrame)
     }
   }
@@ -361,16 +391,31 @@ final class ScreenCaptureController: @unchecked Sendable {
 
   private func captureContext() -> CaptureContext? {
     withLock {
-      guard captureState == .running else {
+      // .running へ遷移するのは completeStartCapture 成功時のみで、その時点で
+      // activeCaptureID は必ず非 nil となる (不変条件)。.running 中に activeCaptureID が
+      // nil になる経路は存在しないため、1 つの guard に統合できる。
+      guard captureState == .running, let activeCaptureID else {
         return nil
       }
       guard let senderStream else {
         return nil
       }
       return CaptureContext(
+        captureID: activeCaptureID,
         senderStream: senderStream,
         videoSampleBufferTransformer: settings.videoSampleBufferTransformer
       )
+    }
+  }
+
+  // 現在の capture (activeCaptureID) と context が保持する capture ID が一致するか
+  // 判定します。送信準備中 (transformer 実行・VideoFrame 生成など) に stop / restart が
+  // 完了した場合でも、送信直前の照合で旧 capture のフレームを送信しない。
+  // 本番では handleSampleBuffer() の送信処理からのみ呼ばれる。
+  // テストから直接呼び出してイベント列 (start / stop / restart) を入力できるよう internal とする。
+  func isActiveCaptureID(_ captureID: UInt64) -> Bool {
+    withLock {
+      return activeCaptureID == captureID
     }
   }
 
