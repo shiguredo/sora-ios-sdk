@@ -5,13 +5,13 @@ import XCTest
 /// 画面共有の capture ID 世代管理に関するユニットテスト
 ///
 /// 画面共有を停止して直ちに再開始したときに、停止前に送信キューへ投入された旧フレームが
-/// 古い sender stream を使わないことを、capture ID の世代判定 (shouldSendFrameForCaptureID) で
+/// 古い sender stream を使わないことを、capture ID の世代判定 (isActiveCaptureID) で
 /// 検証する。モックやスタブは使用しない。
 final class ScreenCaptureFrameGenerationTests: XCTestCase {
   // テストで共通利用するシグナリング URL を返す
   private func makeTestURL() -> URL {
     guard let url = URL(string: "wss://example.com") else {
-      fatalError("failed to create test URL")
+      fatalError("テスト URL の生成に失敗しました")
     }
     return url
   }
@@ -49,7 +49,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
   /// capture A の開始後に、capture A の frame は送信でき、capture A を停止すると
   /// 送信できないことを確認する
   ///
-  /// shouldSendFrameForCaptureID は「context が保持する capture ID」(capture A) と
+  /// isActiveCaptureID は「context が保持する capture ID」(capture A) と
   /// 現在の activeCaptureID を照合する。stop で activeCaptureID が nil になると、
   /// 送信直前の照合で capture A の frame が拒否される。
   func testFrameForStoppedCaptureIsRejected() throws {
@@ -63,7 +63,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
 
     // capture A の frame は送信できる (送信直前の照合で一致)
     XCTAssertTrue(
-      controller.shouldSendFrameForCaptureID(captureAID),
+      controller.isActiveCaptureID(captureAID),
       "実行中の capture の frame は送信できること")
 
     // capture A を停止する (activeCaptureID が nil になる)
@@ -74,7 +74,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
 
     // 停止後の capture A の frame は送信できない
     XCTAssertFalse(
-      controller.shouldSendFrameForCaptureID(captureAID),
+      controller.isActiveCaptureID(captureAID),
       "停止した capture の frame は送信できないこと")
   }
 
@@ -118,11 +118,11 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
 
     // capture A の frame は送信できない (旧 capture)
     XCTAssertFalse(
-      controller.shouldSendFrameForCaptureID(captureAID),
+      controller.isActiveCaptureID(captureAID),
       "再開始後の旧 capture の frame は送信できないこと")
     // capture B の frame は送信できる (現行 capture)
     XCTAssertTrue(
-      controller.shouldSendFrameForCaptureID(captureBID),
+      controller.isActiveCaptureID(captureBID),
       "再開始後の新 capture の frame は送信できること")
   }
 
@@ -139,7 +139,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
 
     // 現在の capture ID と一致しない ID (次世代の ID と想定) は拒否される
     XCTAssertFalse(
-      controller.shouldSendFrameForCaptureID(captureAID + 1),
+      controller.isActiveCaptureID(captureAID + 1),
       "現在の capture と一致しない ID の frame は送信できないこと")
   }
 }

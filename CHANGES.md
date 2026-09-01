@@ -72,6 +72,12 @@
   - Timer closure は `self` を weak capture し、`stop()` で `timer = nil` を設定して循環参照を解消する
   - `run()` / `stop()` の状態 (`timer` / `isRunning` / `generation`) を排他ロックで保護する
   - @t-miya
+- [FIX] 画面共有の再開始後に旧フレームが送信される問題を修正する
+  - 画面キャプチャの CaptureContext に capture ID を持たせ、送信直前に現在の capture ID と照合する
+  - 停止・再開始の競合後も、旧 capture のフレームが古い sender stream へ送信されないようにする
+  - 送信確定後のみフレームの間引き情報 (PTS / uptime) を記録し、破棄されたフレームで throttle 状態を汚染しないようにする
+  - 旧世代の start 完了が遅延して届いた場合に、新世代のキャプチャを誤って停止しないようにする
+  - @t-miya
 
 ### misc
 
