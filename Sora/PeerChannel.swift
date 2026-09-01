@@ -1391,6 +1391,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .switched(let switched):
       switchedToDataChannel = true
       signalingChannel.ignoreDisconnectWebSocket = switched.ignoreDisconnectWebSocket ?? false
+      Logger.debug(
+        type: .peerChannel,
+        message: "switched: switchedToDataChannel => true (generation => \(dataChannelGeneration))")
     case .redirect(let redirect):
       // リダイレクト時の旧接続からの遅延通知の遮断方針:
       // - DataChannel delegate (dataChannelDidChangeState / didReceiveMessageWith):
@@ -1408,6 +1411,33 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 新接続を誤切断するのを防ぐ。また、disconnectTimerScheduled が true のまま
       // 残留すると新接続のタイマー開始が抑止される)
       dataChannelGeneration += 1
+      // 旧 transport の論理的な無効化。redirect 受理済みのため、
+      // 以後 sendMessage / RPC / stats が旧 DataChannel / 旧 PeerConnection を参照しない。
+      // 送信経路と RPC は dataChannelGeneration と rpcChannel の nil で旧接続を判別する。
+      Logger.debug(
+        type: .peerChannel,
+        message: "redirect: invalidating old transport (generation => \(dataChannelGeneration))")
+      switchedToDataChannel = false
+      // 旧 DataChannel の参照を解放し、旧 DataChannel への送信を防ぐ。
+      // (take-and-clear 相当。dataChannels は新しい offer 受信時に再構築される)
+      dataChannels.removeAll()
+      if let rpcChannel {
+        rpcChannel.invalidate(
+          reason: SoraError.rpcDataChannelClosed(reason: "redirect"))
+        self.rpcChannel = nil
+        Logger.debug(type: .peerChannel, message: "redirect: invalidated rpcChannel")
+      }
+      // 旧 MediaStream を終端して解放する。
+      // (旧 PeerConnection が送出する映像・音声フレームが新しい接続へ混入するのを防ぐ)
+      for stream in streams {
+        stream.terminate()
+      }
+      if !streams.isEmpty {
+        Logger.debug(
+          type: .peerChannel,
+          message: "redirect: terminated \(streams.count) streams")
+      }
+      streams.removeAll()
       isRedirecting = true
       cancelDisconnectTimer()
       nativeChannel?.close()
@@ -1935,6 +1965,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // (onDataChannelOpened の発火時点で rpc 呼び出しが可能であることを保証するため)
     if label == "rpc" {
       rpcChannel = RPCChannel(dataChannel: dc)
+      Logger.debug(
+        type: .peerChannel,
+        message: "didOpen: created rpcChannel (generation => \(dataChannelGeneration))")
     }
 
     // libwebrtc の RTCDataChannelDelegate は登録時に現在の state を即時通知しないため、
