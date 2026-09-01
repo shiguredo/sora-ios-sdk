@@ -53,6 +53,9 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   private struct CaptureContext {
+    // この context を取得した時点の capture ID。
+    // 停止・再開始の競合で旧 capture のフレームを送信しないために使用する。
+    let captureID: UInt64
     let senderStream: MediaStream
     let videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
   }
@@ -185,7 +188,8 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // startCapture 前に state チェック、更新を行います
-  private func beginStartCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) throws
+  // テストからイベント列 (start / stop / restart) を入力するため internal とする。
+  func beginStartCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) throws
     -> UInt64
   {
     try withLock {
@@ -233,7 +237,8 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // stopCapture 実行前に state チェック等を行います
-  private func beginStopCapture() -> Bool {
+  // テストからイベント列 (start / stop / restart) を入力するため internal とする。
+  func beginStopCapture() -> Bool {
     withLock {
       switch captureState {
       case .stopped, .stopping:
@@ -292,8 +297,6 @@ final class ScreenCaptureController: @unchecked Sendable {
         return
       }
 
-      self.markVideoFrameSent(presentationTimestamp: presentationTimestamp)
-
       var sampleBufferToSend = sampleBuffer
       if let transformedBuffer = context.videoSampleBufferTransformer?(sampleBuffer) {
         sampleBufferToSend = transformedBuffer
@@ -306,6 +309,15 @@ final class ScreenCaptureController: @unchecked Sendable {
         return
       }
 
+      // 送信直前に capture ID を照合する。transformer 実行中に stop / restart が完了した場合、
+      // 旧 capture のフレームを送信しない (isReadyToSend は実行時点の captureState のみを
+      // 確認するため、stop / restart 後の .running では旧 capture の frame を識別できない)
+      guard self.shouldSendFrameForCaptureID(context.captureID) else {
+        return
+      }
+
+      // 送信確定後のみ PTS / uptime を記録する (stale frame の破棄で throttle 状態を汚染しない)
+      self.markVideoFrameSent(presentationTimestamp: presentationTimestamp)
       context.senderStream.send(videoFrame: videoFrame)
     }
   }
@@ -364,13 +376,30 @@ final class ScreenCaptureController: @unchecked Sendable {
       guard captureState == .running else {
         return nil
       }
+      guard let activeCaptureID else {
+        return nil
+      }
       guard let senderStream else {
         return nil
       }
       return CaptureContext(
+        captureID: activeCaptureID,
         senderStream: senderStream,
         videoSampleBufferTransformer: settings.videoSampleBufferTransformer
       )
+    }
+  }
+
+  // 現在の capture (activeCaptureID) と context が保持する capture ID が一致するか
+  // 判定します。旧 capture の (transformer 実行中の) フレームを送信しないために、
+  // 送信直前で照合する。
+  // テストから直接呼び出してイベント列 (start / stop / restart) を入力できるよう internal とする。
+  func shouldSendFrameForCaptureID(_ captureID: UInt64) -> Bool {
+    withLock {
+      guard activeCaptureID == captureID else {
+        return false
+      }
+      return true
     }
   }
 
