@@ -66,6 +66,12 @@
   - 旧 `rpcChannel` を invalidate して nil にする
   - 旧 `MediaStream` を終端して解放する
   - @t-miya
+- [FIX] `ConnectionTimer` の旧タイマーが新しい接続を切断する問題を修正する
+  - `run()` の再実行前に既存 Timer を無効化し、`timer` プロパティを nil にする
+  - Timer ごとの生成世代 (generation) を持たせ、callback 発火時に世代が一致する場合のみ timeout 処理を実行する
+  - Timer closure は `self` を weak capture し、`stop()` で `timer = nil` を設定して循環参照を解消する
+  - `run()` / `stop()` の状態 (`timer` / `isRunning` / `generation`) を排他ロックで保護する
+  - @t-miya
 
 ### misc
 
