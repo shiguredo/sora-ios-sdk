@@ -1,7 +1,7 @@
 # ConnectionTimer の旧タイマーが新しい接続を切断する問題を修正する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-01
 - Branch: feature/fix-connection-timer-lifecycle
 - Polished: 2026-08-27
 
@@ -74,3 +74,19 @@ Timer の生成、停止、再実行、破棄を一貫して管理し、過去�
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+`ConnectionTimer` の Timer の生成・停止・再実行・破棄を一貫して管理するように修正した。可変状態 (`timer` / `isRunning` / `generation`) は排他ロック (`stateLock`) で保護し、`run()` / `stop()` / Timer callback から異なるスレッドで同時に呼ばれても矛盾しないようにした。
+
+- `run()` の開始時に既存 Timer を必ず invalidate し、`timer` を nil にしてから新しい Timer を生成する。run → run の再実行時に main RunLoop に残った旧 Timer が発火しないようにする。
+- Timer ごとの生成世代 (`generation`) を持たせ、`run()` のたびに +1 する。Timer callback の発火時に現在の世代と一致する場合のみ timeout 処理を実行し、invalidate 済みの旧 Timer が遅れて発火しても現在の接続を切断しない。
+- Timer closure は `self` を weak capture し、`stop()` は `timer` を nil 化する。ConnectionTimer → Timer → closure → self の循環参照を解消し、接続完了・切断後に ConnectionTimer が解放されるようにする。
+- Timer callback 内の monitor の `disconnect()` と handler は、内部 lock の外で呼ぶ (lock を保持したままの再入を防ぐ)。
+
+### 検証
+
+- ユニットテスト (`ConnectionTimerLifecycleTests`):
+  - `run()` の再実行で世代が進むこと (`testRunRerunAdvancesGeneration`)
+  - 旧世代 Timer の handler が実行されないこと (`testOldGenerationIsIgnoredByGenerationComparison`)
+  - `stop()` 後に ConnectionTimer が解放されること (`testStopReleasesTimer`)
+  - `stop()` の二重呼び出しが安全であること (`testStopIsIdempotent`)
+- 既存の全テストが成功することを確認済み。
