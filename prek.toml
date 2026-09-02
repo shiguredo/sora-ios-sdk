@@ -2,29 +2,90 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
-# 全フック共通のステージ
-default_stages = ["pre-commit"]
+minimum_prek_version = "0.4.0"
 
-# Sora と SoraTests 配下の Swift ファイルが対象
+# 最初に失敗したフックで残りをスキップする
+fail_fast = true
+# stages 未指定のフックは pre-commit でだけ実行される
+default_stages = ["pre-commit"]
+# prek install で入れる Git フック
+default_install_hook_types = ["pre-commit"]
+
+# prek 組み込みフック (オフラインで動作する Rust ネイティブ実装)
+[[repos]]
+repo = "builtin"
+hooks = [
+  # 行末の空白を取り除く
+  { id = "trailing-whitespace" },
+  # ファイル末尾を改行 1 つで終わらせる
+  { id = "end-of-file-fixer" },
+  # ファイル先頭の UTF-8 BOM を取り除く
+  { id = "fix-byte-order-marker" },
+  # TOML の構文エラーを検出する
+  { id = "check-toml" },
+  # YAML の構文エラーを検出する
+  { id = "check-yaml" },
+  # JSON の構文エラーを検出する
+  # Package.resolved は identify で json タグが付かないため files / types を上書きする
+  { id = "check-json", files = "(^|/)Package\\.resolved$", types = ["text"] },
+  # XML の構文エラーを検出する
+  # Info.plist / *.xib は identify で xml タグが付かないため files / types を上書きする
+  { id = "check-xml", files = "\\.(plist|xib)$", types = ["text"] },
+  # マージコンフリクトマーカーが残ったコミットを防ぐ
+  { id = "check-merge-conflict" },
+  # 大文字小文字だけが異なるファイル名の衝突を防ぐ
+  { id = "check-case-conflict" },
+  # 大きなファイルの誤コミットを防ぐ
+  { id = "check-added-large-files", args = ["--maxkb=500"] },
+  # 秘密鍵の誤コミットを防ぐ
+  { id = "detect-private-key" },
+  # 改行コードの混在を防ぐ
+  { id = "mixed-line-ending" },
+  # リンク切れのシンボリックリンクを検出する
+  { id = "check-symlinks" },
+  # シンボリックリンクだったファイルが実体ファイルとしてコミットされるのを検出する
+  { id = "destroyed-symlinks" },
+  # shebang 付きスクリプトに実行権限があるか確認する
+  { id = "check-shebang-scripts-are-executable" },
+]
+
+# prek.toml 自体の整合性チェック
+[[repos]]
+repo = "meta"
+hooks = [
+  { id = "check-hooks-apply", files = "prek\\.toml$" },
+  { id = "check-useless-excludes", files = "prek\\.toml$" },
+]
+
+# tombi: TOML のフォーマッタ・リンタ
+# rev は prek auto-update で更新する
+[[repos]]
+repo = "https://github.com/tombi-toml/tombi-pre-commit"
+rev = "v1.5.0"
+hooks = [
+  { id = "tombi-lint" },
+  { id = "tombi-format" },
+]
+
+# プロジェクト固有のローカルフック
+# priority が小さいほど先に実行される。同じ priority なら並列実行される
+# Makefile の fmt / fmt-lint / lint に対応する
 [[repos]]
 repo = "local"
 
+# swift-format: 自動整形
 [[repos.hooks]]
 id = "swift-format-fix"
 name = "swift format fix"
 language = "system"
 entry = "swift"
 args = ["format", "--in-place"]
-files = '^(Sora|SoraTests)/.*\.swift$'
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+priority = 10
 
-[[repos.hooks]]
-id = "swift-format-check"
-name = "swift format check"
-language = "system"
-entry = "swift"
-args = ["format", "lint", "--strict", "--parallel"]
-files = '^(Sora|SoraTests)/.*\.swift$'
-
+# SwiftLint: 自動修正
+# SwiftPM プラグインは並列多重起動すると .build ロックで失敗するため、
+# Makefile と同様にパッケージ全体を 1 回だけ対象にする
 [[repos.hooks]]
 id = "swiftlint-fix"
 name = "SwiftLint fix"
@@ -37,9 +98,25 @@ args = [
   "swiftlint",
   "--fix",
   "--",
+  ".",
 ]
-files = '^(Sora|SoraTests)/.*\.swift$'
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+pass_filenames = false
+priority = 20
 
+# swift-format: 未整形を検出する (lint 修正後の再検証)
+[[repos.hooks]]
+id = "swift-format-check"
+name = "swift format check"
+language = "system"
+entry = "swift"
+args = ["format", "lint", "--strict", "--parallel"]
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+priority = 30
+
+# SwiftLint: 厳格チェック
+# SwiftPM プラグインは並列多重起動すると .build ロックで失敗するため、
+# Makefile と同様にパッケージ全体を 1 回だけ対象にする
 [[repos.hooks]]
 id = "swiftlint-check"
 name = "SwiftLint check"
@@ -52,5 +129,8 @@ args = [
   "swiftlint",
   "--strict",
   "--",
+  ".",
 ]
-files = '^(Sora|SoraTests)/.*\.swift$'
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+pass_filenames = false
+priority = 40

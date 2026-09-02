@@ -16,4 +16,3 @@ xcodebuild_arguments:
     - Sora
     - -destination
     - 'generic/platform=iOS'
-

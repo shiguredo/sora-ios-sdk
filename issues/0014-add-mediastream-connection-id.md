@@ -44,4 +44,3 @@ Low とする。具体的な不具合報告ではなく、API のわかりやす
 - `connectionId` のプロパティ委譲を検証する単体テストが追加されること（`MediaChannel.peerChannel.connectionId` に値を設定して `BasicMediaStream` を構築し、`connectionId` が同値を返すことを確認する）。
 - 既存の `streamId` の挙動が変更されていないこと（後方互換）。
 - `CHANGES.md` の `develop` セクションに `[CHANGE]` エントリと担当者行を追記すること（`public protocol` への property 追加は外部実装者にコンパイルエラーを引き起こす後方互換のない変更）。
-

@@ -100,4 +100,3 @@ if let target = capturer.targetResolution {
 - [FIX] flip を 2 回した時に元の解像度に戻らないバグを修正する
   - @voluntas
 ```
-
