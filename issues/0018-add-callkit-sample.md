@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/add-callkit-sample
-- Polished: 2026-06-05
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -24,13 +24,13 @@ iOS SDK に CallKit 対応が存在しない。`Sora/` 配下に `CXProvider` / 
 
 **SDK 側の制約:**
 
-- `NativePeerChannelFactory.init(bypassVoiceProcessing:)`（`Sora/NativePeerChannelFactory.swift:43`）では `RTCAudioDeviceModule(bypassVoiceProcessing:)` を接続時に一度だけ生成する。この ADM は接続中に差し替えられない。切断後に再接続する場合は `Sora.connect()` によって `MediaChannel` および `NativePeerChannelFactory` が新たに生成されるため、再接続時に `bypassVoiceProcessing` の設定を変更できる。
-- SDK の音声入力初期化（`Sora/PeerChannel.swift:570-571`）では、libwebrtc の内部設定オブジェクト（`RTCAudioSessionConfiguration.webRTC()`）に `AVAudioSession.Category.playAndRecord` を設定する。CallKit は `CXProviderDelegate.provider(_:didActivate:)` でシステムが `AVAudioSession` を有効化してから音声ユニットを起動することを要求する。
-- `Sora` クラスには `usesManualAudio`（`Sora/Sora.swift:224`）と `audioEnabled`（`Sora/Sora.swift:243`）が公開されており、libwebrtc の音声ユニットの初期化を手動制御できる。`usesManualAudio = true` にすると音声ユニットは自動初期化されず、`audioEnabled = true` を代入した時点で初めて起動される。CallKit との統合ではこのパターンが推奨される。
-- `Sora.connect()` の戻り値は `ConnectionTask` である（`Sora/Sora.swift:171-179`）。接続完了は `handler: (MediaChannel?, Error?) -> Void` コールバックで通知される。コールバックで受け取った `MediaChannel` は切断時（`mediaChannel.disconnect(error:)`）のために保持が必要である。
-- `Sora.setAudioMode(_:)` は接続完了後にのみ呼び出せる（`Sora/Sora.swift:304` のコメント参照）。そのため `AudioMode.voiceChat(output:)` の設定は `Sora.connect()` の完了コールバック内で行う。
+- `NativePeerChannelFactory` の `init(bypassVoiceProcessing:)`（`Sora/NativePeerChannelFactory.swift`）では `RTCAudioDeviceModule(bypassVoiceProcessing:)` を生成する。この ADM は `MediaChannel` の `init(manager:configuration:)` で一度だけ生成され、接続中に差し替えられない。切断後に再接続する場合は `Sora.connect()` によって `MediaChannel` および `NativePeerChannelFactory` が新たに生成されるため、再接続時に `bypassVoiceProcessing` の設定を変更できる。
+- SDK の音声入力初期化（`Sora/PeerChannel.swift` の `initializeAudioInput` メソッド）では、libwebrtc の内部設定オブジェクト（`RTCAudioSessionConfiguration.webRTC()`）に `AVAudioSession.Category.playAndRecord` を設定する。CallKit は `CXProviderDelegate.provider(_:didActivate:)` でシステムが `AVAudioSession` を有効化してから音声ユニットを起動することを要求する。
+- `Sora` クラスには `usesManualAudio` と `audioEnabled`（ともに `Sora/Sora.swift`）が公開されており、libwebrtc の音声ユニットの初期化を手動制御できる。`usesManualAudio = true` にすると音声ユニットは自動初期化されず、`audioEnabled = true` を代入した時点で初めて起動される。CallKit との統合ではこのパターンが推奨される。
+- `Sora.connect()` の戻り値は `ConnectionTask` である（`Sora/Sora.swift`）。接続完了は `handler: (MediaChannel?, Error?) -> Void` コールバックで通知される。コールバックで受け取った `MediaChannel` は切断時（`mediaChannel.disconnect(error:)`）のために保持が必要である。
+- `Sora.setAudioMode(_:)` は接続完了後にのみ呼び出せる（`Sora/Sora.swift` のコメント参照）。そのため `AudioMode.voiceChat(output:)` の設定は `Sora.connect()` の完了コールバック内で行う。
 - `Sora/AudioMode.swift` に定義された `AudioMode.voiceChat(output: AudioOutput)` は `AVAudioSession.Mode.voiceChat` と `playAndRecord` を組み合わせた CallKit 通話向けの設定である。関連値 `output: AudioOutput` で音声出力先を指定する。`.default` は端末の状態に依存し（`Sora/AudioMode.swift` の `AudioOutput.default` ドキュメント参照）、通常はイヤーピースになるが保証はない。
-- `Configuration.bypassVoiceProcessing` のデフォルト値は `false`（`Sora/Configuration.swift:155`）。
+- `Configuration.bypassVoiceProcessing` のデフォルト値は `false`（`Sora/Configuration.swift`）。
 
 ## 設計方針
 
