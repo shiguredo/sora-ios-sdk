@@ -35,6 +35,10 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   /// 起動中のデバイス
   public private(set) nonisolated(unsafe) static var current: CameraVideoCapturer?
 
+  // flip 実行中のフラグ。camera queue 上で切り替え中を表現し、
+  // 連続実行の re-entrance を防ぐ。camera queue 上でのみ読み書きする。
+  nonisolated(unsafe) private static var isFlipping = false
+
   /// RTCCameraVideoCapturer が保持している AVCaptureSession
   public var captureSession: AVCaptureSession { native.captureSession }
 
@@ -101,63 +105,126 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   /// 引数に指定された capturer を停止し、反対の position を持つ CameraVideoCapturer を起動します。
   /// CameraVideoCapturer の起動には、 capturer と近い設定のフォーマットとフレームレートが利用されます。
   /// また、起動された CameraVideoCapturer には capturer の保持する MediaStream が設定されます。
+  ///
+  /// 切り替え先の stream は start より前に設定します。RTCCameraVideoCapturer は start の
+  /// completion より前から frame callback を発生させることがあり、静的に再利用される
+  /// front / back capturer に前回利用時の stream が残っていると、旧 stream へ frame が
+  /// 送信されるためです。stream を先行設定し、start 失敗時は元の stream へ rollback します。
+  /// 連続実行時の競合は camera queue 上の re-entrance フラグで防ぎます。
+  /// 引数には CameraVideoCapturer.current を渡してください。
   public static func flip(
     _ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)
   ) {
-    guard let format = capturer.format else {
-      completionHandler(SoraError.cameraError(reason: "format should not be nil"))
-      return
-    }
-
-    guard let capturerFrameRate = capturer.frameRate else {
-      completionHandler(SoraError.cameraError(reason: "frameRate should not be nil"))
-      return
-    }
-
-    // 反対の position を持つ CameraVideoCapturer を取得します。
-    guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front)
-    else {
-      let name = capturer.device.position == .front ? "back" : "front"
-      completionHandler(SoraError.cameraError(reason: "\(name) camera is not found"))
-      return
-    }
-
-    let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-    guard
-      let format = CameraVideoCapturer.format(
-        width: dimension.width,
-        height: dimension.height,
-        for: flip.device,
-        frameRate: capturerFrameRate)
-    else {
-      completionHandler(
-        SoraError.cameraError(
-          reason: "CameraVideoCapturer.format failed: suitable format is not found"))
-      return
-    }
-
-    guard let frameRate = CameraVideoCapturer.maxFrameRate(capturerFrameRate, for: format)
-    else {
-      completionHandler(
-        SoraError.cameraError(
-          reason:
-            "CameraVideoCapturer.maxFramerate failed: suitable frameRate is not found"))
-      return
-    }
-
-    capturer.stop { error in
-      guard error == nil else {
-        completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.stop failed"))
+    // camera queue (libwebrtc の capture session queue) で直列化する。
+    // 連続した flip (フリップボタンの連続タップ等) が同時に実行され、
+    // stop / start の callback が入れ替わる競合を防ぐ。
+    SoraDispatcher.async(on: .camera) {
+      // 引数が現在の capturer と一致することを確認する。
+      // (別の capturer を渡すと、停止していない capturer への stop / stream 代入が起こるため)
+      guard capturer === CameraVideoCapturer.current else {
+        completionHandler(
+          SoraError.cameraError(reason: "capturer is not the current camera"))
         return
       }
-      flip.start(format: format, frameRate: frameRate) { error in
+
+      // 既に flip が実行中の場合はエラーを返す (re-entrance 防止)。
+      // camera queue 上で直列化されるが、stop / start の completion は
+      // 後続の queue hop として実行されるため、フラグで切り替え中を表現する。
+      guard !CameraVideoCapturer.isFlipping else {
+        completionHandler(
+          SoraError.cameraError(reason: "camera flip is already in progress"))
+        return
+      }
+      CameraVideoCapturer.isFlipping = true
+
+      // フラグは同期ブロックで解除せず、stop / start の完了まで維持する。
+      // (非同期部分の間に 2 回目の flip が呼ばれてもエラーになるようにする)
+
+      guard let format = capturer.format else {
+        CameraVideoCapturer.isFlipping = false
+        completionHandler(SoraError.cameraError(reason: "format should not be nil"))
+        return
+      }
+
+      guard let capturerFrameRate = capturer.frameRate else {
+        CameraVideoCapturer.isFlipping = false
+        completionHandler(SoraError.cameraError(reason: "frameRate should not be nil"))
+        return
+      }
+
+      // 反対の position を持つ CameraVideoCapturer を取得します。
+      guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front)
+      else {
+        let name = capturer.device.position == .front ? "back" : "front"
+        CameraVideoCapturer.isFlipping = false
+        completionHandler(SoraError.cameraError(reason: "\(name) camera is not found"))
+        return
+      }
+
+      let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+      guard
+        let format = CameraVideoCapturer.format(
+          width: dimension.width,
+          height: dimension.height,
+          for: flip.device,
+          frameRate: capturerFrameRate)
+      else {
+        CameraVideoCapturer.isFlipping = false
+        completionHandler(
+          SoraError.cameraError(
+            reason: "CameraVideoCapturer.format failed: suitable format is not found"))
+        return
+      }
+
+      guard let frameRate = CameraVideoCapturer.maxFrameRate(capturerFrameRate, for: format)
+      else {
+        CameraVideoCapturer.isFlipping = false
+        completionHandler(
+          SoraError.cameraError(
+            reason:
+              "CameraVideoCapturer.maxFramerate failed: suitable frameRate is not found"))
+        return
+      }
+
+      // 切り替え先の stream を start より前に設定する。
+      // (元の capturer が保持する stream を引き継ぐ)
+      // start 失敗時はもとの状態 (nil または元の stream) へ rollback する。
+      let originalStream = flip.stream
+      flip.stream = capturer.stream
+
+      Logger.debug(
+        type: .cameraVideoCapturer,
+        message: "starting flip to \(flip.device)")
+
+      capturer.stop { error in
         guard error == nil else {
-          completionHandler(
-            SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
+          // stop に失敗した場合は切り替え先の stream を rollback する
+          flip.stream = originalStream
+          CameraVideoCapturer.isFlipping = false
+          Logger.error(
+            type: .cameraVideoCapturer,
+            message: "failed to stop capturer: \(String(describing: error))")
+          completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.stop failed"))
           return
         }
-        flip.stream = capturer.stream
-        completionHandler(nil)
+        flip.start(format: format, frameRate: frameRate) { error in
+          guard error == nil else {
+            // start に失敗した場合は切り替え先の stream を rollback する
+            flip.stream = originalStream
+            CameraVideoCapturer.isFlipping = false
+            Logger.error(
+              type: .cameraVideoCapturer,
+              message: "failed to start flip capturer: \(String(describing: error))")
+            completionHandler(
+              SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
+            return
+          }
+          CameraVideoCapturer.isFlipping = false
+          Logger.debug(
+            type: .cameraVideoCapturer,
+            message: "succeeded to flip to \(flip.device)")
+          completionHandler(nil)
+        }
       }
     }
   }
