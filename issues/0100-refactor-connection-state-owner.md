@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-connection-state-owner
-- Polished:
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -32,7 +32,7 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
   - RPC と signaling offer の状態
 - `Sora/Sora.swift`
   - `ConnectionTask.state`
-  - `ConnectionTask.peerChannel`
+  - `ConnectionTask.peerChannel`（実体は private な `_peerChannel`）
 - `Sora/ConnectionTimer.swift`
   - Timer、monitor、timeout、`isRunning`
 
