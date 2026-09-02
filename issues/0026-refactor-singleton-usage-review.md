@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/refactor-singleton-usage-review
-- Polished: 2026-06-06
+- Polished: 2026-09-02
 - Updated: 2026-08-27
 
 ## 目的
