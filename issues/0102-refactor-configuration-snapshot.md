@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-configuration-snapshot
-- Polished:
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -16,8 +16,9 @@
 `Sora/Configuration.swift` の `Configuration` は値型だが、次の non-Sendable または可変な値を保持する。
 
 - `signalingConnectMetadata: Encodable?`
+- `signalingConnectNotifyMetadata: Encodable?`
 - `dataChannels: Any?`
-- codec parameter の `Encodable?`
+- codec parameter と `ForwardingFilter.metadata` などの `Encodable?`
 - 可変 class の `ICEServerInfo`
 - 可変 class の `WebSocketChannelHandlers`
 - 可変 class の `MediaChannelHandlers`
@@ -42,13 +43,15 @@
 - metadata と codec parameter は snapshot 生成時に JSON `Data` または Sendable な `JSONValue` へ encode する。
 - `dataChannels` は許容形式を検証して immutable な値表現へ変換する。
 - `ICEServerInfo` は URL、username、credential を immutable な内部 value type へ copy する。
+- 接続中にサーバー（offer）由来で更新される値（`PeerChannel` の offer 受信時における `iceServerInfos` 更新など）は、凍結対象を利用者由来の設定に限定し、既存の更新経路は維持する。
 - 配列、辞書、文字列、数値、enum は deep-safe な値だけを保持する。
 - Objective-C / WebRTC object は一般設定 snapshot へ混在させず、専用 owner または adapter handle として分離する。
 
 ### handler の分離
 
 - mutable handler bag を設定値から分離する。
-- 既存 API では接続開始時に handler の immutable snapshot を取得し、接続途中の property 変更が進行中接続へ影響するかどうかを明確に決める。
+- 既存 API では接続開始時に handler の immutable snapshot を取得し、接続途中の property 変更は進行中接続へ影響しない契約とする。
+- `MediaChannel.handlers` など既存の公開 property 自体は維持し、接続処理中の配送は接続開始時に取得した snapshot を参照する。
 - handler の executor 契約や新しい `@Sendable` event API は別 issue で扱う。
 
 ### 互換性
@@ -62,6 +65,7 @@
 - `ICEServerInfo` を公開 struct に変更する破壊的 API 変更は行わない。
 - 公開 RPC API の `Any` / `Sendable` 対応は別 issue とする。
 - handler の `@Sendable` 化と配送 executor の公開契約は別 issue とする。
+- 本 issue は `0100`（接続状態 owner）と `0101`（signaling owner）と同じファイル群・handler / snapshot 概念を共有するため、着手前に順序を調整する。
 - raw WebRTC 型の公開 API からの撤去は `0070` と整合させる。
 
 ## テスト方針
@@ -82,6 +86,7 @@
 - metadata、codec parameter、data channel 設定が snapshot 生成時に検証・凍結されること。
 - ICE server が immutable な内部 value type へ copy されること。
 - mutable handler bag が一般設定 snapshot から分離されていること。
+- 接続開始後に `MediaChannel.handlers` などの handler property を変更しても進行中接続へ影響しないこと。
 - 接続開始後に元の `Configuration` 内の参照型を変更しても進行中接続へ影響しないこと。
 - 公開 `Configuration` に `@unchecked Sendable` を付与していないこと。
 - signaling message と WebRTC 設定の既存挙動が維持されること。
