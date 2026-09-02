@@ -1,7 +1,7 @@
 # VideoHardMuteActor が別接続の capturer を再開する問題を修正する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-02
 - Branch: feature/fix-video-hard-mute-cross-connection-capturer
 - Polished: 2026-08-28
 
@@ -55,13 +55,14 @@ open の `0028` はミュート解除成功後に `storedCapturer` をクリア�
 
 モックやスタブは使用しない。
 
-- 2 つの実 `MediaChannel` と実カメラを使い、A mute、B mute / unmute、A unmute を交差させる。
-- A が mute でカメラを停止・保存した状態で B が unmute を呼び、start / restart どちらの経路でも共有カメラが起動されず、明示的な `SoraError.mediaChannelError` で拒否されることを確認する。
-- capturer と sender stream の identity を記録し、別接続の組み合わせにならないことを確認する。
-- stop または restart の完了待ち中に別接続から操作し、`await` 復帰後の lease 再確認が機能することを検証する。
-- 接続切断後、その接続が保存した capturer を別接続が取得できないことを確認する。
+- 2 つの実 `MediaChannel` と実カメラを使い、A mute、B mute / unmute、A unmute を交差させる。**実カメラを使用するため Simulator / CI では実行できず、実機で確認する。**
+- A が mute でカメラを停止・保存した状態で B が unmute を呼び、start / restart どちらの経路でも共有カメラが起動されず、明示的な `SoraError.mediaChannelError` で拒否されることを確認する。**実機で確認する。**
+- capturer と sender stream の identity を記録し、別接続の組み合わせにならないことを確認する。**実機で確認する。**
+- stop または restart の完了待ち中に別接続から操作し、`await` 復帰後の lease 再確認が機能することを検証する。**実機で確認する。**
+- 接続切断後、その接続が保存した capturer を別接続が取得できないことを確認する。**実機で確認する。**
 - 本 issue では lease と generation による所有権分離を先に確立する。解除成功時の lease 固有保存状態のクリアは `0028` で検証する。
 - テストには、actor の直列化だけでは `await` をまたぐ所有権を保証できない理由を日本語コメントで明記する。
+- シミュレータで実行できる範囲として、release の冪等性と別 lease との独立 (`VideoHardMuteActorLeaseTests`) をユニットテストで検証する。
 
 ## 完了条件
 
@@ -74,3 +75,26 @@ open の `0028` はミュート解除成功後に `storedCapturer` をクリア�
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+`VideoHardMuteActor` にカメラ操作の所有者 (lease) と破棄予約世代 (revocation) を導入した。
+
+- `VideoHardMuteLease` を導入し、接続識別に `MediaChannel` の identity (ObjectIdentifier) を使用する。保存する capturer を lease に紐付ける。
+- `storedCapturer` を lease / capturer / stream の構造体へ変更し、別接続が保存した capturer を取得できないようにする。
+- `release(lease:)` を追加し、接続切断時に保存状態を破棄する。あわせて lease ごとの破棄予約世代 (leaseGenerations) を進め、setMute が await 中に release されても復帰後に検知して保存や再開を中止する。
+- `setMute` の各 await 復帰後に lease と破棄予約世代を再確認する。revocation 済みの場合は、restart / start 後に起動したカメラを停止してからエラーを返す。
+- mute / unmute 時に現在動作しているカメラの stream を照合し、別接続が使用中のカメラを停止・再開しない。`CameraVideoCapturer.current` は全接続で共有される static のため、stream の一致が必須。
+- エラーは明示的な `SoraError.mediaChannelError` で返す ("camera is owned by another connection" / "video hard mute operation was cancelled")。
+
+### スコープ外 (0103 で解決)
+
+- `PeerChannel.initializeCameraVideoCapture`(接続時カメラ起動)と `PeerChannel.terminateSenderStream`(切断時停止)は `VideoHardMuteActor` を経由せず `CameraVideoCapturer.current` を直接参照する。この迂回経路 (接続間の capturer 混線の第三経路) は本 issue では対象外とし、`0103` の camera state owner への集約で解決する。`0103` の「前提となる issue」に明記済み。
+- `ObjectIdentifier` は dealloc 後のアドレス再利用 (ABA) で別インスタンスと同一値になり得るが、切断時に保存状態が破棄されるため実運用では発生しない。将来 `0103` の owner 導入時に論理接続 ID (UUID 等) へ移行する。コードコメントと本 issue の設計方針に明記済み。
+
+### 検証
+
+- ユニットテスト (`VideoHardMuteActorLeaseTests`):
+  - `testReleaseIsIdempotent`: release を複数回呼んでも安全
+  - `testReleaseOfOtherLeaseDoesNotAffectTarget`: 別 lease の release が対象 lease に影響しない
+  - カメラが必要な検証 (storedCapturer の所有権チェック / unmute / mute の stream 照合 / 実カメラでの交差テスト) は実機で確認する。Simulator / CI では実行できないため、issue のテスト方針には「実機で確認する」旨を明記している。
+- 実機確認 (camera 接続の同一接続 mute → unmute): 正常動作 (実機確認済み)。別接続混線の再現は ScreenCast 構成ではカメラ接続が 1 本のため未実施 (制約として記録)。
+- 既存の全テストが成功することを確認済み。

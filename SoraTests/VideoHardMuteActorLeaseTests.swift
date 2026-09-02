@@ -9,6 +9,11 @@ import XCTest
 /// 本テストでは、カメラ操作に到達する前の lease / revocation のロジック
 /// (release の冪等性と、storedCapturer との独立) を検証する。
 /// カメラが必要な検証 (別接続の capturer 混線など) は実機で確認する。
+///
+/// actor の呼び出し直列化 (isProcessing) は実行中フラグの排他であり、
+/// await をまたぐ所有権 (release が setMute の await 中に割り込んだ場合) までは
+/// 保証できない。そのため lease と破棄予約世代 (leaseGenerations) による再確認が
+/// 必要であり、本テストはそこを検証する (setMute 全体の挙動は実機で確認する)。
 final class VideoHardMuteActorLeaseTests: XCTestCase {
   // テストで共通利用するシグナリング URL を返す
   private func makeTestURL() -> URL {
