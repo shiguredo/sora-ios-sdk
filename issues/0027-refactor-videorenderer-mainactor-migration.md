@@ -4,8 +4,8 @@
 - Created: 2026-06-03
 - Completed:
 - Model: Opus 4.8
-- Branch: feature/add-mainactor-video-renderer
-- Polished: 2026-06-06
+- Branch: feature/refactor-videorenderer-mainactor-migration
+- Polished: 2026-09-02
 - Updated: 2026-08-27
 
 ## 目的
