@@ -650,6 +650,13 @@ public final class MediaChannel {
       // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
       currentScreenCaptureController()?.stopCaptureForDisconnect()
 
+      // 接続切断時に、この接続が保存したハードミュートの capturer を破棄します。
+      // (別接続がこの接続の capturer を取得しないようにするため)
+      let hardMuteLease = VideoHardMuteLease(channel: ObjectIdentifier(self))
+      Task { @Sendable in
+        await Self.videoHardMuteActor.release(lease: hardMuteLease)
+      }
+
       Logger.debug(type: .mediaChannel, message: "try disconnecting")
       if let error {
         Logger.error(
@@ -990,6 +997,7 @@ public final class MediaChannel {
       senderStream.videoEnabled = false
       try await Self.videoHardMuteActor.setMute(
         mute: true,
+        lease: VideoHardMuteLease(channel: ObjectIdentifier(self)),
         senderStream: SenderStreamBox(stream: senderStream),
         cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
@@ -1004,6 +1012,7 @@ public final class MediaChannel {
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(
         mute: false,
+        lease: VideoHardMuteLease(channel: ObjectIdentifier(self)),
         senderStream: SenderStreamBox(stream: senderStream),
         cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
