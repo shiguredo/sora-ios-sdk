@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-screen-capture-buffer-ownership
-- Polished:
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -36,6 +36,7 @@ closure capture によって Core Foundation object の参照寿命は延長で�
 ### ReplayKit callback 内で完了させる処理
 
 - `videoSampleBufferTransformer` は ReplayKit callback を受けた executor 上で同期的に実行する。
+- 実行順序は現行と同じく「PTS 間引きと送信中の drop（`shouldSendVideoFrame` / `sendVideoFrameSemaphore`）→ transformer → owned frame への変換 → queue enqueue」とし、破棄されるフレームでは transformer を実行しない。送信処理中に到着したフレームを待たずに破棄する throttle 契約も維持する。
 - `CMSampleBuffer` から送信用の owned frame または immutable snapshot への変換を callback 内で完了する。
 - transformer が frame を drop した場合、別 queue へ何も enqueue しない。
 - buffer 変換に失敗した場合は送信済み timestamp を更新しない。
@@ -45,6 +46,7 @@ closure capture によって Core Foundation object の参照寿命は延長で�
 - `sendVideoFrameQueue` へ渡す値は、capture ID、timestamp、sequence、owned frame / adapter handle などの Sendable な値だけにする。
 - `CMSampleBuffer`、`CVPixelBuffer`、raw `MediaStream` を unchecked box に入れて queue 境界へ渡さない。
 - WebRTC object の thread affinity により raw frame を送れない場合は、`0105` の stream frame executor が受け取れる内部 handle または deep-owned pixel data へ変換する。
+- ただし `0105` の ingress インタフェースが未確定の間は、現行どおり `MediaStream.send(videoFrame:)` を末端とする構成を維持し、本 issue 単独で完結できる範囲に留める。
 - deep copy の性能コストを測定し、必要性を確認せず buffer pool や複雑な cache を導入しない。
 
 ### 外部契約の確認
@@ -61,7 +63,7 @@ closure capture によって Core Foundation object の参照寿命は延長で�
 ## スコープ外
 
 - capture ID の不一致による旧 frame 送信は `0097` で扱う。
-- `MediaStream` / `VideoFilter` の ordered frame processing は `0105` で扱う。
+- `MediaStream` / `VideoFilter` の ordered frame processing と `0105` の ingress への最終接続は `0105` で扱う。本 issue は `0105` の確定を待たずに、`MediaStream.send(videoFrame:)` を末端とする範囲で完結させる。
 - 公開 event handler 全体の `@Sendable` 化は別 issue とする。
 - raw WebRTC frame の公開 API からの撤去は `0070` と整合させる。
 
@@ -86,6 +88,7 @@ closure capture によって Core Foundation object の参照寿命は延長で�
 - transformer drop と変換失敗時に送信 timestamp が更新されないこと。
 - buffer lifetime と executor 契約の根拠が日本語コメントまたは API documentation に記載されていること。
 - 長時間キャプチャでメモリ使用量が継続的に増加しないこと。
+- 破棄されるフレームでは transformer が実行されず、PTS 間引きと drop の判定が transformer より前で行われること。
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
