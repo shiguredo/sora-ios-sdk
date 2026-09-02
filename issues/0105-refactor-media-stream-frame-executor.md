@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-media-stream-frame-executor
-- Polished:
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -36,13 +36,13 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 - `BasicMediaStream` ごとに frame-processing 用の serial executor または actor を持つ。
 - frame event に stream identity、transport epoch、sequence、owned frame / adapter handle を含める。
 - camera、screen capture、public send のすべてを 1 本の ordered ingress へ接続する。
-- disconnect、track replacement、stream terminate 後は、古い epoch の frame を破棄する。
+- disconnect、redirect / 再ネゴシエーション、stream terminate 後は、古い epoch の frame を破棄する。
 
 ### VideoFilter
 
 - legacy `VideoFilter` は frame executor 上だけで直列に呼ぶ。
 - filter property の交換も同じ executor 上で順序付ける。
-- filter を直接 `Sendable` に変更して既存 conformer を壊さない。
+- 既存 `VideoFilter` に直接 `Sendable` を要求せず、既存 conformer を壊さない。順序と安全性は executor 上の直列化で保証する。
 - 新しい Sendable processor 契約を追加する場合は `0057` で扱い、本 issue の executor を基盤として利用する。
 
 ### frame ownership
@@ -55,7 +55,7 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 
 - filter 後の frame と renderer event に同じ sequence を利用できる構造にする。
 - MainActor renderer への最終配送は `0027`、custom queue の公開指定は `0060` で扱う。
-- add、frame、remove、disconnect の因果順序を、個別の unstructured Task 生成に依存させない。
+- add、frame、remove、disconnect に加えて、`videoEnabled` / `audioEnabled` の変更に伴う switch と `onChange(size:)` を含む renderer event の因果順序を、個別の unstructured Task 生成に依存させない。
 
 ## スコープ外
 
@@ -72,8 +72,8 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 - 実カメラ、実 ReplayKit、public `send(videoFrame:)` から同じ実 `MediaStream` へ frame を入力する。
 - 実際の `VideoFilter` 実装を使い、同時実行されず sequence 順に呼ばれることを確認する。
 - filter の交換と frame 入力を競合させ、交換前後の境界が決定的であることを確認する。
-- disconnect、terminate、track replacement 後に古い epoch の frame が送られないことを確認する。
-- filter が frame を drop する場合も後続 frame が停止しないことを確認する。
+- disconnect、redirect / 再ネゴシエーション、terminate 後に古い epoch の frame が送られないことを確認する。
+- 現行 `VideoFilter.filter(_:)` は非 optional を返し drop 経路を持たないため、frame の drop は `0057` の新 processor 契約で扱う。本 issue では filter の連続・並行入力でも後続 frame が停止・追い越しなく sequence 順に処理されることを確認する。
 - Thread Sanitizer を補助的に有効化し、長時間の frame 入力で queue が無制限に増えないことを確認する。
 - テストには、入力元ごとの event sequence と期待する破棄条件を日本語コメントで明記する。
 
@@ -84,7 +84,7 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 - legacy `VideoFilter` の実行と交換が同じ executor 上で順序付けられること。
 - stale transport epoch の frame が WebRTC video source と renderer へ配送されないこと。
 - raw frame を広域の unchecked wrapper で executor 越境させていないこと。
-- add、frame、remove、disconnect の因果順序が明示的に保証されること。
+- add、frame、remove、disconnect に加えて、switch、size を含む renderer event の因果順序が明示的に保証されること。
 - `0057`、`0027`、`0060` が利用できる基盤と責務境界が文書化されていること。
 - 追加したテストと既存テストがすべて成功すること。
 
