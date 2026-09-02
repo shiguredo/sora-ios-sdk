@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-logger-shared-state
-- Polished:
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -40,6 +40,7 @@ open の `0026` は `WrapperVideoEncoderFactory` の singleton だけを対象�
 - `shared`、`level`、`groups`、`onOutputHandler` の get / set を storage 経由にする。
 - 1 回のログ出力では、level、groups、handler を同じ lock 区間で immutable snapshot として取得する。
 - filtering、secret masking、文字列整形、handler 呼び出し、`print` は lock の外で行う。
+- `Log` は公開の値型であり、利用者が handler 経由で受け取った `Log` を任意のスレッドから `description` 化できる。文字列整形の thread 安全性は共有 `DateFormatter` の thread-safe 性に依存するため、その根拠をコードコメントへ残す。
 
 ### handler の再入
 
@@ -49,9 +50,9 @@ open の `0026` は `WrapperVideoEncoderFactory` の singleton だけを対象�
 
 ### shared と formatter
 
-- 公開 `Logger.shared` の getter / setter は source compatibility を維持する。
+- 公開 `Logger.shared` の getter / setter は source compatibility を維持する。差し替え時は新しいインスタンスの設定値（`level` / `groups` / `onOutputHandler`）を storage へ反映し、以後の出力は storage 上の設定を参照する（現行と同じ実行時挙動）。
 - `sharedStorage` の `nonisolated(unsafe)` を除去する。
-- `DateFormatter` を共有する場合は同じ出力同期の下で利用する。可能であれば immutable / value-oriented な formatter へ置き換える。
+- 文字列整形（`Log.description`）は設定 lock の外で実行する。共有 `DateFormatter` は iOS 7 以降 thread-safe である Apple の仕様に基づき、専用 lock を追加せず共有を認め、その根拠をコードコメントへ残す。可能であれば immutable / value-oriented な formatter へ置き換える。
 - class 全体の `@unchecked Sendable` を残す場合は、全 mutable state が storage に閉じていることを型の直前に日本語コメントで説明する。
 
 ## スコープ外
