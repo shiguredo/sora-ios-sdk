@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-signaling-state-owner
-- Polished:
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -29,7 +29,7 @@
 - `isClosing`
 - `urlSession`
 - `webSocketTask`
-- delegate callback の終端状態
+- delegate callback 由来の終端状態（`didCloseWith` / `didCompleteWithError` の 2 系統）
 
 クラスコメントは「URLSession delegate と `SignalingChannel` が単一の直列 queue を利用する」ことを安全性の根拠としているが、すべての public / internal entry point をその queue へ強制する構造はない。
 
@@ -40,15 +40,17 @@
 ### signaling owner
 
 - signaling の phase、接続 URL、redirect generation、session / task identity、切断理由、完了済み通知を 1 つの owner が保持する。
+  - redirect generation は `0095` / `0100` の transport epoch と整合する概念とし、新たな独立カウンタを追加しない。旧 callback の拒否は `0095` の制約に従い、主に session / task identity で判定する。
 - `connect`、`send`、`redirect`、`disconnect` を含むすべての entry point を owner へ enqueue する。
 - URLSession delegate queue は transport callback の受信に限定し、状態の正本にしない。
+- `PeerChannel` / `MediaChannel` が同期参照する `webSocketChannel`、`contactUrl`、`connectedUrl`、`dataChannelSignaling`、`ignoreDisconnectWebSocket` は、`0100` の同期 getter 方針と同じく lock 保護の snapshot または同期 accessor で維持し、owner への同期 wait で実現しない。
 
 ### delegate adapter
 
 - `URLSessionDelegate` / `URLSessionWebSocketDelegate` は小さい `NSObject` adapter へ分離する。
 - adapter は callback 内で session / task identity、generation、必要な値だけを snapshot 化し、ordered ingress へ渡す。
 - callback ごとに独立した Task を生成しない。
-- 古い session / task の callback は identity と generation の不一致で拒否する。
+- 古い session / task の callback は identity（`URLSession` / `URLSessionWebSocketTask` の同一性）と世代の不一致で拒否する。世代は上記の redirect generation を指し、`0095` / `0100` の transport epoch と整合させる。
 
 ### 終端と callback
 
@@ -59,7 +61,7 @@
 
 ### 互換性
 
-- `WebSocketChannel` と既存 handler の公開シグネチャは維持する。
+- `URLSessionWebSocketChannel` は internal であるため、公開対象は `WebSocketChannelHandlers` などの既存 handler API の公開シグネチャであり、これを維持する。
 - `@unchecked Sendable` を残す必要がある場合は、delegate adapter などの小さい internal 型だけに限定し、所有 state を持たせない。
 - proxy、CA 証明書、認証 challenge の既存挙動を変更しない。
 
@@ -69,15 +71,17 @@
 - redirect 時の旧 DataChannel / RPC 無効化は `0095` で扱う。
 - 公開 callback API の `@Sendable` 化は別 issue とする。
 - WebRTC C API への移行は `0070` で扱う。
+- WebSocket クライアント証明書対応 (`0063`) は本 issue と同一ファイル・同一 symbol を変更するため、着手前に順序を調整する。`0025` / `0033` の handler symbol 変更も同様に調整する。
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
-- 実 `URLSessionWebSocketTask` と実 signaling endpoint を使用し、connect、send、receive、redirect、disconnect の順序を検証する。
+- 実 `URLSessionWebSocketTask` と実 signaling endpoint を使用し、connect、send、receive、disconnect の順序を検証する。
+- redirect の実環境検証は `0095` と同様にリダイレクトを発生させるサーバー構成が必要なため自動テスト対象外とし、実機での手動確認とする。
 - 利用者切断と `didCloseWith` / `didCompleteWithError` を競合させ、切断通知が 1 回であることを確認する。
 - 古い task の receive / send completion が新しい generation の handler を呼ばないことを確認する。
-- 実際の proxy と CA 証明書検証経路を利用し、認証 challenge の挙動が変わらないことを確認する。
+- proxy は自動テスト基盤が存在しないため、認証 challenge の挙動維持は実機での手動確認で担保する。CA 証明書検証は既存の `ConfigurationTests` と実機確認で維持する。
 - production の signaling state reducer を導入する場合は、実際の transport event を入力して順序を検証する。
 - Thread Sanitizer を補助的に有効化する。
 - テストには、delegate queue の直列化だけでは entry point 全体を保護できない理由を日本語コメントで明記する。
@@ -89,6 +93,7 @@
 - 古い session / task の callback が current state を変更しないこと。
 - `didCloseWith` と `didCompleteWithError` が競合しても切断通知が厳密に 1 回であること。
 - handler を owner の critical section 外で呼んでいること。
+- `PeerChannel` / `MediaChannel` からの同期読み取り（`webSocketChannel`、`contactUrl`、`connectedUrl`、`dataChannelSignaling`、`ignoreDisconnectWebSocket`）が owner への同期 wait なしで成立すること。
 - `URLSessionWebSocketChannel` 全体の `@unchecked Sendable` が不要になるか、安全性を説明できる小さい adapter に限定されていること。
 - proxy、CA 証明書、redirect の既存挙動が維持されること。
 - 追加したテストと既存テストがすべて成功すること。
