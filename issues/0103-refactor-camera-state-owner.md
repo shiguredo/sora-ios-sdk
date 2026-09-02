@@ -33,6 +33,7 @@ start、stop、restart、change、flip の completion と `CameraVideoCapturerDe
 ## 前提となる issue
 
 - `0098`: 複数接続間で hard mute の capturer が混線するバグを lease で修正する。
+  - 本 issue で解決するのは `VideoHardMuteActor` 内の start / restart 経路。`PeerChannel.initializeCameraVideoCapture`(接続時カメラ起動)と `PeerChannel.terminateSenderStream`(切断時停止)の迂回は 0098 のスコープ外とし、本 issue の owner への集約で解決する。
 - `0099`: flip の stream 設定順と rollback を修正する。
 
 本 issue は上記で確定した挙動を維持したまま、状態所有を整理する refactor とする。
