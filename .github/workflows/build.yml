@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths-ignore:
-    - 'README.md'
-    - 'CHANGES.md'
+    - '**.md'
     - 'LICENSE'
 
 jobs:

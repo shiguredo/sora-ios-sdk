@@ -4,11 +4,8 @@ on:
   workflow_dispatch:
   push:
     paths-ignore:
-    - 'AGENTS.md'
-    - 'CHANGES.md'
-    - 'CLAUDE.md'
+    - '**.md'
     - 'LICENSE'
-    - 'README.md'
     - 'THANKS'
     - 'canary.py'
     - '.gitignore'
