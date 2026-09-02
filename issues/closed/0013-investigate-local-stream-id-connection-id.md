@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-09-02
 - Model: Opus 4.8
 - Branch: feature/investigate-local-stream-id-connection-id
 - Polished: 2026-06-05
@@ -70,3 +70,13 @@ if configuration.publisherStreamId == defaultPublisherStreamId,
 ## 解決方法
 
 ソースコードの処理フローを解析し、`connectionId` が送信ストリーム生成より前に確定することを確認した。実装方針の詳細は別 issue で対応する。
+
+### 分割済みのため closed にする（2026-09-02）
+
+本 issue は調査 issue であり、調査は完了している。本 issue の「次のステップ」が定める実装と設計判断は、以下の通り後続の実装 issue で解消されたため、本 issue に残る作業は無い。
+
+- 方式の選択（streamId を connectionId に変更する方式 / `MediaStream` ラッパーに connectionId プロパティを追加する方式）: `issues/0014-add-mediastream-connection-id.md` が後者の方式を採用している（同 issue の「依存関係」に「0013 は『代替アプローチとして `MediaStream` ラッパーに connectionId プロパティを持たせる方式は native streamId に依存しないため後方互換性の面で安全』と結論付けており、本 issue はその方針に沿う実装を行う」と明記）
+- 既定挙動の変更をオプトインにするか（新フラグを追加するか）: `MediaStream` ラッパー方式では streamId を変更しないため不要となった
+- 受信側の connectionId 公開（`issues/0014-add-mediastream-connection-id.md`）との整合性: 0014 が `MediaStream.connectionId` の公開として対応済み
+
+なお、本 issue 本文の行番号参照（`PeerChannel.swift:1027` / `742` / `434-435`、`MediaChannel.swift:191` / `199`）はソース変更により現行コードとずれている。実際の該当箇所は `PeerChannel.handleSignalingOverWebSocket`（connectionId の確定）、`PeerChannel.createAnswer` → `PeerChannel.initializeSenderStream` → `createNativeSenderStream(streamId: configuration.publisherStreamId)`、`MediaChannel.senderStream` / `MediaChannel.receiverStreams` である。closed に伴い行番号の修正は行わないが、将来 0014 等で実装を進める際はシンボル名で参照すること（`shiguredo-issues` 規約）。
