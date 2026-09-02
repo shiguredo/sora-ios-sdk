@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-camera-state-owner
-- Polished:
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -33,8 +33,11 @@ start、stop、restart、change、flip の completion と `CameraVideoCapturerDe
 ## 前提となる issue
 
 - `0098`: 複数接続間で hard mute の capturer が混線するバグを lease で修正する。
-  - 本 issue で解決するのは `VideoHardMuteActor` 内の start / restart 経路。`PeerChannel.initializeCameraVideoCapture`(接続時カメラ起動)と `PeerChannel.terminateSenderStream`(切断時停止)の迂回は 0098 のスコープ外とし、本 issue の owner への集約で解決する。
+  - 0098 で解決するのは `VideoHardMuteActor.setMute` 内の start / restart 経路（lease 付き）。`PeerChannel.initializeCameraVideoCapture`（接続時カメラ起動）と `PeerChannel.terminateSenderStream`（切断時停止）の迂回は 0098 のスコープ外であり、本 issue の owner への集約で解決する。
 - `0099`: flip の stream 設定順と rollback を修正する。
+  - 本 issue は `0099` を先に完了・マージしてから着手する。`0099` の挙動と回帰テストを本 issue の移行時の回帰検証として利用する。
+  - `0099` は operation generation を導入しない。`0099` が導入した re-entrance フラグ（`isFlipping`）は本 issue の operation generation へ置き換える。
+  - `0099` の start 失敗時はカメラ停止状態で残る。完全な復旧は本 issue の owner の state で実装する。
 
 本 issue は上記で確定した挙動を維持したまま、状態所有を整理する refactor とする。
 
@@ -45,6 +48,8 @@ start、stop、restart、change、flip の completion と `CameraVideoCapturerDe
 - カメラ操作を所有する internal の actor または serial executor 型を導入する。
 - active capturer、device、format、frame rate、stream handle、phase、operation generation、connection lease を owner が保持する。
 - start、stop、restart、change、flip、hard mute、disconnect を owner の command として実行する。
+- connection lease は `0098` が導入した `VideoHardMuteLease`（`ObjectIdentifier` ベース）を引き継ぎ、owner 導入に合わせて論理接続 ID（UUID 等）へ移行する。
+- `VideoHardMuteActor` の保存状態（`storedCapturer` など）と lease 管理は owner へ統合する。
 - 各非同期 callback の復帰時に operation generation と lease を再確認し、古い callback が新しい状態を上書きしないようにする。
 
 ### WebRTC / AVFoundation 境界
@@ -60,6 +65,7 @@ start、stop、restart、change、flip の completion と `CameraVideoCapturerDe
 - `front` / `back` は共有 mutable capturer ではなく、device descriptor または owner 内の resource として扱う。
 - handlers は owner 上で snapshot 化し、設定変更と callback 実行が競合しないようにする。
 - 既存の同期 / callback ベース公開 API は compatibility wrapper として維持する。
+- 公開 API（`start` / `stop` / `restart` / `change` / `flip`）は lease を持たないため、owner の command として直列化と operation generation の対象にするが、接続 lease のチェックは課さない（既存 API に新しい制約を強制しない）。
 - 新しい async API や `@Sendable` handler の公開は別 issue とし、本 issue で既存利用者へ新しい isolation 制約を強制しない。
 
 ### callback
@@ -72,6 +78,7 @@ start、stop、restart、change、flip の completion と `CameraVideoCapturerDe
 
 - MainActor renderer API は `0027` で扱う。
 - Media Processors の公開 API は `0057` で扱う。
+- stream への frame 配送と `VideoFilter` 実行の ordered executor は `0105` で扱う。
 - raw WebRTC 型を公開 API から除去する作業は `0070` と整合させる。
 - `SoraDispatcher` の公開 API 廃止は別 issue とする。
 
