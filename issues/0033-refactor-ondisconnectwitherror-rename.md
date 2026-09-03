@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/refactor-ondisconnectwitherror-rename
-- Polished: 2026-06-06
+- Polished: 2026-09-03
 
 ## 目的
 
@@ -20,14 +20,14 @@
 
 ## 現状
 
-`WebSocketChannelInternalHandlers`（`Sora/WebSocketChannel.swift:141`）は `onConnect` / `onDisconnectWithError` / `onReceive` の 3 ハンドラを持つ。
+`WebSocketChannelInternalHandlers`（`Sora/WebSocketChannel.swift` の `WebSocketChannelInternalHandlers` クラス）は `onConnect` / `onDisconnectWithError` / `onReceive` の 3 ハンドラを持つ。
 
 `onDisconnectWithError` は以下の 4 箇所で参照される。
 
-- 宣言: `Sora/WebSocketChannel.swift:143`
-- 発火: `Sora/URLSessionWebSocketChannel.swift:90`（`if let error { ... }` ブロック内のみで発火する）
-- 設定: `Sora/SignalingChannel.swift:156`
-- コメント参照: `Sora/URLSessionWebSocketChannel.swift:77`
+- 宣言: `Sora/WebSocketChannel.swift` の `WebSocketChannelInternalHandlers.onDisconnectWithError`
+- 発火: `Sora/URLSessionWebSocketChannel.swift` の `URLSessionWebSocketChannel.disconnect(error:)`（`if let error { ... }` ブロック内のみで発火する）
+- 設定: `Sora/SignalingChannel.swift` の `SignalingChannel.setUpWebSocketChannel(url:proxy:caCertificates:)` 内の `ws.internalHandlers.onDisconnectWithError` 代入
+- コメント参照: `Sora/URLSessionWebSocketChannel.swift` の `disconnect(error:)` の doc コメント
 
 発火箇所の構造は以下のとおりで、エラーが nil でない場合にのみ発火する。
 
@@ -45,8 +45,8 @@ if let error {
 - `onDisconnectWithError` を `onDisconnect` へ改名する。
   - `onConnect` の対称形であり、接続・切断イベントが自然なペアとして理解できる。
   - シグネチャ `(URLSessionWebSocketChannel, Error)` の `Error` 引数がエラー発生を型として表現するため、名前への `WithError` は不要。
-- `onDisconnect` は現状エラーがある場合にのみ発火する（`if let error { ... }` ガード）。`onConnect` が全接続ケースで発火するのと非対称だが、シグネチャが常に `Error` を受け取る設計であり呼び出し側は必ずエラーが渡されると理解できる。`Sora/URLSessionWebSocketChannel.swift:77` のコメントを更新してエラー発生時のみ発火する旨を明示する。
-- `SignalingChannelInternalHandlers`（`Sora/SignalingChannel.swift:23`）にも `onDisconnect` が存在するため、改名後の `SignalingChannel.swift` 内には `ws.internalHandlers.onDisconnect`（`WebSocketChannelInternalHandlers` のもの）と `weakSelf.internalHandlers.onDisconnect`（`SignalingChannelInternalHandlers` のもの）の 2 種類が共存する。コンパイルエラーは生じないが、`SignalingChannel.swift:156` の設定箇所のコメントで型の文脈（`WebSocketChannelInternalHandlers` であること）を明示する。
+- `onDisconnect` は現状エラーがある場合にのみ発火する（`if let error { ... }` ガード）。`onConnect` が全接続ケースで発火するのと非対称だが、シグネチャが常に `Error` を受け取る設計であり呼び出し側は必ずエラーが渡されると理解できる。`Sora/URLSessionWebSocketChannel.swift` の `disconnect(error:)` の doc コメントを更新してエラー発生時のみ発火する旨を明示する。
+- `SignalingChannelInternalHandlers`（`Sora/SignalingChannel.swift` の `SignalingChannelInternalHandlers` クラス）にも `onDisconnect` が存在するため、改名後の `SignalingChannel.swift` 内には `ws.internalHandlers.onDisconnect`（`WebSocketChannelInternalHandlers` のもの）と `internalHandlers.onDisconnect`（`SignalingChannelInternalHandlers` のもの。`SignalingChannel.disconnect(error:reason:)` 内で呼ばれる）の 2 種類が共存する。コンパイルエラーは生じないが、`setUpWebSocketChannel(url:proxy:caCertificates:)` 内の設定箇所のコメントで型の文脈（`WebSocketChannelInternalHandlers` であること）を明示する。
 - 発火タイミング・引数（`(URLSessionWebSocketChannel, Error)`）は変更しない。
 
 ## テスト方針
@@ -58,11 +58,10 @@ if let error {
 
 ## 完了条件
 
-- `Sora/WebSocketChannel.swift:143` の `onDisconnectWithError` プロパティが `onDisconnect` へ改名されていること。
-- `Sora/URLSessionWebSocketChannel.swift:90` の発火箇所が `onDisconnect` を参照していること。
-- `Sora/SignalingChannel.swift:156` の設定箇所が `onDisconnect` を参照しており、`WebSocketChannelInternalHandlers` の `onDisconnect` であることをコメントで明示していること。
-- `Sora/URLSessionWebSocketChannel.swift:77` のコメントが `onDisconnect` を反映し、エラー発生時のみ発火する旨を示していること。
-- `Sora/SignalingChannel.swift:155` 付近の切断時 error 挙動を説明するコメントが `onDisconnect` という新名と整合していること。
+- `Sora/WebSocketChannel.swift` の `WebSocketChannelInternalHandlers.onDisconnectWithError` プロパティが `onDisconnect` へ改名されていること。
+- `Sora/URLSessionWebSocketChannel.swift` の `disconnect(error:)` 内の発火箇所が `onDisconnect` を参照していること。
+- `Sora/SignalingChannel.swift` の `setUpWebSocketChannel(url:proxy:caCertificates:)` 内の設定箇所が `onDisconnect` を参照しており、`WebSocketChannelInternalHandlers` の `onDisconnect` であることをコメントで明示していること。
+- `Sora/URLSessionWebSocketChannel.swift` の `disconnect(error:)` の doc コメントが `onDisconnect` を反映し、エラー発生時のみ発火する旨を示していること。
 - ハンドラの発火タイミング・引数が変更前後で同一であること。
 - 既存のテストがすべて通ること。
 - `CHANGES.md` の `## develop` セクションの `### misc` に以下を追記すること:
