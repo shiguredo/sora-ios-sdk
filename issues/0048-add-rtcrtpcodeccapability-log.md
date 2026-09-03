@@ -5,7 +5,7 @@
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/add-rtcrtpcodeccapability-log
-- Polished: 2026-06-06
+- Polished: 2026-09-03
 
 ## 目的
 
