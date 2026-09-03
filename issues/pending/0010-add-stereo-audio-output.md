@@ -17,6 +17,10 @@
 
 上記の前提条件が解決した時点で `issues/` に戻し、実装着手可能な状態に磨き上げる。
 
+## reopened にした理由
+
+WebRTC-Build 側の iOS ステレオ playout 対応が完了している想定のもと、Sora iOS SDK 側の実装を並列に進めるため pending を解除する。`0038-investigate-stereo-audio-receive` の結論整理や API 設計は open のまま残し、着手時に整理する。
+
 ## 目的
 
 Sora から配信されるステレオ音声をステレオのまま再生できるようにする。現状の SDK は音声出力をモノラル前提で扱っており、出力チャンネル数を選択・反映する経路が存在しない。
@@ -25,7 +29,7 @@ Sora から配信されるステレオ音声をステレオのまま再生でき
 
 - **`issues/0038-investigate-stereo-audio-receive.md`**: 本 issue の前提調査。0038 の完了と調査結果をもって初めて本 issue の実装方針が確定する。0038 で iOS libwebrtc の `StereoPlayoutIsAvailable()` が `false` を返すことが判明している場合、WebRTC-Build 側の改修が必要となり、iOS SDK 側ではその対応を待つ必要がある。
 - **WebRTC-Build**: ADM のステレオ playout 設定および Opus デコーダのステレオ再生設定が有効になっていること。
-- **`issues/0010-add-stereo-audio-input.md`** (`issues/pending/`): 入力側の対応。出力側と独立して進められるが、設計の一貫性を保つため同様の API 設計パターンを採用することが望ましい。
+- **`issues/0009-add-stereo-audio-input.md`**: 入力側の対応。出力側と独立して進められるが、設計の一貫性を保つため同様の API 設計パターンを採用することが望ましい。
 
 ## 優先度根拠
 
