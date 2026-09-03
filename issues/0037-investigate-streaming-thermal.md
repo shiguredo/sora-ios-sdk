@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/investigate-streaming-thermal
-- Polished: 2026-06-06
+- Polished: 2026-09-03
 
 ## 目的
 
@@ -20,7 +20,7 @@ Sora iOS SDK を用いた映像配信時に端末が発熱する事象の原因�
 
 発熱に関与しうる主な処理は以下に存在するが、発熱の定量的な測定・切り分けは行われていない。
 
-カメラキャプチャとフォーマット選択は `CameraVideoCapturer` で行っており、`format` と `maxFrameRate` で解像度・フレームレートを選択している。カメラ設定は `Configuration` の `cameraSettings`（`CameraSettings.default`）で指定する。映像エンコードまわりは libwebrtc 本体に委ねられており、現在の libwebrtc バージョンは `Sora/PackageInfo.swift` の `WebRTCInfo.version`（ M148 系）で確認できる。
+カメラキャプチャとフォーマット選択は `CameraVideoCapturer` で行っており、`format` と `maxFrameRate` で解像度・フレームレートを選択している。カメラ設定は `Configuration` の `cameraSettings`（`CameraSettings.default`）で指定する。映像エンコードまわりは libwebrtc 本体に委ねられており、libwebrtc のバージョンは `Sora/PackageInfo.swift` の `WebRTCInfo.version` と `Package.swift` の `libwebrtcVersion`（例: `libwebrtcVersion` が `m150.7871.3.0` のとき `WebRTCInfo.version` は `M150`）で確認できる。
 
 発熱の原因が SDK 設定（解像度・フレームレート・サイマルキャスト等）にあるのか、libwebrtc のエンコード処理にあるのか、ハードウェアエンコーダの利用可否にあるのかが切り分けられていない。
 
@@ -38,9 +38,10 @@ Sora iOS SDK を用いた映像配信時に端末が発熱する事象の原因�
   - Xcode Instruments の Energy Log / Time Profiler、Xcode の Energy Impact ゲージで CPU ・ GPU ・ ネットワークの消費を観測する。
   - ハードウェアエンコーダ（ VideoToolbox ）の使用有無は、Xcode Instruments の Time Profiler で確認する。`VTCompressionSessionCopyProperty` で `kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder` を読む方法もあるが、libwebrtc 内部の `VTCompressionSession` ハンドルに SDK 外からアクセスできない場合は Instruments による外部観測に限定する。ソフトウェアエンコードへのフォールバックが発生している場合は発熱の主要因として記録する。
 - 変数を切り分けた比較測定
-  - 測定対象デバイスは 2 世代以上（最新世代 iPhone / 旧世代 iPhone の各 1 台以上）を用いる。AV1 ハードウェアエンコーダは A17 Pro 以降でのみ利用可能なため、コーデック比較時はデバイスの対応状況を事前に確認する。
+  - 測定対象デバイスは 2 世代以上（最新世代 iPhone / 旧世代 iPhone の各 1 台以上）を用いる。
   - 解像度・フレームレートを段階的に変えて発熱への寄与を比較する（例: 720p/30fps、720p/60fps、1080p/30fps など 2〜3 パターン）。
   - サイマルキャストの有無、コーデック（ H.264 / AV1 / VP8 ・ VP9 （常にソフトウェアエンコード））の違いで比較する。
+  - 各コーデックで利用されるエンコーダ実装（ソフトウェア / ハードウェア）はデバイスと libwebrtc ビルドに依存する。SDK の FAQ ではハードウェアアクセラレーター対応は H.264 / H.265 とされているため、AV1 を含むコーデック比較時は対象デバイスでエンコーダ実装を事前に確認し、比較対象にできないコーデックは除外する。
   - 映像なし（音声のみ）配信との比較でカメラ・エンコードの寄与を切り分ける。
 
 本 issue は調査タスクであり、SDK のコード変更は行わない。測定のために一時的なハーネスコードが必要になる場合はローカル環境のみで管理し、コミット・ブランチへの追加はしない。
