@@ -24,7 +24,7 @@
   - Configuration 内のプロパティで型の一貫性を持たせるため変更
   - @t-miya
 - [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする
-  - オーディオコーデックが `.opus` または `.default` の場合のみ送信される
+  - オーディオコーデックが `.opus` として明示された場合のみ送信される
   - @t-miya
 - [ADD] DataChannel がラベルごとに OPEN になった時点で呼ばれる `onDataChannelOpened` を追加する
   - 受け取ったすべての DataChannel（`#` 始まりのラベルに限定しない）が対象
