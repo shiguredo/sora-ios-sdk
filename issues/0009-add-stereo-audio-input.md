@@ -5,93 +5,92 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/add-stereo-audio-input
-- Polished: 2026-06-05
+- Polished: 2026-09-03
 
-## Pending 理由
+## Pending 理由（履歴）
 
-本 issue は以下の理由により pending とする:
-
-1. **外部依存が未確認**: WebRTC-Build 側で ADM のステレオ録音設定 (`SetStereoRecording`) および Opus エンコーダのステレオ設定が有効になっているかが未確認。有効でない場合、SDK 側の対応は WebRTC-Build 側の対応を待つ必要がある。
-2. **設計判断が未決**: ステレオ入力構成を SDK の専用 API として提供するか、`configureAudioSession(block:)` を通じたアプリ側手順で済ませるかの判断がついていない。
-3. **依存先 issue が未完了**: `issues/0016-add-opus-params.md` が完了しておらず、connect メッセージへの `opus_params` 伝達機構が存在しないため、ステレオパラメーターをシグナリングに含めるための土台が整っていない。
-
-上記の前提条件が解決した時点で `issues/` に戻し、実装着手可能な状態に磨き上げる。
+かつて次の理由で pending としていた（WebRTC-Build 未確認、API 未決、`0016` 未完了）。WebRTC-Build 側のステレオ録音対応が完了している想定のもと、SDK 側を並列に進めるため reopened した。以下の設計方針は、その想定と出力側 `0010` の確定方針に揃えて本 issue で確定する。
 
 ## reopened にした理由
 
-WebRTC-Build 側の iOS ステレオ録音対応が完了している想定のもと、Sora iOS SDK 側の実装を並列に進めるため pending を解除する。API 設計や `0016-add-opus-params` との依存は open のまま残し、着手時に整理する。
+WebRTC-Build 側の iOS ステレオ録音対応が完了している想定のもと、Sora iOS SDK 側の実装を並列に進めるため pending を解除する。
 
 ## 目的
 
-ステレオ音声の送信に対応する。ステレオマイク搭載デバイスや外部オーディオインターフェースからのステレオ入力を Sora へ送信できるようにする。現状の SDK は音声入力をモノラル前提で扱っており、ステレオ入力を構成する経路が存在しない。
+ステレオマイク搭載デバイスや外部オーディオインターフェースからのステレオ入力を Sora へ送信できるようにする。利用者が明示的に有効化した場合のみ、入力 2ch・ADM ステレオ録音・送信コーデックのステレオ指定を揃える。
 
 ## 依存関係
 
-- **`issues/0016-add-opus-params.md`**: connect メッセージへステレオ送信パラメーター (Opus の `stereo` 指定) を渡す部分は、0016 で追加する `opus_params` の connect 伝達処理に委ねる。0016 が完了していることを本 issue の着手前提条件とする。
-- **WebRTC-Build**: ADM のステレオ録音設定および Opus エンコーダのステレオ設定が有効になっていること。有効でない場合、本 issue は WebRTC-Build 側の対応を待つ必要がある。
+- **WebRTC-Build（前提・完了想定）**: iOS ADM のステレオ recording が利用可能であること。ステレオ有効時は `RemoteIO` 等へ切り替わり、`AVAudioSessionModeDefault` のとき 2ch、既定の `VoiceChat` では従来どおりモノラル、という制約を持つ想定（出力側 `0010` と同じ）。
+- **`issues/0010-add-stereo-audio-output.md`**: 出力側。API 命名を揃える。実装は独立してよい。
+- **`issues/0016-add-opus-params.md`**: connect の `audio.opus_params` 伝達機構。本 issue は `opus_params` 全体を再発明しない。`audioStereoInputEnabled == true` のときの `stereo` 指定は 0016 の機構経由で載せる。0016 が未マージなら、本 issue の作業ブランチで 0016 を先に取り込むか同一系列で先行マージする。
 
 ## 優先度根拠
 
-Medium とする。ステレオ送信は利用者から求められる機能であり対応の必要性がある。一方でステレオ録音の実現には WebRTC-Build 側対応の確認、公開 API 設計の検討、0016 の完了が必要で、即時の小規模修正では収まらない。緊急のクラッシュやデータ破壊ではないため High ではない。
+Medium とする。ステレオ送信の需要はあるが、出力 `0010` を優先する方針のもと本 issue は並列整備する。クラッシュやデータ破壊ではないため High にはしない。
 
 ## 現状
 
-### ADM のステレオ設定経路がない
+### WebRTC-Build / libwebrtc（完了想定）
 
-音声を含む `RTCPeerConnectionFactory` は ADM を渡して生成しているが、ADM のステレオ録音設定（`SetStereoRecording` 相当）を SDK から指定する経路は存在しない。
+upstream の iOS ADM では `SetStereoRecording` が未実装相当だった。WebRTC-Build 側パッチによりステレオ録音が可能になっている想定で本 issue を進める。既知の制約（AEC/AGC 喪失、mode は Default 時のみステレオ、Bluetooth HFP はモノラル等）は `0010` と同じ前提を共有する。
 
-```swift
-audioDeviceModule = RTCAudioDeviceModule(bypassVoiceProcessing: bypassVoiceProcessing)
-audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: audioDeviceModule)
-```
+### SDK 側
 
-`Sora/NativePeerChannelFactory.swift:46`
+- `NativePeerChannelFactory` は `RTCAudioDeviceModule(bypassVoiceProcessing:)` で ADM を生成するが、ステレオ録音を指定する経路はない。
+- `PeerChannel.initializeAudioInput` は `RTCAudioSession` で category 等を整える入力初期化であり、入力チャンネル数やステレオ録音の設定は行っていない。
+- アプリは `Sora.configureAudioSession(block:)` 経由で `setPreferredInputNumberOfChannels` を呼べる（ドキュメント案内あり）。ただし SDK が接続フローでステレオ入力に必要な設定（mode・チャンネル数・ADM・シグナリング）を揃える経路はない。
+- `AudioDeviceModuleWrapper` は録音のポーズ / 再開（ハードミュート）のみ。
+- `SignalingConnect` の audio は現状 `codec_type` / `bit_rate` のみ。`opus_params` は 0016 で追加予定。
+- `AudioCodec` / `AudioMode` にチャンネル数や stereo の概念はない。`AudioOutput` は出力先選択であり本 issue では触らない。
+- オーディオルート変更は `SoraRTCAudioSessionDelegateAdapter` から `SoraHandlers.onChangeAudioRoute` へ通知される。高度な挿抜ハンドリングは本 issue の範囲外とする。
 
-マイク入力初期化は `PeerChannel.initializeAudioInput()` (`Sora/PeerChannel.swift:543`) で行われており、`RTCAudioSession.sharedInstance()` を操作している。ここがステレオ設定を追加する主な候補となる。
+## 設計方針
 
-### AVAudioSession のチャンネル数設定
+以下を本 issue の確定方針とする。`0010` と対になる形にする。
 
-`AVAudioSession` の設定変更は `configureAudioSession(block:)` (`Sora/Sora.swift:284`) を通じて行え、`setPreferredInputNumberOfChannels(_:)` も対象として案内されている。`maximumInputNumberOfChannels` は現在選択されているオーディオルートのハードウェア能力を反映する `AVAudioSession` のプロパティであり、ステレオ対応デバイスが選択され有効化されていなければ 0 を返すのが仕様である。アプリ側で `configureAudioSession(block:)` 経由で `setPreferredInputNumberOfChannels(2)` を呼び出すことは既に可能だが、SDK がステレオ入力の構成手順をカプセル化した API を提供するかどうかは未決である。
+1. **公開 API**
+   - `Configuration` に `audioStereoInputEnabled: Bool = false` を追加する（出力の `audioStereoOutputEnabled` と対）。
+   - 既定 `false` で従来どおりモノラル。`true` のときのみステレオ入力経路を有効化する。
+   - `configureAudioSession` のみに任せて SDK に設定を持たない案は採用しない。
+   - `audioInputChannels: Int` 案は採用しない（0010 と同様に Bool で揃える）。
 
-### 音声関連クラスの現状
+2. **設定の反映**
+   - 接続処理のなかで、`audioStereoInputEnabled == true` のときに次を行う。
+     - WebRTC 向け `RTCAudioSessionConfiguration` の `inputNumberOfChannels` を 2 にする（およびステレオ有効に必要な mode を `AVAudioSessionModeDefault` 側へ合わせる）。既定（`false`）では現行どおり `VoiceChat` 前提を崩さない。
+     - WebRTC-Build が公開しているステレオ録音有効化手段（ADM の `SetStereoRecording` 相当）を、ファクトリ / ADM 初期化経路から呼び出す。具体的な ObjC API 名は利用する WebRTC.xcframework のヘッダーに合わせる。
+   - `setAudioMode` にステレオ切替を混ぜない（`0010` と同じ）。ステレオ入力有効時に利用者が `voiceChat` へ戻してモノラル化する衝突が起きないよう、ドキュメントで注意する。
 
-- `Sora/AudioCodec.swift`: Opus と PCMU のみ。チャンネル数や stereo 指定の概念がない。
-- `Sora/AudioMode.swift`: AVAudioSession のカテゴリとモード設定のみ。チャンネル数設定は含まれない。
-- `Sora/AudioDeviceModuleWrapper.swift`: `RTCAudioDeviceModule` の録音ポーズ/再開をラップしている。ステレオ録音制御 (`SetStereoRecording` 相当) の追加先として自然だが、現在はハードミュート制御のみ。
-- `Sora/Signaling.swift`: `SignalingConnect` の audio エンコードは `AudioCodingKeys` として `codec_type` と `bit_rate` のみを持つ (`Signaling.swift:903-906`)。`opus_params` キーは 0016 で追加予定。
+3. **シグナリング / Opus**
+   - `audioStereoInputEnabled == true` のとき、connect の `audio.opus_params` にステレオ送信が分かるよう `stereo`（必要なら `sprop_stereo`）を載せる。伝達は 0016 の `audioOpusParams` 機構を使う。
+   - 利用者が `audioOpusParams` で明示指定している場合は、明示指定を優先する（衝突時の詳細は実装時にドキュメント化）。
+   - 送信 SDP 側で Opus の `stereo=1` が必要な場合は、オファー / 送信コーデック設定経路で保証する（受信 Answer の書き換えは `0010` の範囲）。
 
-### 既存のオーディオルート変更機構
+4. **後方互換性**
+   - 既定はモノラル。既存の `configureAudioSession` / `setAudioMode` / 未設定時の接続挙動は変えない。
 
-SDK は既に `SoraRTCAudioSessionDelegateAdapter` (`Sora/Sora.swift:459-490`) でオーディオルート変更を捕捉し、`SoraHandlers.onChangeAudioRoute` (`Sora/Sora.swift:24-29`) を介してユーザーに通知している。ステレオ入力のルート変更追従はこの既存機構を拡張する形で実装できる。
+5. **範囲外**
+   - ステレオ出力（0010）
+   - デバイス挿抜や内蔵マイク L/R の高度なハンドリング（必要なら別 issue）
+   - Bluetooth ルートの自動最適化の実装（制約はドキュメントに書く）
+   - ルート変更時の完全な自動再構成（通知は既存 `onChangeAudioRoute` を利用。SDK が接続時に設定した内容の再適用を入れる場合は最小限にとどめる）
 
-## 設計方針（調査・判断が必要な項目）
+## 変更対象
 
-以下は実装着手前に結論を出すべき調査・設計判断項目である。これらが未決であることが本 issue の pending 理由の一部となっている。
-
-1. **WebRTC-Build 側の対応状況確認**: ADM のステレオ録音設定、Opus エンコーダのステレオ設定が有効になっているか。未整備なら WebRTC-Build 側対応を待つ。
-2. **API 設計の決定**: 以下のいずれかの方針を選択する:
-   - `Configuration` に `audioInputChannels: Int = 1` を追加し、2 以上でステレオとする
-   - `Configuration` に `audioStereoEnabled: Bool = false` を追加する
-   - `configureAudioSession(block:)` 経由のアプリ側手順に任せ、SDK 側では何も追加しない
-   - 選択した場合、SDK 内で `setPreferredInputNumberOfChannels(2)` を呼び出す責務をどこに持たせるか（`AudioDeviceModuleWrapper` に追加するか、`PeerChannel.initializeAudioInput()` 内で直接行うか）
-3. **ルート変更への追従**: 既存の `onChangeAudioRoute` ハンドラ (`Sora/Sora.swift:24-29`) を活用し、ルート変更時にチャンネル数設定を再適用する。再適用の責務を SDK が持つか、アプリ側に委ねるかを決定する。
-4. **connect メッセージへの伝達**: 0016 で追加される `opus_params` の `stereo` フィールドに委ねる。本 issue の API で設定したチャンネル数と `opus_params.stereo` の値を連動させるか独立に管理するかを決定する。
-5. **ADM 側の StereoRecording 設定**: libwebrtc の Objective-C レイヤーに `SetStereoRecording` 相当の API が存在するか確認する。存在しない場合、`AudioDeviceModuleWrapper` に C++ レイヤー呼び出しのためのブリッジを追加する必要があるか判断する。
-6. **後方互換性**: 既定はモノラル (1ch) とし、明示的にステレオを指定した場合のみ挙動が変わるようにする。既存の `configureAudioSession` や音声 API の挙動は変更しない。
+- `Sora/Configuration.swift`: `audioStereoInputEnabled` 追加
+- 接続・ファクトリ経路（`NativePeerChannelFactory` / `MediaChannel` / ADM 初期化、必要なら `PeerChannel.initializeAudioInput`）: ステレオ有効時の ADM / `RTCAudioSessionConfiguration` 反映
+- シグナリング経路（0016 の `audioOpusParams` 連携）: ステレオ有効時の `stereo` 載荷
+- 送信 SDP / コーデック設定経路（必要な場合）: Opus `stereo=1` 保証
+- ドキュメント: 有効化方法、`0010` / `0016` との関係、VoiceChat・AEC/AGC・Bluetooth の制約
+- `CHANGES.md` の `develop` セクション
 
 ## 完了条件
 
-実装着手前の前提条件:
-- WebRTC-Build 側で ADM のステレオ録音設定および Opus エンコーダのステレオ設定が有効であることが確認されていること
-- `issues/0016-add-opus-params.md` が完了し、`opus_params` 伝達機構が利用可能になっていること
-- API 設計（上記「設計方針 2」）の方針が決定され、具体的なプロパティ名・型・デフォルト値が決定していること
-
-実装後の完了条件:
-- ステレオ音声入力を有効にする設定が `Configuration` に追加されていること
-- 指定時に入力チャンネル数が 2 に設定され、ステレオマイク搭載デバイスで L/R 両チャンネルの音声が Sora へ送信されること
-- 入力デバイスのルート変更が発生してもステレオ構成が維持されること
-- 既定（未指定）およびステレオ未対応デバイスではモノラルのまま従来挙動を維持すること
-- 実機でステレオ入力が Sora 側で受信できることを確認すること
+- `Configuration.audioStereoInputEnabled` が追加され、既定が `false` であること
+- `true` のとき、接続フローで入力 2ch とステレオ録音有効化（WebRTC-Build が要求する設定）が行われること
+- `true` のとき、connect 経由で Opus ステレオ送信が指定され（0016 機構）、実機から Sora へステレオ音声が送れること
+- `false`（既定）では従来どおりモノラルを維持すること
+- 利用上の制約（AEC/AGC、Bluetooth、`setAudioMode`、`audioOpusParams` との関係）がドキュメントに書かれていること
 - `CHANGES.md` の `develop` セクションに以下を追記すること:
   ```
   - [ADD] ステレオ音声入力に対応する
