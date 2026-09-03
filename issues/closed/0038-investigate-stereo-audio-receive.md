@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-09-03
 - Model: Opus 4.8
 - Branch: feature/investigate-stereo-audio-receive
 - Polished: 2026-06-06
@@ -54,3 +54,14 @@ Sora iOS SDK で受信音声をステレオで再生できない事象の原因�
 - 既定はモノラルで後方互換性を保つ方針が明示されていること。
 
 ## 解決方法
+
+本 issue の調査目的（ステレオ playout の可否と必要な対応の切り分け）は、`issues/0010-add-stereo-audio-output.md` に取り込まれ、本 issue 単体で実施すべき調査が残っていないため closed とする。
+
+- `issues/0010-add-stereo-audio-output.md` の「依存関係」に「既知の結論（ADM 未実装がボトルネック、宣言 API だけでは不足、データ経路改修が必要）は下記「現状」に取り込み済み。0038 自体の closed は別作業とする」と明記されている。
+- 同 issue の「現状」に調査結果が反映されている: upstream の iOS ADM（`AudioDeviceIOS::StereoPlayoutIsAvailable`）は常に `false` で、`VoiceProcessingAudioUnit` も 1 チャンネル固定。WebRTC-Build 側パッチでステレオ playout が可能になっている想定。ステレオ時は RemoteIO 系へ切り替わるためハードウェア AEC / AGC が使えず、`AVAudioSessionModeDefault` 側でのみ有効（既定の `VoiceChat` はモノラル維持）、Bluetooth は HFP がモノラル・A2DP はステレオ可などルート依存の制約がある。
+- 同 issue の「設計方針」「完了条件」に本 issue の完了条件が対応付けられている。ADM の `SetStereoPlayout` 相当 API は実装時に WebRTC.xcframework のヘッダーで確認、Answer SDP の Opus `stereo=1` は playout 有効時の保証、実機でのステレオ再生確認は「完了条件」に含まれている。
+- 本 issue の「依存関係」が前提としていた「本 issue でステレオ playout の可否と必要な対応を明らかにした上で 0010 に着手する」方針は崩れている。`issues/0010-add-stereo-audio-output.md` の「依存関係」には「本 issue の着手ゲートにはしない」と明記され、0010 は `Polished: 2026-09-03` で磨き上げ済みである。
+- 本 issue の「優先度根拠」が前提としていた「0009 と 0010 がいずれも pending 状態」も実態と異なる。両 issue は reopened 済みで open であり、いずれも `Polished: 2026-09-03` である。
+- 記載時点の前提だった libwebrtc M148 は現行と一致しない。`Sora/PackageInfo.swift` の `WebRTCInfo.version` は M150 に更新されている。
+
+`issues/0019-investigate-audio-source-mixing.md` は本 issue を「audio_device の構造把握の判断材料」として参照しているが、本 issue は playout（受信側）、0019 は recording（送信側）を対象としており、必要な構造情報は `issues/0010-add-stereo-audio-output.md` の「現状」と WebRTC-Build の成果物で代替できる。
