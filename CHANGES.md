@@ -84,6 +84,11 @@
   - 各 `await` 復帰後に lease と破棄予約世代を再確認し、切断済み接続の保存状態が残らないようにする
   - 接続切断時にその接続の保存状態を破棄する
   - @t-miya
+- [FIX] camera flip で切り替え先の旧 stream へフレームが送られる問題を修正する
+  - 切り替え先 capturer の stream を start より前に設定し、フレームが古い stream へ送られないようにする
+  - start / stop 失敗時は切り替え先の stream を元の値へ rollback する
+  - 連続実行時の競合を re-entrance フラグと camera queue の直列化で防ぐ
+  - @t-miya
 
 ### misc
 
