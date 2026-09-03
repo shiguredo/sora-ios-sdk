@@ -128,6 +128,11 @@ public struct Configuration {
   /// 音声ビットレート。デフォルトは無指定です。
   public var audioBitRate: Int?
 
+  /// Opus 固有のパラメーター。デフォルトは無指定です。
+  /// オーディオコーデックが `.opus` または `.default` の場合のみ `type: connect` の
+  /// `audio.opus_params` として送信されます。
+  public var audioOpusParams: Encodable?
+
   /// 映像の可否。 `true` であれば映像を送受信します。
   /// デフォルトは `true` です。
   public var videoEnabled: Bool = true

@@ -540,6 +540,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       audioEnabled: configuration.audioEnabled,
       audioCodec: configuration.audioCodec,
       audioBitRate: configuration.audioBitRate,
+      opusParams: configuration.audioCodec == .opus ? configuration.audioOpusParams : nil,
       spotlightEnabled: configuration.spotlightEnabled,
       spotlightNumber: configuration.spotlightNumber,
       spotlightFocusRid: configuration.spotlightFocusRid,
