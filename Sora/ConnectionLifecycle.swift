@@ -61,6 +61,30 @@ struct ConnectionLifecycleState: Sendable {
   /// 配送済み callback 台帳。callback の過剰配送 (重複終端) を防ぐ。
   var deliveryTracker = DeliveryTracker()
 
+  /// WebSocket の切断スケジュール済みフラグ。
+  ///
+  /// `PeerChannel.webSocketDisconnectScheduled` に対応する。
+  /// DataChannel シグナリング切り替え後の WebSocket 切断の二度送りを防ぐ。
+  var webSocketDisconnectScheduled: Bool = false
+
+  /// 接続完了後の切断検出の猶予タイマーの開始済みフラグ。
+  ///
+  /// `PeerChannel.disconnectTimerScheduled` に対応する。
+  /// 一時的なネットワーク切断を阻害しないための待機タイマーの二度開始を防ぐ。
+  var disconnectTimerScheduled: Bool = false
+
+  /// 猶予タイマーの世代。
+  ///
+  /// `PeerChannel.disconnectTimerGeneration` に対応する。
+  /// タイマー発火時に世代が一致しないと無視される (キャンセル済みタイマーの遅延発火対策)。
+  var disconnectTimerGeneration: Int = 0
+
+  /// redirect に応答して旧 transport を無効化したフラグ。
+  ///
+  /// `PeerChannel.isRedirecting` に対応する。redirect 中は旧 PeerConnection の
+  /// 遅延通知を無視し、切断処理の続行判定にも使う。
+  var isRedirecting: Bool = false
+
   init(logicalConnectionID: UUID = UUID()) {
     self.logicalConnectionID = logicalConnectionID
   }
@@ -135,6 +159,9 @@ enum ConnectionEvent: Sendable {
 
   /// 切断猶予タイマー開始
   case disconnectTimerScheduled
+
+  /// 切断猶予タイマー発火
+  case disconnectTimerFired
 
   /// 切断猶予タイマーキャンセル
   case disconnectTimerCancelled
@@ -240,30 +267,53 @@ enum ConnectionStateReducer {
     // (redirect 中も接続は継続されるため、phase は変えない)
     case (.connecting, .redirectReceived):
       state.transportEpoch += 1
+      state.isRedirecting = true
       effects.append(.publishSnapshot)
-    case (.connected, .redirectReceived):
+    case (_.connected, .redirectReceived):
       state.transportEpoch += 1
+      state.isRedirecting = true
       effects.append(.publishSnapshot)
-
-    // redirect 先への接続開始 / 完了: redirect 中は phase を変えずに
-    // transport の再接続として扱うため、このイベントは状態遷移を起こさない。
-    // (実際のフローでは offer 受信と一致し、epoch は redirectReceived で処理済み)
+    // redirect 窓の終了 (新 PC 生成): isRedirecting を解除し、
+    // リダイレクト窓でスキップされた WebSocket 切断スケジュールをリセットする。
+    // (新接続でも同じスケジュールを再度実行できるようにする)
     case (_, .redirectConnectStarted):
-      break
+      state.isRedirecting = false
+      state.webSocketDisconnectScheduled = false
     case (_, .redirectConnectEstablished):
       break
 
-    // WebSocket / タイマ系: 状態を変えない (フラグは PeerChannel の実装から移行時に使用)
+    // WebSocket 切断スケジュール: スケジュール済みフラグを true にする。
+    // (二度目の schedule は拒否される。いわゆる 1 回だけのスケジュール)
     case (_, .webSocketDisconnectScheduled):
-      break
+      state.webSocketDisconnectScheduled = true
+      effects.append(.publishSnapshot)
+
+    // 猶予タイマー開始: 開始済みフラグを true にし、現在の世代を保持する。
+    // (二度目の開始は拒否される)
     case (_, .disconnectTimerScheduled):
-      break
+      state.disconnectTimerScheduled = true
+      effects.append(.publishSnapshot)
+
+    // 猶予タイマー発火: タイマーは 1 回だけ発火するため、開始済みフラグを
+    // false に戻す。世代は変えない (発火したタイマーは以後使われない)。
+    // (発火後は再び .disconnected になった場合に、次のタイマーを開始できる)
+    case (_, .disconnectTimerFired):
+      state.disconnectTimerScheduled = false
+      effects.append(.publishSnapshot)
+
+    // 猶予タイマーキャンセル: 開始済みフラグを false にし、世代を +1 する。
+    // (キャンセル済みタイマーの遅延発火は世代照合で無視する)
     case (_, .disconnectTimerCancelled):
-      break
+      state.disconnectTimerScheduled = false
+      state.disconnectTimerGeneration += 1
+      effects.append(.publishSnapshot)
 
     // 切断完了: disconnecting から
     case (.disconnecting, .disconnectCompleted):
       state.phase = .disconnected
+      // 切断によりリダイレクトは中止され、フラグは初期状態に戻る。
+      state.isRedirecting = false
+      state.webSocketDisconnectScheduled = false
       effects.append(.publishSnapshot)
       effects.append(.deliverDisconnect)
 

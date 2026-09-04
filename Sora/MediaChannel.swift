@@ -248,11 +248,19 @@ public final class MediaChannel {
 
   // 接続ライフサイクル状態の単一 owner (actor)
   // 接続 phase / transport epoch / callback 配送台帳を管理する。
-  private let connectionStateOwner: ConnectionStateOwner
+  // PeerChannel から非同期イベント (redirect / タイマー等) を投げるため
+  // internal としている。
+  let connectionStateOwner: ConnectionStateOwner
 
   // 同期 getter が読む snapshot storage。lock で保護される。
   // 接続状態の読み取りはこの storage 経由で行い、actor の同期 wait は行わない。
   private let connectionStateSnapshotStorage = ConnectionSnapshotStorage()
+
+  // PeerChannel から状態を参照するための内部アクセサ。
+  // 同期 getter と同じく snapshot storage から読む。
+  var connectionLifecycleState: ConnectionLifecycleState {
+    connectionStateSnapshotStorage.current().state
+  }
 
   // 映像ハードミュートの同時呼び出しを直列化するための Actor です
   // MediaChannel 間の排他実行を保証するため static にしています
