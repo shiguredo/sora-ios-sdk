@@ -1406,15 +1406,17 @@ public final class MediaChannel {
           mute: false,
           lease: videoHardMuteLease,
           senderStream: SenderStreamBox(stream: senderStream),
-          cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
+          cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings),
+          cameraStartAuthorization: CameraStartAuthorization(
+            reservation: reservation,
+            videoSourceCoordinator: videoSourceCoordinator)
         )
       } catch {
-        _ = videoSourceCoordinator.completeCamera(reservation, active: false)
+        videoSourceCoordinator.cancelCamera(reservation)
         throw error
       }
-      guard videoSourceCoordinator.completeCamera(reservation, active: true) else {
-        await Self.videoHardMuteActor.stopCameraAfterCancelledStart(
-          senderStream: SenderStreamBox(stream: senderStream))
+      guard videoSourceCoordinator.isValid(reservation) else {
+        videoSourceCoordinator.cancelCamera(reservation)
         throw SoraError.mediaChannelError(
           reason: "video hard mute operation was cancelled")
       }

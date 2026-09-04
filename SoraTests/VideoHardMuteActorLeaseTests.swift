@@ -374,6 +374,32 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
       "先行停止は後続の cameraStarting 世代を解除しないこと")
   }
 
+  /// カメラ予約の取消は一致する世代だけを解除し、後続の開始予約へ作用しないことを確認する
+  func testVideoSourceCoordinatorCancelsOnlyMatchingCameraGeneration() throws {
+    let dependencies = try makeDependencies()
+    let coordinator = VideoSourceCoordinator()
+    guard
+      let firstReservation = coordinator.beginCamera(stream: dependencies.senderStreamBox.stream)
+    else {
+      XCTFail("最初のカメラ予約を取得できること")
+      return
+    }
+    XCTAssertTrue(coordinator.completeCamera(firstReservation, active: true))
+
+    coordinator.cancelCamera(firstReservation)
+    XCTAssertFalse(coordinator.isValid(firstReservation), "一致する動作中カメラ予約を解除すること")
+    guard
+      let secondReservation = coordinator.beginCamera(stream: dependencies.senderStreamBox.stream)
+    else {
+      XCTFail("取消後に次のカメラ予約を取得できること")
+      return
+    }
+
+    coordinator.cancelCamera(firstReservation)
+    XCTAssertTrue(coordinator.isValid(secondReservation), "古い取消で後続予約を解除しないこと")
+    coordinator.cancelCamera(secondReservation)
+  }
+
   /// 画面共有予約を公開カメラ API からも同じ送信ストリームで検出できることを確認する
   func testVideoSourceCoordinatorPublishesScreenReservationByStream() throws {
     let dependencies = try makeDependencies()

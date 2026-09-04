@@ -179,7 +179,16 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
       XCTFail("ローカル Answer SDP が存在すること")
       return channel
     }
-    XCTAssertTrue(hasStereoOpus(in: localSDP), "Opus の fmtp に stereo=1 が存在すること")
+    let requiresReceivingAudio: Bool
+    switch configuration.role {
+    case .sendonly:
+      requiresReceivingAudio = false
+    case .recvonly, .sendrecv:
+      requiresReceivingAudio = true
+    }
+    XCTAssertTrue(
+      hasStereoOpus(in: localSDP, requiresReceivingAudio: requiresReceivingAudio),
+      "受信方向を持つ Opus の fmtp に stereo=1 が存在すること")
     return channel
   }
 
@@ -316,7 +325,7 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
   }
 
   /// 受信方向を持つ audio section の Opus payload に対応する fmtp が stereo=1 を含むか確認する
-  private func hasStereoOpus(in sdp: String) -> Bool {
+  private func hasStereoOpus(in sdp: String, requiresReceivingAudio: Bool) -> Bool {
     let lines = sdp.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
     let firstMediaLineIndex = lines.firstIndex { $0.hasPrefix("m=") } ?? lines.endIndex
     let sessionDirection = direction(in: Array(lines[..<firstMediaLineIndex])) ?? "a=sendrecv"
@@ -344,7 +353,7 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     }
     guard !receivingAudioSections.isEmpty else {
       // sendonly では受信音声が存在せず、ステレオ受信指定も不要となる。
-      return true
+      return !requiresReceivingAudio
     }
 
     return receivingAudioSections.allSatisfy { section in

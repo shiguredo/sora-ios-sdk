@@ -27,6 +27,12 @@ struct SenderStreamBox: @unchecked Sendable {
   let stream: MediaStream
 }
 
+// ハードミュート解除時に利用するカメラ開始予約と、その管理元を一体で扱います。
+struct CameraStartAuthorization: Sendable {
+  let reservation: VideoSourceCoordinator.Reservation
+  let videoSourceCoordinator: VideoSourceCoordinator
+}
+
 // カメラ操作の所有者を識別する lease です。
 // MediaChannel の解放後に非同期 cleanup が実行されても別インスタンスと衝突しないよう、
 // オブジェクトのメモリアドレスではなく UUID で論理接続を識別します。
@@ -187,6 +193,7 @@ actor VideoHardMuteActor {
   ///  - lease: カメラ操作の所有者を示す lease
   ///  - senderStream: 送信ストリーム
   ///  - cameraSettings: カメラ設定
+  ///  - cameraStartAuthorization: MediaChannel が取得したカメラ開始予約と管理元
   /// - Throws:
   ///   - 既に処理実行中の場合は `SoraError.mediaChannelError`
   ///   - カメラ操作の失敗時は `SoraError.cameraError`
@@ -194,7 +201,8 @@ actor VideoHardMuteActor {
     mute: Bool,
     lease: VideoHardMuteLease,
     senderStream: SenderStreamBox,
-    cameraSettings: CameraSettingsSnapshot
+    cameraSettings: CameraSettingsSnapshot,
+    cameraStartAuthorization: CameraStartAuthorization? = nil
   ) async throws {
     try operationTracker.begin(lease: lease)
     defer { operationTracker.finish(lease: lease) }
@@ -236,7 +244,10 @@ actor VideoHardMuteActor {
     // 既に再開済みとして成功扱いにします。ただし CameraVideoCapturer.current は
     // 全接続で共有される static のため、別接続のカメラが動作している場合は
     // 自分のカメラとして成功扱いしない。
-    let currentCapturer = await currentCameraVideoCapturer()
+    let currentCapturer = try await currentCameraVideoCapturerAndCompleteStart(
+      senderStream: senderStream,
+      lease: lease,
+      cameraStartAuthorization: cameraStartAuthorization)
     if let currentCapturer {
       // 同じ送信ストリームのカメラが動作中なら、別経路ですでに再開済みとして扱う。
       if currentCapturer.stream === senderStream.stream {
@@ -254,7 +265,9 @@ actor VideoHardMuteActor {
     if let storedCapturer {
       try await restartCameraVideoCapture(
         storedCapturer.capturer,
-        senderStream: senderStream)
+        senderStream: senderStream,
+        lease: lease,
+        cameraStartAuthorization: cameraStartAuthorization)
       // restart 完了後に再確認する。revoke 済みだった場合はカメラを停止する
       try await checkNotRevokedAfterRestart(
         capturer: storedCapturer.capturer,
@@ -265,7 +278,9 @@ actor VideoHardMuteActor {
     }
     let startedCapturer = try await startCameraVideoCapture(
       cameraSettings: cameraSettings,
-      senderStream: senderStream)
+      senderStream: senderStream,
+      lease: lease,
+      cameraStartAuthorization: cameraStartAuthorization)
     // start 完了後に再確認する。revoke 済みだった場合はカメラを停止する
     try await checkNotRevokedAfterStart(
       capturer: startedCapturer,
@@ -280,25 +295,6 @@ actor VideoHardMuteActor {
   func release(lease: VideoHardMuteLease) async {
     storedCapturers.removeValue(forKey: lease)
     await operationTracker.revokeAndWaitForCompletion(lease: lease)
-  }
-
-  /// 開始後に映像送信元の予約が無効化されていた場合、同じ送信ストリームのカメラを停止します。
-  /// 別接続へ引き継がれたカメラには作用しません。
-  func stopCameraAfterCancelledStart(senderStream: SenderStreamBox) async {
-    guard let currentCapturer = await currentCameraVideoCapturer(),
-      currentCapturer.stream === senderStream.stream
-    else {
-      return
-    }
-    do {
-      try await stopCameraVideoCapture(
-        currentCapturer,
-        senderStream: senderStream)
-    } catch {
-      Logger.error(
-        type: .mediaChannel,
-        message: "failed to stop camera after cancelled start: \(error.localizedDescription)")
-    }
   }
 
   /// 指定した lease に破棄予約が記録済みかをテストから確認します。
@@ -360,6 +356,32 @@ actor VideoHardMuteActor {
     }
   }
 
+  // ハードミュート解除時の current 取得と開始予約の確定を、同じカメラ操作内で行います。
+  // onStart から公開 stop が呼ばれても、stop は予約確定後に実行されるため、
+  // 動作中カメラの予約を確実に解放できます。
+  private func currentCameraVideoCapturerAndCompleteStart(
+    senderStream: SenderStreamBox,
+    lease: VideoHardMuteLease,
+    cameraStartAuthorization: CameraStartAuthorization?
+  ) async throws -> CameraVideoCapturer? {
+    let cameraCaptureCoordinator = cameraCaptureCoordinator
+    return try await cameraCaptureCoordinator.perform {
+      guard let currentCapturer = await CameraVideoCapturer.currentForSDK() else {
+        return nil
+      }
+      guard currentCapturer.stream === senderStream.stream else {
+        return currentCapturer
+      }
+      try await Self.completeCameraStartOrStop(
+        capturer: currentCapturer,
+        senderStream: senderStream,
+        lease: lease,
+        cameraStartAuthorization: cameraStartAuthorization,
+        cameraCaptureCoordinator: cameraCaptureCoordinator)
+      return currentCapturer
+    }
+  }
+
   // カメラキャプチャを停止します
   private func stopCameraVideoCapture(
     _ capturer: CameraVideoCapturer,
@@ -393,7 +415,9 @@ actor VideoHardMuteActor {
   // カメラキャプチャを再開します
   private func restartCameraVideoCapture(
     _ capturer: CameraVideoCapturer,
-    senderStream: SenderStreamBox
+    senderStream: SenderStreamBox,
+    lease: VideoHardMuteLease,
+    cameraStartAuthorization: CameraStartAuthorization?
   ) async throws {
     let cameraCaptureCoordinator = cameraCaptureCoordinator
     try await cameraCaptureCoordinator.perform {
@@ -414,13 +438,21 @@ actor VideoHardMuteActor {
         }
         throw error
       }
+      try await Self.completeCameraStartOrStop(
+        capturer: capturer,
+        senderStream: senderStream,
+        lease: lease,
+        cameraStartAuthorization: cameraStartAuthorization,
+        cameraCaptureCoordinator: cameraCaptureCoordinator)
     }
   }
 
   // カメラキャプチャを開始します
   private func startCameraVideoCapture(
     cameraSettings: CameraSettingsSnapshot,
-    senderStream: SenderStreamBox
+    senderStream: SenderStreamBox,
+    lease: VideoHardMuteLease,
+    cameraStartAuthorization: CameraStartAuthorization?
   ) async throws -> CameraVideoCapturer {
     let cameraCaptureCoordinator = cameraCaptureCoordinator
     return try await cameraCaptureCoordinator.perform {
@@ -479,7 +511,56 @@ actor VideoHardMuteActor {
       {
         throw error
       }
+      try await Self.completeCameraStartOrStop(
+        capturer: capturer,
+        senderStream: senderStream,
+        lease: lease,
+        cameraStartAuthorization: cameraStartAuthorization,
+        cameraCaptureCoordinator: cameraCaptureCoordinator)
       return capturer
+    }
+  }
+
+  // 物理カメラの開始と映像送信元予約の確定を、同じ process-wide カメラ操作内で完了します。
+  // 予約または lease が無効なら、開始したカメラを別接続へ作用しない条件で停止します。
+  private static func completeCameraStartOrStop(
+    capturer: CameraVideoCapturer,
+    senderStream: SenderStreamBox,
+    lease: VideoHardMuteLease,
+    cameraStartAuthorization: CameraStartAuthorization?,
+    cameraCaptureCoordinator: CameraVideoCaptureCoordinator
+  ) async throws {
+    guard let cameraStartAuthorization else {
+      return
+    }
+    guard lease.isValid,
+      cameraStartAuthorization.videoSourceCoordinator.completeCamera(
+        cameraStartAuthorization.reservation,
+        active: true)
+    else {
+      cameraStartAuthorization.videoSourceCoordinator.cancelCamera(
+        cameraStartAuthorization.reservation)
+
+      let currentCapturer = await CameraVideoCapturer.currentForSDK()
+      guard currentCapturer === capturer,
+        currentCapturer?.stream === senderStream.stream
+      else {
+        if capturer.isRunning {
+          cameraCaptureCoordinator.quarantine(capturer: capturer)
+        }
+        throw SoraError.mediaChannelError(
+          reason: "video hard mute operation was cancelled")
+      }
+
+      let stopError = await capturer.stopForSDK()
+      guard !capturer.isRunning else {
+        cameraCaptureCoordinator.quarantine(capturer: capturer)
+        throw stopError
+          ?? SoraError.cameraError(reason: "failed to stop camera after cancelled start")
+      }
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+      throw SoraError.mediaChannelError(
+        reason: "video hard mute operation was cancelled")
     }
   }
 }

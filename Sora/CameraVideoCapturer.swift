@@ -175,6 +175,22 @@ final class VideoSourceCoordinator: @unchecked Sendable {
       }
     }
 
+    func cancelCamera(_ reservation: Reservation) {
+      withLock {
+        guard reservation.source == .camera,
+          var entry = entries[reservation.ownerID],
+          entry.generation == reservation.generation,
+          entry.state?.source == .camera
+        else {
+          return
+        }
+        entry.generation &+= 1
+        entry.state = nil
+        entry.stream = nil
+        entries[reservation.ownerID] = entry
+      }
+    }
+
     func completeScreenStart(_ reservation: Reservation) -> Bool {
       withLock {
         guard reservation.source == .screen,
@@ -363,6 +379,10 @@ final class VideoSourceCoordinator: @unchecked Sendable {
   @discardableResult
   func completeCamera(_ reservation: Reservation, active: Bool) -> Bool {
     Self.registry.completeCamera(reservation, active: active)
+  }
+
+  func cancelCamera(_ reservation: Reservation) {
+    Self.registry.cancelCamera(reservation)
   }
 
   @discardableResult
