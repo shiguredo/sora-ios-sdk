@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-09-03
 - Model: Opus 4.8
 - Branch: feature/add-opus-params
 - Polished: 2026-09-02
@@ -39,25 +39,23 @@ if audioCodec != .default || audioBitRate != nil {
 2. **`Sora/Signaling.swift`**:
    - `SignalingConnect` 構造体の `audioBitRate` プロパティの直後に `public var opusParams: Encodable?` を追加する（`SignalingConnect` 側は `vp9Params` / `av1Params` / `h264Params` / `h265Params` と同様にプレフィックスなし）。
    - `AudioCodingKeys` に `case opus_params` を追加する。
-   - `audio` コンテナ生成条件を `if audioCodec != .default || audioBitRate != nil || opusParams != nil {` に変更する。
+   - `audio` コンテナ生成条件を `if audioCodec != .default || audioBitRate != nil || (opusParams != nil && audioCodec == .opus) {` に変更する。
    - `encode(to:)` の `audio` コンテナ内で `audioBitRate` の `encodeIfPresent` 直後に、映像コーデックパラメーターと同様の `superEncoder` パターンで `opusParams` のエンコード処理を追加する。送信条件は後述の「opus_params の送信条件」に従う。
 
 3. **`Sora/PeerChannel.swift`**: `makeSignalingConnect` の `SignalingConnect(...)` メンバーワイズイニシャライザ呼び出しの引数リストに、`h265Params: configuration.videoH265Params` の直後に `opusParams:` を追加する。値は後述の「opus_params の送信条件」に従って絞り込む。これはプロパティ代入ではなくイニシャライザの引数追加である。この変更がなければ `Configuration.audioOpusParams` の値がシグナリングメッセージに反映されない。
 
 ### opus_params の送信条件
 
-`opus_params` は Opus 固有のパラメーターのため、`audioCodec` が `.opus` または `.default` の場合のみ送信し、`.pcmu` の場合は送信しない。映像側（0011 / 0074）と同じ二重防御とし、`PeerChannel` での絞り込みに加えて `encode(to:)` 側でもガードする。
+`opus_params` は Opus 固有のパラメーターのため、`audioCodec` が `.opus` **明示**の場合のみ送信し、`.default` と `.pcmu` の場合は送信しない。映像側（0011 / 0074）と同じ二重防御とし、`PeerChannel` での絞り込みに加えて `encode(to:)` 側でもガードする。
 
 ```swift
 // Sora/PeerChannel.swift の makeSignalingConnect
-opusParams:
-  (configuration.audioCodec == .opus || configuration.audioCodec == .default)
-  ? configuration.audioOpusParams : nil,
+opusParams: configuration.audioCodec == .opus ? configuration.audioOpusParams : nil,
 ```
 
 ```swift
 // Sora/Signaling.swift の SignalingConnect.encode(to:) 内
-if let opusParams, audioCodec == .opus || audioCodec == .default {
+if let opusParams, audioCodec == .opus {
   let opusParamsEnc = audioContainer.superEncoder(forKey: .opus_params)
   try opusParams.encode(to: opusParamsEnc)
 }
@@ -65,7 +63,7 @@ if let opusParams, audioCodec == .opus || audioCodec == .default {
 
 `.pcmu` のときに `opus_params` を送ると `codec_type: PCMU` と Opus 固有パラメーターの不整合な組み合わせになり、Sora サーバーに拒否されるためである。
 
-なお、音声の `.default` は Opus を意味する（`Sora/AudioCodec.swift` の `AudioCodec.default` のドキュメント）。映像側の `.default` はどのコーデックとも整合しないため params を送らない（0074）が、音声側は `.default` でも `opus_params` を送る点に注意する。また、`opus_params` は映像の `vp9_params` 等と違い、sora.conf での有効化設定を必要としない（Sora のシグナリングの型定義で `audio.opus_params` にそのような注記はない）。
+`.default` のときに `opus_params` を送ると `codec_type` がエンコードされず、オーディオフォーマットが確定されないため、Sora サーバーに `invalid_audio_format` で拒否される（実機確認で判明）。そのため `opus_params` 利用時は `audioCodec = .opus` の明示が必須である。なお、音声の `.default` は Opus を意味する（`Sora/AudioCodec.swift` の `AudioCodec.default` のドキュメント）。また、`opus_params` は映像の `vp9_params` 等と違い、sora.conf での有効化設定を必要としない（Sora のシグナリングの型定義で `audio.opus_params` にそのような注記はない）。
 
 ### audioEnabled = false の場合
 
@@ -94,16 +92,38 @@ if let opusParams, audioCodec == .opus || audioCodec == .default {
 - `Configuration` に `audioOpusParams: Encodable?` プロパティが追加されること。
 - `SignalingConnect` に `opusParams: Encodable?` プロパティが追加されること。
 - `AudioCodingKeys` に `case opus_params` が追加されること。
-- `audio` コンテナ生成条件が `opusParams != nil` を含む形に拡張されること。
+- `audio` コンテナ生成条件が `opusParams != nil && audioCodec == .opus` を含む形に拡張されること。
 - `PeerChannel.swift` の `SignalingConnect(...)` イニシャライザ引数リストに `opusParams:` が追加されること（`h265Params: configuration.videoH265Params` の直後）。
-- `audioCodec` が `.opus` / `.default` の場合のみ `audio.opus_params` が送信され、`.pcmu` の場合は送信されないこと。
+- `audioCodec` が `.opus` 明示の場合のみ `audio.opus_params` が送信され、`.default` と `.pcmu` の場合は送信されないこと。
 - `audioOpusParams` が `nil` の場合は `opus_params` がエンコードされず既存の挙動が変更されないこと（後方互換）。
 - テスト方針に記載したテストがすべて通ること。
 - `CHANGES.md` の `develop` セクションに以下の形式で追記すること:
 
 ```
 - [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする
-  - @voluntas
+  - @t-miya
 ```
 
 ## 解決方法
+
+`Configuration.audioOpusParams: Encodable?` を追加し、`type: connect` の `audio.opus_params` として送信できるようにした。映像コーデックパラメーター（`videoVp9Params` 等）と同じ設計（`Encodable?` + `superEncoder` パターン）を踏襲している。
+
+- `Sora/Configuration.swift`: `audioBitRate` の直後に `audioOpusParams: Encodable?` を追加（デフォルト `nil`）。
+- `Sora/Signaling.swift`: `SignalingConnect` に `opusParams: Encodable?` を追加し、`AudioCodingKeys` に `opus_params` を追加。`audio` コンテナ生成条件を `opusParams != nil && audioCodec == .opus` を含む形に拡張し、`superEncoder` パターンでエンコードする。
+- `Sora/PeerChannel.swift`: `makeSignalingConnect` の `SignalingConnect(...)` 引数に `opusParams:` を追加。`audioCodec == .opus` の場合のみ絞り込む（二重防御）。
+
+### opus_params の送信条件（実機確認で確定）
+
+- `audioCodec` が `.opus` **明示**の場合のみ送信する。
+- `.default` / `.pcmu` の場合は送信しない。実機確認で、`.default` のまま `opus_params` を送信すると `codec_type` がエンコードされず、Sora サーバーに `invalid_audio_format` で拒否されることが判明したため、`opus_params` 利用時は `audioCodec = .opus` の明示を必須とする。
+
+### 検証
+
+- ユニットテスト（`SignalingConnectTests`）:
+  - `opusParams` が nil の場合は `opus_params` キーが含まれないこと
+  - `.opus` 明示時は `codec_type: "OPUS"` + `opus_params` がエンコードされること
+  - `.default` の場合は `opus_params` が含まれないこと
+  - `.pcmu` の場合は `opus_params` が含まれないこと
+  - `audioEnabled = false` の場合は audio コンテナ自体が生成されないこと
+- 実機確認: `audioCodec = .opus` + `audioOpusParams` を設定して接続 → シグナリングに `"audio":{"opus_params":{"channels":2,"stereo":true,"usedtx":false,"useinbandfec":true},"codec_type":"OPUS"}` が送信され、接続が成功することを確認。
+- 既存の全テストが成功することを確認済み。
