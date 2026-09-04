@@ -279,6 +279,7 @@ enum ConnectionStateReducer {
     case (_, .redirectConnectStarted):
       state.isRedirecting = false
       state.webSocketDisconnectScheduled = false
+      effects.append(.publishSnapshot)
     case (_, .redirectConnectEstablished):
       break
 
