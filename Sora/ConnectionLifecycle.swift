@@ -20,6 +20,20 @@ enum ConnectionPhase: Sendable {
 
   /// 接続解除済み
   case disconnected
+
+  /// 公開 API の `ConnectionState` へ変換する。
+  var connectionState: ConnectionState {
+    switch self {
+    case .connecting:
+      return .connecting
+    case .connected:
+      return .connected
+    case .disconnecting:
+      return .disconnecting
+    case .disconnected:
+      return .disconnected
+    }
+  }
 }
 
 /// 接続ライフサイクル状態 reducer の State。
@@ -262,16 +276,27 @@ enum ConnectionStateReducer {
   }
 }
 
-/// 接続ライフサイクルの single owner (actor)。
+/// 接続ライフサイクルの single owner。
 ///
 /// reducer と接続に属する mutable state を所有し、ordered ingress を通じて
-/// イベントを直列に処理する。state の更新はいつもこの actor の上で行われる。
+/// イベントを直列に処理する。state の更新はいつもこの owner の上で行われる。
 ///
-/// - Note: 同期 getter は actor の同期 wait を行わない (ロックされた
+/// 同期 API (`connect` / `disconnect`) から await で呼び出さずに済むよう、
+/// actor ではなく `DispatchQueue` (serial) による直列化を採用している。
+/// (actor にすると同期メソッドの `state = .connecting` 等の書き込みが
+/// `await` を必要とし、`internalDisconnect` の一連の流れが同期で保てなくなるため)
+///
+/// - Note: 同期 getter は owner の同期 wait を行わない (ロックされた
 ///   snapshot storage を参照する)。これは callback 内から同期 getter を
 ///   呼んでも deadlock しないための設計である。
-actor ConnectionStateOwner {
-  /// 現在の reducer state
+final class ConnectionStateOwner: @unchecked Sendable {
+  /// イベントを直列処理するための serial DispatchQueue。
+  /// 利用者スレッド、WebSocket delegate、libwebrtc callback など
+  /// 複数のスレッドから `handle` が呼ばれても、この queue 上で直列化される。
+  private let eventQueue = DispatchQueue(
+    label: "jp.shiguredo.sora.ConnectionStateOwner")
+
+  /// 現在の reducer state。`eventQueue` 上の直列処理でのみ読み書きする。
   private var currentState: ConnectionLifecycleState
 
   /// snapshot storage。同期 getter が読み、NSLock で保護される。
@@ -290,23 +315,31 @@ actor ConnectionStateOwner {
   ///
   /// 利用者操作・signaling event・PeerConnection event・DataChannel event、
   /// timeout、redirect、切断はすべてこの関数を経由する。
+  /// イベントは serial queue 上で直列に処理され、順序が確定する。
+  @discardableResult
   func handle(_ event: ConnectionEvent) -> [ConnectionEffect] {
-    let (newState, effects) = ConnectionStateReducer.reduce(
-      state: currentState, event: event)
-    currentState = newState
+    // 同期呼び出しからこの関数が呼ばれても、直列 queue の順序が保証され、
+    // 結果として state の取り出しと publish が一貫した順序になる。
+    eventQueue.sync {
+      let (newState, effects) = ConnectionStateReducer.reduce(
+        state: currentState, event: event)
+      currentState = newState
 
-    // phase 遷移時および transportEpoch 変更時に snapshot を publish する。
-    // (snapshot は publish しっぱなしにならないよう、イベントごとに
-    // 変更があった場合のみ更新する。将来は Effect の一覧に含める)
-    publishSnapshot(state: newState, effects: effects)
+      // phase 遷移時および transportEpoch 変更時に snapshot を publish する。
+      // (snapshot は publish しっぱなしにならないよう、イベントごとに
+      // 変更があった場合のみ更新する。将来は Effect の一覧に含める)
+      publishSnapshot(state: newState, effects: effects)
 
-    return effects
+      return effects
+    }
   }
 
-  /// 現在の State を返す (state の読み出し用)。
-  /// - Note: 使用先は状態の公開やテスト、および actor 外からの読み出し。
-  func state() -> ConnectionLifecycleState {
-    currentState
+  /// 現在の reducer state を確認するための読み取り。
+  ///
+  /// 通常の読み取りは `snapshotStorage.current()` を使う。このメソッドは
+  /// テストおよび状態の確定時に使う。
+  func drainedState() -> ConnectionLifecycleState {
+    eventQueue.sync { currentState }
   }
 
   private func publishSnapshot(state: ConnectionLifecycleState, effects: [ConnectionEffect]) {
