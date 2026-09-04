@@ -1041,6 +1041,7 @@ public final class MediaChannel {
     // 論理停止は同期的に確定し、ReplayKit の停止完了を公開 callback より前に待ちます。
     // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
     let screenCaptureController = currentScreenCaptureController()
+    let screenStopReservation = videoSourceCoordinator.beginScreenStop()
     let screenCaptureStopTask = screenCaptureController?.stopCaptureForDisconnect()
     let videoSourceCoordinator = videoSourceCoordinator
 
@@ -1052,8 +1053,11 @@ public final class MediaChannel {
     }
     let cleanupTask = Task { @Sendable in
       await screenCaptureStopTask?.value
-      videoSourceCoordinator.finishScreenStop(
-        stopped: screenCaptureController?.isCaptureActive() != true)
+      if let screenStopReservation {
+        videoSourceCoordinator.finishScreenStop(
+          screenStopReservation,
+          stopped: screenCaptureController?.isCaptureActive() != true)
+      }
       await hardMuteCleanupTask.value
     }
 
@@ -1409,6 +1413,8 @@ public final class MediaChannel {
         throw error
       }
       guard videoSourceCoordinator.completeCamera(reservation, active: true) else {
+        await Self.videoHardMuteActor.stopCameraAfterCancelledStart(
+          senderStream: SenderStreamBox(stream: senderStream))
         throw SoraError.mediaChannelError(
           reason: "video hard mute operation was cancelled")
       }
@@ -1466,16 +1472,15 @@ public final class MediaChannel {
         videoSourceCoordinator: videoSourceCoordinator
       )
       guard videoSourceCoordinator.completeScreenStart(reservation) else {
-        await screenCaptureController.stopCapture()
-        videoSourceCoordinator.finishScreenStop(
-          stopped: !screenCaptureController.isCaptureActive())
         throw SoraError.mediaChannelError(reason: "screen capture start was cancelled")
       }
     } catch {
-      if screenCaptureController.isCaptureActive() {
-        _ = videoSourceCoordinator.beginScreenStop()
+      // この開始世代が現在も所有者である場合だけ cleanup する。
+      // すでに停止または次世代へ移った場合は、その世代の停止処理へ任せる。
+      if let screenStopReservation = videoSourceCoordinator.beginScreenStop(for: reservation) {
         await screenCaptureController.stopCapture()
         videoSourceCoordinator.finishScreenStop(
+          screenStopReservation,
           stopped: !screenCaptureController.isCaptureActive())
       } else {
         videoSourceCoordinator.failScreenStart(reservation)
@@ -1487,11 +1492,14 @@ public final class MediaChannel {
 
   /// ReplayKit を利用した画面キャプチャを停止します
   public func stopScreenCapture() async {
-    _ = videoSourceCoordinator.beginScreenStop()
+    let screenStopReservation = videoSourceCoordinator.beginScreenStop()
     let screenCaptureController = currentScreenCaptureController()
     await screenCaptureController?.stopCapture()
-    videoSourceCoordinator.finishScreenStop(
-      stopped: screenCaptureController?.isCaptureActive() != true)
+    if let screenStopReservation {
+      videoSourceCoordinator.finishScreenStop(
+        screenStopReservation,
+        stopped: screenCaptureController?.isCaptureActive() != true)
+    }
     Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
   }
 

@@ -149,12 +149,13 @@ final class StereoAudioOutputTests: XCTestCase {
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.playAndRecord.rawValue)
 
+    let installedConfiguration = RTCAudioSessionConfiguration.webRTC()
     second.release()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 0)
-    XCTAssertFalse(
-      RTCAudioSessionConfiguration.webRTC() === configuration,
-      "既存テンプレートを nonatomic に変更せず復元用オブジェクトへ差し替えること")
+    XCTAssertTrue(
+      RTCAudioSessionConfiguration.webRTC() === installedConfiguration,
+      "全 ADM の破棄後は SDK 所有テンプレートだけを更新すること")
     XCTAssertEqual(
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue)
@@ -195,9 +196,10 @@ final class StereoAudioOutputTests: XCTestCase {
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.playAndRecord.rawValue)
 
+    let installedConfiguration = RTCAudioSessionConfiguration.webRTC()
     receiver.release()
     sender.release()
-    XCTAssertFalse(RTCAudioSessionConfiguration.webRTC() === configuration)
+    XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === installedConfiguration)
     XCTAssertEqual(
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue)
@@ -352,10 +354,11 @@ final class StereoAudioOutputTests: XCTestCase {
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.playAndRecord.rawValue)
 
+    let installedConfiguration = RTCAudioSessionConfiguration.webRTC()
     factory.releaseAudioSessionRequirement()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 0)
-    XCTAssertFalse(RTCAudioSessionConfiguration.webRTC() === configuration)
+    XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === installedConfiguration)
     XCTAssertEqual(
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue)

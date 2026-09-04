@@ -315,7 +315,7 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     return counts
   }
 
-  /// audio section の Opus payload に対応する fmtp が stereo=1 を含むか確認する
+  /// 受信方向を持つ audio section の Opus payload に対応する fmtp が stereo=1 を含むか確認する
   private func hasStereoOpus(in sdp: String) -> Bool {
     let lines = sdp.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
     let firstMediaLineIndex = lines.firstIndex { $0.hasPrefix("m=") } ?? lines.endIndex
@@ -332,20 +332,22 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     }
     sections.append(section)
 
-    let activeAudioSections = sections.filter { section in
+    let receivingAudioSections = sections.filter { section in
       guard let mediaLine = section.first, mediaLine.hasPrefix("m=audio ") else {
         return false
       }
       let components = mediaLine.split(whereSeparator: { $0.isWhitespace })
       let port = components.count >= 2 ? components[1].split(separator: "/").first : nil
       let mediaDirection = direction(in: section) ?? sessionDirection
-      return port != nil && port != "0" && mediaDirection != "a=inactive"
+      let canReceive = mediaDirection == "a=sendrecv" || mediaDirection == "a=recvonly"
+      return port != nil && port != "0" && canReceive
     }
-    guard !activeAudioSections.isEmpty else {
-      return false
+    guard !receivingAudioSections.isEmpty else {
+      // sendonly では受信音声が存在せず、ステレオ受信指定も不要となる。
+      return true
     }
 
-    return activeAudioSections.allSatisfy { section in
+    return receivingAudioSections.allSatisfy { section in
       guard let mediaLine = section.first else {
         return false
       }

@@ -209,28 +209,53 @@ final class VideoSourceCoordinator: @unchecked Sendable {
       }
     }
 
-    func beginScreenStop(ownerID: UUID) -> Bool {
+    func beginScreenStop(
+      ownerID: UUID,
+      startReservation: Reservation? = nil
+    ) -> Reservation? {
       withLock {
         guard var entry = entries[ownerID], entry.state?.source == .screen else {
-          return false
+          return nil
+        }
+        if let startReservation {
+          guard startReservation.ownerID == ownerID,
+            startReservation.source == .screen,
+            startReservation.generation == entry.generation,
+            entry.state == .screenStarting || entry.state == .screen
+          else {
+            return nil
+          }
+        }
+        if entry.state == .screenStopping {
+          return Reservation(
+            ownerID: ownerID,
+            generation: entry.generation,
+            source: .screen)
         }
         entry.generation &+= 1
         entry.state = .screenStopping
         entries[ownerID] = entry
-        return true
+        return Reservation(
+          ownerID: ownerID,
+          generation: entry.generation,
+          source: .screen)
       }
     }
 
-    func finishScreenStop(ownerID: UUID, stopped: Bool) {
+    func finishScreenStop(_ reservation: Reservation, stopped: Bool) {
       withLock {
-        guard var entry = entries[ownerID], entry.state?.source == .screen else {
+        guard reservation.source == .screen,
+          var entry = entries[reservation.ownerID],
+          entry.generation == reservation.generation,
+          entry.state == .screenStopping
+        else {
           return
         }
         entry.state = stopped ? nil : .screenCleanupFailed
         if stopped {
           entry.stream = nil
         }
-        entries[ownerID] = entry
+        entries[reservation.ownerID] = entry
       }
     }
 
@@ -276,7 +301,7 @@ final class VideoSourceCoordinator: @unchecked Sendable {
       withLock {
         for (candidateOwnerID, var entry) in entries
         where candidateOwnerID != ownerID
-          && entry.state?.source == .camera
+          && entry.state == .camera
           && entry.stream?.value === stream
         {
           entry.generation &+= 1
@@ -353,13 +378,18 @@ final class VideoSourceCoordinator: @unchecked Sendable {
     Self.registry.isValid(reservation)
   }
 
-  @discardableResult
-  func beginScreenStop() -> Bool {
+  func beginScreenStop() -> Reservation? {
     Self.registry.beginScreenStop(ownerID: ownerID)
   }
 
-  func finishScreenStop(stopped: Bool) {
-    Self.registry.finishScreenStop(ownerID: ownerID, stopped: stopped)
+  func beginScreenStop(for startReservation: Reservation) -> Reservation? {
+    Self.registry.beginScreenStop(
+      ownerID: ownerID,
+      startReservation: startReservation)
+  }
+
+  func finishScreenStop(_ reservation: Reservation, stopped: Bool) {
+    Self.registry.finishScreenStop(reservation, stopped: stopped)
   }
 
   func releaseCamera() {

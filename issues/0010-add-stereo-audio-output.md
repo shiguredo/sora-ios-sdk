@@ -104,7 +104,8 @@ WebRTC-Build `m150.7871.3.2` の `ios_stereo_audio_output.patch` には次が実
 
 4. **共有 AudioSession の category を接続間で管理する**
    - `RTCAudioSessionConfiguration.webRTC()` はプロセス内の共有設定であるため、接続ごとに直接上書きして放置しない。AudioSession category の要求を直列化する internal な coordinator を追加する
-   - coordinator は最初の要求登録時に元の category を保存し、送信を行う接続または `audioStereoOutputEnabled == true` の接続が 1 つでも存在する間は `AVAudioSession.Category.playAndRecord.rawValue` を維持する
+   - coordinator は最初に `PlayAndRecord` が必要となった時点の共有テンプレートから元の category を保存し、送信を行う接続または `audioStereoOutputEnabled == true` の接続が 1 つでも存在する間は `AVAudioSession.Category.playAndRecord.rawValue` を維持する
+   - SDK が設定したテンプレートだけを復元対象とし、接続中にホストアプリが別の `RTCAudioSessionConfiguration` テンプレートへ差し替えた場合は上書きしない
    - coordinator はプロセス全体で共有し、ロックで保護する。要求登録時に一意な lease を返し、同じ lease の解除を複数回行っても状態が変わらないようにする
    - `audioStereoOutputEnabled == true` の場合は送受信ロールにかかわらず要求を登録する。既存のモノラル送信接続も同じ coordinator に登録し、`PeerChannel.initializeAudioInput` からの category 直接代入を除去する
    - `NativePeerChannelFactory` が lease を保持し、`MediaChannel` の切断時に明示的に解除する。接続初期化が途中で失敗した場合も解除し、deinit は解除漏れに対する最後の安全策とする。最後の要求がなくなった時点で保存した category を復元する
@@ -123,7 +124,7 @@ WebRTC-Build `m150.7871.3.2` の `ios_stereo_audio_output.patch` には次が実
    - 出力側の受信設定であるため、送信側のチャンネル数を通知する `sprop-stereo` は追加しない
    - SDP の改行形式と Opus 以外の media section / fmtp parameter を維持する
    - 変換後の `RTCSessionDescription` を `setLocalDescription` と Sora への Answer 送信の両方に使用する
-   - `audioCodec == .default` または `.opus` でも生成された Answer の audio セクションに Opus payload が存在しない場合は `SoraError.peerChannelError` とし、ステレオ出力が成立していない Answer を送信しない
+   - `audioCodec == .default` または `.opus` でも生成された Answer の受信方向を持つ audio セクションに Opus payload が存在しない場合は `SoraError.peerChannelError` とし、ステレオ出力が成立していない Answer を送信しない。`sendonly` の audio セクションは受信設定の対象外とする
    - `audioStereoOutputEnabled == false` の場合は SDP を変更しない
 
 6. **ハードミュートとの非互換を成功扱いにしない**

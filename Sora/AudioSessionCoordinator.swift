@@ -164,14 +164,10 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       return
     }
 
-    if let installedConfiguration,
-      RTCAudioSessionConfiguration.webRTC() === installedConfiguration,
-      let originalCategory
-    {
-      // SDK が設定した template が現在も使われている場合だけ、最新の各値を維持して
-      // カテゴリーを戻す。ホストアプリが別 template を設定済みなら上書きしない。
-      RTCAudioSessionConfiguration.setWebRTC(
-        Self.copyConfiguration(installedConfiguration, category: originalCategory))
+    if let installedConfiguration, let originalCategory {
+      // 全 ADM の破棄後に SDK 所有オブジェクトだけを更新する。global template を
+      // 再設定しないため、同時にホストアプリが別 template へ差し替えても上書きしない。
+      installedConfiguration.category = originalCategory
     }
     originalCategory = nil
     installedConfiguration = nil

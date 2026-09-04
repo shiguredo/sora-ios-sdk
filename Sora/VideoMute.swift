@@ -282,6 +282,25 @@ actor VideoHardMuteActor {
     await operationTracker.revokeAndWaitForCompletion(lease: lease)
   }
 
+  /// 開始後に映像送信元の予約が無効化されていた場合、同じ送信ストリームのカメラを停止します。
+  /// 別接続へ引き継がれたカメラには作用しません。
+  func stopCameraAfterCancelledStart(senderStream: SenderStreamBox) async {
+    guard let currentCapturer = await currentCameraVideoCapturer(),
+      currentCapturer.stream === senderStream.stream
+    else {
+      return
+    }
+    do {
+      try await stopCameraVideoCapture(
+        currentCapturer,
+        senderStream: senderStream)
+    } catch {
+      Logger.error(
+        type: .mediaChannel,
+        message: "failed to stop camera after cancelled start: \(error.localizedDescription)")
+    }
+  }
+
   /// 指定した lease に破棄予約が記録済みかをテストから確認します。
   func isReleased(lease: VideoHardMuteLease) -> Bool {
     lease.isRevoked
