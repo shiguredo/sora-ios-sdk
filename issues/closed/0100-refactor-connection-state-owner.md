@@ -1,7 +1,7 @@
 # 接続ライフサイクルの状態所有者を単一化する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-04
 - Branch: feature/refactor-connection-state-owner
 - Polished: 2026-09-04
 
@@ -132,11 +132,13 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
 - handler は状態確定後に take-and-clear または immutable snapshot として取り出す。
 - 利用者 callback は owner の critical section 外で呼び、reentrant な `disconnect()`、getter、cancel を許容する。
 - callback の executor 契約を内部設計コメントに明記する。公開 callback API の変更は別 issue とする。
+- callback の配送を reducer の Effect (`deliverConnectCallback` 等) に全面的に移す作業は行わない。接続完了 callback の 1 回終端は既存の `invokeConnectHandler` (take-and-clear) で担保し、`deliveryTracker` は状態記録として reducer に保持する。Effect への完全移行は `0110` (Sendable event API) で扱う。
 
 ## スコープ外
 
 - `SignalingChannel` と `URLSessionWebSocketChannel` 自身の状態所有は `0101` で扱う。
 - 公開 handler を `@Sendable` または `AsyncStream` へ移行する作業は別 issue とする。
+- callback 配送の reducer の Effect への完全移行は `0110` (Sendable event API) で扱う。`deliverConnectCallback` 等の Effect は 0100 では状態記録として保持し、実行する側の接続は行わない。
 - raw WebRTC 型を公開 API から除去する作業は `0070` の方針と整合させる。
 - 本 issue で公開 API を一斉に async 化しない。
 - DataChannel の OPEN 追跡状態 (`openedDataChannelLabels` / `messagingLabels` / `onDataChannelNotified`、`dataChannelOpenLock` で保護) は本 issue のスコープ外。現状どおり `NSLock` で保護し、発火判定は reducer (接続 phase) の状態を参照しない (ラベル集合のみに依存)。
@@ -163,6 +165,7 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
   - `ConnectionTask.state` の `NSLock` は 0092 の実装を現状維持する (除去対象ではない)。
   - `PeerChannel` 以外の `nonisolated(unsafe)` (CameraVideoCapturer / DeviceInfo / Logger / MediaChannelConfiguration / MediaStream、および `Sora.swift` の `webRTCCallbackLogger`) はスコープ外。(`webRTCCallbackLogger` は `0111` の対象)
 - Objective-C / libwebrtc callback が単一の ordered ingress を経由すること。
+  - 状態を変更するイベント (redirect / disconnect / timer 等) は `handleConnectionEvent` を経由して `ConnectionStateOwner` (DispatchQueue 直列化) に集約され、順序が確定すること。libwebrtc の delegate そのものは直接 reducer には接続しない (状態を変えない通知は従来どおり)。
 - callback ごとの独立した Task 生成にイベント順序を依存していないこと。
 - public の同期 getter が actor の同期 wait を行わず、lock-backed snapshot を参照すること。
 - callback の呼び出し前に状態と snapshot が確定していること。
@@ -171,3 +174,42 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
 - `0092`、`0093`、`0095`、`0096` の回帰テストを含む全テストが成功すること。
 
 ## 解決方法
+
+接続ライフサイクルの状態所有者を接続単位の単一 owner へ集約した。
+
+### 実装内容
+
+- `Sora/ConnectionLifecycle.swift` (新規):
+  - `ConnectionPhase` (connecting / connected / disconnecting / disconnected)
+  - `ConnectionLifecycleState` (phase / logicalConnectionID / transportEpoch / deliveryTracker / 5 フラグ)
+  - `DeliveryTracker` (callback の 1 回終端の状態保持)
+  - `ConnectionEvent` (状態遷移に必要な事実のみを運ぶ Sendable なイベント)
+  - `ConnectionEffect` (publishSnapshot / deliverConnectCallback 等)
+  - `ConnectionStateReducer` (純粋関数。不正な状態遷移と stale epoch を拒否)
+  - `ConnectionStateOwner` (DispatchQueue 直列化による single owner)
+  - `ConnectionSnapshotStorage` (NSLock で保護した lock-backed snapshot)
+- `Sora/MediaChannel.swift`:
+  - `state` を `public private(set) var` から snapshot を参照する computed getter に変更
+  - 状態の書き込み (`state = .connecting` 等) を reducer のイベント (`handle(.connectRequested)` 等) に置き換え
+  - internal な `connectionStateOwner` / `connectionLifecycleState` を追加
+- `Sora/PeerChannel.swift`:
+  - `nonisolated(unsafe)` の 5 つのフラグ (webSocketDisconnectScheduled / disconnectTimerScheduled / disconnectTimerGeneration / dataChannelGeneration / isRedirecting) を削除
+  - 各フラグを reducer の snapshot から読む computed getter に置き換え
+  - redirect / タイマー / WebSocket スケジュールの書き込みを `handleConnectionEvent(_:)` に置き換え
+
+### 設計上の判断
+
+- 単一 owner は actor ではなく `DispatchQueue` 直列化のクラスとした (同期 API (`connect` / `disconnect`) からの `await` 化を避けるため)。
+- callback の配送を reducer の Effect へ完全移行は行わず (既存の `invokeConnectHandler` (take-and-clear) で担保)、`deliveryTracker` は状態記録として保持する。Effect への完全移行は `0110` で扱う。
+- snapshot の publish は接続 phase 遷移時および transport epoch 変更時のみ。`connectionCount` 等 (notify で更新される値) はスコープ外とし、個別の getter で読む (`0128` で対応)。
+- `ConnectionTask.state` (`NSLock` + `InternalState`) と `ConnectionTimer` (stateLock / timer / generation) は現状維持 (`0092` / `0096` の実装) とし、スコープ外とした。
+
+### テスト
+
+- `SoraTests/ConnectionStateReducerTests.swift` (新規): 接続開始 / キャンセル / 接続完了 / 接続失敗 / タイムアウト / offer / redirect / 切断 / snapshot の 12 件
+- `SoraTests/PeerChannelRedirectInvalidationTests.swift`: 実構成 (MediaChannel 経由) に書き換え
+
+### 実機確認
+
+- 通常接続・切断・redirect・redirect 後の切断・再接続を実機で確認済み。
+- 途中で判明した `.redirectConnectStarted` の snapshot publish 漏れ (isRedirecting がリセットされず、新 PC の状態通知が拒否される) を修正済み。

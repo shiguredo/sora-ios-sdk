@@ -132,12 +132,11 @@ public final class MediaChannel {
   }
 
   /// 接続状態
-  public private(set) var state: ConnectionState = .disconnected {
-    didSet {
-      Logger.trace(
-        type: .mediaChannel,
-        message: "changed state from \(oldValue) to \(state)")
-    }
+  ///
+  /// 単一 owner (actor) が管理する接続 phase の snapshot から読む。
+  /// 同期 getter は actor の同期 wait を行わない。
+  public var state: ConnectionState {
+    connectionStateSnapshotStorage.current().state.phase.connectionState
   }
 
   /// 接続中 (`state == .connected`) であれば ``true``
@@ -247,6 +246,22 @@ public final class MediaChannel {
   private let manager: Sora
   private let nativePeerChannelFactory: NativePeerChannelFactory
 
+  // 接続ライフサイクル状態の単一 owner (actor)
+  // 接続 phase / transport epoch / callback 配送台帳を管理する。
+  // PeerChannel から非同期イベント (redirect / タイマー等) を投げるため
+  // internal としている。
+  let connectionStateOwner: ConnectionStateOwner
+
+  // 同期 getter が読む snapshot storage。lock で保護される。
+  // 接続状態の読み取りはこの storage 経由で行い、actor の同期 wait は行わない。
+  private let connectionStateSnapshotStorage = ConnectionSnapshotStorage()
+
+  // PeerChannel から状態を参照するための内部アクセサ。
+  // 同期 getter と同じく snapshot storage から読む。
+  var connectionLifecycleState: ConnectionLifecycleState {
+    connectionStateSnapshotStorage.current().state
+  }
+
   // 映像ハードミュートの同時呼び出しを直列化するための Actor です
   // MediaChannel 間の排他実行を保証するため static にしています
   private static let videoHardMuteActor = VideoHardMuteActor()
@@ -273,6 +288,8 @@ public final class MediaChannel {
     self.nativePeerChannelFactory = NativePeerChannelFactory(
       bypassVoiceProcessing: configuration.bypassVoiceProcessing,
       audioDevice: configuration.audioDevice)
+    connectionStateOwner = ConnectionStateOwner(
+      snapshotStorage: connectionStateSnapshotStorage)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
@@ -454,7 +471,7 @@ public final class MediaChannel {
   ) {
     Logger.debug(type: .mediaChannel, message: "try connecting")
     _handler = handler
-    state = .connecting
+    connectionStateOwner.handle(.connectRequested)
     connectionStartTime = nil
 
     // 接続開始前にキャンセル要求を受領していた場合は、接続処理を開始しない。
@@ -617,7 +634,7 @@ public final class MediaChannel {
         return
       }
       Logger.debug(type: .mediaChannel, message: "did connect")
-      weakSelf.state = .connected
+      weakSelf.connectionStateOwner.handle(.connectionEstablished)
       handler(nil)
       Logger.debug(type: .mediaChannel, message: "call onConnect")
       weakSelf.internalHandlers.onConnect?(nil)
@@ -668,11 +685,11 @@ public final class MediaChannel {
         executeHandler(error: error)
       }
 
-      state = .disconnecting
+      connectionStateOwner.handle(.disconnectRequested(reason: reason))
       connectionTimer.stop()
       peerChannel.disconnect(error: error, reason: reason)
       Logger.debug(type: .mediaChannel, message: "did disconnect")
-      state = .disconnected
+      connectionStateOwner.handle(.disconnectCompleted)
 
       Logger.debug(type: .mediaChannel, message: "call onDisconnect")
       internalHandlers.onDisconnectLegacy?(error)

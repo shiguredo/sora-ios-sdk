@@ -49,16 +49,24 @@ final class PeerChannelRedirectInvalidationTests: XCTestCase {
   /// 新 offer 受信までの窓では isRedirecting を true にする。
   func testRedirectResetsSwitchedToDataChannelAndGeneration() {
     let config = makeConfiguration()
-    let (peerChannel, signalingChannel) = makePeerChannelWithSignalingChannel(config: config)
+    // MediaChannel を構築する (内部で自前の SignalingChannel / PeerChannel / ConnectionStateOwner を持つ)
+    let mediaChannel = MediaChannel(manager: Sora.shared, configuration: config)
+    let peerChannel = mediaChannel.peerChannel
 
     // リダイレクト前の接続済み状態を再現する
     // (switchedToDataChannel は DataChannel シグナリング確立時に true になる)
     peerChannel.switchedToDataChannel = true
+    // ConnectionStateOwner の phase を接続済み (connected) にする。
+    // リダイレクトイベント (.redirectReceived) は connecting / connected からのみ受理される。
+    // (実際の接続フローでは基本的に connected である)
+    mediaChannel.connectionStateOwner.handle(.connectRequested)
+    mediaChannel.connectionStateOwner.handle(.connectionEstablished)
+
     let generationBefore = peerChannel.dataChannelGeneration
     XCTAssertFalse(peerChannel.isRedirecting, "リダイレクト前は isRedirecting でないこと")
 
     // redirect シグナリングを受信する
-    signalingChannel.internalHandlers.onReceive?(
+    peerChannel.signalingChannel.internalHandlers.onReceive?(
       .redirect(SignalingRedirect(location: "wss://example2.com/signaling")))
 
     XCTAssertFalse(

@@ -236,38 +236,50 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   var dataChannels: [String: DataChannel] = [:]
   var switchedToDataChannel: Bool = false
-  nonisolated(unsafe) var webSocketDisconnectScheduled: Bool = false
-
-  // 接続完了後の切断検出 (RTCPeerConnectionState.disconnected) 用の猶予タイマー。
-  // タイマーの開始・キャンセルのフラグは webSocketDisconnectScheduled と同じく
-  // nonisolated(unsafe) で扱う (ベストエフォート)。二重開始は disconnectTimerScheduled
-  // で防止し、フラグ競合で発火が重複した場合の二重 disconnect は Lock.waitDisconnect の
-  // isDisconnecting ガードで吸収する
-  nonisolated(unsafe) private var disconnectTimerScheduled: Bool = false
-
-  // 猶予タイマーの世代 (トークン)。キャンセル・破棄のたびに +1 する。
-  // asyncAfter で投入済みのクロージャはキャンセルできないため、発火時に
-  // 記録した世代が現在の世代と一致するか確認することで、無効化されたタイマーの
-  // 発火を防ぐ (キャンセル後に再 .disconnected で新たなタイマーを開始した場合、
-  // 古いタイマーが先に発火して猶予時間が短縮される問題の対策)
-  nonisolated(unsafe) private var disconnectTimerGeneration: Int = 0
-
-  // DataChannel 通知の世代 (トークン)。リダイレクトのたびに +1 し、
-  // 旧接続の DataChannel からの遅延通知を無視するために BasicDataChannelDelegate と照合する。
-  // disconnectTimerGeneration と同じく nonisolated(unsafe) で扱う (ベストエフォート)。
-  // BasicDataChannelDelegate から現在の世代を確認するため internal にしている。
-  nonisolated(unsafe) var dataChannelGeneration: Int = 0
-
-  // リダイレクト中フラグ。リダイレクトから新 offer 受信までの窓で、
-  // 旧 RTCPeerConnection からの遅延 didOpen 通知を無視するために使用する。
-  // この間 nativeChannel は旧 PC のままのため、PC アイデンティティの一致だけでは
-  // 旧 PC の通知を防げない。disconnectTimerGeneration と同じく nonisolated(unsafe) で
-  // 扱う (ベストエフォート)。Lock.unlock の遅延切断パスからも参照するため internal にしている。
-  nonisolated(unsafe) var isRedirecting = false
   var signalingOfferMessageDataChannels: [[String: Any]] = []
   var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
+
+  // MARK: - 接続ライフサイクル状態への参照
+
+  // 接続状態の読み書きは MediaChannel の ConnectionStateOwner (単一 owner) 経由で行う。
+  // これにより nonisolated(unsafe) によるベストエフォートの同期を廃止する。
+
+  /// 接続状態を更新するイベントを投げる
+  func handleConnectionEvent(_ event: ConnectionEvent) {
+    mediaChannel?.connectionStateOwner.handle(event)
+  }
+
+  /// 接続ライフサイクル状態の snapshot を読む
+  var connectionLifecycleState: ConnectionLifecycleState {
+    mediaChannel?.connectionLifecycleState ?? ConnectionLifecycleState()
+  }
+
+  /// 現在の transport epoch (dataChannelGeneration の置き換え)
+  var dataChannelGeneration: Int {
+    connectionLifecycleState.transportEpoch
+  }
+
+  /// redirect 中フラグ (isRedirecting の置き換え)
+  var isRedirecting: Bool {
+    connectionLifecycleState.isRedirecting
+  }
+
+  /// WebSocket の切断スケジュール済みフラグ (webSocketDisconnectScheduled の置き換え)
+  var webSocketDisconnectScheduled: Bool {
+    connectionLifecycleState.webSocketDisconnectScheduled
+  }
+
+  /// 猶予タイマーの開始済みフラグ (disconnectTimerScheduled の置き換え)
+  var disconnectTimerScheduled: Bool {
+    connectionLifecycleState.disconnectTimerScheduled
+  }
+
+  /// 猶予タイマーの世代 (disconnectTimerGeneration の置き換え)
+  var disconnectTimerGeneration: Int {
+    connectionLifecycleState.disconnectTimerGeneration
+  }
 
   var state: PeerChannelConnectionState {
     if let nativeChannel {
@@ -1067,8 +1079,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // フラグもリセットし、新接続でも WebSocket 切断をスケジュールできるようにする
     // (リセットしないと、新接続の signaling ラベル受信後に WebSocket が切断されず
     // サーバーセッションが残留する)
-    isRedirecting = false
-    webSocketDisconnectScheduled = false
+    handleConnectionEvent(.redirectConnectStarted)
     nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
 
     guard lock.lock() else {
@@ -1411,7 +1422,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // (旧接続の .disconnected を契機に開始されたタイマーがリダイレクト後も発火し、
       // 新接続を誤切断するのを防ぐ。また、disconnectTimerScheduled が true のまま
       // 残留すると新接続のタイマー開始が抑止される)
-      dataChannelGeneration += 1
+      handleConnectionEvent(.redirectReceived)
       // 旧 transport の論理的な無効化。redirect 受理済みのため、
       // 以後 sendMessage / RPC / stats が旧 DataChannel / 旧 PeerConnection を参照しない。
       // 送信経路と RPC は dataChannelGeneration と rpcChannel の nil で旧接続を判別する。
@@ -1439,7 +1450,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           message: "redirect: terminated \(streams.count) streams")
       }
       streams.removeAll()
-      isRedirecting = true
       cancelDisconnectTimer()
       nativeChannel?.close()
       signalingChannel.redirect(location: redirect.location)
@@ -1485,7 +1495,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     guard state != .closed else { return }
     guard let webSocketChannel = signalingChannel.webSocketChannel else { return }
 
-    webSocketDisconnectScheduled = true
+    handleConnectionEvent(.webSocketDisconnectScheduled)
 
     Logger.info(
       type: .peerChannel,
@@ -1533,10 +1543,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func basicDisconnect(error: Error?, reason: DisconnectReason) {
-    // 切断によりリダイレクトを中止する。
-    // (リダイレクト窓で切断が実行された場合、以降は通常の切断状態に戻す)
-    isRedirecting = false
-
     Logger.debug(
       type: .peerChannel,
       message:
@@ -1608,7 +1614,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
     dataChannelSignalingClose = nil
-    webSocketDisconnectScheduled = false
 
     Logger.debug(type: .peerChannel, message: "did disconnect")
   }
@@ -1851,7 +1856,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     guard !disconnectTimerScheduled else {
       return
     }
-    disconnectTimerScheduled = true
+    handleConnectionEvent(.disconnectTimerScheduled)
     Logger.debug(
       type: .peerChannel,
       message: "scheduling disconnect timer after \(Self.disconnectedGracePeriod) seconds")
@@ -1868,7 +1873,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(
         type: .peerChannel,
         message: "disconnect timer fired (generation: \(generation))")
-      self.disconnectTimerScheduled = false
+      self.handleConnectionEvent(.disconnectTimerFired)
       guard self.state == .disconnected else {
         return
       }
@@ -1887,8 +1892,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     guard disconnectTimerScheduled else {
       return
     }
-    disconnectTimerScheduled = false
-    disconnectTimerGeneration += 1
+    handleConnectionEvent(.disconnectTimerCancelled)
     Logger.debug(type: .peerChannel, message: "canceled disconnect timer")
   }
 
