@@ -232,6 +232,52 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     XCTAssertTrue(coordinator.isAvailable, "停止成功を確認した後はカメラ操作を再開できること")
   }
 
+  /// 同じ接続のカメラと画面共有を、非同期開始より前の予約で排他できることを確認する
+  func testVideoSourceCoordinatorReservesOnlyOneSource() {
+    let coordinator = VideoSourceCoordinator()
+
+    XCTAssertEqual(coordinator.reserveCamera(), .acquired, "最初のカメラ予約を取得できること")
+    XCTAssertEqual(
+      coordinator.reserveCamera(),
+      .alreadyReserved,
+      "同じ送信元の重複予約を識別できること")
+    XCTAssertEqual(
+      coordinator.reserveScreen(),
+      .unavailable,
+      "カメラ予約中は画面共有を予約できないこと")
+
+    coordinator.releaseCamera()
+    XCTAssertEqual(
+      coordinator.reserveScreen(),
+      .acquired,
+      "カメラ予約の解放後は画面共有を予約できること")
+    XCTAssertEqual(
+      coordinator.reserveCamera(),
+      .unavailable,
+      "画面共有予約中はカメラを予約できないこと")
+  }
+
+  /// 切断で破棄した映像送信元には、遅延した開始要求や新しい予約を許可しないことを確認する
+  func testVideoSourceCoordinatorRejectsReservationAfterRevoke() {
+    let coordinator = VideoSourceCoordinator()
+
+    XCTAssertEqual(coordinator.reserveCamera(), .acquired)
+    XCTAssertTrue(coordinator.isReservedForCamera())
+
+    coordinator.revoke()
+    XCTAssertFalse(coordinator.isReservedForCamera(), "切断後は既存のカメラ予約を無効化すること")
+
+    coordinator.releaseCamera()
+    XCTAssertEqual(
+      coordinator.reserveCamera(),
+      .unavailable,
+      "解放後も切断済み coordinator を再利用できないこと")
+    XCTAssertEqual(
+      coordinator.reserveScreen(),
+      .unavailable,
+      "切断後は画面共有も予約できないこと")
+  }
+
   /// 通常カメラの停止キューが完了するまで MediaChannel の切断 callback を通知しないことを確認する
   func testMediaChannelDisconnectWaitsForCameraCleanup() async throws {
     let coordinator = CameraVideoCaptureCoordinator()

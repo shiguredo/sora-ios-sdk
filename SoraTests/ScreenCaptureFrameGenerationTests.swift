@@ -108,7 +108,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
   /// isActiveCaptureID は「context が保持する capture ID」(capture A) と
   /// 現在の activeCaptureID を照合する。stop で activeCaptureID が nil になると、
   /// 送信直前の照合で capture A の frame が拒否される。
-  func testFrameForStoppedCaptureIsRejected() throws {
+  func testFrameForStoppedCaptureIsRejected() async throws {
     let (controller, mediaChannel) = try makeScreenCaptureController()
     let senderStream = makeSenderStream(mediaChannel: mediaChannel)
 
@@ -123,10 +123,11 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       "実行中の capture の frame は送信できること")
 
     // capture A を停止する (activeCaptureID が nil になる)
-    XCTAssertTrue(
-      controller.beginStopCapture(),
-      "停止が受理されること")
-    controller.completeStopCapture()
+    guard let stopTask = controller.stopCaptureForDisconnect() else {
+      XCTFail("停止が受理されること")
+      return
+    }
+    await stopTask.value
 
     // 停止後の capture A の frame は送信できない
     XCTAssertFalse(
@@ -140,10 +141,9 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
   /// 停止→再開始の競合では、isReadyToSend() が実行時点の captureState しか確認しないため、
   /// 再実行後に .running になった state では旧 capture の frame を識別できない。
   /// capture ID の照合で旧 capture (capture A) の送信を拒否し、新 capture (capture B) のみ
-  /// 送信できることを検証する。beginStopCapture + completeStopCapture で
-  /// 停止完了 (state = .stopped) を再現し、その後に beginStartCapture を呼ぶことで
-  /// 実再開始のイベント列を入力する。
-  func testFrameForRestartedCaptureIsRejected() throws {
+  /// 送信できることを検証する。実際の停止 Task の完了を待ってから
+  /// beginStartCapture を呼ぶことで、実再開始のイベント列を入力する。
+  func testFrameForRestartedCaptureIsRejected() async throws {
     let (controller, mediaChannel) = try makeScreenCaptureController()
     let senderStream = makeSenderStream(mediaChannel: mediaChannel)
 
@@ -157,10 +157,11 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     }
 
     // capture A を停止し、停止完了させる (state = .stopped)
-    XCTAssertTrue(
-      controller.beginStopCapture(),
-      "capture A の停止が受理されること")
-    controller.completeStopCapture()
+    guard let stopTask = controller.stopCaptureForDisconnect() else {
+      XCTFail("capture A の停止が受理されること")
+      return
+    }
+    await stopTask.value
 
     // capture B を即時再開始し、完了させる (state = .running)
     let captureBID = try controller.beginStartCapture(
@@ -227,7 +228,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
   }
 
   /// stop が先行した場合、遅延した ReplayKit start を OS へ送らないことを確認する
-  func testDelayedRecorderStartIsRejectedAfterStop() throws {
+  func testDelayedRecorderStartIsRejectedAfterStop() async throws {
     let (controller, mediaChannel) = try makeScreenCaptureController()
     let senderStream = makeSenderStream(mediaChannel: mediaChannel)
     let captureID = try controller.beginStartCapture(
@@ -235,11 +236,14 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       senderStream: senderStream)
 
     // MainActor 上の start 実行より先に、別スレッドの切断が論理停止を確定した順序を再現する。
-    XCTAssertTrue(controller.beginStopCapture(), "開始中の capture を停止できること")
+    guard let stopTask = controller.stopCaptureForDisconnect() else {
+      XCTFail("開始中の capture を停止できること")
+      return
+    }
     XCTAssertFalse(
       controller.shouldIssueRecorderStart(captureID: captureID),
       "停止後に遅れて到着した start は ReplayKit へ送られないこと")
-    controller.completeStopCapture()
+    await stopTask.value
   }
 
   /// ReplayKit 操作キューが先行操作の非同期完了まで後続操作を開始しないことを確認する

@@ -12,8 +12,8 @@
 ## develop
 
 - [ADD] ステレオ音声出力に対応する
-  - `RTCAudioSessionConfiguration` のテンプレートに設定するカテゴリーを接続間で共有し、すべての音声接続を解放したときに元の設定へ復元する
-  - 音声接続中にカテゴリーの初回変更が必要な接続を開始した場合は、共有設定との競合を避けるため接続を拒否する
+  - `RTCAudioSessionConfiguration` のテンプレートを原子的に差し替えてカテゴリー要求を接続間で共有し、すべての音声接続を解放したときに元のテンプレートへ復元する
+  - モノラル受信接続中にモノラル送信接続を追加する場合も、既存の接続を維持したまま `PlayAndRecord` を適用する
   - WebRTC-Build m150.7871.3.2 では Sora iOS SDK が管理する音声接続全体でステレオ接続を 1 つに限定し、他の音声接続と排他にする
   - @t-miya
 - [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする

@@ -391,6 +391,9 @@ public final class MediaChannel {
   /// この MediaChannel が所有する映像ハードミュート状態を識別します。
   private let videoHardMuteLease: VideoHardMuteLease
 
+  /// カメラと画面共有の開始予約を接続単位で排他する状態です。
+  private let videoSourceCoordinator: VideoSourceCoordinator
+
   // ReplayKit を利用した画面キャプチャ制御です
   // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
   // 生成後は MediaChannel のライフサイクルで保持します。
@@ -411,7 +414,8 @@ public final class MediaChannel {
     audioSessionCoordinator: AudioSessionCoordinator = .shared,
     videoHardMuteLease: VideoHardMuteLease = VideoHardMuteLease(),
     cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
-    cameraCaptureOwnership: CameraCaptureOwnership = CameraCaptureOwnership()
+    cameraCaptureOwnership: CameraCaptureOwnership = CameraCaptureOwnership(),
+    videoSourceCoordinator: VideoSourceCoordinator = VideoSourceCoordinator()
   ) throws {
     try Self.validate(configuration: configuration)
 
@@ -428,6 +432,7 @@ public final class MediaChannel {
 
     self.configuration = configuration
     self.videoHardMuteLease = videoHardMuteLease
+    self.videoSourceCoordinator = videoSourceCoordinator
     self.nativePeerChannelFactory = try NativePeerChannelFactory(
       bypassVoiceProcessing: configuration.bypassVoiceProcessing,
       audioDevice: configuration.audioDevice,
@@ -440,7 +445,8 @@ public final class MediaChannel {
       nativePeerChannelFactory: nativePeerChannelFactory,
       mediaChannel: self,
       cameraCaptureCoordinator: cameraCaptureCoordinator,
-      cameraCaptureOwnership: cameraCaptureOwnership)
+      cameraCaptureOwnership: cameraCaptureOwnership,
+      videoSourceCoordinator: videoSourceCoordinator)
     handlers = configuration.mediaChannelHandlers
 
     _connectionTimer = ConnectionTimer(
@@ -454,6 +460,7 @@ public final class MediaChannel {
   }
 
   deinit {
+    videoSourceCoordinator.revoke()
     // 明示切断を経由せずに最終参照が解放された場合も、通常切断と同じ所有リソースを破棄する。
     // 各処理は冪等なため、通常切断後の deinit から重複して呼ばれても安全である。
     prepareForDisconnect(error: nil)
@@ -1020,6 +1027,9 @@ public final class MediaChannel {
   /// 戻り値の Task は、画面共有停止と映像ハードミュート lease の破棄完了を表します。
   @discardableResult
   private func prepareForDisconnect(error: Error?) -> Task<Void, Never> {
+    // 非同期のカメラ / 画面共有開始が遅れて完了しても、新しい送信元として確定させない。
+    videoSourceCoordinator.revoke()
+
     // 接続の終了時に画面キャプチャを停止します。
     // 論理停止は同期的に確定し、ReplayKit の停止完了を公開 callback より前に待ちます。
     // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
@@ -1368,21 +1378,29 @@ public final class MediaChannel {
         senderStream: SenderStreamBox(stream: senderStream),
         cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
+      videoSourceCoordinator.releaseCamera()
     } else {
-      // 画面キャプチャ動作中はカメラを再開しません
-      guard !isScreenCaptureActive() else {
+      let reservation = videoSourceCoordinator.reserveCamera()
+      guard reservation != .unavailable else {
         throw SoraError.mediaChannelError(
           reason:
             "screen capture is active, stopScreenCapture before setVideoHardMute(false)")
       }
 
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
-      try await Self.videoHardMuteActor.setMute(
-        mute: false,
-        lease: videoHardMuteLease,
-        senderStream: SenderStreamBox(stream: senderStream),
-        cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
-      )
+      do {
+        try await Self.videoHardMuteActor.setMute(
+          mute: false,
+          lease: videoHardMuteLease,
+          senderStream: SenderStreamBox(stream: senderStream),
+          cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
+        )
+      } catch {
+        if reservation == .acquired {
+          videoSourceCoordinator.releaseCamera()
+        }
+        throw error
+      }
       senderStream.videoEnabled = true
     }
     Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")
@@ -1407,20 +1425,34 @@ public final class MediaChannel {
       senderStream = stream
     }
 
-    // カメラキャプチャ動作中は開始できません
-    guard !(await isCameraVideoCaptureRunning(on: senderStream)) else {
+    let reservation = videoSourceCoordinator.reserveScreen()
+    guard reservation != .unavailable else {
       throw SoraError.mediaChannelError(
         reason:
           "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
       )
     }
 
-    let screenCaptureController = getOrCreateScreenCaptureController()
+    do {
+      // 公開 API から直接開始されたカメラも確認し、同じ送信ストリームでの二重送信を防ぐ。
+      guard !(await isCameraVideoCaptureRunning(on: senderStream)) else {
+        throw SoraError.mediaChannelError(
+          reason:
+            "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+        )
+      }
 
-    try await screenCaptureController.startCapture(
-      settings: settings,
-      senderStream: senderStream
-    )
+      let screenCaptureController = getOrCreateScreenCaptureController()
+      try await screenCaptureController.startCapture(
+        settings: settings,
+        senderStream: senderStream
+      )
+    } catch {
+      if reservation == .acquired {
+        videoSourceCoordinator.releaseScreen()
+      }
+      throw error
+    }
     Logger.debug(type: .mediaChannel, message: "startScreenCapture")
   }
 
@@ -1428,6 +1460,9 @@ public final class MediaChannel {
   public func stopScreenCapture() async {
     let screenCaptureController = currentScreenCaptureController()
     await screenCaptureController?.stopCapture()
+    if screenCaptureController?.isCaptureActive() != true {
+      videoSourceCoordinator.releaseScreen()
+    }
     Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
   }
 

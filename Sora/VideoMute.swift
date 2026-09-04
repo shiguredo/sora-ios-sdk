@@ -163,17 +163,14 @@ actor VideoHardMuteActor {
   // ハードミュートで停止したキャプチャを取消時に restart するための保持キャプチャラー
   // 保存状態は所有者 (lease) に紐付き、別接続からは取得できない
   private struct StoredCapturer {
-    let lease: VideoHardMuteLease
     let capturer: CameraVideoCapturer
-    // 停止時の送信ストリーム。復帰時に同一ストリームへ戻すために保持する
-    let stream: MediaStream
   }
 
   // await をまたぐ操作完了と lease 解放を同期する tracker
   private let operationTracker: VideoHardMuteOperationTracker
   // 通常のカメラ操作を含め、実デバイスの操作完了まで process-wide で直列化する coordinator
   private let cameraCaptureCoordinator: CameraVideoCaptureCoordinator
-  private var storedCapturer: StoredCapturer?
+  private var storedCapturers: [VideoHardMuteLease: StoredCapturer] = [:]
 
   init(
     operationTracker: VideoHardMuteOperationTracker = VideoHardMuteOperationTracker(),
@@ -205,12 +202,7 @@ actor VideoHardMuteActor {
     // 破棄予約済みの lease では操作を開始しない。
     try checkNotRevoked(lease: lease)
 
-    // 保存状態の所有権チェック
-    // 別接続が保存した capturer をこの接続が取得または上書きできないようにする
-    if let storedCapturer, storedCapturer.lease != lease {
-      throw SoraError.mediaChannelError(
-        reason: "camera is owned by another connection")
-    }
+    let storedCapturer = storedCapturers[lease]
 
     // ミュートを有効化します
     if mute {
@@ -233,11 +225,8 @@ actor VideoHardMuteActor {
       // stop 完了後に再確認する (保存を中止する)
       try checkNotRevoked(lease: lease)
       // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
-      // 停止時の送信ストリームも保持し、復帰時に同一ストリームへ戻せるようにします
-      storedCapturer = StoredCapturer(
-        lease: lease,
-        capturer: currentCapturer,
-        stream: senderStream.stream
+      storedCapturers[lease] = StoredCapturer(
+        capturer: currentCapturer
       )
       return
     }
@@ -249,19 +238,14 @@ actor VideoHardMuteActor {
     // 自分のカメラとして成功扱いしない。
     let currentCapturer = await currentCameraVideoCapturer()
     if let currentCapturer {
-      // 現在動作しているカメラが、自分が停止時に保存した stream (storedCapturer.stream) に
-      // 紐づく場合のみ「自分のカメラが再開済み」と見なす。
-      if currentCapturer.stream === storedCapturer?.stream {
-        if storedCapturer?.capturer === currentCapturer {
-          return
-        }
+      // 同じ送信ストリームのカメラが動作中なら、別経路ですでに再開済みとして扱う。
+      if currentCapturer.stream === senderStream.stream {
+        storedCapturers.removeValue(forKey: lease)
+        return
       }
-      // 別接続のカメラが動作している場合や、別の capturer に差し替わっている場合は、
-      // この接続が保存した capturer の restart を継続できる場合のみ進む
-      if storedCapturer?.lease != lease {
-        throw SoraError.mediaChannelError(
-          reason: "camera is owned by another connection")
-      }
+      // 別接続のカメラが動作中なら、そのカメラを停止または付け替えない。
+      throw SoraError.mediaChannelError(
+        reason: "camera is owned by another connection")
     }
     // current の取得後に再確認する (await 中に release された場合)
     try checkNotRevoked(lease: lease)
@@ -276,10 +260,9 @@ actor VideoHardMuteActor {
         capturer: storedCapturer.capturer,
         senderStream: senderStream,
         lease: lease)
+      storedCapturers.removeValue(forKey: lease)
       return
     }
-    // 別 lease が保存状態を持つ間に、start 経路で共有カメラを起動しない
-    // (guard で all storedCapturer == nil を確認済み)
     let startedCapturer = try await startCameraVideoCapture(
       cameraSettings: cameraSettings,
       senderStream: senderStream)
@@ -295,9 +278,7 @@ actor VideoHardMuteActor {
   // 破棄予約も行い、await 中の setMute が復帰後に保存や再開を行わないようにする。
   // 進行中操作がある場合は、その操作が rollback / stop を終えるまで戻らない。
   func release(lease: VideoHardMuteLease) async {
-    if storedCapturer?.lease == lease {
-      storedCapturer = nil
-    }
+    storedCapturers.removeValue(forKey: lease)
     await operationTracker.revokeAndWaitForCompletion(lease: lease)
   }
 
@@ -402,9 +383,6 @@ actor VideoHardMuteActor {
           reason: "camera capture is quarantined after a cleanup failure")
       }
       let current = await CameraVideoCapturer.currentForSDK()
-      guard capturer.stream === senderStream.stream else {
-        throw SoraError.mediaChannelError(reason: "camera is owned by another connection")
-      }
       if let current {
         guard current === capturer, current.stream === senderStream.stream else {
           throw SoraError.mediaChannelError(

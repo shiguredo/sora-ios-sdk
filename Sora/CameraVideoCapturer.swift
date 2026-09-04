@@ -51,6 +51,76 @@ final class CameraCaptureOwnership: @unchecked Sendable {
   }
 }
 
+/// 1 つの送信接続でカメラと画面共有を同時に開始しないための予約状態です。
+///
+/// 実デバイスの非同期開始より前に送信元を予約し、確認と予約の間へ別 API が
+/// 割り込む競合を防ぎます。切断後は遅延した開始処理を拒否します。
+final class VideoSourceCoordinator: @unchecked Sendable {
+  enum ReservationResult: Equatable, Sendable {
+    case acquired
+    case alreadyReserved
+    case unavailable
+  }
+
+  private enum Source: Equatable, Sendable {
+    case camera
+    case screen
+  }
+
+  private let lock = NSLock()
+  private var source: Source?
+  private var revoked = false
+
+  func reserveCamera() -> ReservationResult {
+    reserve(.camera)
+  }
+
+  func reserveScreen() -> ReservationResult {
+    reserve(.screen)
+  }
+
+  func releaseCamera() {
+    release(.camera)
+  }
+
+  func releaseScreen() {
+    release(.screen)
+  }
+
+  func isReservedForCamera() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return !revoked && source == .camera
+  }
+
+  func revoke() {
+    lock.lock()
+    revoked = true
+    lock.unlock()
+  }
+
+  private func reserve(_ requestedSource: Source) -> ReservationResult {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !revoked else {
+      return .unavailable
+    }
+    guard let source else {
+      self.source = requestedSource
+      return .acquired
+    }
+    return source == requestedSource ? .alreadyReserved : .unavailable
+  }
+
+  private func release(_ releasedSource: Source) {
+    lock.lock()
+    if source == releasedSource {
+      source = nil
+    }
+    lock.unlock()
+  }
+}
+
 /// SDK と公開 API が行うプロセス全体のカメラ操作を、完了コールバックまで含めて直列化します。
 ///
 /// クリーンアップが失敗した場合はカメラを隔離状態にし、動作状態が不明なまま別接続が

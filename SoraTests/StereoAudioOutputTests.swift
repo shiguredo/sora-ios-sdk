@@ -131,18 +131,30 @@ final class StereoAudioOutputTests: XCTestCase {
 
     XCTAssertEqual(coordinator.activeRequirementCount, 2)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 2)
-    XCTAssertEqual(configuration.category, AVAudioSession.Category.playAndRecord.rawValue)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.playAndRecord.rawValue)
+    XCTAssertFalse(
+      RTCAudioSessionConfiguration.webRTC() === configuration,
+      "既存テンプレートを変更せず新しいオブジェクトへ差し替えること")
 
     first.release()
     first.release()
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 1)
-    XCTAssertEqual(configuration.category, AVAudioSession.Category.playAndRecord.rawValue)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.playAndRecord.rawValue)
 
     second.release()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 0)
-    XCTAssertEqual(configuration.category, AVAudioSession.Category.ambient.rawValue)
+    XCTAssertTrue(
+      RTCAudioSessionConfiguration.webRTC() === configuration,
+      "最後の要求解放後に元のテンプレートへ戻すこと")
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.ambient.rawValue)
   }
 
   /// stereo 以外の profile 同士は既存どおり同時に利用できることを確認する
@@ -158,8 +170,8 @@ final class StereoAudioOutputTests: XCTestCase {
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
   }
 
-  /// 既存 ADM の生存中に共有 template の category 変更が必要な接続を拒否することを確認する
-  func testAudioSessionCoordinatorRejectsLateCategoryTransition() throws {
+  /// 既存 ADM の生存中でもテンプレートを原子的に差し替えて送信接続を追加できることを確認する
+  func testAudioSessionCoordinatorAllowsLateCategoryTransition() throws {
     let configuration = RTCAudioSessionConfiguration.webRTC()
     let originalCategory = configuration.category
     configuration.category = AVAudioSession.Category.ambient.rawValue
@@ -167,19 +179,19 @@ final class StereoAudioOutputTests: XCTestCase {
 
     let coordinator = AudioSessionCoordinator()
     let receiver = try coordinator.acquire(profile: .voiceProcessing)
-
-    assertConnectionBusy {
-      _ = try coordinator.acquire(
-        profile: .voiceProcessing,
-        requiresPlayAndRecord: true)
-    }
-
-    receiver.release()
     let sender = try coordinator.acquire(
       profile: .voiceProcessing,
       requiresPlayAndRecord: true)
     sender.requirePlayAndRecord()
+
+    XCTAssertEqual(coordinator.activeRequirementCount, 2)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.playAndRecord.rawValue)
+
+    receiver.release()
     sender.release()
+    XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === configuration)
   }
 
   /// 共有 template がすでに PlayAndRecord の場合は、既存の受信接続後も送信接続を許可することを確認する
@@ -198,11 +210,18 @@ final class StereoAudioOutputTests: XCTestCase {
 
     XCTAssertEqual(coordinator.activeRequirementCount, 2)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 1)
-    XCTAssertEqual(configuration.category, AVAudioSession.Category.playAndRecord.rawValue)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.playAndRecord.rawValue)
+    XCTAssertTrue(
+      RTCAudioSessionConfiguration.webRTC() === configuration,
+      "変更不要な場合はテンプレートを差し替えないこと")
 
     receiver.release()
     sender.release()
-    XCTAssertEqual(configuration.category, AVAudioSession.Category.playAndRecord.rawValue)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.playAndRecord.rawValue)
   }
 
   /// category を要求した接続が先に終了しても、残る ADM の破棄までは復元しないことを確認する
@@ -221,13 +240,13 @@ final class StereoAudioOutputTests: XCTestCase {
 
     sender.release()
     XCTAssertEqual(
-      configuration.category,
+      RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.playAndRecord.rawValue,
       "受信側 ADM が残る間は共有 template を復元しないこと")
 
     receiver.release()
     XCTAssertEqual(
-      configuration.category,
+      RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue,
       "すべての ADM を破棄した後に元の category へ復元すること")
   }
@@ -274,12 +293,17 @@ final class StereoAudioOutputTests: XCTestCase {
 
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 1)
-    XCTAssertEqual(configuration.category, AVAudioSession.Category.playAndRecord.rawValue)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.playAndRecord.rawValue)
 
     factory.releaseAudioSessionRequirement()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 0)
-    XCTAssertEqual(configuration.category, AVAudioSession.Category.ambient.rawValue)
+    XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === configuration)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.ambient.rawValue)
   }
 
   /// 初期状態の disconnect では、後続の接続開始に必要な lease を失わないことを確認する

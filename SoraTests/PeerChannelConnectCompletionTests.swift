@@ -160,9 +160,11 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
   }
 
   /// 初期ロック取得後に切断された場合は signaling の開始前に接続を中止することを確認する
-  func testDisconnectBeforeSignalingStartPreventsStart() throws {
+  func testDisconnectBeforeSignalingStartPreventsStart() async throws {
     let peerChannel = try makePeerChannel(config: makeConfiguration())
     let disconnectError = SoraError.connectionCancelled
+    let callbacksExpectation = expectation(description: "カメラ停止後に切断 callback が届くこと")
+    callbacksExpectation.expectedFulfillmentCount = 2
     var didStartSignaling = false
     var connectCallbackCount = 0
     var disconnectCallbackCount = 0
@@ -172,9 +174,11 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
     peerChannel.onConnect = { error in
       connectCallbackCount += 1
       receivedError = error
+      callbacksExpectation.fulfill()
     }
     peerChannel.internalHandlers.onDisconnect = { _, _ in
       disconnectCallbackCount += 1
+      callbacksExpectation.fulfill()
     }
 
     // connect() が初期ロックを取得した直後の順序を、実際の Lock と PeerChannel で再現する。
@@ -184,6 +188,7 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
     }
 
     XCTAssertFalse(didStartSignaling, "切断要求後は signaling を開始しないこと")
+    await fulfillment(of: [callbacksExpectation], timeout: 3)
     XCTAssertEqual(connectCallbackCount, 1)
     XCTAssertEqual(disconnectCallbackCount, 1)
     XCTAssertEqual(receivedError?.localizedDescription, disconnectError.localizedDescription)
@@ -191,9 +196,11 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
   }
 
   /// signaling 開始処理中の切断要求を、開始処理の復帰後に実行することを確認する
-  func testDisconnectDuringSignalingStartFinishesAfterOperation() throws {
+  func testDisconnectDuringSignalingStartFinishesAfterOperation() async throws {
     let peerChannel = try makePeerChannel(config: makeConfiguration())
     let disconnectError = SoraError.connectionCancelled
+    let callbacksExpectation = expectation(description: "開始処理後に切断 callback が届くこと")
+    callbacksExpectation.expectedFulfillmentCount = 2
     var didRunOperation = false
     var didFinishOperation = false
     var connectCallbackCount = 0
@@ -204,10 +211,12 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
       XCTAssertTrue(didFinishOperation, "開始処理の復帰後に接続 callback を終端すること")
       XCTAssertEqual(error?.localizedDescription, disconnectError.localizedDescription)
       connectCallbackCount += 1
+      callbacksExpectation.fulfill()
     }
     peerChannel.internalHandlers.onDisconnect = { _, _ in
       XCTAssertTrue(didFinishOperation, "開始処理の復帰後に切断 callback を通知すること")
       disconnectCallbackCount += 1
+      callbacksExpectation.fulfill()
     }
 
     peerChannel.lock.startConnection {
@@ -220,6 +229,7 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
 
     XCTAssertTrue(didRunOperation)
     XCTAssertTrue(didFinishOperation)
+    await fulfillment(of: [callbacksExpectation], timeout: 3)
     XCTAssertEqual(connectCallbackCount, 1)
     XCTAssertEqual(disconnectCallbackCount, 1)
     XCTAssertEqual(peerChannel.signalingChannel.state, .disconnected)

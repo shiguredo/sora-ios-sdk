@@ -51,8 +51,8 @@ enum AudioSessionUsage {
 /// 複数の接続が共有する libwebrtc の音声セッション設定を管理します。
 ///
 /// AudioUnit profile の競合を接続開始前に検出します。また、最初の要求で
-/// `RTCAudioSessionConfiguration` template の元のカテゴリを保存し、最後の要求が
-/// 解放された時点で元に戻します。
+/// 元の `RTCAudioSessionConfiguration` template を保存し、最後の要求が
+/// 解放された時点で元のオブジェクトへ戻します。
 final class AudioSessionCoordinator: @unchecked Sendable {
   static let shared = AudioSessionCoordinator()
 
@@ -60,7 +60,7 @@ final class AudioSessionCoordinator: @unchecked Sendable {
   private var activeProfiles: [UUID: AudioSessionProfile] = [:]
   private var playAndRecordRequirementIDs: Set<UUID> = []
   private var pendingPlayAndRecordRequirementIDs: Set<UUID> = []
-  private var originalCategory: String?
+  private var originalConfiguration: RTCAudioSessionConfiguration?
   private var categoryWasChanged = false
 
   /// AudioUnit profile を予約します。
@@ -88,22 +88,11 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       }
     }
 
-    // 最初の profile を予約するとき、ADM の生成前に共有テンプレートのカテゴリーを保存する。
-    // 後続接続ではこの保存値だけを参照し、ADM の生存中に nonatomic なプロパティを読まない。
+    // 最初の profile を予約するとき、ADM の生成前に共有テンプレート自体を保存する。
+    // 後続のカテゴリー変更では既存オブジェクトを変更せず、新しいテンプレートへ
+    // 原子的に差し替えるため、ADM による nonatomic なプロパティの読み取りと競合しない。
     if activeProfiles.isEmpty {
-      originalCategory = RTCAudioSessionConfiguration.webRTC().category
-    }
-
-    // カテゴリーの初回変更は、既存 ADM が存在しない状態に限定する。
-    // 最初から playAndRecord の場合、または SDK が最初の接続で変更済みの場合は、
-    // 書き込みが発生しないため従来どおり後続の送信接続を許可する。
-    let playAndRecordCategory = AVAudioSession.Category.playAndRecord.rawValue
-    let categoryIsPlayAndRecord = categoryWasChanged || originalCategory == playAndRecordCategory
-    if requiresPlayAndRecord, !activeProfiles.isEmpty, !categoryIsPlayAndRecord {
-      throw SoraError.connectionBusy(
-        reason:
-          "an audio connection requiring PlayAndRecord cannot start while another audio connection is active"
-      )
+      originalConfiguration = RTCAudioSessionConfiguration.webRTC()
     }
     // 最初の要求が category を確定する前は、別接続の ADM を生成させない。
     guard pendingPlayAndRecordRequirementIDs.isEmpty else {
@@ -150,11 +139,15 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       return
     }
 
-    let configuration = RTCAudioSessionConfiguration.webRTC()
     if playAndRecordRequirementIDs.count == 1 {
       let playAndRecordCategory = AVAudioSession.Category.playAndRecord.rawValue
-      if originalCategory != playAndRecordCategory {
-        configuration.category = playAndRecordCategory
+      if originalConfiguration?.category != playAndRecordCategory,
+        let originalConfiguration
+      {
+        let configuration = Self.copyConfiguration(
+          originalConfiguration,
+          category: playAndRecordCategory)
+        RTCAudioSessionConfiguration.setWebRTC(configuration)
         categoryWasChanged = true
       }
     }
@@ -177,13 +170,29 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       return
     }
 
-    if categoryWasChanged, let originalCategory {
-      RTCAudioSessionConfiguration.webRTC().category = originalCategory
+    if categoryWasChanged, let originalConfiguration {
+      RTCAudioSessionConfiguration.setWebRTC(originalConfiguration)
     }
-    originalCategory = nil
+    originalConfiguration = nil
     categoryWasChanged = false
     playAndRecordRequirementIDs.removeAll()
     pendingPlayAndRecordRequirementIDs.removeAll()
+  }
+
+  /// 既存テンプレートの各値を維持し、カテゴリーだけを差し替えた新しいオブジェクトを返します。
+  private static func copyConfiguration(
+    _ source: RTCAudioSessionConfiguration,
+    category: String
+  ) -> RTCAudioSessionConfiguration {
+    let configuration = RTCAudioSessionConfiguration()
+    configuration.category = category
+    configuration.categoryOptions = source.categoryOptions
+    configuration.mode = source.mode
+    configuration.sampleRate = source.sampleRate
+    configuration.ioBufferDuration = source.ioBufferDuration
+    configuration.inputNumberOfChannels = source.inputNumberOfChannels
+    configuration.outputNumberOfChannels = source.outputNumberOfChannels
+    return configuration
   }
 }
 
