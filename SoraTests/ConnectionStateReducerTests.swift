@@ -124,7 +124,7 @@ final class ConnectionStateReducerTests: XCTestCase {
 
   /// redirect 受信で transport が切り替わり、再接続しても論理接続が維持されることを確認する
   ///
-  /// 現行の実装 (0095) では redirect 中も接続は継続されるため phase は変えない。
+  /// 現行の実装では redirect 中も接続は継続されるため phase は変えない。
   /// redirect 受信で epoch が増えることだけを検証する。
   func testRedirectReconnectFlow() {
     var state = ConnectionLifecycleState()
