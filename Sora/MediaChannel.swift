@@ -409,7 +409,9 @@ public final class MediaChannel {
   init(
     configuration: Configuration,
     audioSessionCoordinator: AudioSessionCoordinator = .shared,
-    videoHardMuteLease: VideoHardMuteLease = VideoHardMuteLease()
+    videoHardMuteLease: VideoHardMuteLease = VideoHardMuteLease(),
+    cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
+    cameraCaptureOwnership: CameraCaptureOwnership = CameraCaptureOwnership()
   ) throws {
     try Self.validate(configuration: configuration)
 
@@ -437,7 +439,8 @@ public final class MediaChannel {
       signalingChannel: signalingChannel,
       nativePeerChannelFactory: nativePeerChannelFactory,
       mediaChannel: self,
-      cameraCaptureLease: videoHardMuteLease)
+      cameraCaptureCoordinator: cameraCaptureCoordinator,
+      cameraCaptureOwnership: cameraCaptureOwnership)
     handlers = configuration.mediaChannelHandlers
 
     _connectionTimer = ConnectionTimer(
@@ -613,6 +616,7 @@ public final class MediaChannel {
   func connect(
     webRTCConfiguration: WebRTCConfiguration,
     timeout: Int = 30,
+    onPrepared: (() -> Void)? = nil,
     handler: @escaping (_ error: Error?) -> Void
   ) -> ConnectionTask {
     let task = ConnectionTask()
@@ -662,6 +666,11 @@ public final class MediaChannel {
     state = .connecting
     connectionStartTime = nil
     connectionLifecycleLock.unlock()
+
+    // 接続開始を予約して `.connecting` を公開した後に、Sora の管理対象へ登録する。
+    // onAddMediaChannel から同期的に disconnect されても、後続の basicConnect は
+    // 接続試行が終端済みであることを確認してシグナリングを開始しない。
+    onPrepared?()
 
     DispatchQueue.global().async { [weak self] in
       self?.basicConnect(

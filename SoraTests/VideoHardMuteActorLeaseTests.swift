@@ -2,6 +2,47 @@ import XCTest
 
 @testable import Sora
 
+/// 通常カメラの停止キューをテスト側で明示的に再開するための同期ゲート
+private actor CameraCaptureTestGate {
+  private var isOpen = false
+  private var isWaiting = false
+  private var continuation: CheckedContinuation<Void, Never>?
+  private var waitingObservers: [CheckedContinuation<Void, Never>] = []
+
+  /// ゲートが開くまで待機する
+  func wait() async {
+    if isOpen {
+      return
+    }
+    isWaiting = true
+    let observers = waitingObservers
+    waitingObservers.removeAll()
+    for observer in observers {
+      observer.resume()
+    }
+    await withCheckedContinuation { continuation in
+      self.continuation = continuation
+    }
+  }
+
+  /// 操作がゲートで待機を開始するまで待つ
+  func waitUntilBlocked() async {
+    if isWaiting {
+      return
+    }
+    await withCheckedContinuation { continuation in
+      waitingObservers.append(continuation)
+    }
+  }
+
+  /// 待機中の操作を再開する
+  func open() {
+    isOpen = true
+    continuation?.resume()
+    continuation = nil
+  }
+}
+
 /// VideoHardMuteActor の lease / revocation 管理に関するユニットテスト
 ///
 /// VideoHardMuteActor.setMute は実カメラ操作を含むため、カメラが利用できない
@@ -157,19 +198,79 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
       "別接続の sender stream は停止対象にならないこと")
   }
 
+  /// redirect で streams が空になっても通常カメラの所有ストリームを保持できることを確認する
+  func testCameraCaptureOwnershipRetainsOnlyCurrentOwner() throws {
+    let first = try makeDependencies()
+    let second = try makeDependencies()
+    let ownership = CameraCaptureOwnership()
+
+    ownership.set(senderStream: first.senderStreamBox.stream)
+    XCTAssertTrue(
+      ownership.currentSenderStream() === first.senderStreamBox.stream,
+      "設定した sender stream を独立して保持すること")
+
+    ownership.clear(ifOwnedBy: second.senderStreamBox.stream)
+    XCTAssertTrue(
+      ownership.currentSenderStream() === first.senderStreamBox.stream,
+      "別接続からの解除では所有情報を失わないこと")
+
+    ownership.clear(ifOwnedBy: first.senderStreamBox.stream)
+    XCTAssertNil(ownership.currentSenderStream(), "所有接続からの解除で空になること")
+  }
+
   /// カメラ cleanup 失敗後は隔離し、停止成功を確認するまで新しい操作を許可しないことを確認する
   func testCameraCoordinatorQuarantinesCleanupFailure() {
     let coordinator = CameraVideoCaptureCoordinator()
-    let lease = VideoHardMuteLease()
 
     XCTAssertTrue(coordinator.isAvailable)
-    coordinator.quarantine(lease: lease)
+    coordinator.quarantine()
     XCTAssertTrue(coordinator.isQuarantined)
     XCTAssertFalse(coordinator.isAvailable, "cleanup 失敗後は新しいカメラ操作を拒否すること")
 
     coordinator.clearQuarantineAfterSuccessfulStop()
     XCTAssertFalse(coordinator.isQuarantined)
     XCTAssertTrue(coordinator.isAvailable, "停止成功を確認した後はカメラ操作を再開できること")
+  }
+
+  /// 通常カメラの停止キューが完了するまで MediaChannel の切断 callback を通知しないことを確認する
+  func testMediaChannelDisconnectWaitsForCameraCleanup() async throws {
+    let coordinator = CameraVideoCaptureCoordinator()
+    let ownership = CameraCaptureOwnership()
+    let gate = CameraCaptureTestGate()
+    coordinator.enqueue {
+      await gate.wait()
+    }
+    await gate.waitUntilBlocked()
+
+    let mediaChannel = try MediaChannel(
+      configuration: makeConfiguration(),
+      cameraCaptureCoordinator: coordinator,
+      cameraCaptureOwnership: ownership)
+    let nativeFactory = mediaChannel.peerChannel.nativePeerChannelFactory
+    let nativeStream = nativeFactory.createNativeStream(streamId: "camera-cleanup-test")
+    let senderStream = BasicMediaStream(
+      peerChannel: mediaChannel.peerChannel,
+      nativeStream: nativeStream)
+    ownership.set(senderStream: senderStream)
+
+    let disconnectExpectation = expectation(description: "通常カメラ停止後に切断 callback が届くこと")
+    var disconnectCallbackCount = 0
+    mediaChannel.handlers.onDisconnect = { _ in
+      disconnectCallbackCount += 1
+      disconnectExpectation.fulfill()
+    }
+    _ = mediaChannel.connect(webRTCConfiguration: WebRTCConfiguration()) { _ in }
+    mediaChannel.disconnect(error: nil)
+
+    XCTAssertEqual(disconnectCallbackCount, 0, "停止キューの完了前に切断 callback を通知しないこと")
+    XCTAssertTrue(
+      ownership.currentSenderStream() === senderStream,
+      "停止キューの完了前は所有情報を保持すること")
+
+    await gate.open()
+    await fulfillment(of: [disconnectExpectation], timeout: 3)
+    XCTAssertEqual(disconnectCallbackCount, 1, "停止キューの完了後に切断 callback を 1 回だけ通知すること")
+    XCTAssertNil(ownership.currentSenderStream(), "停止処理の完了後に所有情報を解除すること")
   }
 
   /// MediaChannel の最終参照解放でも映像ハードミュートの lease を破棄することを確認する

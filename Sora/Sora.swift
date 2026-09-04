@@ -202,21 +202,23 @@ public final class Sora: @unchecked Sendable {
       weakSelf.handlers.onDisconnect?(mediaChan, error)
     }
 
-    // 接続中のチャネルを管理対象へ追加する。接続完了までは下の接続ハンドラーも
-    // mediaChan を保持し、Sora が先に解放されても接続試行と引数の handler を終端する。
-    add(mediaChannel: mediaChan)
+    // MediaChannel が接続試行を予約して `.connecting` へ遷移した後に管理対象へ追加する。
+    // onAddMediaChannel から同期的に disconnect されても、接続開始前に確実に終端できる。
+    return mediaChan.connect(
+      webRTCConfiguration: webRTCConfiguration,
+      onPrepared: { [weak self, mediaChan] in
+        self?.add(mediaChannel: mediaChan)
+      },
+      handler: { [weak self, mediaChan] error in
+        if let error {
+          handler(nil, error)
+          self?.handlers.onConnect?(nil, error)
+          return
+        }
 
-    return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) {
-      [weak self, mediaChan] error in
-      if let error {
-        handler(nil, error)
-        self?.handlers.onConnect?(nil, error)
-        return
-      }
-
-      handler(mediaChan, nil)
-      self?.handlers.onConnect?(mediaChan, nil)
-    }
+        handler(mediaChan, nil)
+        self?.handlers.onConnect?(mediaChan, nil)
+      })
   }
 
   // MARK: - 音声ユニットの操作

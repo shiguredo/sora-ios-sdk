@@ -61,6 +61,7 @@ final class AudioSessionCoordinator: @unchecked Sendable {
   private var playAndRecordRequirementIDs: Set<UUID> = []
   private var pendingPlayAndRecordRequirementIDs: Set<UUID> = []
   private var originalCategory: String?
+  private var categoryWasChanged = false
 
   /// AudioUnit profile を予約します。
   ///
@@ -87,10 +88,18 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       }
     }
 
-    // category の初回変更は、既存 ADM が存在しない状態に限定する。
-    // これにより libwebrtc が共有 template を読み書きしている間に、SDK が
-    // nonatomic な category を変更するデータ競合を防ぐ。
-    if requiresPlayAndRecord, originalCategory == nil, !activeProfiles.isEmpty {
+    // 最初の profile を予約するとき、ADM の生成前に共有テンプレートのカテゴリーを保存する。
+    // 後続接続ではこの保存値だけを参照し、ADM の生存中に nonatomic なプロパティを読まない。
+    if activeProfiles.isEmpty {
+      originalCategory = RTCAudioSessionConfiguration.webRTC().category
+    }
+
+    // カテゴリーの初回変更は、既存 ADM が存在しない状態に限定する。
+    // 最初から playAndRecord の場合、または SDK が最初の接続で変更済みの場合は、
+    // 書き込みが発生しないため従来どおり後続の送信接続を許可する。
+    let playAndRecordCategory = AVAudioSession.Category.playAndRecord.rawValue
+    let categoryIsPlayAndRecord = categoryWasChanged || originalCategory == playAndRecordCategory
+    if requiresPlayAndRecord, !activeProfiles.isEmpty, !categoryIsPlayAndRecord {
       throw SoraError.connectionBusy(
         reason:
           "an audio connection requiring PlayAndRecord cannot start while another audio connection is active"
@@ -143,8 +152,11 @@ final class AudioSessionCoordinator: @unchecked Sendable {
 
     let configuration = RTCAudioSessionConfiguration.webRTC()
     if playAndRecordRequirementIDs.count == 1 {
-      originalCategory = configuration.category
-      configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+      let playAndRecordCategory = AVAudioSession.Category.playAndRecord.rawValue
+      if originalCategory != playAndRecordCategory {
+        configuration.category = playAndRecordCategory
+        categoryWasChanged = true
+      }
     }
   }
 
@@ -165,10 +177,11 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       return
     }
 
-    if let originalCategory {
+    if categoryWasChanged, let originalCategory {
       RTCAudioSessionConfiguration.webRTC().category = originalCategory
-      self.originalCategory = nil
     }
+    originalCategory = nil
+    categoryWasChanged = false
     playAndRecordRequirementIDs.removeAll()
     pendingPlayAndRecordRequirementIDs.removeAll()
   }

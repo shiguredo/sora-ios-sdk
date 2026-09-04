@@ -9,16 +9,59 @@ struct CameraCaptureFormatBox: @unchecked Sendable {
   let format: AVCaptureDevice.Format
 }
 
-/// SDK が行う process-wide のカメラ操作を、完了コールバックまで含めて直列化します。
+/// 公開カメラ API の完了ハンドラーを並行処理境界へ渡すための内部ラッパーです。
+private final class CameraOperationCompletionBox: @unchecked Sendable {
+  private let completionHandler: (Error?) -> Void
+
+  init(_ completionHandler: @escaping (Error?) -> Void) {
+    self.completionHandler = completionHandler
+  }
+
+  func callAsFunction(_ error: Error?) {
+    completionHandler(error)
+  }
+}
+
+/// PeerChannel がカメラへ設定した送信ストリームを、`streams` の更新と独立して保持します。
 ///
-/// cleanup が失敗した場合はカメラを隔離状態にし、動作状態が不明なまま別接続が
+/// redirect では一時的に `streams` が空になるため、カメラ停止が完了するまで所有情報を
+/// 別途保持しないと、接続失敗時に停止対象を失います。
+final class CameraCaptureOwnership: @unchecked Sendable {
+  private let lock = NSLock()
+  private var senderStream: MediaStream?
+
+  func set(senderStream: MediaStream) {
+    lock.lock()
+    self.senderStream = senderStream
+    lock.unlock()
+  }
+
+  func currentSenderStream() -> MediaStream? {
+    lock.lock()
+    defer { lock.unlock() }
+    return senderStream
+  }
+
+  func clear(ifOwnedBy senderStream: MediaStream) {
+    lock.lock()
+    if self.senderStream === senderStream {
+      self.senderStream = nil
+    }
+    lock.unlock()
+  }
+}
+
+/// SDK と公開 API が行うプロセス全体のカメラ操作を、完了コールバックまで含めて直列化します。
+///
+/// クリーンアップが失敗した場合はカメラを隔離状態にし、動作状態が不明なまま別接続が
 /// start / restart を実行することを防ぎます。停止成功を確認した場合だけ隔離を解除します。
 final class CameraVideoCaptureCoordinator: @unchecked Sendable {
   static let shared = CameraVideoCaptureCoordinator()
 
   private let operationQueue = SerializedAsyncOperationQueue()
   private let lock = NSLock()
-  private var quarantinedLease: VideoHardMuteLease?
+  private var quarantined = false
+  private var quarantinedCapturer: CameraVideoCapturer?
 
   /// カメラ操作を process-wide のキューへ投入します。
   @discardableResult
@@ -41,21 +84,29 @@ final class CameraVideoCaptureCoordinator: @unchecked Sendable {
   var isAvailable: Bool {
     lock.lock()
     defer { lock.unlock() }
-    return quarantinedLease == nil
+    return !quarantined
   }
 
-  /// cleanup 失敗を記録し、以後の start / restart を拒否します。
-  func quarantine(lease: VideoHardMuteLease) {
+  /// クリーンアップ失敗を記録し、以後の start / restart を拒否します。
+  /// 実際の停止を再試行できるよう、停止に失敗した capturer を保持します。
+  func quarantine(capturer: CameraVideoCapturer? = nil) {
     lock.lock()
-    quarantinedLease = lease
+    quarantined = true
+    if let capturer {
+      quarantinedCapturer = capturer
+    }
     lock.unlock()
   }
 
   /// 実際の停止成功を確認した後に隔離状態を解除します。
-  func clearQuarantineAfterSuccessfulStop() {
+  func clearQuarantineAfterSuccessfulStop(capturer: CameraVideoCapturer? = nil) {
     lock.lock()
-    quarantinedLease = nil
-    lock.unlock()
+    defer { lock.unlock() }
+    if let quarantinedCapturer, quarantinedCapturer !== capturer {
+      return
+    }
+    quarantined = false
+    quarantinedCapturer = nil
   }
 
   /// 隔離状態をテストから確認します。
@@ -183,6 +234,22 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   public static func flip(
     _ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)
   ) {
+    let coordinator = CameraVideoCaptureCoordinator.shared
+    let completionBox = CameraOperationCompletionBox(completionHandler)
+    coordinator.enqueue {
+      guard coordinator.isAvailable else {
+        completionBox(
+          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
+        return
+      }
+      completionBox(await flipForSDK(capturer))
+    }
+  }
+
+  /// 共有 coordinator から呼び出す、直列化されていないカメラ切り替え処理です。
+  private static func flipUncoordinated(
+    _ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)
+  ) {
     // camera queue (libwebrtc の capture session queue) で直列化する。
     // 連続した flip (フリップボタンの連続タップ等) が同時に実行され、
     // stop / start の callback が入れ替わる競合を防ぐ。
@@ -264,7 +331,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
         type: .cameraVideoCapturer,
         message: "starting flip to \(flip.device)")
 
-      capturer.stop { error in
+      capturer.stopUncoordinated { error in
         guard error == nil else {
           // stop に失敗した場合は切り替え先の stream を rollback する
           flip.stream = originalStream
@@ -275,7 +342,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
           completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.stop failed"))
           return
         }
-        flip.start(format: format, frameRate: frameRate) { error in
+        flip.startUncoordinated(format: format, frameRate: frameRate) { error in
           guard error == nil else {
             // start に失敗した場合は切り替え先の stream を rollback する
             flip.stream = originalStream
@@ -353,6 +420,33 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     frameRate: Int,
     completionHandler: @escaping ((Error?) -> Void)
   ) {
+    let coordinator = CameraVideoCaptureCoordinator.shared
+    let completionBox = CameraOperationCompletionBox(completionHandler)
+    let formatBox = CameraCaptureFormatBox(format: format)
+    coordinator.enqueue {
+      guard coordinator.isAvailable else {
+        completionBox(
+          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
+        return
+      }
+      guard await CameraVideoCapturer.currentForSDK() == nil else {
+        completionBox(SoraError.cameraError(reason: "another camera is already running"))
+        return
+      }
+      completionBox(
+        await self.startForSDK(
+          format: formatBox.format,
+          frameRate: frameRate,
+          senderStream: nil))
+    }
+  }
+
+  /// 共有 coordinator から呼び出す、直列化されていないカメラ開始処理です。
+  private func startUncoordinated(
+    format: AVCaptureDevice.Format,
+    frameRate: Int,
+    completionHandler: @escaping ((Error?) -> Void)
+  ) {
     guard isRunning == false else {
       completionHandler(SoraError.cameraError(reason: "isRunning should be false"))
       return
@@ -389,6 +483,29 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   /// `endGeneratingDeviceOrientationNotifications()` を使う際は
   /// 必ず対に実行するように注意してください。
   public func stop(completionHandler: @escaping ((Error?) -> Void)) {
+    let coordinator = CameraVideoCaptureCoordinator.shared
+    let completionBox = CameraOperationCompletionBox(completionHandler)
+    coordinator.enqueue {
+      guard await CameraVideoCapturer.currentForSDK() === self else {
+        if self.isRunning {
+          coordinator.quarantine(capturer: self)
+        }
+        completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
+        return
+      }
+
+      let error = await self.stopForSDK()
+      if self.isRunning {
+        coordinator.quarantine(capturer: self)
+      } else {
+        coordinator.clearQuarantineAfterSuccessfulStop(capturer: self)
+      }
+      completionBox(error)
+    }
+  }
+
+  /// 共有 coordinator から呼び出す、直列化されていないカメラ停止処理です。
+  private func stopUncoordinated(completionHandler: @escaping ((Error?) -> Void)) {
     guard isRunning else {
       completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
       return
@@ -409,6 +526,30 @@ public final class CameraVideoCapturer: @unchecked Sendable {
 
   /// 停止前と同じ設定でカメラを再起動します。
   public func restart(completionHandler: @escaping ((Error?) -> Void)) {
+    let coordinator = CameraVideoCaptureCoordinator.shared
+    let completionBox = CameraOperationCompletionBox(completionHandler)
+    coordinator.enqueue {
+      guard coordinator.isAvailable else {
+        completionBox(
+          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
+        return
+      }
+      let current = await CameraVideoCapturer.currentForSDK()
+      guard current == nil || current === self else {
+        completionBox(SoraError.cameraError(reason: "another camera is already running"))
+        return
+      }
+      guard !self.isRunning || current === self else {
+        coordinator.quarantine(capturer: self)
+        completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
+        return
+      }
+      completionBox(await self.restartForSDK(senderStream: nil))
+    }
+  }
+
+  /// 共有 coordinator から呼び出す、直列化されていないカメラ再開処理です。
+  private func restartUncoordinated(completionHandler: @escaping ((Error?) -> Void)) {
     guard let format else {
       completionHandler(SoraError.cameraError(reason: "failed to access format"))
       return
@@ -420,13 +561,13 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     }
 
     if isRunning {
-      stop { [self] (error: Error?) in
+      stopUncoordinated { [self] (error: Error?) in
         guard error == nil else {
           completionHandler(error)
           return
         }
 
-        start(
+        startUncoordinated(
           format: format,
           frameRate: frameRate
         ) { (error: Error?) in
@@ -440,7 +581,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
         }
       }
     } else {
-      start(
+      startUncoordinated(
         format: format,
         frameRate: frameRate
       ) { (error: Error?) in
@@ -460,6 +601,32 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil,
     completionHandler: @escaping ((Error?) -> Void)
   ) {
+    let coordinator = CameraVideoCaptureCoordinator.shared
+    let completionBox = CameraOperationCompletionBox(completionHandler)
+    let formatBox = format.map(CameraCaptureFormatBox.init)
+    coordinator.enqueue {
+      guard coordinator.isAvailable else {
+        completionBox(
+          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
+        return
+      }
+      guard await CameraVideoCapturer.currentForSDK() === self else {
+        completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
+        return
+      }
+      completionBox(
+        await self.changeForSDK(
+          format: formatBox?.format,
+          frameRate: frameRate))
+    }
+  }
+
+  /// 共有 coordinator から呼び出す、直列化されていないカメラ設定変更処理です。
+  private func changeUncoordinated(
+    format: AVCaptureDevice.Format? = nil,
+    frameRate: Int? = nil,
+    completionHandler: @escaping ((Error?) -> Void)
+  ) {
     guard isRunning else {
       completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
       return
@@ -475,13 +642,13 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       return
     }
 
-    stop { [self] (error: Error?) in
+    stopUncoordinated { [self] (error: Error?) in
       guard error == nil else {
         completionHandler(error)
         return
       }
 
-      start(format: format, frameRate: frameRate) { (error: Error?) in
+      startUncoordinated(format: format, frameRate: frameRate) { (error: Error?) in
         guard error == nil else {
           completionHandler(error)
           return
@@ -509,15 +676,17 @@ extension CameraVideoCapturer {
   func startForSDK(
     format: AVCaptureDevice.Format,
     frameRate: Int,
-    senderStream: SenderStreamBox
+    senderStream: SenderStreamBox?
   ) async -> Error? {
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
         // start の完了前からフレームが届く場合があるため、先に送信先を設定する。
         let originalStream = self.stream
-        self.stream = senderStream.stream
-        self.start(format: format, frameRate: frameRate) { error in
-          if error != nil {
+        if let senderStream {
+          self.stream = senderStream.stream
+        }
+        self.startUncoordinated(format: format, frameRate: frameRate) { error in
+          if error != nil, senderStream != nil {
             self.stream = originalStream
           }
           continuation.resume(returning: error)
@@ -530,7 +699,7 @@ extension CameraVideoCapturer {
   func stopForSDK() async -> Error? {
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
-        self.stop { error in
+        self.stopUncoordinated { error in
           continuation.resume(returning: error)
         }
       }
@@ -538,17 +707,39 @@ extension CameraVideoCapturer {
   }
 
   /// SDK のカメラキュー上で再起動し、完了時のエラーを返します。
-  func restartForSDK(senderStream: SenderStreamBox) async -> Error? {
+  func restartForSDK(senderStream: SenderStreamBox?) async -> Error? {
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
         let originalStream = self.stream
-        self.stream = senderStream.stream
-        self.restart { error in
-          if error != nil {
+        if let senderStream {
+          self.stream = senderStream.stream
+        }
+        self.restartUncoordinated { error in
+          if error != nil, senderStream != nil {
             self.stream = originalStream
           }
           continuation.resume(returning: error)
         }
+      }
+    }
+  }
+
+  /// SDK のカメラキュー上で設定を変更し、完了時のエラーを返します。
+  func changeForSDK(format: AVCaptureDevice.Format?, frameRate: Int?) async -> Error? {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        self.changeUncoordinated(format: format, frameRate: frameRate) { error in
+          continuation.resume(returning: error)
+        }
+      }
+    }
+  }
+
+  /// SDK のカメラキュー上でカメラを切り替え、完了時のエラーを返します。
+  static func flipForSDK(_ capturer: CameraVideoCapturer) async -> Error? {
+    await withCheckedContinuation { continuation in
+      CameraVideoCapturer.flipUncoordinated(capturer) { error in
+        continuation.resume(returning: error)
       }
     }
   }

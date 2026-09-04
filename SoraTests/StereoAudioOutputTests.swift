@@ -160,6 +160,11 @@ final class StereoAudioOutputTests: XCTestCase {
 
   /// 既存 ADM の生存中に共有 template の category 変更が必要な接続を拒否することを確認する
   func testAudioSessionCoordinatorRejectsLateCategoryTransition() throws {
+    let configuration = RTCAudioSessionConfiguration.webRTC()
+    let originalCategory = configuration.category
+    configuration.category = AVAudioSession.Category.ambient.rawValue
+    defer { configuration.category = originalCategory }
+
     let coordinator = AudioSessionCoordinator()
     let receiver = try coordinator.acquire(profile: .voiceProcessing)
 
@@ -175,6 +180,29 @@ final class StereoAudioOutputTests: XCTestCase {
       requiresPlayAndRecord: true)
     sender.requirePlayAndRecord()
     sender.release()
+  }
+
+  /// 共有 template がすでに PlayAndRecord の場合は、既存の受信接続後も送信接続を許可することを確認する
+  func testAudioSessionCoordinatorAllowsLateSenderWithoutCategoryTransition() throws {
+    let configuration = RTCAudioSessionConfiguration.webRTC()
+    let originalCategory = configuration.category
+    configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+    defer { configuration.category = originalCategory }
+
+    let coordinator = AudioSessionCoordinator()
+    let receiver = try coordinator.acquire(profile: .voiceProcessing)
+    let sender = try coordinator.acquire(
+      profile: .voiceProcessing,
+      requiresPlayAndRecord: true)
+    sender.requirePlayAndRecord()
+
+    XCTAssertEqual(coordinator.activeRequirementCount, 2)
+    XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 1)
+    XCTAssertEqual(configuration.category, AVAudioSession.Category.playAndRecord.rawValue)
+
+    receiver.release()
+    sender.release()
+    XCTAssertEqual(configuration.category, AVAudioSession.Category.playAndRecord.rawValue)
   }
 
   /// category を要求した接続が先に終了しても、残る ADM の破棄までは復元しないことを確認する
@@ -334,6 +362,56 @@ final class StereoAudioOutputTests: XCTestCase {
     XCTAssertEqual(callbackCount, 1)
     XCTAssertNotNil(receivedError)
     XCTAssertEqual(connectionTask?.state, .completed)
+  }
+
+  /// onAddMediaChannel から即時切断してもシグナリングを開始せず、接続試行を終端することを確認する
+  func testOnAddMediaChannelCanDisconnectBeforeSignalingStarts() {
+    guard let url = URL(string: "wss://127.0.0.1:1") else {
+      XCTFail("テスト URL を生成できること")
+      return
+    }
+    let configuration = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    let sora = Sora()
+    let connectExpectation = expectation(description: "接続失敗 callback が通知されること")
+    let removeExpectation = expectation(description: "切断したチャネルが管理対象から外れること")
+    var addedChannel: MediaChannel?
+    var addCount = 0
+    var removeCount = 0
+    var connectCount = 0
+    var receivedError: Error?
+
+    sora.handlers.onAddMediaChannel = { mediaChannel in
+      addCount += 1
+      addedChannel = mediaChannel
+      XCTAssertEqual(mediaChannel.state, .connecting)
+      mediaChannel.disconnect(error: SoraError.connectionCancelled)
+    }
+    sora.handlers.onRemoveMediaChannel = { mediaChannel in
+      XCTAssertTrue(mediaChannel === addedChannel)
+      removeCount += 1
+      removeExpectation.fulfill()
+    }
+
+    let connectionTask = sora.connect(configuration: configuration) { mediaChannel, error in
+      XCTAssertNil(mediaChannel)
+      connectCount += 1
+      receivedError = error
+      connectExpectation.fulfill()
+    }
+
+    wait(for: [connectExpectation, removeExpectation], timeout: 3)
+    XCTAssertEqual(addCount, 1)
+    XCTAssertEqual(removeCount, 1)
+    XCTAssertEqual(connectCount, 1)
+    XCTAssertNotNil(receivedError)
+    XCTAssertEqual(connectionTask.state, .completed)
+    XCTAssertEqual(addedChannel?.state, .disconnected)
+    XCTAssertEqual(addedChannel?.signalingChannel.state, .disconnected)
+    XCTAssertFalse(addedChannel?.isConnectionTimerRunning ?? true)
+    XCTAssertTrue(sora.mediaChannels.isEmpty)
   }
 
   /// PeerChannel の処理中は切断を遅延し、実切断時に lease を解放することを確認する

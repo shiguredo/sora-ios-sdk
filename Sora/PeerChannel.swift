@@ -323,10 +323,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   let configuration: Configuration
   let signalingChannel: SignalingChannel
   let nativePeerChannelFactory: NativePeerChannelFactory
-  /// 通常カメラ操作とハードミュート操作で共有する接続所有者
-  private let cameraCaptureLease: VideoHardMuteLease
-  /// SDK 内のカメラ start / stop / restart を process-wide で直列化する coordinator
+  /// SDK と公開 API のカメラ start / stop / restart をプロセス全体で直列化する coordinator
   private let cameraCaptureCoordinator: CameraVideoCaptureCoordinator
+  /// redirect で streams を破棄した後も、カメラ停止完了まで保持する所有ストリーム
+  private let cameraCaptureOwnership: CameraCaptureOwnership
 
   private(set) var streams: [MediaStream] = []
   private(set) var iceCandidates: [ICECandidate] = []
@@ -417,15 +417,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     configuration: Configuration, signalingChannel: SignalingChannel,
     nativePeerChannelFactory: NativePeerChannelFactory,
     mediaChannel: MediaChannel?,
-    cameraCaptureLease: VideoHardMuteLease = VideoHardMuteLease(),
-    cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared
+    cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
+    cameraCaptureOwnership: CameraCaptureOwnership = CameraCaptureOwnership()
   ) {
     self.signalingChannel = signalingChannel
     self.mediaChannel = mediaChannel
     self.configuration = configuration
     self.nativePeerChannelFactory = nativePeerChannelFactory
-    self.cameraCaptureLease = cameraCaptureLease
     self.cameraCaptureCoordinator = cameraCaptureCoordinator
+    self.cameraCaptureOwnership = cameraCaptureOwnership
     webRTCConfiguration = configuration.webRTCConfiguration
 
     lock = Lock()
@@ -899,7 +899,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     let cameraCaptureCoordinator = cameraCaptureCoordinator
-    let cameraCaptureLease = cameraCaptureLease
+    let cameraCaptureOwnership = cameraCaptureOwnership
     let formatBox = CameraCaptureFormatBox(format: format)
     let senderStream = SenderStreamBox(stream: stream)
     cameraCaptureCoordinator.enqueue {
@@ -910,18 +910,40 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
-      if let current = await CameraVideoCapturer.currentForSDK(), current.isRunning {
-        if current.stream === senderStream.stream {
-          return
-        }
-        if let error = await current.stopForSDK() {
-          cameraCaptureCoordinator.quarantine(lease: cameraCaptureLease)
+      if let current = await CameraVideoCapturer.currentForSDK() {
+        guard current.isRunning else {
+          cameraCaptureCoordinator.quarantine(capturer: current)
           Logger.error(
             type: .peerChannel,
-            message: "CameraVideoCapturer.stop failed: \(error.localizedDescription)")
+            message: "current CameraVideoCapturer is not running")
           return
         }
-        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop()
+        if current.stream === senderStream.stream {
+          cameraCaptureOwnership.set(senderStream: senderStream.stream)
+          return
+        }
+        let previousStream = current.stream
+        if let error = await current.stopForSDK() {
+          if current.isRunning {
+            cameraCaptureCoordinator.quarantine(capturer: current)
+            Logger.error(
+              type: .peerChannel,
+              message: "CameraVideoCapturer.stop failed: \(error.localizedDescription)")
+            return
+          }
+        }
+        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+        if let previousStream {
+          cameraCaptureOwnership.clear(ifOwnedBy: previousStream)
+        }
+      }
+
+      guard !capturer.isRunning else {
+        cameraCaptureCoordinator.quarantine(capturer: capturer)
+        Logger.error(
+          type: .peerChannel,
+          message: "CameraVideoCapturer is running without being current")
+        return
       }
 
       if let error = await capturer.startForSDK(
@@ -929,11 +951,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         frameRate: frameRate,
         senderStream: senderStream)
       {
+        if capturer.isRunning {
+          cameraCaptureCoordinator.quarantine(capturer: capturer)
+        }
         Logger.error(
           type: .peerChannel,
           message: "CameraVideoCapturer.start failed: \(error.localizedDescription)")
         return
       }
+      cameraCaptureOwnership.set(senderStream: senderStream.stream)
       Logger.debug(
         type: .peerChannel,
         message: "set CameraVideoCapturer to sender stream")
@@ -942,22 +968,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   /// `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。
   private func terminateSenderStream() -> Task<Void, Never>? {
-    guard configuration.videoEnabled || configuration.cameraSettings.isEnabled else {
-      return nil
-    }
-    guard
-      let senderStream = streams.first(where: {
-        $0.streamId == configuration.publisherStreamId
-      })
-    else {
+    guard configuration.videoEnabled, configuration.cameraSettings.isEnabled else {
       return nil
     }
 
-    let senderStreamBox = SenderStreamBox(stream: senderStream)
     let cameraCaptureCoordinator = cameraCaptureCoordinator
-    let cameraCaptureLease = cameraCaptureLease
+    let cameraCaptureOwnership = cameraCaptureOwnership
     return cameraCaptureCoordinator.enqueue {
+      guard let senderStream = cameraCaptureOwnership.currentSenderStream() else {
+        return
+      }
       guard let current = await CameraVideoCapturer.currentForSDK() else {
+        cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
         return
       }
       // 切断対象の送信ストリームを所有する capturer だけを停止する。
@@ -965,18 +987,22 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard
         CameraVideoCaptureCoordinator.isOwned(
           currentStream: current.stream,
-          by: senderStreamBox.stream)
+          by: senderStream)
       else {
+        cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
         return
       }
       if let error = await current.stopForSDK() {
-        cameraCaptureCoordinator.quarantine(lease: cameraCaptureLease)
-        Logger.error(
-          type: .peerChannel,
-          message: "failed to stop CameraVideoCapturer: \(error.localizedDescription)")
-        return
+        if current.isRunning {
+          cameraCaptureCoordinator.quarantine(capturer: current)
+          Logger.error(
+            type: .peerChannel,
+            message: "failed to stop CameraVideoCapturer: \(error.localizedDescription)")
+          return
+        }
       }
-      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop()
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+      cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
     }
   }
 

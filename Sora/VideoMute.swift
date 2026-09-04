@@ -227,7 +227,9 @@ actor VideoHardMuteActor {
       }
       // stop の前に再確認する (await 中に release された場合)
       try checkNotRevoked(lease: lease)
-      try await stopCameraVideoCapture(currentCapturer, lease: lease)
+      try await stopCameraVideoCapture(
+        currentCapturer,
+        senderStream: senderStream)
       // stop 完了後に再確認する (保存を中止する)
       try checkNotRevoked(lease: lease)
       // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
@@ -272,6 +274,7 @@ actor VideoHardMuteActor {
       // restart 完了後に再確認する。revoke 済みだった場合はカメラを停止する
       try await checkNotRevokedAfterRestart(
         capturer: storedCapturer.capturer,
+        senderStream: senderStream,
         lease: lease)
       return
     }
@@ -283,6 +286,7 @@ actor VideoHardMuteActor {
     // start 完了後に再確認する。revoke 済みだった場合はカメラを停止する
     try await checkNotRevokedAfterStart(
       capturer: startedCapturer,
+      senderStream: senderStream,
       lease: lease)
   }
 
@@ -317,18 +321,16 @@ actor VideoHardMuteActor {
   // (停止しないと、破棄された接続の stream へカメラが送信し続けるため)
   private func checkNotRevokedAfterRestart(
     capturer: CameraVideoCapturer,
+    senderStream: SenderStreamBox,
     lease: VideoHardMuteLease
   ) async throws {
     guard !lease.isValid else {
       return
     }
     // 再開した capturer を停止する (zombie 化を防ぐ)
-    do {
-      try await stopCameraVideoCapture(capturer, lease: lease)
-    } catch {
-      cameraCaptureCoordinator.quarantine(lease: lease)
-      throw error
-    }
+    try await stopCameraVideoCapture(
+      capturer,
+      senderStream: senderStream)
     throw SoraError.mediaChannelError(
       reason: "video hard mute operation was cancelled")
   }
@@ -337,18 +339,16 @@ actor VideoHardMuteActor {
   // (別接続の current capturer を停止しないよう、起動した capturer 自体を指定する)
   private func checkNotRevokedAfterStart(
     capturer: CameraVideoCapturer,
+    senderStream: SenderStreamBox,
     lease: VideoHardMuteLease
   ) async throws {
     guard !lease.isValid else {
       return
     }
     // 起動したカメラを停止する (zombie 化を防ぐ)
-    do {
-      try await stopCameraVideoCapture(capturer, lease: lease)
-    } catch {
-      cameraCaptureCoordinator.quarantine(lease: lease)
-      throw error
-    }
+    try await stopCameraVideoCapture(
+      capturer,
+      senderStream: senderStream)
     throw SoraError.mediaChannelError(
       reason: "video hard mute operation was cancelled")
   }
@@ -363,31 +363,30 @@ actor VideoHardMuteActor {
   // カメラキャプチャを停止します
   private func stopCameraVideoCapture(
     _ capturer: CameraVideoCapturer,
-    lease: VideoHardMuteLease
+    senderStream: SenderStreamBox
   ) async throws {
     let cameraCaptureCoordinator = cameraCaptureCoordinator
     try await cameraCaptureCoordinator.perform {
       let current = await CameraVideoCapturer.currentForSDK()
-      guard current === capturer else {
+      guard current === capturer, current?.stream === senderStream.stream else {
         // すでに停止済みなら cleanup は完了している。別の current が存在する場合も
         // その接続のカメラには作用しない。
         guard capturer.isRunning else {
           return
         }
-        cameraCaptureCoordinator.quarantine(lease: lease)
         throw SoraError.mediaChannelError(
           reason: "camera is owned by another connection")
       }
       if let error = await capturer.stopForSDK() {
         // callback 時点で停止済みなら cleanup 成功として扱う。
         guard capturer.isRunning else {
-          cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop()
+          cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
           return
         }
-        cameraCaptureCoordinator.quarantine(lease: lease)
+        cameraCaptureCoordinator.quarantine(capturer: capturer)
         throw error
       }
-      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop()
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
     }
   }
 
@@ -402,11 +401,20 @@ actor VideoHardMuteActor {
         throw SoraError.mediaChannelError(
           reason: "camera capture is quarantined after a cleanup failure")
       }
-      if let current = await CameraVideoCapturer.currentForSDK(), current !== capturer {
-        throw SoraError.mediaChannelError(
-          reason: "camera is owned by another connection")
+      let current = await CameraVideoCapturer.currentForSDK()
+      guard capturer.stream === senderStream.stream else {
+        throw SoraError.mediaChannelError(reason: "camera is owned by another connection")
+      }
+      if let current {
+        guard current === capturer, current.stream === senderStream.stream else {
+          throw SoraError.mediaChannelError(
+            reason: "camera is owned by another connection")
+        }
       }
       if let error = await capturer.restartForSDK(senderStream: senderStream) {
+        if capturer.isRunning {
+          cameraCaptureCoordinator.quarantine(capturer: capturer)
+        }
         throw error
       }
     }
@@ -428,73 +436,53 @@ actor VideoHardMuteActor {
           reason: "camera is owned by another connection")
       }
 
-      return try await withCheckedThrowingContinuation {
-        (continuation: CheckedContinuation<CameraVideoCapturer, Error>) in
-        SoraDispatcher.async(on: .camera) {
-          // 接続時設定の position に対応した CameraVideoCapturer を取得します。
-          // `.front` / `.back` を優先して利用し、静的プロパティ経由で参照される状態と齟齬が出ないようにします。
-          let capturer: CameraVideoCapturer
-          switch cameraSettings.position {
-          case .front:
-            guard let front = CameraVideoCapturer.front else {
-              continuation.resume(
-                throwing: SoraError.cameraError(reason: "front camera is not found"))
-              return
-            }
-            capturer = front
-          case .back:
-            guard let back = CameraVideoCapturer.back else {
-              continuation.resume(
-                throwing: SoraError.cameraError(reason: "back camera is not found"))
-              return
-            }
-            capturer = back
-          case .unspecified:
-            continuation.resume(
-              throwing: SoraError.cameraError(
-                reason: "CameraSettings.position should not be .unspecified"
-              )
-            )
-            return
-          @unknown default:
-            guard let device = CameraVideoCapturer.device(for: cameraSettings.position) else {
-              continuation.resume(
-                throwing: SoraError.cameraError(reason: "camera device is not found for position")
-              )
-              return
-            }
-            capturer = CameraVideoCapturer(device: device)
-          }
-
-          guard
-            // 接続時設定に基づいてカメラの解像度、フレームレートを指定します
-            let format = CameraVideoCapturer.format(
-              width: cameraSettings.resolution.width,
-              height: cameraSettings.resolution.height,
-              for: capturer.device,
-              frameRate: cameraSettings.frameRate),
-            let frameRate = CameraVideoCapturer.maxFrameRate(
-              cameraSettings.frameRate,
-              for: format)
-          else {
-            continuation.resume(
-              throwing: SoraError.cameraError(reason: "failed to resolve camera settings"))
-            return
-          }
-
-          // start 完了前からフレームが届く場合があるため、先に送信先を設定する。
-          let originalStream = capturer.stream
-          capturer.stream = senderStream.stream
-          capturer.start(format: format, frameRate: frameRate) { error in
-            if let error {
-              capturer.stream = originalStream
-              continuation.resume(throwing: error)
-            } else {
-              continuation.resume(returning: capturer)
-            }
-          }
+      // 接続時設定の position に対応した CameraVideoCapturer を取得します。
+      // `.front` / `.back` を優先して利用し、静的プロパティ経由で参照される状態と齟齬が出ないようにします。
+      let capturer: CameraVideoCapturer
+      switch cameraSettings.position {
+      case .front:
+        guard let front = CameraVideoCapturer.front else {
+          throw SoraError.cameraError(reason: "front camera is not found")
         }
+        capturer = front
+      case .back:
+        guard let back = CameraVideoCapturer.back else {
+          throw SoraError.cameraError(reason: "back camera is not found")
+        }
+        capturer = back
+      case .unspecified:
+        throw SoraError.cameraError(
+          reason: "CameraSettings.position should not be .unspecified")
+      @unknown default:
+        guard let device = CameraVideoCapturer.device(for: cameraSettings.position) else {
+          throw SoraError.cameraError(reason: "camera device is not found for position")
+        }
+        capturer = CameraVideoCapturer(device: device)
       }
+
+      guard
+        // 接続時設定に基づいてカメラの解像度、フレームレートを指定します
+        let format = CameraVideoCapturer.format(
+          width: cameraSettings.resolution.width,
+          height: cameraSettings.resolution.height,
+          for: capturer.device,
+          frameRate: cameraSettings.frameRate),
+        let frameRate = CameraVideoCapturer.maxFrameRate(
+          cameraSettings.frameRate,
+          for: format)
+      else {
+        throw SoraError.cameraError(reason: "failed to resolve camera settings")
+      }
+
+      let formatBox = CameraCaptureFormatBox(format: format)
+      if let error = await capturer.startForSDK(
+        format: formatBox.format,
+        frameRate: frameRate,
+        senderStream: senderStream)
+      {
+        throw error
+      }
+      return capturer
     }
   }
 }
