@@ -1,7 +1,7 @@
 # 接続ライフサイクルの状態所有者を単一化する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-04
 - Branch: feature/refactor-connection-state-owner
 - Polished: 2026-09-04
 
@@ -174,3 +174,42 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
 - `0092`、`0093`、`0095`、`0096` の回帰テストを含む全テストが成功すること。
 
 ## 解決方法
+
+接続ライフサイクルの状態所有者を接続単位の単一 owner へ集約した。
+
+### 実装内容
+
+- `Sora/ConnectionLifecycle.swift` (新規):
+  - `ConnectionPhase` (connecting / connected / disconnecting / disconnected)
+  - `ConnectionLifecycleState` (phase / logicalConnectionID / transportEpoch / deliveryTracker / 5 フラグ)
+  - `DeliveryTracker` (callback の 1 回終端の状態保持)
+  - `ConnectionEvent` (状態遷移に必要な事実のみを運ぶ Sendable なイベント)
+  - `ConnectionEffect` (publishSnapshot / deliverConnectCallback 等)
+  - `ConnectionStateReducer` (純粋関数。不正な状態遷移と stale epoch を拒否)
+  - `ConnectionStateOwner` (DispatchQueue 直列化による single owner)
+  - `ConnectionSnapshotStorage` (NSLock で保護した lock-backed snapshot)
+- `Sora/MediaChannel.swift`:
+  - `state` を `public private(set) var` から snapshot を参照する computed getter に変更
+  - 状態の書き込み (`state = .connecting` 等) を reducer のイベント (`handle(.connectRequested)` 等) に置き換え
+  - internal な `connectionStateOwner` / `connectionLifecycleState` を追加
+- `Sora/PeerChannel.swift`:
+  - `nonisolated(unsafe)` の 5 つのフラグ (webSocketDisconnectScheduled / disconnectTimerScheduled / disconnectTimerGeneration / dataChannelGeneration / isRedirecting) を削除
+  - 各フラグを reducer の snapshot から読む computed getter に置き換え
+  - redirect / タイマー / WebSocket スケジュールの書き込みを `handleConnectionEvent(_:)` に置き換え
+
+### 設計上の判断
+
+- 単一 owner は actor ではなく `DispatchQueue` 直列化のクラスとした (同期 API (`connect` / `disconnect`) からの `await` 化を避けるため)。
+- callback の配送を reducer の Effect へ完全移行は行わず (既存の `invokeConnectHandler` (take-and-clear) で担保)、`deliveryTracker` は状態記録として保持する。Effect への完全移行は `0110` で扱う。
+- snapshot の publish は接続 phase 遷移時および transport epoch 変更時のみ。`connectionCount` 等 (notify で更新される値) はスコープ外とし、個別の getter で読む (`0128` で対応)。
+- `ConnectionTask.state` (`NSLock` + `InternalState`) と `ConnectionTimer` (stateLock / timer / generation) は現状維持 (`0092` / `0096` の実装) とし、スコープ外とした。
+
+### テスト
+
+- `SoraTests/ConnectionStateReducerTests.swift` (新規): 接続開始 / キャンセル / 接続完了 / 接続失敗 / タイムアウト / offer / redirect / 切断 / snapshot の 12 件
+- `SoraTests/PeerChannelRedirectInvalidationTests.swift`: 実構成 (MediaChannel 経由) に書き換え
+
+### 実機確認
+
+- 通常接続・切断・redirect・redirect 後の切断・再接続を実機で確認済み。
+- 途中で判明した `.redirectConnectStarted` の snapshot publish 漏れ (isRedirecting がリセットされず、新 PC の状態通知が拒否される) を修正済み。

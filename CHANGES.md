@@ -11,6 +11,10 @@
 
 ## develop
 
+- [UPDATE] 接続ライフサイクルの状態所有者を接続単位の単一 owner へ集約する
+  - 接続状態 (接続 phase / transport epoch / callback の配送状態) の読み書きを単一の owner で管理し、スレッド間の競合を防ぐ
+  - `PeerChannel` の接続状態フラグから `nonisolated(unsafe)` を除去する
+  - @t-miya
 - [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
   - `type: switched` 受信時には発火しない
   - メッセージング用ラベル（`#` 始まり）が存在しない接続では発火しない
