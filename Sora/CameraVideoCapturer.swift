@@ -1,6 +1,74 @@
 import Foundation
 import WebRTC
 
+/// `AVCaptureDevice.Format` をカメラキューへ受け渡すための内部ラッパーです。
+///
+/// `AVCaptureDevice.Format` 自体は `Sendable` ではありませんが、このラッパーに格納した値は
+/// カメラキュー上の `start` に渡す用途に限定します。
+struct CameraCaptureFormatBox: @unchecked Sendable {
+  let format: AVCaptureDevice.Format
+}
+
+/// SDK が行う process-wide のカメラ操作を、完了コールバックまで含めて直列化します。
+///
+/// cleanup が失敗した場合はカメラを隔離状態にし、動作状態が不明なまま別接続が
+/// start / restart を実行することを防ぎます。停止成功を確認した場合だけ隔離を解除します。
+final class CameraVideoCaptureCoordinator: @unchecked Sendable {
+  static let shared = CameraVideoCaptureCoordinator()
+
+  private let operationQueue = SerializedAsyncOperationQueue()
+  private let lock = NSLock()
+  private var quarantinedLease: VideoHardMuteLease?
+
+  /// カメラ操作を process-wide のキューへ投入します。
+  @discardableResult
+  func enqueue(_ operation: @escaping @Sendable () async -> Void) -> Task<Void, Never> {
+    operationQueue.enqueue(operation)
+  }
+
+  /// カメラ操作を process-wide のキューで実行し、結果を返します。
+  func perform<T: Sendable>(_ operation: @escaping @Sendable () async -> T) async -> T {
+    await operationQueue.perform(operation)
+  }
+
+  /// カメラ操作を process-wide のキューで実行し、結果を返します。
+  func perform<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) async throws -> T
+  {
+    try await operationQueue.perform(operation)
+  }
+
+  /// 新しい start / restart を実行できる状態かを返します。
+  var isAvailable: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return quarantinedLease == nil
+  }
+
+  /// cleanup 失敗を記録し、以後の start / restart を拒否します。
+  func quarantine(lease: VideoHardMuteLease) {
+    lock.lock()
+    quarantinedLease = lease
+    lock.unlock()
+  }
+
+  /// 実際の停止成功を確認した後に隔離状態を解除します。
+  func clearQuarantineAfterSuccessfulStop() {
+    lock.lock()
+    quarantinedLease = nil
+    lock.unlock()
+  }
+
+  /// 隔離状態をテストから確認します。
+  var isQuarantined: Bool {
+    !isAvailable
+  }
+
+  /// current capturer の送信先が、切断対象の送信ストリームと一致するかを返します。
+  static func isOwned(currentStream: MediaStream?, by senderStream: MediaStream) -> Bool {
+    currentStream === senderStream
+  }
+}
+
 // カメラの共有状態は既存のカメラ用キューで扱う前提のため、 @unchecked Sendable を付与します。
 /// 解像度やフレームレートなどの設定は `start` 実行時に指定します。
 /// カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
@@ -425,6 +493,65 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     }
   }
 
+}
+
+extension CameraVideoCapturer {
+  /// SDK のカメラキュー上で現在の capturer を取得します。
+  static func currentForSDK() async -> CameraVideoCapturer? {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        continuation.resume(returning: CameraVideoCapturer.current)
+      }
+    }
+  }
+
+  /// SDK のカメラキュー上で起動し、完了時のエラーを返します。
+  func startForSDK(
+    format: AVCaptureDevice.Format,
+    frameRate: Int,
+    senderStream: SenderStreamBox
+  ) async -> Error? {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        // start の完了前からフレームが届く場合があるため、先に送信先を設定する。
+        let originalStream = self.stream
+        self.stream = senderStream.stream
+        self.start(format: format, frameRate: frameRate) { error in
+          if error != nil {
+            self.stream = originalStream
+          }
+          continuation.resume(returning: error)
+        }
+      }
+    }
+  }
+
+  /// SDK のカメラキュー上で停止し、完了時のエラーを返します。
+  func stopForSDK() async -> Error? {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        self.stop { error in
+          continuation.resume(returning: error)
+        }
+      }
+    }
+  }
+
+  /// SDK のカメラキュー上で再起動し、完了時のエラーを返します。
+  func restartForSDK(senderStream: SenderStreamBox) async -> Error? {
+    await withCheckedContinuation { continuation in
+      SoraDispatcher.async(on: .camera) {
+        let originalStream = self.stream
+        self.stream = senderStream.stream
+        self.restart { error in
+          if error != nil {
+            self.stream = originalStream
+          }
+          continuation.resume(returning: error)
+        }
+      }
+    }
+  }
 }
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。

@@ -102,6 +102,16 @@ final class ConfigurationTests: XCTestCase {
     XCTAssertFalse(config.insecure)
   }
 
+  /// audioStereoOutputEnabled の既定値が false であることを確認する
+  func testAudioStereoOutputEnabledDefaultValue() throws {
+    let url = try makeTestURL()
+    let config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+    XCTAssertFalse(config.audioStereoOutputEnabled)
+  }
+
   // MARK: - スポットライトの設定テスト
 
   /// isSpotlightEnabled のデフォルト値が false であることを確認する

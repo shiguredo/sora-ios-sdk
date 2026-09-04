@@ -28,14 +28,133 @@ struct SenderStreamBox: @unchecked Sendable {
 }
 
 // カメラ操作の所有者を識別する lease です。
-// MediaChannel は 1 回の Sora.connect() に対応するため、接続の識別に
-// ObjectIdentifier (MediaChannel identity) を使用します。
-// ObjectIdentifier は値のコピーで actor 境界をまたぐため @unchecked Sendable とする。
-// 注意: ObjectIdentifier は dealloc 後のアドレス再利用 (ABA) で別インスタンスと
-// 同一値になり得るが、切断時に保存状態が破棄されるため実運用では発生しない。
-// 将来カメラ状態 owner (論理接続 ID を保持する型) を導入する際に UUID 等へ移行する。
-struct VideoHardMuteLease: Hashable, @unchecked Sendable {
-  let channel: ObjectIdentifier
+// MediaChannel の解放後に非同期 cleanup が実行されても別インスタンスと衝突しないよう、
+// オブジェクトのメモリアドレスではなく UUID で論理接続を識別します。
+// 破棄状態は lease 自身が保持するため、共有 Actor に接続ごとの墓石を残しません。
+final class VideoHardMuteLease: @unchecked Sendable, Hashable {
+  private let id: UUID
+  private let lock = NSLock()
+  private var revoked = false
+
+  init(id: UUID = UUID()) {
+    self.id = id
+  }
+
+  static func == (lhs: VideoHardMuteLease, rhs: VideoHardMuteLease) -> Bool {
+    lhs.id == rhs.id
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+  }
+
+  /// 新しい操作または進行中の操作で利用できるかを返します。
+  var isValid: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return !revoked
+  }
+
+  /// 進行中および遅延到着する操作を無効化します。
+  func revoke() {
+    lock.lock()
+    revoked = true
+    lock.unlock()
+  }
+
+  /// 破棄予約済みかをテストから確認します。
+  var isRevoked: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return revoked
+  }
+}
+
+/// 映像ハードミュート操作と lease 解放の完了順を管理します。
+///
+/// Actor は `await` 中に再入できるため、単純な処理中フラグだけでは `release()` が
+/// 進行中操作より先に完了します。この tracker は lease を直ちに破棄しつつ、同じ lease の
+/// camera cleanup が終わるまで解放側を待機させます。
+final class VideoHardMuteOperationTracker: @unchecked Sendable {
+  private let lock = NSLock()
+  private var activeLease: VideoHardMuteLease?
+  private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+  private var pendingReleaseObservers: [CheckedContinuation<Void, Never>] = []
+
+  /// 新しい操作を開始します。
+  func begin(lease: VideoHardMuteLease) throws {
+    lock.lock()
+    defer { lock.unlock() }
+
+    guard activeLease == nil else {
+      throw SoraError.mediaChannelError(reason: "video hard mute operation is in progress")
+    }
+    guard lease.isValid else {
+      throw SoraError.mediaChannelError(
+        reason: "video hard mute operation was cancelled")
+    }
+    activeLease = lease
+  }
+
+  /// 操作完了を記録し、同じ lease の解放待ちをすべて再開します。
+  func finish(lease: VideoHardMuteLease) {
+    let waiters: [CheckedContinuation<Void, Never>]
+
+    lock.lock()
+    guard activeLease == lease else {
+      lock.unlock()
+      return
+    }
+    activeLease = nil
+    waiters = releaseWaiters
+    releaseWaiters.removeAll()
+    lock.unlock()
+
+    for waiter in waiters {
+      waiter.resume()
+    }
+  }
+
+  /// lease を直ちに破棄し、同じ lease の進行中操作が完了するまで待機します。
+  func revokeAndWaitForCompletion(lease: VideoHardMuteLease) async {
+    lease.revoke()
+    await withCheckedContinuation { continuation in
+      lock.lock()
+      guard activeLease == lease else {
+        lock.unlock()
+        continuation.resume()
+        return
+      }
+      releaseWaiters.append(continuation)
+      let observers = pendingReleaseObservers
+      pendingReleaseObservers.removeAll()
+      lock.unlock()
+      for observer in observers {
+        observer.resume()
+      }
+    }
+  }
+
+  /// 解放処理が進行中操作の完了待ちへ入るまで、テストから待機します。
+  func waitUntilReleaseIsPending() async {
+    await withCheckedContinuation { continuation in
+      lock.lock()
+      guard releaseWaiters.isEmpty else {
+        lock.unlock()
+        continuation.resume()
+        return
+      }
+      pendingReleaseObservers.append(continuation)
+      lock.unlock()
+    }
+  }
+
+  /// 解放待ちの数をテストから確認します。
+  var pendingReleaseCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return releaseWaiters.count
+  }
 }
 
 // 映像ハードミュートの同時呼び出しによるレースコンディション防止を目的とした Actor です
@@ -50,15 +169,19 @@ actor VideoHardMuteActor {
     let stream: MediaStream
   }
 
-  // 処理実行中フラグ
-  private var isProcessing = false
+  // await をまたぐ操作完了と lease 解放を同期する tracker
+  private let operationTracker: VideoHardMuteOperationTracker
+  // 通常のカメラ操作を含め、実デバイスの操作完了まで process-wide で直列化する coordinator
+  private let cameraCaptureCoordinator: CameraVideoCaptureCoordinator
   private var storedCapturer: StoredCapturer?
-  // lease ごとの破棄予約世代 (revocation)。
-  // setMute は開始時に捕捉した世代を各 await 復帰後に照合する。
-  // release() で世代を進めると、setMute が await 中に release されても
-  // 復帰後に「破棄予約済み」を検知して保存や再開を行わない。
-  // (actor は await 中に再入できるため、release の実行タイミングに依存しない)
-  private var leaseGenerations: [VideoHardMuteLease: Int] = [:]
+
+  init(
+    operationTracker: VideoHardMuteOperationTracker = VideoHardMuteOperationTracker(),
+    cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared
+  ) {
+    self.operationTracker = operationTracker
+    self.cameraCaptureCoordinator = cameraCaptureCoordinator
+  }
 
   /// ハードミュートを有効化/無効化します
   ///
@@ -76,18 +199,11 @@ actor VideoHardMuteActor {
     senderStream: SenderStreamBox,
     cameraSettings: CameraSettingsSnapshot
   ) async throws {
-    guard !isProcessing else {
-      throw SoraError.mediaChannelError(reason: "video hard mute operation is in progress")
-    }
-    isProcessing = true
-    defer { isProcessing = false }
+    try operationTracker.begin(lease: lease)
+    defer { operationTracker.finish(lease: lease) }
 
-    // 操作開始時の世代を捕捉する。setMute は各 await 復帰後に
-    // この世代と一致することを確認する (revocation の検知)
-    let operationGeneration = leaseGenerations[lease] ?? 0
-    // 破棄予約済みの lease では操作を開始しない
-    try checkNotRevoked(
-      lease: lease, operationGeneration: operationGeneration)
+    // 破棄予約済みの lease では操作を開始しない。
+    try checkNotRevoked(lease: lease)
 
     // 保存状態の所有権チェック
     // 別接続が保存した capturer をこの接続が取得または上書きできないようにする
@@ -110,12 +226,10 @@ actor VideoHardMuteActor {
           reason: "camera is owned by another connection")
       }
       // stop の前に再確認する (await 中に release された場合)
-      try checkNotRevoked(
-        lease: lease, operationGeneration: operationGeneration)
-      try await stopCameraVideoCapture(currentCapturer)
+      try checkNotRevoked(lease: lease)
+      try await stopCameraVideoCapture(currentCapturer, lease: lease)
       // stop 完了後に再確認する (保存を中止する)
-      try checkNotRevoked(
-        lease: lease, operationGeneration: operationGeneration)
+      try checkNotRevoked(lease: lease)
       // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
       // 停止時の送信ストリームも保持し、復帰時に同一ストリームへ戻せるようにします
       storedCapturer = StoredCapturer(
@@ -148,8 +262,7 @@ actor VideoHardMuteActor {
       }
     }
     // current の取得後に再確認する (await 中に release された場合)
-    try checkNotRevoked(
-      lease: lease, operationGeneration: operationGeneration)
+    try checkNotRevoked(lease: lease)
 
     // 前回停止時のキャプチャラーが保持できていれば restart、なければ start します
     if let storedCapturer {
@@ -159,35 +272,42 @@ actor VideoHardMuteActor {
       // restart 完了後に再確認する。revoke 済みだった場合はカメラを停止する
       try await checkNotRevokedAfterRestart(
         capturer: storedCapturer.capturer,
-        lease: lease, operationGeneration: operationGeneration)
+        lease: lease)
       return
     }
     // 別 lease が保存状態を持つ間に、start 経路で共有カメラを起動しない
     // (guard で all storedCapturer == nil を確認済み)
-    try await startCameraVideoCapture(cameraSettings: cameraSettings, senderStream: senderStream)
+    let startedCapturer = try await startCameraVideoCapture(
+      cameraSettings: cameraSettings,
+      senderStream: senderStream)
     // start 完了後に再確認する。revoke 済みだった場合はカメラを停止する
     try await checkNotRevokedAfterStart(
-      lease: lease, operationGeneration: operationGeneration)
+      capturer: startedCapturer,
+      lease: lease)
   }
 
   // 接続切断時に、その接続が所有する保存状態を破棄します。
   // 別接続がこの接続の capturer を取得できないようにするために使用します。
-  // 破棄予約 (世代を進める) も行い、await 中の setMute が復帰後に
-  // 保存や再開を行わないようにする。
-  func release(lease: VideoHardMuteLease) {
+  // 破棄予約も行い、await 中の setMute が復帰後に保存や再開を行わないようにする。
+  // 進行中操作がある場合は、その操作が rollback / stop を終えるまで戻らない。
+  func release(lease: VideoHardMuteLease) async {
     if storedCapturer?.lease == lease {
       storedCapturer = nil
     }
-    leaseGenerations[lease, default: 0] += 1
+    await operationTracker.revokeAndWaitForCompletion(lease: lease)
+  }
+
+  /// 指定した lease に破棄予約が記録済みかをテストから確認します。
+  func isReleased(lease: VideoHardMuteLease) -> Bool {
+    lease.isRevoked
   }
 
   // 破棄予約 (revocation) を検知したかを確認します。
   // 不一致ならエラーを返す (カメラ操作はまだ行っていない場合)
   private func checkNotRevoked(
-    lease: VideoHardMuteLease,
-    operationGeneration: Int
+    lease: VideoHardMuteLease
   ) throws {
-    guard leaseGenerations[lease] ?? 0 == operationGeneration else {
+    guard lease.isValid else {
       throw SoraError.mediaChannelError(
         reason: "video hard mute operation was cancelled")
     }
@@ -197,30 +317,37 @@ actor VideoHardMuteActor {
   // (停止しないと、破棄された接続の stream へカメラが送信し続けるため)
   private func checkNotRevokedAfterRestart(
     capturer: CameraVideoCapturer,
-    lease: VideoHardMuteLease,
-    operationGeneration: Int
+    lease: VideoHardMuteLease
   ) async throws {
-    guard leaseGenerations[lease] ?? 0 != operationGeneration else {
+    guard !lease.isValid else {
       return
     }
     // 再開した capturer を停止する (zombie 化を防ぐ)
-    try await stopCameraVideoCapture(capturer)
+    do {
+      try await stopCameraVideoCapture(capturer, lease: lease)
+    } catch {
+      cameraCaptureCoordinator.quarantine(lease: lease)
+      throw error
+    }
     throw SoraError.mediaChannelError(
       reason: "video hard mute operation was cancelled")
   }
 
   // start 後に破棄予約を検知した場合、カメラを停止してからエラーを返します。
-  // (startCameraVideoCapture が capturer を返さないため、現在のカメラを停止する)
+  // (別接続の current capturer を停止しないよう、起動した capturer 自体を指定する)
   private func checkNotRevokedAfterStart(
-    lease: VideoHardMuteLease,
-    operationGeneration: Int
+    capturer: CameraVideoCapturer,
+    lease: VideoHardMuteLease
   ) async throws {
-    guard leaseGenerations[lease] ?? 0 != operationGeneration else {
+    guard !lease.isValid else {
       return
     }
-    // 起動した共有カメラを停止する (zombie 化を防ぐ)
-    if let currentCapturer = await currentCameraVideoCapturer() {
-      try await stopCameraVideoCapture(currentCapturer)
+    // 起動したカメラを停止する (zombie 化を防ぐ)
+    do {
+      try await stopCameraVideoCapture(capturer, lease: lease)
+    } catch {
+      cameraCaptureCoordinator.quarantine(lease: lease)
+      throw error
     }
     throw SoraError.mediaChannelError(
       reason: "video hard mute operation was cancelled")
@@ -228,28 +355,39 @@ actor VideoHardMuteActor {
 
   // 現在のカメラキャプチャラーを取得します
   private func currentCameraVideoCapturer() async -> CameraVideoCapturer? {
-    // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して実行します
-    await withCheckedContinuation { continuation in
-      SoraDispatcher.async(on: .camera) {
-        continuation.resume(returning: CameraVideoCapturer.current)
-      }
+    await cameraCaptureCoordinator.perform {
+      await CameraVideoCapturer.currentForSDK()
     }
   }
 
   // カメラキャプチャを停止します
-  private func stopCameraVideoCapture(_ capturer: CameraVideoCapturer) async throws {
-    // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して実行します
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      SoraDispatcher.async(on: .camera) {
-        // CameraVideoCapturer.stop はコールバック形式です
-        capturer.stop { error in
-          if let error {
-            continuation.resume(throwing: error)
-          } else {
-            continuation.resume(returning: ())
-          }
+  private func stopCameraVideoCapture(
+    _ capturer: CameraVideoCapturer,
+    lease: VideoHardMuteLease
+  ) async throws {
+    let cameraCaptureCoordinator = cameraCaptureCoordinator
+    try await cameraCaptureCoordinator.perform {
+      let current = await CameraVideoCapturer.currentForSDK()
+      guard current === capturer else {
+        // すでに停止済みなら cleanup は完了している。別の current が存在する場合も
+        // その接続のカメラには作用しない。
+        guard capturer.isRunning else {
+          return
         }
+        cameraCaptureCoordinator.quarantine(lease: lease)
+        throw SoraError.mediaChannelError(
+          reason: "camera is owned by another connection")
       }
+      if let error = await capturer.stopForSDK() {
+        // callback 時点で停止済みなら cleanup 成功として扱う。
+        guard capturer.isRunning else {
+          cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop()
+          return
+        }
+        cameraCaptureCoordinator.quarantine(lease: lease)
+        throw error
+      }
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop()
     }
   }
 
@@ -258,19 +396,18 @@ actor VideoHardMuteActor {
     _ capturer: CameraVideoCapturer,
     senderStream: SenderStreamBox
   ) async throws {
-    // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して実行します
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      SoraDispatcher.async(on: .camera) {
-        // マルチストリームの場合、停止時と現在の送信ストリームが異なることがあるので再設定します
-        capturer.stream = senderStream.stream
-        // CameraVideoCapturer.restart はコールバック形式です
-        capturer.restart { error in
-          if let error {
-            continuation.resume(throwing: error)
-          } else {
-            continuation.resume(returning: ())
-          }
-        }
+    let cameraCaptureCoordinator = cameraCaptureCoordinator
+    try await cameraCaptureCoordinator.perform {
+      guard cameraCaptureCoordinator.isAvailable else {
+        throw SoraError.mediaChannelError(
+          reason: "camera capture is quarantined after a cleanup failure")
+      }
+      if let current = await CameraVideoCapturer.currentForSDK(), current !== capturer {
+        throw SoraError.mediaChannelError(
+          reason: "camera is owned by another connection")
+      }
+      if let error = await capturer.restartForSDK(senderStream: senderStream) {
+        throw error
       }
     }
   }
@@ -279,68 +416,82 @@ actor VideoHardMuteActor {
   private func startCameraVideoCapture(
     cameraSettings: CameraSettingsSnapshot,
     senderStream: SenderStreamBox
-  ) async throws {
-    // libwebrtc のカメラ用キュー（SoraDispatcher）を利用して実行します
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      SoraDispatcher.async(on: .camera) {
-        // 接続時設定の position に対応した CameraVideoCapturer を取得します。
-        // `.front` / `.back` を優先して利用し、静的プロパティ経由で参照される状態と齟齬が出ないようにします。
-        let capturer: CameraVideoCapturer
-        switch cameraSettings.position {
-        case .front:
-          guard let front = CameraVideoCapturer.front else {
-            continuation.resume(
-              throwing: SoraError.cameraError(reason: "front camera is not found"))
-            return
-          }
-          capturer = front
-        case .back:
-          guard let back = CameraVideoCapturer.back else {
-            continuation.resume(throwing: SoraError.cameraError(reason: "back camera is not found"))
-            return
-          }
-          capturer = back
-        case .unspecified:
-          continuation.resume(
-            throwing: SoraError.cameraError(
-              reason: "CameraSettings.position should not be .unspecified"
-            )
-          )
-          return
-        @unknown default:
-          guard let device = CameraVideoCapturer.device(for: cameraSettings.position) else {
-            continuation.resume(
-              throwing: SoraError.cameraError(reason: "camera device is not found for position")
-            )
-            return
-          }
-          capturer = CameraVideoCapturer(device: device)
-        }
+  ) async throws -> CameraVideoCapturer {
+    let cameraCaptureCoordinator = cameraCaptureCoordinator
+    return try await cameraCaptureCoordinator.perform {
+      guard cameraCaptureCoordinator.isAvailable else {
+        throw SoraError.mediaChannelError(
+          reason: "camera capture is quarantined after a cleanup failure")
+      }
+      guard await CameraVideoCapturer.currentForSDK() == nil else {
+        throw SoraError.mediaChannelError(
+          reason: "camera is owned by another connection")
+      }
 
-        guard
-          // 接続時設定に基づいてカメラの解像度、フレームレートを指定します
-          let format = CameraVideoCapturer.format(
-            width: cameraSettings.resolution.width,
-            height: cameraSettings.resolution.height,
-            for: capturer.device,
-            frameRate: cameraSettings.frameRate),
-          let frameRate = CameraVideoCapturer.maxFrameRate(cameraSettings.frameRate, for: format)
-        else {
-          continuation.resume(
-            throwing: SoraError.cameraError(reason: "failed to resolve camera settings"))
-          return
-        }
+      return try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<CameraVideoCapturer, Error>) in
+        SoraDispatcher.async(on: .camera) {
+          // 接続時設定の position に対応した CameraVideoCapturer を取得します。
+          // `.front` / `.back` を優先して利用し、静的プロパティ経由で参照される状態と齟齬が出ないようにします。
+          let capturer: CameraVideoCapturer
+          switch cameraSettings.position {
+          case .front:
+            guard let front = CameraVideoCapturer.front else {
+              continuation.resume(
+                throwing: SoraError.cameraError(reason: "front camera is not found"))
+              return
+            }
+            capturer = front
+          case .back:
+            guard let back = CameraVideoCapturer.back else {
+              continuation.resume(
+                throwing: SoraError.cameraError(reason: "back camera is not found"))
+              return
+            }
+            capturer = back
+          case .unspecified:
+            continuation.resume(
+              throwing: SoraError.cameraError(
+                reason: "CameraSettings.position should not be .unspecified"
+              )
+            )
+            return
+          @unknown default:
+            guard let device = CameraVideoCapturer.device(for: cameraSettings.position) else {
+              continuation.resume(
+                throwing: SoraError.cameraError(reason: "camera device is not found for position")
+              )
+              return
+            }
+            capturer = CameraVideoCapturer(device: device)
+          }
 
-        // カメラキャプチャを開始します
-        // CameraVideoCapturer.start はコールバック形式です
-        capturer.stream = senderStream.stream
-        // start 完了まで capturer を確実に生存させるためにクロージャ側でも保持します。
-        // start 成功時は CameraVideoCapturer.current がセットされ、以後はそちらが保持します。
-        capturer.start(format: format, frameRate: frameRate) { [capturer] error in
-          if let error {
-            continuation.resume(throwing: error)
-          } else {
-            continuation.resume(returning: ())
+          guard
+            // 接続時設定に基づいてカメラの解像度、フレームレートを指定します
+            let format = CameraVideoCapturer.format(
+              width: cameraSettings.resolution.width,
+              height: cameraSettings.resolution.height,
+              for: capturer.device,
+              frameRate: cameraSettings.frameRate),
+            let frameRate = CameraVideoCapturer.maxFrameRate(
+              cameraSettings.frameRate,
+              for: format)
+          else {
+            continuation.resume(
+              throwing: SoraError.cameraError(reason: "failed to resolve camera settings"))
+            return
+          }
+
+          // start 完了前からフレームが届く場合があるため、先に送信先を設定する。
+          let originalStream = capturer.stream
+          capturer.stream = senderStream.stream
+          capturer.start(format: format, frameRate: frameRate) { error in
+            if let error {
+              capturer.stream = originalStream
+              continuation.resume(throwing: error)
+            } else {
+              continuation.resume(returning: capturer)
+            }
           }
         }
       }

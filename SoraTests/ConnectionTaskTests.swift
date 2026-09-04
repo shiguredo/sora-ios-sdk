@@ -28,24 +28,24 @@ final class ConnectionTaskTests: XCTestCase {
   /// peerChannel が未設定の場合は cancel 要求は内部では cancelRequested として
   /// 保持され、attach が呼ばれると false を返す。呼び出し元が markCanceled() を
   /// 呼ぶことで最終的に確定する (公開 state はどちらも canceled)。
-  func testCancelRequestHeldUntilAttach() {
+  func testCancelRequestHeldUntilAttach() throws {
     let task = ConnectionTask()
     task.cancel()
 
     // キャンセル要求が保持されているため、接続を開始できない
-    XCTAssertFalse(task.attach(peerChannel: makeTestPeerChannel()))
+    XCTAssertFalse(task.attach(peerChannel: try makeTestPeerChannel()))
     task.markCanceled()
     XCTAssertEqual(task.state, .canceled)
   }
 
   /// キャンセル済みの ConnectionTask に attach すると false が返ることを確認する
-  func testAttachAfterCancelReturnsFalse() {
+  func testAttachAfterCancelReturnsFalse() throws {
     let task = ConnectionTask()
     task.cancel()
     task.markCanceled()
 
     // キャンセル済みのため、接続を開始できない
-    XCTAssertFalse(task.attach(peerChannel: makeTestPeerChannel()))
+    XCTAssertFalse(task.attach(peerChannel: try makeTestPeerChannel()))
   }
 
   /// 接続中の complete() は completed へ遷移することを確認する
@@ -53,6 +53,25 @@ final class ConnectionTaskTests: XCTestCase {
     let task = ConnectionTask()
     task.complete()
     XCTAssertEqual(task.state, .completed)
+  }
+
+  /// tryComplete() は最初に接続成功を確定した呼び出しだけ true を返すことを確認する
+  func testTryCompleteReturnsTrueOnlyOnce() {
+    let task = ConnectionTask()
+
+    XCTAssertTrue(task.tryComplete())
+    XCTAssertFalse(task.tryComplete())
+    XCTAssertEqual(task.state, .completed)
+  }
+
+  /// cancel() が先に成立した場合は tryComplete() が成功へ上書きしないことを確認する
+  func testTryCompleteLosesToCancel() {
+    let task = ConnectionTask()
+
+    task.cancel()
+
+    XCTAssertFalse(task.tryComplete())
+    XCTAssertEqual(task.state, .canceled)
   }
 
   /// キャンセル要求後の complete() は completed へ上書きしないことを確認する
@@ -78,20 +97,20 @@ final class ConnectionTaskTests: XCTestCase {
     XCTAssertEqual(task.state, .completed, "completed は canceled に上書きされないこと")
   }
 
-  /// attach 中にキャンセルが競合しても、終端状態が一意になることを確認する
+  /// attach とキャンセルの両方の実行順で、終端状態が一意になることを確認する
   ///
   /// 接続開始 (attach) とキャンセルのどちらが先に実行されても、最終状態は
   /// canceled (キャンセル先行) または completed (接続完了先行) のどちらかになる。
-  func testAttachAndCancelRaceEndsInTerminalState() {
-    // 動作は thread に依存するため、両方のオーダーを順番に実行して確認する
+  func testAttachAndCancelOrdersEndInTerminalState() throws {
+    // 両方の順序を決定的に実行して確認する
     let task1 = ConnectionTask()
     task1.cancel()
     task1.markCanceled()
     XCTAssertEqual(task1.state, .canceled)
-    XCTAssertFalse(task1.attach(peerChannel: makeTestPeerChannel()))
+    XCTAssertFalse(task1.attach(peerChannel: try makeTestPeerChannel()))
 
     let task2 = ConnectionTask()
-    XCTAssertTrue(task2.attach(peerChannel: makeTestPeerChannel()))
+    XCTAssertTrue(task2.attach(peerChannel: try makeTestPeerChannel()))
     task2.cancel()
     task2.markCanceled()
     XCTAssertEqual(task2.state, .canceled)
@@ -101,13 +120,13 @@ final class ConnectionTaskTests: XCTestCase {
   ///
   /// ConnectionTask.attach は PeerChannel の参照を保持するだけで状態には触れないため、
   /// テスト用のダミー構成で検証可能である
-  private func makeTestPeerChannel() -> PeerChannel {
+  private func makeTestPeerChannel() throws -> PeerChannel {
     let config = Configuration(
       urlCandidates: [URL(fileURLWithPath: "/tmp")],
       channelId: "test",
       role: .sendonly)
     let signalingChannel = SignalingChannel(configuration: config)
-    let nativeFactory = NativePeerChannelFactory(bypassVoiceProcessing: false)
+    let nativeFactory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
     return PeerChannel(
       configuration: config,
       signalingChannel: signalingChannel,

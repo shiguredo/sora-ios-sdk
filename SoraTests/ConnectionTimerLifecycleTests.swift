@@ -113,6 +113,22 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
     // エラーが発生しないこと (二重 stop でもクラッシュしない)
   }
 
+  /// stop() が稼働中 Timer の世代を進め、世代照合前の callback を無効化することを確認する
+  func testStopAdvancesRunningTimerGeneration() {
+    let connectionTimer = makeConnectionTimer(timeout: 100)
+    connectionTimer.run { [] in
+      XCTFail("停止した Timer の handler は実行されないこと")
+    }
+    let generationBeforeStop = connectionTimer.currentGeneration
+
+    connectionTimer.stop()
+
+    XCTAssertGreaterThan(
+      connectionTimer.currentGeneration,
+      generationBeforeStop,
+      "stop() で稼働中 Timer の世代が進むこと")
+  }
+
   /// 遅延して発火した旧世代 Timer の handler が実行されないことを確認する
   ///
   /// run() の再実行で世代が進んだ場合、旧世代の Timer が main RunLoop から

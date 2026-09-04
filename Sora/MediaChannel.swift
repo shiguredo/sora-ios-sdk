@@ -70,6 +70,117 @@ public final class MediaChannelHandlers {
 
 // MARK: -
 
+/// MediaChannel 固有の切断準備と PeerChannel の完了通知を合流させる状態機械です。
+/// 呼び出し側は MediaChannel の lifecycle lock を保持した状態で操作します。
+struct MediaChannelDisconnectPreparation {
+  enum State: Equatable {
+    case notStarted
+    case running
+    case finished
+  }
+
+  enum ReceiveResult: Equatable {
+    case prepare
+    case deferred
+    case ready
+  }
+
+  struct Completion {
+    let connectionTask: ConnectionTask
+    let error: Error?
+    let reason: DisconnectReason
+  }
+
+  private(set) var state: State = .notStarted
+  private var pendingCompletion: Completion?
+
+  /// 切断準備を開始できる場合だけ状態を `running` へ進めます。
+  mutating func begin() -> Bool {
+    guard state == .notStarted else {
+      return false
+    }
+    state = .running
+    return true
+  }
+
+  /// PeerChannel の完了通知を受け取り、呼び出し側が次に行う処理を返します。
+  mutating func receive(_ completion: Completion) -> ReceiveResult {
+    switch state {
+    case .notStarted:
+      state = .running
+      pendingCompletion = completion
+      return .prepare
+    case .running:
+      if pendingCompletion == nil {
+        pendingCompletion = completion
+      }
+      return .deferred
+    case .finished:
+      return .ready
+    }
+  }
+
+  /// 切断準備を完了し、準備中に保留された完了通知を返します。
+  mutating func complete() -> Completion? {
+    guard state == .running else {
+      return nil
+    }
+    state = .finished
+    let completion = pendingCompletion
+    pendingCompletion = nil
+    return completion
+  }
+}
+
+// MARK: -
+
+/// 接続試行の予約から接続タイマー開始までを管理する状態機械です。
+/// 呼び出し側は MediaChannel の lifecycle lock を保持した状態で操作します。
+struct MediaChannelConnectionTimerAuthorization {
+  enum State: Equatable {
+    case idle
+    case authorized
+    case started
+    case terminated
+  }
+
+  private(set) var state: State = .idle
+
+  /// 接続試行を予約し、後続のタイマー開始を認可します。
+  mutating func authorizeConnection() {
+    precondition(state == .idle)
+    state = .authorized
+  }
+
+  /// 認可された接続試行に対して、タイマー開始を 1 回だけ許可します。
+  mutating func beginTimer() -> Bool {
+    guard state == .authorized else {
+      return false
+    }
+    state = .started
+    return true
+  }
+
+  /// 接続成功または切断開始により、遅延したタイマー開始を恒久的に拒否します。
+  mutating func terminate() {
+    state = .terminated
+  }
+}
+
+// MARK: -
+
+/// 非同期 cleanup の完了通知から MediaChannel を弱参照するための内部ラッパーです。
+/// MediaChannel 自体を Sendable とせず、終端処理だけを lifecycle lock 配下へ戻します。
+private final class WeakMediaChannelBox: @unchecked Sendable {
+  weak var value: MediaChannel?
+
+  init(_ value: MediaChannel) {
+    self.value = value
+  }
+}
+
+// MARK: -
+
 /// 一度接続を行ったメディアチャネルは再利用できません。
 /// 同じ設定で接続を行いたい場合は、新しい接続を行う必要があります。
 ///
@@ -241,15 +352,44 @@ public final class MediaChannel {
     _connectionTimer!
   }
 
+  /// 接続タイマーの終端状態を回帰テストから確認するための内部アクセサーです。
+  var isConnectionTimerRunning: Bool {
+    connectionTimer.isRunning
+  }
+
   // PeerChannel に mediaChannel を保持させる際にこの書き方が必要になった
   private var _connectionTimer: ConnectionTimer?
 
-  private let manager: Sora
   private let nativePeerChannelFactory: NativePeerChannelFactory
+
+  /// 接続開始、接続成功、切断開始、切断完了の競合を直列化します。
+  /// 利用者のハンドラーは、このロックを保持した状態では呼び出しません。
+  private let connectionLifecycleLock = NSLock()
+
+  /// 現在の接続試行に対応する ConnectionTask です。
+  private var currentConnectionTask: ConnectionTask?
+
+  /// 一度開始した MediaChannel の再利用を拒否するためのフラグです。
+  private var hasStartedConnection = false
+
+  /// 接続試行の予約後に遅れて到着するタイマー開始を、切断終端後は拒否します。
+  private var connectionTimerAuthorization = MediaChannelConnectionTimerAuthorization()
+
+  /// 切断開始時点が接続試行中だったかを保持します。
+  /// PeerChannel の実切断完了時に接続結果ハンドラーを発火するかの判定に使います。
+  private var disconnectStartedWhileConnecting = false
+
+  private var disconnectPreparation = MediaChannelDisconnectPreparation()
+
+  /// PeerChannel から重複して切断完了が通知されても、公開通知を 1 回に抑えます。
+  private var disconnectFinished = false
 
   // 映像ハードミュートの同時呼び出しを直列化するための Actor です
   // MediaChannel 間の排他実行を保証するため static にしています
-  private static let videoHardMuteActor = VideoHardMuteActor()
+  static let videoHardMuteActor = VideoHardMuteActor()
+
+  /// この MediaChannel が所有する映像ハードミュート状態を識別します。
+  private let videoHardMuteLease: VideoHardMuteLease
 
   // ReplayKit を利用した画面キャプチャ制御です
   // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
@@ -265,20 +405,39 @@ public final class MediaChannel {
 
   /// 初期化します。
   ///
-  /// - parameter manager: `Sora` オブジェクト
   /// - parameter configuration: クライアントの設定
-  init(manager: Sora, configuration: Configuration) {
-    self.manager = manager
+  init(
+    configuration: Configuration,
+    audioSessionCoordinator: AudioSessionCoordinator = .shared,
+    videoHardMuteLease: VideoHardMuteLease = VideoHardMuteLease()
+  ) throws {
+    try Self.validate(configuration: configuration)
+
+    let audioSessionUsage: AudioSessionUsage =
+      if configuration.audioDevice != nil {
+        .custom
+      } else if !configuration.audioEnabled {
+        .none
+      } else if configuration.audioStereoOutputEnabled {
+        .stereoRemoteIO
+      } else {
+        .voiceProcessing(requiresPlayAndRecord: configuration.isSender)
+      }
+
     self.configuration = configuration
-    self.nativePeerChannelFactory = NativePeerChannelFactory(
+    self.videoHardMuteLease = videoHardMuteLease
+    self.nativePeerChannelFactory = try NativePeerChannelFactory(
       bypassVoiceProcessing: configuration.bypassVoiceProcessing,
-      audioDevice: configuration.audioDevice)
+      audioDevice: configuration.audioDevice,
+      audioSessionUsage: audioSessionUsage,
+      audioSessionCoordinator: audioSessionCoordinator)
     signalingChannel = SignalingChannel.init(configuration: configuration)
     _peerChannel = PeerChannel.init(
       configuration: configuration,
       signalingChannel: signalingChannel,
       nativePeerChannelFactory: nativePeerChannelFactory,
-      mediaChannel: self)
+      mediaChannel: self,
+      cameraCaptureLease: videoHardMuteLease)
     handlers = configuration.mediaChannelHandlers
 
     _connectionTimer = ConnectionTimer(
@@ -289,6 +448,41 @@ public final class MediaChannel {
         .peerChannel(_peerChannel!),
       ],
       timeout: configuration.connectionTimeout)
+  }
+
+  deinit {
+    // 明示切断を経由せずに最終参照が解放された場合も、通常切断と同じ所有リソースを破棄する。
+    // 各処理は冪等なため、通常切断後の deinit から重複して呼ばれても安全である。
+    prepareForDisconnect(error: nil)
+
+    // Sora と利用者の双方が参照を解放した場合も、接続中の PeerChannel を明示的に閉じる。
+    // 実処理が進行中なら PeerChannel.Lock が安全な時点まで切断を遅延する。
+    _peerChannel?.disconnect(error: nil, reason: .user)
+  }
+
+  /// ADM を生成する前に、ステレオ音声出力の組み合わせ制約を検証します。
+  static func validate(configuration: Configuration) throws {
+    guard configuration.audioStereoOutputEnabled else {
+      return
+    }
+    guard configuration.audioEnabled else {
+      throw SoraError.configurationError(
+        reason: "audioStereoOutputEnabled requires audioEnabled to be true")
+    }
+    guard configuration.audioCodec != .pcmu else {
+      throw SoraError.configurationError(
+        reason: "audioStereoOutputEnabled does not support PCMU")
+    }
+    guard configuration.audioDevice == nil else {
+      throw SoraError.configurationError(
+        reason: "audioStereoOutputEnabled cannot be used with a custom audio device")
+    }
+    guard !configuration.isSender || configuration.initialMicrophoneEnabled else {
+      throw SoraError.configurationError(
+        reason:
+          "audioStereoOutputEnabled requires initialMicrophoneEnabled to be true for sender roles"
+      )
+    }
   }
 
   // MARK: - RPC
@@ -410,11 +604,6 @@ public final class MediaChannel {
 
   private var _handler: ((_ error: Error?) -> Void)?
 
-  private func executeHandler(error: Error?) {
-    _handler?(error)
-    _handler = nil
-  }
-
   /// サーバーに接続します。
   ///
   /// - parameter webRTCConfiguration: WebRTC の設定
@@ -427,7 +616,10 @@ public final class MediaChannel {
     handler: @escaping (_ error: Error?) -> Void
   ) -> ConnectionTask {
     let task = ConnectionTask()
-    if state.isConnecting {
+    let peerChannel = self.peerChannel
+    connectionLifecycleLock.lock()
+    guard state == .disconnected, !hasStartedConnection else {
+      connectionLifecycleLock.unlock()
       handler(
         SoraError.connectionBusy(
           reason:
@@ -436,12 +628,46 @@ public final class MediaChannel {
       return task
     }
 
+    // 非同期処理を開始する前に接続試行を予約する。これにより、連続した connect と
+    // 戻り値に対する即時 cancel のどちらも一意な接続試行へ結び付く。
+    _handler = handler
+    currentConnectionTask = task
+    hasStartedConnection = true
+    connectionTimerAuthorization.authorizeConnection()
+    disconnectStartedWhileConnecting = false
+    disconnectPreparation = MediaChannelDisconnectPreparation()
+    disconnectFinished = false
+
+    // ConnectionTask を返す前に切断完了ハンドラーを登録する。戻り値に対する即時 cancel や
+    // MediaChannel.disconnect が、非同期 basicConnect の開始前に完了しても通知を失わない。
+    signalingChannel.internalHandlers.onDisconnect = {
+      [weak self, weak peerChannel] error, reason in
+      if let self {
+        self.beginDisconnect(error: error, reason: reason)
+      } else {
+        peerChannel?.disconnect(error: error, reason: reason)
+      }
+    }
+    peerChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
+      // MediaChannel が先に解放されても ConnectionTask は必ず終端させる。
+      guard let self else {
+        task.complete()
+        return
+      }
+      self.finishDisconnect(connectionTask: task, error: error, reason: reason)
+    }
+
+    // `.connecting` を公開する前に切断完了ハンドラーを登録する。
+    // これにより、別スレッドの disconnect が通知登録の隙間へ入ることを防ぐ。
+    state = .connecting
+    connectionStartTime = nil
+    connectionLifecycleLock.unlock()
+
     DispatchQueue.global().async { [weak self] in
       self?.basicConnect(
         connectionTask: task,
         webRTCConfiguration: webRTCConfiguration,
-        timeout: timeout,
-        handler: handler)
+        timeout: timeout)
     }
     return task
   }
@@ -449,13 +675,11 @@ public final class MediaChannel {
   private func basicConnect(
     connectionTask: ConnectionTask,
     webRTCConfiguration: WebRTCConfiguration,
-    timeout: Int,
-    handler: @escaping (Error?) -> Void
+    timeout: Int
   ) {
     Logger.debug(type: .mediaChannel, message: "try connecting")
-    _handler = handler
-    state = .connecting
-    connectionStartTime = nil
+
+    let peerChannel = self.peerChannel
 
     // 接続開始前にキャンセル要求を受領していた場合は、接続処理を開始しない。
     // attach は peerChannel の設定とキャンセル要求の確認を同じ排他領域で行う。
@@ -463,30 +687,10 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "connection task cancelled before connect")
       connectionTask.markCanceled()
       // 通常の接続失敗と同じく切断フローで後始末する。
-      // これにより executeHandler 経由の接続エラー通知と mediaChannel の
+      // これにより接続エラー通知と mediaChannel の
       // remove (Sora.connect が設定した internalHandlers.onDisconnectLegacy) が行われる
-      internalDisconnect(error: SoraError.connectionCancelled, reason: .user)
+      beginDisconnect(error: SoraError.connectionCancelled, reason: .user)
       return
-    }
-
-    signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
-      guard let weakSelf = self else {
-        return
-      }
-      if weakSelf.state == .connecting || weakSelf.state == .connected {
-        weakSelf.internalDisconnect(error: error, reason: reason)
-      }
-      connectionTask.complete()
-    }
-
-    peerChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
-      guard let weakSelf = self else {
-        return
-      }
-      if weakSelf.state == .connecting || weakSelf.state == .connected {
-        weakSelf.internalDisconnect(error: error, reason: reason)
-      }
-      connectionTask.complete()
     }
 
     peerChannel.internalHandlers.onAddStream = { [weak self] stream in
@@ -575,60 +779,82 @@ public final class MediaChannel {
       weakSelf.handlers.onReceiveSignaling?(message)
     }
 
-    // attach 成功後〜ここまでの間に cancel() が割り込んだ場合は、接続を開始しない。
-    // (attach の瞬間だけを確認すると、ハンドラ設定などの間に割り込んだ cancel を
-    // 検出できず、次の peerChannel.connect で接続が開始されてしまう)
-    guard connectionTask.state == .connecting else {
+    // タイマーの開始と接続試行の有効性確認を、切断状態の遷移と同じロックで直列化する。
+    // これにより、切断完了後に遅れてタイマーを再始動する競合を防ぐ。
+    connectionLifecycleLock.lock()
+    guard state == .connecting, currentConnectionTask === connectionTask,
+      connectionTask.state == .connecting,
+      connectionTimerAuthorization.beginTimer()
+    else {
+      connectionLifecycleLock.unlock()
       Logger.debug(type: .mediaChannel, message: "connection task cancelled before connect")
-      connectionTask.markCanceled()
-      internalDisconnect(error: SoraError.connectionCancelled, reason: .user)
-      return
-    }
-
-    peerChannel.connect { [weak self] error in
-      guard let weakSelf = self else {
-        return
-      }
-
-      // cancel() が接続成功より先に成立していた場合は、成功通知を発火させない。
-      // complete() を先に呼ぶと _state == .completed になり、判定できないため
-      // complete() の前に状態を確認する。
-      if connectionTask.state != .connecting {
+      if connectionTask.state == .canceled {
         connectionTask.markCanceled()
-        weakSelf.connectionTimer.stop()
-        weakSelf.internalDisconnect(error: SoraError.connectionCancelled, reason: .user)
-        return
+        beginDisconnect(error: SoraError.connectionCancelled, reason: .user)
       }
-
-      weakSelf.connectionTimer.stop()
-      connectionTask.complete()
-
-      if let error {
-        Logger.error(type: .mediaChannel, message: "failed to connect")
-        weakSelf.internalDisconnect(error: error, reason: .signalingFailure)
-        // internalDisconnect が接続試行中のエラー通知を executeHandler 経由で
-        // すでに実行している場合があるため、ここでは executeHandler 経由でのみ
-        // 通知する (二重呼び出し防止)
-        weakSelf.executeHandler(error: error)
-
-        Logger.debug(type: .mediaChannel, message: "call onConnect")
-        weakSelf.internalHandlers.onConnect?(error)
-        weakSelf.handlers.onConnect?(error)
-        return
-      }
-      Logger.debug(type: .mediaChannel, message: "did connect")
-      weakSelf.state = .connected
-      handler(nil)
-      Logger.debug(type: .mediaChannel, message: "call onConnect")
-      weakSelf.internalHandlers.onConnect?(nil)
-      weakSelf.handlers.onConnect?(nil)
+      return
     }
 
     connectionStartTime = Date()
     connectionTimer.run {
       Logger.error(type: .mediaChannel, message: "connection timeout")
-      self.internalDisconnect(error: SoraError.connectionTimeout, reason: .signalingFailure)
+      self.beginDisconnect(error: SoraError.connectionTimeout, reason: .signalingFailure)
     }
+    connectionLifecycleLock.unlock()
+
+    peerChannel.connect { [weak self] error in
+      guard let self else {
+        return
+      }
+
+      // 成否にかかわらず PeerChannel の終端通知を受けた時点でタイマーを止める。
+      self.connectionTimer.stop()
+      if let error {
+        Logger.error(type: .mediaChannel, message: "failed to connect")
+        self.beginDisconnect(error: error, reason: .signalingFailure)
+        return
+      }
+
+      self.finishConnect(connectionTask: connectionTask)
+    }
+  }
+
+  /// PeerChannel の接続成功を、cancel や切断開始と競合しないよう確定します。
+  private func finishConnect(connectionTask: ConnectionTask) {
+    var connectHandler: ((Error?) -> Void)?
+    var shouldCancel = false
+
+    connectionLifecycleLock.lock()
+    if state == .connecting, currentConnectionTask === connectionTask {
+      if connectionTask.tryComplete() {
+        connectionTimerAuthorization.terminate()
+        state = .connected
+        connectHandler = _handler
+        _handler = nil
+        currentConnectionTask = nil
+      } else {
+        // ConnectionTask.cancel() が先に終端状態を確定している。
+        shouldCancel = true
+      }
+    }
+    connectionLifecycleLock.unlock()
+
+    connectionTimer.stop()
+
+    if shouldCancel {
+      connectionTask.markCanceled()
+      beginDisconnect(error: SoraError.connectionCancelled, reason: .user)
+      return
+    }
+    guard let connectHandler else {
+      return
+    }
+
+    Logger.debug(type: .mediaChannel, message: "did connect")
+    connectHandler(nil)
+    Logger.debug(type: .mediaChannel, message: "call onConnect")
+    internalHandlers.onConnect?(nil)
+    handlers.onConnect?(nil)
   }
 
   /// 接続を解除します。
@@ -636,73 +862,199 @@ public final class MediaChannel {
   /// - parameter error: 接続解除の原因となったエラー
   public func disconnect(error: Error?) {
     // reason に .user を指定しているので、 disconnect は SDK 内部では利用しない
-    internalDisconnect(error: error, reason: .user)
+    beginDisconnect(error: error, reason: .user)
   }
 
   func internalDisconnect(error: Error?, reason: DisconnectReason) {
+    beginDisconnect(error: error, reason: reason)
+  }
+
+  /// 切断開始を 1 回だけ確定し、PeerChannel へ切断を要求します。
+  ///
+  /// 公開ハンドラーと `.disconnected` への遷移は、PeerChannel が native close と
+  /// AudioSession lease の解放を終えた後の `finishDisconnect` で実行します。
+  private func beginDisconnect(error: Error?, reason: DisconnectReason) {
+    var shouldPrepare = false
+
+    connectionLifecycleLock.lock()
     switch state {
+    case .connecting, .connected:
+      disconnectStartedWhileConnecting = state == .connecting
+      connectionTimerAuthorization.terminate()
+      if disconnectStartedWhileConnecting {
+        // 接続試行をここで seal し、遅延切断中の cancel が切断理由を上書きしないようにする。
+        currentConnectionTask?.complete()
+      }
+      state = .disconnecting
+      if disconnectPreparation.begin() {
+        shouldPrepare = true
+      }
     case .disconnecting, .disconnected:
       break
+    }
+    connectionLifecycleLock.unlock()
 
-    default:
-      // 接続の終了時に画面キャプチャを停止します。
-      // 非同期で実行し、切断シーケンス自体はブロックしません。
-      // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
+    guard shouldPrepare else {
+      return
+    }
+
+    startDisconnectPreparation(error: error)
+    peerChannel.disconnect(error: error, reason: reason)
+  }
+
+  /// PeerChannel の実切断完了後に状態と公開ハンドラーを 1 回だけ終端します。
+  private func finishDisconnect(
+    connectionTask: ConnectionTask,
+    error: Error?,
+    reason: DisconnectReason
+  ) {
+    var shouldPrepare = false
+    var shouldNotifyConnect = false
+    var connectHandler: ((Error?) -> Void)?
+
+    connectionLifecycleLock.lock()
+    guard !disconnectFinished else {
+      connectionLifecycleLock.unlock()
+      connectionTask.complete()
+      return
+    }
+
+    // ConnectionTask.cancel() は PeerChannel を直接切断するため、MediaChannel 側で
+    // beginDisconnect を経由せずに完了通知へ到達する場合がある。
+    if state == .connecting || state == .connected {
+      disconnectStartedWhileConnecting = state == .connecting
+      connectionTimerAuthorization.terminate()
+      state = .disconnecting
+    }
+    guard state == .disconnecting else {
+      connectionLifecycleLock.unlock()
+      connectionTask.complete()
+      return
+    }
+
+    let completion = MediaChannelDisconnectPreparation.Completion(
+      connectionTask: connectionTask,
+      error: error,
+      reason: reason)
+    switch disconnectPreparation.receive(completion) {
+    case .prepare:
+      shouldPrepare = true
+    case .deferred:
+      // PeerChannel の cleanup は完了済みでも、MediaChannel 固有の準備が終わるまでは
+      // `.disconnected` と公開 callback を通知しない。
+      connectionLifecycleLock.unlock()
+      return
+    case .ready:
+      break
+    }
+
+    if shouldPrepare {
+      connectionLifecycleLock.unlock()
+      startDisconnectPreparation(error: error)
+      return
+    }
+
+    disconnectFinished = true
+    shouldNotifyConnect = disconnectStartedWhileConnecting
+    if shouldNotifyConnect {
+      connectHandler = _handler
+    }
+    _handler = nil
+    currentConnectionTask = nil
+    state = .disconnected
+    connectionLifecycleLock.unlock()
+
+    // 利用者ハンドラーから観測した時点で ConnectionTask が必ず終端しているようにする。
+    connectionTask.complete()
+
+    if shouldNotifyConnect {
+      connectHandler?(error)
+      Logger.debug(type: .mediaChannel, message: "call onConnect")
+      internalHandlers.onConnect?(error)
+      handlers.onConnect?(error)
+    }
+
+    Logger.debug(type: .mediaChannel, message: "did disconnect")
+    Logger.debug(type: .mediaChannel, message: "call onDisconnect")
+    internalHandlers.onDisconnectLegacy?(error)
+    handlers.onDisconnectLegacy?(error)
+    handlers.onDisconnect?(makeDisconnectEvent(error: error))
+  }
+
+  /// 切断準備を完了状態へ進め、準備中に保留された PeerChannel の完了通知を処理します。
+  private func completeDisconnectPreparation() {
+    let completion: MediaChannelDisconnectPreparation.Completion?
+
+    connectionLifecycleLock.lock()
+    completion = disconnectPreparation.complete()
+    connectionLifecycleLock.unlock()
+
+    if let completion {
+      finishDisconnect(
+        connectionTask: completion.connectionTask,
+        error: completion.error,
+        reason: completion.reason)
+    }
+  }
+
+  /// MediaChannel 固有の cleanup が完了した後に、切断準備を完了状態へ進めます。
+  private func startDisconnectPreparation(error: Error?) {
+    let cleanupTask = prepareForDisconnect(error: error)
+    let weakSelf = WeakMediaChannelBox(self)
+    Task { @Sendable in
+      await cleanupTask.value
+      weakSelf.value?.completeDisconnectPreparation()
+    }
+  }
+
+  /// MediaChannel が所有するタイマー、画面キャプチャ、ハードミュート状態を停止します。
+  /// 戻り値の Task は、画面共有停止と映像ハードミュート lease の破棄完了を表します。
+  @discardableResult
+  private func prepareForDisconnect(error: Error?) -> Task<Void, Never> {
+    // 接続の終了時に画面キャプチャを停止します。
+    // 論理停止は同期的に確定し、ReplayKit の停止完了を公開 callback より前に待ちます。
+    // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
+    let screenCaptureStopTask =
       currentScreenCaptureController()?.stopCaptureForDisconnect()
 
-      // 接続切断時に、この接続が保存したハードミュートの capturer を破棄します。
-      // (別接続がこの接続の capturer を取得しないようにするため)
-      let hardMuteLease = VideoHardMuteLease(channel: ObjectIdentifier(self))
-      Task { @Sendable in
-        await Self.videoHardMuteActor.release(lease: hardMuteLease)
-      }
-
-      Logger.debug(type: .mediaChannel, message: "try disconnecting")
-      if let error {
-        Logger.error(
-          type: .mediaChannel,
-          message: "error: \(error.localizedDescription)")
-      }
-
-      if state == .connecting {
-        executeHandler(error: error)
-      }
-
-      state = .disconnecting
-      connectionTimer.stop()
-      peerChannel.disconnect(error: error, reason: reason)
-      Logger.debug(type: .mediaChannel, message: "did disconnect")
-      state = .disconnected
-
-      Logger.debug(type: .mediaChannel, message: "call onDisconnect")
-      internalHandlers.onDisconnectLegacy?(error)
-      handlers.onDisconnectLegacy?(error)
-
-      // クロージャを用いて、エラーの内容に応じた SoraCloseEvent を生成
-      // error が nil の場合はクライアントからの正常終了 or DataChannel のみのシグナリング利用時の正常終了として .ok にする
-      // error が SoraError の場合はケースに応じて .ok と .error を切り替える
-      // error が SoraError の場合はクライアントが disconnect に渡した error のため、そのまま .error とする
-      let disconnectEvent: SoraCloseEvent = {
-        guard let error = error else {
-          return SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")
-        }
-        if let soraError = error as? SoraError {
-          switch soraError {
-          case .webSocketClosed(let code, let reason):
-            // 基本的に reason が nil なるケースはないはずだが、nil の場合は空文字列とする
-            return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
-          case .dataChannelClosed(let code, let reason):
-            return SoraCloseEvent.ok(code: code, reason: reason)
-          default:
-            return SoraCloseEvent.error(error)
-          }
-        } else {
-          return SoraCloseEvent.error(error)
-        }
-      }()
-
-      handlers.onDisconnect?(disconnectEvent)
+    // 接続切断時に、この接続が保存したハードミュートの capturer を破棄します。
+    // (別接続がこの接続の capturer を取得しないようにするため)
+    let hardMuteLease = videoHardMuteLease
+    let hardMuteCleanupTask = Task { @Sendable in
+      await Self.videoHardMuteActor.release(lease: hardMuteLease)
     }
+    let cleanupTask = Task { @Sendable in
+      await screenCaptureStopTask?.value
+      await hardMuteCleanupTask.value
+    }
+
+    Logger.debug(type: .mediaChannel, message: "try disconnecting")
+    if let error {
+      Logger.error(
+        type: .mediaChannel,
+        message: "error: \(error.localizedDescription)")
+    }
+    connectionTimer.stop()
+    return cleanupTask
+  }
+
+  /// 切断エラーを公開 SoraCloseEvent へ変換します。
+  private func makeDisconnectEvent(error: Error?) -> SoraCloseEvent {
+    guard let error else {
+      return SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")
+    }
+    if let soraError = error as? SoraError {
+      switch soraError {
+      case .webSocketClosed(let code, let reason):
+        // 基本的に reason が nil になるケースはないが、nil の場合は空文字列とする。
+        return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
+      case .dataChannelClosed(let code, let reason):
+        return SoraCloseEvent.ok(code: code, reason: reason)
+      default:
+        return SoraCloseEvent.error(error)
+      }
+    }
+    return SoraCloseEvent.error(error)
   }
 
   /// libwebrtc の統計情報を取得します。
@@ -868,6 +1220,12 @@ public final class MediaChannel {
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setAudioHardMute(_ mute: Bool) -> Error? {
+    // ステレオ再生では Voice Processing の録音ポーズ/再開 API を利用できない。
+    guard !configuration.audioStereoOutputEnabled else {
+      return SoraError.mediaChannelError(
+        reason: "setAudioHardMute is not supported when stereo playout is enabled")
+    }
+
     // 接続されていなければエラー
     guard state == .connected else {
       return SoraError.mediaChannelError(
@@ -997,7 +1355,7 @@ public final class MediaChannel {
       senderStream.videoEnabled = false
       try await Self.videoHardMuteActor.setMute(
         mute: true,
-        lease: VideoHardMuteLease(channel: ObjectIdentifier(self)),
+        lease: videoHardMuteLease,
         senderStream: SenderStreamBox(stream: senderStream),
         cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
@@ -1012,7 +1370,7 @@ public final class MediaChannel {
       // ハードミュート無効化 -> ソフトミュートによる黒塗りフレーム送出解除の順になるようにします
       try await Self.videoHardMuteActor.setMute(
         mute: false,
-        lease: VideoHardMuteLease(channel: ObjectIdentifier(self)),
+        lease: videoHardMuteLease,
         senderStream: SenderStreamBox(stream: senderStream),
         cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
       )
@@ -1072,13 +1430,17 @@ public final class MediaChannel {
   // screenCaptureController インスタンスを取得します
   // インスタンス未生成の場合は生成します
   // スクリーンキャプチャ機能は必ず利用するとは限らないため必要時に生成しています
-  private func getOrCreateScreenCaptureController() -> ScreenCaptureController {
+  func getOrCreateScreenCaptureController(
+    recorderCoordinator: ScreenCaptureRecorderCoordinator = .shared
+  ) -> ScreenCaptureController {
     withScreenCaptureControllerLock {
       if let screenCaptureController {
         return screenCaptureController
       }
 
-      let screenCaptureController = ScreenCaptureController(mediaChannel: self)
+      let screenCaptureController = ScreenCaptureController(
+        mediaChannel: self,
+        recorderCoordinator: recorderCoordinator)
       self.screenCaptureController = screenCaptureController
       return screenCaptureController
     }
