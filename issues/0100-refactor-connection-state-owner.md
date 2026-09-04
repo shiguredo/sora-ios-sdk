@@ -7,9 +7,11 @@
 
 ## 目的
 
-`MediaChannel`、`PeerChannel`、`ConnectionTask`、接続 timeout に分散している接続状態の読み書きを、接続単位の 1 つの actor または serial executor へ集約する。
+`MediaChannel`、`PeerChannel`、`ConnectionTask`、接続 timeout に分散している接続状態の読み書きを、接続単位の 1 つの actor へ集約する。
 
 Swift 6 の isolation を型と実行経路で保証できる内部構造へ移行し、`nonisolated(unsafe)` と「ベストエフォート」の状態同期に依存しない設計にする。
+
+本 issue は、iOS の最低対応バージョンの引き上げを必要としない。Swift 6 言語モード対応にあたって iOS 14 サポートが手間を増やす場合のみ iOS 15 へ引き上げる方針とし、0100 で利用する Swift concurrency API (`AsyncStream` / actor / async / await / `Task`) は iOS 13.0+ で利用可能なため、iOS 14 対応を維持したまま実装する。
 
 ## 現状
 
@@ -55,22 +57,65 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
 
 ### 接続状態 reducer
 
-- 接続 phase、論理接続 ID、transport epoch、完了済み callback 台帳を保持する production の状態 reducer を導入する。
+- 接続 phase、論理接続 ID、transport epoch、配送済み callback 台帳を保持する production の状態 reducer を導入する。
 - reducer の入力は、利用者操作、signaling event、PeerConnection event、DataChannel event、timeout、redirect、切断とする。
 - reducer は副作用を直接実行せず、WebRTC 操作、callback 配送、snapshot 更新などの effect を返す。
 - 不正な状態遷移と stale epoch のイベントを明示的に拒否する。
 
+```text
+[イベントソース]
+  利用者操作        signaling   PeerConnection   DataChannel    timer
+  (disconnect)     (offer)      (didOpen)        (opened)       (timeout)
+       │              │              │               │            │
+       └──────────────┴──────┬───────┴───────────────┴────────────┘
+                              │ yield
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│ 接続単位の actor (単一 owner)                                   │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Intake: AsyncStream<ConnectionEvent> を逐次消費          │  │
+│  └──────────────────────────────┬─────────────────────────┘  │
+│                                 │                            │
+│                                 ▼                            │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ reducer: (State, Event) -> (State, [Effect])            │  │
+│  │  State: phase / logicalConnectionID / transportEpoch    │  │
+│  │         / deliveryTracker                               │  │
+│  └──────────────────────────────┬─────────────────────────┘  │
+│                                 │                            │
+│                        ┌────────┴─────────┐                  │
+│                        ▼                  ▼                  │
+│  ┌─────────────────────────┐    ┌─────────────────────────┐  │
+│  │ snapshot を publish      │    │ effect を実行            │  │
+│  │ (phase 遷移時のみ)        │    │  WebRTC 操作            │  │
+│  └────────────┬────────────┘    │  callback 配送          │  │
+│               │                 │  (critical section 外) │  │
+│               │                 └─────────────────────────┘  │
+│               ▼                                                │
+│  ┌─────────────────────────┐                                  │
+│  │ lock-backed snapshot    │                                  │
+│  │ (NSLock で保護)          │                                  │
+│  └────────────┬────────────┘                                  │
+└───────────────┼───────────────┴───────────────────────────────┘
+                │
+                ▼
+[同期 getter] state / isAvailable / connectionTime ...
+[callback]    onConnect / onDisconnect ... (owner 外)
+```
+
 ### 単一 owner
 
-- reducer と接続に属する mutable state を、接続単位の actor または serial executor が所有する。
-- iOS 14 への back deployment を維持できる Swift concurrency API、`DispatchQueue`、`NSLock` の範囲で実装する。
+- reducer と接続に属する mutable state (接続 phase、論理接続 ID、transport epoch、配送済み callback 台帳) を、**接続単位の `actor`** が所有する。
+- iOS の最低対応バージョンの引き上げは、Swift 6 言語モード対応にあたって iOS 14 サポートが手間を増やす場合にのみ行う方針とする。0100 で利用する Swift concurrency API (`AsyncStream` / actor / async / await / `Task`) は iOS 13.0+ で利用可能であり、iOS 14 対応を維持したまま実装できる。iOS 15+ 限定の API (`Clock` / `ContinuousClock` / `AsyncTimerSequence` 等) は利用しない。
 - custom executor や新しい同期 primitive を利用する場合は、最低 iOS バージョンでの availability を確認してから採用する。
 - Objective-C / libwebrtc delegate 自体を actor isolated witness にせず、薄い `NSObject` adapter から ordered ingress へイベントを渡す。
-- callback ごとに独立した unstructured `Task` を生成しない。複数 queue から届くイベントの順序を 1 本の ingress で確定する。
+- callback ごとに独立した unstructured `Task` を生成しない。複数 queue から届くイベントの順序を 1 本の ingress (`AsyncStream<Event>` の consumer) で確定する。
+- `PeerChannel.Lock` は現状維持。reducer と Lock の責任の境界は、この issue で設計・実装し、Lock の統合 (reducer へ) は別 issue (実装前に起票予定) で扱う。
 
 ### 同期 public getter
 
 - owner が状態更新時に immutable な `MediaChannelSnapshot` を生成する。
+- snapshot の publish は **接続 phase の遷移時のみ**行う。`connectionCount` 等 (notify で更新される値) は snapshot に含めず、現状どおり個別の getter で読む (スコープ外)。
 - public の同期 getter は `NSLock` 等で保護した snapshot storage だけを読む。
 - 複数 getter 間の整合した組み合わせが必要な利用者向けに、version 付き snapshot getter を追加できる構造にする。
 - callback を呼ぶ前に snapshot を publish し、callback 内の同期 getter が新しい状態を観測できる順序を保証する。
@@ -87,13 +132,16 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
 - 公開 handler を `@Sendable` または `AsyncStream` へ移行する作業は別 issue とする。
 - raw WebRTC 型を公開 API から除去する作業は `0070` の方針と整合させる。
 - 本 issue で公開 API を一斉に async 化しない。
+- DataChannel の OPEN 追跡状態 (`openedDataChannelLabels` / `messagingLabels` / `onDataChannelNotified`、`dataChannelOpenLock` で保護) は本 issue のスコープ外。現状どおり `NSLock` で保護し、発火判定は reducer (接続 phase) の状態を参照しない (ラベル集合のみに依存)。
+- `connectionCount` / `publisherCount` / `subscriberCount` (`type: notify` 受信で更新)は本 issue のスコープ外。snapshot は phase 遷移時のみ publish し、notify による更新は現状維持 (これらの値は接続 phase と独立に更新されるため、snapshot の整合性に影響しない)。
+- `ConnectionTimer` の実装 (stateLock / timer / generation) は本 issue のスコープ外。接続 phase の更新は reducer 経由で行うが、ConnectionTimer 自体の状態所有は現状維持とする。
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
 - production の状態 reducer に実際のイベント型を入力し、connect、cancel、timeout、redirect、disconnect の順列を検証する。
-- すべてのイベント列で、接続 phase と callback 完了台帳が矛盾せず、終端が 1 回であることを確認する。
+- すべてのイベント列で、接続 phase と配送済み callback 台帳が矛盾せず、終端が 1 回であることを確認する。
 - 実 Sora と実 WebRTC を使い、同時 connect、即時 cancel、callback 内 disconnect、redirect、再接続を反復する。
 - public callback 内からすべての同期 getter を呼び、deadlock せず最新 snapshot を取得できることを確認する。
 - Thread Sanitizer と actor data race checks を補助的に有効化する。
@@ -102,13 +150,14 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
 ## 完了条件
 
 - 接続 phase、論理接続 ID、transport epoch、callback 完了状態の所有者が 1 つであること。
+- `dataChannelGeneration` が transport epoch として reducer に含まれ、DataChannel delegate の世代照合が sync な read (snapshot) で行われること。
 - `PeerChannel` の接続状態フラグから `nonisolated(unsafe)` が除去されていること。
 - Objective-C / libwebrtc callback が単一の ordered ingress を経由すること。
 - callback ごとの独立した Task 生成にイベント順序を依存していないこと。
 - public の同期 getter が actor の同期 wait を行わず、lock-backed snapshot を参照すること。
 - callback の呼び出し前に状態と snapshot が確定していること。
 - callback 内から同期 getter、cancel、disconnect を呼んでも deadlock しないこと。
-- iOS 14 で利用できない concurrency API を無条件に使用していないこと。
+- iOS 14 では利用できない concurrency API (iOS 15+ 限定 `Clock` / `ContinuousClock` / `AsyncTimerSequence` 等) を無条件に使用していないこと。
 - `0092`、`0093`、`0095`、`0096` の回帰テストを含む全テストが成功すること。
 
 ## 解決方法
