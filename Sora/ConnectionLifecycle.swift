@@ -179,12 +179,24 @@ enum ConnectionEffect: Sendable {
   case publishSnapshot
 
   /// 接続完了 callback を配送する
+  ///
+  /// - Note: この Effect の実行 (callback 配送) は 0110 (Sendable event API) で
+  ///   扱う。0100 では reducer の deliveryTracker を状態記録として保持するのみで、
+  ///   実行する側の接続は行わない。
   case deliverConnectCallback
 
   /// 接続失敗 callback を配送する
+  ///
+  /// - Note: この Effect の実行 (callback 配送) は 0110 (Sendable event API) で
+  ///   扱う。0100 では reducer の deliveryTracker を状態記録として保持するのみで、
+  ///   実行する側の接続は行わない。
   case deliverConnectCallbackWithError
 
   /// 切断通知を配送する
+  ///
+  /// - Note: この Effect の実行 (callback 配送) は 0110 (Sendable event API) で
+  ///   扱う。0100 では reducer の deliveryTracker を状態記録として保持するのみで、
+  ///   実行する側の接続は行わない。
   case deliverDisconnect
 }
 
