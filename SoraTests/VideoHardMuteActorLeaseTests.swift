@@ -233,49 +233,133 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   }
 
   /// 同じ接続のカメラと画面共有を、非同期開始より前の予約で排他できることを確認する
-  func testVideoSourceCoordinatorReservesOnlyOneSource() {
+  func testVideoSourceCoordinatorReservesOnlyOneSource() throws {
+    let dependencies = try makeDependencies()
     let coordinator = VideoSourceCoordinator()
 
-    XCTAssertEqual(coordinator.reserveCamera(), .acquired, "最初のカメラ予約を取得できること")
-    XCTAssertEqual(
-      coordinator.reserveCamera(),
-      .alreadyReserved,
-      "同じ送信元の重複予約を識別できること")
-    XCTAssertEqual(
-      coordinator.reserveScreen(),
-      .unavailable,
+    guard
+      let cameraReservation = coordinator.beginCamera(stream: dependencies.senderStreamBox.stream)
+    else {
+      XCTFail("最初のカメラ予約を取得できること")
+      return
+    }
+    XCTAssertNil(
+      coordinator.beginCamera(stream: dependencies.senderStreamBox.stream),
+      "開始処理中のカメラを重複予約できないこと")
+    XCTAssertNil(
+      coordinator.beginScreen(stream: dependencies.senderStreamBox.stream),
       "カメラ予約中は画面共有を予約できないこと")
+    XCTAssertTrue(coordinator.completeCamera(cameraReservation, active: true))
 
     coordinator.releaseCamera()
-    XCTAssertEqual(
-      coordinator.reserveScreen(),
-      .acquired,
-      "カメラ予約の解放後は画面共有を予約できること")
-    XCTAssertEqual(
-      coordinator.reserveCamera(),
-      .unavailable,
+    guard
+      let screenReservation = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    else {
+      XCTFail("カメラ予約の解放後は画面共有を予約できること")
+      return
+    }
+    XCTAssertTrue(coordinator.completeScreenStart(screenReservation))
+    XCTAssertNil(
+      coordinator.beginCamera(stream: dependencies.senderStreamBox.stream),
       "画面共有予約中はカメラを予約できないこと")
+    XCTAssertTrue(coordinator.beginScreenStop())
+    coordinator.finishScreenStop(stopped: true)
   }
 
   /// 切断で破棄した映像送信元には、遅延した開始要求や新しい予約を許可しないことを確認する
-  func testVideoSourceCoordinatorRejectsReservationAfterRevoke() {
+  func testVideoSourceCoordinatorRejectsReservationAfterRevoke() throws {
+    let dependencies = try makeDependencies()
     let coordinator = VideoSourceCoordinator()
 
-    XCTAssertEqual(coordinator.reserveCamera(), .acquired)
-    XCTAssertTrue(coordinator.isReservedForCamera())
+    guard let reservation = coordinator.beginCamera(stream: dependencies.senderStreamBox.stream)
+    else {
+      XCTFail("カメラ予約を取得できること")
+      return
+    }
+    XCTAssertTrue(coordinator.isValid(reservation))
 
     coordinator.revoke()
-    XCTAssertFalse(coordinator.isReservedForCamera(), "切断後は既存のカメラ予約を無効化すること")
+    XCTAssertFalse(coordinator.isValid(reservation), "切断後は既存のカメラ予約を無効化すること")
 
     coordinator.releaseCamera()
-    XCTAssertEqual(
-      coordinator.reserveCamera(),
-      .unavailable,
+    XCTAssertNil(
+      coordinator.beginCamera(stream: dependencies.senderStreamBox.stream),
       "解放後も切断済み coordinator を再利用できないこと")
-    XCTAssertEqual(
-      coordinator.reserveScreen(),
-      .unavailable,
+    XCTAssertNil(
+      coordinator.beginScreen(stream: dependencies.senderStreamBox.stream),
       "切断後は画面共有も予約できないこと")
+  }
+
+  /// 画面共有の開始待ち中に停止すると、古い開始予約を完了できないことを確認する
+  func testVideoSourceCoordinatorCancelsDelayedScreenStart() throws {
+    let dependencies = try makeDependencies()
+    let coordinator = VideoSourceCoordinator()
+    guard let reservation = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    else {
+      XCTFail("画面共有予約を取得できること")
+      return
+    }
+
+    XCTAssertTrue(coordinator.beginScreenStop())
+    XCTAssertFalse(coordinator.isValid(reservation), "停止開始時に古い世代を無効化すること")
+    XCTAssertFalse(
+      coordinator.completeScreenStart(reservation),
+      "停止後に遅れて完了した開始を確定しないこと")
+
+    coordinator.finishScreenStop(stopped: true)
+    XCTAssertNotNil(
+      coordinator.beginCamera(stream: dependencies.senderStreamBox.stream),
+      "画面共有停止後はカメラを予約できること")
+  }
+
+  /// カメラの接続間引き継ぎ後に、以前の所有接続へ予約を残さないことを確認する
+  func testVideoSourceCoordinatorClearsPreviousCameraOwnerAfterHandoff() throws {
+    let first = try makeDependencies()
+    let second = try makeDependencies()
+    let firstCoordinator = VideoSourceCoordinator()
+    let secondCoordinator = VideoSourceCoordinator()
+
+    guard let firstReservation = firstCoordinator.beginCamera(stream: first.senderStreamBox.stream)
+    else {
+      XCTFail("最初の接続がカメラを予約できること")
+      return
+    }
+    XCTAssertTrue(firstCoordinator.completeCamera(firstReservation, active: true))
+
+    guard
+      let secondReservation = secondCoordinator.beginCamera(stream: second.senderStreamBox.stream)
+    else {
+      XCTFail("引き継ぎ先の接続がカメラ開始を予約できること")
+      return
+    }
+    VideoSourceCoordinator.releaseCameraReservations(
+      for: first.senderStreamBox.stream,
+      excluding: secondReservation)
+
+    XCTAssertFalse(firstCoordinator.isValid(firstReservation))
+    XCTAssertTrue(secondCoordinator.isValid(secondReservation))
+    XCTAssertNotNil(
+      firstCoordinator.beginScreen(stream: first.senderStreamBox.stream),
+      "物理カメラを失った接続は画面共有へ切り替えられること")
+  }
+
+  /// 画面共有予約を公開カメラ API からも同じ送信ストリームで検出できることを確認する
+  func testVideoSourceCoordinatorPublishesScreenReservationByStream() throws {
+    let dependencies = try makeDependencies()
+    let coordinator = VideoSourceCoordinator()
+    guard let reservation = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    else {
+      XCTFail("画面共有予約を取得できること")
+      return
+    }
+
+    XCTAssertTrue(
+      VideoSourceCoordinator.hasScreenReservation(for: dependencies.senderStreamBox.stream))
+    XCTAssertTrue(coordinator.beginScreenStop())
+    coordinator.finishScreenStop(stopped: true)
+    XCTAssertFalse(
+      VideoSourceCoordinator.hasScreenReservation(for: dependencies.senderStreamBox.stream))
+    XCTAssertFalse(coordinator.isValid(reservation))
   }
 
   /// 通常カメラの停止キューが完了するまで MediaChannel の切断 callback を通知しないことを確認する

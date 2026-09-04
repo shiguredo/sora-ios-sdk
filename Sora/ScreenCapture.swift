@@ -184,15 +184,34 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // 画面キャプチャを開始します
-  func startCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) async throws {
+  func startCapture(
+    settings: ScreenCaptureSettings,
+    senderStream: MediaStream,
+    authorization: VideoSourceCoordinator.Reservation,
+    videoSourceCoordinator: VideoSourceCoordinator
+  ) async throws {
+    guard videoSourceCoordinator.isValid(authorization) else {
+      throw SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+    }
     let captureID = try beginStartCapture(settings: settings, senderStream: senderStream)
+
+    // beginStartCapture と並行して停止または切断された場合は、ReplayKit の操作を始めない。
+    guard videoSourceCoordinator.isValid(authorization) else {
+      let error = SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+      _ = completeStartCapture(captureID: captureID, error: error)
+      throw error
+    }
 
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       recorderCoordinator.enqueue { [self] in
         // start のキュー投入前に stop が完了した場合は、ReplayKit の開始自体を行わない。
-        guard shouldIssueRecorderStart(captureID: captureID) else {
+        guard shouldIssueRecorderStart(captureID: captureID),
+          videoSourceCoordinator.isValid(authorization)
+        else {
+          let error = SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+          _ = completeStartCapture(captureID: captureID, error: error)
           continuation.resume(
-            throwing: SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+            throwing: error
           )
           return
         }

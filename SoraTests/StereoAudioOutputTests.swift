@@ -117,7 +117,10 @@ final class StereoAudioOutputTests: XCTestCase {
     let configuration = RTCAudioSessionConfiguration.webRTC()
     let originalCategory = configuration.category
     configuration.category = AVAudioSession.Category.ambient.rawValue
-    defer { configuration.category = originalCategory }
+    defer {
+      configuration.category = originalCategory
+      RTCAudioSessionConfiguration.setWebRTC(configuration)
+    }
 
     let coordinator = AudioSessionCoordinator()
     let first = try coordinator.acquire(
@@ -149,9 +152,9 @@ final class StereoAudioOutputTests: XCTestCase {
     second.release()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 0)
-    XCTAssertTrue(
+    XCTAssertFalse(
       RTCAudioSessionConfiguration.webRTC() === configuration,
-      "最後の要求解放後に元のテンプレートへ戻すこと")
+      "既存テンプレートを nonatomic に変更せず復元用オブジェクトへ差し替えること")
     XCTAssertEqual(
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue)
@@ -175,7 +178,10 @@ final class StereoAudioOutputTests: XCTestCase {
     let configuration = RTCAudioSessionConfiguration.webRTC()
     let originalCategory = configuration.category
     configuration.category = AVAudioSession.Category.ambient.rawValue
-    defer { configuration.category = originalCategory }
+    defer {
+      configuration.category = originalCategory
+      RTCAudioSessionConfiguration.setWebRTC(configuration)
+    }
 
     let coordinator = AudioSessionCoordinator()
     let receiver = try coordinator.acquire(profile: .voiceProcessing)
@@ -191,7 +197,10 @@ final class StereoAudioOutputTests: XCTestCase {
 
     receiver.release()
     sender.release()
-    XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === configuration)
+    XCTAssertFalse(RTCAudioSessionConfiguration.webRTC() === configuration)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.ambient.rawValue)
   }
 
   /// 共有 template がすでに PlayAndRecord の場合は、既存の受信接続後も送信接続を許可することを確認する
@@ -199,7 +208,10 @@ final class StereoAudioOutputTests: XCTestCase {
     let configuration = RTCAudioSessionConfiguration.webRTC()
     let originalCategory = configuration.category
     configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-    defer { configuration.category = originalCategory }
+    defer {
+      configuration.category = originalCategory
+      RTCAudioSessionConfiguration.setWebRTC(configuration)
+    }
 
     let coordinator = AudioSessionCoordinator()
     let receiver = try coordinator.acquire(profile: .voiceProcessing)
@@ -229,7 +241,10 @@ final class StereoAudioOutputTests: XCTestCase {
     let configuration = RTCAudioSessionConfiguration.webRTC()
     let originalCategory = configuration.category
     configuration.category = AVAudioSession.Category.ambient.rawValue
-    defer { configuration.category = originalCategory }
+    defer {
+      configuration.category = originalCategory
+      RTCAudioSessionConfiguration.setWebRTC(configuration)
+    }
 
     let coordinator = AudioSessionCoordinator()
     let sender = try coordinator.acquire(
@@ -249,6 +264,43 @@ final class StereoAudioOutputTests: XCTestCase {
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue,
       "すべての ADM を破棄した後に元の category へ復元すること")
+  }
+
+  /// 接続中にホストアプリが共有 template を差し替えた場合は、その設定を上書きしないことを確認する
+  func testAudioSessionCoordinatorKeepsExternallyReplacedTemplate() throws {
+    let originalConfiguration = RTCAudioSessionConfiguration.webRTC()
+    defer { RTCAudioSessionConfiguration.setWebRTC(originalConfiguration) }
+
+    let initialConfiguration = RTCAudioSessionConfiguration()
+    initialConfiguration.category = AVAudioSession.Category.ambient.rawValue
+    initialConfiguration.mode = AVAudioSession.Mode.default.rawValue
+    initialConfiguration.sampleRate = 44_100
+    RTCAudioSessionConfiguration.setWebRTC(initialConfiguration)
+
+    let coordinator = AudioSessionCoordinator()
+    let requirement = try coordinator.acquire(
+      profile: .voiceProcessing,
+      requiresPlayAndRecord: true)
+    requirement.requirePlayAndRecord()
+
+    let externalConfiguration = RTCAudioSessionConfiguration()
+    externalConfiguration.category = AVAudioSession.Category.soloAmbient.rawValue
+    externalConfiguration.mode = AVAudioSession.Mode.moviePlayback.rawValue
+    externalConfiguration.sampleRate = 48_000
+    RTCAudioSessionConfiguration.setWebRTC(externalConfiguration)
+
+    requirement.release()
+
+    XCTAssertTrue(
+      RTCAudioSessionConfiguration.webRTC() === externalConfiguration,
+      "ホストアプリが設定した template の同一性を維持すること")
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().category,
+      AVAudioSession.Category.soloAmbient.rawValue)
+    XCTAssertEqual(
+      RTCAudioSessionConfiguration.webRTC().mode,
+      AVAudioSession.Mode.moviePlayback.rawValue)
+    XCTAssertEqual(RTCAudioSessionConfiguration.webRTC().sampleRate, 48_000)
   }
 
   /// stereo profile は他の profile および 2 つ目の stereo と同時利用できないことを確認する
@@ -283,7 +335,10 @@ final class StereoAudioOutputTests: XCTestCase {
     let configuration = RTCAudioSessionConfiguration.webRTC()
     let originalCategory = configuration.category
     configuration.category = AVAudioSession.Category.ambient.rawValue
-    defer { configuration.category = originalCategory }
+    defer {
+      configuration.category = originalCategory
+      RTCAudioSessionConfiguration.setWebRTC(configuration)
+    }
 
     let coordinator = AudioSessionCoordinator()
     let factory = try NativePeerChannelFactory(
@@ -300,7 +355,7 @@ final class StereoAudioOutputTests: XCTestCase {
     factory.releaseAudioSessionRequirement()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
     XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 0)
-    XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === configuration)
+    XCTAssertFalse(RTCAudioSessionConfiguration.webRTC() === configuration)
     XCTAssertEqual(
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue)

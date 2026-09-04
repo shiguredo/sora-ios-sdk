@@ -394,6 +394,9 @@ public final class MediaChannel {
   /// カメラと画面共有の開始予約を接続単位で排他する状態です。
   private let videoSourceCoordinator: VideoSourceCoordinator
 
+  /// カメラ状態の確認を process-wide のカメラ操作と直列化します。
+  private let cameraCaptureCoordinator: CameraVideoCaptureCoordinator
+
   // ReplayKit を利用した画面キャプチャ制御です
   // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
   // 生成後は MediaChannel のライフサイクルで保持します。
@@ -433,6 +436,7 @@ public final class MediaChannel {
     self.configuration = configuration
     self.videoHardMuteLease = videoHardMuteLease
     self.videoSourceCoordinator = videoSourceCoordinator
+    self.cameraCaptureCoordinator = cameraCaptureCoordinator
     self.nativePeerChannelFactory = try NativePeerChannelFactory(
       bypassVoiceProcessing: configuration.bypassVoiceProcessing,
       audioDevice: configuration.audioDevice,
@@ -1027,14 +1031,18 @@ public final class MediaChannel {
   /// 戻り値の Task は、画面共有停止と映像ハードミュート lease の破棄完了を表します。
   @discardableResult
   private func prepareForDisconnect(error: Error?) -> Task<Void, Never> {
+    // 進行中のハードミュート解除がカメラ開始後に必ず取消を検知できるよう、
+    // Actor の cleanup Task を生成する前に lease を同期的に無効化する。
+    videoHardMuteLease.revoke()
     // 非同期のカメラ / 画面共有開始が遅れて完了しても、新しい送信元として確定させない。
     videoSourceCoordinator.revoke()
 
     // 接続の終了時に画面キャプチャを停止します。
     // 論理停止は同期的に確定し、ReplayKit の停止完了を公開 callback より前に待ちます。
     // スクリーンキャプチャ未使用時はインスタンス未生成のため何もしません。
-    let screenCaptureStopTask =
-      currentScreenCaptureController()?.stopCaptureForDisconnect()
+    let screenCaptureController = currentScreenCaptureController()
+    let screenCaptureStopTask = screenCaptureController?.stopCaptureForDisconnect()
+    let videoSourceCoordinator = videoSourceCoordinator
 
     // 接続切断時に、この接続が保存したハードミュートの capturer を破棄します。
     // (別接続がこの接続の capturer を取得しないようにするため)
@@ -1044,6 +1052,8 @@ public final class MediaChannel {
     }
     let cleanupTask = Task { @Sendable in
       await screenCaptureStopTask?.value
+      videoSourceCoordinator.finishScreenStop(
+        stopped: screenCaptureController?.isCaptureActive() != true)
       await hardMuteCleanupTask.value
     }
 
@@ -1380,8 +1390,7 @@ public final class MediaChannel {
       )
       videoSourceCoordinator.releaseCamera()
     } else {
-      let reservation = videoSourceCoordinator.reserveCamera()
-      guard reservation != .unavailable else {
+      guard let reservation = videoSourceCoordinator.beginCamera(stream: senderStream) else {
         throw SoraError.mediaChannelError(
           reason:
             "screen capture is active, stopScreenCapture before setVideoHardMute(false)")
@@ -1396,10 +1405,12 @@ public final class MediaChannel {
           cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
         )
       } catch {
-        if reservation == .acquired {
-          videoSourceCoordinator.releaseCamera()
-        }
+        _ = videoSourceCoordinator.completeCamera(reservation, active: false)
         throw error
+      }
+      guard videoSourceCoordinator.completeCamera(reservation, active: true) else {
+        throw SoraError.mediaChannelError(
+          reason: "video hard mute operation was cancelled")
       }
       senderStream.videoEnabled = true
     }
@@ -1425,8 +1436,10 @@ public final class MediaChannel {
       senderStream = stream
     }
 
-    let reservation = videoSourceCoordinator.reserveScreen()
-    guard reservation != .unavailable else {
+    // controller を最初の await より前に保持し、並行する停止または切断が
+    // 遅延中の開始を必ず取り消せるようにする。
+    let screenCaptureController = getOrCreateScreenCaptureController()
+    guard let reservation = videoSourceCoordinator.beginScreen(stream: senderStream) else {
       throw SoraError.mediaChannelError(
         reason:
           "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
@@ -1435,21 +1448,37 @@ public final class MediaChannel {
 
     do {
       // 公開 API から直接開始されたカメラも確認し、同じ送信ストリームでの二重送信を防ぐ。
-      guard !(await isCameraVideoCaptureRunning(on: senderStream)) else {
+      guard
+        !(await isCameraVideoCaptureRunning(
+          on: senderStream,
+          authorization: reservation))
+      else {
         throw SoraError.mediaChannelError(
           reason:
             "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
         )
       }
 
-      let screenCaptureController = getOrCreateScreenCaptureController()
       try await screenCaptureController.startCapture(
         settings: settings,
-        senderStream: senderStream
+        senderStream: senderStream,
+        authorization: reservation,
+        videoSourceCoordinator: videoSourceCoordinator
       )
+      guard videoSourceCoordinator.completeScreenStart(reservation) else {
+        await screenCaptureController.stopCapture()
+        videoSourceCoordinator.finishScreenStop(
+          stopped: !screenCaptureController.isCaptureActive())
+        throw SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+      }
     } catch {
-      if reservation == .acquired {
-        videoSourceCoordinator.releaseScreen()
+      if screenCaptureController.isCaptureActive() {
+        _ = videoSourceCoordinator.beginScreenStop()
+        await screenCaptureController.stopCapture()
+        videoSourceCoordinator.finishScreenStop(
+          stopped: !screenCaptureController.isCaptureActive())
+      } else {
+        videoSourceCoordinator.failScreenStart(reservation)
       }
       throw error
     }
@@ -1458,11 +1487,11 @@ public final class MediaChannel {
 
   /// ReplayKit を利用した画面キャプチャを停止します
   public func stopScreenCapture() async {
+    _ = videoSourceCoordinator.beginScreenStop()
     let screenCaptureController = currentScreenCaptureController()
     await screenCaptureController?.stopCapture()
-    if screenCaptureController?.isCaptureActive() != true {
-      videoSourceCoordinator.releaseScreen()
-    }
+    videoSourceCoordinator.finishScreenStop(
+      stopped: screenCaptureController?.isCaptureActive() != true)
     Logger.debug(type: .mediaChannel, message: "stopScreenCapture")
   }
 
@@ -1540,19 +1569,23 @@ public final class MediaChannel {
   }
 
   // 指定した senderStream に対してカメラキャプチャが実行中かを返します
-  private func isCameraVideoCaptureRunning(on senderStream: MediaStream) async -> Bool {
-    await withCheckedContinuation { continuation in
-      SoraDispatcher.async(on: .camera) {
-        guard
-          let current = CameraVideoCapturer.current,
-          current.isRunning,
-          let currentSenderStream = current.stream
-        else {
-          continuation.resume(returning: false)
-          return
-        }
-        continuation.resume(returning: currentSenderStream === senderStream)
+  private func isCameraVideoCaptureRunning(
+    on senderStream: MediaStream,
+    authorization: VideoSourceCoordinator.Reservation
+  ) async -> Bool {
+    let videoSourceCoordinator = videoSourceCoordinator
+    let senderStream = SenderStreamBox(stream: senderStream)
+    return await cameraCaptureCoordinator.perform {
+      guard videoSourceCoordinator.isValid(authorization) else {
+        return true
       }
+      guard let current = await CameraVideoCapturer.currentForSDK(),
+        current.isRunning,
+        let currentSenderStream = current.stream
+      else {
+        return false
+      }
+      return currentSenderStream === senderStream.stream
     }
   }
 }

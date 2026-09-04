@@ -902,8 +902,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
-    let reservation = videoSourceCoordinator.reserveCamera()
-    guard reservation != .unavailable else {
+    guard let reservation = videoSourceCoordinator.beginCamera(stream: stream) else {
       Logger.error(
         type: .peerChannel,
         message: "camera capture cannot start while screen capture is reserved")
@@ -917,9 +916,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let senderStream = SenderStreamBox(stream: stream)
     cameraCaptureCoordinator.enqueue {
       guard cameraCaptureCoordinator.isAvailable else {
-        if reservation == .acquired {
-          videoSourceCoordinator.releaseCamera()
-        }
+        _ = videoSourceCoordinator.completeCamera(reservation, active: false)
         Logger.error(
           type: .peerChannel,
           message: "camera capture is quarantined after a cleanup failure")
@@ -927,16 +924,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       // 切断がキュー実行より先に確定した場合は、カメラへ作用しない。
-      guard videoSourceCoordinator.isReservedForCamera() else {
+      guard videoSourceCoordinator.isValid(reservation) else {
         return
       }
 
       if let current = await CameraVideoCapturer.currentForSDK() {
-        guard videoSourceCoordinator.isReservedForCamera() else {
+        guard videoSourceCoordinator.isValid(reservation) else {
           return
         }
         guard current.isRunning else {
-          videoSourceCoordinator.releaseCamera()
+          _ = videoSourceCoordinator.completeCamera(reservation, active: false)
           cameraCaptureCoordinator.quarantine(capturer: current)
           Logger.error(
             type: .peerChannel,
@@ -944,7 +941,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           return
         }
         if current.stream === senderStream.stream {
-          if videoSourceCoordinator.isReservedForCamera() {
+          if videoSourceCoordinator.completeCamera(reservation, active: true) {
             cameraCaptureOwnership.set(senderStream: senderStream.stream)
           }
           return
@@ -952,6 +949,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         let previousStream = current.stream
         let stopError = await current.stopForSDK()
         if current.isRunning {
+          _ = videoSourceCoordinator.completeCamera(reservation, active: false)
           cameraCaptureCoordinator.quarantine(capturer: current)
           Logger.error(
             type: .peerChannel,
@@ -963,13 +961,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
         if let previousStream {
           cameraCaptureOwnership.clear(ifOwnedBy: previousStream)
+          VideoSourceCoordinator.releaseCameraReservations(
+            for: previousStream,
+            excluding: reservation)
         }
-        guard videoSourceCoordinator.isReservedForCamera() else {
+        guard videoSourceCoordinator.isValid(reservation) else {
           return
         }
       }
 
       guard !capturer.isRunning else {
+        _ = videoSourceCoordinator.completeCamera(reservation, active: false)
         cameraCaptureCoordinator.quarantine(capturer: capturer)
         Logger.error(
           type: .peerChannel,
@@ -983,9 +985,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         senderStream: senderStream)
       {
         if capturer.isRunning {
+          _ = videoSourceCoordinator.completeCamera(reservation, active: true)
           cameraCaptureCoordinator.quarantine(capturer: capturer)
         } else {
-          videoSourceCoordinator.releaseCamera()
+          _ = videoSourceCoordinator.completeCamera(reservation, active: false)
         }
         Logger.error(
           type: .peerChannel,
@@ -994,7 +997,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       // start の完了待ち中に切断された場合は、開始済みのカメラを同じ直列化区間で停止する。
-      guard videoSourceCoordinator.isReservedForCamera() else {
+      guard videoSourceCoordinator.completeCamera(reservation, active: true) else {
         let stopError = await capturer.stopForSDK()
         if capturer.isRunning {
           cameraCaptureCoordinator.quarantine(capturer: capturer)

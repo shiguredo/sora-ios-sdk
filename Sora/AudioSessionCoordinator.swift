@@ -51,8 +51,8 @@ enum AudioSessionUsage {
 /// 複数の接続が共有する libwebrtc の音声セッション設定を管理します。
 ///
 /// AudioUnit profile の競合を接続開始前に検出します。また、最初の要求で
-/// 元の `RTCAudioSessionConfiguration` template を保存し、最後の要求が
-/// 解放された時点で元のオブジェクトへ戻します。
+/// SDK が差し替えた `RTCAudioSessionConfiguration` template を識別し、最後の要求が
+/// 解放された時点で、外部から再設定されていない場合だけ元のカテゴリーへ戻します。
 final class AudioSessionCoordinator: @unchecked Sendable {
   static let shared = AudioSessionCoordinator()
 
@@ -60,8 +60,8 @@ final class AudioSessionCoordinator: @unchecked Sendable {
   private var activeProfiles: [UUID: AudioSessionProfile] = [:]
   private var playAndRecordRequirementIDs: Set<UUID> = []
   private var pendingPlayAndRecordRequirementIDs: Set<UUID> = []
-  private var originalConfiguration: RTCAudioSessionConfiguration?
-  private var categoryWasChanged = false
+  private var originalCategory: String?
+  private var installedConfiguration: RTCAudioSessionConfiguration?
 
   /// AudioUnit profile を予約します。
   ///
@@ -88,12 +88,6 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       }
     }
 
-    // 最初の profile を予約するとき、ADM の生成前に共有テンプレート自体を保存する。
-    // 後続のカテゴリー変更では既存オブジェクトを変更せず、新しいテンプレートへ
-    // 原子的に差し替えるため、ADM による nonatomic なプロパティの読み取りと競合しない。
-    if activeProfiles.isEmpty {
-      originalConfiguration = RTCAudioSessionConfiguration.webRTC()
-    }
     // 最初の要求が category を確定する前は、別接続の ADM を生成させない。
     guard pendingPlayAndRecordRequirementIDs.isEmpty else {
       throw SoraError.connectionBusy(
@@ -141,14 +135,14 @@ final class AudioSessionCoordinator: @unchecked Sendable {
 
     if playAndRecordRequirementIDs.count == 1 {
       let playAndRecordCategory = AVAudioSession.Category.playAndRecord.rawValue
-      if originalConfiguration?.category != playAndRecordCategory,
-        let originalConfiguration
-      {
+      let currentConfiguration = RTCAudioSessionConfiguration.webRTC()
+      if currentConfiguration.category != playAndRecordCategory {
+        originalCategory = currentConfiguration.category
         let configuration = Self.copyConfiguration(
-          originalConfiguration,
+          currentConfiguration,
           category: playAndRecordCategory)
         RTCAudioSessionConfiguration.setWebRTC(configuration)
-        categoryWasChanged = true
+        installedConfiguration = configuration
       }
     }
   }
@@ -170,11 +164,17 @@ final class AudioSessionCoordinator: @unchecked Sendable {
       return
     }
 
-    if categoryWasChanged, let originalConfiguration {
-      RTCAudioSessionConfiguration.setWebRTC(originalConfiguration)
+    if let installedConfiguration,
+      RTCAudioSessionConfiguration.webRTC() === installedConfiguration,
+      let originalCategory
+    {
+      // SDK が設定した template が現在も使われている場合だけ、最新の各値を維持して
+      // カテゴリーを戻す。ホストアプリが別 template を設定済みなら上書きしない。
+      RTCAudioSessionConfiguration.setWebRTC(
+        Self.copyConfiguration(installedConfiguration, category: originalCategory))
     }
-    originalConfiguration = nil
-    categoryWasChanged = false
+    originalCategory = nil
+    installedConfiguration = nil
     playAndRecordRequirementIDs.removeAll()
     pendingPlayAndRecordRequirementIDs.removeAll()
   }

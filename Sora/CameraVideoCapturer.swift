@@ -10,7 +10,7 @@ struct CameraCaptureFormatBox: @unchecked Sendable {
 }
 
 /// 公開カメラ API の完了ハンドラーを並行処理境界へ渡すための内部ラッパーです。
-private final class CameraOperationCompletionBox: @unchecked Sendable {
+final class CameraOperationCompletionBox: @unchecked Sendable {
   private let completionHandler: (Error?) -> Void
 
   init(_ completionHandler: @escaping (Error?) -> Void) {
@@ -51,73 +51,336 @@ final class CameraCaptureOwnership: @unchecked Sendable {
   }
 }
 
-/// 1 つの送信接続でカメラと画面共有を同時に開始しないための予約状態です。
+/// 映像送信元の開始予約を、接続と送信ストリームに紐付けて管理します。
 ///
-/// 実デバイスの非同期開始より前に送信元を予約し、確認と予約の間へ別 API が
-/// 割り込む競合を防ぎます。切断後は遅延した開始処理を拒否します。
+/// 状態は process-wide のレジストリへ集約し、SDK 内部 API と公開カメラ API が
+/// 同じ送信ストリームへカメラと画面共有を同時に開始する競合を防ぎます。
+/// 非同期開始は世代付きの予約で検証し、停止または切断後に遅れて完了した開始を無効化します。
 final class VideoSourceCoordinator: @unchecked Sendable {
-  enum ReservationResult: Equatable, Sendable {
-    case acquired
-    case alreadyReserved
-    case unavailable
-  }
-
-  private enum Source: Equatable, Sendable {
+  enum Source: Equatable, Sendable {
     case camera
     case screen
   }
 
-  private let lock = NSLock()
-  private var source: Source?
-  private var revoked = false
-
-  func reserveCamera() -> ReservationResult {
-    reserve(.camera)
+  struct Reservation: Equatable, Sendable {
+    fileprivate let ownerID: UUID
+    fileprivate let generation: UInt64
+    fileprivate let source: Source
   }
 
-  func reserveScreen() -> ReservationResult {
-    reserve(.screen)
+  private enum State: Equatable, Sendable {
+    case cameraStarting
+    case camera
+    case screenStarting
+    case screen
+    case screenStopping
+    case screenCleanupFailed
+
+    var source: Source {
+      switch self {
+      case .cameraStarting, .camera:
+        return .camera
+      case .screenStarting, .screen, .screenStopping, .screenCleanupFailed:
+        return .screen
+      }
+    }
+  }
+
+  private final class WeakStream: @unchecked Sendable {
+    weak var value: MediaStream?
+
+    init(_ value: MediaStream) {
+      self.value = value
+    }
+  }
+
+  private struct Entry {
+    var generation: UInt64 = 0
+    var state: State?
+    var stream: WeakStream?
+    var revoked = false
+  }
+
+  private final class Registry: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [UUID: Entry] = [:]
+
+    func register(ownerID: UUID) {
+      withLock {
+        entries[ownerID] = Entry()
+      }
+    }
+
+    func unregister(ownerID: UUID) {
+      _ = withLock {
+        entries.removeValue(forKey: ownerID)
+      }
+    }
+
+    func beginCamera(ownerID: UUID, stream: MediaStream) -> Reservation? {
+      withLock {
+        guard var entry = entries[ownerID], !entry.revoked else {
+          return nil
+        }
+        guard entry.state == nil || entry.state == .camera else {
+          return nil
+        }
+        guard !hasScreenReservationLocked(for: stream) else {
+          return nil
+        }
+        entry.generation &+= 1
+        entry.state = .cameraStarting
+        entry.stream = WeakStream(stream)
+        entries[ownerID] = entry
+        return Reservation(
+          ownerID: ownerID,
+          generation: entry.generation,
+          source: .camera)
+      }
+    }
+
+    func beginScreen(ownerID: UUID, stream: MediaStream) -> Reservation? {
+      withLock {
+        guard var entry = entries[ownerID], !entry.revoked, entry.state == nil else {
+          return nil
+        }
+        guard !hasCameraReservationLocked(for: stream) else {
+          return nil
+        }
+        entry.generation &+= 1
+        entry.state = .screenStarting
+        entry.stream = WeakStream(stream)
+        entries[ownerID] = entry
+        return Reservation(
+          ownerID: ownerID,
+          generation: entry.generation,
+          source: .screen)
+      }
+    }
+
+    func completeCamera(_ reservation: Reservation, active: Bool) -> Bool {
+      withLock {
+        guard reservation.source == .camera,
+          var entry = validEntryLocked(for: reservation),
+          entry.state == .cameraStarting
+        else {
+          return false
+        }
+        entry.state = active ? .camera : nil
+        if !active {
+          entry.stream = nil
+        }
+        entries[reservation.ownerID] = entry
+        return active
+      }
+    }
+
+    func completeScreenStart(_ reservation: Reservation) -> Bool {
+      withLock {
+        guard reservation.source == .screen,
+          var entry = validEntryLocked(for: reservation),
+          entry.state == .screenStarting
+        else {
+          return false
+        }
+        entry.state = .screen
+        entries[reservation.ownerID] = entry
+        return true
+      }
+    }
+
+    func failScreenStart(_ reservation: Reservation) {
+      withLock {
+        guard reservation.source == .screen,
+          var entry = validEntryLocked(for: reservation),
+          entry.state == .screenStarting
+        else {
+          return
+        }
+        entry.state = nil
+        entry.stream = nil
+        entries[reservation.ownerID] = entry
+      }
+    }
+
+    func isValid(_ reservation: Reservation) -> Bool {
+      withLock {
+        validEntryLocked(for: reservation)?.state?.source == reservation.source
+      }
+    }
+
+    func beginScreenStop(ownerID: UUID) -> Bool {
+      withLock {
+        guard var entry = entries[ownerID], entry.state?.source == .screen else {
+          return false
+        }
+        entry.generation &+= 1
+        entry.state = .screenStopping
+        entries[ownerID] = entry
+        return true
+      }
+    }
+
+    func finishScreenStop(ownerID: UUID, stopped: Bool) {
+      withLock {
+        guard var entry = entries[ownerID], entry.state?.source == .screen else {
+          return
+        }
+        entry.state = stopped ? nil : .screenCleanupFailed
+        if stopped {
+          entry.stream = nil
+        }
+        entries[ownerID] = entry
+      }
+    }
+
+    func releaseCamera(ownerID: UUID) {
+      withLock {
+        guard var entry = entries[ownerID], entry.state?.source == .camera else {
+          return
+        }
+        entry.generation &+= 1
+        entry.state = nil
+        entry.stream = nil
+        entries[ownerID] = entry
+      }
+    }
+
+    func revoke(ownerID: UUID) {
+      withLock {
+        guard var entry = entries[ownerID] else {
+          return
+        }
+        entry.revoked = true
+        entry.generation &+= 1
+        if entry.state?.source == .camera {
+          entry.state = nil
+          entry.stream = nil
+        } else if entry.state?.source == .screen {
+          entry.state = .screenStopping
+        }
+        entries[ownerID] = entry
+      }
+    }
+
+    func hasScreenReservation(for stream: MediaStream?) -> Bool {
+      guard let stream else {
+        return false
+      }
+      return withLock {
+        hasScreenReservationLocked(for: stream)
+      }
+    }
+
+    func releaseCameraReservations(for stream: MediaStream, excluding ownerID: UUID? = nil) {
+      withLock {
+        for (candidateOwnerID, var entry) in entries
+        where candidateOwnerID != ownerID
+          && entry.state?.source == .camera
+          && entry.stream?.value === stream
+        {
+          entry.generation &+= 1
+          entry.state = nil
+          entry.stream = nil
+          entries[candidateOwnerID] = entry
+        }
+      }
+    }
+
+    private func validEntryLocked(for reservation: Reservation) -> Entry? {
+      guard let entry = entries[reservation.ownerID],
+        !entry.revoked,
+        entry.generation == reservation.generation
+      else {
+        return nil
+      }
+      return entry
+    }
+
+    private func hasScreenReservationLocked(for stream: MediaStream) -> Bool {
+      entries.values.contains {
+        $0.state?.source == .screen && $0.stream?.value === stream
+      }
+    }
+
+    private func hasCameraReservationLocked(for stream: MediaStream) -> Bool {
+      entries.values.contains {
+        !$0.revoked && $0.state?.source == .camera && $0.stream?.value === stream
+      }
+    }
+
+    private func withLock<T>(_ operation: () -> T) -> T {
+      lock.lock()
+      defer { lock.unlock() }
+      return operation()
+    }
+  }
+
+  private static let registry = Registry()
+  private let ownerID = UUID()
+
+  init() {
+    Self.registry.register(ownerID: ownerID)
+  }
+
+  deinit {
+    Self.registry.unregister(ownerID: ownerID)
+  }
+
+  func beginCamera(stream: MediaStream) -> Reservation? {
+    Self.registry.beginCamera(ownerID: ownerID, stream: stream)
+  }
+
+  func beginScreen(stream: MediaStream) -> Reservation? {
+    Self.registry.beginScreen(ownerID: ownerID, stream: stream)
+  }
+
+  @discardableResult
+  func completeCamera(_ reservation: Reservation, active: Bool) -> Bool {
+    Self.registry.completeCamera(reservation, active: active)
+  }
+
+  @discardableResult
+  func completeScreenStart(_ reservation: Reservation) -> Bool {
+    Self.registry.completeScreenStart(reservation)
+  }
+
+  func failScreenStart(_ reservation: Reservation) {
+    Self.registry.failScreenStart(reservation)
+  }
+
+  func isValid(_ reservation: Reservation) -> Bool {
+    Self.registry.isValid(reservation)
+  }
+
+  @discardableResult
+  func beginScreenStop() -> Bool {
+    Self.registry.beginScreenStop(ownerID: ownerID)
+  }
+
+  func finishScreenStop(stopped: Bool) {
+    Self.registry.finishScreenStop(ownerID: ownerID, stopped: stopped)
   }
 
   func releaseCamera() {
-    release(.camera)
-  }
-
-  func releaseScreen() {
-    release(.screen)
-  }
-
-  func isReservedForCamera() -> Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    return !revoked && source == .camera
+    Self.registry.releaseCamera(ownerID: ownerID)
   }
 
   func revoke() {
-    lock.lock()
-    revoked = true
-    lock.unlock()
+    Self.registry.revoke(ownerID: ownerID)
   }
 
-  private func reserve(_ requestedSource: Source) -> ReservationResult {
-    lock.lock()
-    defer { lock.unlock() }
-    guard !revoked else {
-      return .unavailable
-    }
-    guard let source else {
-      self.source = requestedSource
-      return .acquired
-    }
-    return source == requestedSource ? .alreadyReserved : .unavailable
+  static func hasScreenReservation(for stream: MediaStream?) -> Bool {
+    registry.hasScreenReservation(for: stream)
   }
 
-  private func release(_ releasedSource: Source) {
-    lock.lock()
-    if source == releasedSource {
-      source = nil
-    }
-    lock.unlock()
+  static func releaseCameraReservations(
+    for stream: MediaStream,
+    excluding reservation: Reservation? = nil
+  ) {
+    registry.releaseCameraReservations(
+      for: stream,
+      excluding: reservation?.ownerID)
   }
 }
 
@@ -312,7 +575,12 @@ public final class CameraVideoCapturer: @unchecked Sendable {
           SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
         return
       }
-      completionBox(await flipForSDK(capturer))
+      guard !VideoSourceCoordinator.hasScreenReservation(for: capturer.stream) else {
+        completionBox(
+          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
+        return
+      }
+      _ = await flipForSDK(capturer, completionBeforeEvent: completionBox)
     }
   }
 
@@ -499,15 +767,20 @@ public final class CameraVideoCapturer: @unchecked Sendable {
           SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
         return
       }
+      guard !VideoSourceCoordinator.hasScreenReservation(for: self.stream) else {
+        completionBox(
+          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
+        return
+      }
       guard await CameraVideoCapturer.currentForSDK() == nil else {
         completionBox(SoraError.cameraError(reason: "another camera is already running"))
         return
       }
-      completionBox(
-        await self.startForSDK(
-          format: formatBox.format,
-          frameRate: frameRate,
-          senderStream: nil))
+      _ = await self.startForSDK(
+        format: formatBox.format,
+        frameRate: frameRate,
+        senderStream: nil,
+        completionBeforeEvent: completionBox)
     }
   }
 
@@ -555,6 +828,17 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   public func stop(completionHandler: @escaping ((Error?) -> Void)) {
     let coordinator = CameraVideoCaptureCoordinator.shared
     let completionBox = CameraOperationCompletionBox(completionHandler)
+    let stopCompletionBox = CameraOperationCompletionBox { [self] error in
+      if isRunning {
+        coordinator.quarantine(capturer: self)
+      } else {
+        coordinator.clearQuarantineAfterSuccessfulStop(capturer: self)
+        if let stream {
+          VideoSourceCoordinator.releaseCameraReservations(for: stream)
+        }
+      }
+      completionBox(error)
+    }
     coordinator.enqueue {
       guard await CameraVideoCapturer.currentForSDK() === self else {
         if self.isRunning {
@@ -564,13 +848,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
         return
       }
 
-      let error = await self.stopForSDK()
-      if self.isRunning {
-        coordinator.quarantine(capturer: self)
-      } else {
-        coordinator.clearQuarantineAfterSuccessfulStop(capturer: self)
-      }
-      completionBox(error)
+      _ = await self.stopForSDK(completionBeforeEvent: stopCompletionBox)
     }
   }
 
@@ -604,6 +882,11 @@ public final class CameraVideoCapturer: @unchecked Sendable {
           SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
         return
       }
+      guard !VideoSourceCoordinator.hasScreenReservation(for: self.stream) else {
+        completionBox(
+          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
+        return
+      }
       let current = await CameraVideoCapturer.currentForSDK()
       guard current == nil || current === self else {
         completionBox(SoraError.cameraError(reason: "another camera is already running"))
@@ -614,7 +897,9 @@ public final class CameraVideoCapturer: @unchecked Sendable {
         completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
         return
       }
-      completionBox(await self.restartForSDK(senderStream: nil))
+      _ = await self.restartForSDK(
+        senderStream: nil,
+        completionBeforeEvent: completionBox)
     }
   }
 
@@ -680,14 +965,19 @@ public final class CameraVideoCapturer: @unchecked Sendable {
           SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
         return
       }
+      guard !VideoSourceCoordinator.hasScreenReservation(for: self.stream) else {
+        completionBox(
+          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
+        return
+      }
       guard await CameraVideoCapturer.currentForSDK() === self else {
         completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
         return
       }
-      completionBox(
-        await self.changeForSDK(
-          format: formatBox?.format,
-          frameRate: frameRate))
+      _ = await self.changeForSDK(
+        format: formatBox?.format,
+        frameRate: frameRate,
+        completionBeforeEvent: completionBox)
     }
   }
 
@@ -746,7 +1036,8 @@ extension CameraVideoCapturer {
   func startForSDK(
     format: AVCaptureDevice.Format,
     frameRate: Int,
-    senderStream: SenderStreamBox?
+    senderStream: SenderStreamBox?,
+    completionBeforeEvent: CameraOperationCompletionBox? = nil
   ) async -> Error? {
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
@@ -759,6 +1050,7 @@ extension CameraVideoCapturer {
           if error != nil, senderStream != nil {
             self.stream = originalStream
           }
+          completionBeforeEvent?(error)
           continuation.resume(returning: error)
         }
       }
@@ -766,10 +1058,13 @@ extension CameraVideoCapturer {
   }
 
   /// SDK のカメラキュー上で停止し、完了時のエラーを返します。
-  func stopForSDK() async -> Error? {
+  func stopForSDK(
+    completionBeforeEvent: CameraOperationCompletionBox? = nil
+  ) async -> Error? {
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
         self.stopUncoordinated { error in
+          completionBeforeEvent?(error)
           continuation.resume(returning: error)
         }
       }
@@ -777,7 +1072,10 @@ extension CameraVideoCapturer {
   }
 
   /// SDK のカメラキュー上で再起動し、完了時のエラーを返します。
-  func restartForSDK(senderStream: SenderStreamBox?) async -> Error? {
+  func restartForSDK(
+    senderStream: SenderStreamBox?,
+    completionBeforeEvent: CameraOperationCompletionBox? = nil
+  ) async -> Error? {
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
         let originalStream = self.stream
@@ -788,6 +1086,7 @@ extension CameraVideoCapturer {
           if error != nil, senderStream != nil {
             self.stream = originalStream
           }
+          completionBeforeEvent?(error)
           continuation.resume(returning: error)
         }
       }
@@ -795,10 +1094,15 @@ extension CameraVideoCapturer {
   }
 
   /// SDK のカメラキュー上で設定を変更し、完了時のエラーを返します。
-  func changeForSDK(format: AVCaptureDevice.Format?, frameRate: Int?) async -> Error? {
+  func changeForSDK(
+    format: AVCaptureDevice.Format?,
+    frameRate: Int?,
+    completionBeforeEvent: CameraOperationCompletionBox? = nil
+  ) async -> Error? {
     await withCheckedContinuation { continuation in
       SoraDispatcher.async(on: .camera) {
         self.changeUncoordinated(format: format, frameRate: frameRate) { error in
+          completionBeforeEvent?(error)
           continuation.resume(returning: error)
         }
       }
@@ -806,9 +1110,13 @@ extension CameraVideoCapturer {
   }
 
   /// SDK のカメラキュー上でカメラを切り替え、完了時のエラーを返します。
-  static func flipForSDK(_ capturer: CameraVideoCapturer) async -> Error? {
+  static func flipForSDK(
+    _ capturer: CameraVideoCapturer,
+    completionBeforeEvent: CameraOperationCompletionBox? = nil
+  ) async -> Error? {
     await withCheckedContinuation { continuation in
       CameraVideoCapturer.flipUncoordinated(capturer) { error in
+        completionBeforeEvent?(error)
         continuation.resume(returning: error)
       }
     }

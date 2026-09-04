@@ -2,7 +2,7 @@ import Foundation
 
 /// Answer SDP の Opus 音声形式へステレオ受信指定を追加します。
 enum StereoAudioSDP {
-  /// 音声メディア節にあるすべての Opus ペイロードへ `stereo=1` を設定します。
+  /// 受信方向を持つ音声メディア節のすべての Opus ペイロードへ `stereo=1` を設定します。
   ///
   /// SDP の改行形式、音声以外のメディア節、Opus 以外の属性は変更しません。
   static func enableStereo(in sdp: String) throws -> String {
@@ -23,8 +23,7 @@ enum StereoAudioSDP {
 
     var transformed: [String] = []
     var section: [String] = []
-    var foundActiveAudioSection = false
-    var foundActiveAudioSectionWithoutOpus = false
+    var foundReceivingAudioSectionWithoutOpus = false
 
     func appendSection(_ section: [String], to output: inout [String]) {
       guard let mediaLine = section.first,
@@ -37,21 +36,20 @@ enum StereoAudioSDP {
       let mediaComponents = mediaLine.split(whereSeparator: { $0.isWhitespace })
       let port = mediaComponents.count >= 2 ? mediaComponents[1].split(separator: "/").first : nil
       let mediaDirection = direction(in: section) ?? sessionDirection
-      let isInactive = mediaDirection == "a=inactive"
-      let isActive = port != nil && port != "0" && !isInactive
-      guard isActive else {
+      let canReceive = mediaDirection == "a=sendrecv" || mediaDirection == "a=recvonly"
+      let isReceiving = port != nil && port != "0" && canReceive
+      guard isReceiving else {
         output.append(contentsOf: section)
         return
       }
 
-      foundActiveAudioSection = true
       // rtpmap 属性が残っていても m-line の format 一覧にない payload は交渉対象ではない。
       let mediaPayloadTypes = Set(mediaComponents.dropFirst(3).map(String.init))
       let opusPayloadTypes = section.compactMap(opusPayloadType(from:)).filter {
         mediaPayloadTypes.contains($0)
       }
       if opusPayloadTypes.isEmpty {
-        foundActiveAudioSectionWithoutOpus = true
+        foundReceivingAudioSectionWithoutOpus = true
       }
       let opusPayloadTypeSet = Set(opusPayloadTypes)
 
@@ -91,9 +89,9 @@ enum StereoAudioSDP {
     }
     appendSection(section, to: &transformed)
 
-    guard foundActiveAudioSection, !foundActiveAudioSectionWithoutOpus else {
+    guard !foundReceivingAudioSectionWithoutOpus else {
       throw SoraError.peerChannelError(
-        reason: "Opus payload type was not found in an active audio section of the answer SDP")
+        reason: "Opus payload type was not found in a receiving audio section of the answer SDP")
     }
 
     let result = transformed.joined(separator: lineEnding)
