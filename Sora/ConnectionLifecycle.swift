@@ -269,7 +269,7 @@ enum ConnectionStateReducer {
       state.transportEpoch += 1
       state.isRedirecting = true
       effects.append(.publishSnapshot)
-    case (_.connected, .redirectReceived):
+    case (.connected, .redirectReceived):
       state.transportEpoch += 1
       state.isRedirecting = true
       effects.append(.publishSnapshot)
