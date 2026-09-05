@@ -33,6 +33,38 @@ final class StereoAudioOutputTests: XCTestCase {
     XCTAssertTrue(audioDeviceModule.stereoPlayoutEnabled())
   }
 
+  /// 一時的な Offer 用 PeerConnection の終了後も、次の接続で ADM のステレオ設定を維持することを確認する
+  func testClientOfferKeepsStereoPlayoutForNextPeerConnection() throws {
+    let factory = try NativePeerChannelFactory(
+      bypassVoiceProcessing: false,
+      audioSessionUsage: .stereoRemoteIO)
+    let configuration = WebRTCConfiguration()
+    let offerExpectation = expectation(description: "クライアント Offer を生成できること")
+    factory.createClientOfferSDP(
+      configuration: configuration,
+      constraints: configuration.constraints
+    ) { sdp, error in
+      XCTAssertNil(error)
+      XCTAssertNotNil(sdp)
+      offerExpectation.fulfill()
+    }
+    wait(for: [offerExpectation], timeout: 5)
+
+    // 同じ signaling thread で後続 PC を生成するため、Offer callback と一時 PC の close 完了後に進む。
+    // 続けて PC を入れ替え、redirect のように実接続が一時的に存在しない場合も確認する。
+    for _ in 0..<2 {
+      let peer = try XCTUnwrap(
+        factory.createNativePeerChannel(
+          configuration: configuration,
+          constraints: configuration.constraints,
+          delegate: nil))
+      XCTAssertTrue(
+        factory.audioDeviceModule?.stereoPlayoutEnabled() == true,
+        "PeerConnection の作り直しで ADM のステレオ設定が失われないこと")
+      peer.close()
+    }
+  }
+
   /// 既定のモノラル経路では ADM のステレオ設定を有効にしないことを確認する
   func testFactoryKeepsStereoPlayoutDisabledByDefault() throws {
     let factory = try NativePeerChannelFactory(bypassVoiceProcessing: false)

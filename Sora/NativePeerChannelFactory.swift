@@ -41,6 +41,8 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   let audioDevice: RTCAudioDevice?
   /// 接続が保持する音声セッションの要求
   private let audioSessionRequirement: AudioSessionRequirement?
+  /// 一時 Offer や redirect の PC 入れ替えで ADM が再初期化されるのを防ぐ、未接続の PC
+  private let stereoMediaEngineAnchor: RTCPeerConnection?
 
   var nativeFactory: RTCPeerConnectionFactory
 
@@ -128,6 +130,23 @@ final class NativePeerChannelFactory: @unchecked Sendable {
           audioDeviceModule: adm)
     }
 
+    if stereoPlayoutEnabled {
+      // libwebrtc は最後の PC が閉じられると media engine と ADM を Terminate します。
+      // 再 Init ではステレオ設定を失うため、音声セッションの要求を解放するまで参照を保ちます。
+      // SDP・トラック・DataChannel を設定せず、ネットワーク接続や音声入出力は開始しません。
+      guard
+        let anchor = nativeFactory.peerConnection(
+          with: RTCConfiguration(),
+          constraints: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil),
+          delegate: nil)
+      else {
+        throw SoraError.mediaChannelError(reason: "failed to retain stereo audio media engine")
+      }
+      stereoMediaEngineAnchor = anchor
+    } else {
+      stereoMediaEngineAnchor = nil
+    }
+
     for info in encoder.supportedCodecs() {
       Logger.debug(
         type: .peerChannel,
@@ -141,7 +160,7 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   }
 
   deinit {
-    audioSessionRequirement?.release()
+    releaseAudioSessionRequirement()
   }
 
   /// ADM のステレオ再生設定結果を SDK のエラーへ変換します。
@@ -154,6 +173,8 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 
   /// 接続終了時に音声セッションの要求を明示的に解放します。
   func releaseAudioSessionRequirement() {
+    // 共有カテゴリを復元する前に、保持していた media engine を終了します。
+    stereoMediaEngineAnchor?.close()
     audioSessionRequirement?.release()
   }
 

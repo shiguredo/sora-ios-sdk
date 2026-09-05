@@ -13,7 +13,7 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
   func testConnectStereoRecvonly() throws {
     let configuration = try buildStereoConfiguration(role: .recvonly)
 
-    guard let channel = try connectAndVerify(configuration: configuration) else {
+    guard let channel = connectAndVerify(configuration: configuration) else {
       return
     }
     disconnectAndVerify(channel: channel)
@@ -31,37 +31,42 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     var configuration = try buildStereoConfiguration(role: .recvonly)
     configuration.channelId = channelId
 
-    guard let channel = try connectAndVerify(configuration: configuration) else {
+    guard
+      let channel = connectAndVerify(configuration: configuration, requiresReceivingAudio: true)
+    else {
       return
     }
+    defer { disconnectAndVerify(channel: channel) }
     verifyInboundAudio(channel: channel)
-    disconnectAndVerify(channel: channel)
+    try verifyActiveStereoAudioSession()
   }
 
   /// ステレオ有効の sendonly で入力初期化待ちを残さず接続できることを確認する
   func testConnectStereoSendonly() throws {
     let configuration = try buildStereoConfiguration(role: .sendonly)
 
-    guard let channel = try connectAndVerify(configuration: configuration) else {
+    guard let channel = connectAndVerify(configuration: configuration) else {
       return
     }
+    defer { disconnectAndVerify(channel: channel) }
     XCTAssertFalse(channel.peerChannel.isAudioInputInitialized)
     XCTAssertTrue(channel.senderStream?.hasAudioTrack == true)
     verifyOutboundAudio(channel: channel)
-    disconnectAndVerify(channel: channel)
+    try verifyActiveStereoAudioSession()
   }
 
   /// ステレオ有効の sendrecv で入力初期化待ちを残さず接続できることを確認する
   func testConnectStereoSendrecv() throws {
     let configuration = try buildStereoConfiguration(role: .sendrecv)
 
-    guard let channel = try connectAndVerify(configuration: configuration) else {
+    guard let channel = connectAndVerify(configuration: configuration) else {
       return
     }
+    defer { disconnectAndVerify(channel: channel) }
     XCTAssertFalse(channel.peerChannel.isAudioInputInitialized)
     XCTAssertTrue(channel.senderStream?.hasAudioTrack == true)
     verifyOutboundAudio(channel: channel)
-    disconnectAndVerify(channel: channel)
+    try verifyActiveStereoAudioSession()
   }
 
   /// ステレオ送信接続の切断後に同じ設定で再接続して音声を送信できることを確認する
@@ -69,17 +74,21 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     let categoryBefore = RTCAudioSessionConfiguration.webRTC().category
     let configuration = try buildStereoConfiguration(role: .sendonly)
 
-    guard let firstChannel = try connectAndVerify(configuration: configuration) else {
+    guard let firstChannel = connectAndVerify(configuration: configuration) else {
       return
     }
+    defer { disconnectAndVerify(channel: firstChannel) }
     verifyOutboundAudio(channel: firstChannel)
+    try verifyActiveStereoAudioSession()
     disconnectAndVerify(channel: firstChannel)
     XCTAssertEqual(RTCAudioSessionConfiguration.webRTC().category, categoryBefore)
 
-    guard let secondChannel = try connectAndVerify(configuration: configuration) else {
+    guard let secondChannel = connectAndVerify(configuration: configuration) else {
       return
     }
+    defer { disconnectAndVerify(channel: secondChannel) }
     verifyOutboundAudio(channel: secondChannel)
+    try verifyActiveStereoAudioSession()
     disconnectAndVerify(channel: secondChannel)
     XCTAssertEqual(RTCAudioSessionConfiguration.webRTC().category, categoryBefore)
   }
@@ -144,8 +153,11 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     return configuration
   }
 
-  /// 接続し、ADM、AudioSession category、ローカル Answer SDP を確認する
-  private func connectAndVerify(configuration: Configuration) throws -> MediaChannel? {
+  /// 接続し、ADM、AudioSession template、ローカル Answer SDP を確認する
+  private func connectAndVerify(
+    configuration: Configuration,
+    requiresReceivingAudio: Bool = false
+  ) -> MediaChannel? {
     // SDK の接続が実 AVAudioSession を変更するため、E2ETestBase の tearDown で復元する。
     audioSessionActivatedByTest = true
     guard let channel = connect(configuration: configuration, name: "ステレオ接続") else {
@@ -156,21 +168,6 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     XCTAssertEqual(
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.playAndRecord.rawValue)
-    XCTAssertEqual(AVAudioSession.sharedInstance().category, .playAndRecord)
-    XCTAssertEqual(AVAudioSession.sharedInstance().mode, .default)
-    let audioSession = AVAudioSession.sharedInstance()
-    let usesBluetoothHFP = audioSession.currentRoute.outputs.contains {
-      $0.portType == .bluetoothHFP
-    }
-    if usesBluetoothHFP {
-      XCTAssertEqual(audioSession.outputNumberOfChannels, 1, "Bluetooth HFP はモノラルであること")
-    } else {
-      guard audioSession.maximumOutputNumberOfChannels >= 2 else {
-        disconnectAndVerify(channel: channel)
-        throw XCTSkip("現在の音声出力経路が 2 ch 出力に対応していないためスキップします")
-      }
-      XCTAssertEqual(audioSession.outputNumberOfChannels, 2, "ステレオ対応経路では 2 ch であること")
-    }
     XCTAssertTrue(
       channel.peerChannel.nativePeerChannelFactory.audioDeviceModule?.stereoPlayoutEnabled()
         == true)
@@ -179,17 +176,31 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
       XCTFail("ローカル Answer SDP が存在すること")
       return channel
     }
-    let requiresReceivingAudio: Bool
-    switch configuration.role {
-    case .sendonly:
-      requiresReceivingAudio = false
-    case .recvonly, .sendrecv:
-      requiresReceivingAudio = true
-    }
+    // 空のチャンネルでは recvonly / sendrecv にも受信 audio section はまだ存在しない。
+    // 外部 Publisher の受信テストだけは存在自体を必須にし、それ以外も存在する全節を検証する。
     XCTAssertTrue(
       hasStereoOpus(in: localSDP, requiresReceivingAudio: requiresReceivingAudio),
       "受信方向を持つ Opus の fmtp に stereo=1 が存在すること")
     return channel
+  }
+
+  /// RTP の送受信後に、実際に稼働した AudioSession の category と出力経路を確認する
+  private func verifyActiveStereoAudioSession() throws {
+    // 接続完了だけでは音声入出力が始まっていないため、実 category は RTP 確認後に検証する。
+    let audioSession = AVAudioSession.sharedInstance()
+    XCTAssertEqual(audioSession.category, .playAndRecord)
+    XCTAssertEqual(audioSession.mode, .default)
+    let usesBluetoothHFP = audioSession.currentRoute.outputs.contains {
+      $0.portType == .bluetoothHFP
+    }
+    if usesBluetoothHFP {
+      XCTAssertEqual(audioSession.outputNumberOfChannels, 1, "Bluetooth HFP はモノラルであること")
+    } else {
+      guard audioSession.maximumOutputNumberOfChannels >= 2 else {
+        throw XCTSkip("現在の音声出力経路が 2 ch 出力に対応していないためスキップします")
+      }
+      XCTAssertEqual(audioSession.outputNumberOfChannels, 2, "ステレオ対応経路では 2 ch であること")
+    }
   }
 
   /// 指定した設定で接続し、接続済みの MediaChannel を返す
@@ -352,7 +363,7 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
       return port != nil && port != "0" && canReceive
     }
     guard !receivingAudioSections.isEmpty else {
-      // sendonly では受信音声が存在せず、ステレオ受信指定も不要となる。
+      // 送信専用や Publisher のいない接続では、受信音声が存在しないことを許容する。
       return !requiresReceivingAudio
     }
 
