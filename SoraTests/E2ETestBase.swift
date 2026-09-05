@@ -162,10 +162,10 @@ class E2ETestBase: XCTestCase {
 
   /// チャンネルを切断し、正常切断コード (1000) が onDisconnect で通知されることを確認する
   ///
-  /// 切断済みのチャンネルでは onDisconnect が発火しない (MediaChannel.internalDisconnect は
-  /// .disconnecting / .disconnected 状態では何もせずに戻る) ため、その場合は何もせずに戻る
+  /// 切断済みのチャンネルでは onDisconnect が発火しないため、その場合は何もせずに戻る。
+  /// `.disconnecting` は PeerChannel の後始末中なので、完了通知を待つ。
   internal func disconnectAndVerify(channel: MediaChannel, timeout: TimeInterval = 10) {
-    guard !channel.state.isDisconnected else {
+    guard channel.state != .disconnected else {
       return
     }
     let disconnectExpectation = self.expectation(description: "切断が完了すること")
@@ -177,12 +177,14 @@ class E2ETestBase: XCTestCase {
       }
       disconnectExpectation.fulfill()
     }
-    // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
+    // シグナリング受信による切断完了が state チェックとハンドラ設定の間に入った場合は
     // onDisconnect が発火済みのため、wait せずに戻る
-    guard !channel.state.isDisconnected else {
+    guard channel.state != .disconnected else {
       return
     }
-    channel.disconnect(error: nil)
+    if channel.state != .disconnecting {
+      channel.disconnect(error: nil)
+    }
     wait(for: [disconnectExpectation], timeout: timeout)
   }
 
@@ -194,15 +196,17 @@ class E2ETestBase: XCTestCase {
     for channel in channels {
       guard let channel else { continue }
       // 切断済みのチャンネルでは onDisconnect が発火しないため、待たずにスキップする
-      guard !channel.state.isDisconnected else { continue }
+      guard channel.state != .disconnected else { continue }
       let disconnectExpectation = self.expectation(description: "切断が完了すること")
       channel.handlers.onDisconnect = { _ in
         disconnectExpectation.fulfill()
       }
       // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
       // onDisconnect が発火済みのため、待たずにスキップする
-      guard !channel.state.isDisconnected else { continue }
-      channel.disconnect(error: nil)
+      guard channel.state != .disconnected else { continue }
+      if channel.state != .disconnecting {
+        channel.disconnect(error: nil)
+      }
       self.wait(for: [disconnectExpectation], timeout: 10)
     }
   }

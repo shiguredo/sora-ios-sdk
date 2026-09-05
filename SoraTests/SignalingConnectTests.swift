@@ -42,7 +42,7 @@ final class SignalingConnectTests: XCTestCase {
   /// audioOpusParams が nil の場合、audio.opus_params キーが存在しないことを確認する
   func testOpusParamsNilProducesNoOpusParams() throws {
     let config = makeConfiguration()
-    let peerChannel = makePeerChannel(config: config)
+    let peerChannel = try makePeerChannel(config: config)
     let connect = peerChannel.makeSignalingConnect(sdp: nil, redirect: nil)
     let json = try encodeConnect(connect)
 
@@ -59,7 +59,7 @@ final class SignalingConnectTests: XCTestCase {
     var config = makeConfiguration()
     config.audioCodec = .opus
     config.audioOpusParams = TestOpusParams(minptime: 10, stereo: true)
-    let peerChannel = makePeerChannel(config: config)
+    let peerChannel = try makePeerChannel(config: config)
     let connect = peerChannel.makeSignalingConnect(sdp: nil, redirect: nil)
     let json = try encodeConnect(connect)
 
@@ -83,7 +83,7 @@ final class SignalingConnectTests: XCTestCase {
     var config = makeConfiguration()
     // audioCodec = .default (Opus) のまま audioOpusParams のみ設定
     config.audioOpusParams = TestOpusParams(minptime: 10, stereo: false)
-    let peerChannel = makePeerChannel(config: config)
+    let peerChannel = try makePeerChannel(config: config)
     let connect = peerChannel.makeSignalingConnect(sdp: nil, redirect: nil)
     let json = try encodeConnect(connect)
 
@@ -99,7 +99,7 @@ final class SignalingConnectTests: XCTestCase {
     var config = makeConfiguration()
     config.audioCodec = .pcmu
     config.audioOpusParams = TestOpusParams(minptime: 10, stereo: true)
-    let peerChannel = makePeerChannel(config: config)
+    let peerChannel = try makePeerChannel(config: config)
     let connect = peerChannel.makeSignalingConnect(sdp: nil, redirect: nil)
     let json = try encodeConnect(connect)
 
@@ -115,7 +115,7 @@ final class SignalingConnectTests: XCTestCase {
     var config = makeConfiguration()
     config.audioEnabled = false
     config.audioOpusParams = TestOpusParams(minptime: 10, stereo: true)
-    let peerChannel = makePeerChannel(config: config)
+    let peerChannel = try makePeerChannel(config: config)
     let connect = peerChannel.makeSignalingConnect(sdp: nil, redirect: nil)
     let json = try encodeConnect(connect)
 
@@ -124,9 +124,9 @@ final class SignalingConnectTests: XCTestCase {
   }
 
   // PeerChannel を実際に構築する
-  private func makePeerChannel(config: Configuration) -> PeerChannel {
+  private func makePeerChannel(config: Configuration) throws -> PeerChannel {
     let signalingChannel = SignalingChannel(configuration: config)
-    let nativeFactory = NativePeerChannelFactory(bypassVoiceProcessing: false)
+    let nativeFactory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
     return PeerChannel(
       configuration: config,
       signalingChannel: signalingChannel,

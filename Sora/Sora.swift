@@ -177,7 +177,20 @@ public final class Sora: @unchecked Sendable {
         _ error: Error?
       ) -> Void
   ) -> ConnectionTask {
-    let mediaChan = MediaChannel(manager: self, configuration: configuration)
+    let mediaChan: MediaChannel
+    do {
+      mediaChan = try MediaChannel(configuration: configuration)
+    } catch {
+      // 設定エラーや ADM 初期化エラーはチャネルを登録せず接続試行を終端する。
+      // 通常の接続経路と同様に、利用者の callback は connect() の呼び出しスタック外で通知する。
+      let connectionTask = ConnectionTask()
+      connectionTask.complete()
+      DispatchQueue.global().async { [weak self] in
+        handler(nil, error)
+        self?.handlers.onConnect?(nil, error)
+      }
+      return connectionTask
+    }
     mediaChan.internalHandlers.onDisconnectLegacy = { [weak self, weak mediaChan] error in
       guard let weakSelf = self else {
         return
@@ -189,29 +202,23 @@ public final class Sora: @unchecked Sendable {
       weakSelf.handlers.onDisconnect?(mediaChan, error)
     }
 
-    // MediaChannel.connect() の引数のハンドラが実行されるまで
-    // 解放されないように先にリストに追加しておく
-    // ただ、 mediaChannels を weak array にすべきかもしれない
-    add(mediaChannel: mediaChan)
+    // MediaChannel が接続試行を予約して `.connecting` へ遷移した後に管理対象へ追加する。
+    // onAddMediaChannel から同期的に disconnect されても、接続開始前に確実に終端できる。
+    return mediaChan.connect(
+      webRTCConfiguration: webRTCConfiguration,
+      onPrepared: { [weak self, mediaChan] in
+        self?.add(mediaChannel: mediaChan)
+      },
+      handler: { [weak self, mediaChan] error in
+        if let error {
+          handler(nil, error)
+          self?.handlers.onConnect?(nil, error)
+          return
+        }
 
-    return mediaChan.connect(webRTCConfiguration: webRTCConfiguration) {
-      [weak self, weak mediaChan] error in
-      guard let weakSelf = self else {
-        return
-      }
-      guard let mediaChan else {
-        return
-      }
-
-      if let error {
-        handler(nil, error)
-        weakSelf.handlers.onConnect?(nil, error)
-        return
-      }
-
-      handler(mediaChan, nil)
-      weakSelf.handlers.onConnect?(mediaChan, nil)
-    }
+        handler(mediaChan, nil)
+        self?.handlers.onConnect?(mediaChan, nil)
+      })
   }
 
   // MARK: - 音声ユニットの操作
@@ -508,14 +515,24 @@ public final class ConnectionTask {
     markCanceled()
   }
 
-  func complete() {
+  /// 接続試行中であれば完了状態へ遷移し、遷移できたかを返します。
+  ///
+  /// 接続成功と `cancel()` が競合した場合に、どちらが先に終端状態を確定したかを
+  /// 呼び出し元が判断できるようにするための操作です。
+  @discardableResult
+  func tryComplete() -> Bool {
     stateLock.lock()
     defer { stateLock.unlock() }
     guard _internalState == .connecting else {
-      return
+      return false
     }
     Logger.debug(type: .mediaChannel, message: "connection task completed")
     _internalState = .completed
+    return true
+  }
+
+  func complete() {
+    tryComplete()
   }
 }
 

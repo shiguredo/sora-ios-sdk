@@ -141,6 +141,24 @@ public struct Configuration {
   /// デフォルトは `true` です。
   public var audioEnabled: Bool = true
 
+  /// 受信音声をステレオで再生するかどうか。デフォルトは `false` です。
+  ///
+  /// 有効にすると libwebrtc の Voice Processing を利用しないため、AEC と AGC は
+  /// 利用できません。また、音声ハードミュートとカスタム音声デバイスは利用できず、
+  /// `bypassVoiceProcessing` の設定は無視されます。
+  ///
+  /// `audioEnabled` が `false` の場合、`audioCodec` が `.pcmu` の場合、または送信側
+  /// ロールで `initialMicrophoneEnabled` が `false` の場合は接続できません。
+  /// 受信専用の場合も音声セッションに `.playAndRecord` を利用するため、マイク権限が
+  /// 必要です。Bluetooth HFP ではモノラルとなります。アプリが
+  /// `.allowBluetoothA2DP` を許可し、A2DP route が選択された場合はステレオ出力を
+  /// 利用できますが、SDK は route を自動で切り替えません。
+  ///
+  /// WebRTC-Build m150.7871.3.2 の制約により、Sora iOS SDK が管理する音声接続全体で
+  /// ステレオ接続は 1 つだけ利用でき、他の音声接続とは同時に利用できません。
+  /// 接続後に `Sora.setAudioMode` で `.voiceChat` を指定するとモノラルへ戻る場合があります。
+  public var audioStereoOutputEnabled: Bool = false
+
   /// 接続確立時に端末カメラキャプチャを自動起動するかどうか。
   ///
   /// `cameraSettings.isEnabled` が `true` の場合でも、このフラグが `false` であれば
@@ -306,6 +324,12 @@ public struct Configuration {
   /// SDK ではテストからダミー音声デバイス (DummyAudioDevice) を注入するために使用している。
   /// :nodoc:
   var audioDevice: RTCAudioDevice?
+
+  /// カスタムデバイスでも 2 ch 再生を要求する場合は受信用の Opus SDP に反映する。
+  /// ネイティブ ADM の切替フラグとは分け、カスタムデバイスとの同時指定制約は維持する。
+  var requiresStereoAudioSDP: Bool {
+    audioStereoOutputEnabled || audioDevice?.outputNumberOfChannels == 2
+  }
 
   /// 初期化します。
   /// - parameter url: サーバーの URL

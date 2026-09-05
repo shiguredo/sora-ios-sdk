@@ -11,17 +11,11 @@
 
 ## develop
 
-- [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
-  - `type: switched` 受信時には発火しない
-  - メッセージング用ラベル（`#` 始まり）が存在しない接続では発火しない
-  - @t-miya
-- [UPDATE] `TLSSecurityPolicy` と `ICEServerInfo.tlsSecurityPolicy` を非推奨化する
-  - 2027 年中に廃止予定
-  - 移行先は `Configuration.insecure`
-  - @t-miya
-- [UPDATE] enum 型の `Configuration.spotlightEnabled` を非推奨にする
-  - 移行先は `Configuration.isSpotlightEnabled`
-  - Configuration 内のプロパティで型の一貫性を持たせるため変更
+- [ADD] ステレオ音声出力に対応する
+  - `RTCAudioSessionConfiguration` のテンプレートを原子的に差し替えてカテゴリー要求を接続間で共有し、すべての音声接続を解放したときに SDK が設定したテンプレートだけを元のカテゴリーへ戻す
+  - 接続中にホストアプリが `RTCAudioSessionConfiguration` のテンプレートを差し替えた場合は、その設定を維持する
+  - モノラル受信接続中にモノラル送信接続を追加する場合も、既存の接続を維持したまま `PlayAndRecord` を適用する
+  - WebRTC-Build m150.7871.3.2 では Sora iOS SDK が管理する音声接続全体でステレオ接続を 1 つに限定し、他の音声接続と排他にする
   - @t-miya
 - [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする
   - オーディオコーデックが `.opus` として明示された場合のみ送信される
@@ -34,6 +28,20 @@
   - @t-miya
 - [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
   - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
+  - @t-miya
+- [UPDATE] libwebrtc m150.7871.3.2 に上げる
+  - @t-miya
+- [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
+  - `type: switched` 受信時には発火しない
+  - メッセージング用ラベル（`#` 始まり）が存在しない接続では発火しない
+  - @t-miya
+- [UPDATE] `TLSSecurityPolicy` と `ICEServerInfo.tlsSecurityPolicy` を非推奨化する
+  - 2027 年中に廃止予定
+  - 移行先は `Configuration.insecure`
+  - @t-miya
+- [UPDATE] enum 型の `Configuration.spotlightEnabled` を非推奨にする
+  - 移行先は `Configuration.isSpotlightEnabled`
+  - Configuration 内のプロパティで型の一貫性を持たせるため変更
   - @t-miya
 - [FIX] TURN-TLS の証明書エラーで接続失敗した後も libwebrtc のログが流れ続ける問題を修正する
   - 接続試行中の切断要求で `connect()` の初期ロックを確実に解放し、 `RTCPeerConnection` をクローズする
@@ -49,6 +57,7 @@
   - `ConnectionTask` の状態と `PeerChannel` の紐付けを排他ロックで保護する
   - キャンセル要求を受領した状態 (`cancelRequested`) を保持し、`PeerChannel` の設定と接続開始の前後でキャンセルを確認する
   - 接続開始前にキャンセルされた場合は接続を開始せず、通常の接続失敗と同様に `connectionCancelled` を通知する
+  - `onAddMediaChannel` から即時切断された場合は、シグナリングを開始せず接続試行を終端する
   - 接続完了コールバックでもキャンセル済みか確認し、キャンセル後の接続成功通知を発火しない
   - cancel 済みの接続の状態を `.canceled` のまま保持する (`.completed` に上書きしない)
   - @t-miya
@@ -80,12 +89,17 @@
   - 停止・再開始の競合後も、旧 capture のフレームが古い sender stream へ送信されないようにする
   - 送信確定後のみフレームの間引き情報 (PTS / uptime) を記録し、破棄されたフレームで throttle 状態を汚染しないようにする
   - 旧世代の start 完了が遅延して届いた場合に、新世代のキャプチャを誤って停止しないようにする
+  - プロセス全体で共有される ReplayKit の start / stop と所有権を接続間で直列化する
+  - 切断完了通知より前に ReplayKit の停止完了を待ち、別接続の開始との競合を防ぐ
   - @t-miya
 - [FIX] 映像ハードミュートの capturer が別接続で再開される問題を修正する
-  - カメラ操作の所有者を識別する lease を導入し、保存する capturer を接続に紐付ける
+  - カメラ操作の所有者を識別する lease と sender stream の所有情報を導入し、保存する capturer を接続に紐付ける
   - 別接続が保存した capturer の取得や再開を `SoraError.mediaChannelError` で拒否する
-  - 各 `await` 復帰後に lease と破棄予約世代を再確認し、切断済み接続の保存状態が残らないようにする
-  - 接続切断時にその接続の保存状態を破棄する
+  - 各 `await` 復帰後に lease の破棄状態を再確認し、切断済み接続の保存状態が残らないようにする
+  - SDK 内部と公開 API によるカメラの start / stop / restart / change / flip をプロセス全体で直列化する
+  - 切断対象の送信ストリームが所有するカメラだけを停止し、カメラの停止完了を切断完了通知より前に待つ
+  - カメラのクリーンアップに失敗した場合は共有状態を隔離し、別接続による再利用を防ぐ
+  - 接続切断時にその接続の保存状態を破棄し、進行中のカメラのクリーンアップ完了を待つ
   - @t-miya
 - [FIX] camera flip で切り替え先の旧 stream へフレームが送られる問題を修正する
   - 切り替え先 capturer の stream を start より前に設定し、フレームが古い stream へ送られないようにする
@@ -121,6 +135,9 @@
   - @t-miya
 - [ADD] DataChannel シグナリング切断経路 E2E テストを追加する
   - DataChannel シグナリング有効時にサーバー側切断が DataChannel 経由で伝播し、切断理由が SoraCloseEvent で通知されることを検証する
+  - @t-miya
+- [UPDATE] ダミー音声デバイスによるステレオ送受信テストを追加する
+  - マイク / スピーカーを使わず、実際の Opus / RTP / ADM を通した再生 PCM の左右の分離を検証する
   - @t-miya
 
 ## 2026.2.0

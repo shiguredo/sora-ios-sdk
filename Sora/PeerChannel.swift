@@ -78,6 +78,19 @@ final class PeerChannelInternalHandlers {
   public init() {}
 }
 
+/// カメラ停止待ちの間、PeerChannel と切断引数を保持する Sendable な内部コンテキスト
+private final class PeerChannelDisconnectCompletionContext: @unchecked Sendable {
+  let peerChannel: PeerChannel
+  let error: Error?
+  let reason: DisconnectReason
+
+  init(peerChannel: PeerChannel, error: Error?, reason: DisconnectReason) {
+    self.peerChannel = peerChannel
+    self.error = error
+    self.reason = reason
+  }
+}
+
 class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - Constants
 
@@ -103,6 +116,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // 不変条件: isDisconnecting == true ならば count == 0
     private var isDisconnecting: Bool = false
 
+    // connect() が初期ロックを取得してから signalingChannel.connect() の開始を
+    // 確定するまでの区間を示す。区間中の切断要求は、開始処理側で受け取る。
+    private var isStartingConnection: Bool = false
+
     // count > 0 の間に切断要求があった場合に遅延実行用パラメータを保持する
     private var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
 
@@ -127,6 +144,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       nsLock.lock()
       if isDisconnecting {
         // 切断処理が既に開始されている場合、追加の切断要求は無視する
+      } else if isStartingConnection {
+        // signaling の開始可否を確定する前の切断要求は保存する。
+        // startConnection が開始前に検出した場合は signaling を開始せずに切断する。
+        shouldDisconnect = (true, error, reason)
       } else if count == 0 {
         // 猶予タイマー由来の切断は、タイマー発火時点の確認からここまでの間に
         // 接続が回復している場合は切断しない
@@ -154,6 +175,84 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       nsLock.unlock()
 
       if shouldCallBasicDisconnect {
+        context?.basicDisconnect(error: error, reason: reason)
+      }
+    }
+
+    /// 接続開始用の初期ロックを取得し、signaling 開始前の区間へ入ります。
+    @discardableResult
+    func beginConnectionStart() -> Bool {
+      nsLock.lock()
+      guard !isDisconnecting, !isStartingConnection else {
+        nsLock.unlock()
+        return false
+      }
+      count += 1
+      isStartingConnection = true
+      nsLock.unlock()
+      return true
+    }
+
+    /// signaling 開始と、その直前に到着した切断要求を直列化します。
+    ///
+    /// beginConnectionStart() の後に呼び出します。開始前に切断要求があれば
+    /// operation を実行せず、開始中に切断要求があれば operation の復帰後に切断します。
+    func startConnection(_ operation: () -> Void) {
+      var shouldStart = false
+      var disconnectParams: (Error?, DisconnectReason)?
+
+      nsLock.lock()
+      if !isDisconnecting {
+        switch shouldDisconnect {
+        case (true, let error, let reason):
+          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
+            shouldDisconnect = (false, nil, .unknown)
+            shouldStart = true
+          } else {
+            count = 0
+            isStartingConnection = false
+            isDisconnecting = true
+            shouldDisconnect = (false, nil, .unknown)
+            disconnectParams = (error, reason)
+          }
+        default:
+          shouldStart = true
+        }
+      }
+      nsLock.unlock()
+
+      if let (error, reason) = disconnectParams {
+        context?.basicDisconnect(error: error, reason: reason)
+        return
+      }
+      guard shouldStart else {
+        return
+      }
+
+      operation()
+
+      // operation の実行中にも切断要求が到着し得るため、開始区間を閉じる処理と
+      // 保存済み要求の取り出しを同じ排他領域で行う。
+      nsLock.lock()
+      isStartingConnection = false
+      if !isDisconnecting {
+        switch shouldDisconnect {
+        case (true, let error, let reason):
+          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
+            shouldDisconnect = (false, nil, .unknown)
+          } else {
+            count = 0
+            isDisconnecting = true
+            shouldDisconnect = (false, nil, .unknown)
+            disconnectParams = (error, reason)
+          }
+        default:
+          break
+        }
+      }
+      nsLock.unlock()
+
+      if let (error, reason) = disconnectParams {
         context?.basicDisconnect(error: error, reason: reason)
       }
     }
@@ -210,15 +309,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       nsLock.unlock()
 
       if let (error, reason) = disconnectParams {
-        if let context {
-          // リダイレクト中は旧 RTCPeerConnection の close() により state が .closed を返すため、
-          // disconnect() と同じく isRedirecting 中は basicDisconnect を実行する。
-          // (実行しないと isDisconnecting = true が設定されたまま Lock が恒久的に破壊され、
-          // 以後の waitDisconnect / lock がすべて無視される)
-          if context.state != .closed || context.isRedirecting {
-            context.basicDisconnect(error: error, reason: reason)
-          }
-        }
+        // waitDisconnect で受理した切断要求は、nativeChannel が先に .closed へ
+        // 遷移していても後始末が必要である。二重実行は isDisconnecting が防ぐ。
+        context?.basicDisconnect(error: error, reason: reason)
       }
     }
 
@@ -230,6 +323,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   let configuration: Configuration
   let signalingChannel: SignalingChannel
   let nativePeerChannelFactory: NativePeerChannelFactory
+  /// SDK と公開 API のカメラ start / stop / restart をプロセス全体で直列化する coordinator
+  private let cameraCaptureCoordinator: CameraVideoCaptureCoordinator
+  /// redirect で streams を破棄した後も、カメラ停止完了まで保持する所有ストリーム
+  private let cameraCaptureOwnership: CameraCaptureOwnership
+  /// この接続でカメラと画面共有のどちらを送信するかを、非同期開始より前に予約する coordinator
+  private let videoSourceCoordinator: VideoSourceCoordinator
 
   private(set) var streams: [MediaStream] = []
   private(set) var iceCandidates: [ICECandidate] = []
@@ -301,7 +400,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   var isAudioInputInitialized: Bool = false
 
-  private var lock: Lock
+  let lock: Lock
 
   private var offerEncodings: [SignalingOffer.Encoding]?
 
@@ -319,12 +418,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   required init(
     configuration: Configuration, signalingChannel: SignalingChannel,
     nativePeerChannelFactory: NativePeerChannelFactory,
-    mediaChannel: MediaChannel?
+    mediaChannel: MediaChannel?,
+    cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
+    cameraCaptureOwnership: CameraCaptureOwnership = CameraCaptureOwnership(),
+    videoSourceCoordinator: VideoSourceCoordinator = VideoSourceCoordinator()
   ) {
     self.signalingChannel = signalingChannel
     self.mediaChannel = mediaChannel
     self.configuration = configuration
     self.nativePeerChannelFactory = nativePeerChannelFactory
+    self.cameraCaptureCoordinator = cameraCaptureCoordinator
+    self.cameraCaptureOwnership = cameraCaptureOwnership
+    self.videoSourceCoordinator = videoSourceCoordinator
     webRTCConfiguration = configuration.webRTCConfiguration
 
     lock = Lock()
@@ -355,31 +460,37 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try connecting")
     // このロックは finishConnecting() で解除される
-    lock.lock()
-
+    guard lock.beginConnectionStart() else {
+      handler(SoraError.connectionCancelled)
+      return
+    }
+    // 開始ロックの取得後に設定することで、切断処理との間で onConnect を競合させない。
+    // この区間の切断要求は startConnection まで保存される。
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
     // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
     WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
 
-    signalingChannel.connect { [weak self] error in
-      guard let weakSelf = self else {
-        return
-      }
+    lock.startConnection {
+      signalingChannel.connect { [weak self] error in
+        guard let weakSelf = self else {
+          return
+        }
 
-      // 切断後にリダイレクト先の WebSocket が接続成功した場合は connect メッセージを再送しない。
-      // (リダイレクト窓 (isRedirecting) では再接続のため再送し、切断済み
-      // (isRedirecting == false かつ state == .closed) では再送しない。
-      // 再送するとサーバーが offer を返し、新 PC の生成・リークにつながる)
-      guard weakSelf.isRedirecting || weakSelf.state != .closed else {
-        return
-      }
+        // 切断後にリダイレクト先の WebSocket が接続成功した場合は connect メッセージを再送しない。
+        // (リダイレクト窓 (isRedirecting) では再接続のため再送し、切断済み
+        // (isRedirecting == false かつ state == .closed) では再送しない。
+        // 再送するとサーバーが offer を返し、新 PC の生成・リークにつながる)
+        guard weakSelf.isRedirecting || weakSelf.state != .closed else {
+          return
+        }
 
-      if let sdp = weakSelf.sdp {
-        weakSelf.sendConnectMessage(with: sdp, error: error, redirect: true)
-      } else {
-        weakSelf.sendConnectMessage(error: error)
+        if let sdp = weakSelf.sdp {
+          weakSelf.sendConnectMessage(with: sdp, error: error, redirect: true)
+        } else {
+          weakSelf.sendConnectMessage(error: error)
+        }
       }
     }
   }
@@ -412,13 +523,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   func disconnect(error: Error?, reason: DisconnectReason) {
-    // リダイレクト中は旧 RTCPeerConnection の close() により state が .closed を返す。
-    // そのまま .closed ガードで返すと、リダイレクト窓の切断要求 (ユーザー切断や
-    // リダイレクト先への接続失敗) が後始末なしで握り潰されるため、
-    // isRedirecting 中は切断処理を続行する。
-    if state == .closed, !isRedirecting {
-      return
-    }
     Logger.debug(type: .peerChannel, message: "wait to disconnect")
     lock.waitDisconnect(error: error, reason: reason)
   }
@@ -669,7 +773,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // マイクの初期化
     if configuration.audioEnabled {
-      if configuration.audioDevice == nil {
+      if configuration.audioStereoOutputEnabled {
+        // ステレオ再生では RemoteIO を利用するため、VPIO 専用の入力初期化を実行しない。
+        Logger.debug(
+          type: .peerChannel,
+          message: "stereo playout enabled, skip initialize audio input")
+      } else if configuration.audioDevice == nil {
         initializeAudioInput()
       } else {
         // AVAudioSession の設定はカスタム音声デバイス (DummyAudioDevice.initialize(with:)) が行うためスキップする
@@ -718,14 +827,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       if !session.setInitialMicrophoneMute(initialMicrophoneMute) {
         Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
       }
-
-      // カテゴリをマイク用途のものに変更する
-      // libwebrtc の内部で参照される RTCAudioSessionConfiguration を使う必要がある
-      Logger.debug(
-        type: .peerChannel,
-        message: "change audio session category (playAndRecord)")
-      RTCAudioSessionConfiguration.webRTC().category =
-        AVAudioSession.Category.playAndRecord.rawValue
 
       session.initializeInput { error in
         if let error {
@@ -801,66 +902,165 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
-    if let current = CameraVideoCapturer.current, current.isRunning {
-      // CameraVideoCapturer.current を停止してから capturer を start する
-      current.stop { (error: Error?) in
-        guard error == nil else {
-          Logger.debug(
-            type: .peerChannel,
-            // guard の else 節で非 nil が保証されるため安全
-            // swiftlint:disable:next force_unwrapping
-            message: "CameraVideoCapturer.stop failed =>  \(error!)")
-          return
-        }
+    guard let reservation = videoSourceCoordinator.beginCamera(stream: stream) else {
+      Logger.error(
+        type: .peerChannel,
+        message: "camera capture cannot start while screen capture is reserved")
+      return
+    }
 
-        capturer.start(format: format, frameRate: frameRate) { error in
-          guard error == nil else {
-            Logger.debug(
-              type: .peerChannel,
-              // guard の else 節で非 nil が保証されるため安全
-              // swiftlint:disable:next force_unwrapping
-              message: "CameraVideoCapturer.start failed =>  \(error!)")
-            return
-          }
-          Logger.debug(
-            type: .peerChannel,
-            message: "set CameraVideoCapturer to sender stream")
-          capturer.stream = stream
-        }
+    let cameraCaptureCoordinator = cameraCaptureCoordinator
+    let cameraCaptureOwnership = cameraCaptureOwnership
+    let videoSourceCoordinator = videoSourceCoordinator
+    let formatBox = CameraCaptureFormatBox(format: format)
+    let senderStream = SenderStreamBox(stream: stream)
+    cameraCaptureCoordinator.enqueue {
+      guard cameraCaptureCoordinator.isAvailable else {
+        _ = videoSourceCoordinator.completeCamera(reservation, active: false)
+        Logger.error(
+          type: .peerChannel,
+          message: "camera capture is quarantined after a cleanup failure")
+        return
       }
-    } else {
-      capturer.start(format: format, frameRate: frameRate) { error in
-        guard error == nil else {
-          Logger.debug(
-            type: .peerChannel,
-            // guard の else 節で非 nil が保証されるため安全
-            // swiftlint:disable:next force_unwrapping
-            message: "CameraVideoCapturer.start failed =>  \(error!)")
+
+      // 切断がキュー実行より先に確定した場合は、カメラへ作用しない。
+      guard videoSourceCoordinator.isValid(reservation) else {
+        return
+      }
+
+      if let current = await CameraVideoCapturer.currentForSDK() {
+        guard videoSourceCoordinator.isValid(reservation) else {
           return
         }
-        Logger.debug(
-          type: .peerChannel,
-          message: "set CameraVideoCapturer to sender stream")
-        capturer.stream = stream
+        guard current.isRunning else {
+          _ = videoSourceCoordinator.completeCamera(reservation, active: false)
+          cameraCaptureCoordinator.quarantine(capturer: current)
+          Logger.error(
+            type: .peerChannel,
+            message: "current CameraVideoCapturer is not running")
+          return
+        }
+        if current.stream === senderStream.stream {
+          if videoSourceCoordinator.completeCamera(reservation, active: true) {
+            cameraCaptureOwnership.set(senderStream: senderStream.stream)
+          }
+          return
+        }
+        let previousStream = current.stream
+        let stopError = await current.stopForSDK()
+        if current.isRunning {
+          _ = videoSourceCoordinator.completeCamera(reservation, active: false)
+          cameraCaptureCoordinator.quarantine(capturer: current)
+          Logger.error(
+            type: .peerChannel,
+            message:
+              "CameraVideoCapturer.stop did not stop capture: \(stopError?.localizedDescription ?? "unknown error")"
+          )
+          return
+        }
+        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+        if let previousStream {
+          cameraCaptureOwnership.clear(ifOwnedBy: previousStream)
+          VideoSourceCoordinator.releaseCameraReservations(
+            for: previousStream,
+            excluding: reservation)
+        }
+        guard videoSourceCoordinator.isValid(reservation) else {
+          return
+        }
       }
+
+      guard !capturer.isRunning else {
+        _ = videoSourceCoordinator.completeCamera(reservation, active: false)
+        cameraCaptureCoordinator.quarantine(capturer: capturer)
+        Logger.error(
+          type: .peerChannel,
+          message: "CameraVideoCapturer is running without being current")
+        return
+      }
+
+      if let error = await capturer.startForSDK(
+        format: formatBox.format,
+        frameRate: frameRate,
+        senderStream: senderStream)
+      {
+        if capturer.isRunning {
+          _ = videoSourceCoordinator.completeCamera(reservation, active: true)
+          cameraCaptureCoordinator.quarantine(capturer: capturer)
+        } else {
+          _ = videoSourceCoordinator.completeCamera(reservation, active: false)
+        }
+        Logger.error(
+          type: .peerChannel,
+          message: "CameraVideoCapturer.start failed: \(error.localizedDescription)")
+        return
+      }
+
+      // start の完了待ち中に切断された場合は、開始済みのカメラを同じ直列化区間で停止する。
+      guard videoSourceCoordinator.completeCamera(reservation, active: true) else {
+        let stopError = await capturer.stopForSDK()
+        if capturer.isRunning {
+          cameraCaptureCoordinator.quarantine(capturer: capturer)
+          Logger.error(
+            type: .peerChannel,
+            message:
+              "failed to stop CameraVideoCapturer after cancelled start: \(stopError?.localizedDescription ?? "unknown error")"
+          )
+          return
+        }
+        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+        return
+      }
+      cameraCaptureOwnership.set(senderStream: senderStream.stream)
+      Logger.debug(
+        type: .peerChannel,
+        message: "set CameraVideoCapturer to sender stream")
     }
   }
 
   /// `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。
-  private func terminateSenderStream() {
-    if configuration.videoEnabled || configuration.cameraSettings.isEnabled {
-      // CameraVideoCapturer が起動中の場合は停止する
-      if let current = CameraVideoCapturer.current {
-        current.stop { error in
-          if error != nil {
-            Logger.debug(
-              type: .peerChannel,
-              // nil チェック直後のため安全
-              // swiftlint:disable:next force_unwrapping
-              message: "failed to stop CameraVideoCapturer =>  \(error!)")
-          }
-        }
+  private func terminateSenderStream() -> Task<Void, Never>? {
+    guard configuration.videoEnabled, configuration.cameraSettings.isEnabled else {
+      return nil
+    }
+
+    let cameraCaptureCoordinator = cameraCaptureCoordinator
+    let cameraCaptureOwnership = cameraCaptureOwnership
+    let videoSourceCoordinator = videoSourceCoordinator
+    return cameraCaptureCoordinator.enqueue {
+      guard let senderStream = cameraCaptureOwnership.currentSenderStream() else {
+        videoSourceCoordinator.releaseCamera()
+        return
       }
+      guard let current = await CameraVideoCapturer.currentForSDK() else {
+        cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
+        videoSourceCoordinator.releaseCamera()
+        return
+      }
+      // 切断対象の送信ストリームを所有する capturer だけを停止する。
+      // 別接続がすでに current を取得している場合は、そのカメラへ作用しない。
+      guard
+        CameraVideoCaptureCoordinator.isOwned(
+          currentStream: current.stream,
+          by: senderStream)
+      else {
+        cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
+        videoSourceCoordinator.releaseCamera()
+        return
+      }
+      let stopError = await current.stopForSDK()
+      if current.isRunning {
+        cameraCaptureCoordinator.quarantine(capturer: current)
+        Logger.error(
+          type: .peerChannel,
+          message:
+            "failed to stop CameraVideoCapturer: \(stopError?.localizedDescription ?? "unknown error")"
+        )
+        return
+      }
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+      cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
+      videoSourceCoordinator.releaseCamera()
     }
   }
 
@@ -957,10 +1157,24 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
         Logger.debug(type: .peerChannel, message: "did create answer")
 
+        guard let answer else {
+          handler(nil, SoraError.peerChannelError(reason: "answer should not be nil"))
+          return
+        }
+
+        let localAnswer: RTCSessionDescription
+        do {
+          let sdp =
+            self.configuration.requiresStereoAudioSDP
+            ? try StereoAudioSDP.enableStereo(in: answer.sdp) : answer.sdp
+          localAnswer = RTCSessionDescription(type: answer.type, sdp: sdp)
+        } catch {
+          handler(nil, error)
+          return
+        }
+
         Logger.debug(type: .peerChannel, message: "try setting local description")
-        // guard error == nil 直後のため安全
-        // swiftlint:disable:next force_unwrapping
-        nativeChannel.setLocalDescription(answer!) { error in
+        nativeChannel.setLocalDescription(localAnswer) { error in
           guard error == nil else {
             Logger.debug(
               type: .peerChannel,
@@ -973,15 +1187,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             message: "did set local description")
           Logger.debug(
             type: .peerChannel,
-            // guard error == nil 直後のため安全
-            // swiftlint:disable:next force_unwrapping
-            message: "\(answer!.sdpDescription)")
+            message: "\(localAnswer.sdpDescription)")
           Logger.debug(
             type: .peerChannel,
             message: "did create answer")
-          // guard error == nil 直後のため安全
-          // swiftlint:disable:next force_unwrapping
-          handler(answer!.sdp, nil)
+          handler(localAnswer.sdp, nil)
         }
       }
     }
@@ -1071,14 +1281,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     webSocketDisconnectScheduled = false
     nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
 
-    guard lock.lock() else {
-      // 切断済みのため answer 作成をスキップする。
-      // 生成済みの RTCPeerConnection は未クローズで残るため、ここでクローズする
-      // (リダイレクト窓で切断が実行された後に新 offer が届いた場合に到達する)。
-      Logger.debug(type: .peerChannel, message: "already disconnecting, skip create answer")
-      nativeChannel.close()
-      return
-    }
     createAnswer(
       isSender: configuration.isSender,
       offer: offer.sdp,
@@ -1095,22 +1297,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         self.lock.unlock()
         return
       }
-      guard error == nil else {
+      if let error {
         Logger.error(
           type: .peerChannel,
-          // guard の else 節で非 nil が保証されるため安全
-          // swiftlint:disable:next force_unwrapping
-          message: "failed to create answer (\(error!.localizedDescription))")
+          message: "failed to create answer (\(error.localizedDescription))")
+        self.lock.unlock()
+        self.disconnect(error: error, reason: .signalingFailure)
+        return
+      }
+      guard let sdp else {
         self.lock.unlock()
         self.disconnect(
-          error: SoraError.peerChannelError(reason: "failed to create answer"),
+          error: SoraError.peerChannelError(reason: "created answer SDP is unavailable"),
           reason: .signalingFailure)
         return
       }
 
-      // guard error == nil 直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      let answer = SignalingAnswer(sdp: sdp!)
+      let answer = SignalingAnswer(sdp: sdp)
       self.signalingChannel.send(message: Signaling.answer(answer))
       self.lock.unlock()
       Logger.debug(type: .peerChannel, message: "did send answer")
@@ -1139,22 +1342,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         self.lock.unlock()
         return
       }
-      guard error == nil else {
+      if let error {
         Logger.error(
           type: .peerChannel,
-          // guard の else 節で非 nil が保証されるため安全
-          // swiftlint:disable:next force_unwrapping
-          message: "failed to create update-answer (\(error!.localizedDescription)")
+          message: "failed to create update-answer (\(error.localizedDescription)")
+        self.lock.unlock()
+        self.disconnect(error: error, reason: .signalingFailure)
+        return
+      }
+      guard let answer else {
         self.lock.unlock()
         self.disconnect(
-          error: SoraError.peerChannelError(reason: "failed to create update-answer"),
+          error: SoraError.peerChannelError(reason: "created update-answer SDP is unavailable"),
           reason: .signalingFailure)
         return
       }
 
-      // guard error == nil 直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      let message = Signaling.update(SignalingUpdate(sdp: answer!))
+      let message = Signaling.update(SignalingUpdate(sdp: answer))
       self.signalingChannel.send(message: message)
 
       if self.configuration.isSender {
@@ -1162,9 +1366,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
-      // guard error == nil 直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      self.internalHandlers.onUpdate?(answer!)
+      self.internalHandlers.onUpdate?(answer)
 
       self.lock.unlock()
     }
@@ -1200,22 +1402,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         self.lock.unlock()
         return
       }
-      guard error == nil else {
+      if let error {
         Logger.error(
           type: .peerChannel,
-          // guard の else 節で非 nil が保証されるため安全
-          // swiftlint:disable:next force_unwrapping
-          message: "failed to create re-answer (\(error!.localizedDescription)")
+          message: "failed to create re-answer (\(error.localizedDescription)")
+        self.lock.unlock()
+        self.disconnect(error: error, reason: .signalingFailure)
+        return
+      }
+      guard let answer else {
         self.lock.unlock()
         self.disconnect(
-          error: SoraError.peerChannelError(reason: "failed to create re-answer"),
+          error: SoraError.peerChannelError(reason: "created re-answer SDP is unavailable"),
           reason: .signalingFailure)
         return
       }
 
-      // guard error == nil 直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+      let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer))
       self.signalingChannel.send(message: message)
 
       if self.configuration.isSender {
@@ -1223,9 +1426,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
-      // guard error == nil 直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      self.internalHandlers.onUpdate?(answer!)
+      self.internalHandlers.onUpdate?(answer)
 
       self.lock.unlock()
     }
@@ -1266,22 +1467,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         self.lock.unlock()
         return
       }
-      guard error == nil else {
+      if let error {
         Logger.error(
           type: .peerChannel,
-          // guard の else 節で非 nil が保証されるため安全
-          // swiftlint:disable:next force_unwrapping
-          message: "failed to create re-answer: error => (\(error!.localizedDescription)")
+          message: "failed to create re-answer: error => (\(error.localizedDescription)")
+        self.lock.unlock()
+        self.disconnect(error: error, reason: .signalingFailure)
+        return
+      }
+      guard let answer else {
         self.lock.unlock()
         self.disconnect(
-          error: SoraError.peerChannelError(reason: "failed to create re-answer"),
+          error: SoraError.peerChannelError(reason: "created re-answer SDP is unavailable"),
           reason: .signalingFailure)
         return
       }
 
-      // guard error == nil 直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer!))
+      let reAnswer = Signaling.reAnswer(SignalingReAnswer(sdp: answer))
 
       var data: Data?
       do {
@@ -1318,9 +1520,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
-      // guard error == nil 直後のため安全
-      // swiftlint:disable:next force_unwrapping
-      self.internalHandlers.onUpdate?(answer!)
+      self.internalHandlers.onUpdate?(answer)
 
       self.lock.unlock()
     }
@@ -1332,6 +1532,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       message: "handle signaling over WebSocket => \(signaling.typeName())")
     switch signaling {
     case .offer(let offer):
+      // 切断後にキューから遅れて配送された offer は、接続識別子の更新や
+      // RTCPeerConnection の生成を行う前に破棄する。
+      guard lock.lock() else {
+        Logger.debug(type: .peerChannel, message: "already disconnecting, skip offer")
+        return
+      }
       signalingChannel.setConnectedUrl()
 
       clientId = offer.clientId
@@ -1537,6 +1743,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // (リダイレクト窓で切断が実行された場合、以降は通常の切断状態に戻す)
     isRedirecting = false
 
+    // カメラ開始の非同期完了より先に切断を確定し、遅延した開始を自己停止させる。
+    // MediaChannel を経由しない internal テストや利用経路でも同じ不変条件を維持する。
+    videoSourceCoordinator.revoke()
+
     Logger.debug(
       type: .peerChannel,
       message:
@@ -1556,9 +1766,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     sendDisconnectMessageIfNeeded(reason: reason, error: error)
 
-    if configuration.isSender {
-      terminateSenderStream()
-    }
+    let cameraCleanupTask = configuration.isSender ? terminateSenderStream() : nil
 
     // カスタム音声デバイス (ダミー音声等) の停止。terminateSenderStream は送信側のカメラ停止のみを行い、
     // 音声デバイスの停止は行わないため、recvonly を含む全ロールで実行する。
@@ -1583,7 +1791,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // 開始されないようにするため (接続試行中は ConnectionTimer が処理する)
     connectedAtLeastOnce = false
 
-    nativeChannel?.close()
+    // 利用者が公開 native を先に close した場合も、残りの cleanup は必ず行う。
+    // すでに closed の PeerConnection に対する二度目の close だけを省略する。
+    if nativeChannel?.connectionState != .closed {
+      nativeChannel?.close()
+    }
+    // 実際の PeerConnection を閉じた後、利用者の切断 callback より前に要求を解放する。
+    // Lock が切断を遅延した場合も、AudioUnit の利用中に解放されない。
+    nativePeerChannelFactory.releaseAudioSessionRequirement()
 
     var error = error
     // DataChannel が正常にクローズされ (reason == .dataChannelClosed)、
@@ -1600,6 +1815,27 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // TODO(zztkm): signalingChannel.ignoreDisconnectWebSocket が true の場合はこの処理は不要かもしれない
     signalingChannel.disconnect(error: error, reason: reason)
 
+    guard let cameraCleanupTask else {
+      finishBasicDisconnect(error: error, reason: reason)
+      return
+    }
+
+    // 公開切断 callback より前に、この接続が所有する通常カメラの停止完了を待つ。
+    // context が PeerChannel を保持するため、非同期 cleanup 中に解放されない。
+    let context = PeerChannelDisconnectCompletionContext(
+      peerChannel: self,
+      error: error,
+      reason: reason)
+    Task { @Sendable in
+      await cameraCleanupTask.value
+      context.peerChannel.finishBasicDisconnect(
+        error: context.error,
+        reason: context.reason)
+    }
+  }
+
+  /// 非同期カメラ cleanup の完了後に、切断通知と接続ハンドラーを終端します。
+  private func finishBasicDisconnect(error: Error?, reason: DisconnectReason) {
     Logger.debug(type: .peerChannel, message: "call onDisconnect")
     internalHandlers.onDisconnect?(error, reason)
 
@@ -1833,6 +2069,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       cancelDisconnectTimer()
     case .disconnected:
       scheduleDisconnectTimerIfNeeded()
+    case .closed:
+      // 公開 native が SDK より先に close された場合も、stream、signaling、
+      // AudioSession lease を残さない。SDK 自身の close による再入は Lock が防ぐ。
+      disconnect(error: nil, reason: .noError)
     default:
       break
     }

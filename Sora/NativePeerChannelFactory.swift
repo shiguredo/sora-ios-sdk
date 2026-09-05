@@ -39,14 +39,48 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   let audioDeviceModuleWrapper: AudioDeviceModuleWrapper?
   /// カスタム音声デバイス (テストから注入されたダミー音声デバイス等)
   let audioDevice: RTCAudioDevice?
+  /// 接続が保持する音声セッションの要求
+  private let audioSessionRequirement: AudioSessionRequirement?
+  /// 一時 Offer や redirect の PC 入れ替えで ADM が再初期化されるのを防ぐ、未接続の PC
+  private let stereoMediaEngineAnchor: RTCPeerConnection?
 
   var nativeFactory: RTCPeerConnectionFactory
 
   init(
     bypassVoiceProcessing: Bool,
-    audioDevice: RTCAudioDevice? = nil
-  ) {
+    audioDevice: RTCAudioDevice? = nil,
+    audioSessionUsage: AudioSessionUsage = .none,
+    audioSessionCoordinator: AudioSessionCoordinator = .shared
+  ) throws {
     Logger.debug(type: .peerChannel, message: "create native peer channel factory")
+
+    let stereoPlayoutEnabled = audioSessionUsage.stereoPlayoutEnabled
+    if stereoPlayoutEnabled, audioDevice != nil {
+      throw SoraError.configurationError(
+        reason: "audioStereoOutputEnabled cannot be used with a custom audio device")
+    }
+    if audioDevice != nil {
+      guard case .custom = audioSessionUsage else {
+        throw SoraError.configurationError(
+          reason: "a custom audio device requires the custom audio session profile")
+      }
+    } else if case .custom = audioSessionUsage {
+      throw SoraError.configurationError(
+        reason: "the custom audio session profile requires a custom audio device")
+    }
+
+    // ADM の生成前に profile を予約し、別接続との AudioSession mode 競合を防ぐ。
+    // 以降で初期化に失敗した場合は local lease の deinit が要求を解放する。
+    let audioSessionRequirement = try audioSessionUsage.profile.map {
+      try audioSessionCoordinator.acquire(
+        profile: $0,
+        requiresPlayAndRecord: audioSessionUsage.requiresPlayAndRecord)
+    }
+    // 通常の VPIO では共有 template を ADM の生成前に確定する。
+    // ステレオでは API 成功後にだけ category を変更するため、後段で登録する。
+    if audioSessionUsage.requiresPlayAndRecord, !stereoPlayoutEnabled {
+      audioSessionRequirement?.requirePlayAndRecord()
+    }
 
     // 映像コーデックのエンコーダーとデコーダーを用意する
     let encoder = WrapperVideoEncoderFactory.shared
@@ -56,6 +90,7 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       self.audioDevice = audioDevice
       self.audioDeviceModule = nil
       self.audioDeviceModuleWrapper = nil
+      self.audioSessionRequirement = audioSessionRequirement
       // カスタム音声デバイス有効時は bypassVoiceProcessing は無視される (Voice Processing 不要のため)
       if bypassVoiceProcessing {
         Logger.warn(
@@ -68,16 +103,48 @@ final class NativePeerChannelFactory: @unchecked Sendable {
           decoderFactory: decoder,
           audioDevice: audioDevice)
     } else {
+      if stereoPlayoutEnabled, bypassVoiceProcessing {
+        Logger.warn(
+          type: .peerChannel,
+          message: "bypassVoiceProcessing is ignored when stereo playout is enabled")
+      }
       let adm: RTCAudioDeviceModule = RTCAudioDeviceModule(
-        bypassVoiceProcessing: bypassVoiceProcessing)
+        bypassVoiceProcessing: stereoPlayoutEnabled ? false : bypassVoiceProcessing)
+      if stereoPlayoutEnabled {
+        // この API はファクトリー生成後や再生初期化後には呼べないため、ADM の生成直後に実行する。
+        let result = adm.setStereoPlayoutEnabled(true)
+        try Self.validateStereoPlayoutResult(result)
+      }
       self.audioDevice = nil
       self.audioDeviceModule = adm
       self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
+      // ステレオ化に失敗した場合にカテゴリを変更しないよう、API の成功確認後に登録する。
+      if stereoPlayoutEnabled {
+        audioSessionRequirement?.requirePlayAndRecord()
+      }
+      self.audioSessionRequirement = audioSessionRequirement
       nativeFactory =
         RTCPeerConnectionFactory(
           encoderFactory: encoder,
           decoderFactory: decoder,
           audioDeviceModule: adm)
+    }
+
+    if stereoPlayoutEnabled {
+      // libwebrtc は最後の PC が破棄されると media engine と ADM を Terminate します。
+      // 再 Init ではステレオ設定を失うため、音声セッションの要求を解放するまで参照を保ちます。
+      // SDP・トラック・DataChannel を設定せず、ネットワーク接続や音声入出力は開始しません。
+      guard
+        let anchor = nativeFactory.peerConnection(
+          with: RTCConfiguration(),
+          constraints: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil),
+          delegate: nil)
+      else {
+        throw SoraError.mediaChannelError(reason: "failed to retain stereo audio media engine")
+      }
+      stereoMediaEngineAnchor = anchor
+    } else {
+      stereoMediaEngineAnchor = nil
     }
 
     for info in encoder.supportedCodecs() {
@@ -90,6 +157,26 @@ final class NativePeerChannelFactory: @unchecked Sendable {
         type: .peerChannel,
         message: "supported video decoder: \(info.name) \(info.parameters)")
     }
+  }
+
+  deinit {
+    releaseAudioSessionRequirement()
+  }
+
+  /// ADM のステレオ再生設定結果を SDK のエラーへ変換します。
+  static func validateStereoPlayoutResult(_ result: Int) throws {
+    guard result == 0 else {
+      throw SoraError.mediaChannelError(
+        reason: "RTCAudioDeviceModule::setStereoPlayoutEnabled failed (result: \(result))")
+    }
+  }
+
+  /// 接続終了時に音声セッションの要求を明示的に解放します。
+  func releaseAudioSessionRequirement() {
+    // 共有カテゴリを復元する前に、保持用 PC も close します。
+    // media engine の参照自体は、この Factory と保持用 PC の破棄時に解放されます。
+    stereoMediaEngineAnchor?.close()
+    audioSessionRequirement?.release()
   }
 
   func createNativePeerChannel(
