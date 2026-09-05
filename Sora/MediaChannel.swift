@@ -397,6 +397,9 @@ public final class MediaChannel {
   /// カメラ状態の確認を process-wide のカメラ操作と直列化します。
   private let cameraCaptureCoordinator: CameraVideoCaptureCoordinator
 
+  /// 接続後に開始したカメラも、PeerChannel の切断処理へ停止対象を引き継ぎます。
+  private let cameraCaptureOwnership: CameraCaptureOwnership
+
   // ReplayKit を利用した画面キャプチャ制御です
   // インスタンスが必要な場合は getOrCreateScreenCaptureController 経由で取得します
   // 生成後は MediaChannel のライフサイクルで保持します。
@@ -437,6 +440,7 @@ public final class MediaChannel {
     self.videoHardMuteLease = videoHardMuteLease
     self.videoSourceCoordinator = videoSourceCoordinator
     self.cameraCaptureCoordinator = cameraCaptureCoordinator
+    self.cameraCaptureOwnership = cameraCaptureOwnership
     self.nativePeerChannelFactory = try NativePeerChannelFactory(
       bypassVoiceProcessing: configuration.bypassVoiceProcessing,
       audioDevice: configuration.audioDevice,
@@ -1409,7 +1413,8 @@ public final class MediaChannel {
           cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings),
           cameraStartAuthorization: CameraStartAuthorization(
             reservation: reservation,
-            videoSourceCoordinator: videoSourceCoordinator)
+            videoSourceCoordinator: videoSourceCoordinator,
+            cameraCaptureOwnership: cameraCaptureOwnership)
         )
       } catch {
         videoSourceCoordinator.cancelCamera(reservation)

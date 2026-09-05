@@ -218,6 +218,43 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     XCTAssertNil(ownership.currentSenderStream(), "所有接続からの解除で空になること")
   }
 
+  /// 開始取消後も、物理停止の成功を確認するまでは切断処理が所有ストリームを参照できることを確認する
+  func testCancelledCameraStartRetainsOwnershipUntilStopped() async throws {
+    let dependencies = try makeDependencies()
+    let cameraCoordinator = CameraVideoCaptureCoordinator()
+
+    // lease 破棄と送信元予約破棄の両経路で、開始成功後の停止対象を失わないことを確認する。
+    for revokeLease in [true, false] {
+      let lease = VideoHardMuteLease()
+      let videoSourceCoordinator = VideoSourceCoordinator()
+      let ownership = CameraCaptureOwnership()
+      let senderStream = dependencies.senderStreamBox
+      let reservation = try XCTUnwrap(
+        videoSourceCoordinator.beginCamera(stream: senderStream.stream))
+      let authorization = CameraStartAuthorization(
+        reservation: reservation,
+        videoSourceCoordinator: videoSourceCoordinator,
+        cameraCaptureOwnership: ownership)
+      if revokeLease {
+        lease.revoke()
+      } else {
+        videoSourceCoordinator.revoke()
+      }
+
+      let completed = await cameraCoordinator.perform {
+        authorization.completeStartedCamera(lease: lease, senderStream: senderStream.stream)
+      }
+      XCTAssertFalse(completed, "取消後に開始予約を確定しないこと")
+      XCTAssertTrue(
+        ownership.currentSenderStream() === senderStream.stream,
+        "開始済みカメラの停止が未完了なら、切断処理へ所有情報を引き継ぐこと")
+
+      videoSourceCoordinator.cancelCamera(reservation)
+      ownership.clear(ifOwnedBy: senderStream.stream)
+      XCTAssertNil(ownership.currentSenderStream(), "停止確認後は所有情報を解除できること")
+    }
+  }
+
   /// カメラ cleanup 失敗後は隔離し、停止成功を確認するまで新しい操作を許可しないことを確認する
   func testCameraCoordinatorQuarantinesCleanupFailure() {
     let coordinator = CameraVideoCaptureCoordinator()
@@ -476,26 +513,42 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     XCTAssertTrue(coordinator.isValid(secondStart))
   }
 
-  /// 通常カメラの停止キューが完了するまで MediaChannel の切断 callback を通知しないことを確認する
+  /// 初期カメラ無効から開始した場合も、停止キュー完了まで切断 callback と所有情報を保持することを確認する
   func testMediaChannelDisconnectWaitsForCameraCleanup() async throws {
     let coordinator = CameraVideoCaptureCoordinator()
     let ownership = CameraCaptureOwnership()
-    let gate = CameraCaptureTestGate()
-    coordinator.enqueue {
-      await gate.wait()
-    }
-    await gate.waitUntilBlocked()
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    var configuration = makeConfiguration()
+    configuration.initialCameraEnabled = false
 
     let mediaChannel = try MediaChannel(
-      configuration: makeConfiguration(),
+      configuration: configuration,
       cameraCaptureCoordinator: coordinator,
-      cameraCaptureOwnership: ownership)
+      cameraCaptureOwnership: ownership,
+      videoSourceCoordinator: videoSourceCoordinator)
     let nativeFactory = mediaChannel.peerChannel.nativePeerChannelFactory
     let nativeStream = nativeFactory.createNativeStream(streamId: "camera-cleanup-test")
     let senderStream = BasicMediaStream(
       peerChannel: mediaChannel.peerChannel,
       nativeStream: nativeStream)
-    ownership.set(senderStream: senderStream)
+    let senderStreamBox = SenderStreamBox(stream: senderStream)
+    let lease = VideoHardMuteLease()
+    let reservation = try XCTUnwrap(videoSourceCoordinator.beginCamera(stream: senderStream))
+    let authorization = CameraStartAuthorization(
+      reservation: reservation,
+      videoSourceCoordinator: videoSourceCoordinator,
+      cameraCaptureOwnership: ownership)
+
+    // 実カメラの代替物は作らず、開始成功後に使う予約確定処理と実際の切断処理を接続する。
+    let completed = await coordinator.perform {
+      authorization.completeStartedCamera(lease: lease, senderStream: senderStreamBox.stream)
+    }
+    XCTAssertTrue(completed, "接続後のカメラ開始予約を確定できること")
+    let gate = CameraCaptureTestGate()
+    coordinator.enqueue {
+      await gate.wait()
+    }
+    await gate.waitUntilBlocked()
 
     let disconnectExpectation = expectation(description: "通常カメラ停止後に切断 callback が届くこと")
     var disconnectCallbackCount = 0

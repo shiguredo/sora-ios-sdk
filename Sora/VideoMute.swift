@@ -31,6 +31,14 @@ struct SenderStreamBox: @unchecked Sendable {
 struct CameraStartAuthorization: Sendable {
   let reservation: VideoSourceCoordinator.Reservation
   let videoSourceCoordinator: VideoSourceCoordinator
+  let cameraCaptureOwnership: CameraCaptureOwnership
+
+  /// 物理カメラの開始成功後、同じカメラ操作の直列化区間で予約を確定します。
+  /// 取消済みでも停止に失敗する可能性があるため、所有情報は停止確認まで保持します。
+  func completeStartedCamera(lease: VideoHardMuteLease, senderStream: MediaStream) -> Bool {
+    cameraCaptureOwnership.set(senderStream: senderStream)
+    return lease.isValid && videoSourceCoordinator.completeCamera(reservation, active: true)
+  }
 }
 
 // カメラ操作の所有者を識別する lease です。
@@ -533,10 +541,10 @@ actor VideoHardMuteActor {
     guard let cameraStartAuthorization else {
       return
     }
-    guard lease.isValid,
-      cameraStartAuthorization.videoSourceCoordinator.completeCamera(
-        cameraStartAuthorization.reservation,
-        active: true)
+    guard
+      cameraStartAuthorization.completeStartedCamera(
+        lease: lease,
+        senderStream: senderStream.stream)
     else {
       cameraStartAuthorization.videoSourceCoordinator.cancelCamera(
         cameraStartAuthorization.reservation)
@@ -547,6 +555,8 @@ actor VideoHardMuteActor {
       else {
         if capturer.isRunning {
           cameraCaptureCoordinator.quarantine(capturer: capturer)
+        } else {
+          cameraStartAuthorization.cameraCaptureOwnership.clear(ifOwnedBy: senderStream.stream)
         }
         throw SoraError.mediaChannelError(
           reason: "video hard mute operation was cancelled")
@@ -559,6 +569,7 @@ actor VideoHardMuteActor {
           ?? SoraError.cameraError(reason: "failed to stop camera after cancelled start")
       }
       cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+      cameraStartAuthorization.cameraCaptureOwnership.clear(ifOwnedBy: senderStream.stream)
       throw SoraError.mediaChannelError(
         reason: "video hard mute operation was cancelled")
     }
