@@ -1165,7 +1165,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         let localAnswer: RTCSessionDescription
         do {
           let sdp =
-            self.configuration.audioStereoOutputEnabled
+            self.configuration.requiresStereoAudioSDP
             ? try StereoAudioSDP.enableStereo(in: answer.sdp) : answer.sdp
           localAnswer = RTCSessionDescription(type: answer.type, sdp: sdp)
         } catch {

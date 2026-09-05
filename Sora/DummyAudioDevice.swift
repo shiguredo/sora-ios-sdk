@@ -9,6 +9,7 @@ import WebRTC
 /// delegate.deliverRecordedData で ADM に注入する。
 /// 遠隔音声の再生は AUAudioUnit (RemoteIO) の outputProvider 経由で
 /// delegate.getPlayoutData を呼び出す。
+/// playoutHandler を指定した場合は、音声ハードウェアを起動せず再生 PCM を callback に渡す。
 ///
 /// PCM データの生成 (波形の内容) は pcmGenerator として外部から注入する。
 /// 波形のロジック (正弦波等) はテスト・デモの用途に依存するため、SDK 側では持たない。
@@ -25,10 +26,14 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     (_ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double)
       -> Void
 
-  // 録音タイマーキュー (recordingQueue) と ADM スレッドの間で共有する状態を保護するロック。
-  // deliverPCMData は recordingQueue から呼ばれる一方、
-  // startRecording / stopRecording / setHardMute / terminateDevice は ADM スレッドから呼ばれる。
-  // delegate / _isRecording / isHardMuted の読み書きはこのロックで直列化する。
+  /// 入出力のチャンネル数。PCM は L、R の順の interleaved Int16 とする。
+  private let channelCount: Int
+  /// 指定時は音声ハードウェアを使わず、ADM から取り出した再生 PCM を同期的に渡す。
+  /// バッファは callback の間だけ有効であり、保持する場合はコピーすること。
+  private let playoutHandler: (@Sendable (UnsafeBufferPointer<Int16>, Double) -> Void)?
+
+  // delegate と録音状態へのアクセスを保護する。
+  // PCM の生成・注入は、タイマーから ADM スレッドへ dispatch した後に実行する。
   private let stateLock = NSLock()
 
   private weak var delegate: RTCAudioDeviceDelegate?
@@ -48,6 +53,8 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
   // 再生用
   private var audioUnit: AUAudioUnit?
+  private var playoutTimer: DispatchSourceTimer?
+  private let playoutQueue = DispatchQueue(label: "jp.shiguredo.sora.dummy-audio.playout")
 
   private var _isInitialized = false
   private var _isPlayoutInitialized = false
@@ -61,14 +68,21 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
   /// 初期化する
   /// - Parameter initialMicrophoneEnabled: 初期状態でハードミュートするかどうか
+  /// - Parameter channelCount: 入出力のチャンネル数。1 または 2 を指定する
+  /// - Parameter playoutHandler: 再生 PCM の取得処理。指定時は AudioSession と音声ハードウェアを使わない
   /// - Parameter pcmGenerator: PCM データ生成処理 (波形の内容を決める)
   init(
     initialMicrophoneEnabled: Bool,
+    channelCount: Int = 1,
+    playoutHandler: (@Sendable (UnsafeBufferPointer<Int16>, Double) -> Void)? = nil,
     pcmGenerator:
       @escaping (
         _ data: UnsafeMutableRawPointer, _ frameCount: Int, _ sampleRate: Double
       ) -> Void
   ) {
+    precondition((1...2).contains(channelCount), "channelCount must be 1 or 2")
+    self.channelCount = channelCount
+    self.playoutHandler = playoutHandler
     self.pcmGenerator = pcmGenerator
     self.isHardMuted = !initialMicrophoneEnabled
     super.init()
@@ -77,6 +91,7 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   // 異常経路で terminateDevice が呼ばれずに解放された場合に備える
   deinit {
     recordingTimer?.cancel()
+    playoutTimer?.cancel()
   }
 
   // MARK: - RTCAudioDevice プロパティ
@@ -89,7 +104,7 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     lockedDelegate()?.preferredInputIOBufferDuration ?? 0.02
   }
 
-  var inputNumberOfChannels: Int { 1 }
+  var inputNumberOfChannels: Int { channelCount }
 
   var inputLatency: TimeInterval { 0 }
 
@@ -101,7 +116,7 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     lockedDelegate()?.preferredOutputIOBufferDuration ?? 0.02
   }
 
-  var outputNumberOfChannels: Int { 1 }
+  var outputNumberOfChannels: Int { channelCount }
 
   var outputLatency: TimeInterval { 0 }
 
@@ -117,6 +132,12 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     stateLock.lock()
     self.delegate = delegate
     stateLock.unlock()
+
+    // PCM を callback で消費する場合は、マイク・スピーカー・共有 AudioSession に触れない。
+    if playoutHandler != nil {
+      _isInitialized = true
+      return true
+    }
 
     // RTCAudioDevice 実装は AVAudioSession の設定責務を持つ (RTCAudioDevice.h)
     do {
@@ -145,6 +166,8 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
       guard let self else { return }
       self.recordingTimer?.cancel()
       self.recordingTimer = nil
+      self.playoutTimer?.cancel()
+      self.playoutTimer = nil
       self.stateLock.lock()
       self._isRecording = false
       self._isRecordingInitialized = false
@@ -171,6 +194,11 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   func initializePlayout() -> Bool {
     guard let delegate = lockedDelegate() else { return false }
 
+    if playoutHandler != nil {
+      _isPlayoutInitialized = true
+      return true
+    }
+
     let desc = AudioComponentDescription(
       componentType: kAudioUnitType_Output,
       componentSubType: kAudioUnitSubType_RemoteIO,
@@ -194,7 +222,7 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     let format = AVAudioFormat(
       commonFormat: .pcmFormatInt16,
       sampleRate: delegate.preferredOutputSampleRate,
-      channels: 1,
+      channels: AVAudioChannelCount(channelCount),
       interleaved: true)
     guard let format else { return false }
     do {
@@ -227,6 +255,23 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   }
 
   func startPlayout() -> Bool {
+    if playoutHandler != nil {
+      guard let delegate = lockedDelegate(), _isPlayoutInitialized else { return false }
+      playoutTimer?.cancel()
+      _isPlaying = true
+      let timer = DispatchSource.makeTimerSource(queue: playoutQueue)
+      let interval = delegate.preferredOutputIOBufferDuration
+      timer.schedule(deadline: .now() + interval, repeating: interval)
+      timer.setEventHandler { [weak self, weak delegate] in
+        // ADM は同一スレッドでの callback を要求するため、タイマーの実行スレッドは使わない。
+        delegate?.dispatchAsync { [weak self] in
+          self?.consumePlayoutData()
+        }
+      }
+      timer.resume()
+      playoutTimer = timer
+      return true
+    }
     guard let au = audioUnit else { return false }
     do {
       try au.startHardware()
@@ -241,9 +286,38 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   }
 
   func stopPlayout() -> Bool {
+    playoutTimer?.cancel()
+    playoutTimer = nil
     audioUnit?.stopHardware()
     _isPlaying = false
     return true
+  }
+
+  /// 音声デバイスを起動せずに実際の ADM の再生データを取得する。ADM スレッドから呼ぶ。
+  private func consumePlayoutData() {
+    guard _isPlaying, let delegate = lockedDelegate(), let playoutHandler else { return }
+    let sampleRate = delegate.preferredOutputSampleRate
+    let frameCount = UInt32((sampleRate * delegate.preferredOutputIOBufferDuration) + 0.5)
+    guard frameCount > 0 else { return }
+    var samples = [Int16](repeating: 0, count: Int(frameCount) * channelCount)
+    samples.withUnsafeMutableBytes { bytes in
+      var buffers = AudioBufferList(
+        mNumberBuffers: 1,
+        mBuffers: AudioBuffer(
+          mNumberChannels: UInt32(channelCount),
+          mDataByteSize: UInt32(bytes.count),
+          mData: bytes.baseAddress))
+      var timestamp = AudioTimeStamp()
+      timestamp.mFlags = .hostTimeValid
+      timestamp.mHostTime = mach_absolute_time()
+      var flags = AudioUnitRenderActionFlags()
+      let result = delegate.getPlayoutData(&flags, &timestamp, 0, frameCount, &buffers)
+      guard result == noErr else {
+        Logger.warn(type: .dummyAudioDevice, message: "getPlayoutData failed with status \(result)")
+        return
+      }
+      playoutHandler(UnsafeBufferPointer(bytes.bindMemory(to: Int16.self)), sampleRate)
+    }
   }
 
   // MARK: - 録音 (Recording)
@@ -273,8 +347,11 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     timer.schedule(
       deadline: .now() + .nanoseconds(intervalNs),
       repeating: .nanoseconds(intervalNs))
-    timer.setEventHandler { [weak self] in
-      self?.deliverPCMData()
+    timer.setEventHandler { [weak self, weak delegate] in
+      // キューのワーカースレッドが変わっても、ADM への PCM 注入は同じスレッドに固定する。
+      delegate?.dispatchAsync { [weak self] in
+        self?.deliverPCMData()
+      }
     }
     timer.resume()
     recordingTimer = timer
@@ -309,9 +386,7 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   }
 
   private func deliverPCMData() {
-    // 共有状態をロックで直列化して読み取る。
-    // delegate は弱参照のため、ローカル変数にコピーして強参照にすることで、
-    // deliverRecordedData 呼び出し中に解放されないようにする
+    // 終了済み・ミュート中の録音は実行せず、注入中は delegate の強参照を保持する。
     stateLock.lock()
     let delegate = self.delegate
     let isRecording = _isRecording
@@ -336,29 +411,6 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
         message: "invalid frame count: \(frameCount)")
       return
     }
-    let dataSize = Int(frameCount) * MemoryLayout<Int16>.size
-
-    let bufferList = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
-    bufferList.initialize(to: AudioBufferList())
-    defer {
-      free(bufferList.pointee.mBuffers.mData)
-      bufferList.deallocate()
-    }
-    bufferList.pointee.mNumberBuffers = 1
-    bufferList.pointee.mBuffers.mNumberChannels = 1
-    bufferList.pointee.mBuffers.mDataByteSize = UInt32(dataSize)
-    bufferList.pointee.mBuffers.mData = malloc(dataSize)
-
-    // malloc 失敗時はこのフレームをスキップする
-    guard let data = bufferList.pointee.mBuffers.mData else {
-      Logger.warn(
-        type: .dummyAudioDevice,
-        message: "failed to allocate PCM data")
-      return
-    }
-
-    fillPCMData(data: data, frameCount: Int(frameCount), sampleRate: sampleRate)
-
     // ADM のジッタバッファ制御がタイムスタンプを参照するため、ホスト時刻と有効フラグを設定する
     // (mFlags がないと AudioTimeStampGetNanoseconds が nullopt を返し、時刻が無視される)
     var timestamp = AudioTimeStamp()
@@ -366,9 +418,20 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     timestamp.mHostTime = mach_absolute_time()
     var flags = AudioUnitRenderActionFlags()
 
+    // libwebrtc の inputData 経路はフレーム数をサンプル数として扱い、2 ch では半分を失う。
+    // renderBlock 経路ではチャンネル数を含むバッファ全体が渡るため、こちらで PCM を生成する。
     let result = delegate.deliverRecordedData(
-      &flags, &timestamp, 0, frameCount,
-      UnsafePointer(bufferList), nil, nil)
+      &flags, &timestamp, 0, frameCount, nil, nil
+    ) { _, _, _, frames, buffers, _ in
+      let buffer = buffers.pointee.mBuffers
+      let requiredBytes = Int(frames) * self.channelCount * MemoryLayout<Int16>.size
+      guard buffers.pointee.mNumberBuffers == 1,
+        buffer.mNumberChannels == UInt32(self.channelCount),
+        Int(buffer.mDataByteSize) >= requiredBytes, let data = buffer.mData
+      else { return kAudio_ParamError }
+      self.fillPCMData(data: data, frameCount: Int(frames), sampleRate: sampleRate)
+      return noErr
+    }
     if result != noErr {
       Logger.warn(
         type: .dummyAudioDevice,

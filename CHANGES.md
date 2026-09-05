@@ -136,6 +136,9 @@
 - [ADD] DataChannel シグナリング切断経路 E2E テストを追加する
   - DataChannel シグナリング有効時にサーバー側切断が DataChannel 経由で伝播し、切断理由が SoraCloseEvent で通知されることを検証する
   - @t-miya
+- [UPDATE] ダミー音声デバイスによるステレオ送受信テストを追加する
+  - マイク / スピーカーを使わず、実際の Opus / RTP / ADM を通した再生 PCM の左右の分離を検証する
+  - @t-miya
 
 ## 2026.2.0
 

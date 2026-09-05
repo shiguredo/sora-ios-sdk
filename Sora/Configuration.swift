@@ -325,6 +325,12 @@ public struct Configuration {
   /// :nodoc:
   var audioDevice: RTCAudioDevice?
 
+  /// カスタムデバイスでも 2 ch 再生を要求する場合は受信用の Opus SDP に反映する。
+  /// ネイティブ ADM の切替フラグとは分け、カスタムデバイスとの同時指定制約は維持する。
+  var requiresStereoAudioSDP: Bool {
+    audioStereoOutputEnabled || audioDevice?.outputNumberOfChannels == 2
+  }
+
   /// 初期化します。
   /// - parameter url: サーバーの URL
   /// - parameter channelId: チャネル ID
