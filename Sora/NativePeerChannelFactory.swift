@@ -131,7 +131,7 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     }
 
     if stereoPlayoutEnabled {
-      // libwebrtc は最後の PC が閉じられると media engine と ADM を Terminate します。
+      // libwebrtc は最後の PC が破棄されると media engine と ADM を Terminate します。
       // 再 Init ではステレオ設定を失うため、音声セッションの要求を解放するまで参照を保ちます。
       // SDP・トラック・DataChannel を設定せず、ネットワーク接続や音声入出力は開始しません。
       guard
@@ -173,7 +173,8 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 
   /// 接続終了時に音声セッションの要求を明示的に解放します。
   func releaseAudioSessionRequirement() {
-    // 共有カテゴリを復元する前に、保持していた media engine を終了します。
+    // 共有カテゴリを復元する前に、保持用 PC も close します。
+    // media engine の参照自体は、この Factory と保持用 PC の破棄時に解放されます。
     stereoMediaEngineAnchor?.close()
     audioSessionRequirement?.release()
   }

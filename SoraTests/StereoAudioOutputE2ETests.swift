@@ -4,6 +4,18 @@ import XCTest
 
 @testable @preconcurrency import Sora
 
+/// WebRTC の統計オブジェクトを他スレッドへ渡さず、検証に必要な数値だけを保持する。
+private struct AudioRTPCounts: Sendable {
+  let packets: Int
+  let bytes: Int
+}
+
+/// callback から返った数値を、テストと同じ MainActor 上で保存する。
+@MainActor
+private final class AudioRTPCountsResult {
+  var counts: AudioRTPCounts?
+}
+
 /// ステレオ音声出力を有効にした実接続を検証します。
 ///
 /// E2E 環境の Sora と実際の ADM を利用し、モックやスタブは使用しません。
@@ -109,34 +121,34 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
     XCTAssertNil(channel.setAudioHardMute(true), "モノラル時にハードミュートできること")
 
     // ミュート直前に生成済みの RTP packet が統計へ反映されるまで待ってから比較する。
-    _ = outboundAudioCounts(channel: channel, delay: 1)
-    guard let mutedStart = outboundAudioCounts(channel: channel, delay: 0),
-      let mutedEnd = outboundAudioCounts(channel: channel, delay: 2)
+    _ = audioCounts(channel: channel, delay: 1)
+    guard let mutedStart = audioCounts(channel: channel, delay: 0),
+      let mutedEnd = audioCounts(channel: channel, delay: 2)
     else {
       disconnectAndVerify(channel: channel)
       return
     }
     XCTAssertEqual(
-      mutedEnd.packetsSent,
-      mutedStart.packetsSent,
+      mutedEnd.packets,
+      mutedStart.packets,
       "ハードミュート中は音声 packet が増加しないこと")
     XCTAssertEqual(
-      mutedEnd.bytesSent,
-      mutedStart.bytesSent,
+      mutedEnd.bytes,
+      mutedStart.bytes,
       "ハードミュート中は音声 byte が増加しないこと")
 
     XCTAssertNil(channel.setAudioHardMute(false), "モノラル時にハードミュートを解除できること")
-    guard let resumed = outboundAudioCounts(channel: channel, delay: 2) else {
+    guard let resumed = audioCounts(channel: channel, delay: 2) else {
       disconnectAndVerify(channel: channel)
       return
     }
     XCTAssertGreaterThan(
-      resumed.packetsSent,
-      mutedEnd.packetsSent,
+      resumed.packets,
+      mutedEnd.packets,
       "ハードミュート解除後は音声 packet が再び増加すること")
     XCTAssertGreaterThan(
-      resumed.bytesSent,
-      mutedEnd.bytesSent,
+      resumed.bytes,
+      mutedEnd.bytes,
       "ハードミュート解除後は音声 byte が再び増加すること")
     disconnectAndVerify(channel: channel)
   }
@@ -228,111 +240,66 @@ final class StereoAudioOutputE2ETests: E2ETestBase {
 
   /// outbound-rtp (audio) で実際に RTP packet と byte が送信されることを確認する
   private func verifyOutboundAudio(channel: MediaChannel) {
-    let statsExpectation = expectation(description: "音声 RTP が送信されること")
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-      channel.getStats { result in
-        DispatchQueue.main.async {
-          defer { statsExpectation.fulfill() }
-          guard case .success(let stats) = result else {
-            if case .failure(let error) = result {
-              XCTFail("音声統計の取得に失敗した: \(error)")
-            }
-            return
-          }
-
-          let outbound = stats.entries.first {
-            $0.type == "outbound-rtp"
-              && ($0.values["kind"] as? NSString) == "audio"
-          }
-          XCTAssertNotNil(outbound, "outbound audio stats が存在すること")
-          XCTAssertGreaterThan(
-            (outbound?.values["bytesSent"] as? NSNumber)?.intValue ?? 0,
-            0,
-            "音声の bytesSent が 0 より大きいこと")
-          XCTAssertGreaterThan(
-            (outbound?.values["packetsSent"] as? NSNumber)?.intValue ?? 0,
-            0,
-            "音声の packetsSent が 0 より大きいこと")
-        }
-      }
+    guard let counts = audioCounts(channel: channel, delay: 2) else {
+      return
     }
-
-    wait(for: [statsExpectation], timeout: 15)
+    XCTAssertGreaterThan(counts.bytes, 0, "音声の bytesSent が 0 より大きいこと")
+    XCTAssertGreaterThan(counts.packets, 0, "音声の packetsSent が 0 より大きいこと")
   }
 
   /// inbound-rtp (audio) で外部 Publisher の RTP packet と byte を受信することを確認する
   private func verifyInboundAudio(channel: MediaChannel) {
-    let statsExpectation = expectation(description: "外部 Publisher の音声 RTP を受信すること")
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-      channel.getStats { result in
-        DispatchQueue.main.async {
-          defer { statsExpectation.fulfill() }
-          guard case .success(let stats) = result else {
-            if case .failure(let error) = result {
-              XCTFail("音声統計の取得に失敗した: \(error)")
-            }
-            return
-          }
-
-          let inbound = stats.entries.first {
-            $0.type == "inbound-rtp"
-              && ($0.values["kind"] as? NSString) == "audio"
-          }
-          XCTAssertNotNil(inbound, "inbound audio stats が存在すること")
-          XCTAssertGreaterThan(
-            (inbound?.values["bytesReceived"] as? NSNumber)?.intValue ?? 0,
-            0,
-            "音声の bytesReceived が 0 より大きいこと")
-          XCTAssertGreaterThan(
-            (inbound?.values["packetsReceived"] as? NSNumber)?.intValue ?? 0,
-            0,
-            "音声の packetsReceived が 0 より大きいこと")
-        }
-      }
+    guard let counts = audioCounts(channel: channel, receiving: true, delay: 2) else {
+      return
     }
-
-    wait(for: [statsExpectation], timeout: 15)
+    XCTAssertGreaterThan(counts.bytes, 0, "音声の bytesReceived が 0 より大きいこと")
+    XCTAssertGreaterThan(counts.packets, 0, "音声の packetsReceived が 0 より大きいこと")
   }
 
-  /// 指定時間後の outbound-rtp (audio) の packet 数と byte 数を取得する
-  private func outboundAudioCounts(
+  /// 指定時間後の audio RTP の packet 数と byte 数を取得する
+  private func audioCounts(
     channel: MediaChannel,
+    receiving: Bool = false,
     delay: TimeInterval
-  ) -> (packetsSent: Int, bytesSent: Int)? {
+  ) -> AudioRTPCounts? {
     let statsExpectation = expectation(description: "音声 RTP 統計を取得できること")
-    var counts: (packetsSent: Int, bytesSent: Int)?
+    let resultBox = AudioRTPCountsResult()
 
     DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-      channel.getStats { result in
-        DispatchQueue.main.async {
-          defer { statsExpectation.fulfill() }
-          guard case .success(let stats) = result else {
-            if case .failure(let error) = result {
-              XCTFail("音声統計の取得に失敗した: \(error)")
-            }
-            return
-          }
+      // WebRTC スレッドで呼ばれる入口には MainActor の隔離を継承させない。
+      channel.getStats { @Sendable result in
+        let counts = result.map { stats -> AudioRTPCounts? in
+          let type = receiving ? "inbound-rtp" : "outbound-rtp"
           guard
-            let outbound = stats.entries.first(where: {
-              $0.type == "outbound-rtp"
-                && ($0.values["kind"] as? NSString) == "audio"
+            let entry = stats.entries.first(where: {
+              $0.type == type && ($0.values["kind"] as? NSString) == "audio"
             })
           else {
-            XCTFail("outbound audio stats が存在すること")
-            return
+            return nil
           }
-          counts = (
-            packetsSent: (outbound.values["packetsSent"] as? NSNumber)?.intValue ?? 0,
-            bytesSent: (outbound.values["bytesSent"] as? NSNumber)?.intValue ?? 0
-          )
+          return AudioRTPCounts(
+            packets: (entry.values[receiving ? "packetsReceived" : "packetsSent"] as? NSNumber)?
+              .intValue
+              ?? 0,
+            bytes: (entry.values[receiving ? "bytesReceived" : "bytesSent"] as? NSNumber)?.intValue
+              ?? 0)
+        }
+        // 非 Sendable の Statistics は渡さず、数値または Error のみを main queue へ戻す。
+        DispatchQueue.main.async {
+          defer { statsExpectation.fulfill() }
+          switch counts {
+          case .success(let counts):
+            XCTAssertNotNil(counts, "audio RTP stats が存在すること")
+            resultBox.counts = counts
+          case .failure(let error):
+            XCTFail("音声統計の取得に失敗した: \(error)")
+          }
         }
       }
     }
 
     wait(for: [statsExpectation], timeout: delay + 10)
-    return counts
+    return resultBox.counts
   }
 
   /// 受信方向を持つ audio section の Opus payload に対応する fmtp が stereo=1 を含むか確認する
