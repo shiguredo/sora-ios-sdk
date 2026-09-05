@@ -491,6 +491,8 @@ final class StereoAudioOutputTests: XCTestCase {
     let sora = Sora()
     let connectExpectation = expectation(description: "接続失敗 callback が通知されること")
     let removeExpectation = expectation(description: "切断したチャネルが管理対象から外れること")
+    let globalConnectExpectation = expectation(description: "Sora にも接続取消が通知されること")
+    let disconnectExpectation = expectation(description: "切断イベントは正常終了として通知されること")
     var addedChannel: MediaChannel?
     var addCount = 0
     var removeCount = 0
@@ -501,7 +503,20 @@ final class StereoAudioOutputTests: XCTestCase {
       addCount += 1
       addedChannel = mediaChannel
       XCTAssertEqual(mediaChannel.state, .connecting)
-      mediaChannel.disconnect(error: SoraError.connectionCancelled)
+      mediaChannel.disconnect(error: nil)
+    }
+    sora.handlers.onConnect = { mediaChannel, error in
+      XCTAssertNil(mediaChannel)
+      guard case SoraError.connectionCancelled? = error else {
+        XCTFail("接続成功ではなく取消として通知されること")
+        globalConnectExpectation.fulfill()
+        return
+      }
+      globalConnectExpectation.fulfill()
+    }
+    sora.handlers.onDisconnect = { _, error in
+      XCTAssertNil(error, "正常切断の通知には接続取消エラーを混ぜないこと")
+      disconnectExpectation.fulfill()
     }
     sora.handlers.onRemoveMediaChannel = { mediaChannel in
       XCTAssertTrue(mediaChannel === addedChannel)
@@ -516,7 +531,11 @@ final class StereoAudioOutputTests: XCTestCase {
       connectExpectation.fulfill()
     }
 
-    wait(for: [connectExpectation, removeExpectation], timeout: 3)
+    wait(
+      for: [
+        connectExpectation, globalConnectExpectation, removeExpectation, disconnectExpectation,
+      ],
+      timeout: 3)
     XCTAssertEqual(addCount, 1)
     XCTAssertEqual(removeCount, 1)
     XCTAssertEqual(connectCount, 1)

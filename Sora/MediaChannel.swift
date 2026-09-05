@@ -992,10 +992,12 @@ public final class MediaChannel {
     connectionTask.complete()
 
     if shouldNotifyConnect {
-      connectHandler?(error)
+      // 正常切断でも接続自体は未成立なので、接続結果は取消として通知します。
+      let connectionError = error ?? SoraError.connectionCancelled
+      connectHandler?(connectionError)
       Logger.debug(type: .mediaChannel, message: "call onConnect")
-      internalHandlers.onConnect?(error)
-      handlers.onConnect?(error)
+      internalHandlers.onConnect?(connectionError)
+      handlers.onConnect?(connectionError)
     }
 
     Logger.debug(type: .mediaChannel, message: "did disconnect")
