@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-09-05
 - Model: Opus 4.8
 - Branch: feature/add-stereo-audio-output
 - Polished: 2026-09-03
@@ -125,7 +125,7 @@ WebRTC-Build `m150.7871.3.2` の `ios_stereo_audio_output.patch` には次が実
    - SDP の改行形式と Opus 以外の media section / fmtp parameter を維持する
    - 変換後の `RTCSessionDescription` を `setLocalDescription` と Sora への Answer 送信の両方に使用する
    - `audioCodec == .default` または `.opus` でも生成された Answer の受信方向を持つ audio セクションに Opus payload が存在しない場合は `SoraError.peerChannelError` とし、ステレオ出力が成立していない Answer を送信しない。`sendonly` の audio セクションは受信設定の対象外とする
-   - `audioStereoOutputEnabled == false` の場合は SDP を変更しない
+   - `audioStereoOutputEnabled == false` の場合は SDP を変更しない。ただし、カスタムデバイスが 2 ch 出力を要求する場合は、その再生要求も同じ SDP 変換に反映する
 
 6. **ハードミュートとの非互換を成功扱いにしない**
    - `audioStereoOutputEnabled == true` の場合、`MediaChannel.setAudioHardMute(_:)` は `pauseRecording` / `resumeRecording` を呼ばず、未対応であることを示す `SoraError.mediaChannelError` を返す
@@ -155,12 +155,19 @@ WebRTC-Build `m150.7871.3.2` の `ios_stereo_audio_output.patch` には次が実
 - `audioStereoOutputEnabled == false` では既存経路を維持することを確認する
 - SDP 変換について、fmtp 行なし、`stereo` なし、`stereo=0`、既に `stereo=1`、複数の audio payload type、Opus payload なし、video fmtp 併存、CRLF / LF の各ケースを実データから構築した SDP で確認する
 - ステレオ時の `setAudioHardMute(_:)` が成功を返さないことと、モノラル時の既存ハードミュートを壊さないことを確認する
-- iOS 実機で L/R が分離した音源を再生し、左右が混合されずステレオ出力されることを確認する
-- iOS 実機でステレオの recvonly / sendonly / sendrecv が接続でき、sendonly / sendrecv では `RTCAudioSession.initializeInput` の完了待ちが残らず音声を送信できることを確認する
-- iOS 実機でステレオ接続を切断して再接続できることを確認し、VPIO 用の入力初期化状態が残留しないことを確認する
+- ダミー音声デバイスで左右に異なる音源を生成し、実際の Opus / RTP / ADM を経由した再生 PCM の左右が分離していることを確認する
+- Sora に接続したダミー音声の sendonly / recvonly と sendrecv の双方向通信、切断後の再接続を確認する。マイク、スピーカー、外部 Publisher は使わない
+- 接続情報を必要としないローカルの実 PeerConnection 間でも、ダミー音声を送信して左右を分離した再生 PCM を確認する
 - 実際の `RTCAudioSessionConfiguration.webRTC()` を使い、複数の送信 / ステレオ接続に相当する category 要求を登録・解除しても、最後の要求を解除するまで `PlayAndRecord` が維持され、最後に元の category へ復元されることを確認する
 - `sendonly + audioStereoOutputEnabled == true + initialMicrophoneEnabled == false` の決定的な設定エラーを使い、戻る `ConnectionTask` が完了済みであること、引数の接続ハンドラーと `Sora.handlers.onConnect` が各 1 回だけエラーを通知すること、`mediaChannels` と `onAddMediaChannel` に失敗した channel が現れないことを確認する
-- iOS 実機でモノラル時、マイク権限拒否時、`initialMicrophoneEnabled` 指定時、Bluetooth HFP / A2DP、接続後の `setAudioMode` 変更時の挙動を確認する
+- ダミー音声デバイスのモノラル送信で、ハードミュート中の RTP 停止と解除後の再開を確認する
+
+### テスト方針の変更
+
+2026-09-05 のユーザー指示により、マイクを使うテストは不要とし、音声入出力を行うテストをダミー音声デバイスに統一する。
+ネイティブ ADM のステレオ設定、設定エラー、SDP、共有 AudioSession 管理の単体テストは、音声ハードウェアを起動せず継続する。
+ダミー音声の送受信成功を、RemoteIO の実機再生やマイク制御の確認完了とは扱わない。
+実機の再生経路、マイク権限、Bluetooth HFP / A2DP、接続後の `setAudioMode` の挙動は未検証として明記する。
 
 ## 変更対象
 
@@ -193,7 +200,7 @@ WebRTC-Build `m150.7871.3.2` の `ios_stereo_audio_output.patch` には次が実
 - stereo 時の `setAudioHardMute(_:)` が、録音データ経路だけを停止して SDK のハードミュート契約を満たさない処理を成功扱いにしないこと
 - 送信ロールで `initialMicrophoneEnabled == false` と stereo を同時指定した場合に、初期ハードミュートを保証できないまま接続しないこと
 - stereo の sendonly / sendrecv では VPIO 専用の `setInitialMicrophoneMute` / `initializeInput` を呼ばず、RemoteIO の入力経路で送信できること
-- 実機でステレオ再生を確認し、recvonly、sendonly、sendrecv、切断後の再接続、モノラル、マイク権限拒否、Bluetooth HFP / A2DP、`setAudioMode` 変更時の挙動も確認すること
+- ダミー音声デバイスで左右の分離を確認し、sendonly / recvonly、sendrecv、再接続、モノラルのハードミュートを検証すること。ネイティブ実機の再生経路やマイク制御などは未検証として区別すること
 - 利用上の制約（AEC / AGC、ハードミュート、`bypassVoiceProcessing`、マイク権限、Bluetooth HFP / A2DP、`setAudioMode`）がドキュメントに書かれていること
 - `CHANGES.md` の `develop` セクションに以下を追記すること:
   ```
@@ -204,3 +211,15 @@ WebRTC-Build `m150.7871.3.2` の `ios_stereo_audio_output.patch` には次が実
   ```
 
 ## 解決方法
+
+- WebRTC-Build を `m150.7871.3.2` に更新し、`Configuration.audioStereoOutputEnabled` を追加した。既定値は `false` とし、不正な組み合わせは ADM の生成前に設定エラーとして通知する
+- `NativePeerChannelFactory` が Factory の生成前に ADM のステレオ出力を設定する。一時 Offer や redirect で最後の PC が破棄されても、接続中の media engine とステレオ設定を維持する
+- `AudioSessionCoordinator` が接続単位の要求と共有テンプレートを管理する。WebRTC-Build の制約により、ネイティブのステレオ接続は他の音声接続と排他にし、ホストアプリが差し替えたテンプレートは上書きしない
+- `StereoAudioSDP` が受信方向の Opus を `stereo=1` にし、変換後の同じ Answer をローカル設定と Sora への送信に使用する。カスタムデバイスの 2 ch 再生要求にも反映するが、公開ステレオフラグとの同時指定禁止は維持する
+- ネイティブのステレオ時は VPIO 専用の入力初期化を呼ばず、ハードミュートの非対応をエラーで通知する。接続取消、切断完了、カメラ / 画面共有の所有権と遅延 callback の競合も修正した
+- `DummyAudioDevice` に 2 ch 入出力と、音声ハードウェアを起動せず実 ADM の再生 PCM を取得する callback を追加した。録音 PCM は `renderBlock` 経路で全チャンネルを渡し、音声 callback は ADM スレッド上で実行する
+- ユーザー指示に従い、今回追加したマイク依存の E2E をダミー音声の sendonly / recvonly、sendrecv、再接続、モノラルハードミュートのテストに置き換えた。左 600 Hz / 右 1200 Hz の実再生 PCM を判定し、モノラル化などの不正な再生 PCM を拒否する
+- ローカルの実 PeerConnection 間でも Opus / RTP / ADM を通した左右分離を検証するテストを追加した。ローカルでは全 188 テスト中 167 成功、接続情報未設定による Sora E2E のスキップ 21、失敗 0 を確認した
+- `c469278` の GitHub Actions Build と CI が成功した。CI ではダミー音声の 4 件の E2E とローカル PeerConnection のテストを含む全 188 テストで失敗 0 を確認した
+- ネイティブ ADM の設定とエラー、SDP、AudioSession の管理はハードウェアを起動しない単体テストで確認した。実機の RemoteIO 再生、マイク制御 / 権限、Bluetooth、`setAudioMode` の挙動は未検証であり、ダミー音声の成功と区別する
+- 利用上の制約を README と公開 API の説明に記載した。PR は #381 とし、ユーザー指示によりマージしない
