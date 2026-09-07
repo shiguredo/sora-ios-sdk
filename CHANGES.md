@@ -15,7 +15,9 @@
   - `RTCAudioSessionConfiguration` のテンプレートを原子的に差し替えてカテゴリー要求を接続間で共有し、すべての音声接続を解放したときに SDK が設定したテンプレートだけを元のカテゴリーへ戻す
   - 接続中にホストアプリが `RTCAudioSessionConfiguration` のテンプレートを差し替えた場合は、その設定を維持する
   - モノラル受信接続中にモノラル送信接続を追加する場合も、既存の接続を維持したまま `PlayAndRecord` を適用する
-  - WebRTC-Build m150.7871.3.2 では Sora iOS SDK が管理する音声接続全体でステレオ接続を 1 つに限定し、他の音声接続と排他にする
+  - ステレオでも送信側だけがマイク入力を初期化し、受信専用ではマイク権限を不要にする
+  - ステレオの送信側でも初期マイクミュートとハードミュートを利用できるようにする
+  - Sora iOS SDK が管理する音声接続全体でステレオ接続を 1 つに限定し、他の音声接続と排他にする
   - @t-miya
 - [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする
   - オーディオコーデックが `.opus` として明示された場合のみ送信される
@@ -43,6 +45,9 @@
   - 移行先は `Configuration.isSpotlightEnabled`
   - Configuration 内のプロパティで型の一貫性を持たせるため変更
   - @t-miya
+- [FIX] 初期マイクミュートから最初に解除する要求が ADM に渡らない問題を修正する
+  - SDK のミュート状態キャッシュを除き、ADM の成功・失敗を返す
+  - @voluntas
 - [FIX] TURN-TLS の証明書エラーで接続失敗した後も libwebrtc のログが流れ続ける問題を修正する
   - 接続試行中の切断要求で `connect()` の初期ロックを確実に解放し、 `RTCPeerConnection` をクローズする
   - 接続失敗時のエラー通知が二重に呼ばれないようにする

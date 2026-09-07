@@ -13,7 +13,7 @@ enum AudioSessionProfile: Equatable {
 enum AudioSessionUsage {
   case none
   case voiceProcessing(requiresPlayAndRecord: Bool)
-  case stereoRemoteIO
+  case stereoRemoteIO(requiresPlayAndRecord: Bool)
   case custom
 
   var profile: AudioSessionProfile? {
@@ -31,10 +31,9 @@ enum AudioSessionUsage {
 
   var requiresPlayAndRecord: Bool {
     switch self {
-    case .voiceProcessing(let requiresPlayAndRecord):
+    case .voiceProcessing(let requiresPlayAndRecord),
+      .stereoRemoteIO(let requiresPlayAndRecord):
       return requiresPlayAndRecord
-    case .stereoRemoteIO:
-      return true
     case .none, .custom:
       return false
     }

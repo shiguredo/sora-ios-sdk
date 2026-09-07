@@ -773,12 +773,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // マイクの初期化
     if configuration.audioEnabled {
-      if configuration.audioStereoOutputEnabled {
-        // ステレオ再生では RemoteIO を利用するため、VPIO 専用の入力初期化を実行しない。
-        Logger.debug(
-          type: .peerChannel,
-          message: "stereo playout enabled, skip initialize audio input")
-      } else if configuration.audioDevice == nil {
+      if configuration.audioDevice == nil {
         initializeAudioInput()
       } else {
         // AVAudioSession の設定はカスタム音声デバイス (DummyAudioDevice.initialize(with:)) が行うためスキップする

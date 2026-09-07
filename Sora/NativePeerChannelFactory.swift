@@ -119,15 +119,19 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       self.audioDeviceModule = adm
       self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
       // ステレオ化に失敗した場合にカテゴリを変更しないよう、API の成功確認後に登録する。
-      if stereoPlayoutEnabled {
+      if stereoPlayoutEnabled, audioSessionUsage.requiresPlayAndRecord {
         audioSessionRequirement?.requirePlayAndRecord()
       }
       self.audioSessionRequirement = audioSessionRequirement
-      nativeFactory =
+      let factory: RTCPeerConnectionFactory? =
         RTCPeerConnectionFactory(
           encoderFactory: encoder,
           decoderFactory: decoder,
           audioDeviceModule: adm)
+      guard let factory else {
+        throw SoraError.mediaChannelError(reason: "failed to create native peer connection factory")
+      }
+      nativeFactory = factory
     }
 
     if stereoPlayoutEnabled {

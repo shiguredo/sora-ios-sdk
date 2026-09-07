@@ -24,7 +24,7 @@ final class StereoAudioOutputTests: XCTestCase {
   func testFactoryEnablesStereoPlayoutOnActualADM() throws {
     let factory = try NativePeerChannelFactory(
       bypassVoiceProcessing: false,
-      audioSessionUsage: .stereoRemoteIO)
+      audioSessionUsage: .stereoRemoteIO(requiresPlayAndRecord: false))
 
     guard let audioDeviceModule = factory.audioDeviceModule else {
       XCTFail("RTCAudioDeviceModule が生成されること")
@@ -37,7 +37,7 @@ final class StereoAudioOutputTests: XCTestCase {
   func testClientOfferKeepsStereoPlayoutForNextPeerConnection() throws {
     let factory = try NativePeerChannelFactory(
       bypassVoiceProcessing: false,
-      audioSessionUsage: .stereoRemoteIO)
+      audioSessionUsage: .stereoRemoteIO(requiresPlayAndRecord: false))
     let configuration = WebRTCConfiguration()
     let offerExpectation = expectation(description: "クライアント Offer を生成できること")
     factory.createClientOfferSDP(
@@ -122,13 +122,15 @@ final class StereoAudioOutputTests: XCTestCase {
     assertConfigurationError(configuration)
   }
 
-  /// 送信側の初期ハードミュートとステレオの同時指定を拒否することを確認する
-  func testRejectsStereoSenderWithInitialMicrophoneDisabled() {
-    var configuration = makeConfiguration(role: .sendonly)
-    configuration.audioStereoOutputEnabled = true
-    configuration.initialMicrophoneEnabled = false
+  /// 送信側でも初期ミュートを指定でき、受信専用でも不要な入力制約を受けないことを確認する
+  func testAcceptsStereoWithInitialMicrophoneDisabled() {
+    for role in [Role.sendonly, .sendrecv, .recvonly] {
+      var configuration = makeConfiguration(role: role)
+      configuration.audioStereoOutputEnabled = true
+      configuration.initialMicrophoneEnabled = false
 
-    assertConfigurationError(configuration)
+      XCTAssertNoThrow(try MediaChannel.validate(configuration: configuration))
+    }
   }
 
   /// 不正な設定を検証しても共有 AudioSession category を変更しないことを確認する
@@ -394,6 +396,43 @@ final class StereoAudioOutputTests: XCTestCase {
     XCTAssertEqual(
       RTCAudioSessionConfiguration.webRTC().category,
       AVAudioSession.Category.ambient.rawValue)
+  }
+
+  /// 接続設定の role に応じて、ステレオでも送信側だけが録音可能な category を要求する。
+  func testStereoCategoryFollowsSenderRole() throws {
+    let originalConfiguration = RTCAudioSessionConfiguration.webRTC()
+    defer { RTCAudioSessionConfiguration.setWebRTC(originalConfiguration) }
+
+    for role in [Role.recvonly, .sendonly, .sendrecv] {
+      // 実際の MediaChannel と ADM を作り、接続前の category 要求を確認する。
+      // recvonly の場合も stereo profile の排他制御は維持する。
+      let template = RTCAudioSessionConfiguration()
+      template.category = AVAudioSession.Category.ambient.rawValue
+      RTCAudioSessionConfiguration.setWebRTC(template)
+      let coordinator = AudioSessionCoordinator()
+      var configuration = makeConfiguration(role: role)
+      configuration.audioStereoOutputEnabled = true
+      var channel: MediaChannel? = try MediaChannel(
+        configuration: configuration,
+        audioSessionCoordinator: coordinator)
+
+      XCTAssertNotNil(channel)
+      XCTAssertEqual(coordinator.activeRequirementCount, 1)
+      XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, role == .recvonly ? 0 : 1)
+      XCTAssertEqual(
+        RTCAudioSessionConfiguration.webRTC().category,
+        role == .recvonly
+          ? AVAudioSession.Category.ambient.rawValue
+          : AVAudioSession.Category.playAndRecord.rawValue)
+
+      channel = nil
+      XCTAssertEqual(coordinator.activeRequirementCount, 0)
+      XCTAssertEqual(coordinator.activePlayAndRecordRequirementCount, 0)
+      XCTAssertEqual(
+        RTCAudioSessionConfiguration.webRTC().category,
+        AVAudioSession.Category.ambient.rawValue,
+        "接続を解放すると元の category に戻ること")
+    }
   }
 
   /// 初期状態の disconnect では、後続の接続開始に必要な lease を失わないことを確認する
@@ -804,7 +843,7 @@ final class StereoAudioOutputTests: XCTestCase {
     let sora = Sora()
     var configuration = makeConfiguration(role: .sendonly)
     configuration.audioStereoOutputEnabled = true
-    configuration.initialMicrophoneEnabled = false
+    configuration.audioEnabled = false
 
     var argumentHandlerCount = 0
     var globalHandlerCount = 0
@@ -840,22 +879,22 @@ final class StereoAudioOutputTests: XCTestCase {
     XCTAssertEqual(argumentError?.localizedDescription, globalError?.localizedDescription)
   }
 
-  /// ステレオ時のハードミュートが録音停止処理へ進まず未対応エラーを返すことを確認する
-  func testStereoHardMuteReturnsUnsupportedError() throws {
-    var configuration = makeConfiguration()
+  /// ステレオの送信側でも共通の接続状態検証へ進み、未接続では録音を操作しないことを確認する
+  func testStereoHardMuteRequiresConnection() throws {
+    var configuration = makeConfiguration(role: .sendonly)
     configuration.audioStereoOutputEnabled = true
     let mediaChannel = try MediaChannel(configuration: configuration)
     defer { mediaChannel.disconnect(error: nil) }
 
     guard let error = mediaChannel.setAudioHardMute(true) else {
-      XCTFail("ステレオ時のハードミュートはエラーを返すこと")
+      XCTFail("未接続時のハードミュートはエラーを返すこと")
       return
     }
     guard case SoraError.mediaChannelError(let reason) = error else {
       XCTFail("SoraError.mediaChannelError が返ること: \(error)")
       return
     }
-    XCTAssertTrue(reason.contains("stereo playout"))
+    XCTAssertTrue(reason.contains("MediaChannel is not connected"))
   }
 
   // 設定検証が configurationError を返すことを確認する

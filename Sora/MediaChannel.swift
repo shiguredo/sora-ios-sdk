@@ -431,7 +431,7 @@ public final class MediaChannel {
       } else if !configuration.audioEnabled {
         .none
       } else if configuration.audioStereoOutputEnabled {
-        .stereoRemoteIO
+        .stereoRemoteIO(requiresPlayAndRecord: configuration.isSender)
       } else {
         .voiceProcessing(requiresPlayAndRecord: configuration.isSender)
       }
@@ -494,12 +494,6 @@ public final class MediaChannel {
     guard configuration.audioDevice == nil else {
       throw SoraError.configurationError(
         reason: "audioStereoOutputEnabled cannot be used with a custom audio device")
-    }
-    guard !configuration.isSender || configuration.initialMicrophoneEnabled else {
-      throw SoraError.configurationError(
-        reason:
-          "audioStereoOutputEnabled requires initialMicrophoneEnabled to be true for sender roles"
-      )
     }
   }
 
@@ -1259,12 +1253,6 @@ public final class MediaChannel {
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setAudioHardMute(_ mute: Bool) -> Error? {
-    // ステレオ再生では Voice Processing の録音ポーズ/再開 API を利用できない。
-    guard !configuration.audioStereoOutputEnabled else {
-      return SoraError.mediaChannelError(
-        reason: "setAudioHardMute is not supported when stereo playout is enabled")
-    }
-
     // 接続されていなければエラー
     guard state == .connected else {
       return SoraError.mediaChannelError(
