@@ -31,7 +31,7 @@
 - [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
   - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
   - @t-miya
-- [UPDATE] libwebrtc m150.7871.3.3 に上げる
+- [UPDATE] libwebrtc m150.7871.3.5 に上げる
   - @voluntas
 - [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
   - `type: switched` 受信時には発火しない
