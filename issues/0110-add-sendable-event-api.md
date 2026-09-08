@@ -35,11 +35,13 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 
 ## 前提となる issue
 
-- `0100`: 接続イベントの ordered ingress と state snapshot
+- `0100`: PeerChannel の接続状態フラグの reducer と state snapshot
 - `0101`: signaling event の ordered ingress
 - `0102`: mutable handler bag と設定 snapshot の分離
 - `0105`: stream frame event の順序保証
 - `0107`: 外部 consumer fixture
+
+(接続イベントの ordered ingress 自体は `0010` の `connectionLifecycleLock` と `0100` の reducer が分担する。この点の設計は 0100 完了後に再検討する。)
 
 ## 設計方針
 

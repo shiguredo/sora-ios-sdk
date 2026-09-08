@@ -67,7 +67,7 @@
 
 ## スコープ外
 
-- `MediaChannel` / `PeerChannel` 全体の接続状態所有は `0100` で扱う。
+- `MediaChannel` / `PeerChannel` 全体の接続状態所有は `0100` と `0010` が分担する。 (MediaChannel は `0010` の `connectionLifecycleLock`、PeerChannel の接続状態フラグは `0100` の reducer)
 - redirect 時の旧 DataChannel / RPC 無効化は `0095` で扱う。
 - 公開 callback API の `@Sendable` 化は別 issue とする。
 - WebRTC C API への移行は `0070` で扱う。

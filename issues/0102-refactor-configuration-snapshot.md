@@ -65,7 +65,7 @@
 - `ICEServerInfo` を公開 struct に変更する破壊的 API 変更は行わない。
 - 公開 RPC API の `Any` / `Sendable` 対応は別 issue とする。
 - handler の `@Sendable` 化と配送 executor の公開契約は別 issue とする。
-- 本 issue は `0100`（接続状態 owner）と `0101`（signaling owner）と同じファイル群・handler / snapshot 概念を共有するため、着手前に順序を調整する。
+- 本 issue は `0100` (接続状態フラグの reducer) と `0101` (signaling owner) と同じファイル群・handler / snapshot 概念を共有するため、着手前に順序を調整する。
 - raw WebRTC 型の公開 API からの撤去は `0070` と整合させる。
 
 ## テスト方針

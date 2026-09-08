@@ -31,6 +31,10 @@
 - [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
   - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
   - @t-miya
+- [UPDATE] PeerChannel の接続状態フラグの所有者を単一の reducer へ集約する
+  - `webSocketDisconnectScheduled` / `disconnectTimerScheduled` / `disconnectTimerGeneration` / `dataChannelGeneration` / `isRedirecting` の 5 つのフラグを `ConnectionStateOwner` (単一所有者) で管理する
+  - `nonisolated(unsafe)` を除去し、スナップショット読みに置き換える
+  - @t-miya
 - [UPDATE] libwebrtc m150.7871.3.5 に上げる
   - @voluntas
 - [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
