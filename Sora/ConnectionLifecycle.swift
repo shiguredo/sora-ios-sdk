@@ -183,7 +183,7 @@ final class ConnectionStateOwner: @unchecked Sendable {
   /// イベントは serial queue 上で直列に処理され、順序が確定する。
   @discardableResult
   func handle(_ event: ConnectionEvent) -> [ConnectionEffect] {
-    eventQueue.sync {
+    let effects: [ConnectionEffect] = eventQueue.sync {
       let (newState, effects) = ConnectionStateReducer.reduce(
         state: currentState, event: event)
       currentState = newState
@@ -193,6 +193,7 @@ final class ConnectionStateOwner: @unchecked Sendable {
 
       return effects
     }
+    return effects
   }
 
   private func publishSnapshot(state: ConnectionLifecycleState, effects: [ConnectionEffect]) {
