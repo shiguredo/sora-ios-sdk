@@ -115,10 +115,6 @@
   - start / stop 失敗時は切り替え先の stream を元の値へ rollback する
   - 連続実行時の競合を re-entrance フラグと camera queue の直列化で防ぐ
   - @t-miya
-- [UPDATE] PeerChannel の接続状態フラグの所有者を単一の reducer へ集約する
-  - `webSocketDisconnectScheduled` / `disconnectTimerScheduled` / `disconnectTimerGeneration` / `dataChannelGeneration` / `isRedirecting` の 5 つのフラグを `ConnectionStateOwner` (単一所有者) で管理する
-  - `nonisolated(unsafe)` を除去し、スナップショット読みに置き換える
-  - @t-miya
 
 ### misc
 
