@@ -1,7 +1,7 @@
 # PeerChannel の接続状態フラグの所有者を単一化する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-08
 - Branch: feature/refactor-peer-channel-flags
 - Polished: 2026-09-04
 
@@ -135,3 +135,34 @@ PeerChannel の接続状態フラグ 5 つは、`nonisolated(unsafe)` で宣言�
 - `0092`、`0093`、`0095`、`0096` の回帰テストを含む全テストが成功すること。
 
 ## 解決方法
+
+PeerChannel の接続状態フラグ 5 つを接続単位の単一所有者 (reducer + snapshot) へ移行した。
+
+### 実装内容
+
+- `Sora/ConnectionLifecycle.swift` (新規):
+  - `ConnectionLifecycleState`: transport 世代 / webSocketDisconnectScheduled / disconnectTimerScheduled / disconnectTimerGeneration / isRedirecting の 5 フラグ
+  - `ConnectionEvent`: redirectReceived / redirectConnectStarted / webSocketDisconnectScheduled / disconnectTimerScheduled / disconnectTimerFired / disconnectTimerCancelled / disconnectCompleted の 7 イベント
+  - `ConnectionStateReducer` (純粋関数。イベントは呼び出し側のガードを通過した前提で、順序は DispatchQueue 直列化で確定)
+  - `ConnectionStateOwner` (DispatchQueue 直列化による単一所有者。actor ではなく sync API から await 化を避けるため)
+  - `ConnectionSnapshotStorage` (NSLock で保護した lock-backed snapshot)
+- `Sora/PeerChannel.swift`:
+  - `nonisolated(unsafe)` の 5 フラグ宣言を削除
+  - `ConnectionStateOwner` / `ConnectionSnapshotStorage` を直接保持 (MediaChannel は変更しない)
+  - 各フラグを snapshot から読む computed getter に置き換え
+  - 各書き込みを `handleConnectionEvent(_:)` に置き換え
+
+### 設計上の判断
+
+- 単一所有者は PeerChannel が直接保持する (MediaChannel の接続ライフサイクルは connectionLifecycleLock (NSLock ベース) が担当し、本 issue では変更しない)。
+- reducer の Effect は publishSnapshot のみ (全イベントが無条件に publish する)。効果の追加は Sendable event API の拡張時に検討する。
+- 呼び出し側ガード (check-then-act) によるベストエフォートは従来どおり維持する (重複しても発火時ガードや世代照合で無害化される)。
+
+### テスト
+
+- `SoraTests/ConnectionStateReducerTests.swift` (新規): redirect 受信 / redirect 窓終了 / WebSocket スケジュール / 猶予タイマー (開始 / 発火 / キャンセル) / 切断完了 / snapshot round-trip の 7 件。
+
+### 実機確認
+
+- 通常接続・切断・redirect (クラスタ Sora) を実機で確認済み。
+- 一時ログで reducer のイベント処理 (redirectReceived → redirectConnectStarted → disconnectCompleted) と各フラグの遷移を確認済み。
