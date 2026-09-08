@@ -59,7 +59,7 @@ configuration.audioStereoOutputEnabled = true
 `sendonly` と `sendrecv` ではマイク入力を初期化し、`initialMicrophoneEnabled` と `MediaChannel.setAudioHardMute(_:)` で制御できます。
 
 この入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要です。
-現在の `Package.swift` が参照する m150.7871.3.2 は対応していないため、対応ビルドの公開後に依存関係を更新する必要があります。
+`Package.swift` は m150.7871.3.3 を参照しています。
 
 ## システム条件
 

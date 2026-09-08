@@ -2,10 +2,10 @@
 
 - CHANGE
   - 下位互換のない変更
-- UPDATE
-  - 下位互換がある変更
 - ADD
   - 下位互換がある追加
+- UPDATE
+  - 下位互換がある変更
 - FIX
   - バグ修正
 
@@ -18,7 +18,7 @@
   - ステレオでも送信側だけがマイク入力を初期化し、受信専用ではマイク権限を不要にする
   - ステレオの送信側でも初期マイクミュートとハードミュートを利用できるようにする
   - Sora iOS SDK が管理する音声接続全体でステレオ接続を 1 つに限定し、他の音声接続と排他にする
-  - @t-miya
+  - @voluntas
 - [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする
   - オーディオコーデックが `.opus` として明示された場合のみ送信される
   - @t-miya
@@ -31,8 +31,8 @@
 - [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
   - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
   - @t-miya
-- [UPDATE] libwebrtc m150.7871.3.2 に上げる
-  - @t-miya
+- [UPDATE] libwebrtc m150.7871.3.3 に上げる
+  - @voluntas
 - [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
   - `type: switched` 受信時には発火しない
   - メッセージング用ラベル（`#` 始まり）が存在しない接続では発火しない
@@ -114,6 +114,9 @@
 
 ### misc
 
+- [CHANGE] E2E テストをテスト種別ごとに分割する
+  - テストクラスを recvonly / sendonly / sendrecv / simulcast の 4 つに分割し、共通処理は E2ETestBase に集約した
+  - @t-miya
 - [ADD] E2E テスト用にダミー音声デバイスを追加する
   - テストから internal な `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
   - @t-miya
@@ -122,9 +125,6 @@
   - @t-miya
 - [ADD] simulcast E2E テストを追加する
   - sendonly と recvonly を同一チャンネルに接続し、3 レイヤー (r0 / r1 / r2) の simulcast 送信と受信を検証する
-  - @t-miya
-- [CHANGE] E2E テストをテスト種別ごとに分割する
-  - テストクラスを recvonly / sendonly / sendrecv / simulcast の 4 つに分割し、共通処理は E2ETestBase に集約した
   - @t-miya
 - [ADD] reconnect E2E テストを追加する
   - Sora API (DisconnectConnection) でサーバー側から切断し、再接続できることを検証する
@@ -143,7 +143,7 @@
   - @t-miya
 - [UPDATE] ダミー音声デバイスによるステレオ送受信テストを追加する
   - マイク / スピーカーを使わず、実際の Opus / RTP / ADM を通した再生 PCM の左右の分離を検証する
-  - @t-miya
+  - @voluntas
 
 ## 2026.2.0
 
