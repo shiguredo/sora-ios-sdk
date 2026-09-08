@@ -22,14 +22,14 @@ Swift 6 の isolation を型と実行経路で保証できる内部構造へ移�
 
 ## 現状
 
-PeerChannel の接続状態フラグ 5 つは、`nonisolated(unsafe)` で宣言されている。
+PeerChannel の接続状態フラグ 5 つは、`nonisolated(unsafe)` で宣言されていた。
 
 - `Sora/PeerChannel.swift`
-  - `webSocketDisconnectScheduled` (239 行) — DataChannel シグナリング切り替え後の WebSocket の二重切断を防ぐ
-  - `disconnectTimerScheduled` (246 行) — 接続完了後の切断検出の猶予タイマーの開始済みフラグ
-  - `disconnectTimerGeneration` (253 行) — 猶予タイマーの世代 (トークン)
-  - `dataChannelGeneration` (259 行) — DataChannel 通知の世代 (トークン)
-  - `isRedirecting` (266 行) — リダイレクト中フラグ
+  - `webSocketDisconnectScheduled` — DataChannel シグナリング切り替え後の WebSocket の二重切断を防ぐ
+  - `disconnectTimerScheduled` — 接続完了後の切断検出の猶予タイマーの開始済みフラグ
+  - `disconnectTimerGeneration` — 猶予タイマーの世代 (トークン)
+  - `dataChannelGeneration` — DataChannel 通知の世代 (トークン)
+  - `isRedirecting` — リダイレクト中フラグ
 
 これらは、利用者スレッド、`DispatchQueue.global()`、URLSession delegate queue、libwebrtc callback、DataChannel delegate、main RunLoop から読み書きされる。
 
@@ -50,53 +50,43 @@ PeerChannel の接続状態フラグ 5 つは、`nonisolated(unsafe)` で宣言�
 
 ### 接続状態 reducer
 
-- 接続 phase、論理接続 ID、transport 世代、配送済み callback 台帳を保持する production の状態 reducer を導入する。
-- reducer の入力は、利用者操作、signaling event、PeerConnection event、DataChannel event、timeout、redirect、切断とする。
-- reducer は副作用を直接実行せず、WebRTC 操作、callback 配送、snapshot 更新などの effect を返す。
-- 不正な状態遷移と stale epoch のイベントを明示的に拒否する。
+- PeerChannel の接続状態フラグ 5 つ (transport 世代 / WebSocket スケジュール / 猶予タイマー開始・世代 / redirect 中) を保持する production の状態 reducer を導入する。
+- reducer の入力は、WebSocket スケジュール、猶予タイマー (開始 / 発火 / キャンセル)、redirect 受信、redirect 窓の終了、切断完了とする。
+- reducer は副作用を直接実行せず、snapshot 更新などの effect を返す。
+- イベントは呼び出し側のガードを通過したものが渡される前提とし、reducer 自身では拒否しない (reducer への入力は DispatchQueue 直列化で順序が確定する)。
 
 ```text
 [イベントソース]
-  利用者操作        signaling   PeerConnection   DataChannel    timer
-  (disconnect)     (offer)      (didOpen)        (opened)       (timeout)
-       │              │              │               │            │
-       └──────────────┴──────┬───────┴───────────────┴────────────┘
-                              │ yield
-                              ▼
+  PeerChannel
+  (scheduleWebSocketDisconnect / 猶予タイマー / redirect / 切断)
+       │
+       │ DispatchQueue.sync (直列化)
+       ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ 接続単位の DispatchQueue 直列化オブジェクト (単一所有者)         │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │ Intake: AsyncStream<ConnectionEvent> を逐次消費          │  │
-│  └──────────────────────────────┬─────────────────────────┘  │
-│                                 ▼                            │
+│ ConnectionStateOwner (単一所有者, DispatchQueue 直列化)         │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │ reducer: (State, Event) -> (State, [Effect])            │  │
-│  │  State: phase / logicalConnectionID / transportEpoch    │  │
-│  │         / deliveryTracker                               │  │
+│  │  State: transportEpoch / webSocketDisconnectScheduled   │  │
+│  │         / disconnectTimerScheduled /                   │  │
+│  │         / disconnectTimerGeneration / isRedirecting     │  │
 │  └──────────────────────────────┬─────────────────────────┘  │
-│                        ┌────────┴─────────┐                  │
-│                        ▼                  ▼                  │
-│  ┌─────────────────────────┐    ┌─────────────────────────┐  │
-│  │ snapshot を publish      │    │ effect を実行            │  │
-│  │ (phase 遷移時 / epoch 変更時) │  │  WebRTC 操作            │  │
-│  └────────────┬────────────┘    │  callback 配送          │  │
-│               │                 │  (critical section 外) │  │
-│               │                 └─────────────────────────┘  │
-│               ▼                                                │
+│                                 ▼                            │
 │  ┌─────────────────────────┐                                  │
 │  │ NSLock で保護した snapshot│                                  │
 │  └────────────┬────────────┘                                  │
 └───────────────┴───────────────┴───────────────────────────────┘
                 │
                 ▼
-[同期 getter] dataChannelGeneration / isRedirecting / ... (PeerChannel 内)
+[PeerChannel の同期 getter] dataChannelGeneration / isRedirecting /
+  webSocketDisconnectScheduled / disconnectTimerScheduled /
+  disconnectTimerGeneration (snapshot 読み)
 ```
 
 ### 単一 owner
 
-- reducer と接続に属する mutable state (接続 phase、論理接続 ID、transport 世代、配送済み callback 台帳) を、**接続単位の serial executor (DispatchQueue 直列化)** が所有する。
-- 同期 API (`connect` / `disconnect`) から await で呼び出さずに済むよう、actor ではなく `DispatchQueue` (serial) による直列化を採用する。
-- `PeerChannel` の接続状態フラグは、この owner の snapshot を読み、イベントを投げる形に置き換える。
+- reducer と PeerChannel の接続状態フラグ 5 つを、**PeerChannel 内の serial executor (DispatchQueue 直列化) が所有する**。
+- 同期 API から await で呼び出さずに済むよう、actor ではなく `DispatchQueue` (serial) による直列化を採用する。
+- `PeerChannel` が `ConnectionStateOwner` を直接保持し、自身のフラグを snapshot で読み、イベントを投げる形に置き換える。
 
 ### 同期 getter
 
@@ -118,20 +108,19 @@ PeerChannel の接続状態フラグ 5 つは、`nonisolated(unsafe)` で宣言�
 - callback 配送の reducer の Effect への完全移行は `0110` (Sendable event API) で扱う。
 - raw WebRTC 型を公開 API から除去する作業は `0070` の方針と整合させる。
 - 本 issue で公開 API を一斉に async 化しない。
-- DataChannel の OPEN 追跡状態 (`openedDataChannelLabels` / `messagingLabels` / `onDataChannelNotified`、`dataChannelOpenLock` で保護) は本 issue のスコープ外。現状どおり `NSLock` で保護し、発火判定は reducer (接続 phase) の状態を参照しない (ラベル集合のみに依存)。
+- DataChannel の OPEN 追跡状態 (`openedDataChannelLabels` / `messagingLabels` / `onDataChannelNotified`、`dataChannelOpenLock` で保護) は本 issue のスコープ外。現状どおり `NSLock` で保護し、発火判定は reducer (接続状態フラグ) の状態を参照しない (ラベル集合のみに依存)。
 - `connectionCount` / `publisherCount` / `subscriberCount` (`type: notify` 受信で更新)は本 issue のスコープ外。(`0128` で扱う)
-- `ConnectionTimer` の実装 (stateLock / timer / generation) は本 issue のスコープ外。接続 phase の更新は reducer 経由で行うが、ConnectionTimer 自体の状態所有は現状維持とする。
+- `ConnectionTimer` の実装 (stateLock / timer / generation) は本 issue のスコープ外。ConnectionTimer 自体の状態所有は現状維持とする。
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
-- production の状態 reducer に実際のイベント型を入力し、connect、cancel、timeout、redirect、disconnect の順列を検証する。
-- すべてのイベント列で、接続 phase と配送済み callback 台帳が矛盾せず、終端が 1 回であることを確認する。
-- 実 Sora と実 WebRTC を使い、同時 connect、即時 cancel、callback 内 disconnect、redirect、再接続を反復する。
-- public callback 内からすべての同期 getter を呼び、deadlock せず最新 snapshot を取得できることを確認する。
+- production の状態 reducer に実際のイベント型を入力し、redirect 受信 / redirect 窓終了 / WebSocket スケジュール / 猶予タイマー (開始 / 発火 / キャンセル) / 切断完了の遷移を検証する。
+- すべてのイベント列で、フラグの値と副作用 (publishSnapshot) が矛盾しないことを確認する。
+- 実 Sora と実 WebRTC を使い、redirect、再接続を反復する。
 - Thread Sanitizer と actor data race checks を補助的に有効化する。
-- テストには、検証するイベント順と stale event を拒否すべき理由を日本語コメントで明記する。
+- テストには、検証するイベント順を日本語コメントで明記する。
 
 ## 完了条件
 
@@ -141,7 +130,7 @@ PeerChannel の接続状態フラグ 5 つは、`nonisolated(unsafe)` で宣言�
   - `PeerChannel` 以外の `nonisolated(unsafe)` (CameraVideoCapturer / DeviceInfo / Logger / MediaChannelConfiguration / MediaStream、および `Sora.swift` の `webRTCCallbackLogger`) はスコープ外。 (`webRTCCallbackLogger` は `0111` の対象)
 - `dataChannelGeneration` が transport 世代として reducer に含まれ、DataChannel delegate の世代照合が sync な read (snapshot) で行われること。世代変更時も snapshot が publish されること。
 - 同期 getter が serial executor の同期 wait を行わず、NSLock で保護した snapshot storage を参照すること。
-- callback の呼び出し前に状態と snapshot が確定していること。
+- イベントの処理が serial executor (DispatchQueue 直列化) 上で行われること。
 - iOS 14 では利用できない concurrency API (iOS 16+ 限定 `Clock` / `ContinuousClock` / `AsyncTimerSequence` 等) を無条件に使用していないこと。
 - `0092`、`0093`、`0095`、`0096` の回帰テストを含む全テストが成功すること。
 

@@ -20,7 +20,7 @@
 - `unlock()`: count をデクリメント。count == 0 になると遅延保存した切断要求を実行
 - `waitDisconnect(error:reason:)`: count > 0 の間は切断要求を保存し、count == 0 または接続試行中 (count == 1) の解除時に `basicDisconnect` を実行
 
-この Lock は `0100` で導入する接続 phase の状態と密接に関係するが、0100 ではスコープ外とした。
+この Lock は `0100` で導入する PeerChannel の接続状態フラグの状態と密接に関係するが、0100 ではスコープ外とした。
 
 ## 前提となる issue
 
@@ -30,14 +30,14 @@
 ## 設計方針
 
 - 統合先を決定する。`0010` の `connectionLifecycleLock` と同じ領域へ組み込むか、`0100` の reducer へ組み込むかを検討し、どちらか 1 つに選定する。
-- 接続処理の直列化と接続 phase の遷移を単一の ingress で処理する。
+- 接続処理の直列化と PeerChannel の状態遷移を単一の ingress で処理する。
 - `waitDisconnect` の遅延実行セマンティクス (接続試行中の切断要求、猶予タイマー発動時のキャンセル等) を維持する。
 - callback の再入 (basicDisconnect から lock/unlock を呼ぶ場合) が deadlock しないことを保証する。
 
 ## スコープ外
 
-- 接続 phase / transport epoch / callback 完了台帳の導入は `0100`。
-- MediaChannel の接続ライフサイクルの直列化は `0010`。
+- transport 世代 (dataChannelGeneration) の管理は `0100` (PeerChannel の接続状態フラグ reducer)。
+- 接続 phase / callback 完了状態の管理は、本 issue で扱わない (MediaChannel の接続ライフサイクルは `0010` の connectionLifecycleLock が担い、単一化の対象となる issue は別途検討)。
 
 ## テスト方針
 
