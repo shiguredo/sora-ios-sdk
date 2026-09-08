@@ -358,27 +358,27 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     connectionStateOwner.handle(event)
   }
 
-  /// 現在の transport 世代 (dataChannelGeneration の置き換え)
+  /// 現在の transport 世代
   var dataChannelGeneration: Int {
     connectionStateSnapshotStorage.current().transportEpoch
   }
 
-  /// redirect 中フラグ (isRedirecting の置き換え)
+  /// redirect 中フラグ
   var isRedirecting: Bool {
     connectionStateSnapshotStorage.current().isRedirecting
   }
 
-  /// WebSocket の切断スケジュール済みフラグ (webSocketDisconnectScheduled の置き換え)
+  /// WebSocket の切断スケジュール済みフラグ
   var webSocketDisconnectScheduled: Bool {
     connectionStateSnapshotStorage.current().webSocketDisconnectScheduled
   }
 
-  /// 猶予タイマーの開始済みフラグ (disconnectTimerScheduled の置き換え)
+  /// 猶予タイマーの開始済みフラグ
   var disconnectTimerScheduled: Bool {
     connectionStateSnapshotStorage.current().disconnectTimerScheduled
   }
 
-  /// 猶予タイマーの世代 (disconnectTimerGeneration の置き換え)
+  /// 猶予タイマーの世代
   var disconnectTimerGeneration: Int {
     connectionStateSnapshotStorage.current().disconnectTimerGeneration
   }

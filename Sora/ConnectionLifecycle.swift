@@ -37,7 +37,7 @@ struct ConnectionLifecycleState: Sendable {
   /// タイマー発火時に世代が一致しないと無視される (キャンセル済みタイマーの遅延発火対策)。
   var disconnectTimerGeneration: Int = 0
 
-  /// redirect が発生したことを示すフラグ。redirect に応答して旧 transport は無効化される。
+  /// redirect 中であることを示すフラグ。
   ///
   /// `PeerChannel.isRedirecting` に対応する。redirect 中は旧 PeerConnection の
   /// 遅延通知を無視し、切断処理の続行判定にも使う。
