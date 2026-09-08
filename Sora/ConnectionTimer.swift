@@ -29,7 +29,7 @@ enum ConnectionMonitor {
 class ConnectionTimer: @unchecked Sendable {
   public var monitors: [ConnectionMonitor]
   public var timeout: Int
-  public var isRunning: Bool = false
+  private var _isRunning = false
 
   /// Timer の状態 (`timer` / `isRunning` / `generation`) を保護する排他ロック。
   /// `run()` と `stop()` は接続処理・切断処理・Timer callback など異なるスレッドから
@@ -37,6 +37,13 @@ class ConnectionTimer: @unchecked Sendable {
   private let stateLock = NSLock()
 
   private var timer: Timer?
+
+  /// Timer が現在有効かどうかを返します。
+  public var isRunning: Bool {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return _isRunning
+  }
 
   /// Timer ごとの生成世代。`run()` のたびに +1 し、callback 発火時に現在の世代と
   /// 一致する場合のみ timeout 処理を実行する。
@@ -115,18 +122,23 @@ class ConnectionTimer: @unchecked Sendable {
       return
     }
     RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
-    isRunning = true
+    _isRunning = true
     stateLock.unlock()
   }
 
   public func stop() {
     stateLock.lock()
     Logger.debug(type: .connectionTimer, message: "stop")
+    // invalidate 前に RunLoop へ配送されたものの、まだ世代照合を通過していない callback を
+    // 拒否できるよう、稼働中の Timer を停止するときは世代を進める。
+    if timer != nil {
+      generation += 1
+    }
     // timer を nil 化しないと ConnectionTimer → Timer → closure → self の
     // 循環参照が残り、接続完了・切断後も ConnectionTimer が解放されない。
     timer?.invalidate()
     timer = nil
-    isRunning = false
+    _isRunning = false
     stateLock.unlock()
   }
 }

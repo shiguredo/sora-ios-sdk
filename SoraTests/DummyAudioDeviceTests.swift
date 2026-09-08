@@ -34,12 +34,131 @@ final class SineWaveGenerator {
   }
 }
 
+/// 左を 600 Hz、右を 1200 Hz とする、左右を区別できるステレオ音源。
+final class StereoSineWaveGenerator {
+  private var time: Double = 0
+
+  func generate(data: UnsafeMutableRawPointer, frameCount: Int, sampleRate: Double) {
+    let pcm = data.assumingMemoryBound(to: Int16.self)
+    for frame in 0..<frameCount {
+      pcm[frame * 2] = Int16(sin(2 * .pi * 600 * time) * 9830)
+      pcm[frame * 2 + 1] = Int16(sin(2 * .pi * 1200 * time) * 9830)
+      time += 1 / sampleRate
+    }
+  }
+}
+
+/// ADM の再生 PCM から左右の周波数成分を測る。受信した実データだけを判定する。
+/// callback とテストスレッドの共有カウンターはロックで保護する。
+final class StereoToneProbe: @unchecked Sendable {
+  private let lock = NSLock()
+  private var separatedDuration: Double = 0
+
+  var stereoDuration: Double {
+    lock.lock()
+    defer { lock.unlock() }
+    return separatedDuration
+  }
+
+  func consume(_ samples: UnsafeBufferPointer<Int16>, sampleRate: Double) {
+    let frames = samples.count / 2
+    guard frames > 0, samples.count.isMultiple(of: 2), sampleRate > 0 else { return }
+    // 位相はエンコードやジッタバッファで変わるため、sin と cos の両成分の二乗和を使う。
+    func power(channel: Int, frequency: Double) -> Double {
+      var real = 0.0
+      var imaginary = 0.0
+      for frame in 0..<frames {
+        let phase = 2 * Double.pi * frequency * Double(frame) / sampleRate
+        let sample = Double(samples[frame * 2 + channel])
+        real += sample * cos(phase)
+        imaginary += sample * sin(phase)
+      }
+      return (real * real + imaginary * imaginary) / Double(frames * frames)
+    }
+    let left600 = power(channel: 0, frequency: 600)
+    let left1200 = power(channel: 0, frequency: 1200)
+    let right600 = power(channel: 1, frequency: 600)
+    let right1200 = power(channel: 1, frequency: 1200)
+    // 圧縮による漏れは許容するが、無音・左右交換・モノラル化後の複製は成功にしない。
+    guard left600 > 100_000, right1200 > 100_000,
+      left600 > left1200 * 8, right1200 > right600 * 8
+    else { return }
+    lock.lock()
+    separatedDuration += Double(frames) / sampleRate
+    lock.unlock()
+  }
+}
+
 /// DummyAudioDevice の単体テスト
 ///
 /// PCM 生成 (fillPCMData) は外部注入された pcmGenerator への委譲のみであるため、
 /// 注入するジェネレーター (SineWaveGenerator) の動作と、
 /// DummyAudioDevice のハードミュート制御を検証する。
 final class DummyAudioDeviceTests: XCTestCase {
+
+  /// チャンネル数の既定値を維持しつつ、2 ch 指定を入出力の双方へ反映する。
+  func testChannelCounts() {
+    let mono = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in }
+    let stereo = DummyAudioDevice(initialMicrophoneEnabled: true, channelCount: 2) { _, _, _ in }
+    XCTAssertEqual(mono.inputNumberOfChannels, 1)
+    XCTAssertEqual(mono.outputNumberOfChannels, 1)
+    XCTAssertEqual(stereo.inputNumberOfChannels, 2)
+    XCTAssertEqual(stereo.outputNumberOfChannels, 2)
+  }
+
+  /// ネイティブ ADM の切替とは独立に、カスタムデバイスの 2 ch 再生要求を SDP へ渡す。
+  func testCustomStereoDeviceRequestsStereoSDP() throws {
+    var configuration = Configuration(
+      url: try XCTUnwrap(URL(string: "wss://example.invalid")), channelId: "test", role: .recvonly)
+    XCTAssertFalse(configuration.requiresStereoAudioSDP)
+    configuration.audioDevice = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in }
+    XCTAssertFalse(configuration.requiresStereoAudioSDP)
+    configuration.audioDevice = DummyAudioDevice(
+      initialMicrophoneEnabled: true, channelCount: 2
+    ) { _, _, _ in }
+    XCTAssertTrue(configuration.requiresStereoAudioSDP)
+    XCTAssertFalse(configuration.audioStereoOutputEnabled)
+    XCTAssertNoThrow(try MediaChannel.validate(configuration: configuration))
+  }
+
+  /// 判定器自身が無音・左右交換・モノラル化を検出することを実 PCM で確認する。
+  func testStereoProbeRejectsSilenceSwappedAndMixedChannels() {
+    let generator = StereoSineWaveGenerator()
+    let device = DummyAudioDevice(
+      initialMicrophoneEnabled: true, channelCount: 2, pcmGenerator: generator.generate)
+    var stereo = [Int16](repeating: 0, count: 960 * 2)
+    stereo.withUnsafeMutableBytes {
+      device.fillPCMData(data: $0.baseAddress!, frameCount: 960)
+    }
+    let correct = StereoToneProbe()
+    stereo.withUnsafeBufferPointer { correct.consume($0, sampleRate: 48000) }
+    XCTAssertEqual(correct.stereoDuration, 0.02, accuracy: 0.000001)
+
+    for transformation in 0..<4 {
+      var invalid = stereo
+      for frame in 0..<960 {
+        let left = stereo[frame * 2]
+        let right = stereo[frame * 2 + 1]
+        switch transformation {
+        case 0:
+          invalid[frame * 2] = 0
+          invalid[frame * 2 + 1] = 0
+        case 1:
+          invalid[frame * 2] = right
+          invalid[frame * 2 + 1] = left
+        case 2:
+          let mixed = Int16((Int(left) + Int(right)) / 2)
+          invalid[frame * 2] = mixed
+          invalid[frame * 2 + 1] = mixed
+        default:
+          invalid[frame * 2 + 1] = 0
+        }
+      }
+      let probe = StereoToneProbe()
+      invalid.withUnsafeBufferPointer { probe.consume($0, sampleRate: 48000) }
+      XCTAssertEqual(probe.stereoDuration, 0, "不正な左右データを成功扱いしないこと: \(transformation)")
+    }
+  }
 
   // fillPCMData で生成した PCM データを Int16 配列として読み出す
   private func readPCMData(

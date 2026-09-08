@@ -27,9 +27,9 @@ final class PeerChannelConnectEncodingTests: XCTestCase {
   }
 
   // PeerChannel を実際に構築する
-  private func makePeerChannel(config: Configuration) -> PeerChannel {
+  private func makePeerChannel(config: Configuration) throws -> PeerChannel {
     let signalingChannel = SignalingChannel(configuration: config)
-    let nativeFactory = NativePeerChannelFactory(bypassVoiceProcessing: false)
+    let nativeFactory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
     return PeerChannel(
       configuration: config,
       signalingChannel: signalingChannel,
@@ -50,7 +50,7 @@ final class PeerChannelConnectEncodingTests: XCTestCase {
 
   // Configuration から PeerChannel を経由して connect JSON を取得する
   private func encodeConnect(from config: Configuration) throws -> [String: Any] {
-    let peerChannel = makePeerChannel(config: config)
+    let peerChannel = try makePeerChannel(config: config)
     let connect = peerChannel.makeSignalingConnect(sdp: nil, redirect: nil)
     return try encodeConnect(connect)
   }

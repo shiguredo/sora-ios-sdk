@@ -28,9 +28,9 @@ final class PeerChannelRedirectInvalidationTests: XCTestCase {
   // PeerChannel と接続済みの SignalingChannel を構築する
   private func makePeerChannelWithSignalingChannel(
     config: Configuration
-  ) -> (peerChannel: PeerChannel, signalingChannel: SignalingChannel) {
+  ) throws -> (peerChannel: PeerChannel, signalingChannel: SignalingChannel) {
     let signalingChannel = SignalingChannel(configuration: config)
-    let nativeFactory = NativePeerChannelFactory(bypassVoiceProcessing: false)
+    let nativeFactory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
     let peerChannel = PeerChannel(
       configuration: config,
       signalingChannel: signalingChannel,
@@ -47,9 +47,9 @@ final class PeerChannelRedirectInvalidationTests: XCTestCase {
   /// 旧 transport を参照しないよう、switchedToDataChannel を false にする必要がある。
   /// また、旧接続の遅延通知を遮断するため dataChannelGeneration を進め、
   /// 新 offer 受信までの窓では isRedirecting を true にする。
-  func testRedirectResetsSwitchedToDataChannelAndGeneration() {
+  func testRedirectResetsSwitchedToDataChannelAndGeneration() throws {
     let config = makeConfiguration()
-    let (peerChannel, signalingChannel) = makePeerChannelWithSignalingChannel(config: config)
+    let (peerChannel, signalingChannel) = try makePeerChannelWithSignalingChannel(config: config)
 
     // リダイレクト前の接続済み状態を再現する
     // (switchedToDataChannel は DataChannel シグナリング確立時に true になる)
@@ -78,11 +78,11 @@ final class PeerChannelRedirectInvalidationTests: XCTestCase {
   /// リダイレクト中に sendMessage が呼ばれた場合、switchedToDataChannel が false のため
   /// 「DataChannel is not open yet」を返す。旧 DataChannel への送信が起きないことを
   /// 実経路 (sendMessage の呼び出し) で検証する。
-  func testRedirectPreventsSendMessageToOldDataChannel() {
+  func testRedirectPreventsSendMessageToOldDataChannel() throws {
     let config = makeConfiguration()
     // MediaChannel を構築する (内部で自前の SignalingChannel / PeerChannel を持つ)
     // こうすることで MediaChannel.sendMessage が同じ PeerChannel を参照する
-    let mediaChannel = MediaChannel(manager: Sora.shared, configuration: config)
+    let mediaChannel = try MediaChannel(configuration: config)
 
     // リダイレクト前の接続済み状態を再現する
     mediaChannel.peerChannel.switchedToDataChannel = true

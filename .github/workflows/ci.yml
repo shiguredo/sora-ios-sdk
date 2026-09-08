@@ -41,6 +41,7 @@ jobs:
         xcrun simctl boot "$SIMULATOR_NAME"
         xcrun simctl bootstatus "$SIMULATOR_NAME" -b
     - name: Run E2E Tests
+      id: e2e_tests
       run: |
         rm -rf build
 
@@ -82,9 +83,39 @@ jobs:
         xcodebuild test-without-building \
             -xctestrun "$XCTESTRUN" \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+            -resultBundlePath build/e2e.xcresult \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE=
+    - name: Show E2E Crash Diagnostics
+      if: failure() && steps.e2e_tests.outcome == 'failure'
+      run: |
+        if [ ! -d build/e2e.xcresult ]; then
+          echo 'No E2E result bundle is available.'
+          exit 0
+        fi
+
+        # 接続情報や環境変数を含み得る診断全体は公開せず、終了理由とシンボルだけを抽出する。
+        xcrun xcresulttool export diagnostics \
+          --path build/e2e.xcresult \
+          --output-path build/e2e-diagnostics
+        find build/e2e-diagnostics -type f -name '*.ips' -print0 |
+          while IFS= read -r -d '' report; do
+            jq '
+              select(.threads? != null) |
+              select(.procName == "xctest" or (.procName | startswith("Sora"))) |
+              . as $crash |
+              {
+                process: .procName,
+                exception: (.exception | {type, signal, codes}),
+                termination: (.termination | {namespace, code, indicator}),
+                frames: [
+                  .threads[.faultingThread].frames[]? |
+                  {image: $crash.usedImages[.imageIndex].name, symbol, symbolLocation}
+                ]
+              }
+            ' "$report"
+          done
     - name: Shutdown Simulator
       if: always()
       run: xcrun simctl shutdown 'iPhone 17 Pro' || true

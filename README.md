@@ -32,6 +32,34 @@ Please read https://github.com/shiguredo/oss before use.
 - 各種カメラ設定を利用できる
   - 解像度・フレームレート・フロントカメラ優先
 - 受信した音声データを PCM 形式で取得できる
+- ステレオ音声出力に対応
+
+## ステレオ音声出力
+
+`Configuration.audioStereoOutputEnabled` を `true` にすると、Sora から受信した Opus 音声をステレオで再生できます。既定値は `false` であり、従来のモノラル音声出力を維持します。
+
+```swift
+var configuration = Configuration(
+  urlCandidates: [url],
+  channelId: channelId,
+  role: .recvonly)
+configuration.audioStereoOutputEnabled = true
+```
+
+ステレオ音声出力には次の制約があります。
+
+- Voice Processing I/O の代わりに RemoteIO を利用するため、AEC と AGC は利用できない
+- `Configuration.bypassVoiceProcessing` の指定は無視される
+- `audioEnabled` に `false` を指定した場合、または音声コーデックに PCMU を指定した場合は利用できない。`.default` を指定した場合も、Answer の受信方向を持つ音声メディアセクションに Opus がなければ接続に失敗する。送信専用の音声メディアセクションはステレオ受信指定の対象外となる
+- Sora iOS SDK が管理する音声接続全体でステレオ接続を 1 つだけ利用でき、他の音声接続とは同時に利用できない
+- Bluetooth HFP ではモノラルになる。アプリが `.allowBluetoothA2DP` を許可し、A2DP route が選択された場合はステレオ出力を利用できるが、SDK は route を自動で切り替えない
+- 接続後に `Sora.setAudioMode(.voiceChat(...))` を呼ぶと、OS によってモノラル出力へ切り替わる可能性がある
+
+`recvonly` ではマイク入力を初期化せず、マイク権限も必要ありません。
+`sendonly` と `sendrecv` ではマイク入力を初期化し、`initialMicrophoneEnabled` と `MediaChannel.setAudioHardMute(_:)` で制御できます。
+
+この入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要です。
+`Package.swift` は m150.7871.3.5 を参照しています。
 
 ## システム条件
 

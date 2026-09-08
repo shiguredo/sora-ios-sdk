@@ -37,8 +37,8 @@ final class PeerChannelConnectCompletionE2ETests: E2ETestBase {
         return
       }
 
-      // onDisconnect を先に設定してから切断する
-      // (disconnect() は同期で onDisconnect が発火するため)
+      // onDisconnect を先に設定してから切断する。
+      // PeerChannel の後始末が終わった時点で非同期に発火する場合がある。
       channel.handlers.onDisconnect = { _ in
         DispatchQueue.main.async {
           XCTAssertTrue(
@@ -48,7 +48,7 @@ final class PeerChannelConnectCompletionE2ETests: E2ETestBase {
         }
       }
 
-      // 接続成功 callback 内から同期的に切断する
+      // 接続成功 callback 内から切断を要求する
       // (旧実装ではこれが callback の二重実行を引き起こしていた)
       channel.disconnect(error: nil)
 
