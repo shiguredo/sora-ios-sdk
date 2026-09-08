@@ -26,7 +26,7 @@
 
 ## スコープ外
 
-- `state` / `connectionStartTime` の snapshot 化 (`MediaChannelSnapshot`) は `0100` で扱う。`connectionCount` 系は 0100 のスコープ外 (0100 の「スコープ外」に明記) であり、本 issue で扱う。
+- `state` / `connectionStartTime` の snapshot 化 (`MediaChannelSnapshot`) は本 issue では扱わない。 (`0010` が MediaChannel の接続ライフサイクルを `connectionLifecycleLock` で実装済みであり、ここで扱うのは `connectionCount` 系のみ)
 - `onReceiveSignaling` の Sendable 化 / event API 化は `0110` で扱う。
 
 ## テスト方針

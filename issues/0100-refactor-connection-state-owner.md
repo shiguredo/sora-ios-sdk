@@ -119,7 +119,7 @@ PeerChannel の接続状態フラグ 5 つは、`nonisolated(unsafe)` で宣言�
 - raw WebRTC 型を公開 API から除去する作業は `0070` の方針と整合させる。
 - 本 issue で公開 API を一斉に async 化しない。
 - DataChannel の OPEN 追跡状態 (`openedDataChannelLabels` / `messagingLabels` / `onDataChannelNotified`、`dataChannelOpenLock` で保護) は本 issue のスコープ外。現状どおり `NSLock` で保護し、発火判定は reducer (接続 phase) の状態を参照しない (ラベル集合のみに依存)。
-- `connectionCount` / `publisherCount` / `subscriberCount` (`type: notify` 受信で更新)は本 issue のスコープ外。snapshot は phase 遷移時および transport 世代の変更時に publish し、notify による更新は現状維持 (これらの値は接続 phase と独立に更新されるため、snapshot の整合性に影響しない)。
+- `connectionCount` / `publisherCount` / `subscriberCount` (`type: notify` 受信で更新)は本 issue のスコープ外。(`0128` で扱う)
 - `ConnectionTimer` の実装 (stateLock / timer / generation) は本 issue のスコープ外。接続 phase の更新は reducer 経由で行うが、ConnectionTimer 自体の状態所有は現状維持とする。
 
 ## テスト方針
