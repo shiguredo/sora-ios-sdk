@@ -5,7 +5,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 
 # Sora iOS SDK (sora-ios-sdk)
 
-- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (develop は 2026.3.0-canary.0)
+- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (2026.3.0)
 - **リポジトリ**: https://github.com/shiguredo/sora-ios-sdk
 - **ドキュメント**: https://sora-ios-sdk.shiguredo.jp/
 - **API リファレンス**: https://sora-ios-sdk.shiguredo.jp/_static/api/docs/
