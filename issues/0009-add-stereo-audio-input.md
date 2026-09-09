@@ -7,6 +7,16 @@
 - Branch: feature/add-stereo-audio-input
 - Polished: 2026-09-03
 
+## pending にした理由
+
+2026-09-09、利用する WebRTC.xcframework (`m150.7871.3.5`) の `RTCAudioDeviceModule` にステレオ録音を有効化する公開 API が無いことを確認したため、pending に戻す。
+
+出力側の `0010` は `setStereoPlayoutEnabled:` / `stereoPlayoutEnabled` を利用してリリース済みである。
+一方、録音側の `SetStereoRecording` 相当は `RTCAudioDeviceModule` に公開されておらず、SDK からステレオ入力を有効化する経路を作れない。
+
+ネイティブ側でステレオ録音の公開 API が提供され、実機でステレオ入力を確認できる状態になった時点で reopened にする。
+本 issue の設計方針と完了条件はその時点で再利用する。
+
 ## Pending 理由（履歴）
 
 かつて次の理由で pending としていた（WebRTC-Build 未確認、API 未決、`0016` 未完了）。WebRTC-Build 側のステレオ録音対応が完了している想定のもと、SDK 側を並列に進めるため reopened した。以下の設計方針は、その想定と出力側 `0010` の確定方針に揃えて本 issue で確定する。
