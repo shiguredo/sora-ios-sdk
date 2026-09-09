@@ -1,7 +1,7 @@
 # ネイティブ stereo 出力の実機検証を整備する
 
 - Created: 2026-09-07
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-09
 - Branch: feature/add-stereo-audio-output
 - Polished: {YYYY-MM-DD}
 
@@ -49,3 +49,14 @@
 - 公開設定の説明が実測結果と整合し、通常の CI にマイク入力を必須とするテストを追加していない。
 
 ## 解決方法
+
+2026-09-09、m150.7871.3.5（webrtc-build issue 0014 / 0016 を含む）と実機を使い、ネイティブ RemoteIO のステレオ出力を検証した。
+
+- `recvonly` と `sendrecv` を接続し、左右に異なる信号を入力した実際の出力で左右の分離を確認した。
+- 切断後の再接続、割り込みからの復帰、出力経路の変更後もステレオ再生を確認した。
+- マイク権限が未決定・拒否の状態で `recvonly` が接続でき、マイク入力を初期化しないことを確認した。
+- `sendonly` / `sendrecv` ではマイク入力を初期化し、`initialMicrophoneEnabled` と `MediaChannel.setAudioHardMute(_:)` が動作することを確認した。
+- Bluetooth HFP ではモノラル、A2DP ではステレオ出力となることを確認した。
+- `DummyAudioDevice` は実機検証に代用せず、通常の CI にはマイク入力を必須とするテストを追加していない。
+
+検証に利用した端末種別、OS、出力経路、category、mode、観測方法は検証時の記録に基づく。
