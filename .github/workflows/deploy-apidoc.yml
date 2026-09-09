@@ -24,7 +24,10 @@ jobs:
     - name: Show Xcode Version
       run: xcodebuild -version
     - name: Install Jazzy
-      run: sudo gem install jazzy
+      run: |
+        # mustache 1.1.3 は jazzy 0.15.4 が渡す Pathname を扱えず失敗するため 1.1.2 に固定する
+        sudo gem install mustache -v 1.1.2
+        sudo gem install jazzy
     - name: Generate API Documentation
       run: jazzy
     - name: Upload Pages Artifact
