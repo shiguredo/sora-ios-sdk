@@ -1,7 +1,7 @@
 # ネイティブ stereo の受信専用接続でマイク入力を不要にする
 
 - Created: 2026-09-07
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-09
 - Branch: feature/add-stereo-audio-output
 - Polished: {YYYY-MM-DD}
 
@@ -68,12 +68,11 @@ issue 0132 の競合判定を維持したまま入力の要否を反映し、実
 - 変更した Swift ファイルの strict SwiftLint が成功した。SDK 全体では 190 テスト中、成功 169、Sora 接続情報の未設定などによるスキップ 21、失敗 0 だった。
 - 実際の ADM と MediaChannel を使う `AudioDeviceModuleWrapperTests` と `StereoAudioOutputTests` の 34 件が成功した。受信専用では category を変更せず、sendonly / sendrecv では `playAndRecord` を要求し、最後の接続解放後に元へ戻ることを確認した。
 - 未初期化の実際の ADM に対する最初のミュート解除と再試行が失敗を返し、SDK が失敗を成功扱いにしないことを確認した。
-- SDK のビルド・テストは `Package.swift` の m150.7871.3.2 を使用している。新しいネイティブとの通信・入力 I/O の統合検証ではない。
+- SDK のビルド・テストは、この時点では `Package.swift` の m150.7871.3.2 を使用していた。新しいネイティブとの統合検証は「依存ビルドの取り込みと実機検証」で行った。
 
-### 残る対応
+### 依存ビルドの取り込みと実機検証
 
-対応するネイティブビルドは未公開であり、`Package.swift` のバージョンと checksum の更新は未実施である。
-m150.7871.3.2 の `initializeInput` は VPIO 専用であり、呼び出しを戻すだけでは RemoteIO の手動入力初期化は行われない。
-この SDK 変更と、0014〜0016 を含むネイティブへの依存更新を合わせて提供する必要がある。
-依存更新後に、実機の recvonly / sendonly / sendrecv、初期ミュートから最初の解除、マイク音声・左右の再生音・インジケーターを確認する。
-依存更新と実機検証が残るため、本 issue は open のままとする。
+- `Package.swift` を m150.7871.3.5 に更新した。このビルドは webrtc-build issue 0014（RemoteIO の手動入力初期化）と issue 0016（ハードミュート）を含む。
+- 実機の `recvonly` / `sendonly` / `sendrecv`、初期ミュートから最初の解除、マイク音声・左右の再生音・インジケーターを確認した。
+- マイク権限が未決定・拒否の状態でも `recvonly` が接続でき、入力を使用せずに再生できることを確認した。
+- 切断、再接続、経路変更によって受信専用の入力が有効にならないことを確認した。
