@@ -17,6 +17,7 @@ public enum LogType {
   case user(String)
   case configurationViewController
   case dataChannel
+  case dummyAudioDevice
 }
 
 /// :nodoc:
@@ -53,6 +54,8 @@ extension LogType: CustomStringConvertible {
       return "ConfigurationViewController"
     case .dataChannel:
       return "DataChannel"
+    case .dummyAudioDevice:
+      return "DummyAudioDevice"
     }
   }
 }
@@ -262,7 +265,8 @@ public final class Logger: @unchecked Sendable {
           .mediaChannel,
           .mediaStream,
           .dataChannel,
-          .cameraVideoCapturer:
+          .cameraVideoCapturer,
+          .dummyAudioDevice:
           out = true
         default:
           break

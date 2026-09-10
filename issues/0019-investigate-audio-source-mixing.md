@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/investigate-audio-source-mixing
-- Polished: 2026-06-05
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -22,10 +22,10 @@
 
 ## 現状
 
-任意の音声データ（マイク以外、または複数ソースを合成した音声）を送信する API が存在しない。音声トラックは `createNativeAudioTrack` で生成しており、 `RTCAudioSource` はデバイスのマイク入力を前提としている（`Sora/NativePeerChannelFactory.swift:138-144`）。
+任意の音声データ（マイク以外、または複数ソースを合成した音声）を送信する公開 API が存在しない。音声トラックは `NativePeerChannelFactory.createNativeAudioTrack` で生成しており、既定では `RTCAudioSource` がデバイスのマイク入力を前提としている。
 
 ```swift
-// Sora/NativePeerChannelFactory.swift:138-144
+// Sora/NativePeerChannelFactory.swift の createNativeAudioTrack
 func createNativeAudioTrack(
   trackId: String,
   constraints: RTCMediaConstraints
@@ -35,7 +35,7 @@ func createNativeAudioTrack(
 }
 ```
 
-現在の `AudioDeviceModuleWrapper`（`Sora/AudioDeviceModuleWrapper.swift`）は `RTCAudioDeviceModule` の録音の pause/resume（ハードミュート）のみをラップするクラスであり、カスタム音声ソースの供給経路は実装されていない。SDK に `AVAudioEngine` によるミキシングや合成済み音声バッファーを送信トラックへ供給する経路は存在しない。
+現在の `AudioDeviceModuleWrapper`（`Sora/AudioDeviceModuleWrapper.swift`）は `RTCAudioDeviceModule` の録音の pause/resume（ハードミュート）のみをラップするクラスである。一方、SDK 内部には `Configuration.audioDevice`（内部プロパティ、`:nodoc:`）から `RTCAudioDevice` 実装を注入する経路が存在し、 `DummyAudioDevice`（`Sora/DummyAudioDevice.swift`）が PCM データを `deliverRecordedData` で ADM へ供給している。この経路はテスト用途に限定されており、複数ソースのミキシングには対応していない。SDK に `AVAudioEngine` によるミキシングや合成済み音声バッファーを送信トラックへ供給する公開 API は存在しない。
 
 ## 設計方針
 
@@ -43,9 +43,9 @@ func createNativeAudioTrack(
 
 調査すべき実現経路:
 
-1. **`RTCAudioDeviceModule` の差し替え**: `NativePeerChannelFactory.init` では `RTCAudioDeviceModule` を `RTCPeerConnectionFactory` の `audioDeviceModule:` 引数に渡している（`Sora/NativePeerChannelFactory.swift:43-56`）。`RTCAudioDeviceModule` は ObjC クラスで libwebrtc の C++ `AudioDeviceModule` へのブリッジであるため、独自サブクラスを作成して C++ 仮想関数を経由するカスタム音声入力を供給できるかが不明である。調査の起点は WebRTC パッケージ（SPM キャッシュまたは Pods の `WebRTC.xcframework` 内）に含まれるヘッダー（`RTCAudioDeviceModule.h` 等）であり、 ObjC からのサブクラス化または委譲が可能かを確認する。
+1. **`RTCAudioDeviceModule` の差し替え**: `NativePeerChannelFactory.init(bypassVoiceProcessing:audioDevice:)` では `RTCAudioDeviceModule` を `RTCPeerConnectionFactory` の `audioDeviceModule:` 引数に渡している。`RTCAudioDeviceModule` は ObjC クラスで libwebrtc の C++ `AudioDeviceModule` へのブリッジであるため、独自サブクラスを作成して C++ 仮想関数を経由するカスタム音声入力を供給できるかが不明である。調査の起点は WebRTC パッケージ（SPM キャッシュの `WebRTC.xcframework` 内）に含まれるヘッダー（`RTCAudioDeviceModule.h` 等）であり、 ObjC からのサブクラス化または委譲が可能かを確認する。加えて、SDK が既に持つ `RTCAudioDevice` 注入経路（`Configuration.audioDevice` → `NativePeerChannelFactory.init(bypassVoiceProcessing:audioDevice:)` の `audioDevice` 引数）を公開 API 化してミキシングを載せる案が、 `RTCAudioDeviceModule` の差し替えより低コストで実現できないかも比較対象とする。`DummyAudioDevice` がこの経路で PCM 供給の実績を持つことを判断材料にできる。
 2. **`RTCAudioCustomProcessing`**: libwebrtc の iOS ヘッダーに `RTCAudioCustomProcessing` プロトコルが存在するかを、パッケージヘッダーを grep して確認する。存在する場合、マイク音声に対して前処理としてミキシングを適用できるかを調査する。
-3. **カスタム `AVAudioEngine` からの PCM 注入**: libwebrtc の VoiceProcessingIO は `AVAudioEngine` とは独立した Core Audio `AudioUnit` として動作するため、 `AVAudioEngine.installTap` で直接割り込むことはできない。現実的な経路としては、 `AVAudioEngine` で合成した `AVAudioPCMBuffer` を経路 1 のカスタム `RTCAudioDeviceModule` 実装に渡すことで送信音声として供給できるかを調査する。
+3. **カスタム `AVAudioEngine` からの PCM 注入**: libwebrtc の VoiceProcessingIO は `AVAudioEngine` とは独立した Core Audio `AudioUnit` として動作すると見込まれ、 `AVAudioEngine.installTap` で直接割り込むことはできない（この前提は調査で確認する）。現実的な経路としては、 `AVAudioEngine` で合成した `AVAudioPCMBuffer` を経路 1 のカスタム `RTCAudioDeviceModule` 実装に渡すことで送信音声として供給できるかを調査する。
 
 調査の結果、 libwebrtc のソース変更が不可避、または C++ レイヤーへの ABI 依存が生じると判断された場合は、本 issue を `issues/pending/` へ移動し、その理由を明記する。
 

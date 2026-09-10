@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/add-video-frame-raw-data
-- Polished: 2026-06-05
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -20,15 +20,15 @@
 
 ## 現状
 
-`VideoFrame` から生データを取得する API が存在しない。`enum VideoFrame` は `case native` のみを定義しており、公開しているプロパティは `width` / `height` / `timestamp` だけで、フレームバッファーの生データを取り出すプロパティが無い（`Sora/VideoFrame.swift:10-41`）。
+`VideoFrame` から生データを取得する API が存在しない。`Sora/VideoFrame.swift` の `VideoFrame` は `case native` のみを定義しており、公開しているプロパティは `width` / `height` / `timestamp` だけで、フレームバッファーの生データを取り出すプロパティが無い。
 
-`init?(from sampleBuffer:)`（`Sora/VideoFrame.swift:52-63`）では `RTCCVPixelBuffer(pixelBuffer:)` で明示的にラップしているため、`CMSampleBuffer` 経由で生成した `VideoFrame` のバッファは常に `RTCCVPixelBuffer` になる。一方、ネットワーク受信フレームのバッファ型は WebRTC のデコード処理に依存しており、`RTCI420Buffer` になる場合がある。
+`Sora/VideoFrame.swift` の `init?(from:)` では `RTCCVPixelBuffer(pixelBuffer:)` で明示的にラップしているため、`CMSampleBuffer` 経由で生成した `VideoFrame` のバッファは常に `RTCCVPixelBuffer` になる。一方、ネットワーク受信フレームのバッファ型は WebRTC のデコード処理に依存しており、`RTCI420Buffer` になる場合がある。
 
 `RTCVideoFrame.buffer` は `RTCVideoFrameBuffer` プロトコルであり、`RTCCVPixelBuffer` にキャストすれば `.pixelBuffer` プロパティ（`CVPixelBuffer` 型）を取得できる。
 
 ## 設計方針
 
-1. `Sora/VideoFrame.swift` の `// MARK: - プロパティ` セクション内、`timestamp` プロパティ（40 行目）の直後に `public var pixelBuffer: CVPixelBuffer?` を追加する。既存の `width` / `height` / `timestamp` と同様の `switch self` パターンで実装する。
+1. `Sora/VideoFrame.swift` の `// MARK: - プロパティ` セクション内、`timestamp` プロパティの直後に `public var pixelBuffer: CVPixelBuffer?` を追加する。既存の `width` / `height` / `timestamp` と同様の `switch self` パターンで実装する。
 2. 実装は `frame.buffer as? RTCCVPixelBuffer` でキャストし、成功した場合は `.pixelBuffer` を返し、失敗した場合は `nil` を返す。これにより `RTCI420Buffer` を持つフレーム（ネットワーク受信時等）では `nil` を返すが、API の動作として明文化する。
 3. 既存の `case native` および各プロパティの挙動は変更せず、プロパティの追加のみを行う。後方互換性を維持する。
 

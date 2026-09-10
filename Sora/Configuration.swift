@@ -59,7 +59,7 @@ public struct Configuration {
   // MARK: - 接続に関する設定
 
   /// スポットライトの設定
-  public enum Spotlight {
+  public enum Spotlight: Equatable {
     /// 有効
     case enabled
 
@@ -128,6 +128,11 @@ public struct Configuration {
   /// 音声ビットレート。デフォルトは無指定です。
   public var audioBitRate: Int?
 
+  /// Opus 固有のパラメーター。デフォルトは無指定です。
+  /// オーディオコーデックが `.opus` として明示された場合のみ `type: connect` の
+  /// `audio.opus_params` として送信されます。`.default` を指定した場合は送信されません。
+  public var audioOpusParams: Encodable?
+
   /// 映像の可否。 `true` であれば映像を送受信します。
   /// デフォルトは `true` です。
   public var videoEnabled: Bool = true
@@ -135,6 +140,24 @@ public struct Configuration {
   /// 音声の可否。 `true` であれば音声を送受信します。
   /// デフォルトは `true` です。
   public var audioEnabled: Bool = true
+
+  /// 受信音声をステレオで再生するかどうか。デフォルトは `false` です。
+  ///
+  /// 有効にすると libwebrtc の Voice Processing を利用しないため、AEC と AGC は
+  /// 利用できません。また、カスタム音声デバイスは利用できず、
+  /// `bypassVoiceProcessing` の設定は無視されます。
+  ///
+  /// `audioEnabled` が `false` の場合、または `audioCodec` が `.pcmu` の場合は接続できません。
+  /// マイク入力は送信側ロールの場合だけ初期化します。受信専用ではマイク権限は不要です。
+  /// 送信側では `initialMicrophoneEnabled` と `MediaChannel.setAudioHardMute(_:)` で
+  /// マイク入力を制御できます。Bluetooth HFP ではモノラルとなります。アプリが
+  /// `.allowBluetoothA2DP` を許可し、A2DP route が選択された場合はステレオ出力を
+  /// 利用できますが、SDK は route を自動で切り替えません。
+  ///
+  /// libwebrtc の音声セッションを共有するため、Sora iOS SDK が管理する音声接続全体で
+  /// ステレオ接続は 1 つだけ利用でき、他の音声接続とは同時に利用できません。
+  /// 接続後に `Sora.setAudioMode` で `.voiceChat` を指定するとモノラルへ戻る場合があります。
+  public var audioStereoOutputEnabled: Bool = false
 
   /// 接続確立時に端末カメラキャプチャを自動起動するかどうか。
   ///
@@ -180,7 +203,18 @@ public struct Configuration {
 
   /// スポットライトの可否
   /// 詳しくは Sora のスポットライト機能を参照してください。
-  public var spotlightEnabled: Spotlight = .disabled
+  public var isSpotlightEnabled: Bool = false
+
+  /// スポットライトの可否
+  /// 詳しくは Sora のスポットライト機能を参照してください。
+  @available(
+    *, deprecated,
+    message: "`isSpotlightEnabled: Bool` で設定してください。2027 年中に廃止予定"
+  )
+  public var spotlightEnabled: Spotlight {
+    get { isSpotlightEnabled ? .enabled : .disabled }
+    set { isSpotlightEnabled = (newValue == .enabled) }
+  }
 
   /// スポットライトの対象人数
   public var spotlightNumber: Int?
@@ -229,6 +263,15 @@ public struct Configuration {
   ///   完全なチェーンを送出する必要がある。
   public var caCertificate: String?
 
+  /// サーバー証明書の検証をスキップするかどうか。
+  ///
+  /// `true` にすると WebSocket シグナリングおよび TURN-TLS の
+  /// サーバー証明書検証をスキップし、全ての接続を許可する。
+  /// 本番環境での利用は行わず、開発・検証目的のみで使用すること。
+  /// `caCertificate` が指定されていても、`insecure == true` が優先される。
+  /// デフォルトは `false`。
+  public var insecure: Bool = false
+
   /// 転送フィルターの設定
   ///
   /// この項目は 2025 年 12 月リリース予定の Sora にて廃止されます
@@ -271,6 +314,22 @@ public struct Configuration {
   /// パブリッシャーの音声トラックの ID です。
   /// 通常、指定する必要はありません。
   public var publisherAudioTrackId: String = defaultPublisherAudioTrackId
+
+  /// カスタム音声デバイス。
+  ///
+  /// 未設定 (nil) の場合は、通常どおり `RTCAudioDeviceModule` 経由で物理マイクを使用する。
+  /// 設定した場合は、カスタム音声デバイスが物理マイクの代わりに使用され、
+  /// 音声入力の初期化 (`initializeAudioInput()`) はスキップされる。
+  ///
+  /// SDK ではテストからダミー音声デバイス (DummyAudioDevice) を注入するために使用している。
+  /// :nodoc:
+  var audioDevice: RTCAudioDevice?
+
+  /// カスタムデバイスでも 2 ch 再生を要求する場合は受信用の Opus SDP に反映する。
+  /// ネイティブ ADM の切替フラグとは分け、カスタムデバイスとの同時指定制約は維持する。
+  var requiresStereoAudioSDP: Bool {
+    audioStereoOutputEnabled || audioDevice?.outputNumberOfChannels == 2
+  }
 
   /// 初期化します。
   /// - parameter url: サーバーの URL

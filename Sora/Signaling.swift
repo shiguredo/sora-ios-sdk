@@ -309,6 +309,9 @@ public struct SignalingConnect {
   /// 音声ビットレート
   public var audioBitRate: Int?
 
+  /// 音声の Opus 固有パラメーター
+  public var opusParams: Encodable?
+
   /// スポットライトの可否
   public var spotlightEnabled: Configuration.Spotlight
 
@@ -912,6 +915,7 @@ extension SignalingConnect: Codable {
   enum AudioCodingKeys: String, CodingKey {
     case codec_type
     case bit_rate
+    case opus_params
   }
 
   public init(from decoder: Decoder) throws {
@@ -996,7 +1000,13 @@ extension SignalingConnect: Codable {
     }
 
     if audioEnabled {
-      if audioCodec != .default || audioBitRate != nil {
+      // opus_params は Opus 固有パラメーターのため、audioCodec が .opus の場合のみ
+      // 送信する (codec_type: "OPUS" を明示しないとオーディオフォーマットが確定されず、
+      // Sora サーバーに invalid_audio_format で拒否されるため。.default の場合は
+      // codec_type を送信しないため opus_params も送信しない)
+      let hasMatchingParams = opusParams != nil && audioCodec == .opus
+
+      if audioCodec != .default || audioBitRate != nil || hasMatchingParams {
         var audioContainer =
           container
           .nestedContainer(
@@ -1008,6 +1018,10 @@ extension SignalingConnect: Codable {
         try audioContainer.encodeIfPresent(
           audioBitRate,
           forKey: .bit_rate)
+        if let opusParams, hasMatchingParams {
+          let opusParamsEnc = audioContainer.superEncoder(forKey: .opus_params)
+          try opusParams.encode(to: opusParamsEnc)
+        }
       }
     } else {
       try container.encode(false, forKey: .audio)

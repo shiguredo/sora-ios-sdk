@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/add-libwebrtc-update-automation
-- Polished: 2026-06-06
+- Polished: 2026-09-03
 
 ## 目的
 
@@ -18,10 +18,10 @@ libwebrtc のバージョン更新時に `Package.swift` のバージョン文�
 
 ## 現状
 
-`Package.swift:6` でバージョン文字列を定義し、`Package.swift:21-25` の `binaryTarget` でリリース URL と checksum を直書きしている。バージョン更新時は以下を手動で行う必要がある。
+`Package.swift` の `let libwebrtcVersion` でバージョン文字列を定義し、`targets` 内の `binaryTarget` の `url:` と `checksum:` でリリース URL と checksum を直書きしている。バージョン更新時は以下を手動で行う必要がある。
 
-- `Package.swift:6` の `libwebrtcVersion` の書き換え
-- `WebRTC.xcframework.zip` をダウンロードして `swift package compute-checksum` で checksum を再計算し `Package.swift:24` を書き換え
+- `Package.swift` の `let libwebrtcVersion` の書き換え
+- `WebRTC.xcframework.zip` をダウンロードして `swift package compute-checksum` で checksum を再計算し `binaryTarget` の `checksum:` を書き換え
 - `CHANGES.md` への更新エントリ追記
 
 既存の `canary.py` は SDK 自身のバージョン文字列（`Sora/PackageInfo.swift`）を管理するツールであり、`Package.swift` の `libwebrtcVersion` や checksum の更新は対象外。本 issue の自動化対象と重複しない。
@@ -54,7 +54,7 @@ libwebrtc のバージョン更新時に `Package.swift` のバージョン文�
 モック・スタブは使用しない。
 
 - 実装したスクリプト / ワークフローを実際に実行し、`Package.swift` のバージョン文字列と checksum が正しく書き換えられることを確認する。
-- `swift package compute-checksum <URL>` の出力と、書き換え後の `checksum:` の値が一致することを確認する。
+- ダウンロードした `WebRTC.xcframework.zip` のローカルパスに対する `swift package compute-checksum` の出力と、書き換え後の `checksum:` の値が一致することを確認する。
 - 書き換え後に `build.yml` に準じたコマンドでビルドが通ることを確認する。
 
 ## 完了条件

@@ -32,6 +32,7 @@ Please read https://github.com/shiguredo/oss before use.
 - 各種カメラ設定を利用できる
   - 解像度・フレームレート・フロントカメラ優先
 - 受信した音声データを PCM 形式で取得できる
+- ステレオ音声出力に対応
 
 ## システム条件
 

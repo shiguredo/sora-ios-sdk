@@ -41,8 +41,80 @@ public struct ScreenCaptureSettings {
   }
 }
 
+/// process-wide の ReplayKit recorder に対する操作順と所有者を管理します。
+///
+/// `RPScreenRecorder.shared()` は接続間で共有されるため、controller ごとのキューでは
+/// 別接続の start / stop が競合します。すべての操作を 1 本のキューへ集約し、
+/// owner ID が一致する controller だけが recorder を停止できるようにします。
+final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
+  static let shared = ScreenCaptureRecorderCoordinator()
+
+  private let operationQueue = SerializedAsyncOperationQueue()
+  private let lock = NSLock()
+  private var ownerID: UUID?
+  private var quarantined = false
+
+  /// 直前の ReplayKit 操作が完了した後に処理を実行します。
+  @discardableResult
+  func enqueue(_ operation: @escaping @Sendable () async -> Void) -> Task<Void, Never> {
+    operationQueue.enqueue(operation)
+  }
+
+  /// recorder が未使用の場合に owner を予約します。
+  func acquire(ownerID: UUID) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    guard self.ownerID == nil, !quarantined else {
+      return false
+    }
+    self.ownerID = ownerID
+    return true
+  }
+
+  /// 指定した owner が現在の recorder 所有者かを返します。
+  func isOwner(_ ownerID: UUID) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return self.ownerID == ownerID
+  }
+
+  /// 指定した owner が保持する recorder を解放します。
+  func release(ownerID: UUID) {
+    lock.lock()
+    if self.ownerID == ownerID {
+      self.ownerID = nil
+    }
+    lock.unlock()
+  }
+
+  /// stop 後の recorder 状態を反映します。
+  ///
+  /// 実際に停止していない場合は owner を保持した隔離状態とし、別接続の取得を拒否します。
+  func finishStop(ownerID: UUID, recorderStopped: Bool) {
+    lock.lock()
+    guard self.ownerID == ownerID else {
+      lock.unlock()
+      return
+    }
+    if recorderStopped {
+      self.ownerID = nil
+      quarantined = false
+    } else {
+      quarantined = true
+    }
+    lock.unlock()
+  }
+
+  /// recorder の隔離状態をテストから確認します。
+  var isQuarantined: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return quarantined
+  }
+}
+
 // スクリーンキャプチャーのコントローラークラスです。
-// 内部でロックと専用キューにより排他制御を行うため、 @unchecked Sendable を付与します。
+// 内部でロックと共有キューにより排他制御を行うため、 @unchecked Sendable を付与します。
 final class ScreenCaptureController: @unchecked Sendable {
   // キャプチャー状況の列挙型
   private enum CaptureState {
@@ -50,16 +122,36 @@ final class ScreenCaptureController: @unchecked Sendable {
     case starting
     case running
     case stopping
+    case cleanupFailed
   }
 
   private struct CaptureContext {
+    // この context を取得した時点の capture ID。
+    // 停止・再開始の競合で旧 capture のフレームを送信しないために使用する。
+    let captureID: UInt64
     let senderStream: MediaStream
     let videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
+  }
+
+  /// ReplayKit の完了コールバック時点のエラーと実際の録画状態
+  private struct RecorderOperationResult: @unchecked Sendable {
+    let error: Error?
+    let isRecording: Bool
+  }
+
+  /// ReplayKit の開始 API を呼んだか、呼ぶ前から別用途で録画中だったかを表します。
+  private enum RecorderStartResult: @unchecked Sendable {
+    case alreadyRecording
+    case completed(RecorderOperationResult)
   }
 
   private weak var mediaChannel: MediaChannel?
   // ReplayKit のレコーダーです
   private let recorder = RPScreenRecorder.shared()
+  // 共有 recorder に対する、この controller 固有の所有者 ID
+  private let recorderOwnerID = UUID()
+  // process-wide の ReplayKit 操作と所有者を管理する coordinator
+  private let recorderCoordinator: ScreenCaptureRecorderCoordinator
   // 画面フレームを順序保証して送信するためのキュー
   private let sendVideoFrameQueue = DispatchQueue(
     label: "jp.shiguredo.sora.screenCapture.sendVideoFrameQueue")
@@ -78,92 +170,169 @@ final class ScreenCaptureController: @unchecked Sendable {
   // start/stop が前後したときに、古い start 完了コールバックを無効化します。
   private var captureID: UInt64 = 0
   private var activeCaptureID: UInt64?
+  // ReplayKit の start が成功し、対応する stop が必要な capture ID
+  private var recorderCaptureID: UInt64?
+  // stop の完了待ちを、同時に停止する呼び出しと切断処理で共有する Task
+  private var recorderStopTask: Task<Void, Never>?
 
-  init(mediaChannel: MediaChannel) {
+  init(
+    mediaChannel: MediaChannel,
+    recorderCoordinator: ScreenCaptureRecorderCoordinator = .shared
+  ) {
     self.mediaChannel = mediaChannel
+    self.recorderCoordinator = recorderCoordinator
   }
 
   // 画面キャプチャを開始します
-  func startCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) async throws {
+  func startCapture(
+    settings: ScreenCaptureSettings,
+    senderStream: MediaStream,
+    authorization: VideoSourceCoordinator.Reservation,
+    videoSourceCoordinator: VideoSourceCoordinator
+  ) async throws {
+    guard videoSourceCoordinator.isValid(authorization) else {
+      throw SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+    }
     let captureID = try beginStartCapture(settings: settings, senderStream: senderStream)
 
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      // MainActor への切り替え中に stopCapture が先行する可能性がありますが、
-      // completionHandler 側で captureID を照合して旧世代の start 完了を無効化します。
-      Task { @MainActor in
-        // 本 API は画面映像のみを送信対象としており、 ReplayKit 経路でのマイク / カメラ入力は使用しません。
-        self.recorder.isMicrophoneEnabled = false
-        self.recorder.isCameraEnabled = false
-        self.recorder.startCapture(
-          handler: { [weak self] sampleBuffer, sampleBufferType, error in
-            self?.handleSampleBuffer(
-              sampleBuffer: sampleBuffer,
-              sampleBufferType: sampleBufferType,
-              error: error
-            )
-          },
-          completionHandler: { [weak self] error in
-            guard let self else {
-              continuation.resume(
-                throwing: SoraError.mediaChannelError(
-                  reason: "ScreenCaptureController is unavailable"
-                )
-              )
-              return
-            }
+    // beginStartCapture と並行して停止または切断された場合は、ReplayKit の操作を始めない。
+    guard videoSourceCoordinator.isValid(authorization) else {
+      let error = SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+      _ = completeStartCapture(captureID: captureID, error: error)
+      throw error
+    }
 
-            switch self.completeStartCapture(captureID: captureID, error: error) {
-            case .success:
-              continuation.resume(returning: ())
-            case .failed(let error):
-              continuation.resume(throwing: error)
-            case .cancelled:
-              Task { [weak self] in
-                await self?.stopCapture()
-              }
-              continuation.resume(
-                throwing: SoraError.mediaChannelError(reason: "screen capture start was cancelled")
-              )
-            }
-          })
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      recorderCoordinator.enqueue { [self] in
+        // start のキュー投入前に stop が完了した場合は、ReplayKit の開始自体を行わない。
+        guard shouldIssueRecorderStart(captureID: captureID),
+          videoSourceCoordinator.isValid(authorization)
+        else {
+          let error = SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+          _ = completeStartCapture(captureID: captureID, error: error)
+          continuation.resume(
+            throwing: error
+          )
+          return
+        }
+
+        // ReplayKit の recorder は process-wide で共有されるため、別 controller が
+        // 使用中の場合は OS の start API を呼ばずに決定的に拒否する。
+        guard recorderCoordinator.acquire(ownerID: recorderOwnerID) else {
+          let error = SoraError.mediaChannelError(
+            reason: "screen capture is owned by another connection")
+          _ = completeStartCapture(captureID: captureID, error: error)
+          continuation.resume(throwing: error)
+          return
+        }
+
+        let recorderStartResult = await startRecorderCaptureIfIdle()
+        guard case .completed(let recorderResult) = recorderStartResult else {
+          recorderCoordinator.release(ownerID: recorderOwnerID)
+          let error = SoraError.mediaChannelError(
+            reason: "screen capture recorder is already used outside this connection")
+          _ = completeStartCapture(captureID: captureID, error: error)
+          continuation.resume(throwing: error)
+          return
+        }
+
+        var error = recorderResult.error
+        if error == nil, !recorderResult.isRecording {
+          error = SoraError.mediaChannelError(
+            reason: "screen capture start succeeded without an active recorder")
+        }
+
+        if error == nil {
+          recordRecorderStart(captureID: captureID)
+        } else {
+          // start の失敗時は isRecording だけでは SDK の所有権を証明できない。
+          // ホストアプリが同じ recorder を使用している可能性があるため停止せず予約を解放する。
+          if recorderResult.isRecording {
+            Logger.warn(
+              type: .mediaChannel,
+              message: "screen capture start failed while the recorder is active")
+          }
+          recorderCoordinator.release(ownerID: recorderOwnerID)
+        }
+
+        switch completeStartCapture(captureID: captureID, error: error) {
+        case .success:
+          continuation.resume(returning: ())
+        case .failed(let error):
+          continuation.resume(throwing: error)
+        case .cancelled:
+          // stop は同じ operation queue に投入されており、この start 完了後に
+          // recorderCaptureID を確認して ReplayKit を停止する。
+          continuation.resume(
+            throwing: SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+          )
+        }
       }
     }
   }
 
   // 画面キャプチャを停止します
   func stopCapture() async {
-    guard beginStopCapture() else {
+    guard let task = scheduleStopCapture() else {
       return
     }
+    await task.value
+  }
 
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-      Task { @MainActor in
-        self.recorder.stopCapture { error in
-          if let error {
-            Logger.error(
-              type: .mediaChannel,
-              message: "failed to stop screen capture: \(error.localizedDescription)"
-            )
-          }
-          self.withLock {
-            self.captureState = .stopped
-          }
-          continuation.resume(returning: ())
-        }
+  /// `scheduleStopCapture()` で論理停止を確定した後、必要な ReplayKit 停止を実行します。
+  private func stopRecorderCaptureAfterBegin() async {
+    let hasRecorderCapture = withLock { recorderCaptureID != nil }
+    let shouldStopRecorder = hasRecorderCapture && recorderCoordinator.isOwner(recorderOwnerID)
+    let recorderStopped: Bool
+    if shouldStopRecorder {
+      let recorderResult = await stopRecorderCapture()
+      if let error = recorderResult.error {
+        Logger.error(
+          type: .mediaChannel,
+          message: "failed to stop screen capture: \(error.localizedDescription)"
+        )
       }
+      if recorderResult.isRecording {
+        Logger.error(
+          type: .mediaChannel,
+          message: "screen capture recorder is still running after stop")
+      }
+      recorderCoordinator.finishStop(
+        ownerID: recorderOwnerID,
+        recorderStopped: !recorderResult.isRecording)
+      recorderStopped = !recorderResult.isRecording
+    } else if hasRecorderCapture {
+      // 開始成功を記録済みなのに所有者でない場合は、別用途の recorder を停止しない。
+      // 所有状態が解消するまで再試行できるよう、クリーンアップ失敗として保持する。
+      recorderStopped = false
+    } else {
+      recorderCoordinator.release(ownerID: recorderOwnerID)
+      recorderStopped = true
+    }
+    completeStopCapture(recorderStopped: recorderStopped)
+  }
+
+  // ReplayKit の停止結果を反映し、未停止なら同じ controller から再試行できる状態を保持します。
+  private func completeStopCapture(recorderStopped: Bool) {
+    withLock {
+      captureState = recorderStopped ? .stopped : .cleanupFailed
+      if recorderStopped {
+        recorderCaptureID = nil
+      }
+      recorderStopTask = nil
     }
   }
 
   // 切断時に呼び出される stopCapture です。
-  // 呼び出し元で完了待ちをする必要はありません。
-  func stopCaptureForDisconnect() {
-    Task { [weak self] in
-      await self?.stopCapture()
-    }
+  // 公開切断 callback より前に ReplayKit の停止を完了するため、呼び出し元へ Task を返します。
+  @discardableResult
+  func stopCaptureForDisconnect() -> Task<Void, Never>? {
+    // MediaChannel の deinit から呼ばれた場合も、ここでフレーム送出を同期的に無効化する。
+    scheduleStopCapture()
   }
 
   // 画面キャプチャが動作中かどうかを返します。
-  // starting / running / stopping を動作中として扱います。
+  // starting / running / stopping / cleanupFailed を動作中として扱います。
   func isCaptureActive() -> Bool {
     withLock {
       captureState != .stopped
@@ -172,7 +341,8 @@ final class ScreenCaptureController: @unchecked Sendable {
 
   // MARK: - Private
 
-  private enum StartCaptureResult {
+  // completeStartCapture の戻り値として使用する。テストから比較するため internal とする。
+  enum StartCaptureResult {
     case success
     case failed(Error)
     case cancelled
@@ -184,15 +354,112 @@ final class ScreenCaptureController: @unchecked Sendable {
     return try block()
   }
 
+  /// 論理停止を同期的に確定し、共有 recorder の停止 Task を返します。
+  ///
+  /// すでに停止中の場合は同じ Task を返すため、通常停止と切断が競合しても
+  /// 公開切断 callback は先行する停止処理の完了を待てます。
+  private func scheduleStopCapture() -> Task<Void, Never>? {
+    withLock {
+      switch captureState {
+      case .stopped:
+        return nil
+      case .stopping:
+        return recorderStopTask
+      case .starting, .running, .cleanupFailed:
+        captureState = .stopping
+        senderStream = nil
+        lastSentVideoPresentationTimestamp = nil
+        lastSentVideoUptime = nil
+        activeCaptureID = nil
+
+        // operation closure が ReplayKit の停止コールバックまで controller を強参照する。
+        // MediaChannel への参照は weak のため循環参照にはならない。
+        let task = recorderCoordinator.enqueue { [self] in
+          await stopRecorderCaptureAfterBegin()
+        }
+        recorderStopTask = task
+        return task
+      }
+    }
+  }
+
+  /// 遅延した start 操作が、現在も同じ capture の開始要求に対応するかを確認します。
+  /// 本番の operation queue とテストの競合イベント列から呼び出します。
+  func shouldIssueRecorderStart(captureID: UInt64) -> Bool {
+    withLock {
+      captureState == .starting && activeCaptureID == captureID
+    }
+  }
+
+  /// ReplayKit の start 成功を記録し、後続の stop が OS 停止を必要とすることを示します。
+  private func recordRecorderStart(captureID: UInt64) {
+    withLock {
+      recorderCaptureID = captureID
+    }
+  }
+
+  /// 別用途の録画が動作していない場合だけ ReplayKit の開始 API を呼びます。
+  private func startRecorderCaptureIfIdle() async -> RecorderStartResult {
+    await withCheckedContinuation { continuation in
+      Task { @MainActor in
+        // 設定変更より前に確認し、ホストアプリが所有する録画へ干渉しない。
+        guard !self.recorder.isRecording else {
+          continuation.resume(returning: .alreadyRecording)
+          return
+        }
+
+        // 本 API は画面映像のみを送信対象としており、ReplayKit 経路でのマイク / カメラ入力は使用しません。
+        self.recorder.isMicrophoneEnabled = false
+        self.recorder.isCameraEnabled = false
+        self.recorder.startCapture(
+          handler: { [weak self] sampleBuffer, sampleBufferType, error in
+            self?.handleSampleBuffer(
+              sampleBuffer: sampleBuffer,
+              sampleBufferType: sampleBufferType,
+              error: error
+            )
+          },
+          completionHandler: { error in
+            Task { @MainActor in
+              continuation.resume(
+                returning: .completed(
+                  RecorderOperationResult(
+                    error: error,
+                    isRecording: self.recorder.isRecording)))
+            }
+          })
+      }
+    }
+  }
+
+  /// ReplayKit の画面キャプチャを停止し、完了時のエラーを返します。
+  private func stopRecorderCapture() async -> RecorderOperationResult {
+    await withCheckedContinuation { continuation in
+      Task { @MainActor in
+        self.recorder.stopCapture { error in
+          Task { @MainActor in
+            continuation.resume(
+              returning: RecorderOperationResult(
+                error: error,
+                isRecording: self.recorder.isRecording))
+          }
+        }
+      }
+    }
+  }
+
   // startCapture 前に state チェック、更新を行います
-  private func beginStartCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) throws
+  // 本番では startCapture() からのみ呼ばれる。
+  // テストからイベント列 (start / stop / restart) を入力するため internal とする。
+  // (completeStartCapture() と対で呼ぶ必要がある。単体で呼ぶと state が .starting で止まる)
+  func beginStartCapture(settings: ScreenCaptureSettings, senderStream: MediaStream) throws
     -> UInt64
   {
     try withLock {
       switch captureState {
       case .running:
         throw SoraError.mediaChannelError(reason: "screen capture is already running")
-      case .starting, .stopping:
+      case .starting, .stopping, .cleanupFailed:
         throw SoraError.mediaChannelError(reason: "screen capture operation is in progress")
       case .stopped:
         captureID += 1
@@ -210,7 +477,10 @@ final class ScreenCaptureController: @unchecked Sendable {
   }
 
   // startCapture のコールバックが返ってきた後に state 更新等を行います
-  private func completeStartCapture(captureID: UInt64, error: Error?) -> StartCaptureResult {
+  // 本番では startCapture() の完了コールバックからのみ呼ばれる。
+  // テストからイベント列 (start / complete / stop / restart) を入力するため internal とする。
+  // (beginStartCapture() と対で呼ぶ必要がある。単体で呼ぶと state が不正になる)
+  func completeStartCapture(captureID: UInt64, error: Error?) -> StartCaptureResult {
     withLock {
       // startCapture 終了前に stopCapture が実行された場合はキャンセルします
       // この時 activeCaptureID は nil となっています
@@ -229,23 +499,6 @@ final class ScreenCaptureController: @unchecked Sendable {
 
       captureState = .running
       return .success
-    }
-  }
-
-  // stopCapture 実行前に state チェック等を行います
-  private func beginStopCapture() -> Bool {
-    withLock {
-      switch captureState {
-      case .stopped, .stopping:
-        return false
-      case .starting, .running:
-        captureState = .stopping
-        senderStream = nil
-        lastSentVideoPresentationTimestamp = nil
-        lastSentVideoUptime = nil
-        activeCaptureID = nil
-        return true
-      }
     }
   }
 
@@ -292,8 +545,6 @@ final class ScreenCaptureController: @unchecked Sendable {
         return
       }
 
-      self.markVideoFrameSent(presentationTimestamp: presentationTimestamp)
-
       var sampleBufferToSend = sampleBuffer
       if let transformedBuffer = context.videoSampleBufferTransformer?(sampleBuffer) {
         sampleBufferToSend = transformedBuffer
@@ -306,6 +557,17 @@ final class ScreenCaptureController: @unchecked Sendable {
         return
       }
 
+      // 送信直前に capture ID を照合する。送信準備中 (transformer 実行・VideoFrame 生成など)
+      // に stop / restart が完了した場合、旧 capture のフレームを送信しない
+      // (isReadyToSend は実行時点の captureState のみを確認するため、stop / restart 後の
+      // .running では旧 capture の frame を識別できない)
+      guard self.isActiveCaptureID(context.captureID) else {
+        return
+      }
+
+      // 送信直前のみ PTS / uptime を記録する (ID 照合を通過しなかった stale frame の破棄で
+      // throttle 状態を汚染しない)
+      self.markVideoFrameSent(presentationTimestamp: presentationTimestamp)
       context.senderStream.send(videoFrame: videoFrame)
     }
   }
@@ -361,16 +623,31 @@ final class ScreenCaptureController: @unchecked Sendable {
 
   private func captureContext() -> CaptureContext? {
     withLock {
-      guard captureState == .running else {
+      // .running へ遷移するのは completeStartCapture 成功時のみで、その時点で
+      // activeCaptureID は必ず非 nil となる (不変条件)。.running 中に activeCaptureID が
+      // nil になる経路は存在しないため、1 つの guard に統合できる。
+      guard captureState == .running, let activeCaptureID else {
         return nil
       }
       guard let senderStream else {
         return nil
       }
       return CaptureContext(
+        captureID: activeCaptureID,
         senderStream: senderStream,
         videoSampleBufferTransformer: settings.videoSampleBufferTransformer
       )
+    }
+  }
+
+  // 現在の capture (activeCaptureID) と context が保持する capture ID が一致するか
+  // 判定します。送信準備中 (transformer 実行・VideoFrame 生成など) に stop / restart が
+  // 完了した場合でも、送信直前の照合で旧 capture のフレームを送信しない。
+  // 本番では handleSampleBuffer() の送信処理からのみ呼ばれる。
+  // テストから直接呼び出してイベント列 (start / stop / restart) を入力できるよう internal とする。
+  func isActiveCaptureID(_ captureID: UInt64) -> Bool {
+    withLock {
+      return activeCaptureID == captureID
     }
   }
 

@@ -2,14 +2,156 @@
 
 - CHANGE
   - 下位互換のない変更
-- UPDATE
-  - 下位互換がある変更
 - ADD
   - 下位互換がある追加
+- UPDATE
+  - 下位互換がある変更
 - FIX
   - バグ修正
 
 ## develop
+
+## 2026.3.0
+
+**リリース日**: 2026-09-10
+
+- [ADD] ステレオ音声出力に対応する
+  - `RTCAudioSessionConfiguration` のテンプレートを原子的に差し替えてカテゴリー要求を接続間で共有し、すべての音声接続を解放したときに SDK が設定したテンプレートだけを元のカテゴリーへ戻す
+  - 接続中にホストアプリが `RTCAudioSessionConfiguration` のテンプレートを差し替えた場合は、その設定を維持する
+  - モノラル受信接続中にモノラル送信接続を追加する場合も、既存の接続を維持したまま `PlayAndRecord` を適用する
+  - ステレオでも送信側だけがマイク入力を初期化し、受信専用ではマイク権限を不要にする
+  - ステレオの送信側でも初期マイクミュートとハードミュートを利用できるようにする
+  - Sora iOS SDK が管理する音声接続全体でステレオ接続を 1 つに限定し、他の音声接続と排他にする
+  - @voluntas
+- [ADD] `Configuration.audioOpusParams` を追加して audio.opus_params を指定できるようにする
+  - オーディオコーデックが `.opus` として明示された場合のみ送信される
+  - @t-miya
+- [ADD] DataChannel がラベルごとに OPEN になった時点で呼ばれる `onDataChannelOpened` を追加する
+  - 受け取ったすべての DataChannel（`#` 始まりのラベルに限定しない）が対象
+  - @t-miya
+- [ADD] WebSocket シグナリングと TURN-TLS で insecure モードを利用できるようにする
+  - `Configuration.insecure = true` の場合はサーバー証明書の検証をスキップする
+  - @t-miya
+- [ADD] spotlightEnabled を Bool で設定できる isSpotlightEnabled プロパティを追加する
+  - `Configuration.isSpotlightEnabled = true` でスポットライトを有効にする
+  - @t-miya
+- [UPDATE] PeerChannel の接続状態フラグの所有者を単一の reducer へ集約する
+  - `webSocketDisconnectScheduled` / `disconnectTimerScheduled` / `disconnectTimerGeneration` / `dataChannelGeneration` / `isRedirecting` の 5 つのフラグを `ConnectionStateOwner` (単一所有者) で管理する
+  - `nonisolated(unsafe)` を除去し、スナップショット読みに置き換える
+  - @t-miya
+- [UPDATE] libwebrtc m150.7871.3.5 に上げる
+  - @voluntas
+- [UPDATE] `onDataChannel` の発火タイミングをクライアント側の DataChannel 準備完了時に変更する
+  - `type: switched` 受信時には発火しない
+  - メッセージング用ラベル（`#` 始まり）が存在しない接続では発火しない
+  - @t-miya
+- [UPDATE] `TLSSecurityPolicy` と `ICEServerInfo.tlsSecurityPolicy` を非推奨化する
+  - 2027 年中に廃止予定
+  - 移行先は `Configuration.insecure`
+  - @t-miya
+- [UPDATE] enum 型の `Configuration.spotlightEnabled` を非推奨にする
+  - 移行先は `Configuration.isSpotlightEnabled`
+  - Configuration 内のプロパティで型の一貫性を持たせるため変更
+  - @t-miya
+- [FIX] 初期マイクミュートから最初に解除する要求が ADM に渡らない問題を修正する
+  - SDK のミュート状態キャッシュを除き、ADM の成功・失敗を返す
+  - @voluntas
+- [FIX] TURN-TLS の証明書エラーで接続失敗した後も libwebrtc のログが流れ続ける問題を修正する
+  - 接続試行中の切断要求で `connect()` の初期ロックを確実に解放し、 `RTCPeerConnection` をクローズする
+  - 接続失敗時のエラー通知が二重に呼ばれないようにする
+  - @t-miya
+- [FIX] 受信中にネットワークが切断されてもエラー通知がない問題を修正する
+  - 接続完了後に `RTCPeerConnectionState` が `.disconnected` のまま停滞した場合、猶予時間の経過後に切断する
+  - 切断時はシグナリング経由で明示的な切断メッセージを送信する
+    - WebSocket シグナリング構成ではサーバー側セッションを即時解放できる
+    - DataChannel シグナリング構成では切断中は同じ ICE 上を流れるため届かない
+  - @t-miya
+- [FIX] `ConnectionTask` の即時キャンセルが接続開始を止めない競合を修正する
+  - `ConnectionTask` の状態と `PeerChannel` の紐付けを排他ロックで保護する
+  - キャンセル要求を受領した状態 (`cancelRequested`) を保持し、`PeerChannel` の設定と接続開始の前後でキャンセルを確認する
+  - 接続開始前にキャンセルされた場合は接続を開始せず、通常の接続失敗と同様に `connectionCancelled` を通知する
+  - `onAddMediaChannel` から即時切断された場合は、シグナリングを開始せず接続試行を終端する
+  - 接続完了コールバックでもキャンセル済みか確認し、キャンセル後の接続成功通知を発火しない
+  - cancel 済みの接続の状態を `.canceled` のまま保持する (`.completed` に上書きしない)
+  - @t-miya
+- [FIX] `PeerChannel` の接続完了ハンドラーが複数回呼ばれる、または呼ばれない問題を修正する
+  - offer SDP の生成エラーが外側の `error` へ置き換わり、`sdpError` が利用者へ伝播しない問題を修正する
+  - `createAnswer` で `nativeChannel` が nil の場合に handler を呼ばずに return し、切断処理が行われず接続が残ってしまう問題を修正する
+  - 接続成功・失敗・切断の各経路で callback を先に取り出してクリアする take-and-clear に統一し、callback 内から同期的に `disconnect()` されても二重実行されないようにする
+  - @t-miya
+- [FIX] 切断時の invalidate と RPC 呼び出しが競合して、RPC が完了しない問題を修正する
+  - `RPCChannel` に invalidated 状態を持たせ、`call()` の利用可能性確認と pending 登録を `invalidate()` と同じ排他単位で行うようにする
+  - invalidate 後の `call()` は pending を登録せず、`rpcDataChannelClosed` で即時に失敗させる
+  - pending の完了 (response / timeout / invalidate / 送信失敗) を `finishPending` に集約し、競合しても 1 回だけ完了する
+  - `MediaChannel.rpc` の Task がキャンセルされた場合は `CancellationError` で完了するようにする
+  - @t-miya
+- [FIX] redirect 受理後も旧 DataChannel と RPC を利用できる問題を修正する
+  - redirect 受理時に旧 transport を論理的に無効化し、以後の `sendMessage` / RPC / stats が旧 DataChannel / 旧 PeerConnection を参照しないようにする
+  - `switchedToDataChannel` を false にし、旧 DataChannel の参照を解放する
+  - 旧 `rpcChannel` を invalidate して nil にする
+  - 旧 `MediaStream` を終端して解放する
+  - @t-miya
+- [FIX] `ConnectionTimer` の旧タイマーが新しい接続を切断する問題を修正する
+  - `run()` の再実行前に既存 Timer を無効化し、`timer` プロパティを nil にする
+  - Timer ごとの生成世代 (generation) を持たせ、callback 発火時に世代が一致する場合のみ timeout 処理を実行する
+  - Timer closure は `self` を weak capture し、`stop()` で `timer = nil` を設定して循環参照を解消する
+  - `run()` / `stop()` の状態 (`timer` / `isRunning` / `generation`) を排他ロックで保護する
+  - @t-miya
+- [FIX] 画面共有の再開始後に旧フレームが送信される問題を修正する
+  - 画面キャプチャの CaptureContext に capture ID を持たせ、送信直前に現在の capture ID と照合する
+  - 停止・再開始の競合後も、旧 capture のフレームが古い sender stream へ送信されないようにする
+  - 送信確定後のみフレームの間引き情報 (PTS / uptime) を記録し、破棄されたフレームで throttle 状態を汚染しないようにする
+  - 旧世代の start 完了が遅延して届いた場合に、新世代のキャプチャを誤って停止しないようにする
+  - プロセス全体で共有される ReplayKit の start / stop と所有権を接続間で直列化する
+  - 切断完了通知より前に ReplayKit の停止完了を待ち、別接続の開始との競合を防ぐ
+  - @t-miya
+- [FIX] 映像ハードミュートの capturer が別接続で再開される問題を修正する
+  - カメラ操作の所有者を識別する lease と sender stream の所有情報を導入し、保存する capturer を接続に紐付ける
+  - 別接続が保存した capturer の取得や再開を `SoraError.mediaChannelError` で拒否する
+  - 各 `await` 復帰後に lease の破棄状態を再確認し、切断済み接続の保存状態が残らないようにする
+  - SDK 内部と公開 API によるカメラの start / stop / restart / change / flip をプロセス全体で直列化する
+  - 切断対象の送信ストリームが所有するカメラだけを停止し、カメラの停止完了を切断完了通知より前に待つ
+  - カメラのクリーンアップに失敗した場合は共有状態を隔離し、別接続による再利用を防ぐ
+  - 接続切断時にその接続の保存状態を破棄し、進行中のカメラのクリーンアップ完了を待つ
+  - @t-miya
+- [FIX] camera flip で切り替え先の旧 stream へフレームが送られる問題を修正する
+  - 切り替え先 capturer の stream を start より前に設定し、フレームが古い stream へ送られないようにする
+  - start / stop 失敗時は切り替え先の stream を元の値へ rollback する
+  - 連続実行時の競合を re-entrance フラグと camera queue の直列化で防ぐ
+  - @t-miya
+
+### misc
+
+- [CHANGE] E2E テストをテスト種別ごとに分割する
+  - テストクラスを recvonly / sendonly / sendrecv / simulcast の 4 つに分割し、共通処理は E2ETestBase に集約した
+  - @t-miya
+- [ADD] E2E テスト用にダミー音声デバイスを追加する
+  - テストから internal な `Configuration.audioDevice` にカスタム `RTCAudioDevice` を注入できる
+  - @t-miya
+- [ADD] sendrecv E2E テストを追加する
+  - 同一チャンネルに 2 台の sendrecv クライアントを接続し、互いの映像を送受信できることを検証する
+  - @t-miya
+- [ADD] simulcast E2E テストを追加する
+  - sendonly と recvonly を同一チャンネルに接続し、3 レイヤー (r0 / r1 / r2) の simulcast 送信と受信を検証する
+  - @t-miya
+- [ADD] reconnect E2E テストを追加する
+  - Sora API (DisconnectConnection) でサーバー側から切断し、再接続できることを検証する
+  - @t-miya
+- [ADD] DataChannel シグナリング切り替え E2E テストを追加する
+  - DataChannel シグナリング有効時に type: "switched" メッセージの受信とシグナリングの切り替えを検証する
+  - @t-miya
+- [ADD] DataChannel messaging E2E テストを追加する
+  - 同一チャンネルに 2 台の sendrecv クライアントを接続し、DataChannel 経由のメッセージ送受信と DataChannel stats を検証する
+  - @t-miya
+- [ADD] RPC E2E テストを追加する
+  - recvonly クライアントが RequestSimulcastRid で受信 rid を切り替え、解像度変化で確認できることを検証する
+  - @t-miya
+- [ADD] DataChannel シグナリング切断経路 E2E テストを追加する
+  - DataChannel シグナリング有効時にサーバー側切断が DataChannel 経由で伝播し、切断理由が SoraCloseEvent で通知されることを検証する
+  - @t-miya
+- [ADD] ダミー音声デバイスによるステレオ送受信テストを追加する
+  - マイク / スピーカーを使わず、実際の Opus / RTP / ADM を通した再生 PCM の左右の分離を検証する
+  - @voluntas
 
 ## 2026.2.1
 

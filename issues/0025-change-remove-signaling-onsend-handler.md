@@ -5,7 +5,7 @@
 - Completed:
 - Model: Opus 4.8
 - Branch: feature/refactor-remove-signaling-onsend-handler
-- Polished: 2026-06-06
+- Polished: 2026-09-02
 
 ## 目的
 
@@ -18,18 +18,16 @@
 
 ## 現状
 
-`SignalingChannelInternalHandlers` に送信メッセージを差し替えるクロージャ `onSend` が定義されている。
+`SignalingChannelInternalHandlers`（非公開 class）に、送信メッセージを差し替えるクロージャ `onSend` が定義されている。
 
 ```swift
-// Sora/SignalingChannel.swift:32
 /// シグナリング送信時に呼ばれるクロージャー
 var onSend: ((Signaling) -> Signaling)?
 ```
 
-`send(message:)` では、送信直前にこのクロージャでメッセージを差し替える経路がある。
+`Sora/SignalingChannel.swift` の `send(message:)` では、送信直前にこのクロージャでメッセージを差し替える経路がある。
 
 ```swift
-// Sora/SignalingChannel.swift:282
 Logger.debug(type: .signalingChannel, message: "send message")
 let message = internalHandlers.onSend?(message) ?? message
 let encoder = JSONEncoder()
@@ -39,8 +37,8 @@ let encoder = JSONEncoder()
 
 ## 設計方針
 
-- `Sora/SignalingChannel.swift:282` の `let message = internalHandlers.onSend?(message) ?? message` を削除し、受け取った `message` をそのまま利用する。
-- `Sora/SignalingChannel.swift:32` の `var onSend: ((Signaling) -> Signaling)?` 宣言（および Swift Doc コメント 1 行）を完全に削除する。 `SignalingChannelInternalHandlers` は非公開クラスであり外部から参照不能なため、 `@available(*, unavailable)` による移行猶予期間は不要である。
+- `Sora/SignalingChannel.swift` の `send(message:)` 内の `let message = internalHandlers.onSend?(message) ?? message` を削除し、受け取った `message` をそのまま利用する。
+- `Sora/SignalingChannel.swift` の `SignalingChannelInternalHandlers.onSend` 宣言（および Swift Doc コメント 1 行）を完全に削除する。 `SignalingChannelInternalHandlers` は非公開クラスであり外部から参照不能なため、 `@available(*, unavailable)` による移行猶予期間は不要である。
 - 削除に伴い、 `onSend` を参照している箇所が他に無いことを grep で確認してから実施する。
 
 ## テスト方針
@@ -55,7 +53,7 @@ let encoder = JSONEncoder()
 - `SignalingChannel` の送信経路から `onSend` による差し替えが取り除かれていること。
 - `SignalingChannelInternalHandlers` から `onSend` 宣言が完全に削除されていること。
 - 既存の通常のシグナリング送受信の挙動が変わらないこと。
-- `CHANGES.md` の `develop` セクションの `### misc` に、既存の `[CHANGE]` エントリの末尾（`[UPDATE]` エントリより前）に以下を追記すること:
+- `CHANGES.md` の `## develop` セクションに `### misc` サブセクション（無ければ新設）を設け、種別順（`[CHANGE]` → `[ADD]` → `[UPDATE]` → `[FIX]`）に従って以下を追記すること:
   ```
   - [CHANGE] 送信シグナリングメッセージを書き換え可能な内部ハンドラ `onSend` を削除する
     - @voluntas
