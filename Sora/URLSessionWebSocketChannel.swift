@@ -2,8 +2,11 @@ import Foundation
 import Security
 
 // URLSession を利用した WebSocket 通信用のクラスです。
-// URLSession の delegateQueue と SignalingChannel 側の単一並行キューを前提に状態を扱うため、
-// @unchecked Sendable を付与します。
+// 可変状態 (isClosing / urlSession / webSocketTask) は SignalingStateOwner の直列 queue 上
+// でのみ読み書きします。URLSession の delegate callback も同じ queue 上で呼ばれるため、
+// 追加のロックなしで安全に扱えます。
+// URLSession / URLSessionWebSocketTask が Sendable ではないため @unchecked Sendable を
+// 付与しますが、上記の直列化によりデータ競合は発生しません。
 final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessionDelegate,
   URLSessionTaskDelegate, URLSessionWebSocketDelegate
 {
