@@ -45,6 +45,18 @@ libwebrtc の `RTCPeerConnectionDelegate` における `peerConnection(_:didAdd 
 - **スレッド安全性**: `RTCPeerConnectionDelegate` のコールバックは libwebrtc のシグナリングスレッドから呼ばれる。現行コードは `streams` 配列へのアクセスに同期機構を使用しておらず、`add(stream:)` / `remove(streamId:)` の他呼び出し元（SDP パイプラインの `initializeSenderStream`）も同じ経路で実行される。receiver マッピングへのアクセスは現行の `streams` と同じ扱いでよい（本変更で新たな実行スレッドやアクセス経路は増えない）。
 - 公開 API の `onAddStream` / `onRemoveStream` の挙動・引数型（`MediaStream`）・呼び出しタイミングを変えない。内部実装のみを track ベースへ切り替える。
 
+## 追加調査
+
+libwebrtc m150.7871.3.5 のヘッダとソースを確認した結果を反映する。
+
+- `RTCRtpReceiver` が持つのは `receiverId` / `parameters` / `track` / `sources` / `delegate` のみで、stream ID を返す API は無い。add 側は `RTCPeerConnectionDelegate` の `peerConnection(_:didAdd:streams:)` の `streams` 引数から stream ID を取得できるが、remove 側の `peerConnection(_:didRemove:)` は receiver のみのため、設計方針どおり `receiverId` をキーとした `receiverId -> streamId` マッピングが必要となる。
+- Swift の実セレクタ名は次のとおり（コンパイラで確認済み）。
+  - `func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream])`
+  - `func peerConnection(_ peerConnection: RTCPeerConnection, didRemove rtpReceiver: RTCRtpReceiver)`
+- libwebrtc m150 の Unified Plan 経路 `ApplyRemoteDescriptionUpdateTransceiverState` は `OnTrack` -> `OnAddTrack` -> `OnAddStream` の順で発火する。`SetAssociatedRemoteStreams` が `receiver->SetStreams(...)` を呼び、`AudioRtpReceiver::SetStreams` / `VideoRtpReceiver::SetStreams` が `stream->AddTrack(...)` するため、`RTCMediaStream.audioTracks` / `videoTracks` は Unified Plan でも populate される。
+- `BasicMediaStream.nativeVideoTrack` / `nativeAudioTrack` は `nativeStream.videoTracks.first` / `audioTracks.first` を都度読むため、track が後から届いても既存の `BasicMediaStream` に反映される。`didAdd:streams:` ベースへ移行しても onAddStream 時点で全 track が揃っている必要はない。
+- `didAdd stream:` / `didRemove stream:` は libwebrtc 側で Plan B 廃止マクロに囲まれたレガシー経路から呼ばれており、移行の必要性は変わらない。
+
 ## テスト方針
 
 - sendrecv 接続でリモートストリームの追加・削除が正しく通知されることを実機で確認する。
