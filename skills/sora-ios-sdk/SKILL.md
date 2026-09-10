@@ -5,7 +5,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 
 # Sora iOS SDK (sora-ios-sdk)
 
-- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (develop は 2026.3.0-canary.0)
+- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (2026.3.0)
 - **リポジトリ**: https://github.com/shiguredo/sora-ios-sdk
 - **ドキュメント**: https://sora-ios-sdk.shiguredo.jp/
 - **API リファレンス**: https://sora-ios-sdk.shiguredo.jp/_static/api/docs/
@@ -26,7 +26,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 Swift Package Manager を利用する。
 
 ```swift
-.package(url: "https://github.com/shiguredo/sora-ios-sdk.git", from: "2026.2.1")
+.package(url: "https://github.com/shiguredo/sora-ios-sdk.git", from: "2026.3.0")
 ```
 
 `import Sora` と `import WebRTC` で利用する。
@@ -276,16 +276,16 @@ mediaChannel.getStats { result in
 }
 
 // DataChannel でメッセージを送信する (label は # 始まり)
-let error: Error? = mediaChannel.sendMessage(label: "#spam", data: Data("hello".utf8))
+let sendMessageError: Error? = mediaChannel.sendMessage(label: "#spam", data: Data("hello".utf8))
 
 // 音声ハードミュート (マイクインジケーターを消灯する)
-let error: Error? = mediaChannel.setAudioHardMute(true)
+let audioHardMuteError: Error? = mediaChannel.setAudioHardMute(true)
 
 // 音声ソフトミュート (デジタルサイレンスを送る)
-let error: Error? = mediaChannel.setAudioSoftMute(true)
+let audioSoftMuteError: Error? = mediaChannel.setAudioSoftMute(true)
 
 // 映像ソフトミュート (黒塗りフレームを送る)
-let error: Error? = mediaChannel.setVideoSoftMute(true)
+let videoSoftMuteError: Error? = mediaChannel.setVideoSoftMute(true)
 
 // 映像ハードミュート (カメラを停止する)
 try await mediaChannel.setVideoHardMute(true)
