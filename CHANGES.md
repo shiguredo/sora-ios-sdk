@@ -11,6 +11,16 @@
 
 ## develop
 
+### misc
+
+- [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
+  - エラーパスで未 wait の expectation を `XCTWaiter.wait(for:timeout: 0)` で消費する
+  - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける
+  - wait のタイムアウトをリクエストより長くし、API コールバックの結果を保持して wait 後に検証することで、コールバックの次のテストへの誤帰属を防ぐ
+  - 切断の共通ヘルパー (`disconnectAndVerify` / `disconnectAll`) の早期 return でも未 wait の expectation を残さないようにする
+  - `disconnectAndVerify` の切断イベント検証を wait 後に行い、テスト終了後の assertion の誤帰属を防ぐ
+  - @t-miya
+
 ## 2026.3.0
 
 **リリース日**: 2026-09-10
