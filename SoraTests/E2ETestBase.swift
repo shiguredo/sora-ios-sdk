@@ -169,23 +169,37 @@ class E2ETestBase: XCTestCase {
       return
     }
     let disconnectExpectation = self.expectation(description: "切断が完了すること")
+    // onDisconnect のイベントは main queue に束ねて保持する。ハンドラ内で assertion を
+    // 記録すると、wait がタイムアウトした後に発火して次のテストへ誤帰属され得るため、
+    // 検証は wait の後にテストメソッド側で行う
+    var disconnectEvent: SoraCloseEvent?
     channel.handlers.onDisconnect = { event in
-      if case .ok(let code, _) = event {
-        XCTAssertEqual(code, 1000, "正常切断コードであること")
-      } else {
-        XCTFail("予期しない切断: \(event)")
+      DispatchQueue.main.async {
+        disconnectEvent = event
+        disconnectExpectation.fulfill()
       }
-      disconnectExpectation.fulfill()
     }
     // シグナリング受信による切断完了が state チェックとハンドラ設定の間に入った場合は
-    // onDisconnect が発火済みのため、wait せずに戻る
+    // onDisconnect が発火済みのため、wait せずに戻る。生成した expectation は
+    // fulfill の有無にかかわらず未 wait のため、timeout 0 で消費する
     guard channel.state != .disconnected else {
+      _ = XCTWaiter.wait(for: [disconnectExpectation], timeout: 0)
       return
     }
     if channel.state != .disconnecting {
       channel.disconnect(error: nil)
     }
     wait(for: [disconnectExpectation], timeout: timeout)
+    // 受信した切断イベントは wait 後に検証する
+    guard let disconnectEvent else {
+      // タイムアウトした場合は wait が失敗を報告済みのため、追加の XCTFail は記録しない
+      return
+    }
+    if case .ok(let code, _) = disconnectEvent {
+      XCTAssertEqual(code, 1000, "正常切断コードであること")
+    } else {
+      XCTFail("予期しない切断: \(disconnectEvent)")
+    }
   }
 
   /// 接続済みチャンネルの切断を完了まで待つ
@@ -202,8 +216,12 @@ class E2ETestBase: XCTestCase {
         disconnectExpectation.fulfill()
       }
       // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
-      // onDisconnect が発火済みのため、待たずにスキップする
-      guard channel.state != .disconnected else { continue }
+      // onDisconnect が発火済みのため、待たずにスキップする。生成した expectation は
+      // fulfill の有無にかかわらず未 wait のため、timeout 0 で消費する
+      guard channel.state != .disconnected else {
+        _ = XCTWaiter.wait(for: [disconnectExpectation], timeout: 0)
+        continue
+      }
       if channel.state != .disconnecting {
         channel.disconnect(error: nil)
       }

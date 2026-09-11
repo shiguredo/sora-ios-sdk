@@ -4,13 +4,24 @@ import XCTest
 
 /// sendonly ダミー映像・音声テスト
 final class SendonlyE2ETests: E2ETestBase {
-  // Sora API (DisconnectConnection) の切断が成功したかどうか (testSendonlyReconnect 用。
-  // URLSession のコールバックから書き込むため、main queue に束ねた上でクラスプロパティに保持する)
+  // Sora API (DisconnectConnection) の切断が成功したかどうか。
+  // コールバックの結果を wait 後に検証してテストメソッド側で設定する
   private var apiDisconnectSucceeded = false
+  // Sora API コールバックの結果。コールバック内では XCTFail を呼ばず、
+  // wait の後にテストメソッド側で検証する (コールバックがテスト終了後に発火しても
+  // 次のテストへ失敗が誤帰属されないようにするため)
+  private var apiError: Error?
+  private var apiResponse: URLResponse?
+  // Sora API の wait が終了したかどうか。wait 終了後に発火したコールバックの
+  // 結果保持と fulfill を抑止する
+  private var apiWaitFinished = false
 
   override func setUp() {
     super.setUp()
     apiDisconnectSucceeded = false
+    apiError = nil
+    apiResponse = nil
+    apiWaitFinished = false
   }
 
   /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
@@ -240,15 +251,14 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("初回接続に失敗した")
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
-      // 報告を防ぐ
-      disconnectExpectation.fulfill()
-      connect2Expectation.fulfill()
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ (fulfill だけでは hasBeenWaitedOn が立たない)
+      _ = XCTWaiter.wait(for: [disconnectExpectation, connect2Expectation], timeout: 0)
       return
     }
 
     // Sora API (DisconnectConnection) でサーバー側から切断する
-    let apiExpectation = self.expectation(description: "Sora API の切断が成功すること")
+    let apiExpectation = self.expectation(description: "Sora API の呼び出しが完了すること")
     var request = URLRequest(url: apiUrl)
     request.httpMethod = "POST"
     request.setValue("Sora_20151104.DisconnectConnection", forHTTPHeaderField: "X-Sora-Target")
@@ -256,27 +266,46 @@ final class SendonlyE2ETests: E2ETestBase {
     request.httpBody = try JSONSerialization.data(
       withJSONObject: ["channel_id": channelId, "connection_id": connectionId1])
     request.timeoutInterval = 10
-    URLSession.shared.dataTask(with: request) { _, response, error in
+    // URLSession.shared は keep-alive 接続をプールするため、サーバー側で閉じられた
+    // 接続を再利用したときに NSURLErrorNetworkConnectionLost (-1005) で失敗し得る。
+    // API 呼び出しごとに使い捨ての URLSession を生成し、接続を再利用しないようにする。
+    // timeoutIntervalForResource でリクエストの総時間を制限し、タスクとセッションが
+    // 残り続けないようにする
+    let apiConfiguration = URLSessionConfiguration.ephemeral
+    apiConfiguration.timeoutIntervalForResource = 10
+    let apiSession = URLSession(configuration: apiConfiguration)
+    apiSession.dataTask(with: request) { _, response, error in
+      apiSession.invalidateAndCancel()
+      // コールバック内では XCTFail を呼ばず、結果の保持と fulfill のみを行う。
+      // コールバックがテスト終了後に発火しても次のテストへ失敗が誤帰属されない
       DispatchQueue.main.async {
-        if let error {
-          XCTFail("Sora API の呼び出しに失敗した : \(error)")
-        } else if let httpResponse = response as? HTTPURLResponse,
-          (200..<300).contains(httpResponse.statusCode)
-        {
-          self.apiDisconnectSucceeded = true
-        } else {
-          XCTFail("Sora API がエラーを返した : \(String(describing: response))")
-        }
+        guard !self.apiWaitFinished else { return }
+        self.apiError = error
+        self.apiResponse = response
         apiExpectation.fulfill()
       }
     }.resume()
-    wait(for: [apiExpectation], timeout: 10)
+    // wait のタイムアウトをリクエストのタイムアウトより長くし、通常はコールバックが
+    // wait の内側で発火するようにする
+    wait(for: [apiExpectation], timeout: 15)
+    apiWaitFinished = true
+    // コールバックの結果は wait 後にテストメソッド側で検証する
+    if let apiError {
+      XCTFail("Sora API の呼び出しに失敗した : \(apiError)")
+    } else if let httpResponse = apiResponse as? HTTPURLResponse,
+      (200..<300).contains(httpResponse.statusCode)
+    {
+      apiDisconnectSucceeded = true
+    } else if let apiResponse {
+      XCTFail("Sora API がエラーを返した : \(String(describing: apiResponse))")
+    }
+    // コールバックが wait 内に発火しなかった場合は wait がタイムアウトを報告済みのため、
+    // ここでは追加の XCTFail を記録しない
     guard apiDisconnectSucceeded else {
-      // 後始末 (サーバー切断は発生しないため、切断検知 expectation を fulfill する)
+      // 後始末 (サーバー切断は発生しないため、切断検知 expectation を wait 済みにする)
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      disconnectExpectation.fulfill()
-      connect2Expectation.fulfill()
+      _ = XCTWaiter.wait(for: [disconnectExpectation, connect2Expectation], timeout: 0)
       return
     }
 
@@ -286,7 +315,7 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("サーバー切断を検知できなかった")
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      connect2Expectation.fulfill()
+      _ = XCTWaiter.wait(for: [connect2Expectation], timeout: 0)
       return
     }
     // 切断理由を確認する (Sora API 切断では code 1000 / reason "DISCONNECTED-API" が期待される。
@@ -790,7 +819,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // Sora API (DisconnectConnection) でサーバー側から切断する
-    let apiExpectation = self.expectation(description: "Sora API の切断が成功すること")
+    let apiExpectation = self.expectation(description: "Sora API の呼び出しが完了すること")
     var request = URLRequest(url: apiUrl)
     request.httpMethod = "POST"
     request.setValue("Sora_20151104.DisconnectConnection", forHTTPHeaderField: "X-Sora-Target")
@@ -798,21 +827,41 @@ final class SendonlyE2ETests: E2ETestBase {
     request.httpBody = try JSONSerialization.data(
       withJSONObject: ["channel_id": channelId, "connection_id": channel.connectionId])
     request.timeoutInterval = 10
-    URLSession.shared.dataTask(with: request) { _, response, error in
+    // URLSession.shared は keep-alive 接続をプールするため、サーバー側で閉じられた
+    // 接続を再利用したときに NSURLErrorNetworkConnectionLost (-1005) で失敗し得る。
+    // API 呼び出しごとに使い捨ての URLSession を生成し、接続を再利用しないようにする。
+    // timeoutIntervalForResource でリクエストの総時間を制限し、タスクとセッションが
+    // 残り続けないようにする
+    let apiConfiguration = URLSessionConfiguration.ephemeral
+    apiConfiguration.timeoutIntervalForResource = 10
+    let apiSession = URLSession(configuration: apiConfiguration)
+    apiSession.dataTask(with: request) { _, response, error in
+      apiSession.invalidateAndCancel()
+      // コールバック内では XCTFail を呼ばず、結果の保持と fulfill のみを行う。
+      // コールバックがテスト終了後に発火しても次のテストへ失敗が誤帰属されない
       DispatchQueue.main.async {
-        if let error {
-          XCTFail("Sora API の呼び出しに失敗した : \(error)")
-        } else if let httpResponse = response as? HTTPURLResponse,
-          (200..<300).contains(httpResponse.statusCode)
-        {
-          self.apiDisconnectSucceeded = true
-        } else {
-          XCTFail("Sora API がエラーを返した : \(String(describing: response))")
-        }
+        guard !self.apiWaitFinished else { return }
+        self.apiError = error
+        self.apiResponse = response
         apiExpectation.fulfill()
       }
     }.resume()
-    wait(for: [apiExpectation], timeout: 10)
+    // wait のタイムアウトをリクエストのタイムアウトより長くし、通常はコールバックが
+    // wait の内側で発火するようにする
+    wait(for: [apiExpectation], timeout: 15)
+    apiWaitFinished = true
+    // コールバックの結果は wait 後にテストメソッド側で検証する
+    if let apiError {
+      XCTFail("Sora API の呼び出しに失敗した : \(apiError)")
+    } else if let httpResponse = apiResponse as? HTTPURLResponse,
+      (200..<300).contains(httpResponse.statusCode)
+    {
+      apiDisconnectSucceeded = true
+    } else if let apiResponse {
+      XCTFail("Sora API がエラーを返した : \(String(describing: apiResponse))")
+    }
+    // コールバックが wait 内に発火しなかった場合は wait がタイムアウトを報告済みのため、
+    // ここでは追加の XCTFail を記録しない
     guard self.apiDisconnectSucceeded else {
       // 後始末 (サーバー切断は発生しないため、close / 切断待機の expectation を wait 済みにする)
       capturer.stop()
