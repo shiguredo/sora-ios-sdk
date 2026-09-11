@@ -1,7 +1,7 @@
 # reconnect E2E テストの API 失敗時の後始末を修正し、API 呼び出しの一時接続断に強くする
 
 - Created: 2026-09-11
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-11
 - Branch: feature/fix-reconnect-e2e-api-failure
 - Polished: {YYYY-MM-DD}
 
@@ -60,3 +60,10 @@ CI (コミット `4c1f5724`) の `testSendonlyReconnect` で、以下の 2 件�
 - `0081`: `testSendonlyDataChannelClose` を追加した。 こちらは `XCTWaiter.wait(for:timeout: 0)` で expectation を消費している。
 
 ## 解決方法
+
+- `SoraTests/SendonlyE2ETests.swift` の `testSendonlyReconnect` で、エラーパスの expectation を `fulfill()` から `XCTWaiter.wait(for:timeout: 0)` に変更し、未 wait の expectation が残らないようにした。
+- Sora API (DisconnectConnection) の呼び出しを使い捨ての `URLSessionConfiguration.ephemeral` に変更し、完了後に `invalidateAndCancel` するようにした。 `timeoutIntervalForResource` でリクエストの総時間を制限し、wait のタイムアウトを 15 秒にしてコールバックが通常は wait の内側で発火するようにした。
+- API コールバック内では `XCTFail` を呼ばず、結果をクラスプロパティに保持して wait 後にテストメソッド側で検証するようにした。 コールバックがテスト終了後に発火しても次のテストへ失敗が誤帰属されない。
+- `SoraTests/E2ETestBase.swift` の `disconnectAndVerify` / `disconnectAll` で、早期 return / continue の前に expectation を `XCTWaiter.wait(for:timeout: 0)` で消費するようにした。 `disconnectAndVerify` の onDisconnect ハンドラ内の assertion を削除し、イベントを main queue に束ねて保持して wait 後に検証するようにした。
+- `CHANGES.md` の `## develop` に FIX を追記した。
+- 検証: `make fmt-lint` / `make lint` / `xcodebuild build-for-testing` / `test-without-building` (197 テスト中 0 failures、E2E 21 件スキップ) を確認した。 E2E はコミット `95c8fab8` の CI で通過した。
