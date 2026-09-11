@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-09-11
 - Model: Sonnet 4.6
 - Branch: feature/add-notice-file（NOTICE 作成が必要と判断した場合のみ。不要の場合はブランチ不要）
 - Polished: 2026-06-06
@@ -88,3 +88,11 @@ NOTICE ファイルは作成しない。CHANGES.md への記載も不要。
 ```
 
 ## 解決方法
+
+Apache License 2.0 第 4 条 (d) の NOTICE 伝播義務を確認した結果、iOS 向けに配布される `WebRTC.xcframework` には NOTICE ではなく `LICENSE.md` が同梱されており、SDK が引き継ぐべき他者の NOTICE ファイルは無かった。一方で libwebrtc とそれが同梱するサードパーティライブラリの多くは BSD 系ライセンスであり、バイナリ再配布時の著作権表示・免責事項の再掲義務がある。そこで NOTICE ファイルは作成せず、sora-android-sdk と同じ形式の `THIRD_PARTY_LICENSES.md` をリポジトリルートに追加した。
+
+- `Package.swift` が参照する `WebRTC.xcframework`（libwebrtc m150.7871.3.5）に同梱されている `LICENSE.md` を基に、libwebrtc と同梱される 22 ライブラリ（webrtc / abseil-cpp / boringssl / dav1d / fft / fiat / g711 / g722 / libaom / libc++ / libc++abi / libsrtp / libvpx / libyuv / llvm-libc / ooura / opus / perfetto / pffft / protobuf / rnnoise / spl_sqrt_floor）のライセンス全文を記載した
+- 各ライブラリには上流のライセンス URL を併記し、どのライセンスに基づくかを追跡できるようにした
+- `WebRTC.xcframework` 自体にも `LICENSE.md` が同梱されているため、SDK 利用者は xcframework を受け取った時点でも帰属表示を受け取れる。リポジトリルートの `THIRD_PARTY_LICENSES.md` はその帰属表示を明示する位置づけとする
+- `SwiftLintPlugins` はビルド時のみ動作する SPM ビルドプラグインで、SDK の配布物に含まれないため対象外とした
+- `NOTICE` ファイルは作成しない
