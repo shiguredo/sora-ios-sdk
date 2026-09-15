@@ -1,4 +1,4 @@
-# deep-safe な公開 value type に Sendable 準拠を追加する
+# 公開値型を `Sendable` に対応させる
 
 - Created: 2026-08-27
 - Completed:
@@ -8,7 +8,7 @@
 
 ## 目的
 
-deep-safe な公開 value type へ checked `Sendable` 準拠を追加し、Swift 6 consumer が actor / Task 境界で SDK の値をそのまま利用できるようにする。
+deep Sendable な公開値型へ checked `Sendable` 準拠を追加し、Swift 6 consumer が actor / Task 境界で SDK の値をそのまま利用できるようにする。
 
 `0102` (接続設定の snapshot 化) と `0152` (公開 Sendable 設定型) は、公開型が `Sendable` であることを前提に、公開型を写した mirror 型を作らずに snapshot と設定型を組み立てる。本 issue を両 issue より先に完了させる。
 
@@ -28,7 +28,7 @@ mutable reference、`Any` / `Encodable?` などの存在型、closure、raw WebR
 
 ### 本 issue で `Sendable` を付与する (29 型)
 
-deep-safe であるにもかかわらず `Sendable` が付いていない型である。すべて checked `Sendable` を付与できることを、実際の `Sora/` のソースへ conformance を足した Swift 6 型検査で確認済みである。
+deep Sendable であるにもかかわらず `Sendable` が付いていない型である。すべて checked `Sendable` を付与できることを、実際の `Sora/` のソースへ conformance を足した Swift 6 型検査で確認済みである。
 
 - `Sora/ConnectionState.swift`: `ConnectionState`
 - `Sora/WebRTCConfiguration.swift`: `MediaConstraints` / `DegradationPreference`
@@ -44,12 +44,12 @@ deep-safe であるにもかかわらず `Sendable` が付いていない型で�
 
 補足する判断材料は次のとおりである。
 
-- `MediaConstraints` は `public var mandatory` / `public var optional` を持つが、保持するのは `[String: String]` だけなので deep-safe である。
-- `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系は `0102` が snapshot へそのまま保持するため、対象一覧から外せない。`CameraSettings` と `Configuration.Spotlight` も本 issue の完了により写しを作らずに保持できるようになるが、`0102` の現行記述は `CameraSettingsSnapshot` と Bool を前提にしているため、`0102` の更新は本 issue の完了後に別途行う。
+- `MediaConstraints` は `public var mandatory` / `public var optional` を持つが、保持するのは `[String: String]` だけなので deep Sendable である。
+- `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系 / `CameraSettings` は `0102` が snapshot へそのまま保持するため、対象一覧から外せない。`0102` は本 issue の完了に合わせて `CameraSettings` を直接保持する形へ更新済みである。`Configuration.Spotlight` は `0102` では `Configuration` の stored property である `isSpotlightEnabled: Bool` を凍結するため使わないが、deep Sendable な公開値型として本 issue の対象に含める。
 - `AudioMode` の `AVAudioSession.Category` と `CameraSettings` の `AVCaptureDevice.Position` は imported type だが、iPhoneOS 26.5 SDK で `Sendable` であることを型検査で確認済みである。`build.yml` が使う iPhoneOS 26.2 SDK でも同じ結果になることを実装時に確認する。
-- `SoraCloseEvent` の `case error(Error)` は deep-safe である。採用 toolchain の stdlib で `Error` が `Sendable` を継承しているためである。
+- `SoraCloseEvent` の `case error(Error)` は、採用 toolchain の stdlib で `Error` が `Sendable` を継承しているため checked `Sendable` にできる。ただし運ばれる `Error` の実体まで deep Sendable であることは保証しない。
 - `SignalingAnswer` など 10 型は `String` / `Bool?` / `Int` だけで構成されている。`Signaling` という集合で一括して「付与できない」と扱うのは誤りである。
-- `CameraSettings` へ `Sendable` を付与すると、`Sora/VideoMute.swift` の internal `CameraSettingsSnapshot` の存在理由 (非 `Sendable` な `CameraSettings` を actor 境界へ渡すための写し) が失われる。`CameraSettingsSnapshot` の削除と、それを前提にしている `0102` / `0142` / `0143` の見直しは本 issue のスコープ外とする。
+- `CameraSettings` へ `Sendable` を付与すると、`Sora/VideoMute.swift` の internal `CameraSettingsSnapshot` の存在理由 (非 `Sendable` な `CameraSettings` を actor 境界へ渡すための写し) が失われる。`0102` の見直しは本 issue の branch で行った。`CameraSettingsSnapshot` の削除と `0142` の見直しは本 issue のスコープ外とする。
 
 ### 本 issue では付与しない
 
@@ -72,8 +72,8 @@ deep-safe であるにもかかわらず `Sendable` が付いていない型で�
 
 ## 設計方針
 
-- `Sora/` 配下の `public enum` / `public struct` を機械的に抽出する。抽出規則は「`Sora/` 配下の `.swift` で `public struct` / `public enum` を宣言している行 (入れ子型を含み、コメント行を除く)」とし、`Sora/` 全体で 80 型になる。この 80 型について stored property と associated value を再帰的に確認する。deep-safe の判定は「値型であり、保持する値と associated value が再帰的に `Sendable` であり、mutable class、`Any` / `Any?` / `Encodable?` などの存在型、closure、`NSObject`、raw WebRTC object を含まないこと」とする。`public var` の有無は判定に影響しない。
-- 深い安全が確認できた型へ checked `Sendable` を付与する。public 非 frozen 型へは `Sendable` が推論されないため明示的に書く。
+- `Sora/` 配下の `public enum` / `public struct` を機械的に抽出する。抽出規則は「`Sora/` 配下の `.swift` で `public struct` / `public enum` を宣言している行 (入れ子型を含み、コメント行を除く)」とし、`Sora/` 全体で 80 型になる。この 80 型について stored property と associated value を再帰的に確認する。deep Sendable かどうかの判定は「値型であり、保持する値と associated value が再帰的に `Sendable` であり、mutable class、`Any` / `Any?` / `Encodable?` などの存在型、closure、`NSObject`、raw WebRTC object を含まないこと」とする。`public var` の有無は判定に影響しない。
+- deep Sendable と判定した型へ checked `Sendable` を付与する。public 非 frozen 型へは `Sendable` が推論されないため明示的に書く。
 - `Sendable` 準拠は型の宣言と同じファイルにしか書けない。`extension` は対象型の宣言と同じファイル内に置く。
 - `@unchecked Sendable` を value type へ新たに付与しない。`Sora/` の内部の値型に既存の付与が 5 件ある (`CameraCaptureFormatBox` / `RPCRawResponse` / `ScreenCaptureController` の `RecorderOperationResult` と `RecorderStartResult` / `SenderStreamBox`) が、本 issue では削除しない。
 - imported type を associated value に持つ型は、iPhoneOS SDK の header と swiftinterface を確認し、`swiftc -typecheck` で表明してから付与する。WebRTC の header に `NS_SWIFT_SENDABLE` は無いため、raw WebRTC object を持つ型は対象外とする。
@@ -92,7 +92,7 @@ deep-safe であるにもかかわらず `Sendable` が付いていない型で�
 - `LogType.configurationViewController` と `Logger.Group.configurationViewController` の削除は公開 enum のケース削除であり後方互換がないため行わない。
 - `AudioMode` への種類追加の検討は `0149` (pending) が扱う。
 - Sendable 非準拠の型を検出する CI gate の追加は `0107` / `0118` が扱う。
-- `0102` / `0142` / `0143` の `CameraSettings` / `Configuration.Spotlight` / `CameraSettingsSnapshot` に関する記述更新は、本 issue の完了後に各 issue を実装する際に行う。`0142` / `0143` が本 issue より先に実装される場合は、その時点では `CameraSettings` が `Sendable` ではないため `CameraSettingsSnapshot` を前提にした記述のままでよく、本 issue の完了後に見直す。本 issue の branch ではこれらの issue を変更しない。
+- `0102` の `CameraSettings` を snapshot へそのまま保持する形への更新と、`0143` の `CameraSettings` が `Sendable` になったことを前提にした記述更新は、本 issue の branch で行った。`0142` は `CameraSettingsSnapshot` へ新しい設定を引き継ぐ方針のため変更しない。`CameraSettingsSnapshot` の削除は別 issue とする。
 
 ## 変更対象
 
@@ -117,7 +117,9 @@ deep-safe であるにもかかわらず `Sendable` が付いていない型で�
 - `0108`: `Package.swift` の Swift 6 language mode 化。SwiftPM の consumer で checked が効くようになるのは `0108` の完了後である。
 - `0110`: Sendable な event API。`Signaling` 本体 / `SignalingCandidate` / `ICECandidate` の扱いを `0110` と揃える。
 - `0116` / `0117`: `SoraDispatcher` の非推奨化と削除。
-- `0102` / `0142` / `0143`: 本 issue の完了後、`CameraSettingsSnapshot` と `Configuration.Spotlight` の Bool 復元を前提にした記述 (`0102` の現状と設計方針、`0142` / `0143` の `CameraSettingsSnapshot` 拡張) を、`CameraSettings` と `Configuration.Spotlight` を直接扱う形へ更新する。更新は各 issue を実装するときに行う。
+- `0102`: 本 issue の branch で、`CameraSettings` を snapshot へそのまま保持する形へ更新した。`Configuration.Spotlight` は `0102` では使わない (`Configuration` の stored property である `isSpotlightEnabled: Bool` を凍結する)。
+- `0143`: 本 issue の branch で、`CameraSettings` が `Sendable` になったことを前提にした記述へ更新した。
+- `0142`: `CameraSettingsSnapshot` へ新しい設定を引き継ぐ方針は `CameraSettings` が `Sendable` になっても変わらないため変更しない。`CameraSettingsSnapshot` の削除は別 issue とする。
 
 ## テスト方針
 
@@ -126,7 +128,7 @@ deep-safe であるにもかかわらず `Sendable` が付いていない型で�
 - `SoraTests/SendableConformanceTests.swift` (新規) に `func requireSendable<T: Sendable>(_: T.Type) {}` を置き、対象 29 型すべてについて呼ぶ。準拠が無ければコンパイルが失敗する。
 - `requireSendable` は `@unchecked Sendable` でも通るため、checked であることの根拠にはしない。checked であることは、対象型へ `@unchecked Sendable` を付与していないことを `git diff` で確認して担保する。
 - `SoraTests` 側で対象型へ `Sendable` を付与する extension を書かない。書くと検査が無意味になる。
-- 対象型の値を `nonisolated` な actor の stored property と `Task` へ渡すテストを置く。
+- 対象型の値を `nonisolated` な (MainActor ではない) actor の stored property と `Task` の closure へ渡すテストを置く。
 - `xcodebuild build-for-testing -scheme Sora-Package` を `SWIFT_VERSION=6` で実行し、test target まで含めて build する。
 - `Sora/` 全体を `swiftc -typecheck -swift-version 6` で検査し、concurrency の警告が増加しないことを確認する。実測では現行ソースが 0 error / 64 warning で、対象 29 型を含む付与を行った検証では 1 件 (`PeerChannel` の `SignalingPong` capture) が解消し、新たに増えた警告は 0 件だった。確認は CI と同じ toolchain (`build.yml` は Xcode 26.2 / iphoneos26.2、`ci.yml` は iphoneos26.5) で行う。warnings-as-errors を gate にするのは `0107` / `0108` / `0118` である。
 - 既存テスト (`RidTests` / `SignalingConnectTests` / `ConfigurationTests` / `SignalingOfferEncodingTests` など) がすべて成功することを確認する。
