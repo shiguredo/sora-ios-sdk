@@ -32,6 +32,10 @@
 - `maskSecrets` の単体テストを追加し、各対象キーと JSON 以外の形式に対する挙動を固定する。
 - マスクの対象キー一覧は定数として 1 箇所にまとめ、追加漏れが起きないようにする。
 
+## 前提となる issue
+
+- `0102`: 接続設定の snapshot 化。本 issue は `ICEServerInfo.description` と `urlCandidates` のログのマスクを扱うため、`0102` の完了後に着手する。
+
 ## 完了条件
 
 - `username` を含む JSON 形式のログで、値がマスクされること。
