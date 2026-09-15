@@ -25,7 +25,7 @@
 - closure property の get / set を `NSLock` で排他する。公開シグネチャと配送セマンティクス (接続途中の設定が次の配送から反映される) を維持する。
 - 配送側は lock の外で取得値 (closure のコピー) を呼ぶ。lock 保持中に呼ぶと、callback から別の handler を設定したときに deadlock するためである。
 - `MediaChannel.handlers` の参照自体も lock 付きアクセサにし、bag の差し替えと配送の競合をなくす。
-- `MediaChannel.internalHandlers` / `PeerChannel.internalHandlers` / `SignalingChannelInternalHandlers` は接続開始前に 1 回だけ設定され、以降に書き換える経路が無いため対象外とする。
+- `MediaChannel.internalHandlers` / `PeerChannel.internalHandlers` / `SignalingChannelInternalHandlers` は接続処理の同期区間で設定され (`SignalingChannelInternalHandlers.onDisconnect` は `PeerChannel.init` と `MediaChannel.connect` の 2 箇所で設定され後者が上書きする)、接続開始以降に書き換える経路が無いため対象外とする。
 - `SoraHandlers` の同期は `0111`、handler の `@Sendable` 化と executor 契約は `0110` に委ねる。
 - `0102` の完了を前提とする。`0102` が handler bag を snapshot から分離し、明示引数として引き渡す形にする。
 
