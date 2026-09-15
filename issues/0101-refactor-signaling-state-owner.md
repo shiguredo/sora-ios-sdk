@@ -43,7 +43,9 @@
   - 状態機械 (phase / URL / フラグ) は `SignalingState` + `SignalingEvent` + 純粋な reducer として `Sora/SignalingState.swift` (新規) に置く。0100 の ConnectionLifecycle と同じ構成とする。
   - 非 Sendable な `URLSessionWebSocketChannel` の参照 (current / candidates) は reducer の state に含めず、owner のメソッド (`addCandidate` / `adopt` / `removeCandidate` / `clear`) で直列 queue 上のみで管理する。
   - redirect generation は `0095` / `0100` の transport epoch と整合する概念とし、新たな独立カウンタを追加しない。旧 callback の拒否は `0095` の制約に従い、session / task identity で判定する。
-- `connect`、`send`、`redirect`、`disconnect` を含むすべての entry point を owner の直列 queue へ enqueue する。再入 (delegate callback から操作 API を呼ぶ場合) は queue 上かどうかを検出して直接実行し、デッドロックしない。
+- `connect`、`send`、`redirect`、`disconnect` を含むすべての entry point を owner の直列 queue へ enqueue する。queue 外から同期 wait しない。再入 (delegate callback から操作 API を呼ぶ場合) は queue 上かどうかを検出して直接実行し、デッドロックしない。
+  - owner queue は `PeerChannel` 経由で呼ぶ `RTCPeerConnection` の API が libwebrtc の signaling thread の完了を待つため、その実行中は signaling thread に依存する。signaling thread は `RTCPeerConnectionDelegate` の callback (`peerConnection(_:didGenerate:)` など) から `send` などの entry point を呼ぶため、queue 外からの同期 wait は owner queue と signaling thread の相互待ちでデッドロックする。
+  - entry point の順序は queue への投入順で確定する。非同期で投入しても、単一の直列 queue へ投入する限り順序は保たれる。
 - URLSession の delegate queue には owner と同じ直列 queue を設定する。delegate callback と操作が同じ queue を通ることで順序を確定する。
 - `PeerChannel` / `MediaChannel` が同期参照する `contactUrl`、`connectedUrl`、`state`、`dataChannelSignaling`、`ignoreDisconnectWebSocket` は、`0100` の同期 getter 方針と同じく lock 保護の snapshot で維持し、owner への同期 wait で実現しない。
 - `webSocketChannel` の同期 accessor は Channel 参照を返さず、切断などの操作メソッド (`disconnectCurrentWebSocket()` 等) を owner の queue へ enqueue する形にする。Channel の状態 (`isClosing` 等) を owner queue 外から操作させない。
@@ -86,13 +88,14 @@
 - 古い task の receive / send completion が新しい接続の handler を呼ばないことを確認する。
 - proxy は自動テスト基盤が存在しないため、認証 challenge の挙動維持は実機での手動確認で担保する。CA 証明書検証は既存の `ConfigurationTests` と実機確認で維持する。
 - `SignalingState` / `SignalingEvent` / reducer を実際の transport event 列で入力し、phase / URL / フラグの遷移と stale event の拒否を検証する。
+- `SignalingStateOwner` の enqueue が queue 外からの呼び出しをブロックしないこと、queue 上からの再入がその場で実行されること、投入順が保たれることを検証する。
 - Thread Sanitizer を補助的に有効化する。
 - テストには、delegate queue の直列化だけでは entry point 全体を保護できない理由を日本語コメントで明記する。
 
 ## 完了条件
 
 - signaling の mutable state の所有者が 1 つであること (`SignalingStateOwner`)。
-- `connect`、`send`、`redirect`、`disconnect`、delegate callback が同じ ordered ingress (owner の直列 queue) を通ること。
+- `connect`、`send`、`redirect`、`disconnect`、delegate callback が同じ ordered ingress (owner の直列 queue) を通ること (queue 外からの投入は呼び出し元をブロックしない enqueue で行う)。
 - 古い session / task の callback が current state を変更しないこと (identity の不一致で拒否)。
 - `didCloseWith` と `didCompleteWithError` が競合しても切断通知が厳密に 1 回であること (Channel の `isClosing` を owner queue で保護)。
 - handler が状態変更ブロックの外 (状態更新と take-and-clear の後) で呼ばれていること。
@@ -104,3 +107,23 @@
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+### 実装中に検出したデッドロック
+
+最初の実装では owner への投入を `dispatchQueue.sync` による同期 wait で行っていた。この実装では、実接続を行う E2E テスト (`MessagingE2ETests.testSendrecvDataChannelMessaging`) が `started.` の表示後に停止し、CI がジョブのタイムアウト (40 分) で強制終了した。
+
+原因は owner queue と libwebrtc の signaling thread の循環待ちである。
+
+1. owner queue は URLSession の delegate queue でもあるため、受信処理 (`SignalingChannel.handle(message:)` → `PeerChannel.handleSignalingOverWebSocket`) が owner queue 上で動く。この経路は `setConfiguration` / `setRemoteDescription` / `answer(for:)` / `setLocalDescription` / `statistics` / `close` を呼ぶ。
+2. libwebrtc の `RTCPeerConnection` の proxy (`pc/proxy.h` の `PROXY_METHOD` / `PROXY_CONSTMETHOD`) は、呼び出し元が signaling thread でない場合 `PostTask` した後に `rtc::Event::Wait(kForever)` で完了を待つ。したがって owner queue は signaling thread の空きを待つ。
+3. signaling thread は `RTCPeerConnectionDelegate` の callback から `PeerChannel.peerConnection(_:didGenerate:)` → `SignalingChannel.send` などを呼ぶ。同期 wait の実装ではここで owner queue の空きを待つ。
+
+この 2 と 3 が同時に成立すると相互待ちでデッドロックする。Simulator 上で実 libwebrtc と `SignalingStateOwner` を使った再現実験で確認した (signaling thread から `owner.sync` しない場合は 17 件の ICE candidate を処理して完了し、`owner.sync` する場合は 1 件目で停止した)。
+
+### 対策
+
+owner への投入を `SignalingStateOwner.enqueue` に変更し、queue 外からの entry point は呼び出し元をブロックしない非同期投入にした。queue 上で実行中の場合はその場で実行するため、再入でもデッドロックしない。entry point の順序は queue への投入順で確定し、非同期でも順序は保たれる。
+
+`SignalingChannel` の `connect` / `redirect` / `disconnect` / `send(message:)` / `send(text:)` / `setConnectedUrl` / `disconnectWebSocket(identifier:)` と、`dataChannelSignaling` / `ignoreDisconnectWebSocket` の setter をすべて `enqueue` に統一した。`sync` は誤用を防ぐため削除した。
+
+`SignalingStateOwnerTests` で、queue 外からの enqueue が呼び出し元をブロックしないこと、queue 上からの再入がその場で実行されること、投入順が保たれることを検証する。

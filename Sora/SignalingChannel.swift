@@ -43,6 +43,14 @@ class SignalingChannel {
 
   // 接続状態の単一所有者。
   // 状態の読み書きと WebSocket の操作はすべてこの owner の直列 queue 上で行う。
+  //
+  // entry point (connect / redirect / disconnect / send / send(text:) / setConnectedUrl /
+  // disconnectWebSocket) はすべて owner.enqueue で queue へ投入する。owner の queue は
+  // PeerChannel 経由で呼ぶ RTCPeerConnection の API が libwebrtc の signaling thread の
+  // 完了を待つため、その実行中は signaling thread に依存する。signaling thread は
+  // RTCPeerConnectionDelegate の callback から send を呼ぶため、queue 外から同期で
+  // 待つと相互待ちでデッドロックする。enqueue は呼び出し元をブロックせず、
+  // 投入順が entry point の順序を確定する。
   private let owner = SignalingStateOwner()
 
   // MARK: - 同期 getter
@@ -68,8 +76,8 @@ class SignalingChannel {
       owner.snapshot.state.dataChannelSignaling
     }
     set {
-      owner.sync {
-        owner.handle(.dataChannelSignalingUpdated(newValue))
+      owner.enqueue {
+        self.owner.handle(.dataChannelSignalingUpdated(newValue))
       }
     }
   }
@@ -80,8 +88,8 @@ class SignalingChannel {
       owner.snapshot.state.ignoreDisconnectWebSocket
     }
     set {
-      owner.sync {
-        owner.handle(.ignoreDisconnectWebSocketUpdated(newValue))
+      owner.enqueue {
+        self.owner.handle(.ignoreDisconnectWebSocketUpdated(newValue))
       }
     }
   }
@@ -218,8 +226,8 @@ class SignalingChannel {
   }
 
   func connect(handler: @escaping (Error?) -> Void) {
-    owner.sync {
-      if owner.currentState.phase == .connecting {
+    owner.enqueue {
+      if self.owner.currentState.phase == .connecting {
         handler(
           SoraError.connectionBusy(
             reason:
@@ -228,10 +236,10 @@ class SignalingChannel {
       }
 
       Logger.debug(type: .signalingChannel, message: "try connecting")
-      owner.setOnConnect(handler)
-      owner.handle(.connectRequested)
+      self.owner.setOnConnect(handler)
+      self.owner.handle(.connectRequested)
 
-      if configuration.insecure {
+      if self.configuration.insecure {
         Logger.warn(
           type: .signalingChannel,
           message: "insecure mode is enabled: WebSocket TLS certificate verification is skipped")
@@ -240,51 +248,51 @@ class SignalingChannel {
       // CA 証明書のパース
       let caCertificates: [SecCertificate]?
       do {
-        caCertificates = try configuration.parsedCACertificates()
+        caCertificates = try self.configuration.parsedCACertificates()
       } catch {
         Logger.error(
           type: .signalingChannel,
           message: "failed to parse CA certificate: \(error.localizedDescription)")
-        owner.handle(.connectionFailed)
-        if let onConnect = owner.takeOnConnect() {
+        self.owner.handle(.connectionFailed)
+        if let onConnect = self.owner.takeOnConnect() {
           onConnect(error)
         }
         return
       }
 
-      let urlCandidates = unique(urls: configuration.urlCandidates)
+      let urlCandidates = self.unique(urls: self.configuration.urlCandidates)
       Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
       for url in urlCandidates {
-        let ws = setUpWebSocketChannel(
-          url: url, proxy: configuration.proxy, caCertificates: caCertificates)
+        let ws = self.setUpWebSocketChannel(
+          url: url, proxy: self.configuration.proxy, caCertificates: caCertificates)
         Logger.info(
           type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
-        ws.connect(delegateQueue: owner.queue)
-        owner.addCandidate(ws)
+        ws.connect(delegateQueue: self.owner.queue)
+        self.owner.addCandidate(ws)
       }
     }
   }
 
   func redirect(location: String) {
-    owner.sync {
+    owner.enqueue {
       Logger.debug(type: .signalingChannel, message: "try redirecting to \(location)")
-      owner.handle(.redirectRequested)
+      self.owner.handle(.redirectRequested)
 
-      if configuration.insecure {
+      if self.configuration.insecure {
         Logger.warn(
           type: .signalingChannel,
           message: "insecure mode is enabled: WebSocket TLS certificate verification is skipped")
       }
 
       // 切断
-      owner.currentChannelOnQueue()?.disconnect(error: nil)
-      owner.setCurrentChannel(nil)
+      self.owner.currentChannelOnQueue()?.disconnect(error: nil)
+      self.owner.setCurrentChannel(nil)
 
       // 接続
       guard let newUrl = URL(string: location) else {
         let message = "invalid message: \(location)"
         Logger.error(type: .signalingChannel, message: message)
-        disconnect(
+        self.disconnect(
           error: SoraError.signalingChannelError(reason: message),
           reason: DisconnectReason.signalingFailure)
         return
@@ -293,24 +301,24 @@ class SignalingChannel {
       // CA 証明書のパース
       let caCertificates: [SecCertificate]?
       do {
-        caCertificates = try configuration.parsedCACertificates()
+        caCertificates = try self.configuration.parsedCACertificates()
       } catch {
         Logger.error(
           type: .signalingChannel,
           message: "failed to parse CA certificate: \(error.localizedDescription)")
-        disconnect(error: error, reason: .signalingFailure)
+        self.disconnect(error: error, reason: .signalingFailure)
         return
       }
 
-      let ws = setUpWebSocketChannel(
-        url: newUrl, proxy: configuration.proxy, caCertificates: caCertificates)
-      ws.connect(delegateQueue: owner.queue)
+      let ws = self.setUpWebSocketChannel(
+        url: newUrl, proxy: self.configuration.proxy, caCertificates: caCertificates)
+      ws.connect(delegateQueue: self.owner.queue)
     }
   }
 
   func disconnect(error: Error?, reason: DisconnectReason) {
-    owner.sync {
-      switch owner.currentState.phase {
+    owner.enqueue {
+      switch self.owner.currentState.phase {
       case .disconnecting, .disconnected:
         break
       case .connecting, .connected:
@@ -321,17 +329,17 @@ class SignalingChannel {
             message: "error: \(error.localizedDescription)")
         }
 
-        owner.handle(.disconnectRequested)
-        owner.currentChannelOnQueue()?.disconnect(error: nil)
-        for candidate in owner.candidatesOnQueue() {
+        self.owner.handle(.disconnectRequested)
+        self.owner.currentChannelOnQueue()?.disconnect(error: nil)
+        for candidate in self.owner.candidatesOnQueue() {
           candidate.disconnect(error: nil)
         }
-        owner.handle(.disconnectCompleted)
+        self.owner.handle(.disconnectCompleted)
 
         Logger.debug(type: .signalingChannel, message: "call onDisconnect")
-        internalHandlers.onDisconnect?(error, reason)
+        self.internalHandlers.onDisconnect?(error, reason)
 
-        owner.handle(.urlsCleared)
+        self.owner.handle(.urlsCleared)
         Logger.debug(type: .signalingChannel, message: "did disconnect")
       }
     }
@@ -344,15 +352,19 @@ class SignalingChannel {
     owner.disconnectChannel(identifier: identifier)
   }
 
+  /// シグナリングメッセージを送信します。
+  ///
+  /// `PeerChannel.peerConnection(_:didGenerate:)` など libwebrtc の signaling thread からも
+  /// 呼ばれるため、owner の queue へ非同期で投入して呼び出し元をブロックしません。
   func send(message: Signaling) {
-    owner.sync {
-      guard let ws = owner.currentChannelOnQueue() else {
+    owner.enqueue {
+      guard let ws = self.owner.currentChannelOnQueue() else {
         Logger.info(type: .signalingChannel, message: "failed to unwrap webSocketChannel")
         return
       }
 
       Logger.debug(type: .signalingChannel, message: "send message")
-      let message = internalHandlers.onSend?(message) ?? message
+      let message = self.internalHandlers.onSend?(message) ?? message
       let encoder = JSONEncoder()
       do {
         var data = try encoder.encode(message)
@@ -361,11 +373,11 @@ class SignalingChannel {
         // Signaling.encode(to:) では Any を扱えなかったため、文字列に変換する直前に値を設定している
         switch message {
         case .connect:
-          if configuration.dataChannels != nil {
+          if self.configuration.dataChannels != nil {
             var jsonObject =
               try (JSONSerialization.jsonObject(with: data, options: []))
               as! [String: Any]
-            jsonObject["data_channels"] = configuration.dataChannels
+            jsonObject["data_channels"] = self.configuration.dataChannels
             data = try JSONSerialization.data(withJSONObject: jsonObject, options: [])
           }
         default:
@@ -383,9 +395,13 @@ class SignalingChannel {
     }
   }
 
+  /// シグナリングメッセージを文字列で送信します。
+  ///
+  /// `nativeChannel.statistics` の完了 callback など owner queue 外のスレッドからも
+  /// 呼ばれるため、owner の queue へ非同期で投入して呼び出し元をブロックしません。
   func send(text: String) {
-    owner.sync {
-      guard let ws = owner.currentChannelOnQueue() else {
+    owner.enqueue {
+      guard let ws = self.owner.currentChannelOnQueue() else {
         Logger.info(type: .signalingChannel, message: "failed to unwrap webSocketChannel")
         return
       }
@@ -420,11 +436,11 @@ class SignalingChannel {
   }
 
   func setConnectedUrl() {
-    owner.sync {
-      guard let ws = owner.currentChannelOnQueue() else {
+    owner.enqueue {
+      guard let ws = self.owner.currentChannelOnQueue() else {
         return
       }
-      owner.handle(.connectedUrlSet(url: ws.url))
+      self.owner.handle(.connectedUrlSet(url: ws.url))
     }
   }
 }

@@ -172,6 +172,7 @@ enum SignalingStateReducer {
 ///
 /// 状態と接続候補の管理を直列 queue 上で行う。URLSession の delegateQueue にも
 /// 同じ queue を設定することで、delegate callback と操作の順序を確定する。
+/// queue 外から entry point を呼ぶ場合は `enqueue(_:)` を使い、queue の完了を待たない。
 final class SignalingStateOwner: @unchecked Sendable {
   /// 操作と URLSession delegate callback を直列化する queue。
   /// URLSession の delegateQueue にはこの queue を設定する。
@@ -212,18 +213,33 @@ final class SignalingStateOwner: @unchecked Sendable {
     self.queue = queue
   }
 
-  /// owner の queue 上で同期的に block を実行する。
+  /// owner の queue 上で実行中かどうか。
   ///
-  /// すでに queue 上で実行中の場合は直接実行し、デッドロックを避ける。
-  /// (delegate callback から操作 API を呼ぶ再入経路で利用する)
-  func sync(_ block: () -> Void) {
-    if DispatchQueue.getSpecific(key: queueKey) != nil
-      || OperationQueue.current === queue
-    {
+  /// URLSession の delegate callback は OperationQueue を経由して dispatchQueue 上で
+  /// 実行されるため、queue 固有値と OperationQueue.current の両方を確認する。
+  private var isOnQueue: Bool {
+    DispatchQueue.getSpecific(key: queueKey) != nil || OperationQueue.current === queue
+  }
+
+  /// entry point の処理を owner の直列 queue へ投入する。
+  ///
+  /// - queue 上で実行中の場合はその場で実行する
+  ///   (delegate callback や handler から操作 API を呼ぶ再入でデッドロックしないため)。
+  /// - queue 外から呼ばれた場合は queue の完了を待たずに非同期で投入する。
+  ///
+  /// queue 外から同期で待ってはならない。owner の queue は `PeerChannel` 経由で呼ぶ
+  /// libwebrtc の `RTCPeerConnection` の API が signaling thread の完了を待つため、
+  /// その実行中は signaling thread に依存する。signaling thread は
+  /// `RTCPeerConnectionDelegate` の callback から `SignalingChannel.send` などの
+  /// entry point を呼ぶため、queue 外からの同期 wait は相互待ちでデッドロックする。
+  /// 投入順が entry point の順序を確定するため、非同期で投入しても順序は保たれる。
+  func enqueue(_ block: @escaping () -> Void) {
+    if isOnQueue {
       block()
       return
     }
-    dispatchQueue.sync(execute: block)
+    let queued = SignalingQueueBlock(block)
+    dispatchQueue.async { queued.body() }
   }
 
   /// イベントを処理し、状態を更新する。queue 上で呼び出すこと。
@@ -301,8 +317,8 @@ final class SignalingStateOwner: @unchecked Sendable {
   ///
   /// redirect などで WebSocket が切り替わっている場合は何もしない。
   func disconnectChannel(identifier: ObjectIdentifier) {
-    sync {
-      guard let channel = currentChannel,
+    enqueue {
+      guard let channel = self.currentChannel,
         ObjectIdentifier(channel) == identifier
       else {
         return
@@ -323,6 +339,19 @@ final class SignalingStateOwner: @unchecked Sendable {
 struct SignalingSnapshot: Sendable {
   let state: SignalingState
   let currentChannelIdentifier: ObjectIdentifier?
+}
+
+/// owner の queue へ投入する closure を包むボックス。
+///
+/// entry point の closure は non-Sendable な `SignalingChannel` の状態を参照するため、
+/// `DispatchQueue.async` が要求する `@Sendable` を満たせない。closure は owner の
+/// 直列 queue 上でのみ実行されるため、`@unchecked Sendable` で包んで投入する。
+private final class SignalingQueueBlock: @unchecked Sendable {
+  let body: () -> Void
+
+  init(_ body: @escaping () -> Void) {
+    self.body = body
+  }
 }
 
 /// 同期 getter が読む lock-backed snapshot storage。
