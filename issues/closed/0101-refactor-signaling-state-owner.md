@@ -175,3 +175,13 @@ redirect の実環境検証はテスト方針で手動確認としているた�
 6. `type: switched` を受信して `switchedToDataChannel => true (generation => 1)` となり、`signaling` / `notify` / `push` / `stats` / `rpc` の data channel がすべて open になる。
 
 `connection timeout` と `DUPLICATED-CHANNEL-ID` は発生していない。旧 `node1` の切断後に同 WebSocket からの受信で handler が呼ばれる経路は発生していない (この競合自体は今回の実行では発生しておらず、`handleReceiveResult` の `isClosing` ガードの妥当性はユニットテストで検証している)。旧接続の TCP 終了に伴う `nw_flow_add_write_request ... Socket is not connected` と `Connection 1: received failure notification` は旧 transport の後始末であり、接続には影響していない。
+
+### CI での確認
+
+デッドロックの解消後に CI を実行し、停止していた E2E テストを含めてすべて成功することを確認した。
+
+- CI workflow の `e2e` ジョブ: `Test Suite 'All tests' passed` / `Executed 222 tests, with 0 failures`
+  - 当初 `Test Case '-[SoraTests.MessagingE2ETests testSendrecvDataChannelMessaging]' started.` の表示後に停止していた `MessagingE2ETests.testSendrecvDataChannelMessaging` が 5.753 秒で成功する
+  - 本 issue で追加した `SignalingStateOwnerTests` (7 件)、`SignalingStateReducerTests` (14 件)、`URLSessionWebSocketChannelTests` (4 件) を含む
+- Build workflow も成功する
+- 確認した CI run: `34927960378` (CI)、`34927960384` (Build)
