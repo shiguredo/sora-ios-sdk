@@ -48,5 +48,6 @@ SDK が非推奨化した `Configuration.spotlightEnabled` と `TLSSecurityPolic
 
 - `0065`: `Configuration.insecure` を追加した。`TLSSecurityPolicy` の非推奨化と `usesVerifiedTURNTLS` の後方互換の前提を定めた。
 - `0030`: `ICEServerInfo` の `nativeValue(insecure:)` とイニシャライザを変更する別スコープ。同じメソッドを編集するため着手順序に注意する。
+- `0102`: 本 issue の完了後 (非推奨 API の内部利用を除去した後) に、`ICEServerInfo.nativeValue(insecure:)` / `usesVerifiedTURNTLS` を `ICEServerSnapshot` へ移設する。移設後は `WebRTCConfigurationSnapshot` が同じ判定を持つ。
 
 ## 解決方法
