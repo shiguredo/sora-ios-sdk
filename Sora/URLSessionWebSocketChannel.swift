@@ -122,66 +122,81 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
       return
     }
     webSocketTask.send(nativeMessage) { [weak self] error in
-      guard let weakSelf = self else {
-        return
-      }
+      self?.handleSendCompletion(error)
+    }
+  }
 
-      // 余計なログを出力しないために、 disconnect の前にチェックする
-      guard !weakSelf.isClosing else {
-        return
-      }
+  /// 送信完了を処理する。
+  ///
+  /// 切断要求後の完了では何もしない。
+  /// テストから呼び出すため internal としている。
+  func handleSendCompletion(_ error: Error?) {
+    // 余計なログを出力しないために、 disconnect の前にチェックする
+    guard !isClosing else {
+      return
+    }
 
-      if let error {
-        Logger.debug(
-          type: .webSocketChannel,
-          message: "[\(weakSelf.host)] failed to send message: \(error.localizedDescription)")
-        weakSelf.disconnect(error: SoraError.webSocketError(error))
-      }
+    if let error {
+      Logger.debug(
+        type: .webSocketChannel,
+        message: "[\(host)] failed to send message: \(error.localizedDescription)")
+      disconnect(error: SoraError.webSocketError(error))
     }
   }
 
   func receive() {
     webSocketTask?.receive { [weak self] result in
-      guard let weakSelf = self else {
-        return
+      self?.handleReceiveResult(result)
+    }
+  }
+
+  /// 受信結果を処理する。
+  ///
+  /// 切断要求後に届いた受信結果ではハンドラーを呼ばず、受信の再開もしない。
+  /// disconnect は internalHandlers しか空にしないため、ここで isClosing を
+  /// 確認しないと利用者 handler (WebSocketChannelHandlers.onReceive) が
+  /// 切断後に呼ばれ得る。
+  /// テストから呼び出すため internal としている。
+  func handleReceiveResult(_ result: Result<URLSessionWebSocketTask.Message, Error>) {
+    guard !isClosing else {
+      return
+    }
+
+    switch result {
+    case .success(let message):
+      Logger.debug(
+        type: .webSocketChannel,
+        message: "[\(host)] receive message => \(message)")
+
+      var newMessage: WebSocketMessage?
+      switch message {
+      case .string(let string):
+        newMessage = .text(string)
+      case .data(let data):
+        newMessage = .binary(data)
+      @unknown default:
+        break
       }
 
-      switch result {
-      case .success(let message):
+      if let message = newMessage {
+        Logger.debug(
+          type: .webSocketChannel, message: "[\(host)] call onReceive")
+        handlers.onReceive?(message)
+        internalHandlers.onReceive?(message)
+      } else {
         Logger.debug(
           type: .webSocketChannel,
-          message: "[\(weakSelf.host)] receive message => \(message)")
-
-        var newMessage: WebSocketMessage?
-        switch message {
-        case .string(let string):
-          newMessage = .text(string)
-        case .data(let data):
-          newMessage = .binary(data)
-        @unknown default:
-          break
-        }
-
-        if let message = newMessage {
-          Logger.debug(
-            type: .webSocketChannel, message: "[\(weakSelf.host)] call onReceive")
-          weakSelf.handlers.onReceive?(message)
-          weakSelf.internalHandlers.onReceive?(message)
-        } else {
-          Logger.debug(
-            type: .webSocketChannel,
-            message:
-              "[\(weakSelf.host)] received message is not string or binary (discarded)"
-          )
-          // discard
-        }
-
-        weakSelf.receive()
-      case .failure(let error):
-        // メッセージ受信に失敗以上のエラーは urlSession の didCompleteWithError で検知できるのでここではログを出して break する
-        Logger.debug(
-          type: .webSocketChannel, message: "[\(weakSelf.host)] message receive error: \(error)")
+          message:
+            "[\(host)] received message is not string or binary (discarded)"
+        )
+        // discard
       }
+
+      receive()
+    case .failure(let error):
+      // メッセージ受信に失敗以上のエラーは urlSession の didCompleteWithError で検知できるのでここではログを出して break する
+      Logger.debug(
+        type: .webSocketChannel, message: "[\(host)] message receive error: \(error)")
     }
   }
 
