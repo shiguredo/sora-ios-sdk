@@ -5,7 +5,7 @@ import WebRTC
 ///
 /// 接続が正常に切断された場合は、`.ok(code, reason)` ケースが使用され、
 /// 異常な切断やエラー発生時は、`.error(Error)` ケースが使用されます。
-public enum SoraCloseEvent {
+public enum SoraCloseEvent: Sendable {
   /// 正常な接続切断を示します。
   /// - Parameters:
   ///   - code: 接続切断時に返されるコード。例えば、WebSocket の標準切断コード（例: 1000 等）など。

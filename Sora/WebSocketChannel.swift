@@ -121,7 +121,7 @@ public enum WebSocketStatusCode: Sendable {
 }
 
 /// WebSocket の通信で送受信されるメッセージを表します。
-public enum WebSocketMessage {
+public enum WebSocketMessage: Sendable {
   /// テキスト
   case text(String)
 

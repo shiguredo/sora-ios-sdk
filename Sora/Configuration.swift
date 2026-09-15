@@ -59,7 +59,7 @@ public struct Configuration {
   // MARK: - 接続に関する設定
 
   /// スポットライトの設定
-  public enum Spotlight: Equatable {
+  public enum Spotlight: Equatable, Sendable {
     /// 有効
     case enabled
 
@@ -411,7 +411,7 @@ extension Configuration {
 }
 
 /// 転送フィルターのルールのフィールドの設定です。
-public enum ForwardingFilterRuleField: String, Encodable {
+public enum ForwardingFilterRuleField: String, Encodable, Sendable {
   /// connection_id
   case connectionId = "connection_id"
 
@@ -423,7 +423,7 @@ public enum ForwardingFilterRuleField: String, Encodable {
 }
 
 /// 転送フィルターのルールの演算子の設定です。
-public enum ForwardingFilterRuleOperator: String, Encodable {
+public enum ForwardingFilterRuleOperator: String, Encodable, Sendable {
   /// is_in
   case isIn = "is_in"
 
@@ -432,7 +432,7 @@ public enum ForwardingFilterRuleOperator: String, Encodable {
 }
 
 /// 転送フィルターのルールの設定です。
-public struct ForwardingFilterRule: Encodable {
+public struct ForwardingFilterRule: Encodable, Sendable {
   /// field
   public let field: ForwardingFilterRuleField
 
@@ -458,7 +458,7 @@ public struct ForwardingFilterRule: Encodable {
 }
 
 /// 転送フィルターのアクションの設定です。
-public enum ForwardingFilterAction: String, Encodable {
+public enum ForwardingFilterAction: String, Encodable, Sendable {
   /// block
   case block
 

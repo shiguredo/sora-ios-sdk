@@ -420,7 +420,7 @@ public final class ConnectionTask {
   /// 公開 API であるため、利用者が switch で全ケースを網羅している場合に備えて
   /// ケースは追加しない。内部でキャンセル処理中の `cancelRequested` 状態を
   /// 持つ場合も、外部からは `.canceled` として観測される。
-  public enum State {
+  public enum State: Sendable {
     /// 接続試行中
     case connecting
 

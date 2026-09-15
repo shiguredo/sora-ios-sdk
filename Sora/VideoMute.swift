@@ -1,8 +1,8 @@
 import AVFoundation
 import Foundation
 
-// 公開 API の CameraSettings に Sendable を要求せず、
-// actor 境界を越えるために必要な値だけを内部でスナップショット化します。
+// ミュート解除時のカメラ再起動に必要な値だけを内部で保持します。
+// 公開 API の CameraSettings は Sendable のため、このスナップショットによる値の受け渡しは必須ではない。
 struct CameraSettingsSnapshot: Sendable {
   let resolution: CameraSettings.Resolution
   let frameRate: Int

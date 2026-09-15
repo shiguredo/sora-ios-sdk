@@ -1174,7 +1174,7 @@ extension CameraVideoCapturer {
 }
 
 /// `CameraVideoCapturer` の設定を表すオブジェクトです。
-public struct CameraSettings: CustomStringConvertible {
+public struct CameraSettings: CustomStringConvertible, Sendable {
   /// デフォルトの設定。
   public static var `default`: CameraSettings { CameraSettings() }
 

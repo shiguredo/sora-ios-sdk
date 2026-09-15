@@ -2,7 +2,7 @@ import UIKit
 import WebRTC
 
 /// VideoView における、映像ソースの停止時の処理を表します。
-public enum VideoViewConnectionMode {
+public enum VideoViewConnectionMode: Sendable {
   /// サーバー及びストリームとの接続解除時に描画処理を停止します。
   case auto
 
