@@ -65,7 +65,7 @@
 
 - `CameraVideoCapturer` の共有状態は `0103` で扱う。
 - `Logger.shared` は `0106`、`Sora.shared` は `0111` で扱う。
-- 接続状態の owner は `0100`、接続設定の snapshot は `0102` で扱う。
+- 接続状態の owner は `0100`、接続設定の snapshot は `0102` で扱う。`0102` は `PeerChannel.connect` の `WrapperVideoEncoderFactory.shared.simulcastEnabled` 設定行で読む `configuration.simulcastEnabled` の参照元を snapshot へ移すため、本 issue は `0102` の完了後に着手する。
 - WebRTC C API への移行は `0070` で扱う。`0026` を先行する場合は接続単位の ownership を移行後も維持し、`0070` が先行する場合は C bridge に global mutable flag を再導入しない。
 
 ## テスト方針
@@ -87,7 +87,7 @@
 - 異なる `simulcastEnabled` を持つ複数接続の E2E が成功し、全接続を同じ設定へ揃える workaround が削除されていること。
 - 既存の全テストがパスすること。
 - 単一接続での映像送受信の挙動が変わらないこと。
-- `CHANGES.md` の `## develop` セクションの `### misc` に以下を追記すること（`### misc` セクションが存在しない場合は新設すること）:
+- `CHANGES.md` の `## develop` の主リストに `[UPDATE]` として以下を追記すること (利用者に見える挙動が変わる主リストの `[UPDATE]` とする。`### misc` は利用者影響が無いリファクタなどに使われている):
   ```
   - [UPDATE] WrapperVideoEncoderFactory を接続単位インスタンスにして simulcastEnabled のグローバル状態を解消する
     - @voluntas
