@@ -25,6 +25,7 @@
 
 ## 前提となる issue
 
+- `0102`: `Sora.connect` の設定 snapshot 生成経路。`Sora.connect` と設定エラー通知経路を扱うため、本 issue は `0102` の完了後に着手する。
 - `0118`: test target の strict concurrency ゲート。
 
 ## 完了条件
