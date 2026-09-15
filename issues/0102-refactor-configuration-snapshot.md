@@ -26,8 +26,7 @@
 - `signalingConnectMetadata` / `signalingConnectNotifyMetadata` / `audioOpusParams` / `videoVp9Params` / `videoAv1Params` / `videoH264Params` / `videoH265Params` の `Encodable?`
 - `dataChannels: Any?`
 - `forwardingFilter` / `forwardingFilters` と `ForwardingFilter.metadata: Encodable?`
-- `webRTCConfiguration`。`MediaConstraints`、`DegradationPreference`、可変 class の `ICEServerInfo` を含む
-- `cameraSettings`。`CameraSettings` は Sendable ではない
+- `webRTCConfiguration`。`MediaConstraints` と `DegradationPreference` は `0123` の完了により `Sendable` で、可変 class の `ICEServerInfo` が残る
 - 可変 class の `webSocketChannelHandlers` / `mediaChannelHandlers`
 - `audioDevice: RTCAudioDevice?`。利用者が設定する公開 property ではなく、カスタム音声デバイスを注入するテスト用の internal フックである
 
@@ -57,17 +56,17 @@
   - `struct WebRTCConfigurationSnapshot: Sendable` (constraints / `[ICEServerSnapshot]` / ICE transport policy / SDP semantics / degradation preference / insecure)。`MediaConstraints` と `DegradationPreference` は `0123` の完了により `Sendable` に準拠するため、公開型をそのまま保持する
   - `struct ForwardingFilterSnapshot: Sendable` (name / priority / action / rules / version / metadata)。`ForwardingFilterRule` 系も `0123` の完了により `Sendable` に準拠するため、公開型をそのまま保持する
   - `enum JSONValue: Sendable, Equatable` (`null` / `bool` / 符号付き整数 / 符号なし整数 / 浮動小数 / `string` / `array` / `object`。`Encodable` に準拠) を `Sora/JSONValue.swift` に置く
-- snapshot のフィールドは `Configuration` の全 stored property を次の 3 つに分類して決める。`spotlightEnabled` は `isSpotlightEnabled` への computed property のため対象は stored property のみである。
-  - そのまま値で持つ: `urlCandidates` / `channelId` / `clientId` / `bundleId` / `role` / `multistreamEnabled` / `connectionTimeout` / `videoCodec` / `videoBitRate` / `audioCodec` / `audioBitRate` / `videoEnabled` / `audioEnabled` / `audioStereoOutputEnabled` / `initialCameraEnabled` / `initialMicrophoneEnabled` / `bypassVoiceProcessing` / `isSpotlightEnabled` / `simulcastEnabled` / `simulcastRid` (非推奨だが stored property のため保持) / `simulcastRequestRid` / `spotlightNumber` / `spotlightFocusRid` / `spotlightUnfocusRid` / `dataChannelSignaling` / `ignoreDisconnectWebSocket` / `audioStreamingLanguageCode` / `proxy` / `insecure` / `caCertificate` (PEM 文字列のまま) / publisher の 3 つの ID。派生値の `isMultistream` と `isSender` も接続開始時に確定させる
-  - 変換して持つ: `cameraSettings` → `CameraSettingsSnapshot`、`webRTCConfiguration` → `WebRTCConfigurationSnapshot`、`forwardingFilter` / `forwardingFilters` → `ForwardingFilterSnapshot`、metadata / notify metadata / `dataChannels` → `JSONValue?`、codec 一致時のみ codec 別 params → `JSONValue?` (非一致は `nil`)、`requiresStereoAudioSDP` → `Bool`、`usesCustomAudioDevice` → `Bool` (`audioDevice != nil` を接続開始時に確定した派生値)
+- snapshot のフィールドは `Configuration` の全 stored property を次の 3 つに分類して決める。非推奨の `spotlightEnabled` は `isSpotlightEnabled` を読み書きする computed property のため、stored property である `isSpotlightEnabled` だけを対象にする。
+  - そのまま値で持つ: `urlCandidates` / `channelId` / `clientId` / `bundleId` / `role` / `multistreamEnabled` / `connectionTimeout` / `videoCodec` / `videoBitRate` / `audioCodec` / `audioBitRate` / `videoEnabled` / `audioEnabled` / `audioStereoOutputEnabled` / `initialCameraEnabled` / `initialMicrophoneEnabled` / `bypassVoiceProcessing` / `isSpotlightEnabled` / `simulcastEnabled` / `simulcastRid` (非推奨だが stored property のため保持) / `simulcastRequestRid` / `spotlightNumber` / `spotlightFocusRid` / `spotlightUnfocusRid` / `dataChannelSignaling` / `ignoreDisconnectWebSocket` / `audioStreamingLanguageCode` / `proxy` / `insecure` / `caCertificate` (PEM 文字列のまま) / `cameraSettings` / publisher の 3 つの ID。派生値の `isMultistream` と `isSender` も接続開始時に確定させる
+  - 変換して持つ: `webRTCConfiguration` → `WebRTCConfigurationSnapshot`、`forwardingFilter` / `forwardingFilters` → `ForwardingFilterSnapshot`、metadata / notify metadata / `dataChannels` → `JSONValue?`、codec 一致時のみ codec 別 params → `JSONValue?` (非一致は `nil`)、`requiresStereoAudioSDP` → `Bool`、`usesCustomAudioDevice` → `Bool` (`audioDevice != nil` を接続開始時に確定した派生値)
   - 含めない: `audioDevice`、handler bag
 - `multistreamEnabled` は非推奨だが生値のまま snapshot へ凍結する。`SignalingConnect.multistreamEnabled` は `Bool?` で `encodeIfPresent` されるため、`nil` と `true` を区別できないと既定値のときに `"multistream": true` が新規出力されて signaling JSON が変わる。`isMultistream` (`multistreamEnabled ?? true`) は別途確定し、`PeerChannel` の分岐に使う。この読み取りで deprecation 警告が出るが、`0138` は `multistreamEnabled` を対象外としているため、警告の解消は `0138` の対象追加または別 issue とする。
 - 非推奨の `spotlightEnabled` は運ばず、確定済みの `isSpotlightEnabled` のみを保持する。
-- `isSpotlightEnabled` を Bool で持つ理由は、`Configuration.Spotlight` が public enum で `Sendable` 準拠を持たず、`0123` の対象にも含まれていないためである。`SignalingConnect.spotlightEnabled: Configuration.Spotlight` は変更しないため、`makeSignalingConnect` で Bool から復元する。
+- `isSpotlightEnabled` は `Configuration` の stored property である `Bool` をそのまま凍結する。`Configuration.Spotlight` は `0123` の完了により `Sendable` になったため snapshot に enum を保持することもできるが、`Configuration` 側の stored property が `Bool` であるため `Bool` で保持する。`SignalingConnect.spotlightEnabled: Configuration.Spotlight` は変更しないため、`makeSignalingConnect` で `Bool` から復元する。
 
 ### snapshot の生成
 
-- `ConnectionConfigurationSnapshot.init(configuration:) throws` を `Configuration` からの唯一の変換入口とする。テストから単体で生成できるよう、internal な `ICEServerSnapshot.init(_:)` / `WebRTCConfigurationSnapshot.init(_:)` / `ForwardingFilterSnapshot.init(_:)` / `CameraSettingsSnapshot` の変換も用意する。`Encodable` / `Any` から `JSONValue` への変換関数は `Sora/JSONValue.swift` に置く。
+- `ConnectionConfigurationSnapshot.init(configuration:) throws` を `Configuration` からの唯一の変換入口とする。テストから単体で生成できるよう、internal な `ICEServerSnapshot.init(_:)` / `WebRTCConfigurationSnapshot.init(_:)` / `ForwardingFilterSnapshot.init(_:)` の変換も用意する。`Encodable` / `Any` から `JSONValue` への変換関数は `Sora/JSONValue.swift` に置く。
 - `Sora.connect` は `MediaChannel(configuration:)` の生成より前にこの変換関数を呼び、結果を `MediaChannel` の designated init (`init(snapshot:...)`) へ渡す。`MediaChannel(configuration:)` は通らない。
 - `MediaChannel.init(snapshot:configuration:audioDevice:mediaChannelHandlers:webSocketChannelHandlers:...)` を designated init とする。公開互換の `public let configuration` は designated init でしか初期化できないため、snapshot に加えて元の `Configuration` も受け取る。`configuration` は公開 getter 専用とし、接続開始後の非同期処理からは参照しない。
 - `MediaChannel.init(configuration:...)` を internal な convenience として残す。convenience は snapshot を生成し、`configuration` から `audioDevice` / `mediaChannelHandlers` / `webSocketChannelHandlers` を取り出して designated init へ渡す。`MediaChannel` を直接生成する既存テストはこの経路を通る。変換の実装は 1 つに固定する。
@@ -98,7 +97,7 @@
 - `ICEServerSnapshot` に `CustomStringConvertible` を付与せず、`credential` / `username` を含む値の新しい文字列化経路を追加しない。既存の `ICEServerInfo.description`、`Logger.maskSecrets` の対象キー、`urlCandidates` のログに残る漏えいは `0156` で扱う。
 - `ICEServerSnapshot` は URL、ユーザー名、credential、TURN-TLS の検証ポリシーを copy する。`0030` 完了後は格納プロパティ `username` を読む。検証ポリシーは、`0138` が導入する internal な真値 (検証を行うか否かを表す Bool) の名前と意味に合わせて `ICEServerSnapshot` の Bool として保持し、非推奨の `userName` / `tlsSecurityPolicy` を新規に参照しない。`RTCTlsCertPolicy` への写像と `usesVerifiedTURNTLS` の判定は snapshot 側の computed property に一本化し、`insecure` を優先する既存の関係を再現する。
 - `parsedCACertificates()` は現在 `extension Configuration` のメソッドであり、`configuration` を保持しない `SignalingChannel` / `PeerChannel` からは呼べない。PEM 文字列を受け取る自由関数または snapshot のメソッドへ移し、呼び出し元をそこへ切り替える。`Configuration.parsedCACertificates()` はテスト互換のため現状のまま残す。パース位置の一本化は本 issue では行わない。
-- `CameraSettings` は既存の `CameraSettingsSnapshot` を再利用し、`isEnabled` を追加して拡張する。`PeerChannel` が接続中に読む `cameraSettings.isEnabled` / `.position` / `.resolution` / `.frameRate` を snapshot へ置き換える。既存の `CameraSettingsSnapshot` 利用箇所は `init(_ cameraSettings:)` 経由のため影響しない。
+- `CameraSettings` は `0123` の完了により `Sendable` のため snapshot へそのまま保持する。`PeerChannel` が接続中に読む `cameraSettings.isEnabled` / `.position` / `.resolution` / `.frameRate` を snapshot の `CameraSettings` へ置き換える。`Sora/VideoMute.swift` の internal な `CameraSettingsSnapshot` はミュート解除時のカメラ再起動経路が使うため変更しない。
 - `audioDevice` は snapshot に含めない。`RTCAudioDevice` が必要な `NativePeerChannelFactory` の生成は `MediaChannel.init` の同期区間で行う。`PeerChannel` の接続処理が snapshot から必要とするのは `requiresStereoAudioSDP` (SDP 用) と `usesCustomAudioDevice` (`audioDevice != nil` を接続開始時に確定した派生値) の 2 つである。`PeerChannel.initializeSenderStream` の `configuration.audioDevice` 参照は `usesCustomAudioDevice` で置き換える。`requiresStereoAudioSDP` で代用してはならない。`requiresStereoAudioSDP` は `audioStereoOutputEnabled || audioDevice?.outputNumberOfChannels == 2` であり `audioDevice != nil` と等価ではなく、代用するとネイティブ ADM のステレオ接続でマイク入力が初期化されず、モノラルのカスタムデバイスで逆に初期化される退行になる。
 - `MediaChannel.init` の同期区間で使う `audioStereoOutputEnabled` / `isSender` / `bypassVoiceProcessing` / `connectionTimeout` は snapshot から読む。`AudioSessionUsage` の算出と `ConnectionTimer` の生成も snapshot を用いる。`audioDevice` と handler bag だけは snapshot ではなく init の引数で受け取る。
 - `DeviceInfo.current` は利用者由来の設定ではないため snapshot に含めない。`environment` は既存どおり connect message 生成時に読み、redirect 再送時も再評価される既存挙動を維持する。読み取りの安全化は `0112` で扱う。
@@ -141,7 +140,7 @@
 - `ICEServerInfo` を公開 struct に変更する破壊的 API 変更。
 - `0156` で扱う、ログと文字列表現からのシークレット漏えいの防止 (`Logger.maskSecrets` の対象キー、`ICEServerInfo.description`、`urlCandidates` のログ、マスクの単体テスト)。
 - `PeerChannel.lock` の役割と `PeerChannel` 全体の排他設計は `0129` (PeerChannel.Lock の統合) で扱う。本 issue は接続所有 WebRTC 設定の読み書きに専用 lock を追加するところまでとする。
-- `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` への `Sendable` 準拠の追加は `0123` が先行して行う。本 issue はこれらの公開型をそのまま snapshot に保持し、mirror 型を作らない。
+- `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `CameraSettings` への `Sendable` 準拠の追加は `0123` が先行して行う。本 issue はこれらの公開型をそのまま snapshot に保持し、mirror 型を作らない。
 
 ## 変更対象
 
@@ -154,7 +153,6 @@
 - `Sora/SignalingChannel.swift`: snapshot と handler bag の受け取り、`configuration` 参照の置き換え
 - `Sora/Signaling.swift`: internal な `SignalingConnect.dataChannelSettings` の追加 (`default` 付きで既存の memberwise init 呼び出しを変えない)、`data_channels` の encode、`SignalingChannel.send` の `JSONSerialization` マージの削除
 - `Sora/WebRTCConfiguration.swift` / `Sora/NativePeerChannelFactory.swift`: snapshot から `RTCConfiguration` を組み立てる経路
-- `Sora/VideoMute.swift`: `CameraSettingsSnapshot` への `isEnabled` 追加
 - `SoraTests/ConfigurationTests.swift`: CA 解析の呼び出し先の移行と snapshot 変換の単体テスト
 - `SoraTests/ConnectionConfigurationSnapshotTests.swift` (新規): 不変性、deep Sendable、connect JSON のゴールデン比較
 - `SoraTests/PeerChannelConnectEncodingTests.swift` / `SignalingConnectTests.swift` / `PeerChannelConnectCompletionTests.swift` / `PeerChannelRedirectInvalidationTests.swift` / `ConnectionTaskTests.swift` / `ConnectionTimerLifecycleTests.swift`: `try ConnectionConfigurationSnapshot(configuration:)` を追加し、`SignalingChannel(snapshot:webSocketChannelHandlers:)` / `PeerChannel(snapshot:...)` へ置換する。`ConnectionTimerLifecycleTests` の `makeSignalingChannel()` は非 throwing のため、ヘルパーとその呼び出し元を `throws` 化する。
@@ -166,7 +164,7 @@
 - `0100` (完了 2026-09-08): `ConnectionStateOwner` / `ConnectionSnapshotStorage` / 純粋 reducer。同じ配置・命名の考え方に揃える。
 - `0101` (完了 2026-09-15): `SignalingState` / `SignalingStateOwner`。`SignalingChannel` の `configuration` 参照を snapshot へ置き換える土台になる。
 - `0138` (非推奨 API の内部利用除去) と `0030` (`ICEServerInfo` の userName): 先に完了させ、`ICEServerInfo` の内部表現を確定させる。完了前に着手する場合は現行の `userName` / `tlsSecurityPolicy` を読み、変換関数 1 箇所に非推奨警告が残ることを許容する。
-- `0123`: `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系への `Sendable` 準拠の追加。本 issue が snapshot に公開型をそのまま保持するために先行を必須とする。`0123` の検証が `0107` の consumer fixture に依存している場合は、`SoraTests` の `requireSendable` によるコンパイル時表明で代替して先に完了させる。
+- `0123`: `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系 / `CameraSettings` への `Sendable` 準拠の追加。本 issue が snapshot に公開型をそのまま保持するために先行を必須とする。`0123` の検証が `0107` の consumer fixture に依存している場合は、`SoraTests` の `requireSendable` によるコンパイル時表明で代替して先に完了させる。
 - `0107`: consumer fixture と API baseline (未完了)。本 issue では公開 API 差分ゼロを `git diff` と目視で確認し、`0107` 完了後の baseline 検査に委ねる。
 - `0025` (`SignalingChannelInternalHandlers.onSend` の削除): 先に完了していることが望ましいが、必須ではない。`0025` は `SignalingChannel.send` の 1 行 (`onSend` の適用) を削除するだけで、本 issue が変える `data_channels` のマージとは行が重ならず、意味的な依存も無い (`onSend` はどこからも設定されていないデッドコードである)。同時に進める場合は `SignalingChannel.send` の近接行を触るため rebase する。
 
@@ -204,7 +202,7 @@
 - `metadata` が `nil` / `Optional.some(NSNull())` / scalar / 空 object の各場合で、出力が現行と同じ (`null` とキー省略を区別する) であることを検証する。
 - `NaN` / `Infinity` を含む metadata が `SoraError.configurationError` になり、プロセスが abort しないことを検証する。
 - ゴールデン JSON は `Configuration` のフィクスチャごとに `SoraTests/ConnectionConfigurationSnapshotTests.swift` に固定し、`Configuration` にフィールドを追加したときは同ファイルの期待値を更新する。
-- `CameraSettingsSnapshot` の `isEnabled` が snapshot に反映されることを検証する。
+- `CameraSettings` が snapshot へそのまま保持され、`isEnabled` / `position` / `resolution` / `frameRate` が接続開始時の値で凍結されることを検証する。
 - `ICEServerSnapshot` が TURN-TLS の検証ポリシーを保持し、`usesVerifiedTURNTLS` の判定が変わらないことを検証する。
 - `ConnectionConfigurationSnapshot` の生成前に、対象の `Configuration` ごとの connect JSON をゴールデン文字列として `SoraTests/ConnectionConfigurationSnapshotTests.swift` に固定する。変更後は snapshot 経路で生成した connect JSON を正規化して比較する。キー順の差異は比較対象にしない。比較は `PeerChannel.makeSignalingConnect` を直接呼び、`Signaling.connect` を `JSONEncoder` で encode する同期テストで行う。実 Sora 接続は signaling が成立しサーバーが accept することの確認に役割を限定する。
 - `SendonlyE2ETests` の `data_channels` 検証と `ConfigurationTests` の CA 解析検証を回帰検証として使う。
@@ -220,9 +218,9 @@
 - metadata、notify metadata、codec parameter、`forwardingFilter` / `forwardingFilters` の metadata、`dataChannels` が snapshot 生成時に `JSONValue` へ写されること。
 - `ICEServerInfo` が参照共有されない internal value type へ copy され、TURN-TLS の検証ポリシーが維持されること。
 - snapshot が raw WebRTC / Objective-C object (`RTCAudioDevice`) を保持しないこと。
-- `requiresStereoAudioSDP` / `usesCustomAudioDevice` とカメラ設定 (`isEnabled` を含む) の判定材料が接続開始時に確定していること。
+- `requiresStereoAudioSDP` / `usesCustomAudioDevice` とカメラ設定 (`isEnabled` / `position` / `resolution` / `frameRate`) の判定材料が接続開始時に確定していること。
 - `ConnectionConfigurationSnapshot` / `ICEServerSnapshot` / `WebRTCConfigurationSnapshot` / `ForwardingFilterSnapshot` が checked `Sendable` に準拠していること。`@unchecked Sendable` を付与していないこと。
-- `WebRTCConfigurationSnapshot` と `ForwardingFilterSnapshot` が `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系の公開型をそのまま保持し、mirror 型を定義していないこと。
+- `ConnectionConfigurationSnapshot` が `CameraSettings` を、`WebRTCConfigurationSnapshot` と `ForwardingFilterSnapshot` が `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系の公開型をそのまま保持し、mirror 型を定義していないこと。
 - 接続開始後の非同期処理が `Configuration` の参照型フィールド (metadata / notify metadata / `dataChannels` / `forwardingFilter` / `forwardingFilters` / `webRTCConfiguration`) を参照せず、snapshot を参照していること。`MediaChannel.configuration` の公開 getter と `MediaChannel.init` の同期区間は除く。
 - internal な `SignalingConnect.dataChannelSettings` へ snapshot の `dataChannelSettings` を渡していること。
 - `MediaChannel.validate(snapshot:audioDevice:)` が audio の組合せ制約のみを持ち、`configuration` を受け取らないこと。
