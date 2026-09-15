@@ -107,7 +107,7 @@ deep Sendable であるにもかかわらず `Sendable` が付いていない型
 
 ### 本 issue を前提とする
 
-- `0102`: `ConnectionConfigurationSnapshot` が `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系をそのまま保持する。`CameraSettings` と `Configuration.Spotlight` も写しを作らずに保持できるようになるため、`0102` の `CameraSettingsSnapshot` と Bool 復元の記述は本 issue の完了後に更新する。
+- `0102`: `ConnectionConfigurationSnapshot` が `MediaConstraints` / `DegradationPreference` / `ForwardingFilterRule` 系と `CameraSettings` をそのまま保持する。本 issue の branch で `0102` の記述を更新した。
 - `0152`: 利用者が actor / Task 境界へ渡す公開 Sendable 設定型が本 issue の準拠を利用する。
 - `0124` / `0125`: samples / quickstart の `@preconcurrency import Sora` と `nonisolated(unsafe)` を撤去する際の公開 `Sendable` 一覧。
 
@@ -162,7 +162,9 @@ deep Sendable な公開値型 29 型へ checked `Sendable` 準拠を付与し、
 - `Sendable` 準拠は型の宣言と同一ファイルにのみ書けるため、`extension` ではなく宣言行へ付与した。
 - `@unchecked Sendable` は使っていない。29 型すべてでコンパイラが stored property と associated value を再帰的に検証している。
 - `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない。標準ライブラリの `Error: Sendable` に依存するためで、この旨を `CHANGES.md` と `SKILL.md` に明記した。
-- `CameraSettings` と `Configuration.Spotlight` を対象に含めた結果、`0102` は `CameraSettingsSnapshot` と Bool 復元をやめて公開型を直接保持できるようになったため、本ブランチで `0102` の記述を更新した。`0143` の `CameraSettings` に関する記述も更新した。`CameraSettingsSnapshot` の削除は別 issue とする。
+- `CameraSettings` を対象に含めた結果、`0102` の `ConnectionConfigurationSnapshot` は `CameraSettings` をそのまま保持できるようになったため、本ブランチで `0102` の記述を更新した。`0143` の `CameraSettings` に関する記述も更新した。
+- `Sora/VideoMute.swift` の internal な `CameraSettingsSnapshot` はミュート解除時のカメラ再起動経路が使うため、`CameraSettings` が `Sendable` になっても変更しない。削除は別 issue とする。
+- `Configuration.Spotlight` は `0102` では使わない。`0102` は `Configuration` の stored property である `isSpotlightEnabled: Bool` を凍結し、`SignalingConnect.spotlightEnabled` へ復元するため、この復元の記述は変わらない。
 
 ### 検証
 
