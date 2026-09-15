@@ -34,7 +34,7 @@ sora-ios-sdk-quickstart は Swift 6 言語モード対応時に次の暫定対�
 - `0110`: executor 契約を持つ Sendable event API
 - `0120`: Sendable な statistics snapshot API
 - `0122`: legacy VideoRenderer API の削除
-- `0123`: immutable な公開 value type への Sendable 準拠
+- `0123`: deep-safe な公開 value type への Sendable 準拠
 
 ## 設計方針
 
