@@ -17,6 +17,14 @@
   - `URLSessionWebSocketChannel` の可変状態 (`urlSession` / `webSocketTask` / `isClosing`) へのアクセスを owner queue に限定する
   - 公開 API の変更はない
   - @t-miya
+- [UPDATE] 公開値型を `Sendable` に対応させる
+  - 接続と設定: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent` / `MediaConstraints` / `DegradationPreference` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
+  - メディア、ログ、表示: `AudioMode` / `AudioOutput` / `CameraSettings` / `LogType` / `LogLevel` / `Log` / `Logger.Group` / `VideoViewConnectionMode` / `WebSocketMessage`
+  - シグナリング: `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
+  - 利用者が actor / Task 境界へ SDK の値をそのまま渡せるようにする
+  - `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない (標準ライブラリの `Error: Sendable` に依存する)
+  - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya

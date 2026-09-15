@@ -514,9 +514,19 @@ SDK 本体は Swift 6 言語モードでビルド・ CI 検証している。た
 
 SDK が公開型に `Sendable` 準拠を追加しているため、利用側で独自に `Sendable` 準拠を追加していた場合は削除が必要になる。
 
-- `Sendable`: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `ICETransportPolicy` / `SDPSemantics` / `AspectRatio` / `WebSocketStatusCode` / `DeviceInfo` / `Proxy` / `CameraSettings.Resolution`
+- `Sendable`
+  - 設定: `MediaConstraints` / `DegradationPreference` / `SDPSemantics` / `ICETransportPolicy` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
+  - 接続と切断: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent`
+  - 音声: `AudioMode` / `AudioOutput`
+  - カメラ: `CameraSettings` / `CameraSettings.Resolution`
+  - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group`
+  - 映像表示: `VideoViewConnectionMode`
+  - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
+  - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
 - `@unchecked Sendable`: `Sora` / `Logger` / `CameraVideoCapturer`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
+
+`SoraCloseEvent` は `Sendable` だが、`SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない。標準ライブラリの `Error: Sendable` に依存するため、可変状態を持つ `Error` を載せた値を actor 境界へ渡す場合は利用側で注意する。
 
 `MediaChannel` や `MediaStream` を `Task` や別 actor へそのまま渡すことはできない。`@MainActor` の型や `Task { @MainActor in ... }` に閉じ込めるなど、利用側で隔離する。
 
