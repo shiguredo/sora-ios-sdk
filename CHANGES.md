@@ -11,6 +11,12 @@
 
 ## develop
 
+- [UPDATE] SignalingChannel と URLSessionWebSocketChannel の状態所有者を統一する
+  - signaling の phase、接続 URL、`data_channel_signaling` / `ignore_disconnect_websocket` のフラグを純粋な reducer と単一の owner で管理する
+  - `connect` / `send` / `redirect` / `disconnect` / URLSession delegate callback を同じ直列 queue へ投入し、順序を確定する
+  - `URLSessionWebSocketChannel` の可変状態 (`urlSession` / `webSocketTask` / `isClosing`) へのアクセスを owner queue に限定する
+  - 公開 API の変更はない
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya
