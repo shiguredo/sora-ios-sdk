@@ -1695,7 +1695,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     if webSocketDisconnectScheduled { return }
     guard switchedToDataChannel, signalingChannel.ignoreDisconnectWebSocket else { return }
     guard state != .closed else { return }
-    guard let webSocketChannel = signalingChannel.webSocketChannel else { return }
+    guard let webSocketChannelIdentifier = signalingChannel.webSocketChannelIdentifier else {
+      return
+    }
 
     handleConnectionEvent(.webSocketDisconnectScheduled)
 
@@ -1713,7 +1715,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.info(
           type: .peerChannel,
           message: "disconnecting WebSocket after DataChannel signaling established")
-        webSocketChannel.disconnect(error: nil)
+        self.signalingChannel.disconnectWebSocket(identifier: webSocketChannelIdentifier)
       }
     }
   }
