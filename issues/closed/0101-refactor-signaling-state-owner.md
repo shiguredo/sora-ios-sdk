@@ -161,4 +161,17 @@ Thread Sanitizer も補助的に実行した。0101 の変更箇所にはデー�
 
 接続成功時は handler を消費しない `SignalingStateOwner.onConnectOnQueue()` を追加し、終端経路 (CA 証明書のパース失敗) の `takeOnConnect()` は維持した。`SignalingStateOwnerTests` に、接続成功の通知で handler が消費されないことと、`takeOnConnect` が handler を消費することを検証するテストを追加した。
 
-redirect の実環境検証はテスト方針で手動確認としているため CI では検出できない。実 Sora での redirect 確認が必要である。
+redirect の実環境検証はテスト方針で手動確認としているため CI では検出できない。実 Sora 環境での実機確認を 2026-09-15 に実施した。
+
+### redirect の実機確認
+
+クラスター構成の Sora サーバーで redirect を発生させ、実機 (iPhone14,7 / iOS 26.6.1、Sora iOS SDK 2026.3.0 / Sora 2026.2.0-canary.0) で確認した。ログは次の順に出た。
+
+1. 接続先 (`node1`) へ接続し、`SignalingChannel DEBUG: call connect(handler:)` → `PeerChannel DEBUG: try creating offer SDP` → `did create offer SDP` → `did connect to signaling channel` → `send connect` の順で `type: connect` を送信する (この時点では `redirect` フィールドなし)。
+2. `{"type":"redirect","location":"wss://node2/signaling"}` を受信し、`handle signaling over WebSocket => redirect` → `PeerChannel DEBUG: redirect: invalidating old transport (generation => 1)` → `SignalingChannel DEBUG: try redirecting to wss://node2/signaling` の順で処理する。
+3. 旧 `node1` の WebSocket が `disconnecting` → `disconnected` となり、その後 `node2` が `connecting` → `connected` となる。
+4. 新しい transport の接続成功時に `SignalingChannel DEBUG: call connect(handler:)` が再度呼ばれ、`did connect to signaling channel` → `send connect` の後に `{"sdp":...,"redirect":true,...}` が `node2` へ送信される。接続成功で handler が消費されないため、ここで `type: connect` が再送される (レビューで検出した退行の修正が機能している)。
+5. `node2` から `type: offer` を受信して answer を送信し、`PeerChannel DEBUG: did connect` → `MediaChannel DEBUG: call onConnect` → `MediaChannel DEBUG: connection task completed` となる。利用者の connect handler の呼び出しは 1 回だけである。
+6. `type: switched` を受信して `switchedToDataChannel => true (generation => 1)` となり、`signaling` / `notify` / `push` / `stats` / `rpc` の data channel がすべて open になる。
+
+`connection timeout` と `DUPLICATED-CHANNEL-ID` は発生していない。旧 `node1` の切断後に同 WebSocket からの受信で handler が呼ばれる経路は発生していない (この競合自体は今回の実行では発生しておらず、`handleReceiveResult` の `isClosing` ガードの妥当性はユニットテストで検証している)。旧接続の TCP 終了に伴う `nw_flow_add_write_request ... Socket is not connected` と `Connection 1: received failure notification` は旧 transport の後始末であり、接続には影響していない。
