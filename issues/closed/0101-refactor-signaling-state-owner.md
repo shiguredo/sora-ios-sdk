@@ -1,7 +1,7 @@
 # SignalingChannel と URLSessionWebSocketChannel の状態所有者を統一する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-15
 - Branch: feature/refactor-signaling-state-owner
 - Polished: 2026-09-02
 
@@ -41,28 +41,28 @@
 
 - signaling の phase、接続 URL、data_channel_signaling / ignore_disconnect_websocket のフラグ、接続中 / 候補の WebSocket 参照を 1 つの owner が保持する。
   - 状態機械 (phase / URL / フラグ) は `SignalingState` + `SignalingEvent` + 純粋な reducer として `Sora/SignalingState.swift` (新規) に置く。0100 の ConnectionLifecycle と同じ構成とする。
-  - 非 Sendable な `URLSessionWebSocketChannel` の参照 (current / candidates) は reducer の state に含めず、owner のメソッド (`addCandidate` / `adopt` / `removeCandidate` / `clear`) で直列 queue 上のみで管理する。
-  - redirect generation は `0095` / `0100` の transport epoch と整合する概念とし、新たな独立カウンタを追加しない。旧 callback の拒否は `0095` の制約に従い、session / task identity で判定する。
+  - 非 Sendable な `URLSessionWebSocketChannel` の参照 (current / candidates) は reducer の state に含めず、owner のメソッド (`addCandidate` / `setCurrentChannel` / `removeCandidate` / `clearCandidates`) で直列 queue 上のみで管理する。
+  - redirect generation は `0095` / `0100` の transport epoch と整合する概念とし、新たな独立カウンタを追加しない。旧 callback の拒否は `0095` の制約に従い、Channel の `isClosing` で判定する。
 - `connect`、`send`、`redirect`、`disconnect` を含むすべての entry point を owner の直列 queue へ enqueue する。queue 外から同期 wait しない。再入 (delegate callback から操作 API を呼ぶ場合) は queue 上かどうかを検出して直接実行し、デッドロックしない。
   - owner queue は `PeerChannel` 経由で呼ぶ `RTCPeerConnection` の API が libwebrtc の signaling thread の完了を待つため、その実行中は signaling thread に依存する。signaling thread は `RTCPeerConnectionDelegate` の callback (`peerConnection(_:didGenerate:)` など) から `send` などの entry point を呼ぶため、queue 外からの同期 wait は owner queue と signaling thread の相互待ちでデッドロックする。
   - entry point の順序は queue への投入順で確定する。非同期で投入しても、単一の直列 queue へ投入する限り順序は保たれる。
 - URLSession の delegate queue には owner と同じ直列 queue を設定する。delegate callback と操作が同じ queue を通ることで順序を確定する。
 - `PeerChannel` / `MediaChannel` が同期参照する `contactUrl`、`connectedUrl`、`state`、`dataChannelSignaling`、`ignoreDisconnectWebSocket` は、`0100` の同期 getter 方針と同じく lock 保護の snapshot で維持し、owner への同期 wait で実現しない。
-- `webSocketChannel` の同期 accessor は Channel 参照を返さず、切断などの操作メソッド (`disconnectCurrentWebSocket()` 等) を owner の queue へ enqueue する形にする。Channel の状態 (`isClosing` 等) を owner queue 外から操作させない。
+- `webSocketChannel` の同期 accessor は Channel 参照を返さず、現在使用中の Channel の識別子 (`webSocketChannelIdentifier`) を公開し、切断などの操作は `disconnectWebSocket(identifier:)` を owner の queue へ enqueue する形にする。Channel の状態 (`isClosing` 等) を owner queue 外から操作させない。
 
 ### delegate adapter
 
 - `URLSessionWebSocketChannel` 自身が `URLSessionDelegate` / `URLSessionWebSocketDelegate` を実装する (小さい adapter への分離は行わない)。delegate callback は owner と同じ直列 queue 上で呼ばれるため、callback 内で identity を snapshot 化して別の ingress へ渡す必要がない。
 - callback ごとに独立した Task を生成しない。
-- 古い session / task の callback は identity（`URLSession` / `URLSessionWebSocketTask` の同一性）の不一致で拒否する。
+- 古い session / task の callback は Channel の `isClosing` で拒否する。`isClosing` は owner queue 上でのみ読み書きし、redirect や候補の破棄では owner が対象 Channel を `disconnect` してから参照を外すため、「`isClosing == false` の Channel は現在使用中の transport である」が成立する。session / task の identity 比較は行わない (1 インスタンスが作る session / task は 1 つであり、照合しても到達しない経路になるため)。
 - Channel の可変状態 (`urlSession` / `webSocketTask` / `isClosing`) は owner の直列 queue 上でのみ読み書きする。
 
 ### 終端と callback
 
 - `didCloseWith` と `didCompleteWithError` が両方届いても、1 接続につき切断通知を厳密に 1 回にする。1 回保証は Channel 自身の `isClosing` (owner queue 上でのみ読み書き) で行う。owner に終端済みの台帳 (墓石) は残さない。
-- send / receive completion は、対象 transport が current であることを owner queue 上で再確認する。
+- send / receive completion は、owner queue 上で Channel の `isClosing` を再確認し、切断済みの Channel では handler を呼ばない。owner が保持する current な Channel は常に `isClosing == false`、それ以外は `disconnect` 済みなので、この確認が「current な transport であること」の確認になる。
 - handler は状態更新と take-and-clear の後に呼ぶ。ここでの「critical section 外」は「状態変更ブロックの外」を意味し、handler 呼び出しも owner queue 上で行う。handler 内から操作 API を呼ぶ再入は queue 上の直接実行で安全に処理される。handler 内で別スレッドの完了を同期的に待つことは避ける (owner queue を占有するため)。
-- redirect では旧 transport の close と新 transport の開始を identity で分離する。
+- redirect では旧 transport を `disconnect` (=`isClosing = true`) してから owner の参照を外し、新しい `URLSessionWebSocketChannel` を生成して接続する。旧 transport の遅延 callback は `isClosing` で切り離す。
 
 ### 互換性
 
@@ -96,7 +96,7 @@
 
 - signaling の mutable state の所有者が 1 つであること (`SignalingStateOwner`)。
 - `connect`、`send`、`redirect`、`disconnect`、delegate callback が同じ ordered ingress (owner の直列 queue) を通ること (queue 外からの投入は呼び出し元をブロックしない enqueue で行う)。
-- 古い session / task の callback が current state を変更しないこと (identity の不一致で拒否)。
+- 古い session / task の callback が current state を変更しないこと (Channel の `isClosing` で拒否)。
 - `didCloseWith` と `didCompleteWithError` が競合しても切断通知が厳密に 1 回であること (Channel の `isClosing` を owner queue で保護)。
 - handler が状態変更ブロックの外 (状態更新と take-and-clear の後) で呼ばれていること。
 - `PeerChannel` / `MediaChannel` からの同期読み取り (`contactUrl`、`connectedUrl`、`state`、`dataChannelSignaling`、`ignoreDisconnectWebSocket`) が owner への同期 wait なしで成立すること (lock 保護の snapshot)。
@@ -127,3 +127,26 @@ owner への投入を `SignalingStateOwner.enqueue` に変更し、queue 外か�
 `SignalingChannel` の `connect` / `redirect` / `disconnect` / `send(message:)` / `send(text:)` / `setConnectedUrl` / `disconnectWebSocket(identifier:)` と、`dataChannelSignaling` / `ignoreDisconnectWebSocket` の setter をすべて `enqueue` に統一した。`sync` は誤用を防ぐため削除した。
 
 `SignalingStateOwnerTests` で、queue 外からの enqueue が呼び出し元をブロックしないこと、queue 上からの再入がその場で実行されること、投入順が保たれることを検証する。
+
+### 終端処理のテストと receive の isClosing ガード
+
+`URLSessionWebSocketChannel` の終端処理を検証可能にするため、`send` / `receive` の完了処理を `handleSendCompletion(_:)` / `handleReceiveResult(_:)` として切り出した (`PeerChannel.invokeConnectHandler` と同じく、テストから呼び出すため internal としている)。
+
+`receive` の成功完了は利用者 handler (`WebSocketChannelHandlers.onReceive`) を `isClosing` で確認していなかった。`disconnect` は `internalHandlers` しか空にしないため、切断要求の直前に届いたメッセージの完了が切断後に実行されると利用者 handler が呼ばれ得る。`handleReceiveResult` の先頭で `isClosing` を確認するようにした (設計方針「send / receive completion は切断済みの Channel では handler を呼ばない」の実装)。
+
+`URLSessionWebSocketChannelTests` を追加した。
+
+- `didCloseWith` と `didCompleteWithError` が両方届いても切断通知が 1 回であること
+- 利用者切断の後に close callback が届いても切断通知が発火しないこと
+- 切断後に届いた受信結果で利用者 / 内部 handler が呼ばれないこと
+- 切断後に届いた送信完了で切断通知が増えないこと
+
+実 `URLSession` / `URLSessionWebSocketTask` (未 resume) を注入し、delegate メソッドと完了ハンドラを直接呼ぶため、ネットワークに依存せず決定的に検証できる。モックやスタブは使用しない。`handleReceiveResult` の `isClosing` ガードを一時的に外すと `testReceiveResultAfterDisconnectDoesNotCallHandlers` が失敗することを確認している。
+
+Thread Sanitizer も補助的に実行した。0101 の変更箇所にはデータ競合は検出されず、検出された `PeerChannel.onConnect` の競合は別 issue (`0151`) として起票した。
+
+### delegate 設計の変更に伴い削除した要求
+
+設計方針の更新 (`f9805fd3` 設計方針を単一 owner の構成に合わせて更新する) で、delegate の設計を「`URLSessionDelegate` / `URLSessionWebSocketDelegate` を小さい adapter へ分離し、callback 内で session / task identity を snapshot 化して ordered ingress へ渡す」から「`URLSessionWebSocketChannel` 自身が delegate を実装する (1 インスタンスが 1 つの session / task を持つ)」へ変更した。
+
+この変更により session / task の identity 比較は恒真になり、照合しても到達しない経路になる。しかし identity による拒否を求める記述 (設計方針と完了条件) が残っていたため、記述を実装に合わせて `isClosing` による拒否へ修正した。実装は新しい設計どおりで、identity 比較は追加しない。
