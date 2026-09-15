@@ -12,11 +12,11 @@
 
 `Configuration` が struct であることだけに依存せず、内部の参照型、`Any`、`Encodable` を接続開始時に値へ写し取る。mutable handler bag は snapshot に含めず、接続開始時に明示引数として引き渡す。
 
-本 issue は非同期区間の入力源を差し替える refactor であり、signaling JSON と WebRTC 設定の値と解釈を変えない (数値の表記と、`dataChannels` が非 nil のときの metadata の `Decimal` の値だけは次の段落の例外がある)。JSON 化できない `dataChannels` と connect message に載る metadata などの encode 失敗を `SoraError.configurationError` として接続開始前に返す検証は、前提 issue の `0158` が追加する。本 issue はその検証を snapshot 生成へ移設して 1 箇所に保つ (検証の条件も失敗時の挙動も変えない)。
+本 issue は非同期区間の入力源を差し替える refactor であり、signaling JSON と WebRTC 設定の値と解釈を変えない (数値の表記と、`dataChannels` が非 nil のときの connect message に載る `Decimal` の値だけは次の段落の例外がある)。JSON 化できない `dataChannels` と connect message に載る metadata などの encode 失敗を `SoraError.configurationError` として接続開始前に返す検証は、前提 issue の `0158` が追加する。本 issue はその検証を snapshot 生成へ移設して 1 箇所に保つ (検証の条件も失敗時の挙動も変えない)。
 
-唯一の例外は数値である。変換経路が変わるため `Float` / `Double` の表記 (指数表記の展開、`-0.0` の符号) が変わり得るが値は同一である。また `dataChannels` が非 nil のとき metadata の `Decimal` は現行が壊れており (実測: `1.0000000000000001` が `1`)、変更後は利用者入力どおりになる (詳細は「値の凍結」を参照)。
+唯一の例外は数値である。変換経路が変わるため `Float` / `Double` の表記 (指数表記の展開、`-0.0` の符号) が変わり得るが値は同一である。また `dataChannels` が非 nil のとき connect message に載る `Decimal` は現行が壊れており (実測: `1.0000000000000001` が `1`)、変更後は利用者入力どおりになる (詳細は「値の凍結」を参照)。
 
-`Decimal` の値の修正を本 issue に含めるのは、原因が `SignalingChannel.send` の `JSONSerialization` 再直列化そのものであり、本 issue が `data_channels` を `SignalingConnect.encode(to:)` へ移してこの処理を削除するためである。`Any` を再直列化せずに connect JSON へ載せる手段は `JSONValue` と internal な `SignalingConnect.dataChannelSettings` しかなく、別 issue に切り出しても同じ行に対して本 issue の部分集合を実装することになる。
+`Decimal` の値の修正を本 issue に含めるのは、原因が `SignalingChannel.send` の `JSONSerialization` 再直列化そのものであり、本 issue が `data_channels` を `SignalingConnect.encode(to:)` へ移してこの処理を削除するためである。`Any` を再直列化せずに connect JSON へ載せる手段は `JSONValue` と internal な `SignalingConnect.dataChannelSettings` しかなく、別 issue に切り出しても同じ行に対して本 issue の部分集合を実装することになる。元からあるバグがこの機構の廃止に伴って直るため、`CHANGES.md` の `[FIX]` として記録する。
 
 ## 現状
 
@@ -39,7 +39,7 @@
 - `dataChannels` / `ForwardingFilter.metadata` のように参照型を共有したまま内容を変更する場合。
 - `iceServerInfos` の要素である `ICEServerInfo` を in-place で変更する場合。
 
-`SignalingConnect` は `data_channels` の格納プロパティを持たない。`CodingKeys` に `data_channels` はあるが `encode(to:)` からは使われていない。現在の唯一の注入経路は `SignalingChannel.send` が `JSONEncoder` の出力を `JSONSerialization` で `[String: Any]` に戻し、`data_channels` を代入して再シリアライズする処理である。この再直列化は connect message 全体に掛かるため、`dataChannels` が非 nil のときは metadata の `Double` / `Float` が 17 桁表記になり、`JSONSerialization` が `Decimal` を `NSNumber` (Double) へ落とすため Double の精度で表現できない `Decimal` は値が壊れる (実測: `1.0000000000000001` が `1`)。
+`SignalingConnect` は `data_channels` の格納プロパティを持たない。`CodingKeys` に `data_channels` はあるが `encode(to:)` からは使われていない。現在の唯一の注入経路は `SignalingChannel.send` が `JSONEncoder` の出力を `JSONSerialization` で `[String: Any]` に戻し、`data_channels` を代入して再シリアライズする処理である。この再直列化は connect message 全体に掛かるため、`dataChannels` が非 nil のときは connect message に載る `Double` / `Float` が 17 桁表記になり、`JSONSerialization` が `Decimal` を `NSNumber` (Double) へ落とすため Double の精度で表現できない `Decimal` は値が壊れる (実測: `1.0000000000000001` が `1`)。
 
 `PeerChannel.webRTCConfiguration` は `var` で、`configuration.webRTCConfiguration` から初期化された後、offer 受信時に `iceServerInfos` / `iceTransportPolicy` だけがサーバー値で上書きされる。`isInsecure` はサーバー由来ではなく `configuration.insecure` から設定される。
 
@@ -146,7 +146,7 @@
 - `SignalingConnect` の公開プロパティ型と `PeerChannel.makeSignalingConnect` のシグネチャを変更しない。internal な `var dataChannelSettings: JSONValue? = nil` を追加する (`let` + 既定値は memberwise init の既定引数から除外されるため `var` にする)。既存の memberwise init 呼び出しを変えない。
 - `WebRTCConfiguration` / `ICEServerInfo` / `ForwardingFilter` / `MediaConstraints` の公開 property と initializer、および `Codable` の出力 (キー名を含む) を維持する。`WebRTCConfiguration` の internal メンバの移設は公開 API に影響しない。
 - `MediaChannel.configuration` は元 `Configuration` を返し続ける。そのため `MediaChannel` は Sendable ではなく、利用者が `configuration` を actor / Task 境界へ渡す要件は `0152` で扱う。`Sora.connect` の公開シグネチャは変えない。`MediaChannel.validate` は internal のため、snapshot を受け取る形へ変更する。
-- `CHANGES.md` の `## develop` に `[UPDATE]` として追記する。利用者に見える挙動 (数値の表記と、`dataChannels` が非 nil のときの metadata の `Decimal` の値) が変わるため主リストへ置く (`### misc` は利用者影響が無いリファクタなどに使われている。`0100` / `0101` も主リストの `[UPDATE]` である)。`dataChannels` が非 nil のときの metadata の `Decimal` の値も利用者入力どおりになるが、これは「`JSONSerialization` 往復の廃止」という refactor の不可避な帰結であり、独立した `[FIX]` として切り出せる実装手段が無いため `[UPDATE]` の本文に含める。本文には、接続開始時に設定を snapshot へ写し取るようになったこと、数値の表記が変わり得ること (指数表記の展開、`-0.0` の符号)、`dataChannels` が非 nil のときに metadata の `Decimal` が壊れなくなることを含める。担当者行は `- @t-miya` とし、種別の順序と担当者行の書式は `shiguredo-changelog` に従う。
+- `CHANGES.md` の `## develop` の主リストに、refactor を `[UPDATE]` として、`dataChannels` が非 nil のときの connect message に載る `Decimal` の値の修正を `[FIX]` として追記する。`[UPDATE]` の本文には、接続開始時に設定を snapshot へ写し取るようになったことと、数値の表記が変わり得ること (指数表記の展開、`-0.0` の符号) を含める。`[FIX]` は「`dataChannels` を設定していると connect message に載る `Decimal` (`signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別 params / `ForwardingFilter.metadata`) が Double の精度に丸められて送信される問題を修正する」とし、`[UPDATE]` と同様に主リストへ置く (`### misc` は利用者影響が無いリファクタなどに使われている)。分離可能なバグ修正は `0158` に切り出したが、この問題は `JSONSerialization` 往復の廃止 (本 issue の中核) でしか直せないため、本 issue が `[FIX]` を 1 件持つ。担当者行は `- @t-miya` とし、種別の順序 (`[UPDATE]` → `[FIX]`) と担当者行の書式は `shiguredo-changelog` に従う。
 - `0107` の API baseline は未整備のため、本 issue では `git diff` と目視で公開 API 差分ゼロを確認する。`dataChannelSettings` と `JSONValue` は internal のため差分に出ない。baseline による機械検査は `0107` の完了後に行う。
 
 ## スコープ外
@@ -257,8 +257,8 @@
 - offer 受信時の `iceServerInfos` / `iceTransportPolicy` の上書きと、redirect で `offer.configuration` が `nil` のときに直前のサーバー値を維持する既存挙動が変わらないこと。
 - 公開 `Configuration` に `@unchecked Sendable` を付与していないこと。
 - 公開 API のシグネチャが変更されていないこと。
-- signaling message と WebRTC 設定の値と解釈が維持されること (変わるのは数値の表記と、`dataChannels` が非 nil のときの metadata の `Decimal` が現行の壊れた値から利用者入力どおりになる点である。metadata と `dataChannels` の `Float` / `Double` は指数表記が展開・丸めされることがあり (`-0.0` は符号が失われる)、`dataChannels` が非 nil のときは metadata の `Double` の 17 桁表記が `JSONEncoder` の表記に揃う。表記の違いは値として同一)。`Decimal` は Double の精度で表現できない値も含めて metadata 経路と `dataChannels` 経路の両方で利用者入力どおりの値と精度で出力されること。`dataChannels` の値自身は Double としての解釈が現行と同一で出力されること (表記は変わり得る)。object のキー順は不定になり (`Dictionary` の順序) 宣言順とは一致しないが、JSON として等価であること。
-- `CHANGES.md` の `## develop` の主リストに `[UPDATE]` として追記していること (本文の内容は「互換性」を参照)。`0158` が追加する `[FIX]` には触れない。
+- signaling message と WebRTC 設定の値と解釈が維持されること (変わるのは数値の表記と、`dataChannels` が非 nil のときの connect message に載る `Decimal` が現行の壊れた値から利用者入力どおりになる点である。connect message と `dataChannels` の `Float` / `Double` は指数表記が展開・丸めされることがあり (`-0.0` は符号が失われる)、`dataChannels` が非 nil のときは connect message の `Double` の 17 桁表記が `JSONEncoder` の表記に揃う。表記の違いは値として同一)。`Decimal` は Double の精度で表現できない値も含めて metadata 経路と `dataChannels` 経路の両方で利用者入力どおりの値と精度で出力されること。`dataChannels` の値自身は Double としての解釈が現行と同一で出力されること (表記は変わり得る)。object のキー順は不定になり (`Dictionary` の順序) 宣言順とは一致しないが、JSON として等価であること。
+- `CHANGES.md` の `## develop` の主リストに、refactor の `[UPDATE]` と、`dataChannels` が非 nil のときの connect message に載る `Decimal` の修正の `[FIX]` を追記していること (本文の内容は「互換性」を参照)。`0158` が追加する `[FIX]` 2 件とは別のエントリにする。
 - `Sora` と `SoraTests` が `SWIFT_VERSION=6` と `SWIFT_STRICT_CONCURRENCY=complete` でビルドでき、変更前後で concurrency 診断の件数が増えていないこと。
 - 追加したテストと既存テストがすべて成功すること。
 
