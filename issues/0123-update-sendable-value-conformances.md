@@ -1,7 +1,7 @@
 # 公開値型を `Sendable` に対応させる
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-15
 - Priority: Medium
 - Branch: feature/update-sendable-value-conformances
 - Polished: 2026-09-15
@@ -146,3 +146,33 @@ deep Sendable であるにもかかわらず `Sendable` が付いていない型
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+deep Sendable な公開値型 29 型へ checked `Sendable` 準拠を付与し、`Sora/` の Swift 6 型検査で新規警告が出ないことと、値を actor 境界と Task 境界へ渡せることをテストで確認した。実行時の挙動は変えていない。
+
+### 実装内容
+
+- `Sora/ConnectionState.swift` / `Sora/WebRTCConfiguration.swift` / `Sora/AudioMode.swift` / `Sora/Logger.swift` / `Sora/VideoView.swift` / `Sora/WebSocketChannel.swift` / `Sora/Sora.swift` / `Sora/Configuration.swift` / `Sora/CameraVideoCapturer.swift` / `Sora/MediaChannel.swift` / `Sora/Signaling.swift`: 対象 29 型の宣言行へ `Sendable` を追加した (`ConnectionState` / `MediaConstraints` / `DegradationPreference` / `AudioMode` / `AudioOutput` / `LogType` / `LogLevel` / `Log` / `Logger.Group` / `VideoViewConnectionMode` / `WebSocketMessage` / `ConnectionTask.State` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule` / `CameraSettings` / `SoraCloseEvent` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`)
+- `SoraTests/SendableConformanceTests.swift` (新規): `requireSendable` による 29 型のコンパイル時表明と、対象型の値を `nonisolated` な actor の stored property と `Task` の closure へ渡すテストを置いた
+- `Sora/VideoMute.swift`: `CameraSettingsSnapshot` のコメントを、`CameraSettings` が `Sendable` になった現状に合わせて修正した (型自体は削除しない)
+- `skills/sora-ios-sdk/SKILL.md`: `Sendable` 準拠の一覧を 45 型へ更新し、`SoraCloseEvent.error` の保証範囲を注記した
+- `CHANGES.md`: `## develop` に `[UPDATE] 公開値型を `Sendable` に対応させる` を追記した
+
+### 設計上の判断
+
+- `Sendable` 準拠は型の宣言と同一ファイルにのみ書けるため、`extension` ではなく宣言行へ付与した。
+- `@unchecked Sendable` は使っていない。29 型すべてでコンパイラが stored property と associated value を再帰的に検証している。
+- `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない。標準ライブラリの `Error: Sendable` に依存するためで、この旨を `CHANGES.md` と `SKILL.md` に明記した。
+- `CameraSettings` と `Configuration.Spotlight` を対象に含めた結果、`0102` は `CameraSettingsSnapshot` と Bool 復元をやめて公開型を直接保持できるようになったため、本ブランチで `0102` の記述を更新した。`0143` の `CameraSettings` に関する記述も更新した。`CameraSettingsSnapshot` の削除は別 issue とする。
+
+### 検証
+
+- `swiftc -typecheck -swift-version 6` (`Sora/` 全体、iPhoneOS 26.5 SDK): 0 error。警告は 64 件から 63 件へ減り、差分は `PeerChannel` の `SignalingPong` capture 警告 1 件の解消のみで、新規警告は 0 件。
+- `xcodebuild build-for-testing -scheme Sora-Package -sdk iphoneos26.5 -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' SWIFT_VERSION=6`: 成功。
+- 追加した `SendableConformanceTests` の 2 件と、既存の非 E2E テスト 24 クラス 202 件が成功。
+- `swift format lint --strict` と `swiftlint --strict` が通過。
+- 29 型の準拠を巻き戻した状態では新規テストが 29 型すべてでコンパイルエラーになることを確認し、テストが gate として機能することを確認した。
+- Xcode 26.2 / iPhoneOS 26.2 SDK での imported type の確認と E2E テストは、この環境に SDK が無い / secrets が必要なため CI で確認する。
+
+### 実機確認
+
+不要と判断した。`Sendable` はコンパイル時のみのマーカー protocol で、実行時の requirement も witness も持たない。変更は 29 行の宣言への準拠追加であり、実行されるコード、音声セッション、カメラ、画面キャプチャ、ネットワークのいずれも変えていない。
