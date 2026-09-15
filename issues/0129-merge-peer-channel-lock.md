@@ -26,10 +26,12 @@
 
 - `0010`: MediaChannel の接続ライフサイクルを `connectionLifecycleLock` (NSLock) で再実装 (0069 / 0038 と密接)
 - `0100`: PeerChannel の接続状態フラグの reducer (完了後に対象)
+- `0102`: 接続所有の WebRTC 設定と `webRTCConfigurationLock` の追加。統合対象となる lock が増えるため、本 issue は `0102` の完了後に対象とする。
 
 ## 設計方針
 
 - 統合先を決定する。`0010` の `connectionLifecycleLock` と同じ領域へ組み込むか、`0100` の reducer へ組み込むかを検討し、どちらか 1 つに選定する。
+- `0102` が追加する `webRTCConfigurationLock` は接続所有の WebRTC 設定の読み書き区間だけを保護し、`PeerChannel.lock` は接続ライフサイクルの状態 (進行中の非同期処理数と切断フラグ) を保護する。保護対象が異なるため、統合時に `webRTCConfigurationLock` を統合先へ吸収するか、別 lock として残すかを決定する。
 - 接続処理の直列化と PeerChannel の状態遷移を単一の ingress で処理する。
 - `waitDisconnect` の遅延実行セマンティクス (接続試行中の切断要求、猶予タイマー発動時のキャンセル等) を維持する。
 - callback の再入 (basicDisconnect から lock/unlock を呼ぶ場合) が deadlock しないことを保証する。
@@ -49,6 +51,7 @@
 ## 完了条件
 
 - `PeerChannel.Lock` が削除され、その管理状態が統合先 (0010 の `connectionLifecycleLock` または 0100 の reducer) に移行されていること。
+- `webRTCConfigurationLock` の扱い (統合先への吸収、または別 lock としての存続) が決定され、その方針どおりに実装されていること。
 - 統合先の完了条件が引き続き満たされていること。
 - 既存の全テストが成功すること。
 
