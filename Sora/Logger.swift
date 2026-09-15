@@ -1,7 +1,7 @@
 import Foundation
 
 /// :nodoc:
-public enum LogType {
+public enum LogType: Sendable {
   case sora
   case webSocketChannel
   case signaling
@@ -73,7 +73,7 @@ extension LogType: CustomStringConvertible {
 /// 2. `debug`
 /// 1. `trace`
 /// 0. `off`
-public enum LogLevel {
+public enum LogLevel: Sendable {
   /// 致命的なエラー情報
   case fatal
 
@@ -143,7 +143,7 @@ extension LogLevel: CustomStringConvertible {
 // MARK: -
 
 /// :nodoc:
-public struct Log {
+public struct Log: Sendable {
   public let level: LogLevel
   public let type: LogType
   public let timestamp: Date
@@ -181,7 +181,7 @@ extension Log: CustomStringConvertible {
 // @unchecked Sendable を付与します。
 /// :nodoc:
 public final class Logger: @unchecked Sendable {
-  public enum Group {
+  public enum Group: Sendable {
     case channels
     case connectionTimer
     case videoCapturer

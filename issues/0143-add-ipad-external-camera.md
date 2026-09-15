@@ -25,7 +25,7 @@ iPadOS 17.0 以降の iPad では USB 接続の UVC 外部カメラが利用で�
 - `CameraVideoCapturer.devices` に外部カメラを含める。 `RTCCameraVideoCapturer.captureDevices()` の結果へ `AVCaptureDevice.DiscoverySession` で取得した `.external` のデバイスを `uniqueID` の重複を除いて追加する。
   - `AVCaptureDevice.DeviceType.external` は iOS 17.0 以降でのみ利用できるため `#available(iOS 17.0, *)` で分岐する。 SDK の最小対応バージョン (iOS 14) は変更しない。
 - `CameraSettings` に `deviceID: String?` を追加する。 `AVCaptureDevice.uniqueID` を指定する API とし、指定時は `position` より優先する。 外部カメラは `position` で特定できないため、外部カメラを使う場合は `deviceID` を指定する。
-  - `CameraSettingsSnapshot` にも `deviceID` を追加する。 `CameraSettings` 自体は `Sendable` にせず、actor 境界へ渡す値だけをスナップショット化する現行方針を維持する。
+  - `CameraSettingsSnapshot` にも `deviceID` を追加する。 `CameraSettings` は `0123` の完了により `Sendable` になった。 `CameraSettingsSnapshot` を廃止して `CameraSettings` をそのまま actor 境界へ渡す形への変更は別 issue とし、本 issue では `deviceID` をスナップショットへ引き継ぐ現行方針を維持する。
   - `PeerChannel.initializeCameraVideoCapture` と `VideoMute.startCameraVideoCapture` の両方で `deviceID` から `CameraVideoCapturer.devices` を検索し、見つかった `AVCaptureDevice` から `CameraVideoCapturer(device:)` を生成する。 `deviceID` が未指定の場合は現状どおり `position` から front / back を選ぶ。
   - `deviceID` に一致するデバイスが見つからない場合は、 front / back が見つからない場合と同じくカメラを起動せずにエラーログを出力する。
 - `CameraVideoCapturer.flip(_:completionHandler:)` は `device.position` が `.front` / `.back` 以外の場合はエラーを返す。 外部カメラには front / back の区別がないため。

@@ -2,7 +2,7 @@ import Foundation
 import WebRTC
 
 /// メディア制約を表します。
-public struct MediaConstraints {
+public struct MediaConstraints: Sendable {
   /// 必須の制約
   public var mandatory: [String: String] = [:]
 
@@ -34,7 +34,7 @@ public enum SDPSemantics: Sendable {
 }
 
 /// (リソースの逼迫により) 送信する映像の品質が維持できない場合の挙動です。
-public enum DegradationPreference {
+public enum DegradationPreference: Sendable {
   /// 何もしない
   case disabled
 

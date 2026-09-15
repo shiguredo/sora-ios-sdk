@@ -50,7 +50,7 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
 - `Params: Encodable & Sendable` と `Result: Decodable & Sendable` を要求する新しい public protocol を追加する。
 - 既存 `RPCMethodProtocol` の制約は変更せず、互換 API として維持する。
 - 新旧 protocol の両方へ準拠した型で overload が曖昧にならない API 名または明示的な overload 設計を採用する。
-- SDK 組み込みの RPC params / result は deep-safe であることを確認したうえで新 protocol に対応する。
+- SDK 組み込みの RPC params / result は deep Sendable であることを確認したうえで新 protocol に対応する。
 
 ### response の越境
 

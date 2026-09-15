@@ -2,7 +2,7 @@ import Foundation
 import WebRTC
 
 /// MediaChannel, SignalingChannel, WebSocketChannel の接続状態を表します。
-public enum ConnectionState {
+public enum ConnectionState: Sendable {
   /// 接続試行中
   case connecting
 
