@@ -24,7 +24,7 @@
 
 ## 前提となる issue
 
-本 issue は `0101` の完了を前提とする。`0101` が `SignalingChannel` と `URLSessionWebSocketChannel` の状態所有者を統一する作業であり、その完了後に接続管理の境界と名前を確定させることで、状態所有の再設計と改名が衝突しないようにする。
+本 issue は `0101` と `0102` の完了を前提とする。`0101` が `SignalingChannel` と `URLSessionWebSocketChannel` の状態所有者を統一する作業であり、その完了後に接続管理の境界と名前を確定させることで、状態所有の再設計と改名が衝突しないようにする。また `0102` が接続設定のシグナリング JSON 生成を `ConnectionConfigurationSnapshot` へ移す作業であり、その完了後にシグナリングの encode / decode の分離先を確定させる。
 
 ## 設計方針
 
