@@ -126,4 +126,56 @@ final class SignalingStateOwnerTests: XCTestCase {
     wait(for: [expectation], timeout: 3)
     XCTAssertEqual(observed, Array(0..<total), "enqueue した順に実行されること")
   }
+
+  // MARK: - 接続完了 handler のライフサイクル
+
+  /// 接続成功の通知で handler が消費されないことを確認する
+  ///
+  /// redirect では新しい transport が採用されたときにも同じ handler を呼び、
+  /// type: connect を redirect: true で再送する。接続成功時に handler を
+  /// take-and-clear すると 2 回目の採用で handler が nil になり、redirect が
+  /// 機能しなくなる。
+  func testOnConnectHandlerIsNotConsumedByNotification() {
+    let owner = SignalingStateOwner()
+    let expectation = expectation(description: "接続成功の通知が 2 回呼ばれること")
+    var callCount = 0
+
+    owner.enqueue {
+      owner.setOnConnect { _ in
+        callCount += 1
+        if callCount == 2 {
+          expectation.fulfill()
+        }
+      }
+
+      // 初回接続の採用
+      owner.onConnectOnQueue()?(nil)
+      // redirect 後の採用 (同じ handler をもう一度呼ぶ)
+      owner.onConnectOnQueue()?(nil)
+    }
+
+    wait(for: [expectation], timeout: 3)
+    XCTAssertEqual(callCount, 2, "接続成功のたびに handler が呼ばれること")
+  }
+
+  /// takeOnConnect が handler を消費することを確認する
+  ///
+  /// 終端経路 (CA 証明書のパース失敗など) では 1 回だけ通知して解放する。
+  func testTakeOnConnectConsumesHandler() {
+    let owner = SignalingStateOwner()
+    let expectation = expectation(description: "handler の取り出しが完了すること")
+    var firstIsNil = true
+    var secondIsNil = false
+
+    owner.enqueue {
+      owner.setOnConnect { _ in }
+      firstIsNil = owner.takeOnConnect() == nil
+      secondIsNil = owner.takeOnConnect() == nil
+      expectation.fulfill()
+    }
+
+    wait(for: [expectation], timeout: 3)
+    XCTAssertFalse(firstIsNil, "1 回目は handler を取り出せること")
+    XCTAssertTrue(secondIsNil, "2 回目は nil になること")
+  }
 }

@@ -60,8 +60,8 @@
 ### 終端と callback
 
 - `didCloseWith` と `didCompleteWithError` が両方届いても、1 接続につき切断通知を厳密に 1 回にする。1 回保証は Channel 自身の `isClosing` (owner queue 上でのみ読み書き) で行う。owner に終端済みの台帳 (墓石) は残さない。
-- send / receive completion は、owner queue 上で Channel の `isClosing` を再確認し、切断済みの Channel では handler を呼ばない。owner が保持する current な Channel は常に `isClosing == false`、それ以外は `disconnect` 済みなので、この確認が「current な transport であること」の確認になる。
-- handler は状態更新と take-and-clear の後に呼ぶ。ここでの「critical section 外」は「状態変更ブロックの外」を意味し、handler 呼び出しも owner queue 上で行う。handler 内から操作 API を呼ぶ再入は queue 上の直接実行で安全に処理される。handler 内で別スレッドの完了を同期的に待つことは避ける (owner queue を占有するため)。
+- send / receive completion は、owner queue 上で Channel の `isClosing` を再確認し、切断済みの Channel では handler を呼ばない。owner は切断後も切断済みの Channel を current として保持するため (`isClosing == true`)、`isClosing == false` の Channel は現在使用中の transport である (逆は成立しない)。
+- handler は状態更新の後に呼ぶ。ここでの「critical section 外」は「状態変更ブロックの外」を意味し、handler 呼び出しも owner queue 上で行う。接続試行を終端させる経路 (CA 証明書のパース失敗など) では take-and-clear した後に呼ぶ。接続成功時は handler を消費しない (redirect では新しい transport の採用時にも同じ handler を呼び、type: connect を再送するため)。handler 内から操作 API を呼ぶ再入は queue 上の直接実行で安全に処理される。handler 内で別スレッドの完了を同期的に待つことは避ける (owner queue を占有するため)。
 - redirect では旧 transport を `disconnect` (=`isClosing = true`) してから owner の参照を外し、新しい `URLSessionWebSocketChannel` を生成して接続する。旧 transport の遅延 callback は `isClosing` で切り離す。
 
 ### 互換性
@@ -98,7 +98,7 @@
 - `connect`、`send`、`redirect`、`disconnect`、delegate callback が同じ ordered ingress (owner の直列 queue) を通ること (queue 外からの投入は呼び出し元をブロックしない enqueue で行う)。
 - 古い session / task の callback が current state を変更しないこと (Channel の `isClosing` で拒否)。
 - `didCloseWith` と `didCompleteWithError` が競合しても切断通知が厳密に 1 回であること (Channel の `isClosing` を owner queue で保護)。
-- handler が状態変更ブロックの外 (状態更新と take-and-clear の後) で呼ばれていること。
+- handler が状態変更ブロックの外 (状態更新の後) で呼ばれていること。接続試行を終端させる経路では take-and-clear の後で呼ばれていること。
 - `PeerChannel` / `MediaChannel` からの同期読み取り (`contactUrl`、`connectedUrl`、`state`、`dataChannelSignaling`、`ignoreDisconnectWebSocket`) が owner への同期 wait なしで成立すること (lock 保護の snapshot)。
 - `webSocketChannel` への操作が owner queue 経由で行われ、Channel の状態が owner queue 外から操作されないこと。
 - `URLSessionWebSocketChannel` の `@unchecked Sendable` の安全性がクラスコメントで説明されていること (可変状態のアクセスが owner queue に限定される)。
@@ -150,3 +150,15 @@ Thread Sanitizer も補助的に実行した。0101 の変更箇所にはデー�
 設計方針の更新 (`f9805fd3` 設計方針を単一 owner の構成に合わせて更新する) で、delegate の設計を「`URLSessionDelegate` / `URLSessionWebSocketDelegate` を小さい adapter へ分離し、callback 内で session / task identity を snapshot 化して ordered ingress へ渡す」から「`URLSessionWebSocketChannel` 自身が delegate を実装する (1 インスタンスが 1 つの session / task を持つ)」へ変更した。
 
 この変更により session / task の identity 比較は恒真になり、照合しても到達しない経路になる。しかし identity による拒否を求める記述 (設計方針と完了条件) が残っていたため、記述を実装に合わせて `isClosing` による拒否へ修正した。実装は新しい設計どおりで、identity 比較は追加しない。
+
+### レビューで検出した redirect の退行
+
+接続成功時に `owner.takeOnConnect()` で handler を消費していたため、redirect で新しい transport が採用されたときにも handler が呼ばれず、`type: connect` (`redirect: true`) が再送されなかった。
+
+- `PeerChannel` の接続完了 handler (`signalingChannel.connect { ... }`) は、`sdp` がある場合に `redirect: true` で `sendConnectMessage` を呼ぶ。これは redirect で `type: connect` を再送するための経路である
+- handler を再登録する経路はない (`signalingChannel.connect` の呼び出しは `PeerChannel.connect` の 1 箇所のみで、`SignalingChannel.redirect` は `setOnConnect` を呼ばない)
+- develop では `if let onConnect = weakSelf.onConnect { onConnect(nil) }` で handler を消費していなかったため、この退行は本 issue の実装で作り込んだもの
+
+接続成功時は handler を消費しない `SignalingStateOwner.onConnectOnQueue()` を追加し、終端経路 (CA 証明書のパース失敗) の `takeOnConnect()` は維持した。`SignalingStateOwnerTests` に、接続成功の通知で handler が消費されないことと、`takeOnConnect` が handler を消費することを検証するテストを追加した。
+
+redirect の実環境検証はテスト方針で手動確認としているため CI では検出できない。実 Sora での redirect 確認が必要である。

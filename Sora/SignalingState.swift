@@ -301,6 +301,15 @@ final class SignalingStateOwner: @unchecked Sendable {
     onConnect = handler
   }
 
+  /// 接続完了 handler を消費せずに取り出す。queue 上で呼び出すこと。
+  ///
+  /// redirect では新しい transport が採用されたときにも同じ handler を呼び、
+  /// type: connect を再送する。そのため接続成功の通知では handler を残す。
+  /// handler を終端させる経路 (CA 証明書のパース失敗など) では `takeOnConnect()` を使う。
+  func onConnectOnQueue() -> ((Error?) -> Void)? {
+    onConnect
+  }
+
   /// 接続完了 handler を取り出す (take-and-clear)。queue 上で呼び出すこと。
   func takeOnConnect() -> ((Error?) -> Void)? {
     let handler = onConnect

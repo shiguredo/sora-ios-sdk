@@ -171,7 +171,10 @@ class SignalingChannel {
       }
       weakSelf.owner.clearCandidates()
 
-      if let onConnect = weakSelf.owner.takeOnConnect() {
+      // 接続完了 handler は消費しない。
+      // redirect では新しい transport の採用時にも同じ handler を呼び、
+      // type: connect を redirect: true で再送するため
+      if let onConnect = weakSelf.owner.onConnectOnQueue() {
         Logger.debug(type: .signalingChannel, message: "call connect(handler:)")
         onConnect(nil)
       }

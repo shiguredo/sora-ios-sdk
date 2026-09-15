@@ -11,6 +11,10 @@
 
 ## develop
 
+- [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
+  - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
+  - @t-miya
+
 ### misc
 
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
