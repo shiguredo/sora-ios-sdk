@@ -57,6 +57,11 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 - MainActor renderer への最終配送は `0027`、custom queue の公開指定は `0060` で扱う。
 - add、frame、remove、disconnect に加えて、`videoEnabled` / `audioEnabled` の変更に伴う switch と `onChange(size:)` を含む renderer event の因果順序を、個別の unstructured Task 生成に依存させない。
 
+### 映像・音声の有効フラグ
+
+- `videoEnabled` / `audioEnabled` の変更を stream 単位の executor 上で直列化する。`MediaChannel.setVideoSoftMute` の同期書き込み、`setVideoHardMute` の actor 内書き込み、`setVideoHardMute(false)` の成功後の書き込みなど、複数の API から同じ stream の `videoEnabled` へ書き込まれても、最後に確定した変更が最終値になるようにする。
+- `0136` は `setVideoHardMute(true)` の書き込みだけを `VideoHardMuteActor` の executor へ移す限定変更である。`videoEnabled` の変更全体を stream 単位へ集約するのは本 issue が担う。
+
 ## スコープ外
 
 - 新しい Media Processors 機能は `0057` で扱う。
@@ -85,6 +90,7 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 - stale transport epoch の frame が WebRTC video source と renderer へ配送されないこと。
 - raw frame を広域の unchecked wrapper で executor 越境させていないこと。
 - add、frame、remove、disconnect に加えて、switch、size を含む renderer event の因果順序が明示的に保証されること。
+- 同一 stream の `videoEnabled` / `audioEnabled` を複数の API から並行に変更しても、最後に確定した変更が最終値になり、途中の変更が後から上書きされないこと。
 - `0057`、`0027`、`0060` が利用できる基盤と責務境界が文書化されていること。
 - 追加したテストと既存テストがすべて成功すること。
 
