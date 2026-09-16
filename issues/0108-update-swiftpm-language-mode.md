@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/update-swiftpm-language-mode
-- Polished: 2026-08-31
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -62,7 +62,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 
 - `Package.swift` の tools version が Swift 6 対応の `6.x` であること。
 - `swiftLanguageModes: [.v6]` が manifest に明示されていること。
-- `swift package dump-package` が tools 6.x と Swift 6 language mode を示すこと。出力キーは `swiftLanguageVersions` のまま、値として `["6"]` が現れる。
+- `swift package dump-package` が tools 6.x と Swift 6 language mode を示すこと (`swiftLanguageVersions` に `["6"]` が現れることが期待されるが、キー名と値の形式は採用 Xcode の `PackageDescription` が出力する JSON で確認する)。
 - iOS 14 deployment target が維持されていること。
 - package product、target、binary dependency の構成が意図せず変わっていないこと。
 - target 全体を MainActor default にして concurrency 問題を隠していないこと。
