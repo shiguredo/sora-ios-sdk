@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Low
 - Branch: feature/refactor-connect-error-closure-capture
-- Polished:
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -12,7 +12,7 @@
 
 ## 現状
 
-`Sora/Sora.swift` の `Sora.connect` は `MediaChannel` の生成に失敗した場合、既存の設定エラー経路で `ConnectionTask.complete()` の後に `DispatchQueue.global().async` の中で接続 handler と `Sora.handlers.onConnect` を呼ぶ。
+`Sora/Sora.swift` の `Sora.connect` は、接続設定の snapshot 生成または `MediaChannel` の生成に失敗した場合（設定エラーや ADM 初期化エラー）、既存の設定エラー経路で `ConnectionTask.complete()` の後に `DispatchQueue.global().async` の中で接続 handler と `Sora.handlers.onConnect` を呼ぶ。
 
 この closure は `@escaping` だが `@Sendable` ではない接続 handler を capture するため、`SWIFT_VERSION=6` で `#SendableClosureCaptures` 警告が出る。既存の `SignalingQueueBlock` は `Sora/SignalingState.swift` の private 型であり、別ファイルから流用できない。
 
