@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-notify-connection-count-races
-- Polished: 2026-09-03
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -26,7 +26,7 @@
 
 ## スコープ外
 
-- `state` / `connectionStartTime` の snapshot 化 (`MediaChannelSnapshot`) は本 issue では扱わない。 (`0010` が MediaChannel の接続ライフサイクルを `connectionLifecycleLock` で実装済みであり、ここで扱うのは `connectionCount` 系のみ)
+- `state` / `connectionStartTime` は本 issue では扱わない。MediaChannel の接続ライフサイクルは `0010` の `connectionLifecycleLock` による直列化を正とし、本 issue で扱うのは `connectionCount` / `publisherCount` / `subscriberCount` のみ
 - `onReceiveSignaling` の Sendable 化 / event API 化は `0110` で扱う。
 
 ## テスト方針
