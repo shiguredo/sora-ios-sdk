@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-e2e-concurrency-suppressions
-- Polished:
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -13,7 +13,7 @@ E2E テストが `@preconcurrency import Sora` と根拠のない `@unchecked Se
 
 ## 現状
 
-`SoraTests/E2ETestBase.swift` と 6 つの E2E test ファイルは、合計 7 箇所で `@testable @preconcurrency import Sora` を使用している。
+`SoraTests/E2ETestBase.swift` と 10 の E2E test ファイルは、合計 11 箇所で `@testable @preconcurrency import Sora` を使用している (2026-09-16 時点)。起票時点 (2026-08-27) は 7 箇所で、その後 `ConnectionTaskCancelE2ETests` / `PeerChannelConnectCompletionE2ETests` / `StereoAudioOutputE2ETests` / `VideoHardMuteRollbackE2ETests` の追加により増えている。
 
 `E2ETestBase` は `@MainActor` だが、SDK callback は WebSocket、DataChannel、WebRTC の callback executor から到達する。各 test は一部を `DispatchQueue.main.async` へ送っているものの、`@preconcurrency` により non-Sendable capture と isolation の診断が抑止されている。
 
@@ -23,7 +23,7 @@ E2E テストが `@preconcurrency import Sora` と根拠のない `@unchecked Se
 
 ## 設計方針
 
-- 7 箇所の `@testable @preconcurrency import Sora` を通常の `@testable import Sora` へ変更する。
+- 11 箇所の `@testable @preconcurrency import Sora` を通常の `@testable import Sora` へ変更する。
 - E2E test の mutable state は `E2ETestBase` の MainActor または明示的な同期 storage で所有する。
 - SDK callback から MainActor state を更新するときは、値を immutable snapshot にしてから 1 つの明示的な hop を行う。
 - expectation の fulfill と test state の更新順序を同じ actor 上で決定する。
