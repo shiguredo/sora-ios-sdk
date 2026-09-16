@@ -32,6 +32,8 @@
 
 - 統合先を決定する。`0010` の `connectionLifecycleLock` と同じ領域へ組み込むか、`0100` の reducer へ組み込むかを検討し、どちらか 1 つに選定する。
 - `0102` が追加する `webRTCConfigurationLock` は接続所有の WebRTC 設定の読み書き区間だけを保護し、`PeerChannel.lock` は接続ライフサイクルの状態 (進行中の非同期処理数と切断フラグ) を保護する。保護対象が異なるため、統合時に `webRTCConfigurationLock` を統合先へ吸収するか、別 lock として残すかを決定する。
+- `0102` の `webRTCConfigurationLock` は個々の読み出し / 書き込みだけを保護し、`currentWebRTCConfiguration()` → `WebRTCConfigurationSnapshot.replacing(...)` → `updateWebRTCConfiguration(_:)` の read-modify-write が lock をまたいで 3 分割されている。`updateWebRTCConfiguration(_:)` は現在値を見ないため、読み出しと書き戻しの間の更新は失われる。現状は接続所有設定の書き込み元が `PeerChannel.createAndSendAnswer` の 1 箇所だけで、そこは `SignalingChannel` の直列 queue 上で実行されるため実害は無い。統合時は差分 (iceServerInfos / iceTransportPolicy / isInsecure) を受け取って lock 内で現在値へ適用する形にまとめ、`replacing(...)` を不要にできるかを検討する。
+- `PeerChannel.createAndSendAnswer` は更新後の値を再読せずローカルから `createNativePeerChannel` / `setConfiguration` / `createAnswer` へ渡しており、「この offer の設定で answer を作る」ことがコード上で保証されている。統合後もこの性質を維持する。
 - 接続処理の直列化と PeerChannel の状態遷移を単一の ingress で処理する。
 - `waitDisconnect` の遅延実行セマンティクス (接続試行中の切断要求、猶予タイマー発動時のキャンセル等) を維持する。
 - callback の再入 (basicDisconnect から lock/unlock を呼ぶ場合) が deadlock しないことを保証する。

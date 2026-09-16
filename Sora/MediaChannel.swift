@@ -207,6 +207,13 @@ public final class MediaChannel {
   // MARK: - 接続情報
 
   /// クライアントの設定
+  ///
+  /// 公開互換のために利用者が渡した値を返し続けます。接続開始後の非同期区間
+  /// (非同期 hop の後、WebRTC callback、`ConnectionTimer`) はこの値の参照型フィールド
+  /// (metadata / notify metadata / codec 別 params / `dataChannels` / `forwardingFilter` /
+  /// `forwardingFilters` / `webRTCConfiguration`、および snapshot に含めない handler bag と
+  /// `audioDevice`) を読みません。値型フィールドは接続開始時の値のままなので、公開 getter、
+  /// `description`、公開 mute API、`senderStream` / `receiverStreams` はこの値を読みます。
   public let configuration: Configuration
 
   /// 最初に type: connect メッセージを送信した URL (デバッグ用)
@@ -414,8 +421,10 @@ public final class MediaChannel {
 
   /// 初期化します。
   ///
+  /// 利用者が渡した `Configuration` から snapshot を生成します。テストなどで
+  /// snapshot を直接渡す場合は designated init を使います。
   /// - parameter configuration: クライアントの設定
-  init(
+  convenience init(
     configuration: Configuration,
     audioSessionCoordinator: AudioSessionCoordinator = .shared,
     videoHardMuteLease: VideoHardMuteLease = VideoHardMuteLease(),
@@ -423,17 +432,53 @@ public final class MediaChannel {
     cameraCaptureOwnership: CameraCaptureOwnership = CameraCaptureOwnership(),
     videoSourceCoordinator: VideoSourceCoordinator = VideoSourceCoordinator()
   ) throws {
-    try Self.validate(configuration: configuration)
+    try self.init(
+      snapshot: ConnectionConfigurationSnapshot(configuration: configuration),
+      configuration: configuration,
+      audioDevice: configuration.audioDevice,
+      mediaChannelHandlers: configuration.mediaChannelHandlers,
+      webSocketChannelHandlers: configuration.webSocketChannelHandlers,
+      audioSessionCoordinator: audioSessionCoordinator,
+      videoHardMuteLease: videoHardMuteLease,
+      cameraCaptureCoordinator: cameraCaptureCoordinator,
+      cameraCaptureOwnership: cameraCaptureOwnership,
+      videoSourceCoordinator: videoSourceCoordinator)
+  }
+
+  /// 初期化します。
+  ///
+  /// - parameter snapshot: 接続開始時に写し取った設定
+  /// - parameter configuration: 公開互換のために保持する利用者の設定
+  /// - parameter audioDevice: カスタム音声デバイス (snapshot には含めない)
+  /// - parameter mediaChannelHandlers: メディアチャネルのハンドラ
+  /// - parameter webSocketChannelHandlers: WebSocket チャネルのハンドラ
+  init(
+    snapshot: ConnectionConfigurationSnapshot,
+    configuration: Configuration,
+    audioDevice: RTCAudioDevice?,
+    mediaChannelHandlers: MediaChannelHandlers,
+    webSocketChannelHandlers: WebSocketChannelHandlers,
+    audioSessionCoordinator: AudioSessionCoordinator = .shared,
+    videoHardMuteLease: VideoHardMuteLease = VideoHardMuteLease(),
+    cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
+    cameraCaptureOwnership: CameraCaptureOwnership = CameraCaptureOwnership(),
+    videoSourceCoordinator: VideoSourceCoordinator = VideoSourceCoordinator()
+  ) throws {
+    // snapshot の usesCustomAudioDevice は接続開始時に audioDevice != nil から確定する。
+    // 両者を確定させる経路は init(configuration:) だけなので、不一致は SDK 内部の不具合。
+    precondition(snapshot.usesCustomAudioDevice == (audioDevice != nil))
+
+    try Self.validate(snapshot: snapshot)
 
     let audioSessionUsage: AudioSessionUsage =
-      if configuration.audioDevice != nil {
+      if snapshot.usesCustomAudioDevice {
         .custom
-      } else if !configuration.audioEnabled {
+      } else if !snapshot.audioEnabled {
         .none
-      } else if configuration.audioStereoOutputEnabled {
-        .stereoRemoteIO(requiresPlayAndRecord: configuration.isSender)
+      } else if snapshot.audioStereoOutputEnabled {
+        .stereoRemoteIO(requiresPlayAndRecord: snapshot.isSender)
       } else {
-        .voiceProcessing(requiresPlayAndRecord: configuration.isSender)
+        .voiceProcessing(requiresPlayAndRecord: snapshot.isSender)
       }
 
     self.configuration = configuration
@@ -442,20 +487,22 @@ public final class MediaChannel {
     self.cameraCaptureCoordinator = cameraCaptureCoordinator
     self.cameraCaptureOwnership = cameraCaptureOwnership
     self.nativePeerChannelFactory = try NativePeerChannelFactory(
-      bypassVoiceProcessing: configuration.bypassVoiceProcessing,
-      audioDevice: configuration.audioDevice,
+      bypassVoiceProcessing: snapshot.bypassVoiceProcessing,
+      audioDevice: audioDevice,
       audioSessionUsage: audioSessionUsage,
       audioSessionCoordinator: audioSessionCoordinator)
-    signalingChannel = SignalingChannel.init(configuration: configuration)
+    signalingChannel = SignalingChannel.init(
+      snapshot: snapshot,
+      webSocketChannelHandlers: webSocketChannelHandlers)
     _peerChannel = PeerChannel.init(
-      configuration: configuration,
+      snapshot: snapshot,
       signalingChannel: signalingChannel,
       nativePeerChannelFactory: nativePeerChannelFactory,
       mediaChannel: self,
       cameraCaptureCoordinator: cameraCaptureCoordinator,
       cameraCaptureOwnership: cameraCaptureOwnership,
       videoSourceCoordinator: videoSourceCoordinator)
-    handlers = configuration.mediaChannelHandlers
+    handlers = mediaChannelHandlers
 
     _connectionTimer = ConnectionTimer(
       monitors: [
@@ -464,7 +511,7 @@ public final class MediaChannel {
         // swiftlint:disable:next force_unwrapping
         .peerChannel(_peerChannel!),
       ],
-      timeout: configuration.connectionTimeout)
+      timeout: snapshot.connectionTimeout)
   }
 
   deinit {
@@ -479,19 +526,19 @@ public final class MediaChannel {
   }
 
   /// ADM を生成する前に、ステレオ音声出力の組み合わせ制約を検証します。
-  static func validate(configuration: Configuration) throws {
-    guard configuration.audioStereoOutputEnabled else {
+  static func validate(snapshot: ConnectionConfigurationSnapshot) throws {
+    guard snapshot.audioStereoOutputEnabled else {
       return
     }
-    guard configuration.audioEnabled else {
+    guard snapshot.audioEnabled else {
       throw SoraError.configurationError(
         reason: "audioStereoOutputEnabled requires audioEnabled to be true")
     }
-    guard configuration.audioCodec != .pcmu else {
+    guard snapshot.audioCodec != .pcmu else {
       throw SoraError.configurationError(
         reason: "audioStereoOutputEnabled does not support PCMU")
     }
-    guard configuration.audioDevice == nil else {
+    guard !snapshot.usesCustomAudioDevice else {
       throw SoraError.configurationError(
         reason: "audioStereoOutputEnabled cannot be used with a custom audio device")
     }
@@ -618,13 +665,12 @@ public final class MediaChannel {
 
   /// サーバーに接続します。
   ///
-  /// - parameter webRTCConfiguration: WebRTC の設定
-  /// - parameter timeout: タイムアウトまでの秒数
+  /// - parameter webRTCConfiguration: WebRTC の設定。接続処理はこの引数を使わず、
+  ///   接続開始時の snapshot から設定を読む (公開引数の扱いは別途整理する)
   /// - parameter handler: 接続試行後に呼ばれるクロージャー
   /// - parameter error: (接続失敗時) エラー
   func connect(
     webRTCConfiguration: WebRTCConfiguration,
-    timeout: Int = 30,
     onPrepared: (() -> Void)? = nil,
     handler: @escaping (_ error: Error?) -> Void
   ) -> ConnectionTask {
@@ -682,19 +728,14 @@ public final class MediaChannel {
     onPrepared?()
 
     DispatchQueue.global().async { [weak self] in
-      self?.basicConnect(
-        connectionTask: task,
-        webRTCConfiguration: webRTCConfiguration,
-        timeout: timeout)
+      // basicConnect は接続設定を snapshot から読む。webRTCConfiguration は既存テストの
+      // 呼び出し互換のために受け取るだけで、接続処理では使わない。
+      self?.basicConnect(connectionTask: task)
     }
     return task
   }
 
-  private func basicConnect(
-    connectionTask: ConnectionTask,
-    webRTCConfiguration: WebRTCConfiguration,
-    timeout: Int
-  ) {
+  private func basicConnect(connectionTask: ConnectionTask) {
     Logger.debug(type: .mediaChannel, message: "try connecting")
 
     let peerChannel = self.peerChannel

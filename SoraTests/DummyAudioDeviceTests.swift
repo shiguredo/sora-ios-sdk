@@ -118,7 +118,9 @@ final class DummyAudioDeviceTests: XCTestCase {
     ) { _, _, _ in }
     XCTAssertTrue(configuration.requiresStereoAudioSDP)
     XCTAssertFalse(configuration.audioStereoOutputEnabled)
-    XCTAssertNoThrow(try MediaChannel.validate(configuration: configuration))
+    XCTAssertNoThrow(
+      try MediaChannel.validate(
+        snapshot: ConnectionConfigurationSnapshot(configuration: configuration)))
   }
 
   /// 判定器自身が無音・左右交換・モノラル化を検出することを実 PCM で確認する。

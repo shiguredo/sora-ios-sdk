@@ -92,42 +92,6 @@ public struct WebRTCConfiguration {
   public init() {
     iceServerInfos = []
   }
-
-  // MARK: - ネイティブ
-
-  var nativeValue: RTCConfiguration {
-    let config = RTCConfiguration()
-    config.iceServers = iceServerInfos.map { info in
-      info.nativeValue(insecure: isInsecure)
-    }
-    config.iceTransportPolicy = iceTransportPolicy.nativeValue
-    config.sdpSemantics = sdpSemantics.nativeValue
-
-    // AES-GCM を有効にする
-    config.cryptoOptions = RTCCryptoOptions(
-      srtpEnableGcmCryptoSuites: true,
-      srtpPreferGcmCryptoSuites: true,
-      srtpEnableAes128Sha1_32CryptoCipher: false,
-      srtpEnableAes128Sha1_80CryptoCipher: false,
-      srtpEnableEncryptedRtpHeaderExtensions: false,
-      sframeRequireFrameEncryption: false)
-    return config
-  }
-
-  var nativeConstraints: RTCMediaConstraints { constraints.nativeValue }
-
-  /// `Configuration.insecure` に対応する内部フラグ。
-  /// `true` の場合は TURN-TLS の証明書検証をスキップする。
-  var isInsecure: Bool = false
-
-  var usesVerifiedTURNTLS: Bool {
-    if isInsecure {
-      return false
-    }
-    return iceServerInfos.contains { info in
-      info.usesVerifiedTURNTLS
-    }
-  }
 }
 
 private let sdpSemanticsTable: PairTable<String, SDPSemantics> =

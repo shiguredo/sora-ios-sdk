@@ -38,11 +38,10 @@ final class StereoAudioOutputTests: XCTestCase {
     let factory = try NativePeerChannelFactory(
       bypassVoiceProcessing: false,
       audioSessionUsage: .stereoRemoteIO(requiresPlayAndRecord: false))
-    let configuration = WebRTCConfiguration()
+    let webRTCConfiguration = WebRTCConfigurationSnapshot(WebRTCConfiguration())
     let offerExpectation = expectation(description: "クライアント Offer を生成できること")
     factory.createClientOfferSDP(
-      configuration: configuration,
-      constraints: configuration.constraints
+      webRTCConfiguration: webRTCConfiguration
     ) { sdp, error in
       XCTAssertNil(error)
       XCTAssertNotNil(sdp)
@@ -55,8 +54,7 @@ final class StereoAudioOutputTests: XCTestCase {
     for _ in 0..<2 {
       let peer = try XCTUnwrap(
         factory.createNativePeerChannel(
-          configuration: configuration,
-          constraints: configuration.constraints,
+          webRTCConfiguration: webRTCConfiguration,
           delegate: nil))
       XCTAssertTrue(
         factory.audioDeviceModule?.stereoPlayoutEnabled() == true,
@@ -129,7 +127,9 @@ final class StereoAudioOutputTests: XCTestCase {
       configuration.audioStereoOutputEnabled = true
       configuration.initialMicrophoneEnabled = false
 
-      XCTAssertNoThrow(try MediaChannel.validate(configuration: configuration))
+      XCTAssertNoThrow(
+        try MediaChannel.validate(
+          snapshot: ConnectionConfigurationSnapshot(configuration: configuration)))
     }
   }
 
@@ -467,8 +467,7 @@ final class StereoAudioOutputTests: XCTestCase {
     let webRTCConfiguration = WebRTCConfiguration()
     guard
       let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
+        webRTCConfiguration: WebRTCConfigurationSnapshot(webRTCConfiguration),
         delegate: peerChannel)
     else {
       XCTFail("RTCPeerConnection を生成できること")
@@ -775,8 +774,7 @@ final class StereoAudioOutputTests: XCTestCase {
     let webRTCConfiguration = WebRTCConfiguration()
     guard
       let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
+        webRTCConfiguration: WebRTCConfigurationSnapshot(webRTCConfiguration),
         delegate: peerChannel)
     else {
       XCTFail("RTCPeerConnection を生成できること")
@@ -899,7 +897,10 @@ final class StereoAudioOutputTests: XCTestCase {
 
   // 設定検証が configurationError を返すことを確認する
   private func assertConfigurationError(_ configuration: Configuration) {
-    XCTAssertThrowsError(try MediaChannel.validate(configuration: configuration)) { error in
+    XCTAssertThrowsError(
+      try MediaChannel.validate(
+        snapshot: ConnectionConfigurationSnapshot(configuration: configuration))
+    ) { error in
       guard case SoraError.configurationError = error else {
         XCTFail("SoraError.configurationError が返ること: \(error)")
         return

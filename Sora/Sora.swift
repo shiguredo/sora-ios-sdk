@@ -179,7 +179,15 @@ public final class Sora: @unchecked Sendable {
   ) -> ConnectionTask {
     let mediaChan: MediaChannel
     do {
-      mediaChan = try MediaChannel(configuration: configuration)
+      // 接続開始後に利用者所有の可変値を参照しないよう、チャネルを生成する前に
+      // 設定を snapshot へ写し取る。JSON 化できない設定はここで終端する。
+      let snapshot = try ConnectionConfigurationSnapshot(configuration: configuration)
+      mediaChan = try MediaChannel(
+        snapshot: snapshot,
+        configuration: configuration,
+        audioDevice: configuration.audioDevice,
+        mediaChannelHandlers: configuration.mediaChannelHandlers,
+        webSocketChannelHandlers: configuration.webSocketChannelHandlers)
     } catch {
       // 設定エラーや ADM 初期化エラーはチャネルを登録せず接続試行を終端する。
       // 通常の接続経路と同様に、利用者の callback は connect() の呼び出しスタック外で通知する。

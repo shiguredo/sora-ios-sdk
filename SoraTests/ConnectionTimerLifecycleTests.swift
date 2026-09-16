@@ -26,14 +26,17 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   }
 
   // SignalingChannel を構築する
-  private func makeSignalingChannel() -> SignalingChannel {
-    SignalingChannel(configuration: makeConfiguration())
+  private func makeSignalingChannel() throws -> SignalingChannel {
+    let configuration = makeConfiguration()
+    return SignalingChannel(
+      snapshot: try ConnectionConfigurationSnapshot(configuration: configuration),
+      webSocketChannelHandlers: configuration.webSocketChannelHandlers)
   }
 
   // ConnectionTimer を構築する (SignalingChannel のみの monitor で十分)
-  private func makeConnectionTimer(timeout: Int) -> ConnectionTimer {
+  private func makeConnectionTimer(timeout: Int) throws -> ConnectionTimer {
     ConnectionTimer(
-      monitors: [.signalingChannel(makeSignalingChannel())],
+      monitors: [.signalingChannel(try makeSignalingChannel())],
       timeout: timeout)
   }
 
@@ -43,8 +46,8 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   /// が発火し、新しい接続を timeout として切断していた。修正後は run() の開始時に旧 Timer を
   /// invalidate し、generation を進めるため、旧 Timer の発火は無視される。
   /// (世代の更新そのものは lock 配下の currentGeneration で検証する)
-  func testRunRerunAdvancesGeneration() {
-    let connectionTimer = makeConnectionTimer(timeout: 100)
+  func testRunRerunAdvancesGeneration() throws {
+    let connectionTimer = try makeConnectionTimer(timeout: 100)
     let initialGeneration = connectionTimer.currentGeneration
 
     connectionTimer.run { [] in
@@ -68,8 +71,8 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   /// 旧実装では stop() が timer を nil 化しないため、ConnectionTimer → Timer → closure → self の
   /// 循環参照が残り、ConnectionTimer が解放されなかった。修正後は stop() が timer = nil を
   /// 設定するため、weak 参照で解放を確認できる。
-  func testStopReleasesTimer() {
-    var connectionTimer: ConnectionTimer? = makeConnectionTimer(timeout: 100)
+  func testStopReleasesTimer() throws {
+    var connectionTimer: ConnectionTimer? = try makeConnectionTimer(timeout: 100)
     weak var weakTimer = connectionTimer
 
     connectionTimer?.run { [] in
@@ -94,8 +97,8 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   ///
   /// stop() は timer?.invalidate() と timer = nil を lock 配下で行うため、
   /// 何度呼んでも安全 (冪等) である。
-  func testStopIsIdempotent() {
-    let connectionTimer = makeConnectionTimer(timeout: 100)
+  func testStopIsIdempotent() throws {
+    let connectionTimer = try makeConnectionTimer(timeout: 100)
     connectionTimer.run { [] in
       XCTFail("停止した Timer の handler は実行されないこと")
     }
@@ -114,8 +117,8 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   }
 
   /// stop() が稼働中 Timer の世代を進め、世代照合前の callback を無効化することを確認する
-  func testStopAdvancesRunningTimerGeneration() {
-    let connectionTimer = makeConnectionTimer(timeout: 100)
+  func testStopAdvancesRunningTimerGeneration() throws {
+    let connectionTimer = try makeConnectionTimer(timeout: 100)
     connectionTimer.run { [] in
       XCTFail("停止した Timer の handler は実行されないこと")
     }
@@ -134,8 +137,8 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   /// run() の再実行で世代が進んだ場合、旧世代の Timer が main RunLoop から
   /// 遅れて発火しても、generation 不一致で無視される。ここでは
   /// 「再実行後の currentGeneration が示すとおり、旧 Timer が無効であること」を検証する。
-  func testOldGenerationIsIgnoredByGenerationComparison() {
-    let connectionTimer = makeConnectionTimer(timeout: 1)
+  func testOldGenerationIsIgnoredByGenerationComparison() throws {
+    let connectionTimer = try makeConnectionTimer(timeout: 1)
 
     // 最初の run() (1 秒タイマー)
     connectionTimer.run { [] in

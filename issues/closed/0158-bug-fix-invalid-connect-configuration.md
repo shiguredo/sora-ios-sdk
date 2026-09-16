@@ -1,9 +1,9 @@
 # JSON 化できない接続設定を接続開始前に configurationError として返す
 
 - Created: 2026-09-15
-- Completed:
+- Completed: 2026-09-16
 - Priority: Medium
-- Branch: feature/fix-invalid-connect-configuration
+- Branch: feature/refactor-configuration-snapshot
 - Polished: 2026-09-15
 
 ## 目的
@@ -100,3 +100,30 @@ metadata の場合は `signalingConnectMetadata` に `NaN` を含む `Encodable`
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+`ConnectionConfigurationSnapshot.init(configuration:)` (接続開始時の snapshot 生成) で JSON 化可否を検証し、失敗を `SoraError.configurationError` として接続開始前に返すようにした。設計方針が置き場所としていた `MediaChannel.validate(configuration:)` ではなく snapshot 生成に置いたのは、`0102` が同じ変換 (利用者の `Encodable` / `Any` を `JSONValue` へ写し取る処理) を snapshot 生成で行うためである。検証を別の場所に残すと同じ encode を 2 回行うことになり、`SignalingConnect.encode(to:)` と条件がずれる余地も残る。本 issue は `0102` に統合して完了とする。
+
+### 実装内容
+
+- `Sora/ConnectionConfigurationSnapshot.swift` (新規): `ConnectionConfigurationSnapshot.init(configuration:)` が `dataChannels` / `signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別 params / `forwardingFilter` / `forwardingFilters` の metadata を `JSONValue` へ変換し、失敗時に `SoraError.configurationError(reason:)` を throw する。`reason` は本 issue が固定した文字列を `ConfigurationSnapshotErrorReason` に持つ。`MediaChannel.validate(snapshot:)` は audio の組合せ制約だけを検証する。
+- `Sora/JSONValue.swift` (新規): `Encodable` 用の `JSONValue.from(_:errorReason:)` と `Any` 用の `JSONValue.fromDataChannels(_:errorReason:)` を置いた。
+- `Sora/MediaChannel.swift`: `validate(configuration:)` を `validate(snapshot:)` へ置き換え、designated init が snapshot を受け取る形にした。
+- `Sora/Sora.swift`: snapshot 生成を `MediaChannel.init` より先に行い、失敗を既存の設定エラー経路 (`ConnectionTask.complete()` と接続スタック外の handler 呼び出し) で通知する。
+- `SoraTests/ConnectConfigurationValidationTests.swift` (新規): 非有限値の metadata、JSON 化できない `dataChannels`、JSON 化できる `dataChannels`、検証順序、`Sora.connect` 経由の通知を検証する。
+- `CHANGES.md`: `## develop` の主リストへ `[FIX]` を 2 件追記した。
+
+### 設計上の判断
+
+- 検証順序は JSON 化可否 → audio の組合せ制約とした。`Sora.connect` が snapshot 生成を `MediaChannel.init` より先に行うため、本 issue の設計方針と同じ優先順位になる (`SoraTests/ConnectConfigurationValidationTests` の `testJSONValidationRunsBeforeAudioConstraints` で固定)。
+- `dataChannels` は `JSONSerialization.isValidJSONObject(["data_channels": value])` で判定する。abort の再現経路である `JSONSerialization.data(withJSONObject:)` は検証に使わない (`Sora/RPC.swift` の前例に揃える)。
+- metadata / notify metadata / codec 別 params / `ForwardingFilter.metadata` は `JSONEncoder` の出力を `JSONDecoder` で `JSONValue` へ読み直し、その成否で検証する。`Decimal.quietNaN` のように `JSONEncoder` が throw せず不正な JSON を出力する値も検出できる。
+- codec 別 params は `SignalingConnect.encode(to:)` が connect message に載せる条件 (video は `videoEnabled` かつ codec 一致、audio は `audioEnabled` かつ `.opus`) と同じ条件でのみ検証する。載らない params の encode 失敗を新たにエラーにしない。
+- `reason` は本 issue が固定した文字列をそのまま使う。`EncodingError` の説明文は値と codingPath を含むため使わない。
+- 検証で encode した結果を送信に再利用するため、利用者の `Encodable` の encode は接続開始時の 1 回だけになる (設計方針の「2 回 encode」は解消した)。
+- `MediaChannel.validate(configuration:)` の互換ラッパーは残していない。テスト方針の「`validate(configuration:)` の単体テストでも直接確認する」は満たさず、`MediaChannel(configuration:)` 経由で同じ検証を通す形へ移行した。
+
+### 検証
+
+- `swiftc -typecheck -swift-version 6` (`Sora/` 全体、iPhoneOS 26.5 SDK / arm64-apple-ios14.0): 0 error。
+- `xcodebuild build-for-testing` / `test-without-building` (iPhone 17 Pro / iOS 26.5、`SWIFT_VERSION=6`): 非 E2E テストがすべて成功 (失敗 0)。追加した `ConnectConfigurationValidationTests` と `ConnectionConfigurationSnapshotTests` を含む。
+- CI (`ci.yml` の self-hosted、`iphoneos26.5` SDK) での確認は `0102` の完了時に実施する。

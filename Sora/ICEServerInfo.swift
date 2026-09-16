@@ -20,16 +20,6 @@ public final class ICEServerInfo {
   @available(*, deprecated, message: "2027 年中に廃止予定です。Configuration.insecure を使用してください")
   public var tlsSecurityPolicy: TLSSecurityPolicy = .secure
 
-  func nativeValue(insecure: Bool) -> RTCIceServer {
-    RTCIceServer(
-      urlStrings: urls,
-      username: userName,
-      credential: credential,
-      tlsCertPolicy: insecure ? .insecureNoCheck : tlsSecurityPolicy.nativeValue)
-  }
-
-  // MARK: 初期化
-
   /// 初期化します。
   public init(
     urls: [String],
@@ -57,15 +47,6 @@ public final class ICEServerInfo {
     self.userName = userName
     self.credential = credential
     self.tlsSecurityPolicy = tlsSecurityPolicy
-  }
-
-  var usesVerifiedTURNTLS: Bool {
-    if tlsSecurityPolicy == .insecure {
-      return false
-    }
-    return urls.contains { url in
-      url.lowercased().hasPrefix("turns:")
-    }
   }
 }
 
