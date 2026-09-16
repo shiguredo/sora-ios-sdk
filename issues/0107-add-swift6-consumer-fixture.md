@@ -3,19 +3,19 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/add-swift6-consumer-fixture
-- Polished:
+- Polished: 2026-09-16
 
 ## 目的
 
 SDK 自身の target だけでなく、通常の iOS アプリが外部 package として `Sora` を import した状態で Swift 6 の公開 API を検証する consumer fixture を追加する。
 
-`@testable` と `@preconcurrency` による診断抑止を使わず、strict concurrency warning と意図しない source break を CI で検出できるようにする。
+`@testable` による内部 API への依存と、`@preconcurrency` による concurrency 診断の抑止を使わず、strict concurrency warning と意図しない source break を CI で検出できるようにする。
 
 ## 現状
 
 `.github/workflows/build.yml` と `.github/workflows/ci.yml` は、`xcodebuild` に `SWIFT_VERSION=6` を渡して SDK scheme と E2E test target をビルドしている。
 
-一方、`SoraTests` の E2E test は 7 ファイルで `@testable @preconcurrency import Sora` を使用している。この構成では、通常の利用者が見る public interface と strict concurrency diagnostic を検証できない。
+一方、`SoraTests` の E2E テストは 11 ファイル (`E2ETestBase` を含む、2026-09-16 時点) で `@testable @preconcurrency import Sora` を使用している。この構成では、通常の利用者が見る public interface と strict concurrency diagnostic を検証できない。
 
 現在の CI には次の gate がない。
 
@@ -47,7 +47,8 @@ SDK 自身の target だけでなく、通常の iOS アプリが外部 package 
 - MainActor context から `VideoView` と renderer API を利用する。
 - 利用者定義の RPC method、params、result 型を利用する。
 - 既存 callback API を利用し、互換 API が引き続き compile できることを確認する。
-- immutable snapshot、Sendable event、RPC v2 などの新 API が追加された後、それぞれの利用例を追加する。
+- `0109` の Sendable な RPC API、`0110` の Sendable event API、`0120` の statistics snapshot API など、後続 issue で追加される Swift 6 向け新 API の compile scenario を後から追加できる構造にする。それぞれの利用例の追加は対応する issue の完了条件で行い、本 issue では含めない。
+- 非推奨 API (`SoraDispatcher`、`Utilities.Stopwatch` など) を利用する legacy scenario を追加できる構造にする。deprecation warning は error 化せず表示として確認するため、`SWIFT_TREAT_WARNINGS_AS_ERRORS=YES` の対象から分離した専用の compile 設定を用意する。legacy scenario の追加自体は `0114` / `0116` で行う。
 
 ### compiler settings
 
@@ -75,8 +76,8 @@ SDK 自身の target だけでなく、通常の iOS アプリが外部 package 
 ## スコープ外
 
 - `Package.swift` の tools version と language mode の変更は `0108` で扱う。
-- E2E test から既存の `@preconcurrency import Sora` を撤去する作業は別 issue とする。
-- Thread Sanitizer を利用した runtime stress test は別 issue とする。
+- E2E test から既存の `@preconcurrency import Sora` を撤去する作業は `0118` で扱う。
+- Thread Sanitizer を利用した runtime stress test は `0119` で扱う。
 - 実 Sora への接続試験は既存 E2E workflow の責務とする。
 
 ## テスト方針
@@ -85,18 +86,19 @@ SDK 自身の target だけでなく、通常の iOS アプリが外部 package 
 
 - fixture は実際のローカル package product `Sora` に依存して compile する。
 - Xcode 26.2 と最新 26.x の両方で、clean build を実行する。
-- strict concurrency と warnings-as-errors を無効にした場合だけ通るコードを fixture に入れない。
+- strict concurrency と warnings-as-errors を無効にした場合だけ通るコードを fixture に入れない。ただし非推奨 API の legacy scenario は、`0114` / `0116` で deprecation warning の表示を確認するため、warnings-as-errors から分離した専用設定での compile を例外とする。
 - public API baseline を意図的に変更した確認用 branch で、CI が差分を検出できることを一度確認する。
 - fixture の各 scenario には、どの public concurrency contract を検査するかを日本語コメントで明記する。
 
 ## 完了条件
 
 - 通常の iOS consumer project がリポジトリ内に存在すること。
+- fixture がローカル package product への通常依存として compile し、SDK source を fixture target へ直接含めていないこと。
 - fixture が `@testable` と `@preconcurrency` を使用していないこと。
 - `SWIFT_STRICT_CONCURRENCY=complete` と warnings-as-errors で fixture が build できること。
 - core scenario の default actor isolation が `nonisolated` であること。
 - UI scenario が明示的に MainActor で検証されること。
-- 既存 callback API と新しい Swift 6 API の compile scenario を追加できる構造であること。
+- 既存 callback API、非推奨 API、新しい Swift 6 API の compile scenario を後から追加できる構造であること。
 - Xcode 26.2 と最新 26.x の CI が存在すること。
 - consumer fixture に secret が渡されていないこと。
 - GitHub 公式または利用実績のない外部 action を新規追加していないこと。
