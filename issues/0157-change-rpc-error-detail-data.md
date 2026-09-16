@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/change-rpc-error-detail-data
-- Polished:
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -32,8 +32,8 @@ finishPending(id: identifier, result: .failure(SoraError.rpcServerError(detail: 
 ## 設計方針
 
 - `RPCErrorDetail.data` の型を `Any?` から deep-Sendable な JSON value 型へ変更する。`JSONSerialization` が返す `Any` を `RPCErrorDetail` へ入れる経路をなくす。
-- JSON value 型は `0102` が `Sora/JSONValue.swift` に置く `JSONValue` を公開型として再利用する。`0102` が internal のままとした場合は、本 issue で public 化する判断を `0102` と揃える。
-- `0102` の `JSONValue` は変換関数 (`from(_:errorReason:)` / `fromDataChannels(_:errorReason:)`) が `SoraError.configurationError` と接続設定向けの固定理由文字列に依存している。公開型が SDK 固有のエラー写像と、利用者に見せる文字列の秘匿方針を持ち込まないよう、変換は `JSONValue` 固有のエラーにし、`SoraError` への写像と理由文字列は `ConnectionConfigurationSnapshot` 側へ移すことを検討する (`0102` は写像を変換関数 1 箇所に置くと定めているため、`0102` の完了後に本 issue で扱う)。
+- JSON value 型は `0102` が `Sora/JSONValue.swift` に置く `JSONValue` を公開型として再利用する。`0102` は internal (`enum JSONValue: Sendable, Equatable`、`Encodable` / `Decodable` 準拠) のまま完了しており、公開型への変更は本 issue が行う (`0102` の issue は「公開型としての `JSONValue` が必要な場合は `0157` が public 化する」と定め、`0152` も本 issue の完了を前提としている)。
+- `0102` の `JSONValue` は変換関数 (`from(_:errorReason:)` / `fromDataChannels(_:errorReason:)`) が `SoraError.configurationError` と接続設定向けの固定理由文字列 (`ConfigurationSnapshotErrorReason`) に依存している。公開型が SDK 固有のエラー写像と、利用者に見せる文字列の秘匿方針を持ち込まないよう、変換は `JSONValue` 固有のエラーにし、`SoraError` への写像と理由文字列は `ConnectionConfigurationSnapshot` 側へ移す (`0102` の実装では写像が変換関数内に残っているため、本 issue で分離する)。
 - `Any?` を `@unchecked Sendable` で包む方法、および `SoraError.rpcServerError(detail:)` を削除する方法は採らない。前者は不変性を検証できず、後者は後方互換がない。
 - `data` の型変更は後方互換がないため `CHANGES.md` に `[CHANGE]` として記載し、次期 major version で取り込む。`Milestone:` は指定しない。
 - `0108` (Swift 6 language mode) と `0118` (warnings-as-errors) より先に完了させる。先に完了できない場合は、`SoraError` の警告を一時的に許容する条件を `0108` / `0118` に明記する。
@@ -42,14 +42,16 @@ finishPending(id: identifier, result: .failure(SoraError.rpcServerError(detail: 
 ## 変更対象
 
 - `Sora/RPC.swift`: `RPCErrorDetail.data` の型変更と `RPCChannel` の変換
-- `Sora/JSONValue.swift`: `JSONValue` の公開と、変換関数に残る `SoraError` 依存の分離 (`0102` の完了状況による)
+- `Sora/JSONValue.swift`: `JSONValue` の公開
+- `Sora/ConnectionConfigurationSnapshot.swift`: 変換関数に残る `SoraError.configurationError` への写像と固定理由文字列の移設 (`JSONValue.from` / `fromDataChannels` の呼び出し元)
 - `SoraTests/RpcE2ETests.swift` / `SoraTests/E2ETestBase.swift`: `rpcServerError` 経路の検証
+- `SoraTests/SendableConformanceTests.swift`: `RPCErrorDetail` の `requireSendable` によるコンパイル時表明の追加
 - `CHANGES.md`
 
 ## 前提となる issue
 
-- `0123` (未完了): `SoraTests` の `requireSendable`。本 issue の型検査は `0123` が `SoraTests/SendableConformanceTests.swift` に新設する `requireSendable` を使う。`0123` の完了前に着手する場合は同じ helper を重複定義しないよう、先に `0123` の実装状況を確認する。
-- `0102` (未完了): `Sora/JSONValue.swift` の `JSONValue`。完了前に着手する場合は、本 issue で `JSONValue` を追加し、`0102` と重複しないよう先に `0102` の実装状況を確認する。
+- `0123` (完了 2026-09-15): `SoraTests` の `requireSendable`。`SoraTests/SendableConformanceTests.swift` に internal 関数として実在し、本 issue の型検査でそのまま利用する。
+- `0102` (完了 2026-09-16): `Sora/JSONValue.swift` の `JSONValue`。internal のまま完了しており、本 issue で public 化する。
 
 ### 本 issue の完了後に着手する issue
 
