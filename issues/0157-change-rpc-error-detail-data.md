@@ -33,6 +33,7 @@ finishPending(id: identifier, result: .failure(SoraError.rpcServerError(detail: 
 
 - `RPCErrorDetail.data` の型を `Any?` から deep-Sendable な JSON value 型へ変更する。`JSONSerialization` が返す `Any` を `RPCErrorDetail` へ入れる経路をなくす。
 - JSON value 型は `0102` が `Sora/JSONValue.swift` に置く `JSONValue` を公開型として再利用する。`0102` が internal のままとした場合は、本 issue で public 化する判断を `0102` と揃える。
+- `0102` の `JSONValue` は変換関数 (`from(_:errorReason:)` / `fromDataChannels(_:errorReason:)`) が `SoraError.configurationError` と接続設定向けの固定理由文字列に依存している。公開型が SDK 固有のエラー写像と、利用者に見せる文字列の秘匿方針を持ち込まないよう、変換は `JSONValue` 固有のエラーにし、`SoraError` への写像と理由文字列は `ConnectionConfigurationSnapshot` 側へ移すことを検討する (`0102` は写像を変換関数 1 箇所に置くと定めているため、`0102` の完了後に本 issue で扱う)。
 - `Any?` を `@unchecked Sendable` で包む方法、および `SoraError.rpcServerError(detail:)` を削除する方法は採らない。前者は不変性を検証できず、後者は後方互換がない。
 - `data` の型変更は後方互換がないため `CHANGES.md` に `[CHANGE]` として記載し、次期 major version で取り込む。`Milestone:` は指定しない。
 - `0108` (Swift 6 language mode) と `0118` (warnings-as-errors) より先に完了させる。先に完了できない場合は、`SoraError` の警告を一時的に許容する条件を `0108` / `0118` に明記する。
@@ -41,7 +42,7 @@ finishPending(id: identifier, result: .failure(SoraError.rpcServerError(detail: 
 ## 変更対象
 
 - `Sora/RPC.swift`: `RPCErrorDetail.data` の型変更と `RPCChannel` の変換
-- `Sora/JSONValue.swift`: `JSONValue` の公開 (`0102` の完了状況による)
+- `Sora/JSONValue.swift`: `JSONValue` の公開と、変換関数に残る `SoraError` 依存の分離 (`0102` の完了状況による)
 - `SoraTests/RpcE2ETests.swift` / `SoraTests/E2ETestBase.swift`: `rpcServerError` 経路の検証
 - `CHANGES.md`
 
