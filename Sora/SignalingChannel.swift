@@ -39,7 +39,14 @@ class SignalingChannelInternalHandlers {
 class SignalingChannel {
   var internalHandlers = SignalingChannelInternalHandlers()
 
-  var configuration: Configuration
+  /// 接続設定の snapshot
+  let snapshot: ConnectionConfigurationSnapshot
+
+  /// WebSocket チャネルのハンドラ
+  ///
+  /// snapshot には含めず、参照のまま受け取ります。配送のたびに bag を読む既存挙動を
+  /// 維持するためです。
+  private let webSocketChannelHandlers: WebSocketChannelHandlers
 
   // 接続状態の単一所有者。
   // 状態の読み書きと WebSocket の操作はすべてこの owner の直列 queue 上で行う。
@@ -102,8 +109,11 @@ class SignalingChannel {
     owner.snapshot.currentChannelIdentifier
   }
 
-  required init(configuration: Configuration) {
-    self.configuration = configuration
+  init(
+    snapshot: ConnectionConfigurationSnapshot, webSocketChannelHandlers: WebSocketChannelHandlers
+  ) {
+    self.snapshot = snapshot
+    self.webSocketChannelHandlers = webSocketChannelHandlers
   }
 
   private func unique(urls: [URL]) -> [URL] {
@@ -130,7 +140,7 @@ class SignalingChannel {
   {
     let ws = URLSessionWebSocketChannel(
       url: url, proxy: proxy, caCertificates: caCertificates,
-      insecure: configuration.insecure)
+      insecure: snapshot.insecure)
 
     // 接続成功時 (URLSession の delegate queue は owner の queue と同じため、
     // このクロージャは owner の queue 上で呼ばれる)
@@ -219,7 +229,7 @@ class SignalingChannel {
       }
     }
 
-    ws.handlers = configuration.webSocketChannelHandlers
+    ws.handlers = webSocketChannelHandlers
     // メッセージ受信時
     ws.internalHandlers.onReceive = { [weak self] message in
       self?.handle(message: message)
@@ -242,7 +252,7 @@ class SignalingChannel {
       self.owner.setOnConnect(handler)
       self.owner.handle(.connectRequested)
 
-      if self.configuration.insecure {
+      if self.snapshot.insecure {
         Logger.warn(
           type: .signalingChannel,
           message: "insecure mode is enabled: WebSocket TLS certificate verification is skipped")
@@ -251,7 +261,7 @@ class SignalingChannel {
       // CA 証明書のパース
       let caCertificates: [SecCertificate]?
       do {
-        caCertificates = try self.configuration.parsedCACertificates()
+        caCertificates = try self.snapshot.parsedCACertificates()
       } catch {
         Logger.error(
           type: .signalingChannel,
@@ -263,11 +273,11 @@ class SignalingChannel {
         return
       }
 
-      let urlCandidates = self.unique(urls: self.configuration.urlCandidates)
+      let urlCandidates = self.unique(urls: self.snapshot.urlCandidates)
       Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
       for url in urlCandidates {
         let ws = self.setUpWebSocketChannel(
-          url: url, proxy: self.configuration.proxy, caCertificates: caCertificates)
+          url: url, proxy: self.snapshot.proxy, caCertificates: caCertificates)
         Logger.info(
           type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
         ws.connect(delegateQueue: self.owner.queue)
@@ -281,7 +291,7 @@ class SignalingChannel {
       Logger.debug(type: .signalingChannel, message: "try redirecting to \(location)")
       self.owner.handle(.redirectRequested)
 
-      if self.configuration.insecure {
+      if self.snapshot.insecure {
         Logger.warn(
           type: .signalingChannel,
           message: "insecure mode is enabled: WebSocket TLS certificate verification is skipped")
@@ -304,7 +314,7 @@ class SignalingChannel {
       // CA 証明書のパース
       let caCertificates: [SecCertificate]?
       do {
-        caCertificates = try self.configuration.parsedCACertificates()
+        caCertificates = try self.snapshot.parsedCACertificates()
       } catch {
         Logger.error(
           type: .signalingChannel,
@@ -314,7 +324,7 @@ class SignalingChannel {
       }
 
       let ws = self.setUpWebSocketChannel(
-        url: newUrl, proxy: self.configuration.proxy, caCertificates: caCertificates)
+        url: newUrl, proxy: self.snapshot.proxy, caCertificates: caCertificates)
       ws.connect(delegateQueue: self.owner.queue)
     }
   }
@@ -370,23 +380,10 @@ class SignalingChannel {
       let message = self.internalHandlers.onSend?(message) ?? message
       let encoder = JSONEncoder()
       do {
-        var data = try encoder.encode(message)
-
-        // type: connect の data_channels を設定する
-        // Signaling.encode(to:) では Any を扱えなかったため、文字列に変換する直前に値を設定している
-        switch message {
-        case .connect:
-          if self.configuration.dataChannels != nil {
-            var jsonObject =
-              try (JSONSerialization.jsonObject(with: data, options: []))
-              as! [String: Any]
-            jsonObject["data_channels"] = self.configuration.dataChannels
-            data = try JSONSerialization.data(withJSONObject: jsonObject, options: [])
-          }
-        default:
-          break
-        }
-
+        // data_channels は SignalingConnect.encode(to:) が出力する。
+        // 以前はここで JSONSerialization を使って connect message 全体を
+        // 再直列化していたが、その往復が Decimal の値を壊していた。
+        let data = try encoder.encode(message)
         let str = String(data: data, encoding: .utf8) ?? ""
         Logger.debug(type: .signalingChannel, message: str)
         ws.send(message: .text(str))

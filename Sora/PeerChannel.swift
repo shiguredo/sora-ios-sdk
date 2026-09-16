@@ -320,7 +320,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - Properties
 
   var internalHandlers = PeerChannelInternalHandlers()
-  let configuration: Configuration
+
+  /// 接続開始時に写し取った利用者の設定
+  ///
+  /// 利用者所有の可変値を参照しないための値で、offer 受信でも更新されない。
+  /// 接続所有の WebRTC 設定は `webRTCConfiguration` (`currentWebRTCConfiguration()`) を使う。
+  let snapshot: ConnectionConfigurationSnapshot
   let signalingChannel: SignalingChannel
   let nativePeerChannelFactory: NativePeerChannelFactory
   /// SDK と公開 API のカメラ start / stop / restart をプロセス全体で直列化する coordinator
@@ -406,7 +411,33 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   var nativeChannel: RTCPeerConnection?
 
-  var webRTCConfiguration: WebRTCConfiguration
+  /// 接続所有の WebRTC 設定
+  ///
+  /// 利用者由来 snapshot を初期値とし、offer 受信時にサーバー値で更新します。
+  /// `snapshot.webRTCConfiguration` (利用者由来で、offer 受信でも更新されない) と
+  /// 取り違えないこと。読み書きは webRTCConfigurationLock 配下で行います。
+  private var webRTCConfiguration: WebRTCConfigurationSnapshot
+
+  /// webRTCConfiguration の読み書きを保護する lock
+  ///
+  /// lock は値を読み書きする短い区間だけ保持し、libwebrtc の非同期 callback や
+  /// await、利用者 handler の呼び出しをまたいで保持しません。
+  private let webRTCConfigurationLock = NSLock()
+
+  /// 接続所有の WebRTC 設定の現在値を返します。
+  func currentWebRTCConfiguration() -> WebRTCConfigurationSnapshot {
+    webRTCConfigurationLock.lock()
+    defer { webRTCConfigurationLock.unlock() }
+    return webRTCConfiguration
+  }
+
+  /// 接続所有の WebRTC 設定を更新します。
+  func updateWebRTCConfiguration(_ configuration: WebRTCConfigurationSnapshot) {
+    webRTCConfigurationLock.lock()
+    defer { webRTCConfigurationLock.unlock() }
+    webRTCConfiguration = configuration
+  }
+
   var clientId: String?
   var bundleId: String?
   var connectionId: String?
@@ -430,8 +461,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   // MARK: - Public methods
 
-  required init(
-    configuration: Configuration, signalingChannel: SignalingChannel,
+  init(
+    snapshot: ConnectionConfigurationSnapshot, signalingChannel: SignalingChannel,
     nativePeerChannelFactory: NativePeerChannelFactory,
     mediaChannel: MediaChannel?,
     cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
@@ -440,12 +471,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     self.signalingChannel = signalingChannel
     self.mediaChannel = mediaChannel
-    self.configuration = configuration
+    self.snapshot = snapshot
     self.nativePeerChannelFactory = nativePeerChannelFactory
     self.cameraCaptureCoordinator = cameraCaptureCoordinator
     self.cameraCaptureOwnership = cameraCaptureOwnership
     self.videoSourceCoordinator = videoSourceCoordinator
-    webRTCConfiguration = configuration.webRTCConfiguration
+    webRTCConfiguration = snapshot.webRTCConfiguration
 
     connectionStateOwner = ConnectionStateOwner(
       snapshotStorage: connectionStateSnapshotStorage)
@@ -487,7 +518,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
     // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
-    WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
+    WrapperVideoEncoderFactory.shared.simulcastEnabled = snapshot.simulcastEnabled
 
     lock.startConnection {
       signalingChannel.connect { [weak self] error in
@@ -574,12 +605,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
-    if configuration.isSender {
+    if snapshot.isSender {
       Logger.debug(type: .peerChannel, message: "try creating offer SDP")
+      let offerConfiguration = currentWebRTCConfiguration()
       nativePeerChannelFactory
         .createClientOfferSDP(
-          configuration: webRTCConfiguration,
-          constraints: webRTCConfiguration.constraints
+          webRTCConfiguration: offerConfiguration
         ) { [weak self] sdp, sdpError in
           guard let self else {
             return
@@ -632,7 +663,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// sendConnectMessage から呼び出す。テストから利用するため internal とする。
   func makeSignalingConnect(sdp: String?, redirect: Bool?) -> SignalingConnect {
     var role: SignalingRole
-    switch configuration.role {
+    switch snapshot.role {
     case .sendonly:
       role = .sendonly
     case .recvonly:
@@ -645,43 +676,44 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let webRTCVersion =
       "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version.dropFirst()).\(WebRTCInfo.branch).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
 
-    let simulcast = configuration.simulcastEnabled
+    let simulcast = snapshot.simulcastEnabled
     return SignalingConnect(
       role: role,
-      channelId: configuration.channelId,
-      clientId: configuration.clientId,
-      bundleId: configuration.bundleId,
-      metadata: configuration.signalingConnectMetadata,
-      notifyMetadata: configuration.signalingConnectNotifyMetadata,
+      channelId: snapshot.channelId,
+      clientId: snapshot.clientId,
+      bundleId: snapshot.bundleId,
+      metadata: snapshot.signalingConnectMetadata,
+      notifyMetadata: snapshot.signalingConnectNotifyMetadata,
       sdp: sdp,
-      multistreamEnabled: configuration.multistreamEnabled,
-      videoEnabled: configuration.videoEnabled,
-      videoCodec: configuration.videoCodec,
-      videoBitRate: configuration.videoBitRate,
-      audioEnabled: configuration.audioEnabled,
-      audioCodec: configuration.audioCodec,
-      audioBitRate: configuration.audioBitRate,
-      opusParams: configuration.audioCodec == .opus ? configuration.audioOpusParams : nil,
-      spotlightEnabled: configuration.spotlightEnabled,
-      spotlightNumber: configuration.spotlightNumber,
-      spotlightFocusRid: configuration.spotlightFocusRid,
-      spotlightUnfocusRid: configuration.spotlightUnfocusRid,
+      multistreamEnabled: snapshot.multistreamEnabled,
+      videoEnabled: snapshot.videoEnabled,
+      videoCodec: snapshot.videoCodec,
+      videoBitRate: snapshot.videoBitRate,
+      audioEnabled: snapshot.audioEnabled,
+      audioCodec: snapshot.audioCodec,
+      audioBitRate: snapshot.audioBitRate,
+      opusParams: snapshot.audioOpusParams,
+      spotlightEnabled: snapshot.isSpotlightEnabled ? .enabled : .disabled,
+      spotlightNumber: snapshot.spotlightNumber,
+      spotlightFocusRid: snapshot.spotlightFocusRid,
+      spotlightUnfocusRid: snapshot.spotlightUnfocusRid,
       simulcastEnabled: simulcast,
-      simulcastRid: configuration.simulcastRid,
-      simulcastRequestRid: configuration.simulcastRequestRid,
+      simulcastRid: snapshot.simulcastRid,
+      simulcastRequestRid: snapshot.simulcastRequestRid,
       soraClient: soraClient,
       webRTCVersion: webRTCVersion,
       environment: DeviceInfo.current.description,
-      dataChannelSignaling: configuration.dataChannelSignaling,
-      ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
-      audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
+      dataChannelSignaling: snapshot.dataChannelSignaling,
+      ignoreDisconnectWebSocket: snapshot.ignoreDisconnectWebSocket,
+      audioStreamingLanguageCode: snapshot.audioStreamingLanguageCode,
       redirect: redirect,
-      forwardingFilter: configuration.forwardingFilter,
-      forwardingFilters: configuration.forwardingFilters,
-      vp9Params: configuration.videoCodec == .vp9 ? configuration.videoVp9Params : nil,
-      av1Params: configuration.videoCodec == .av1 ? configuration.videoAv1Params : nil,
-      h264Params: configuration.videoCodec == .h264 ? configuration.videoH264Params : nil,
-      h265Params: configuration.videoCodec == .h265 ? configuration.videoH265Params : nil
+      forwardingFilter: snapshot.forwardingFilter?.forwardingFilter(),
+      forwardingFilters: snapshot.forwardingFilters?.map { $0.forwardingFilter() },
+      vp9Params: snapshot.videoVp9Params,
+      av1Params: snapshot.videoAv1Params,
+      h264Params: snapshot.videoH264Params,
+      h265Params: snapshot.videoH265Params,
+      dataChannelSettings: snapshot.dataChannelSettings
     )
   }
 
@@ -695,15 +727,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "initialize sender stream")
 
+    // constraints と degradationPreference は接続所有の設定から読む。
+    // 利用者由来の snapshot.webRTCConfiguration は offer 受信で更新されないため、
+    // 2 系統に分けると offer 由来の値が増えたときにずれる。
+    let connectionWebRTCConfiguration = currentWebRTCConfiguration()
+
     let nativeStream =
       nativePeerChannelFactory
       .createNativeSenderStream(
-        streamId: configuration.publisherStreamId,
+        streamId: snapshot.publisherStreamId,
         videoTrackId:
-          configuration.videoEnabled ? configuration.publisherVideoTrackId : nil,
+          snapshot.videoEnabled ? snapshot.publisherVideoTrackId : nil,
         audioTrackId:
-          configuration.audioEnabled ? configuration.publisherAudioTrackId : nil,
-        constraints: webRTCConfiguration.constraints)
+          snapshot.audioEnabled ? snapshot.publisherAudioTrackId : nil,
+        constraints: connectionWebRTCConfiguration.constraints)
     let stream = BasicMediaStream(
       peerChannel: self,
       nativeStream: nativeStream)
@@ -764,7 +801,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           videoTransceiver.sender.track = videoTrack
         }
 
-        if let degradationPreference = configuration.webRTCConfiguration
+        if let degradationPreference = connectionWebRTCConfiguration
           .degradationPreference
         {
           let parameters = videoTransceiver.sender.parameters
@@ -789,8 +826,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     // マイクの初期化
-    if configuration.audioEnabled {
-      if configuration.audioDevice == nil {
+    if snapshot.audioEnabled {
+      if !snapshot.usesCustomAudioDevice {
         initializeAudioInput()
       } else {
         // AVAudioSession の設定はカスタム音声デバイス (DummyAudioDevice.initialize(with:)) が行うためスキップする
@@ -798,7 +835,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           type: .peerChannel,
           message: "custom audio device enabled, skip initialize audio input")
       }
-    } else if configuration.audioDevice != nil {
+    } else if snapshot.usesCustomAudioDevice {
       // 音声トラック自体が生成されないためダミー音声も無効となる
       Logger.warn(
         type: .peerChannel,
@@ -806,8 +843,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     // カメラの初期化
-    if configuration.videoEnabled, configuration.cameraSettings.isEnabled,
-      configuration.initialCameraEnabled
+    if snapshot.videoEnabled, snapshot.cameraSettings.isEnabled,
+      snapshot.initialCameraEnabled
     {
       initializeCameraVideoCapture(stream: stream)
     }
@@ -815,7 +852,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     add(stream: stream)
     Logger.debug(
       type: .peerChannel,
-      message: "create publisher stream (id: \(configuration.publisherStreamId))")
+      message: "create publisher stream (id: \(snapshot.publisherStreamId))")
   }
 
   private func initializeAudioInput() {
@@ -835,7 +872,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // の設定のため、initialMicrophoneEnabled の否定値を渡します。
       //
       // 入力初期化後は変更できないため、 initializeInput の前に設定します。
-      let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
+      let initialMicrophoneMute = !snapshot.initialMicrophoneEnabled
       if !session.setInitialMicrophoneMute(initialMicrophoneMute) {
         Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
       }
@@ -859,7 +896,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func initializeCameraVideoCapture(stream: MediaStream) {
-    let position = configuration.cameraSettings.position
+    let position = snapshot.cameraSettings.position
 
     // position に対応した CameraVideoCapturer を取得する
     let capturer: CameraVideoCapturer
@@ -891,10 +928,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // デバイスに対応したフォーマットとフレームレートを取得する
     guard
       let format = CameraVideoCapturer.format(
-        width: configuration.cameraSettings.resolution.width,
-        height: configuration.cameraSettings.resolution.height,
+        width: snapshot.cameraSettings.resolution.width,
+        height: snapshot.cameraSettings.resolution.height,
         for: capturer.device,
-        frameRate: configuration.cameraSettings.frameRate)
+        frameRate: snapshot.cameraSettings.frameRate)
     else {
       Logger.error(
         type: .peerChannel,
@@ -905,7 +942,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     guard
       let frameRate = CameraVideoCapturer.maxFrameRate(
-        configuration.cameraSettings.frameRate, for: format)
+        snapshot.cameraSettings.frameRate, for: format)
     else {
       Logger.error(
         type: .peerChannel,
@@ -1032,7 +1069,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   /// `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。
   private func terminateSenderStream() -> Task<Void, Never>? {
-    guard configuration.videoEnabled, configuration.cameraSettings.isEnabled else {
+    guard snapshot.videoEnabled, snapshot.cameraSettings.isEnabled else {
       return nil
     }
 
@@ -1177,7 +1214,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         let localAnswer: RTCSessionDescription
         do {
           let sdp =
-            self.configuration.requiresStereoAudioSDP
+            self.snapshot.requiresStereoAudioSDP
             ? try StereoAudioSDP.enableStereo(in: answer.sdp) : answer.sdp
           localAnswer = RTCSessionDescription(type: answer.type, sdp: sdp)
         } catch {
@@ -1233,18 +1270,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // (リダイレクトで接続が切り替わった場合に、旧接続の answer が新接続に送信されるのを防ぐ)
     let generation = dataChannelGeneration
 
+    var updatedConfiguration = currentWebRTCConfiguration()
     if let config = offer.configuration {
       Logger.debug(type: .peerChannel, message: "update configuration")
       Logger.debug(
         type: .peerChannel, message: "ICE server infos => \(config.iceServerInfos)")
       Logger.debug(
         type: .peerChannel, message: "ICE transport policy => \(config.iceTransportPolicy)")
-      webRTCConfiguration.iceServerInfos = config.iceServerInfos
-      webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
+      updatedConfiguration = updatedConfiguration.replacing(
+        iceServerInfos: config.iceServerInfos.map(ICEServerSnapshot.init),
+        iceTransportPolicy: config.iceTransportPolicy)
     }
 
-    webRTCConfiguration.isInsecure = configuration.insecure
-    if configuration.insecure {
+    // isInsecure は offer.configuration の有無にかかわらず毎回 Configuration.insecure で
+    // 置き換える。
+    updatedConfiguration = updatedConfiguration.replacing(isInsecure: snapshot.insecure)
+    updateWebRTCConfiguration(updatedConfiguration)
+    if snapshot.insecure {
       Logger.warn(
         type: .peerChannel,
         message: "insecure mode is enabled: TURN-TLS certificate verification is skipped")
@@ -1258,7 +1300,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // この throw パスは実運用では到達しない防御的コードである
     let caCertificates: [SecCertificate]?
     do {
-      caCertificates = try configuration.parsedCACertificates()
+      caCertificates = try snapshot.parsedCACertificates()
     } catch {
       lock.unlock()
       disconnect(
@@ -1267,12 +1309,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
+    // 上で更新した値をそのまま使う。lock は読み出しごとに解放されるため、
+    // currentWebRTCConfiguration() を再読すると同一の値を参照する保証がコード上に無い。
     nativeChannel =
       nativePeerChannelFactory
       .createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
-        proxy: configuration.proxy,
+        webRTCConfiguration: updatedConfiguration,
+        proxy: snapshot.proxy,
         caCertificates: caCertificates,
         delegate: self)
     guard let nativeChannel else {
@@ -1290,12 +1333,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // (リセットしないと、新接続の signaling ラベル受信後に WebSocket が切断されず
     // サーバーセッションが残留する)
     handleConnectionEvent(.redirectConnectStarted)
-    nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
+    nativeChannel.setConfiguration(updatedConfiguration.nativeValue)
 
     createAnswer(
-      isSender: configuration.isSender,
+      isSender: snapshot.isSender,
       offer: offer.sdp,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: updatedConfiguration.nativeConstraints,
       initialOffer: true,
       mid: offer.mid,
       generation: generation
@@ -1345,7 +1388,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: offer,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: currentWebRTCConfiguration().nativeConstraints,
       generation: generation
     ) { answer, error in
       // リダイレクト等で接続が切り替わった場合は、旧接続の update-answer を破棄する。
@@ -1372,7 +1415,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       let message = Signaling.update(SignalingUpdate(sdp: answer))
       self.signalingChannel.send(message: message)
 
-      if self.configuration.isSender {
+      if self.snapshot.isSender {
         self.updateSenderOfferEncodings()
       }
 
@@ -1394,7 +1437,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: currentWebRTCConfiguration().nativeConstraints,
       generation: generation
     ) { answer, error in
       // 2025.1.1 までは lock() 呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
@@ -1432,7 +1475,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer))
       self.signalingChannel.send(message: message)
 
-      if self.configuration.isSender {
+      if self.snapshot.isSender {
         self.updateSenderOfferEncodings()
       }
 
@@ -1460,7 +1503,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: currentWebRTCConfiguration().nativeConstraints,
       generation: generation
     ) { answer, error in
       // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
@@ -1526,7 +1569,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
       }
 
-      if self.configuration.isSender {
+      if self.snapshot.isSender {
         self.updateSenderOfferEncodings()
       }
 
@@ -1575,7 +1618,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // NOTE: シグナリング type: update は Sora 2022.1.0 で廃止された
     // SDK では過去のバージョンとの互換性のために残しているが、いずれは削除する予定
     case .update(let update):
-      if configuration.isMultistream {
+      if snapshot.isMultistream {
         createAndSendUpdateAnswer(forOffer: update.sdp)
       }
     case .reOffer(let reOffer):
@@ -1778,7 +1821,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     sendDisconnectMessageIfNeeded(reason: reason, error: error)
 
-    let cameraCleanupTask = configuration.isSender ? terminateSenderStream() : nil
+    let cameraCleanupTask = snapshot.isSender ? terminateSenderStream() : nil
 
     // カスタム音声デバイス (ダミー音声等) の停止。terminateSenderStream は送信側のカメラ停止のみを行い、
     // 音声デバイスの停止は行わないため、recvonly を含む全ロールで実行する。
@@ -1986,7 +2029,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
     }
 
-    if configuration.isMultistream,
+    if snapshot.isMultistream,
       stream.streamId == clientId
     {
       Logger.debug(

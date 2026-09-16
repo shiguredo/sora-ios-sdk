@@ -29,10 +29,13 @@ final class PeerChannelRedirectInvalidationTests: XCTestCase {
   private func makePeerChannelWithSignalingChannel(
     config: Configuration
   ) throws -> (peerChannel: PeerChannel, signalingChannel: SignalingChannel) {
-    let signalingChannel = SignalingChannel(configuration: config)
+    let snapshot = try ConnectionConfigurationSnapshot(configuration: config)
+    let signalingChannel = SignalingChannel(
+      snapshot: snapshot,
+      webSocketChannelHandlers: config.webSocketChannelHandlers)
     let nativeFactory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
     let peerChannel = PeerChannel(
-      configuration: config,
+      snapshot: snapshot,
       signalingChannel: signalingChannel,
       nativePeerChannelFactory: nativeFactory,
       mediaChannel: nil)

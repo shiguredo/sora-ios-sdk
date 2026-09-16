@@ -373,6 +373,13 @@ public struct SignalingConnect {
 
   /// H265 向け映像コーデックパラメーター
   public var h265Params: Encodable?
+
+  /// `data_channels` に出力する設定
+  ///
+  /// `Configuration.dataChannels` は `Any?` のため `Encodable` として扱えません。
+  /// 接続開始時に `JSONValue` へ写し取った値を `PeerChannel.makeSignalingConnect` から
+  /// 渡し、`encode(to:)` で `data_channels` として出力します。
+  var dataChannelSettings: JSONValue?
 }
 
 /// "offer" シグナリングメッセージを表します。
@@ -942,6 +949,12 @@ extension SignalingConnect: Codable {
     if let notifyMetadata {
       let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
       try notifyMetadata.encode(to: notifyEnc)
+    }
+    // data_channels は SignalingConnect の他のプロパティと異なり Any を扱うため、
+    // 接続開始時に JSONValue へ写し取った値をここで出力する。
+    if let dataChannelSettings {
+      let dataChannelEnc = container.superEncoder(forKey: .data_channels)
+      try dataChannelSettings.encode(to: dataChannelEnc)
     }
     try container.encodeIfPresent(
       multistreamEnabled,

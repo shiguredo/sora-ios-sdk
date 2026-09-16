@@ -186,4 +186,39 @@ final class SendableConformanceTests: XCTestCase {
     await assertCrossesBoundaries(
       SignalingDisconnect(reason: "切断"), message: "SignalingDisconnect が actor 境界を越えられない")
   }
+
+  /// internal な snapshot 型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。
+  ///
+  /// 接続開始後の非同期区間へ渡す値のため、`Sendable` の欠落はコンパイルで検出する必要がある。
+  func testConnectionConfigurationSnapshotTypesConformToSendable() async throws {
+    let configuration = Configuration(
+      url: try XCTUnwrap(URL(string: "wss://example.invalid")),
+      channelId: "test",
+      role: .sendrecv)
+    let snapshot = try ConnectionConfigurationSnapshot(configuration: configuration)
+
+    requireSendable(ConnectionConfigurationSnapshot.self)
+    requireSendable(ICEServerSnapshot.self)
+    requireSendable(WebRTCConfigurationSnapshot.self)
+    requireSendable(ForwardingFilterSnapshot.self)
+    requireSendable(JSONValue.self)
+
+    await assertCrossesBoundaries(
+      snapshot, message: "ConnectionConfigurationSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      snapshot.webRTCConfiguration,
+      message: "WebRTCConfigurationSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ICEServerSnapshot(
+        urls: ["turns:example.com"], username: "user", credential: "credential",
+        isTLSInsecure: false),
+      message: "ICEServerSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ForwardingFilterSnapshot(
+        name: nil, priority: nil, action: nil, rules: [], version: nil, metadata: .null),
+      message: "ForwardingFilterSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      JSONValue.object(["key": .string("value")]),
+      message: "JSONValue が actor 境界を越えられない")
+  }
 }

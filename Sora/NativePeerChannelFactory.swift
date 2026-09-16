@@ -184,21 +184,20 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   }
 
   func createNativePeerChannel(
-    configuration: WebRTCConfiguration,
-    constraints: MediaConstraints,
+    webRTCConfiguration: WebRTCConfigurationSnapshot,
     proxy: Proxy? = nil,
     caCertificates: [SecCertificate]? = nil,
     delegate: RTCPeerConnectionDelegate?
   ) -> RTCPeerConnection? {
     let certificateVerifier = createCertificateVerifier(
-      configuration: configuration,
+      webRTCConfiguration: webRTCConfiguration,
       caCertificates: caCertificates)
     if let proxy {
       // proxy ありの overload は certificateVerifier が nullable のため、
       // verifier が不要な場合は nil をそのまま渡せる。
       return nativeFactory.peerConnection(
-        with: configuration.nativeValue,
-        constraints: constraints.nativeValue,
+        with: webRTCConfiguration.nativeValue,
+        constraints: webRTCConfiguration.nativeConstraints,
         certificateVerifier: certificateVerifier,
         delegate: delegate,
         proxyType: RTCProxyType.https,
@@ -210,26 +209,26 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     } else {
       if let certificateVerifier {
         return nativeFactory.peerConnection(
-          with: configuration.nativeValue,
-          constraints: constraints.nativeValue,
+          with: webRTCConfiguration.nativeValue,
+          constraints: webRTCConfiguration.nativeConstraints,
           certificateVerifier: certificateVerifier,
           delegate: delegate)
       } else {
         // proxy なしの certificateVerifier 付き overload は nullable ではないため、
         // certificateVerifier が不要な場合は certificateVerifier なしの overload を使う。
         return nativeFactory.peerConnection(
-          with: configuration.nativeValue,
-          constraints: constraints.nativeValue,
+          with: webRTCConfiguration.nativeValue,
+          constraints: webRTCConfiguration.nativeConstraints,
           delegate: delegate)
       }
     }
   }
 
   private func createCertificateVerifier(
-    configuration: WebRTCConfiguration,
+    webRTCConfiguration: WebRTCConfigurationSnapshot,
     caCertificates: [SecCertificate]?
   ) -> RTCSSLCertificateVerifier? {
-    if configuration.usesVerifiedTURNTLS {
+    if webRTCConfiguration.usesVerifiedTURNTLS {
       return IOSCertificateVerifier(caCertificates: caCertificates)
     }
 
@@ -300,12 +299,11 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 
   // クライアント情報としての Offer SDP を生成する
   func createClientOfferSDP(
-    configuration: WebRTCConfiguration,
-    constraints: MediaConstraints,
+    webRTCConfiguration: WebRTCConfigurationSnapshot,
     handler: @escaping (String?, Error?) -> Void
   ) {
     let peer = createNativePeerChannel(
-      configuration: configuration, constraints: constraints, delegate: nil)
+      webRTCConfiguration: webRTCConfiguration, delegate: nil)
 
     // `guard let peer = peer {` と書いた場合、 Xcode 12.5 でビルド・エラーになった
     guard let peer2 = peer else {
@@ -317,10 +315,10 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       streamId: "offer",
       videoTrackId: "video",
       audioTrackId: "audio",
-      constraints: constraints)
+      constraints: webRTCConfiguration.constraints)
     peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
     peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
-    peer2.offer(for: constraints.nativeValue) { sdp, error in
+    peer2.offer(for: webRTCConfiguration.nativeConstraints) { sdp, error in
       if let error {
         handler(nil, error)
       } else if let sdp {

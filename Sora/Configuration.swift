@@ -370,13 +370,18 @@ public struct Configuration {
 
 extension Configuration {
   /// PEM 文字列から CA 証明書を解析する
+  ///
+  /// 接続処理は snapshot 側の `parsedCACertificates()` を使う。このメソッドは既存テストの
+  /// 呼び出し互換のために残している。
   func parsedCACertificates() throws -> [SecCertificate]? {
     guard let pem = caCertificate else { return nil }
     return try Self.parsePEMCertificates(pem)
   }
 
   /// PEM 文字列から SecCertificate の配列を生成する
-  private static func parsePEMCertificates(_ pem: String) throws -> [SecCertificate] {
+  ///
+  /// `ConnectionConfigurationSnapshot` も使うため internal とする。
+  static func parsePEMCertificates(_ pem: String) throws -> [SecCertificate] {
     // PEM ブロックを非貪欲マッチで抽出する。
     // `[\s\S]*?` により BEGIN に対応する最初の END までを取得する。
     // これにより複数証明書連結時でもブロック単位の抽出が可能で、

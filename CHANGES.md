@@ -25,8 +25,25 @@
   - `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない (標準ライブラリの `Error: Sendable` に依存する)
   - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
   - @t-miya
+- [UPDATE] 接続設定を immutable な Sendable snapshot へ変換する
+  - 接続開始時に利用者の `Configuration` を内部の snapshot へ写し取り、接続開始後に走る非同期処理が利用者所有の可変値を参照しないようにする
+  - 公開 API の変更はない
+  - 数値の表記が変わる場合がある (`Float` / `Double` の指数表記の展開、`-0.0` の符号)
+  - `dataChannels` を設定している場合は connect message の `Double` / `Float` の 17 桁表記が解消され、`JSONEncoder` の表記に揃う
+  - JSON オブジェクトのキー順は不定になる (`Dictionary` の順序のため。JSON として等価)
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
+  - @t-miya
+- [FIX] `dataChannels` を設定していると connect message に載る `Decimal` が Double の精度に丸められて送信される問題を修正する
+  - `Configuration.dataChannels` を設定しているときに、`signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別パラメーター / `ForwardingFilter.metadata` の `Decimal` が Double の精度に丸められる問題を修正する
+  - @t-miya
+- [FIX] JSON 化できない `dataChannels` を設定すると接続時にプロセスが abort する問題を修正する
+  - `Configuration.dataChannels` に JSON 化できない値 (`Data` / `Date` / `Set` / `URL` / 非 String キーの辞書 / `NaN` / `Infinity` / `Decimal` の `NaN` / 入れ子の非有限値) を設定した場合に、接続開始前に `SoraError.configurationError` として返す
+  - @t-miya
+- [FIX] connect message に載る metadata の encode に失敗すると接続がタイムアウトする問題を修正する
+  - `Configuration.signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別パラメーター / `ForwardingFilter.metadata` の encode に失敗した場合に、接続開始前に `SoraError.configurationError` として返す
+  - `JSONEncoder` がエラーにしない `Decimal` の `NaN` も、出力した JSON の再パースで検出する
   - @t-miya
 
 ### misc
