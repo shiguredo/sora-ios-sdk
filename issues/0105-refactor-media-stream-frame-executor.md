@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-media-stream-frame-executor
-- Polished: 2026-09-02
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -35,8 +35,10 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 
 - `BasicMediaStream` ごとに frame-processing 用の serial executor または actor を持つ。
 - frame event に stream identity、transport epoch、sequence、owned frame / adapter handle を含める。
+  - stream identity は、非 Sendable な `MediaStream` / `VideoFrame` を executor や actor 境界で扱うための内部 handle とし、既存の `SenderStreamBox` (`Sora/VideoMute.swift`) を置き換えられる形にする。`0098` / `0103` / `0136` は「`0105` が stream 用の内部 handle を導入した場合は、actor へ渡す方式を変更できる」としており、これと整合させる。
+  - transport epoch は既存の `ConnectionLifecycleState.transportEpoch` (`Sora/ConnectionLifecycle.swift`) を使う。`transportEpoch` は redirect 受信時のみ増加するため、disconnect / stream terminate の破棄は executor の無効化で行い、epoch の増加に依存しない。
 - camera、screen capture、public send のすべてを 1 本の ordered ingress へ接続する。
-- disconnect、redirect / 再ネゴシエーション、stream terminate 後は、古い epoch の frame を破棄する。
+- disconnect または stream terminate 後は executor を無効化し、到着する frame を破棄する。redirect 後は、ingress 時に保持した transport epoch が現在値と一致しない frame を破棄する。re-offer / re-answer による再ネゴシエーション (`Sora/Signaling.swift`) では transport も stream も変わらないため frame の破棄は不要であり、sequence 順の維持だけを保証する。
 
 ### VideoFilter
 
@@ -59,8 +61,12 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 
 ### 映像・音声の有効フラグ
 
-- `videoEnabled` / `audioEnabled` の変更を stream 単位の executor 上で直列化する。`MediaChannel.setVideoSoftMute` の同期書き込み、`setVideoHardMute` の actor 内書き込み、`setVideoHardMute(false)` の成功後の書き込みなど、複数の API から同じ stream の `videoEnabled` へ書き込まれても、最後に確定した変更が最終値になるようにする。
-- `0136` は `setVideoHardMute(true)` の書き込みだけを `VideoHardMuteActor` の executor へ移す限定変更である。`videoEnabled` の変更全体を stream 単位へ集約するのは本 issue が担う。
+- `videoEnabled` / `audioEnabled` の変更を stream 単位の executor 上で直列化する。直列化の単位は書き込み 1 回ではなく、公開 API の呼び出し 1 回 (operation) とし、operation 内の書き込みの途中に他の operation の書き込みを割り込ませない。
+- 対象とする書き込み:
+  - `videoEnabled`: `MediaChannel.setVideoSoftMute` の同期書き込み、`MediaChannel.setVideoHardMute` による `VideoHardMuteActor.setMute` (`Sora/VideoMute.swift`) 内の書き込み、`setVideoHardMute(false)` の成功後の書き込み、`MediaStream.videoEnabled` への直接代入、`0136` が導入した失敗時の復元書き込み
+  - `audioEnabled`: `MediaChannel.setAudioSoftMute` の書き込み、`MediaStream.audioEnabled` への直接代入
+- operation の順序は executor 上の線形順で決まる。operation が読み取る前値は、その operation が線形順で開始した時点の値とする (`0136` の「実行を開始した時点の値」を線形順の開始時点として明確化する)。失敗時に復元する書き込みは、失敗した operation の一部としてその operation 内で確定し、後続 operation の書き込みを上書きしない。
+- `0136` は `setVideoHardMute(true)` の書き込みだけを `VideoHardMuteActor` の executor へ移す限定変更 (実装済み) である。`videoEnabled` の変更全体を stream 単位へ集約するのは本 issue が担う。
 
 ## スコープ外
 
@@ -74,12 +80,12 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 
 モックやスタブは使用しない。
 
-- 実カメラ、実 ReplayKit、public `send(videoFrame:)` から同じ実 `MediaStream` へ frame を入力する。
+- 実カメラ、実 ReplayKit、public `send(videoFrame:)` から同じ実 `MediaStream` へ frame を入力する。実カメラと実 ReplayKit は Simulator で利用できないため (CI は Simulator 実行)、これらを使う順序検証は実機で行い、実機でしか確認できない項目は未検証として区別する。Simulator の自動テストでは public `send(videoFrame:)` 経由の並行入力で検証する。
 - 実際の `VideoFilter` 実装を使い、同時実行されず sequence 順に呼ばれることを確認する。
 - filter の交換と frame 入力を競合させ、交換前後の境界が決定的であることを確認する。
-- disconnect、redirect / 再ネゴシエーション、terminate 後に古い epoch の frame が送られないことを確認する。
+- disconnect、redirect、terminate 後に、無効化済み executor または transport epoch 不一致の frame が送られないことを確認する。
 - 現行 `VideoFilter.filter(_:)` は非 optional を返し drop 経路を持たないため、frame の drop は `0057` の新 processor 契約で扱う。本 issue では filter の連続・並行入力でも後続 frame が停止・追い越しなく sequence 順に処理されることを確認する。
-- Thread Sanitizer を補助的に有効化し、長時間の frame 入力で queue が無制限に増えないことを確認する。
+- Thread Sanitizer は `0119` の基盤が利用可能になった時点で補助的に有効化し、長時間の frame 入力で queue が無制限に増えないことを確認する (`0119` / `0151` が未完了の間は完了条件に含めない)。
 - テストには、入力元ごとの event sequence と期待する破棄条件を日本語コメントで明記する。
 
 ## 完了条件
@@ -87,10 +93,10 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 - stream ごとに映像 frame 処理の所有 executor が 1 つ存在すること。
 - camera、screen capture、public send が同じ ordered ingress を経由すること。
 - legacy `VideoFilter` の実行と交換が同じ executor 上で順序付けられること。
-- stale transport epoch の frame が WebRTC video source と renderer へ配送されないこと。
+- transport epoch が現在値と一致しない frame と、stream terminate / disconnect 後に executor へ到着した frame が WebRTC video source と renderer へ配送されないこと。
 - raw frame を広域の unchecked wrapper で executor 越境させていないこと。
 - add、frame、remove、disconnect に加えて、switch、size を含む renderer event の因果順序が明示的に保証されること。
-- 同一 stream の `videoEnabled` / `audioEnabled` を複数の API から並行に変更しても、最後に確定した変更が最終値になり、途中の変更が後から上書きされないこと。
+- 同一 stream の `videoEnabled` / `audioEnabled` を複数の API から並行に変更しても、executor 上の線形順で最後に確定した operation の値が最終値になり、operation 内の書き込み (失敗時の復元書き込みを含む) が後続 operation と交差しないこと。
 - `0057`、`0027`、`0060` が利用できる基盤と責務境界が文書化されていること。
 - 追加したテストと既存テストがすべて成功すること。
 
