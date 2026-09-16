@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-logger-shared-state
-- Polished: 2026-09-02
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -50,7 +50,7 @@ open の `0026` は `WrapperVideoEncoderFactory` の singleton だけを対象�
 
 ### shared と formatter
 
-- 公開 `Logger.shared` の getter / setter は source compatibility を維持する。差し替え時は新しいインスタンスの設定値（`level` / `groups` / `onOutputHandler`）を storage へ反映し、以後の出力は storage 上の設定を参照する（現行と同じ実行時挙動）。
+- 公開 `Logger.shared` の getter / setter は source compatibility を維持する。storage が設定値（`level` / `groups` / `onOutputHandler`）の正本であり、`Logger.shared` の差し替えは storage 内の参照を置き換えるだけとする。設定値は差し替え後も storage に残るため、現行のように新インスタンスの初期値へ戻る挙動とは異なり、この契約をコードコメントへ残す。以後の出力は storage 上の設定を参照する。
 - `sharedStorage` の `nonisolated(unsafe)` を除去する。
 - 文字列整形（`Log.description`）は設定 lock の外で実行する。共有 `DateFormatter` は iOS 7 以降 thread-safe である Apple の仕様に基づき、専用 lock を追加せず共有を認め、その根拠をコードコメントへ残す。可能であれば immutable / value-oriented な formatter へ置き換える。
 - class 全体の `@unchecked Sendable` を残す場合は、全 mutable state が storage に閉じていることを型の直前に日本語コメントで説明する。
@@ -60,7 +60,7 @@ open の `0026` は `WrapperVideoEncoderFactory` の singleton だけを対象�
 - `Sora.shared`、`DeviceInfo.current`、WebRTC callback logger の lifecycle は別 issue とする。
 - ログ API の廃止やログ形式の変更は行わない。
 - ログ group の追加・削除は行わない。
-- secret masking の仕様変更は行わない。
+- secret masking の仕様変更は行わない（対象キーの追加などは `0156` が扱う）。
 
 ## テスト方針
 
@@ -77,6 +77,7 @@ open の `0026` は `WrapperVideoEncoderFactory` の singleton だけを対象�
 ## 完了条件
 
 - `shared`、`level`、`groups`、`onOutputHandler` の全読み書きが同じ同期方針で保護されていること。
+- storage が設定の正本であり、`Logger.shared` の差し替え後も設定値（`level` / `groups` / `onOutputHandler`）が維持される契約がコードコメントに明記されていること。
 - 1 回のログ出力が整合した設定 snapshot を使用すること。
 - filtering、masking、formatting、handler、`print` を設定 lock の外で実行すること。
 - handler 内から Logger を再設定・再呼び出ししても deadlock しないこと。
