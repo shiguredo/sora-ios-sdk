@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-screen-capture-buffer-ownership
-- Polished: 2026-09-02
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -21,7 +21,7 @@ sample buffer と backing pixel buffer の lifetime / alias を明確にし、�
 - `CaptureContext.videoSampleBufferTransformer`
 - `VideoFrame` が保持する WebRTC frame または pixel buffer
 
-Swift 6.3 の SDK interface では `CMSampleBuffer` が non-Sendable と診断される。`ScreenCaptureController: @unchecked Sendable` と state lock は controller の一部 state を保護するだけで、sample buffer 自体の executor 越境と backing storage の不変性を保証しない。
+Swift 6 言語モード（現行 CI の `SWIFT_VERSION=6`）の SDK interface では `CMSampleBuffer` が non-Sendable と診断される。`ScreenCaptureController: @unchecked Sendable` と state lock は controller の一部 state を保護するだけで、sample buffer 自体の executor 越境と backing storage の不変性を保証しない。
 
 closure capture によって Core Foundation object の参照寿命は延長できるが、ReplayKit callback 後の buffer 再利用、pixel buffer の alias、別 queue からの安全な読み取りはコード上の型契約になっていない。
 
@@ -36,9 +36,9 @@ closure capture によって Core Foundation object の参照寿命は延長で�
 ### ReplayKit callback 内で完了させる処理
 
 - `videoSampleBufferTransformer` は ReplayKit callback を受けた executor 上で同期的に実行する。
-- 実行順序は現行と同じく「PTS 間引きと送信中の drop（`shouldSendVideoFrame` / `sendVideoFrameSemaphore`）→ transformer → owned frame への変換 → queue enqueue」とし、破棄されるフレームでは transformer を実行しない。送信処理中に到着したフレームを待たずに破棄する throttle 契約も維持する。
+- 実行順序は「PTS 間引きと送信中の drop（`shouldSendVideoFrame` / `sendVideoFrameSemaphore`）→ transformer → owned frame への変換」の段階順を現行から維持し、queue への enqueue だけを変換完了後に移す。破棄されるフレームでは transformer を実行しない。送信処理中に到着したフレームを待たずに破棄する throttle 契約も維持する。
 - `CMSampleBuffer` から送信用の owned frame または immutable snapshot への変換を callback 内で完了する。
-- transformer が frame を drop した場合、別 queue へ何も enqueue しない。
+- transformer が frame を drop した場合、別 queue へ何も enqueue しない。drop と変換失敗の早期 return では、取得済みの `sendVideoFrameSemaphore` を確実に signal して戻る。
 - buffer 変換に失敗した場合は送信済み timestamp を更新しない。
 
 ### executor 越境
@@ -47,6 +47,7 @@ closure capture によって Core Foundation object の参照寿命は延長で�
 - `CMSampleBuffer`、`CVPixelBuffer`、raw `MediaStream` を unchecked box に入れて queue 境界へ渡さない。
 - WebRTC object の thread affinity により raw frame を送れない場合は、`0105` の stream frame executor が受け取れる内部 handle または deep-owned pixel data へ変換する。
 - ただし `0105` の ingress インタフェースが未確定の間は、現行どおり `MediaStream.send(videoFrame:)` を末端とする構成を維持し、本 issue 単独で完結できる範囲に留める。
+- `MediaStream.send(videoFrame:)` を末端に維持する間は、queue 側へ渡した owned な表現から `VideoFrame` を構築して送信する。非 Sendable な `VideoFrame` 自体は queue 境界を越えない。
 - deep copy の性能コストを測定し、必要性を確認せず buffer pool や複雑な cache を導入しない。
 
 ### 外部契約の確認
