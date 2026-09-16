@@ -1401,6 +1401,18 @@ public final class MediaChannel {
   /// 事前に映像ソフトミュートを利用していた場合は状態が上書きされます
   /// ハードミュート解除時に直前のソフトミュートの状態を復元するようなことはしません
   ///
+  /// ハードミュート有効化に失敗した場合は、呼び出し前の `senderStream.videoEnabled` を復元します。
+  /// ただし操作が取り消された場合は復元せず、黒塗り (ソフトミュート) のまま終了します。
+  /// 切断の開始と同時に失敗した場合は復元されることがあります。
+  /// 復元する値はこの操作が実行を開始した時点の値であり、並行する `setVideoSoftMute` や
+  /// `MediaStream.videoEnabled` への直接代入とは排他されません。
+  /// 操作の実行中や設定前の取消により拒否された場合は `videoEnabled` を変更しません。
+  ///
+  /// `senderStream.videoEnabled` の setter は値が変化したときだけ利用者 handler と
+  /// `VideoRenderer` を呼びます。呼び出し前が有効な場合は、成功時に `onSwitchVideo(false)` が 1 回、
+  /// 復元する失敗時に `onSwitchVideo(false)` と `onSwitchVideo(true)` がこの順に 1 回ずつ発火します。
+  /// 有効化の経路ではこれらの callback は `VideoHardMuteActor` の executor で発火します。
+  ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Throws: エラー時は `SoraError.cameraError` または `SoraError.mediaChannelError` がスローされます
   public func setVideoHardMute(_ mute: Bool) async throws {
@@ -1419,8 +1431,8 @@ public final class MediaChannel {
     }
 
     if mute {
-      // ソフトミュートによる黒塗りフレーム送出 -> ハードミュート有効化の順になるようにします
-      senderStream.videoEnabled = false
+      // 黒塗りの設定は VideoHardMuteActor.setMute 内で行います
+      // (所有権を取得できなかった呼び出しが videoEnabled を変更しないようにするため)
       try await Self.videoHardMuteActor.setMute(
         mute: true,
         lease: videoHardMuteLease,

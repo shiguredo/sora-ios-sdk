@@ -45,6 +45,12 @@
   - `Configuration.signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別パラメーター / `ForwardingFilter.metadata` の encode に失敗した場合に、接続開始前に `SoraError.configurationError` として返す
   - `JSONEncoder` がエラーにしない `Decimal` の `NaN` も、出力した JSON の再パースで検出する
   - @t-miya
+- [FIX] setVideoHardMute(true) の失敗時に映像が黒塗りのまま残る問題を修正する
+  - `MediaChannel.setVideoHardMute(true)` の黒塗り設定と失敗時の復元を `VideoHardMuteActor.setMute` 内へ移す
+  - `VideoHardMuteActor` の所有権を取得できなかった呼び出しは `videoEnabled` を変更しない
+  - 接続終了中 (lease が無効) の失敗では復元せず、黒塗りのまま終了する
+  - `setVideoHardMute(true)` の経路では `onSwitchVideo` が `VideoHardMuteActor` の executor で発火する (これまでと異なるスレッドから呼ばれる場合がある)
+  - @t-miya
 
 ### misc
 

@@ -1,7 +1,7 @@
 # setVideoHardMute(true) の失敗時に videoEnabled を復元する
 
 - Created: 2026-09-10
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-16
 - Priority: Medium
 - Branch: feature/fix-video-hard-mute-rollback
 - Polished: 2026-09-16
@@ -110,19 +110,20 @@
 - 検証前に `XCTAssertTrue(stream.videoEnabled, "video track は既定で有効であること")` と `XCTAssertTrue(stream.hasVideoTrack)` を置く。
 - `stream.handlers.onSwitchVideo` に発火値の配列を記録するクロージャを設定する。handler は `await setVideoHardMute` の完了前に同期で発火するため、closure 内で直接配列へ追加し (`DispatchQueue.main.async` を挟まない)、`await` の戻り直後に配列を読む。接続完了後に handler を設定するため、設定前の発火は記録されない。
 - 取消経路: `lease.revoke()` の後に `setVideoHardMute(true)` を呼ぶ。throw は `do` / `catch let error as SoraError` で捕捉し、`case .mediaChannelError(let reason)` の `reason` に `"cancelled"` が含まれることを検証し、throw しなかった場合は `XCTFail` にする。あわせて `senderStream.videoEnabled` が変更されないこと、`onSwitchVideo` の記録配列が空であることを検証する。これは `operationTracker.begin` による設定前の拒否であり、設定後の取消 (`checkNotRevoked`) とは別事象である。
-- 成功経路: lease を revoke せずに `setVideoHardMute(true)` を呼ぶ。throw は握りつぶさず、throw した場合はテストを失敗させる。カメラ未起動のため冪等成功して `senderStream.videoEnabled` が false になることと、`onSwitchVideo` が `[false]` の 1 回だけ発火することを検証する。lease は一度 revoke すると戻せないため、取消経路とは別のテストメソッドにする。この経路は `CameraVideoCapturer.current` が nil であることを前提とする。テスト冒頭で `CameraVideoCapturer.current` を確認し、非 nil なら `XCTSkip` するか、テスト間で実カメラを起動しない。
+- 成功経路: lease を revoke せずに `setVideoHardMute(true)` を呼ぶ。throw は握りつぶさず、throw した場合はテストを失敗させる。カメラ未起動のため冪等成功して `senderStream.videoEnabled` が false になることと、`onSwitchVideo` が `[false]` の 1 回だけ発火することを検証する。続けて 2 回目の `setVideoHardMute(true)` を呼び、値が変化しないため `onSwitchVideo` が追加発火しないことも検証する。lease は一度 revoke すると戻せないため、取消経路とは別のテストメソッドにする。この経路は起動中のカメラが無いことを前提とする。テスト冒頭で `await CameraVideoCapturer.currentForSDK()` を確認し、非 nil なら `XCTSkip` するか、テスト間で実カメラを起動しない。
 - `SORA_SIGNALING_URL` / `TEST_SECRET_KEY` 未設定時は XCTSkip とする。
 - 直接生成した `MediaChannel` は `sora.mediaChannels` に登録されないため `E2ETestBase.tearDown` では切断されない。`addTeardownBlock` で `state != .disconnected` のときだけ `onDisconnect` を設定して `channel.disconnect(error: nil)` を呼び、`await fulfillment(of:timeout: 10)` で待つ。前提 assertion で早期 return した場合も後始末が走るようにする。`E2ETestBase.disconnectAndVerify` は正常切断コードを検証して handler を上書きするため、本テストでは使わない。
 
 ### 実機で確認する項目
 
 - 別接続がカメラを所有している場合の復元: 実機で 2 つの `MediaChannel` を接続し、一方を `initialCameraEnabled = true`、もう一方を `false` にして後者から `setVideoHardMute(true)` を呼ぶ。`"camera is owned by another connection"` の throw 後に `senderStream.videoEnabled` が呼び出し前の値へ戻り、`onSwitchVideo` が false → true の順に発火することを確認する。
+- SwiftPM のテストターゲットは tool-hosted のため実機では実行できない。この確認は自動テストではなく、実機で同じプロセスに 2 接続を作れるアプリ (一時的な確認用アプリを含む) で手動で行う。
 
 ### 現状の seam では検証できない項目
 
 - 復元分岐に到達する失敗は、設定後の所有権不一致 (`currentCameraVideoCapturer()` 後の guard と `stopCameraVideoCapture` 内の guard) である。いずれも起動済みの `CameraVideoCapturer.current` を必要とし、Simulator では `current` が nil のため `currentCameraVideoCapturer()` の早期 return で復元分岐に到達しない。
 - 設定後に取消 (`checkNotRevoked`) による復元しない分岐は、カメラ停止完了のタイミングに `revoke()` を差し込む決定的な手順がないため未検証とする。
-- 復元分岐を通る自動テストは存在しない。復元そのものは実機確認のみで、完了条件でも CI 対象外として区別する。
+- 復元分岐を通る自動テストは存在しない。Simulator では到達できず、SwiftPM のテストターゲットは tool-hosted で実機でも実行できないため、復元は実機での手動確認のみとし、完了条件でも CI 対象外として区別する。
 
 ## 変更対象
 
@@ -158,3 +159,28 @@
 - `0105`: `MediaStream` の `videoEnabled` / `audioEnabled` の変更を stream 単位の executor へ集約する計画。本 issue は `videoEnabled` の書き込み 1 つを `VideoHardMuteActor` の executor へ移す限定変更であり、callback の executor と順序の全体設計は `0105` が扱う。
 
 ## 解決方法
+
+`VideoHardMuteActor.setMute(mute: true)` の直列化区間へ `videoEnabled` の設定と復元を移した。
+
+- `Sora/VideoMute.swift`: `if mute {` の先頭で操作開始時点の `videoEnabled` を保持して false を設定し、`if mute` ブロックの残りを `do` / `catch` で囲んだ。設定後に throw した場合は `VideoHardMuteLease.isValid` のときだけ呼び出し前の値へ復元し、取消 (接続終了) の失敗では復元しない。
+- `Sora/MediaChannel.swift`: `setVideoHardMute(true)` から `videoEnabled = false` を削除し、doc に復元条件・callback の発火・executor の変更を追記した。
+- `Sora/MediaStream.swift`: `MediaStreamHandlers.onSwitchVideo` の doc に executor の違いを追記した。
+- `SoraTests/VideoHardMuteActorLeaseTests.swift`: video track 付き stream のヘルパと、`operationTracker.begin` の拒否で `videoEnabled` が変化しないことを検証するテストを追加した。
+- `SoraTests/VideoHardMuteRollbackE2ETests.swift`: 実 Sora 接続で取消経路と成功経路 (2 回目の追加発火なしを含む) を検証するテストを追加した。
+- `CHANGES.md`: `## develop` に `[FIX]` を追記した。
+
+### 検証
+
+- ビルド: `xcodebuild build-for-testing` (Swift 6, iphonesimulator26.5) 成功。swift-format lint / SwiftLint は指摘なし。
+- テスト: 257 件実行 / 失敗 0 (スキップ 23 は環境変数未設定時の E2E)。
+- 実 Sora サーバ接続 E2E (Simulator): `testRevokedLeaseDoesNotChangeVideoEnabled` と `testNoCameraMuteKeepsVideoEnabledFalse` が pass。
+- 実機 (iPhone 14 / iOS 26.6.1) で復元分岐を手動確認 (PASS):
+  - owner 接続 (`initialCameraEnabled = true`) でカメラを起動し、target 接続 (`initialCameraEnabled = false`) から `setVideoHardMute(true)` を呼ぶ
+  - `mediaChannelError(reason: "camera is owned by another connection")` が返る
+  - target の `videoEnabled` は `before=true` / `after=true` で復元される
+  - `onSwitchVideo` は `[false, true]` の順に発火する
+
+### 未検証
+
+- 設定後・カメラ未起動の取消、および停止完了後の取消による「復元しない」分岐は、決定的な手順がないため未検証とする。
+- SwiftPM のテストターゲットは tool-hosted のため実機では実行できない。復元分岐の実機確認は一時的な確認用アプリで手動実施した。
