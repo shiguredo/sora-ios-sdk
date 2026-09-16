@@ -1,7 +1,7 @@
 # 接続設定を immutable な Sendable snapshot へ変換する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-16
 - Priority: Medium
 - Branch: feature/refactor-configuration-snapshot
 - Polished: 2026-09-15
@@ -263,3 +263,50 @@
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+接続開始時に利用者の `Configuration` を internal な `ConnectionConfigurationSnapshot` へ写し取り、接続開始後の非同期区間が `Configuration` の参照型フィールドを読まない構造にした。signaling JSON と WebRTC 設定の値と解釈は維持し、変わるのは数値の表記と `dataChannels` が非 nil のときの connect message に載る `Decimal` の値だけである (どちらも `CHANGES.md` に記録した)。
+
+### 実装内容
+
+- `Sora/JSONValue.swift` (新規): `null` / `bool` / `decimal` / `double` / `string` / `array` / `object` を持つ internal な `JSONValue` と、`Encodable` / `Any` からの変換 (`from(_:errorReason:)` / `fromDataChannels(_:errorReason:)`)。`Encodable` は `JSONValueBox` で keyed container へ入れてから encode し、`SignalingConnect.encode(to:)` の `superEncoder` と同じ結果にする。`dataChannels` は `JSONSerialization.isValidJSONObject` → `data(withJSONObject:)` → `JSONDecoder` で変換する。
+- `Sora/ConnectionConfigurationSnapshot.swift` (新規): `ICEServerSnapshot` / `WebRTCConfigurationSnapshot` / `ForwardingFilterSnapshot` / `ConnectionConfigurationSnapshot`。stored property はすべて `let` で、`@unchecked Sendable` は使っていない。`RTCConfiguration` / `RTCMediaConstraints` は Objective-C の class のため computed property (`nativeValue` / `nativeConstraints`) として生成する。検証の理由文字列は `ConfigurationSnapshotErrorReason` に集約した。
+- `Sora/Configuration.swift`: `parsePEMCertificates(_:)` を internal に変更した。`parsedCACertificates()` は既存テスト互換のラッパーとして残している。
+- `Sora/ICEServerInfo.swift` / `Sora/WebRTCConfiguration.swift` / `Sora/TLSSecurityPolicy.swift`: snapshot へ移設した `nativeValue` / `nativeConstraints` / `usesVerifiedTURNTLS` を削除し、重複実装を残さない。`TLSSecurityPolicy.nativeValue` と private テーブルは参照元が無くなったため削除した。
+- `Sora/NativePeerChannelFactory.swift`: `createNativePeerChannel` / `createClientOfferSDP` / `createCertificateVerifier` の引数を `webRTCConfiguration: WebRTCConfigurationSnapshot` に変更し、`constraints:` 引数を削除して snapshot の `nativeConstraints` を使う。
+- `Sora/Signaling.swift`: internal な `dataChannelSettings` を追加し、`SignalingConnect.encode(to:)` が `data_channels` を出力する。
+- `Sora/SignalingChannel.swift`: snapshot と handler bag を受け取る init に変更し、`configuration` を削除した。`send` の `JSONSerialization` マージを削除した。
+- `Sora/PeerChannel.swift`: 利用者由来 snapshot を保持し、接続所有の `webRTCConfiguration` を `webRTCConfigurationLock` 配下で読み書きする。offer 受信時の更新は `replacing(...)` で新しい値を作る。`makeSignalingConnect` と接続処理の参照を snapshot へ移した。
+- `Sora/MediaChannel.swift`: designated init を `init(snapshot:configuration:audioDevice:mediaChannelHandlers:webSocketChannelHandlers:...)` とし、`validate(snapshot:)` へ変更した。`precondition(snapshot.usesCustomAudioDevice == (audioDevice != nil))` で内部不変条件を表明する。
+- `Sora/Sora.swift`: snapshot 生成を `MediaChannel.init` より先に行い、失敗を既存の設定エラー経路で通知する (ADM / WebSocket / `RTCPeerConnection` を生成しない)。
+- `SoraTests/ConnectionConfigurationSnapshotTests.swift` (新規): 変換の単体テスト、値の凍結、connect JSON のゴールデン、旧経路との等価比較、codec 別 params の条件、`CameraSettings` の凍結、TURN-TLS ポリシー。
+- `SoraTests/ConnectConfigurationValidationTests.swift` (新規): `0158` の検証テストを snapshot 生成経由へ移行したもの。
+- 既存テスト: `PeerChannel` / `SignalingChannel` の新しい init と `MediaChannel.validate(snapshot:)` へ移行し、`SendableConformanceTests` に snapshot 4 型の表明を追加した。
+- `CHANGES.md`: `## develop` の主リストへ `[UPDATE]` と `[FIX]` を追記した。
+
+### 設計上の判断
+
+- `MediaChannel` は snapshot を stored property として保持しない。接続開始後の読み出しを `PeerChannel` / `SignalingChannel` が自身の snapshot から行う形にしたため、保持しても読まれない。`MediaChannel.configuration` の doc に、参照型フィールドを読まないことと、値型フィールドを読む箇所 (公開 getter / `description` / 公開 mute API / `senderStream` / `receiverStreams`) を列挙した。
+- `PeerChannel.init` の `required` はサブクラスが存在しないため削除した。
+- `WebRTCConfiguration.isInsecure` は書き込み元が消えて常に false になったため削除し、snapshot 生成では `false` 固定とした。一時 offer の生成に `Configuration.insecure` を反映しない既存挙動を保つためである (offer 受信時に `Configuration.insecure` で置き換わる)。
+- `MediaChannel.connect` の未使用な `timeout` 引数は呼び出し元が無いため削除した。`webRTCConfiguration` は既存テストの呼び出し互換のため残し、doc に「接続処理では使わない」と明記した (公開引数としての扱いは `0153`)。
+- `JSONValue` は `Int64` / `UInt64` の case を持たない。`Decimal` を `Double` より先に判定するため整数トークンも `Decimal` として読まれ、この 2 case は到達不能である (その旨を doc に書いた)。
+- `initializeSenderStream` は接続所有の WebRTC 設定を 1 回だけ読み、constraints と `degradationPreference` の両方に使う。`createAndSendAnswer` は更新後の値を再読せず、ローカルの値で `createNativePeerChannel` / `setConfiguration` / `createAnswer` を作る。
+- `NativePeerChannelFactory` の引数名は `webRTCConfiguration:` に統一した。`snapshot:` は `PeerChannel` の利用者設定全体を指す `snapshot` と衝突するため採らない。
+- `0158` の検証は `ConnectionConfigurationSnapshot.init` へ移設した。`0158` の設計方針が置き場所としていた `MediaChannel.validate(configuration:)` ではなく snapshot 生成に置いたのは、同じ変換を 2 回行わないためである。`0158` は本 issue に統合して完了とした。
+- ソースコードのコメントに issue 番号を書かない。将来の対応は理由そのものを書く。
+- `MediaChannel.validate(snapshot:)` の audio 制約の理由文字列は既存のままとした。
+
+### 検証
+
+- `swiftc -typecheck -swift-version 6` (`Sora/` 全体、iPhoneOS 26.5 SDK / Xcode 26.6): 0 error。warning は 57 件 (実装直後は 60 件で、未参照になった `TLSSecurityPolicy.nativeValue` と private テーブルの削除により 3 件減った)。
+- `swift format lint --strict`: 通過。
+- `xcodebuild build-for-testing` / `test-without-building` (iPhone 17 Pro / iOS 26.5、`SWIFT_VERSION=6`、E2E を除く): 231 件が成功 (失敗 0)。`ConnectionConfigurationSnapshotTests` の 22 件と `ConnectConfigurationValidationTests` の 6 件を含む。
+- `#SendableClosureCaptures` は実装の前後で 67 → 67 で増えていない (実装時の計測)。
+- 接続試行のタイムアウトが `Configuration.connectionTimeout` から `ConnectionTimer` へ渡ることを既存テストの成功で確認した。
+- Thread Sanitizer を有効にした非 E2E テスト (`xcodebuild test -enableThreadSanitizer YES`) を実行した。`PeerChannel.onConnect` の data race (`invokeConnectHandler` の書き込みと `state` getter の読み込み) が検出され、サニタイザがテストプロセスを終了させたためスイートは完走しなかった。競合している箇所 (`onConnect` / `state` / `finishBasicDisconnect` / `invokeConnectHandler`) は本 issue が変更しておらず (develop と同一)、既存の問題として `0151` (PeerChannel.onConnect のデータ競合) が扱う。本 issue の変更範囲 (snapshot の写し取りと参照先の置き換え) では race は検出されていないが、最初のレポートで実行が終了したため全経路の走査は完了していない。
+- 元の metadata object / `ICEServerInfo` を別スレッドから変更する probe は実施していない。snapshot の生成は接続開始の同期区間で行い、生成後に SDK が元の object を読まないことは凍結テストと connect JSON のゴールデンで確認している。
+- E2E テスト (実 Sora) と CI (Xcode 26.2 / iPhoneOS 26.2 SDK) は未実施。push 後に `ci.yml` の E2E と `build.yml` の Release build で確認する。
+
+### 実機確認
+
+不要と判断した。変更は接続開始時の値の写し取りと設定の参照先の置き換えで、実行される通信・音声・カメラの処理自体は変えていない。最終的な確認は実 Sora に対する E2E テストで行う。
