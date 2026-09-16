@@ -13,6 +13,10 @@ public enum MediaStreamAudioVolume {
 /// ストリームのイベントハンドラです。
 public final class MediaStreamHandlers {
   /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
+  ///
+  /// `MediaChannel.setVideoHardMute(true)` の経路では `VideoHardMuteActor` の executor で、
+  /// `MediaChannel.setVideoSoftMute`、`MediaChannel.setVideoHardMute(false)` の成功時、
+  /// `MediaStream.videoEnabled` への直接代入では呼び出し側の executor で呼ばれます。
   public var onSwitchVideo: ((_ isEnabled: Bool) -> Void)?
 
   /// 音声トラックが有効または無効にセットされたときに呼ばれるクロージャー

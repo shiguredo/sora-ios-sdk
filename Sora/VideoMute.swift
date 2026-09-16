@@ -199,7 +199,9 @@ actor VideoHardMuteActor {
   /// - Parameters:
   ///  - mute: `true` で有効化、`false` で無効化
   ///  - lease: カメラ操作の所有者を示す lease
-  ///  - senderStream: 送信ストリーム
+  ///  - senderStream: 送信ストリーム。`mute = true` の場合は `videoEnabled` を false にし、
+  ///    失敗時は `lease` が有効なときだけ操作開始時点の値へ復元します。判定と書き込みは原子的では
+  ///    ないため、切断の開始と同時に失敗した場合は復元が実行され得ます
   ///  - cameraSettings: カメラ設定
   ///  - cameraStartAuthorization: MediaChannel が取得したカメラ開始予約と管理元
   /// - Throws:
@@ -222,29 +224,47 @@ actor VideoHardMuteActor {
 
     // ミュートを有効化します
     if mute {
-      guard let currentCapturer = await currentCameraVideoCapturer() else {
-        // キャプチャ未起動の場合は停止対象がないため、冪等として成功扱いにします
+      // 黒塗りフレームの送出はカメラ停止より前に行う必要があります。
+      // この設定は operationTracker.begin の後に置くため、拒否された呼び出しはここへ到達しません。
+      let previousVideoEnabled = senderStream.stream.videoEnabled
+      senderStream.stream.videoEnabled = false
+      do {
+        guard let currentCapturer = await currentCameraVideoCapturer() else {
+          // キャプチャ未起動の場合は停止対象がないため、冪等として成功扱いにします
+          return
+        }
+        // 動作中のカメラがこの接続の senderStream に紐付いていることを確認する。
+        // (別接続が使用中のカメラを停止しないため。CameraVideoCapturer.current は
+        // 全接続で共有される static のため、stream の一致が必要)
+        guard currentCapturer.stream === senderStream.stream else {
+          throw SoraError.mediaChannelError(
+            reason: "camera is owned by another connection")
+        }
+        // stop の前に再確認する (await 中に release された場合)
+        try checkNotRevoked(lease: lease)
+        try await stopCameraVideoCapture(
+          currentCapturer,
+          senderStream: senderStream)
+        // stop 完了後に再確認する (保存を中止する)
+        try checkNotRevoked(lease: lease)
+        // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
+        storedCapturers[lease] = StoredCapturer(
+          capturer: currentCapturer
+        )
         return
+      } catch {
+        // 取消 (lease が無効) の失敗では復元しません。
+        // カメラが停止済みか quarantine 中かによらず、切断中に映像有効の callback を
+        // 発火させても回復できないためです。
+        // それ以外の失敗では呼び出し前の値へ戻します (defer の finish より先に完了します)。
+        // isValid の判定と videoEnabled の書き込みは原子的ではないため、判定直後に
+        // 別スレッドの prepareForDisconnect が revoke した場合は復元が実行され得ます。
+        // 厳密な排他は有効フラグの変更を直列化する設計で扱います。
+        if lease.isValid {
+          senderStream.stream.videoEnabled = previousVideoEnabled
+        }
+        throw error
       }
-      // 動作中のカメラがこの接続の senderStream に紐付いていることを確認する。
-      // (別接続が使用中のカメラを停止しないため。CameraVideoCapturer.current は
-      // 全接続で共有される static のため、stream の一致が必要)
-      guard currentCapturer.stream === senderStream.stream else {
-        throw SoraError.mediaChannelError(
-          reason: "camera is owned by another connection")
-      }
-      // stop の前に再確認する (await 中に release された場合)
-      try checkNotRevoked(lease: lease)
-      try await stopCameraVideoCapture(
-        currentCapturer,
-        senderStream: senderStream)
-      // stop 完了後に再確認する (保存を中止する)
-      try checkNotRevoked(lease: lease)
-      // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
-      storedCapturers[lease] = StoredCapturer(
-        capturer: currentCapturer
-      )
-      return
     }
 
     // ミュートを無効化します
