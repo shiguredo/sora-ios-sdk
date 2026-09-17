@@ -3,11 +3,11 @@
 - Created: 2026-09-17
 - Completed: {YYYY-MM-DD}
 - Branch: feature/update-xcode-project-configuration-format
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-09-17
 
 ## 目的
 
-Apple は Xcode 27.2 以降で、Xcode プロジェクトの設定ファイルに、従来の property list 形式の `.pbxproj` に代わる、階層構造を持つ JSON 形式の `.xcproj` を利用できるようにしている。
+Apple は Xcode 27.2 以降で、Xcode プロジェクトの設定ファイルのデフォルトを、従来の property list 形式の `.pbxproj` から、階層構造を持つ JSON 形式の `.xcproj` へ変更している。Xcode 27 以降は両形式をサポートするため、どちらの形式でもプロジェクトを開ける。
 
 Sora iOS SDK の利用例である `sora-ios-sdk-quickstart` と `sora-ios-sdk-samples` も JSON 形式へ移行し、プロジェクト設定の差分を確認しやすく、設定変更を安全にレビューできる状態にする。
 
@@ -37,18 +37,18 @@ Apple の説明では、`.xcproj` は Xcode 27 以降で利用できる。プロ
 - Apple の手順に従い、Xcode の Project navigator でプロジェクトを選択し、File inspector の Project Document にある Project Format を JSON に変更する
 - 変換後も `.xcodeproj` のディレクトリは維持し、内部の `project.pbxproj` を `project.xcproj` へ置き換える
 - `SoraQuickStart` / `SamplesApp` のターゲット、スキーム、ソース・リソースの参照、Swift Package 依存関係、ビルド設定、デプロイメントターゲット、Samples のファイルシステム同期グループを維持する
-- 変換作業は Xcode 27.2 以降で行い、変換後の利用条件を `.xcproj` に対応する Xcode 27 以降へ更新する
-- 両リポジトリの GitHub Actions と README の Xcode / iOS SDK 条件を、採用する Xcode 27 系のバージョンへ合わせる
+- 変換作業は Xcode 27.2 以降で行い、変換後の利用条件（README のシステム条件）を、`.xcproj` と互換のある Xcode 27 以降へ更新する
+- 両リポジトリの GitHub Actions の Xcode / iOS SDK 条件を、Xcode 27.2 とそれに付属する iOS SDK へ更新する
 - アプリのソースコードや Sora iOS SDK の API 利用方法は変更しない
 
 ## 完了条件
 
 - `sora-ios-sdk-quickstart/SoraQuickStart.xcodeproj/project.pbxproj` が削除され、同じプロジェクト内に `project.xcproj` が追加されていること
 - `sora-ios-sdk-samples/SamplesApp/SamplesApp.xcodeproj/project.pbxproj` が削除され、同じプロジェクト内に `project.xcproj` が追加されていること
-- Xcode 27.2 以降で両プロジェクトを開けること
+- Xcode 27 以降で両プロジェクトを開けること
 - 両プロジェクトで既存の `SoraQuickStart` / `SamplesApp` スキームを利用した Release ビルドが成功すること
 - Swift Package 依存関係、ターゲット、デプロイメントターゲット、Swift version、ファイル参照が変換前と同じ意味を保っていること
-- 両リポジトリの GitHub Actions が、`.xcproj` を扱える Xcode 27 系と対応する iOS SDK で成功すること
+- 両リポジトリの GitHub Actions が、Xcode 27.2 とそれに付属する iOS SDK で成功すること
 - 両リポジトリの README と変更履歴に、プロジェクト形式の変更と Xcode の利用条件が反映されていること
 
 ## 解決方法
