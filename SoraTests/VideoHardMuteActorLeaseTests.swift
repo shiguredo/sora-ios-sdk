@@ -322,7 +322,8 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   /// 開始取消後も、物理停止の成功を確認するまでは切断処理が所有ストリームを参照できることを確認する
   func testCancelledCameraStartRetainsOwnershipUntilStopped() async throws {
     let dependencies = try makeDependencies()
-    let cameraCoordinator = CameraVideoCaptureCoordinator()
+    // process-wide の shared を汚染しないよう、テストローカルの owner を注入する
+    let cameraCoordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
 
     // lease 破棄と送信元予約破棄の両経路で、開始成功後の停止対象を失わないことを確認する。
     for revokeLease in [true, false] {
@@ -358,16 +359,119 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
 
   /// カメラ cleanup 失敗後は隔離し、停止成功を確認するまで新しい操作を許可しないことを確認する
   func testCameraCoordinatorQuarantinesCleanupFailure() {
-    let coordinator = CameraVideoCaptureCoordinator()
+    // 隔離状態は process-wide の owner が保持するため、テストローカルの owner を注入して
+    // 他のテストへ状態を持ち越さないようにする。
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
 
     XCTAssertTrue(coordinator.isAvailable)
     coordinator.quarantine()
     XCTAssertTrue(coordinator.isQuarantined)
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "隔離状態が owner に記録されること")
     XCTAssertFalse(coordinator.isAvailable, "cleanup 失敗後は新しいカメラ操作を拒否すること")
 
     coordinator.clearQuarantineAfterSuccessfulStop()
     XCTAssertFalse(coordinator.isQuarantined)
+    XCTAssertEqual(owner.snapshot.phase, .idle, "解除が owner に記録されること")
     XCTAssertTrue(coordinator.isAvailable, "停止成功を確認した後はカメラ操作を再開できること")
+  }
+
+  /// 隔離した capturer と異なる capturer の停止完了では隔離を解除しないことを確認する
+  func testCameraCoordinatorKeepsQuarantineForOtherCapturer() {
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
+    let quarantined = CameraCapturerID()
+
+    coordinator.quarantine(capturerID: quarantined)
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "隔離状態が owner に記録されること")
+
+    coordinator.clearQuarantineAfterSuccessfulStop(capturerID: CameraCapturerID())
+
+    XCTAssertTrue(coordinator.isQuarantined, "別 capturer の停止完了では隔離を解除しないこと")
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "owner の隔離も維持されること")
+  }
+
+  /// 隔離した capturer と一致する ID の停止完了で隔離が解除されることを確認する
+  func testCameraCoordinatorClearsQuarantineForMatchingCapturer() {
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
+    let capturerID = CameraCapturerID()
+
+    coordinator.quarantine(capturerID: capturerID)
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "隔離状態が owner に記録されること")
+
+    coordinator.clearQuarantineAfterSuccessfulStop(capturerID: capturerID)
+
+    XCTAssertFalse(coordinator.isQuarantined, "一致する capturer の停止完了で隔離を解除すること")
+    XCTAssertEqual(owner.snapshot.phase, .idle, "owner の隔離も解除されること")
+  }
+
+  /// 隔離中はカメラ操作が拒否されることを coordinator 経由で確認する
+  ///
+  /// `cameraOperationRejectionError` は引数の coordinator が保持する owner を参照するため、
+  /// テストローカルの owner でも操作拒否の判定を検証できる。
+  func testCameraOperationRejectionErrorFollowsInjectedOwner() {
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
+
+    XCTAssertNil(
+      CameraVideoCapturer.cameraOperationRejectionError(coordinator: coordinator, stream: nil),
+      "隔離していない場合は拒否しないこと")
+
+    coordinator.quarantine()
+
+    let error = CameraVideoCapturer.cameraOperationRejectionError(
+      coordinator: coordinator, stream: nil)
+    guard let soraError = error as? SoraError, case .cameraError(let reason) = soraError else {
+      XCTFail("cameraError が返ること: \(String(describing: error))")
+      return
+    }
+    XCTAssertEqual(reason, "camera capture is quarantined after a cleanup failure")
+
+    coordinator.clearQuarantineAfterSuccessfulStop()
+    XCTAssertNil(
+      CameraVideoCapturer.cameraOperationRejectionError(coordinator: coordinator, stream: nil),
+      "隔離解除後は拒否しないこと")
+  }
+
+  /// 画面共有の予約中はカメラ操作が拒否され、隔離がある場合は隔離が優先されることを確認する
+  func testCameraOperationRejectionErrorForScreenReservation() throws {
+    let dependencies = try makeDependencies()
+    let coordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
+    let sourceCoordinator = VideoSourceCoordinator()
+    let stream = dependencies.senderStreamBox.stream
+    let reservation = try XCTUnwrap(
+      sourceCoordinator.beginScreen(stream: stream), "画面共有を予約できること")
+    XCTAssertTrue(sourceCoordinator.completeScreenStart(reservation))
+    // 画面共有の予約はプロセス全体の registry が保持するため、テスト内で解放する
+    defer {
+      if let stopReservation = sourceCoordinator.beginScreenStop() {
+        sourceCoordinator.finishScreenStop(stopReservation, stopped: true)
+      }
+    }
+
+    let screenError = CameraVideoCapturer.cameraOperationRejectionError(
+      coordinator: coordinator, stream: stream)
+    guard let screenSoraError = screenError as? SoraError,
+      case .cameraError(let screenReason) = screenSoraError
+    else {
+      XCTFail("cameraError が返ること: \(String(describing: screenError))")
+      return
+    }
+    XCTAssertEqual(screenReason, "screen capture is active on the camera stream")
+
+    // 隔離中は画面共有の予約を確認せず、隔離の理由で拒否する
+    coordinator.quarantine()
+
+    let quarantinedError = CameraVideoCapturer.cameraOperationRejectionError(
+      coordinator: coordinator, stream: stream)
+    guard let quarantinedSoraError = quarantinedError as? SoraError,
+      case .cameraError(let quarantinedReason) = quarantinedSoraError
+    else {
+      XCTFail("cameraError が返ること: \(String(describing: quarantinedError))")
+      return
+    }
+    XCTAssertEqual(quarantinedReason, "camera capture is quarantined after a cleanup failure")
   }
 
   /// 同じ接続のカメラと画面共有を、非同期開始より前の予約で排他できることを確認する
@@ -616,7 +720,8 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
 
   /// 初期カメラ無効から開始した場合も、停止キュー完了まで切断 callback と所有情報を保持することを確認する
   func testMediaChannelDisconnectWaitsForCameraCleanup() async throws {
-    let coordinator = CameraVideoCaptureCoordinator()
+    // process-wide の shared を汚染しないよう、テストローカルの owner を注入する
+    let coordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
     let ownership = CameraCaptureOwnership()
     let videoSourceCoordinator = VideoSourceCoordinator()
     var configuration = makeConfiguration()

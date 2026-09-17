@@ -11,6 +11,13 @@
 
 ## develop
 
+- [UPDATE] CameraVideoCapturer のカメラ状態の所有者を単一化する
+  - `CameraVideoCapturer` の `current` / `isRunning` / `format` / `frameRate` / `stream` を内部の owner (`CameraStateOwner`) が、`device` を instance の lock 付き storage が、`handlers` を型全体で共有する lock 付き storage が保持し、`NSLock` で保護した値から同期で読むようにする
+  - カメラ操作 (start / stop / restart / change / flip) の状態遷移を純粋な reducer へ集約し、操作世代で古い callback を破棄する
+  - `CameraVideoCapturer` から `@unchecked Sendable` と `nonisolated(unsafe)` を除去し、`Sendable` に準拠させる
+  - `front` / `back` / `current` / `isRunning` / `format` / `frameRate` は computed property になるが、読み取り専用の利用はソース互換である
+  - `CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しなくなる。SDK 内部の経路は接続側が `MediaStream` を保持するため影響しないが、利用者が capturer 以外に強参照を保たない場合は `nil` になる
+  - @t-miya
 - [UPDATE] SignalingChannel と URLSessionWebSocketChannel の状態所有者を統一する
   - signaling の phase、接続 URL、`data_channel_signaling` / `ignore_disconnect_websocket` のフラグを純粋な reducer と単一の owner で管理する
   - `connect` / `send` / `redirect` / `disconnect` / URLSession delegate callback を同じ直列 queue へ投入し、順序を確定する

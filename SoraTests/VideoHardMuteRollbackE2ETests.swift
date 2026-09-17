@@ -158,7 +158,7 @@ final class VideoHardMuteRollbackE2ETests: E2ETestBase {
   /// カメラ未起動の setVideoHardMute(true) が黒塗りになり、2 回目で追加発火しないことを確認する
   func testNoCameraMuteKeepsVideoEnabledFalse() async throws {
     // 実カメラが current の場合は所有権 guard により復元経路へ入るため、前提を確認する
-    guard await CameraVideoCapturer.currentForSDK() == nil else {
+    guard CameraVideoCapturer.current == nil else {
       throw XCTSkip("実カメラが current のためカメラ未起動の経路を検証できません")
     }
 

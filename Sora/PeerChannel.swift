@@ -977,13 +977,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
-      if let current = await CameraVideoCapturer.currentForSDK() {
+      if let current = CameraVideoCapturer.current {
         guard videoSourceCoordinator.isValid(reservation) else {
           return
         }
         guard current.isRunning else {
           _ = videoSourceCoordinator.completeCamera(reservation, active: false)
-          cameraCaptureCoordinator.quarantine(capturer: current)
+          cameraCaptureCoordinator.quarantine(capturerID: current.id)
           Logger.error(
             type: .peerChannel,
             message: "current CameraVideoCapturer is not running")
@@ -999,7 +999,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         let stopError = await current.stopForSDK()
         if current.isRunning {
           _ = videoSourceCoordinator.completeCamera(reservation, active: false)
-          cameraCaptureCoordinator.quarantine(capturer: current)
+          cameraCaptureCoordinator.quarantine(capturerID: current.id)
           Logger.error(
             type: .peerChannel,
             message:
@@ -1007,7 +1007,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           )
           return
         }
-        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: current.id)
         if let previousStream {
           cameraCaptureOwnership.clear(ifOwnedBy: previousStream)
           VideoSourceCoordinator.releaseCameraReservations(
@@ -1021,7 +1021,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
       guard !capturer.isRunning else {
         _ = videoSourceCoordinator.completeCamera(reservation, active: false)
-        cameraCaptureCoordinator.quarantine(capturer: capturer)
+        cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         Logger.error(
           type: .peerChannel,
           message: "CameraVideoCapturer is running without being current")
@@ -1035,7 +1035,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       {
         if capturer.isRunning {
           _ = videoSourceCoordinator.completeCamera(reservation, active: true)
-          cameraCaptureCoordinator.quarantine(capturer: capturer)
+          cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         } else {
           _ = videoSourceCoordinator.completeCamera(reservation, active: false)
         }
@@ -1049,7 +1049,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard videoSourceCoordinator.completeCamera(reservation, active: true) else {
         let stopError = await capturer.stopForSDK()
         if capturer.isRunning {
-          cameraCaptureCoordinator.quarantine(capturer: capturer)
+          cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
           Logger.error(
             type: .peerChannel,
             message:
@@ -1057,7 +1057,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           )
           return
         }
-        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: capturer.id)
         return
       }
       cameraCaptureOwnership.set(senderStream: senderStream.stream)
@@ -1081,7 +1081,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         videoSourceCoordinator.releaseCamera()
         return
       }
-      guard let current = await CameraVideoCapturer.currentForSDK() else {
+      guard let current = CameraVideoCapturer.current else {
         cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
         videoSourceCoordinator.releaseCamera()
         return
@@ -1099,7 +1099,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
       let stopError = await current.stopForSDK()
       if current.isRunning {
-        cameraCaptureCoordinator.quarantine(capturer: current)
+        cameraCaptureCoordinator.quarantine(capturerID: current.id)
         Logger.error(
           type: .peerChannel,
           message:
@@ -1107,7 +1107,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         )
         return
       }
-      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: current.id)
       cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
       videoSourceCoordinator.releaseCamera()
     }

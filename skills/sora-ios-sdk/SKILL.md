@@ -518,12 +518,12 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
   - 設定: `MediaConstraints` / `DegradationPreference` / `SDPSemantics` / `ICETransportPolicy` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
   - 接続と切断: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent`
   - 音声: `AudioMode` / `AudioOutput`
-  - カメラ: `CameraSettings` / `CameraSettings.Resolution`
+  - カメラ: `CameraSettings` / `CameraSettings.Resolution` / `CameraVideoCapturer`
   - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group`
   - 映像表示: `VideoViewConnectionMode`
   - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
   - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
-- `@unchecked Sendable`: `Sora` / `Logger` / `CameraVideoCapturer`
+- `@unchecked Sendable`: `Sora` / `Logger`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
 
 `SoraCloseEvent` は `Sendable` だが、`SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない。標準ライブラリの `Error: Sendable` に依存するため、可変状態を持つ `Error` を載せた値を actor 境界へ渡す場合は利用側で注意する。
@@ -591,10 +591,9 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 次の静的プロパティは `nonisolated(unsafe)` であり、コンパイラによるスレッド安全の検証対象外となる。同時に読み書きしない前提で利用する。
 
 - `DeviceInfo.current`
-- `CameraVideoCapturer.current` / `CameraVideoCapturer.handlers`
 - `Logger.shared` / `Sora.logLevel`
 
-カメラ操作 (`start` / `stop` / `restart` / `change` / `flip`) は SDK 内部で直列化されるが、`CameraVideoCapturer.current` を利用側から書き換えないこと。
+カメラ操作 (`start` / `stop` / `restart` / `change` / `flip`) は SDK 内部で直列化される。`CameraVideoCapturer` の状態 (`current` / `isRunning` / `format` / `frameRate` / `stream`) は内部の owner が、`device` は instance の lock 付き storage が、`handlers` は型全体で共有する lock 付き storage が `NSLock` で保護して公開しており、`CameraVideoCapturer` は `Sendable` に準拠する。`CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しないため、利用者が `MediaStream` を保持する必要がある。
 
 ### 現状の制約
 
