@@ -39,6 +39,10 @@
   - `dataChannels` を設定している場合は connect message の `Double` / `Float` の 17 桁表記が解消され、`JSONEncoder` の表記に揃う
   - JSON オブジェクトのキー順は不定になる (`Dictionary` の順序のため。JSON として等価)
   - @t-miya
+- [UPDATE] ScreenCapture の sample buffer の所有境界を明確にする
+  - `ScreenCaptureSettings.videoSampleBufferTransformer` が受け取る `CMSampleBuffer` は、ReplayKit が渡した buffer の浅いコピーになる。画素データは従来どおり共有され、`CMSampleBufferGetPresentationTimeStamp` などの読み取りも従来どおり動作する
+  - `ScreenCaptureSettings.videoSampleBufferTransformer` と `MediaChannel.startScreenCapture` のドキュメントに、呼び出し executor と返却した sample buffer の所有契約を明記する
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya

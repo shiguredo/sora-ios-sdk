@@ -1,7 +1,7 @@
 # ScreenCapture の sample buffer 所有境界を明確にする
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-17
 - Priority: Medium
 - Branch: feature/refactor-screen-capture-buffer-ownership
 - Polished: 2026-09-17
@@ -41,13 +41,13 @@ Core Foundation object の retain により参照寿命は延長できるが、R
 
 ### 対象範囲
 
-ReplayKit callback から `sendVideoFrameQueue` へ渡る sample buffer の所有境界だけを変更する。変換処理の実行順序、`isReadyToSend()` の判定位置、`videoSampleBufferTransformer` を実行する executor は現行のまま維持する。
+ReplayKit callback から `sendVideoFrameQueue` へ渡る sample buffer の所有境界だけを変更する。変換処理の実行順序と接続状態の判定位置 (改修前の `isReadyToSend()` と同じ位置)、`videoSampleBufferTransformer` を実行する executor は改修前のまま維持する。
 
 現行の実行順序は「ReplayKit callback で `captureContext()` が capture ID / sender stream / transformer を snapshot し、`captureState == .running` でなければ破棄 (525 / 624-641 行目) → `shouldSendVideoFrame` (531 行目) → `sendVideoFrameSemaphore` の即時取得 (536 行目) → enqueue (539 行目) → queue 上で `isReadyToSend()` (544 行目) → transformer (549 行目) → `VideoFrame` 生成 (555 行目) → capture ID 照合 (564 行目) → `markVideoFrameSent` (570 行目) → `send` (571 行目)」である。
 
 `captureContext()` (624-641 行目) は削除し、callback 時の capture 状態確認 / capture ID 取得と、queue 時の sender stream 解決 / transformer 取得へ分割する。
 
-callback 側では `captureState == .running` の確認を現行と同じ位置 (間引き判定より前) に残す。これにより `.starting` の間に到着した frame は現行どおり semaphore を取得せずに破棄され、queue closure へ入らない。`activeCaptureID` は semaphore を取得した後に確認し、`nil` の場合は signal して戻る (取得済みの flight を返却する)。現行は `captureContext()` が `activeCaptureID != nil` も同時に要求して semaphore 取得前に破棄するため、この点だけ挙動が変わる。`.starting` → `.running` の直後に到着する frame が semaphore 取得に失敗し得るのは現行と同じである。
+callback 側では `activeCaptureID` の確認を間引き判定と semaphore の取得より前に行う。`activeCaptureIDForRunningCapture()` が `captureState == .running` と `activeCaptureID != nil` を 1 つの lock 区間で判定するため、`.starting` の間に到着した frame と停止中の frame は semaphore を取得せずに破棄され、queue closure へ入らない。改修前の `captureContext()` と同じ位置である。
 
 ### 新しく導入する所有型
 
@@ -92,39 +92,45 @@ queue 上の transformer の扱いは現行 (549-553 行目) と同じ 3 経路�
 
 queue closure の処理順を次に固定する。この順序は `0097` が確定した不変条件の維持を目的とする。
 
-1. `captureState == .running` の内部述語を確認する (現行 `isReadyToSend()` の 544 行目のうち capture state の判定)。失敗した場合も signal する (step 7)。`.connected` の判定は `isReadyToSend()` に残り、`processOwnedFrame` からは行わない (テストが接続なしで queue 上の処理を駆動できるようにするため)。
-2. transformer を実行する (現行 549 行目と同じ executor)。これには「transformer が未設定なら元の buffer をそのまま使う」「設定済みで `nil` を返したら破棄する」の両方を含む (前節の 3 経路)。
-3. `VideoFrame(from:)` で frame を生成する。失敗時は `Logger.debug` のログだけを出して戻る (現行 556 行目と同じ)。
-4. lock 区間で `activeCaptureID` と `senderStream` を取得し、payload の `captureID` が `activeCaptureID` と一致する場合だけ送信対象にする。不一致、`activeCaptureID` が `nil`、`senderStream` が `nil` のいずれかなら戻る。これにより、queue の実行待ちの間に stop または stop → restart が完了した旧世代の frame は送信されない。
-5. 4 の capture ID 照合を通過した後にだけ `markVideoFrameSent` を呼ぶ。`lastSentVideoPresentationTimestamp` と `lastSentVideoUptime` の更新は送信が確定した frame に限定する。4 の照合の後に stop が確定する競合は現行と同じであり、本 issue では変更しない。
-6. `senderStream.send(videoFrame:)` を呼ぶ。
-7. 1 から 6 のどの経路で戻っても、`sendVideoFrameSemaphore` を signal する。signal は `defer` で 1 回だけ行い、step 1 の capture state 述語の失敗も含める。現行の `defer` (541 行目) は closure 先頭にあり、すべての return で signal している。
+1. `captureState == .running` の内部述語を確認する (改修前 `isReadyToSend()` の 544 行目のうち capture state の判定)。失敗した場合も signal する (step 8)。
+2. 接続状態を確認する (改修前 `isReadyToSend()` のうち接続状態の判定)。切断中に到着した frame では transformer を実行せずに破棄する。改修前と同じ位置 (transformer より前) に置く。テストは `setMediaChannelConnectionRequiredForTesting(false)` でこの確認を無効化し、接続を行わずに送信経路を駆動する。
+3. transformer を実行する (改修前 549 行目と同じ executor)。これには「transformer が未設定なら元の buffer をそのまま使う」「設定済みで `nil` を返したら破棄する」の両方を含む (前節の 3 経路)。
+4. `VideoFrame(from:)` で frame を生成する。失敗時は `Logger.debug` のログだけを出して戻る (改修前 556 行目と同じ)。
+5. lock 区間で `activeCaptureID` と `senderStream` を取得し、payload の `captureID` が `activeCaptureID` と一致する場合だけ送信対象にする。不一致、`activeCaptureID` が `nil`、`senderStream` が `nil` のいずれかなら戻る。これにより、queue の実行待ちの間に stop または stop → restart が完了した旧世代の frame は送信されない。
+6. 5 の capture ID 照合を通過した後にだけ `markVideoFrameSent` を呼ぶ。`lastSentVideoPresentationTimestamp` と `lastSentVideoUptime` の更新は送信が確定した frame に限定する。5 の照合の後に stop が確定する競合は改修前と同じであり、本 issue では変更しない。
+7. `senderStream.send(videoFrame:)` を呼ぶ。
+8. 1 から 7 のどの経路で戻っても、`sendVideoFrameSemaphore` を signal する。signal は `defer` で 1 回だけ行い、step 1 の capture state 述語と step 2 の接続状態の失敗も含める。改修前の `defer` (541 行目) は closure 先頭にあり、すべての return で signal している。
 
 `sendVideoFrameSemaphore` は「送信処理中に到着したフレームを待たずに破棄する」単発 flight の契約を維持する。callback 側で enqueue 直後に signal してはならない。
 
 ### callback 側の処理
 
-1. `captureState == .running` を確認する (現行 `captureContext()` の guard と同じ位置)。`.running` でなければ semaphore を取得せずに戻る。
-2. `shouldSendVideoFrame` で間引き判定を行う (現行 531 行目と同じ位置)。送信対象でなければ戻る。
-3. `sendVideoFrameSemaphore` を即時取得する (現行 536 行目と同じ)。取得できなければ戻る。
-4. lock 区間で `activeCaptureID` を取得する。`activeCaptureID` が `nil` の場合は、取得済みの `sendVideoFrameSemaphore` を signal して戻る。
-5. `CMSampleBufferCreateCopy` で `ScreenCaptureOwnedSampleBuffer` を生成し、`ScreenCaptureOwnedFrame(captureID:presentationTimestamp:sampleBuffer:)` に詰めて enqueue する。
-6. コピーの失敗時は queue へ enqueue せず、取得済みの `sendVideoFrameSemaphore` を signal して戻る。
-7. コピーは浅いコピーであり、callback の実行時間は現行 (間引き判定と semaphore 取得のみ) から大きく増えない。transform と `VideoFrame` 生成は現行どおり queue 上で行う。
+1. lock 区間で `activeCaptureID` を取得する。`activeCaptureIDForRunningCapture()` が `captureState == .running` と `activeCaptureID != nil` を同時に判定するため、`.running` でない場合と `activeCaptureID` が `nil` の場合は、いずれも semaphore を取得せずに戻る。capture ID はこの時点で payload へ固定し、停止・再開始の競合で旧世代の frame に新世代の ID が付く窓を広げない。
+2. `shouldSendVideoFrame` で間引き判定を行う (改修前 531 行目と同じ位置)。送信対象でなければ戻る。
+3. `sendVideoFrameSemaphore` を即時取得する (改修前 536 行目と同じ)。取得できなければ戻る。
+4. `CMSampleBufferCreateCopy` で `ScreenCaptureOwnedSampleBuffer` を生成し、`ScreenCaptureOwnedFrame(captureID:presentationTimestamp:sampleBuffer:)` に詰めて enqueue する。
+5. コピーの失敗時は queue へ enqueue せず、取得済みの `sendVideoFrameSemaphore` を signal して戻る。
+6. コピーは浅いコピーであり、callback の実行時間は改修前 (間引き判定と semaphore 取得のみ) から大きく増えない。transform と `VideoFrame` 生成は改修前どおり queue 上で行う。
 
 ### テスト用の internal seam
 
 `handleSampleBuffer` は private のまま維持する。内部を次の 3 つに分け、テストは接続を行わずに「queue 上の処理」と「callback の破棄判断」を決定的に駆動する。名称は実装時に `beginStartCapture` / `completeStartCapture` / `isActiveCaptureID` と同じ方針で決める。
 
-- `processOwnedFrame(_ ownedFrame: ScreenCaptureOwnedFrame)`: queue 上の処理 (queue 上の処理順の 1 から 7) を行う internal メソッド。`sendVideoFrameSemaphore` は取得せず、queue closure の `defer` と同じ位置で signal する。本番の queue closure はこのメソッドを呼ぶ。
-- `performSend(ownedFrame: ScreenCaptureOwnedFrame) -> Bool`: テスト用の取得 wrapper。`tryAcquireSendFlight()` が `true` を返した場合だけ `processOwnedFrame` を呼び、`false` の場合は何もせず `false` を返す (permit を二重に増やさない)。取得に失敗した場合は `isReadyToSend()` と同じ扱いで frame を破棄する。
-- `enqueueOwnedFrame(sampleBuffer:presentationTimestamp:) -> Bool` (callback 側): 間引き判定、`sendVideoFrameSemaphore` の即時取得、`activeCaptureID` の確認、`CMSampleBufferCreateCopy`、enqueue を行い、enqueue した場合だけ `true` を返す。`handleSampleBuffer` は ReplayKit の `RPSampleBufferType` と `Error?` を処理した後、このメソッドへ実 buffer を渡す。
+- `processOwnedFrame(_ ownedFrame: ScreenCaptureOwnedFrame)`: queue 上の処理 (queue 上の処理順の 1 から 8) を行う internal メソッド。`sendVideoFrameSemaphore` は取得せず、このメソッドの `defer` で 1 回だけ signal する。本番の queue closure はこのメソッドを呼ぶ。接続状態の確認は `mediaChannelConnectionRequired` で制御する。
+- `performSend(ownedFrame: ScreenCaptureOwnedFrame) -> Bool`: テスト用の取得 wrapper。`tryAcquireSendFlight()` が `true` を返した場合だけ `processOwnedFrame` を呼び、`false` の場合は何もせず `false` を返す (permit を二重に増やさない)。
+- `enqueueOwnedFrame(sampleBuffer:presentationTimestamp:) -> Bool`: callback 側の処理。`activeCaptureID` の取得、間引き判定、`sendVideoFrameSemaphore` の即時取得、`CMSampleBufferCreateCopy`、enqueue を行い、enqueue した場合だけ `true` を返す。`handleSampleBuffer` は ReplayKit の `RPSampleBufferType` と `Error?` を処理した後、このメソッドへ実 buffer を渡す。
 
-`sendVideoFrameSemaphore` は private のため、`tryAcquireSendFlight()` を internal に追加する。テストはこれを直接呼んで permit を保持し、その状態で `enqueueOwnedFrame` を呼ぶことで「即時取得に失敗して破棄される frame」を再現できる。
+**permit の会計は `enqueueOwnedFrame` の中で完結させる。** enqueue しなかった場合は `enqueueOwnedFrame` が signal し、enqueue した場合は queue 上の `processOwnedFrame` が signal する。signal の位置は `sendVideoFrameSemaphore` を取得した側が責任を持ち、呼び出し元へ返却を委ねない (`handleSampleBuffer` が戻り値を破棄しても permit が漏れない)。
 
-enqueue 後に queue の処理完了を待つため、`drainSendVideoFrameQueue()` を internal に追加する。中身は `sendVideoFrameQueue.sync {}` と、その直後に 1 回だけ `sendVideoFrameSemaphore.wait()` を呼んで `defer` の signal を回収する処理とする。`enqueueOwnedFrame` が `false` を返した場合 (permit を取得していない場合) は wait せずに戻る。これにより、テストは enqueue の有無にかかわらず permit 数を元に戻せる。
+`activeCaptureID` の取得は間引き判定と permit の取得より前に行う。停止・再開始の競合で旧世代の frame に新世代の ID が付く窓を広げないためである。
 
-`isReadyToSend()` と `shouldSendVideoFrame(presentationTimestamp:)` を private から internal に変更する。`performSend` は接続の有無を判定しない (`mediaChannel.state` を見ない) ため、テストは未接続のまま queue 上の処理を駆動できる。`.connected` の判定は `isReadyToSend()` の中だけに残し、`performSend` は `captureState == .running` の判定のみを行う。`isReadyToSend()` 自体の挙動 (`.disconnected` で `false`) は internal 化してテストする。
+transformer も同じ時点で payload へ snapshot する。停止・再開始をまたいだ旧世代の frame に新世代の transformer を適用しないためである (改修前の `CaptureContext` と同じ粒度)。
+
+`sendVideoFrameSemaphore` の回復は、早期 return となる frame (capture state 不一致 / transformer の nil / `VideoFrame` 生成失敗 / 接続断 / capture ID 不一致) を処理した直後に `performSend` が `true` を返し、次に送信される frame が `VideoFilter` へ到達することで観測する。`processOwnedFrame` が signal するため、早期 return で semaphore が残らないことを同じテストで観測できる。加えて、enqueue した frame の処理完了後に permit を 2 回取得しようとすると 2 回目が失敗することを確認し、二重 signal が無いことを検証する。
+
+enqueue 後に queue の処理完了を待つため、`drainSendVideoFrameQueue()` を internal に追加する。中身は `sendVideoFrameQueue.sync {}` だけとする。送信キューは serial なので `sync {}` は先行して enqueue された frame の処理と `processOwnedFrame` の `defer` signal の完了を待ち、permit の会計は `sync {}` の前後で変わらない。このメソッドを送信キュー自身の executor から呼ぶと自己デッドロックするため、テストの executor からのみ呼ぶ。
+
+`isReadyToSend()` は送信経路から呼ばれなくなるため削除し、capture state の述語 (`isCaptureStateRunning()`) と接続状態の述語 (`isMediaChannelConnected()`) に分ける。`shouldSendVideoFrame(presentationTimestamp:)` は private から internal に変更する。接続状態の確認は `mediaChannelConnectionRequired` (private) と `setMediaChannelConnectionRequiredForTesting(_:)` でテストから無効化できるようにする。本番の queue closure は接続状態を要求したまま実行し、テストだけが接続を行わずに queue 上の処理を駆動する。
 
 `lastSentVideoPresentationTimestamp` / `lastSentVideoUptime` は private のため、timestamp の確認には既存の `isActiveCaptureID` と同じ方針で internal な読み出し用アクセサを追加する。テストはアクセサで値の更新有無を直接確認する。
 
@@ -132,11 +138,11 @@ enqueue 後に queue の処理完了を待つため、`drainSendVideoFrameQueue(
 
 テストは `beginStartCapture` で `.starting` にした後 `completeStartCapture(captureID:error: nil)` を呼んで `.running` にする (`beginStartCapture` だけでは `.starting` のままで `.running` にならない。455-503 行目)。世代を進める場合は `ScreenCaptureController.stopCapture()` (internal、275 行目) を `await` して停止を確定させ、その後に次の capture を開始する。`completeStopCapture` は private で `recorderStopped: Bool` を取るため、テストからは呼ばない。
 
-`MediaChannel` を `.connected` にするには実 Sora サーバーとの接続が必要で、ReplayKit の画面共有も Simulator では動作しない。そのため未接続で実行できる `performSend` と `enqueueOwnedFrame` を使い、`isReadyToSend()` の `.connected` ゲートは「本 issue で変更しない既存挙動」として実機確認に回す。
+`MediaChannel` を `.connected` にするには実 Sora サーバーとの接続が必要で、ReplayKit の画面共有も Simulator では動作しない。そのためテストは `setMediaChannelConnectionRequiredForTesting(false)` を設定してから `performSend` を呼び、接続を行わずに queue 上の処理を駆動する。接続状態の判定そのものは `isMediaChannelConnected()` を直接呼んで確認し、実接続での確認は実機に回す。
 
 ### 送信の観測方法
 
-`performSend` は接続の有無を判定しないため、未接続でも送信経路の観測ができる。
+テストは接続状態の要求を無効化するため、未接続でも送信経路の観測ができる。
 
 - sender stream は `NativePeerChannelFactory.createNativeSenderStream(streamId:videoTrackId:audioTrackId:constraints:)` (`Sora/NativePeerChannelFactory.swift:265-298`) で生成し、`videoTrackId` を渡す。既存テストの `makeSenderStream` (94-98 行目) が使う `createNativeStream` は video track を作らないため `nativeVideoSource` が `nil` になり、WebRTC の video source へ frame が到達しない (`send` は `videoFilter` を呼んだ後に `nativeVideoSource` を optional chaining する)。
 - `VideoFilter` 実装は `filter(videoFrame:)` の呼び出し回数を記録する。WebRTC の video source への到達は実 `RTCVideoSource` を持つ sender stream の `videoTrackId` で確認する。どちらも実 API の組み合わせであり、モックは使わない。
@@ -162,18 +168,19 @@ enqueue 後に queue の処理完了を待つため、`drainSendVideoFrameQueue(
 - `ScreenCaptureController` の `@unchecked Sendable` の除去と、`settings` / `onRuntimeError` / `MediaStream` の executor 契約の統一。`ScreenCaptureSettings` の `Sendable` 化は `0123` が「未起票」と記録しており受け皿が無いため、必要になった時点で別 issue とする (本 issue では扱わない)。
 - カメラ経路の `SenderStreamBox` の移送と置き換え。`0103` が「`0105` の完了まで維持する」と確定しており、本 issue では変更しない。
 - `MediaStream` / `VideoFrame` への `Sendable` 準拠追加。公開 API の破壊的変更になるため、`0105` の internal handle 方式で扱う。
-- `MediaChannel.state` (`Sora/MediaChannel.swift:253`) の同期。`isReadyToSend()` からの非同期読み出しは現行のまま維持する。
+- `MediaChannel.state` (`Sora/MediaChannel.swift:253`) の同期。送信キューからの `isMediaChannelConnected()` による非同期読み出しは改修前のまま維持する。
 - 利用者が返す `CMSampleBuffer` の deep copy と buffer pool の導入。実機で ReplayKit の buffer 再利用や tearing が観測された場合に別 issue とする (本 issue では実測だけを行い、対処はしない)。
 - raw WebRTC frame の公開 API からの撤去は `0070` と整合させる (`0070` は libwebrtc_c への移行全体を保持する親 issue であり、Phase 4 で `ScreenCapture.swift` の送信経路も置き換え対象になる。その際に本 issue の `ScreenCaptureOwnedFrame` も `0070` の方式へ追従する)。
 - Thread Sanitizer による検証は `0119` の基盤が利用可能になった時点で補助的に行い、`0119` / `0151` が未完了の間は完了条件に含めない。
+- 画面キャプチャのビットレートと解像度の整合 (`Configuration.videoBitRate` の指定、ReplayKit が返すネイティブ解像度との比率)。実機確認で、動きの激しい映像の輪郭が崩れる事象を観測した。送信側の実測が 134.6 kbps で `qualityLimitationReason: bandwidth`、受信側は `framesDecoded` 1338 / `framesReceived` 1339 / `framesDropped` 0 / `packetsLost` 0 であり、本 issue が変更した buffer の所有境界ではなく VP9 へ渡すビットレートの不足による圧縮劣化と判断した。`ScreenCastEnvironment.makeConfiguration` と `Configuration.videoBitRate` の既定値 (nil) は本 issue の変更対象外であり、必要になった時点で別 issue とする。
 
 ## 変更対象
 
-- `Sora/ScreenCapture.swift`: `ScreenCaptureOwnedSampleBuffer` / `ScreenCaptureOwnedFrame` の追加、`CaptureContext` と `captureContext()` の削除、`handleSampleBuffer` の内部メソッド (`enqueueOwnedFrame` / `processOwnedFrame` / `performSend`) への分割、queue closure のキャプチャ対象の変更、`activeCaptureID` / `senderStream` の原子的な取得、`tryAcquireSendFlight()` / `drainSendVideoFrameQueue()` / timestamp 読み出しアクセサの internal 追加、`isReadyToSend()` / `shouldSendVideoFrame(presentationTimestamp:)` の internal 化、`ScreenCaptureSettings.videoSampleBufferTransformer` と `ScreenCaptureController` / `ScreenCaptureRecorderCoordinator` の doc コメントの追記
+- `Sora/ScreenCapture.swift`: `ScreenCaptureOwnedSampleBuffer` / `ScreenCaptureOwnedFrame` の追加、`CaptureContext` と `captureContext()` の削除、`handleSampleBuffer` の内部メソッド (`enqueueOwnedFrame` / `processOwnedFrame` / `performSend`) への分割、queue closure のキャプチャ対象の変更、`activeCaptureID` / `senderStream` の原子的な取得、`tryAcquireSendFlight()` / `tryAcquireSendFlightRelease()` / `drainSendVideoFrameQueue()` / timestamp 読み出しアクセサ / `setMediaChannelConnectionRequiredForTesting(_:)` / `setVideoSampleBufferTransformerForTesting(_:)` の internal 追加、`isReadyToSend()` の削除、`isMediaChannelConnected()` / `shouldSendVideoFrame(presentationTimestamp:)` の internal 化、`ScreenCaptureSettings.videoSampleBufferTransformer` と `ScreenCaptureController` / `ScreenCaptureRecorderCoordinator` の doc コメントの追記
 - `Sora/MediaChannel.swift`: `startScreenCapture` の doc コメントに transformer の executor 契約と返却 buffer の所有契約を追記する (シグネチャは変更しない)
 - `SoraTests/ScreenCaptureFrameGenerationTests.swift`: 実 `CMSampleBuffer` を生成して `enqueueOwnedFrame` / `processOwnedFrame` / `performSend` へ投入するテストの追加
 - `skills/sora-ios-sdk/SKILL.md`: 画面キャプチャ節に transformer の executor 契約と所有契約を追記する
-- `CHANGES.md`: `## develop` の `### misc` に refactor として追記
+- `CHANGES.md`: `## develop` の主リストに `[UPDATE]` として追記 (transformer が受け取る buffer の扱いが変わるため)
 - 変更対象外: `Sora/MediaStream.swift`、`Sora/VideoFrame.swift`、`Sora/VideoMute.swift`、`Sora/CameraVideoCapturer.swift`、`Sora/ScreenCapture.swift` の `captureState` の値遷移と recorder ownership (`0137` の対象)。`captureContext()` の削除に伴い callback 側の frame 破棄条件は semaphore 取得後の signal を追加するが、`captureState` の遷移そのものは変更しない
 
 ## テスト方針
@@ -182,17 +189,29 @@ enqueue 後に queue の処理完了を待つため、`drainSendVideoFrameQueue(
 
 ### Simulator (CI の unit test) で実行する
 
-新規の `ScreenCaptureFrameGenerationTests` では `MediaChannel` を接続しないため、`isReadyToSend()` の `.connected` ゲートは通らない。`performSend` は `.connected` を判定しないので queue 上の処理は駆動でき、`.connected` ゲート自体は本 issue で変更しない既存挙動として実機で確認する。
+新規の `ScreenCaptureFrameGenerationTests` では `MediaChannel` を接続しないため、`setMediaChannelConnectionRequiredForTesting(false)` で接続状態の確認を無効化して送信経路を駆動する。接続状態の判定そのものは `isMediaChannelConnected()` を直接呼んで確認し、実接続での確認は実機で行う。
 
 - `CMVideoFormatDescriptionCreateForImageBuffer` と `CMSampleBufferCreateReadyWithImageBuffer` で image buffer を持つ実 `CMSampleBuffer` を生成し、internal 化した `performSend(ownedFrame:)` へ投入する。`ScreenCaptureOwnedSampleBuffer` はその実 buffer から生成する。
 - transformer が未設定 (既定の `ScreenCaptureSettings()`)、元の buffer を返す、別の buffer を返す、nil を返す各経路を実 buffer で検証する。transformer 未設定では frame が破棄されず送信され、nil を返した場合だけ破棄されることを、`VideoFilter` の到達回数と transformer の呼び出し回数で区別して確認する。
-- image buffer を持たない `CMSampleBufferCreate` の buffer を投入し、`VideoFrame(from:)` の生成失敗経路で送信 timestamp が更新されないこと (internal なアクセサで確認) と semaphore が回復することを確認する。
+- `VideoFrame(from:)` の生成に失敗する経路は、image buffer を持たない video sample buffer を `CMBlockBufferCreateWithMemoryBlock` と `CMSampleBufferCreate` で生成して駆動する。ReplayKit が渡す video sample buffer は image buffer を含むためこの入力にはならないが、transformer の戻り値は型で video buffer と強制されないため、利用者入力から到達し得る経路としてテストする。
 - `targetFPS` による間引きで破棄される frame では、`enqueueOwnedFrame` が `false` を返して enqueue されず、`drainSendVideoFrameQueue()` 後も transformer が実行されないことを確認する。
-- `tryAcquireSendFlight()` で permit を保持したまま `enqueueOwnedFrame` を呼び、即時取得に失敗した frame が enqueue されないこと (`false` が返る) を確認する。保持した permit は別の internal な解放メソッドで返す。
-- `beginStartCapture` で capture A を開始し `completeStartCapture(captureID:error: nil)` で `.running` にした後、`stopCapture()` を `await` して停止を確定させる。停止後は `enqueueOwnedFrame` が `captureState` の述語で `false` を返すことを確認する。世代照合そのものは、capture A の `ScreenCaptureOwnedFrame` を `performSend` へ投入して送信されないことと、現在の capture の frame は送信されることの対比で確認する (`0097` の回帰確認)。停止の確定を待ってから投入し、`send` が lock 外であることによる非決定性を持ち込まない。
-- `isReadyToSend()` が `mediaChannel.state == .disconnected` のときに `false` を返すことを確認する。
-- semaphore の回復は、早期 return となる frame (capture state 不一致 / transformer の nil / `VideoFrame` 生成失敗 / capture ID 不一致) を処理した直後に `performSend` が `true` を返し、次に送信される frame が `VideoFilter` へ到達することで確認する。
+- `tryAcquireSendFlight()` で permit を保持したまま `enqueueOwnedFrame` を呼び、即時取得に失敗した frame が enqueue されないこと (`false` が返る) を確認する。保持した permit は `tryAcquireSendFlightRelease()` で返す。
+- enqueue した frame の処理完了後に permit が 2 つ存在しないこと (2 回続けて取得すると 2 回目が失敗すること) を確認し、permit の二重返却が無いことを検証する。
+- 破棄した frame の直後でも続けて送信対象の frame を enqueue できることを確認し、permit が漏れていないことを検証する。
+- `beginStartCapture` で capture A を開始し `completeStartCapture(captureID:error: nil)` で `.running` にした後、`stopCapture()` を `await` して停止を確定させる。停止後は `enqueueOwnedFrame` が `captureState` の述語で破棄することを確認する。世代照合そのものは、capture A の `ScreenCaptureOwnedFrame` を `performSend` へ投入して送信されないことと、現在の capture の frame は送信されることの対比で確認する (`0097` の回帰確認)。停止の確定を待ってから投入し、`send` が lock 外であることによる非決定性を持ち込まない。
+- `isMediaChannelConnected()` が `mediaChannel.state == .disconnected` のときに `false` を返すことを確認する。
+- 未接続かつ接続状態の確認を有効にした controller で `processOwnedFrame` を呼び、frame が送信されず transformer も実行されないことを確認する。
+- semaphore の回復は、早期 return となる frame (capture state 不一致 / transformer の nil / capture ID 不一致) を処理した直後に `performSend` が `true` を返し、次に送信される frame が `VideoFilter` へ到達することで確認する。
 - テストには、どの時点で sample buffer の所有表現へ移すか (callback でのコピー生成、queue 上での変換、送信確定後の timestamp 更新) を日本語コメントで明記する。
+
+### ユニットテストで再現できない防御経路
+
+次の 2 つは、決定的に再現する手段がないため**テスト対象に含めない**。コード読解で経路の存在と返却を確認し、その旨をコードコメントに残す。
+
+- `CMSampleBufferCreateCopy` の失敗 (`ScreenCaptureOwnedSampleBuffer.init?` が `nil` を返す経路)。`CMSampleBufferCreateCopy` は通常の入力では失敗せず、失敗させる入力も特定できない。この経路では取得済みの permit を `signal` してフレームを破棄する (`Logger.debug` のみ) ため、permit が漏れないことをコードで確認する。
+- `activeCaptureIDForRunningCapture()` が `nil` を返す競合。`captureState == .running` の確認と capture ID の取得は同一の lock 区間で行うため、`nil` になるのは停止がその区間の直前で確定した場合だけであり、スレッドのタイミングに依存して再現できない。この経路は permit を取得する前なので、返却すべき permit は存在しない。
+
+テストで再現できない防御経路であることを理由に、これらの分岐を削除したり `@unchecked` な回避に置き換えたりしない。
 
 ### 実機で手動確認する (CI では未検証として区別する)
 
@@ -203,21 +222,34 @@ enqueue 後に queue の処理完了を待つため、`drainSendVideoFrameQueue(
 - Thread Sanitizer は `0119` の基盤が利用可能になるまで完了条件に含めない (`0105` と同じ扱い)。
 - 実 ReplayKit は Simulator で動作しないため、上記は実機で確認し、未検証項目として区別する。
 
+#### 実機確認の結果 (2026-09-17)
+
+iPhone 17 Pro / iOS 26.5 の実機と ScreenCast サンプルで確認した。接続と切断を 4 回繰り返し、最後はサーバー側からの切断 (code 1000 `DISCONNECTED-API`) とした。サンプルは `videoBitRate` を指定せず、`ScreenCaptureSettings` に `videoSampleBufferTransformer` を渡さないため、transformer の 3 経路のうち未設定の経路だけを通る。
+
+- 実 ReplayKit から受け取った sample buffer の処理: `failed to copy sampleBuffer for screen capture` と `failed to create VideoFrame from sampleBuffer` の防御ログは 4 セッションを通じて 0 回だった。浅いコピーと `VideoFrame(from:)` は実 buffer で全フレーム成功した。
+- メモリ使用量: Instruments の Allocations と VM Tracker で計測した。5 分 48 秒の trace で All Heap & Anonymous VM の Persistent は 22.70 MiB / 74,569 個、Transient は 11,183,407 個だった。配信中のフットプリントは 300-400 MiB (30 秒 312 MiB / 1 分 378 MiB / 3 分 319 MiB / 5 分 396 MiB) で単調増加せず、切断後に 91 MiB へ戻った。Swapped Size は最大 2 MiB で横ばいだった。フレームあたり約 3.7 MiB の pixel buffer が漏れていれば桁違いに増加するため、pixel buffer の retain 漏れは無い。
+- ReplayKit の buffer 再利用による tearing: ブロック積み上げゲームのサンプルで、激しい動きの際にブロックの輪郭が若干崩れる事象を観測した。ただし受信側の `inbound-rtp` は framesDecoded 1338 / framesReceived 1339 / framesDropped 0 / packetsLost 0 / freezeCount 4 (合計 1.304 秒) であり、浅いコピーの pixel buffer 再利用に特徴的な「同一タイルが固定されて壊れる」「静止時にも崩れる」という症状ではない。併せて計測した送信側は 720x1280 を 8.0 fps・134.6 kbps で送り、`qualityLimitationReason: bandwidth` が 60 秒中 16.555 秒立っていた。帯域不足による VP9 の圧縮劣化と判断し、deep copy 化は別 issue とする (「スコープ外」を参照)。deep copy 化の要否を決める `videoBitRate` を明示した再計測は本 issue では行わない。
+- `.connected` ゲートと実 ReplayKit の frame 送信: `startScreenCapture` は 4 回すべて成功し、停止と再開を繰り返しても `screen capture recorder is still running after stop` と `screen capture start failed while the recorder is active` は 0 回だった。配信中の 60 秒で 482 フレームを送信し、`media-source` の 487 フレームとの差は間引きと semaphore の即時取得失敗による 5 フレームだけだった。permit の漏れや二重 signal による送出停止は観測されなかった。
+- サーバー側からの切断: SDK が停止を完了させ、`stopScreenCapture` まで到達した。この経路で出る `WebSocket is closed (1000 DISCONNECTED-API)` と `failed to send disconnect message over DataChannel` は、既に閉じた DataChannel へ disconnect を送ろうとしたことによるプロトコル上の通知であり、本 issue の変更とは無関係である。
+
+残る未検証項目は無い。`videoSampleBufferTransformer` の 3 経路のうち設定ありの 2 経路は Simulator のユニットテストで検証済みであり、実機では未設定の経路のみを確認した。
+
 ## 完了条件
 
 - ReplayKit callback が `sendVideoFrameQueue` へ渡す値が `ScreenCaptureOwnedFrame` だけであり、OS が渡した `CMSampleBuffer` の参照が queue closure にキャプチャされていないこと。`CaptureContext` は削除されていること。
 - `sendVideoFrameQueue` の closure がキャプチャまたは直接参照する値が `ScreenCaptureOwnedFrame` payload と `self` だけで、`sampleBuffer` と `CaptureContext` を参照していないこと。
 - raw `MediaStream` を移送する box (`SenderStreamBox` と同種のもの) を新設していないこと。新設した `@unchecked Sendable` 型は `ScreenCaptureOwnedSampleBuffer` と `ScreenCaptureOwnedFrame` の 2 つだけで、それぞれの安全性の根拠が型 doc に記載され、その根拠が「Create ルールの所有権」と「1 回の所有権移動」に限定されていること。
 - queue 上で `activeCaptureID` と `senderStream` を取得し、payload の `captureID` と比較していること。停止後は `activeCaptureID` が `nil` のため送信されず、stop → restart 後は世代が一致しないため旧世代の frame が送信されないこと (テストで検証する)。
-- `isReadyToSend` / transformer / `VideoFrame` 生成 / capture ID 照合 / `markVideoFrameSent` / `send` の順序が現行から変わっていないこと。`activeCaptureID` と `senderStream` は queue 上で 1 つの lock 区間で取得していること。
-- transformer 未設定では元の buffer が送信され、transformer が nil を返した場合と `VideoFrame` の生成に失敗した場合には送信 timestamp が更新されず `sendVideoFrameSemaphore` が signal されること。
-- `targetFPS` による間引き、semaphore の即時取得失敗、`captureState != .running` の各経路で、`enqueueOwnedFrame` が `false` を返して enqueue せず、queue 側の transformer が実行されないこと。queue 側の transformer は capture ID 照合より前に実行される (現行と同じ順序) ため、旧世代の frame で transformer が呼ばれること自体は現行どおり許容し、送信されないことだけを確認する。
+- `isCaptureStateRunning` / 接続状態 / transformer / `VideoFrame` 生成 / capture ID 照合 / `markVideoFrameSent` / `send` の順序が改修前から変わっていないこと。`activeCaptureID` と `senderStream` は queue 上で 1 つの lock 区間で取得していること。
+- 未接続の frame では transformer が実行されず、送信もされないこと (テストで検証する)。
+- transformer 未設定では元の buffer が送信され、transformer が nil を返した場合と `VideoFrame` の生成に失敗した場合には送信 timestamp が更新されず `sendVideoFrameSemaphore` が signal されること。`CMSampleBufferCreateCopy` の失敗と `activeCaptureIDForRunningCapture()` の競合による破棄は「ユニットテストで再現できない防御経路」としてコードで確認する。
+- `targetFPS` による間引き、semaphore の即時取得失敗、`captureState != .running` の各経路で、`enqueueOwnedFrame` が enqueue せず、queue 側の transformer が実行されないこと。queue 側の transformer は capture ID 照合より前に実行される (改修前と同じ順序) ため、旧世代の frame で transformer が呼ばれること自体は改修前どおり許容し、送信されないことだけを確認する。
 - 世代照合を通過しなかった frame が throttle 状態を更新せず、`0097` の「再開後の先頭フレームが targetFPS で間引かれない」挙動が維持されていること (テストで検証する)。
 - `ScreenCaptureSettings.videoSampleBufferTransformer` と `MediaChannel.startScreenCapture` の doc コメントに、呼び出し executor と返した `CMSampleBuffer` の所有契約が明記されていること。
 - `skills/sora-ios-sdk/SKILL.md` の画面キャプチャ節に、transformer の呼び出し executor と所有契約が記載されていること。
 - `ScreenCaptureController` と `ScreenCaptureRecorderCoordinator` の型 doc に、stored property ごとの保護方法と不変条件が記載されていること。
 - `CMSampleBuffer` / `CVPixelBuffer` を deep copy していないこと。`CMSampleBufferCreateCopy` の浅いコピーで queue へ所有権を移していること。
-- `CHANGES.md` の `## develop` に `### misc` の追記があること。
+- `CHANGES.md` の `## develop` の主リストに `[UPDATE]` の追記があること。
 - `Sora/ScreenCapture.swift` の `#SendableClosureCaptures` warning が解消されていること。Dispatch の closure は暗黙の `@preconcurrency @Sendable` のため warning に留まる。warning の解消だけで完了とせず、queue closure がキャプチャする型による強制 (上記 1・2 番目) を完了条件の根拠とする。
 - 追加したテストと既存テストがすべて成功すること。`.connected` ゲートと実 ReplayKit の frame 送信は実機で確認し、未検証項目として区別されていること。
 
@@ -227,8 +259,19 @@ enqueue 後に queue の処理完了を待つため、`drainSendVideoFrameQueue(
 - `#SendableClosureCaptures` warning: `SWIFT_VERSION=6` でビルドし、`Sora/ScreenCapture.swift` に該当 warning が出ないことを確認する。
 - 世代照合: `scheduleStopCapture` の `activeCaptureID = nil` / `senderStream = nil` (370-373 行目) と queue 側の取得が同一 lock 区間であることをコードで確認し、テストで旧 capture の frame が送信されないことを検証する。
 - transformer 未設定の既定経路: `ScreenCaptureSettings()` を使うテストで `VideoFilter` への到達回数が 1 以上であることを確認する。
-- queue 上の処理の駆動: テストは `beginStartCapture` + `completeStartCapture(captureID:error: nil)` で `.running` にし、`performSend` を直接呼ぶ。`performSend` が `.connected` を判定しないことをコードで確認する。
-- semaphore の会計: `tryAcquireSendFlight()` / `processOwnedFrame` の signal / `drainSendVideoFrameQueue()` の wait が同じ permit に対して 1 回ずつ対応していることをコードで確認する。
+- queue 上の処理の駆動: テストは `beginStartCapture` + `completeStartCapture(captureID:error: nil)` で `.running` にし、`setMediaChannelConnectionRequiredForTesting(false)` を設定したうえで `performSend` を直接呼ぶ。本番の queue closure は接続状態の確認を有効にしたままであることをコードで確認する。
+- semaphore の会計: permit を取得するのは `enqueueOwnedFrame` だけであり、enqueue しなかった場合は `enqueueOwnedFrame` が、enqueue した場合は `processOwnedFrame` の `defer` がそれぞれ 1 回だけ signal する。テストの `drainSendVideoFrameQueue()` は `sync {}` のみで permit を消費しない。この対応をコードで確認し、permit が 2 つ存在しないことと破棄後も enqueue できることをテストで検証する。
 - ドキュメント: `git diff` で `ScreenCaptureSettings` / `MediaChannel.startScreenCapture` / `ScreenCaptureController` / `ScreenCaptureRecorderCoordinator` の日本語 doc と `skills/sora-ios-sdk/SKILL.md` の画面キャプチャ節を確認する。
 
 ## 解決方法
+
+- `Sora/ScreenCapture.swift` に `ScreenCaptureOwnedSampleBuffer` と `ScreenCaptureOwnedFrame` を追加し、`@unchecked Sendable` の根拠を「`CMSampleBufferCreateCopy` が返す Create ルールの所有権」と「callback から送信キューへの 1 回の所有権移動」の 2 点だけに限定して型 doc に記載した。
+- `sendVideoFrameQueue` の closure へ渡す値を `ScreenCaptureOwnedFrame` payload と弱参照の `self` だけにした。`CaptureContext` と `captureContext()` を削除し、callback 側では transformer を解決しない。
+- `handleSampleBuffer` を `enqueueOwnedFrame` / `processOwnedFrame` / `performSend` に分割した。callback 側では `activeCaptureID` の取得、間引き判定、`sendVideoFrameSemaphore` の即時取得、`CMSampleBufferCreateCopy`、enqueue を行い、送信先 `MediaStream` の解決と capture ID の照合は queue 上で 1 つの lock 区間で行う。
+- transformer の 3 経路 (未設定 / nil を返す / buffer を返す) と、capture state の確認、接続状態の確認、transformer、`VideoFrame` 生成、capture ID 照合、`markVideoFrameSent`、`send` の実行順序を改修前のまま維持した。`markVideoFrameSent` は capture ID 照合を通過した frame に限定した。
+- permit の会計を `enqueueOwnedFrame` の中で完結させた。enqueue しなかった場合は同メソッドが、enqueue した場合は queue 上の `processOwnedFrame` の `defer` が 1 回だけ signal する。これにより、コピー失敗と capture ID の競合による破棄でも permit が漏れず、二重 signal も起きない。
+- テストから送信経路を決定的に駆動するため、`enqueueOwnedFrame` / `processOwnedFrame` / `performSend` / `tryAcquireSendFlight()` / `tryAcquireSendFlightRelease()` / `drainSendVideoFrameQueue()` / `setMediaChannelConnectionRequiredForTesting(_:)` を internal とした。不要になった `isReadyToSend()` / `setVideoSampleBufferTransformerForTesting(_:)` / `lastSentVideoUptimeForTesting` を削除した。
+- `SoraTests/ScreenCaptureFrameGenerationTests.swift` に、実 `CMSampleBuffer` を生成して送信経路へ投入するテストを追加した。`VideoFrame(from:)` の生成失敗経路は image buffer を持たない video sample buffer で駆動する。
+- `ScreenCaptureSettings.videoSampleBufferTransformer` と `MediaChannel.startScreenCapture` の doc コメント、`ScreenCaptureController` と `ScreenCaptureRecorderCoordinator` の型 doc、`skills/sora-ios-sdk/SKILL.md` の画面キャプチャ節に executor 契約と所有契約を記載し、`CHANGES.md` の `## develop` に `[UPDATE]` を追記した。
+- テストは 328 件成功 / 失敗 0 / skip 29 で、`Sora/ScreenCapture.swift` の `#SendableClosureCaptures` warning は 0、`swift format lint --strict` と SwiftLint `--strict` も違反 0 である。
+- 実機確認の結果は「テスト方針」の「実機確認の結果」に記載した。要約すると、防御ログ 0 回、recorder の警告 0 回、メモリは配信後 300-400 MiB から切断後 91 MiB へ復帰、60 秒で 482 フレームを送信して `media-source` との差が 5 フレームだけで、セマフォと世代照合の回帰は観測されなかった。激しい動きでの輪郭の崩れは帯域不足による VP9 の圧縮劣化と判断し、本 issue のスコープ外とした。

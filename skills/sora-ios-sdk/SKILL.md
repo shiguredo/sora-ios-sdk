@@ -441,6 +441,8 @@ await mediaChannel.stopScreenCapture()
 
 同一送信ストリームでカメラと画面キャプチャは同時に使えない。`initialCameraEnabled = false` にするか、`setVideoHardMute(true)` でカメラを止めてから開始する。
 
+`videoSampleBufferTransformer` は SDK 内部の送信キュー上で呼ばれる。`targetFPS` による間引きで破棄されるフレームと、送信処理中のために破棄されるフレーム、キャプチャ停止中と切断中のフレームでは呼ばれない。引数と戻り値の `CMSampleBuffer` の所有権は SDK に委ねられ、戻り値の buffer が保持する pixel buffer は送信のために SDK が retain する。戻り値を返した後にその buffer を書き換えないこと。
+
 ### 描画
 
 `VideoView` (`UIView`) を `MediaStream.videoRenderer` に設定する。`VideoRenderer` プロトコルを実装した独自ビューも利用できる。`VideoView.connectionMode` で切断時の挙動 (`.auto` / `.autoClear` / `.manual`) を指定する。
