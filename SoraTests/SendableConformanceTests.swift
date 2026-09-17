@@ -49,10 +49,10 @@ private func assertCrossesBoundaries<Value: Sendable>(
 }
 
 final class SendableConformanceTests: XCTestCase {
-  /// 公開 value type が `Sendable` に準拠していることをコンパイル時に表明する。
+  /// 公開型 (`CameraVideoCapturer` は class) が `Sendable` に準拠していることをコンパイル時に表明する。
   ///
   /// 準拠が欠けた型を 1 つでも渡すとこのテストはコンパイルできない。
-  func testPublicValueTypesConformToSendable() {
+  func testPublicTypesConformToSendable() {
     // 接続状態
     requireSendable(ConnectionState.self)
 
@@ -92,6 +92,9 @@ final class SendableConformanceTests: XCTestCase {
 
     // カメラ設定
     requireSendable(CameraSettings.self)
+
+    // カメラの capturer
+    requireSendable(CameraVideoCapturer.self)
 
     // 切断イベント
     requireSendable(SoraCloseEvent.self)
@@ -185,6 +188,29 @@ final class SendableConformanceTests: XCTestCase {
       SignalingPong(), message: "SignalingPong が actor 境界を越えられない")
     await assertCrossesBoundaries(
       SignalingDisconnect(reason: "切断"), message: "SignalingDisconnect が actor 境界を越えられない")
+  }
+
+  /// internal なカメラ状態型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。
+  ///
+  /// owner の queue と reducer の間で受け渡す値のため、`Sendable` の欠落はコンパイルで検出する。
+  func testCameraStateTypesConformToSendable() async {
+    requireSendable(CameraCapturerID.self)
+    requireSendable(CameraPhase.self)
+    requireSendable(CameraState.self)
+    requireSendable(CameraEvent.self)
+    requireSendable(CameraEffect.self)
+
+    await assertCrossesBoundaries(
+      CameraCapturerID(), message: "CameraCapturerID が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraPhase.idle, message: "CameraPhase が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraState(), message: "CameraState が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraEvent.startRequested(id: CameraCapturerID(), generation: 1),
+      message: "CameraEvent が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraEffect.publishSnapshot, message: "CameraEffect が actor 境界を越えられない")
   }
 
   /// internal な snapshot 型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。

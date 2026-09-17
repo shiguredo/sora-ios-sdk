@@ -1637,7 +1637,7 @@ public final class MediaChannel {
       guard videoSourceCoordinator.isValid(authorization) else {
         return true
       }
-      guard let current = await CameraVideoCapturer.currentForSDK(),
+      guard let current = CameraVideoCapturer.current,
         current.isRunning,
         let currentSenderStream = current.stream
       else {

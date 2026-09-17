@@ -4,12 +4,16 @@ import WebRTC
 /// `AVCaptureDevice.Format` をカメラキューへ受け渡すための内部ラッパーです。
 ///
 /// `AVCaptureDevice.Format` 自体は `Sendable` ではありませんが、このラッパーに格納した値は
-/// カメラキュー上の `start` に渡す用途に限定します。
+/// カメラキュー上の `start` に渡す用途に限定します。`@unchecked Sendable` はこの前提に
+/// 依存します。
 struct CameraCaptureFormatBox: @unchecked Sendable {
   let format: AVCaptureDevice.Format
 }
 
 /// 公開カメラ API の完了ハンドラーを並行処理境界へ渡すための内部ラッパーです。
+///
+/// `@unchecked Sendable` としているのは、保持する closure が init で確定した `let` で、
+/// この box をカメラ操作用の直列 queue へ渡す用途に限定しているためです。
 final class CameraOperationCompletionBox: @unchecked Sendable {
   private let completionHandler: (Error?) -> Void
 
@@ -26,6 +30,9 @@ final class CameraOperationCompletionBox: @unchecked Sendable {
 ///
 /// redirect では一時的に `streams` が空になるため、カメラ停止が完了するまで所有情報を
 /// 別途保持しないと、接続失敗時に停止対象を失います。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `senderStream` だけで、
+/// その読み書きをすべて `lock` で排他しているためです。
 final class CameraCaptureOwnership: @unchecked Sendable {
   private let lock = NSLock()
   private var senderStream: MediaStream?
@@ -56,6 +63,10 @@ final class CameraCaptureOwnership: @unchecked Sendable {
 /// 状態は process-wide のレジストリへ集約し、SDK 内部 API と公開カメラ API が
 /// 同じ送信ストリームへカメラと画面共有を同時に開始する競合を防ぎます。
 /// 非同期開始は世代付きの予約で検証し、停止または切断後に遅れて完了した開始を無効化します。
+///
+/// `@unchecked Sendable` としているのは、可変状態が process-wide な `Registry` だけで、
+/// その読み書きを `Registry` の lock で排他しているためです。この型自身が持つのは
+/// init で確定する `ownerID` だけです。
 final class VideoSourceCoordinator: @unchecked Sendable {
   enum Source: Equatable, Sendable {
     case camera
@@ -86,6 +97,10 @@ final class VideoSourceCoordinator: @unchecked Sendable {
     }
   }
 
+  /// `MediaStream` を弱参照で包む内部ラッパーです。
+  ///
+  /// `@unchecked Sendable` としているのは、`value` の読み書きが外側の `Registry` の
+  /// lock 下でのみ行われるためです。
   private final class WeakStream: @unchecked Sendable {
     weak var value: MediaStream?
 
@@ -101,6 +116,10 @@ final class VideoSourceCoordinator: @unchecked Sendable {
     var revoked = false
   }
 
+  /// 送信元の予約状態を接続ごとに保持する process-wide なレジストリです。
+  ///
+  /// `@unchecked Sendable` としているのは、可変状態が `entries` だけで、
+  /// その読み書きをすべて `lock` で排他しているためです。
   private final class Registry: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [UUID: Entry] = [:]
@@ -438,13 +457,33 @@ final class VideoSourceCoordinator: @unchecked Sendable {
 ///
 /// クリーンアップが失敗した場合はカメラを隔離状態にし、動作状態が不明なまま別接続が
 /// start / restart を実行することを防ぎます。停止成功を確認した場合だけ隔離を解除します。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `quarantinedCapturerID` だけで、
+/// その読み書きをすべて `lock` で排他しているためです。`owner` と `operationQueue` は
+/// `let` で、queue 側が操作を直列化します。
 final class CameraVideoCaptureCoordinator: @unchecked Sendable {
   static let shared = CameraVideoCaptureCoordinator()
 
+  /// 隔離状態の唯一の保持先であるカメラ状態 owner です。
+  ///
+  /// 注入した owner を使うのは `isAvailable` / `cameraOperationRejectionError` の判定と、
+  /// `quarantine` / `clearQuarantineAfterSuccessfulStop` が送る `.quarantined` /
+  /// `.quarantineCleared` の適用先です。reducer の他の state、instance テーブル、pin は
+  /// `CameraVideoCapturer` が常に `CameraStateOwner.shared` を参照するため
+  /// process-wide な owner に作られます。
+  private let owner: CameraStateOwner
+
   private let operationQueue = SerializedAsyncOperationQueue()
   private let lock = NSLock()
-  private var quarantined = false
-  private var quarantinedCapturer: CameraVideoCapturer?
+  private var quarantinedCapturerID: CameraCapturerID?
+
+  /// owner を指定して coordinator を初期化します。
+  ///
+  /// 既定は process-wide な `CameraStateOwner.shared` です。テストでは shared を
+  /// 汚染しないよう、テストローカルの owner を渡します。
+  init(owner: CameraStateOwner = .shared) {
+    self.owner = owner
+  }
 
   /// カメラ操作を process-wide のキューへ投入します。
   @discardableResult
@@ -464,32 +503,44 @@ final class CameraVideoCaptureCoordinator: @unchecked Sendable {
   }
 
   /// 新しい start / restart を実行できる状態かを返します。
+  ///
+  /// 隔離状態は owner の `phase` が保持します。coordinator はキャッシュを持たず、
+  /// owner の snapshot を参照します。lock を取らないため、`quarantine` /
+  /// `clearQuarantineAfterSuccessfulStop` の更新より前に true を観測し得ますが、
+  /// 隔離の判定と操作はすべて coordinator の直列 queue 上で行う前提のため問題に
+  /// なりません。また停止要求は phase を `.quarantined` から外すため、隔離中の
+  /// 回復停止が実行されている間は true を返します (この間も操作は直列化される)。
   var isAvailable: Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    return !quarantined
+    owner.snapshot.phase != .quarantined
   }
 
   /// クリーンアップ失敗を記録し、以後の start / restart を拒否します。
-  /// 実際の停止を再試行できるよう、停止に失敗した capturer を保持します。
-  func quarantine(capturer: CameraVideoCapturer? = nil) {
+  ///
+  /// 実際の停止を再試行できるよう、停止に失敗した capturer の ID を保持します。
+  /// 停止対象が特定できない場合は ID を保持しません。
+  /// ID の更新と owner への通知を同じ lock 区間で行い、別のスレッドの解除に
+  /// 割り込まれて新しい隔離が解除されないようにします。
+  func quarantine(capturerID: CameraCapturerID? = nil) {
     lock.lock()
-    quarantined = true
-    if let capturer {
-      quarantinedCapturer = capturer
+    defer { lock.unlock() }
+    if let capturerID {
+      quarantinedCapturerID = capturerID
     }
-    lock.unlock()
+    owner.handle(.quarantined)
   }
 
   /// 実際の停止成功を確認した後に隔離状態を解除します。
-  func clearQuarantineAfterSuccessfulStop(capturer: CameraVideoCapturer? = nil) {
+  ///
+  /// 隔離した capturer が指定と異なる場合は解除しません (別接続の停止完了で
+  /// 隔離を解除しないため)。照合・解除・ owner への通知を同じ lock 区間で行います。
+  func clearQuarantineAfterSuccessfulStop(capturerID: CameraCapturerID? = nil) {
     lock.lock()
     defer { lock.unlock() }
-    if let quarantinedCapturer, quarantinedCapturer !== capturer {
+    if let trackedID = quarantinedCapturerID, trackedID != capturerID {
       return
     }
-    quarantined = false
-    quarantinedCapturer = nil
+    quarantinedCapturerID = nil
+    owner.handle(.quarantineCleared)
   }
 
   /// 隔離状態をテストから確認します。
@@ -503,12 +554,146 @@ final class CameraVideoCaptureCoordinator: @unchecked Sendable {
   }
 }
 
-// カメラの共有状態は既存のカメラ用キューで扱う前提のため、 @unchecked Sendable を付与します。
+/// `CameraVideoCapturerHandlers` を lock 付きで保持する storage です。
+///
+/// `handlers` の get / set を保護します。利用者の
+/// `CameraVideoCapturer.handlers.onCapture = ...` という in-place 変更は
+/// 同じインスタンスを返すことで維持します。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `handlers` だけで、その読み書きを
+/// すべて `lock` で排他しているためです。返した `CameraVideoCapturerHandlers` が持つ
+/// closure property 自体の読み書きは、この lock では排他しません。
+private final class CameraHandlersStorage: @unchecked Sendable {
+  private let lock = NSLock()
+  private var handlers = CameraVideoCapturerHandlers()
+
+  /// 現在の handlers を返します。
+  func current() -> CameraVideoCapturerHandlers {
+    lock.lock()
+    defer { lock.unlock() }
+    return handlers
+  }
+
+  /// handlers を差し替えます。
+  func publish(_ handlers: CameraVideoCapturerHandlers) {
+    lock.lock()
+    defer { lock.unlock() }
+    self.handlers = handlers
+  }
+}
+
+/// non-Sendable な `AVCaptureDevice` を lock 付きで保持する storage です。
+///
+/// `device` の getter / setter と `position` はこの storage の lock 下で読み書きし、
+/// owner の queue を同期 wait しません。owner の command は command 開始時に
+/// libwebrtc の capture session queue 上でこの storage から読み取ります。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `device` だけで、その読み書きを
+/// すべて `lock` で排他しているためです。
+private final class CameraDeviceStorage: @unchecked Sendable {
+  private let lock = NSLock()
+  private var device: AVCaptureDevice
+
+  init(device: AVCaptureDevice) {
+    self.device = device
+  }
+
+  /// 現在のデバイスを返します。
+  func current() -> AVCaptureDevice {
+    lock.lock()
+    defer { lock.unlock() }
+    return device
+  }
+
+  /// デバイスを差し替えます。
+  func setDevice(_ device: AVCaptureDevice) {
+    lock.lock()
+    defer { lock.unlock() }
+    self.device = device
+  }
+}
+
+/// non-Sendable な `RTCCameraVideoCapturer` とその delegate を保持する storage です。
+///
+/// どちらも init で確定し以後差し替えないため、保持するだけで安全に共有できます。
+/// native の呼び出しは libwebrtc の capture session queue 上で行います。
+///
+/// `@unchecked Sendable` としているのは、保持する値が init で確定した `let` だけで、
+/// 可変状態を持たないためです。
+private final class CameraNativeStorage: @unchecked Sendable {
+  private let native: RTCCameraVideoCapturer
+  private let delegate: CameraVideoCapturerDelegate
+
+  init(native: RTCCameraVideoCapturer, delegate: CameraVideoCapturerDelegate) {
+    self.native = native
+    self.delegate = delegate
+  }
+
+  /// `RTCCameraVideoCapturer` を返します。
+  func nativeCapturer() -> RTCCameraVideoCapturer {
+    native
+  }
+
+  /// `AVCaptureSession` を返します。
+  func captureSession() -> AVCaptureSession {
+    native.captureSession
+  }
+}
+
+/// libwebrtc の capture session queue への hop を 1 箇所に閉じ込める adapter です。
+///
+/// `RTCCameraVideoCapturer` の native 操作と delegate callback は libwebrtc の
+/// capture session queue 上でのみ行う必要があります。カメラ操作はこの adapter を
+/// 経由してのみ queue へ hop し、公開 dispatcher API には依存しません。
+enum CameraQueueExecutor {
+  /// capture session queue 上で block を非同期で実行します。
+  static func async(_ block: @escaping () -> Void) {
+    RTCDispatcher.dispatchAsync(on: .typeCaptureSession, block: block)
+  }
+}
+
+/// カメラをキャプチャするクラスです。
+///
 /// 解像度やフレームレートなどの設定は `start` 実行時に指定します。
 /// カメラはパブリッシャーまたはグループの接続時に自動的に起動 (起動済みなら再起動) されます。
 ///
 /// カメラの設定を変更したい場合は、 `change` を実行します。
-public final class CameraVideoCapturer: @unchecked Sendable {
+///
+/// 共有状態は `CameraStateOwner` が、`device` は instance ごとの lock 付き storage が、
+/// `handlers` は型全体で共有する lock 付き storage (`private static let handlersStorage`) が
+/// 保持します。この型が持つ instance の stored property は次の 3 つだけです。
+///
+/// - `id`: instance を識別する ID
+/// - `deviceStorage`: `AVCaptureDevice` を保持する lock 付き storage
+/// - `nativeStorage`: `RTCCameraVideoCapturer` とその delegate を保持する storage
+///
+/// 不変条件は次のとおりです。`RTCCameraVideoCapturer` の start / stop と
+/// `AVCaptureDevice` の使用は libwebrtc の capture session queue 上でのみ行います。
+/// camera queue への hop は `CameraQueueExecutor` に閉じ込めており、`start` / `stop` /
+/// `restart` / `change` / `flip` はすべてこの queue を経由します。
+/// frame callback (`CameraVideoCapturerDelegate.capturer(_:didCapture:)`) も
+/// libwebrtc の capture session queue 上で発火する前提とします (upstream の実装を
+/// 確認できないため、現行の挙動を前提とします)。
+///
+/// 一方で `current` / `isRunning` / `format` / `frameRate` は owner の snapshot と
+/// resource テーブルから、`stream` は owner の resource テーブルから (弱参照のため
+/// capturer は `MediaStream` を保持しません)、`device` / `handlers` / `position` は
+/// instance の lock 付き storage から、`captureSession` は init で確定して以後
+/// 差し替えない storage から読むため、任意のスレッドから呼べます。`device` の setter も
+/// 任意のスレッドから呼べるため、command の実行中に device を差し替えると、その command が
+/// 読む device は差し替え前後で変わり得ます。
+/// `handlers` の get / set が排他するのは bag の参照だけであり、closure property 自体の
+/// 同時アクセスは排他していません。
+///
+/// `Sendable` に準拠するのは、共有状態を owner が、non-Sendable な実資源を
+/// lock 付き storage が保持しているためです。
+public final class CameraVideoCapturer: Sendable {
+  /// この instance を識別する ID です。
+  ///
+  /// owner の instance テーブルへの登録と、状態機械の command 引数に使います。
+  /// `init` の全 stored property を初期化した後に owner へ登録します。
+  let id = CameraCapturerID()
+
   // MARK: インスタンスの取得
 
   /// 利用可能なデバイスのリスト
@@ -516,33 +701,30 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   public static var devices: [AVCaptureDevice] { RTCCameraVideoCapturer.captureDevices() }
 
   /// 前面のカメラに対応するデバイス
-  public static let front: CameraVideoCapturer? = {
-    if let device = device(for: .front) {
-      return CameraVideoCapturer(device: device)
-    } else {
-      return nil
-    }
-  }()
+  ///
+  /// owner が instance を 1 つだけ遅延生成して強参照で保持し、2 回目以降は同じ instance を
+  /// 返します。`public static let` のままだと `@unchecked Sendable` の除去後に
+  /// non-Sendable 型の static let になり Swift 6 でエラーになるため computed property と
+  /// しています。
+  public static var front: CameraVideoCapturer? {
+    CameraStateOwner.shared.frontCapturer()
+  }
 
   /// 背面のカメラに対応するデバイス
-  public static let back: CameraVideoCapturer? = {
-    if let device = device(for: .back) {
-      return CameraVideoCapturer(device: device)
-    } else {
-      return nil
-    }
-  }()
+  public static var back: CameraVideoCapturer? {
+    CameraStateOwner.shared.backCapturer()
+  }
 
-  // TODO(zztkm): 共有状態を actor に移し、 async API に置き換えて concurrency-safe にする。
   /// 起動中のデバイス
-  public private(set) nonisolated(unsafe) static var current: CameraVideoCapturer?
-
-  // flip 実行中のフラグ。camera queue 上で切り替え中を表現し、
-  // 連続実行の re-entrance を防ぐ。camera queue 上でのみ読み書きする。
-  nonisolated(unsafe) private static var isFlipping = false
+  ///
+  /// owner の snapshot を読みます。書き込みは owner の publish へ一本化するため
+  /// setter は設けません (外部からは従来どおり読み取り専用)。
+  public static var current: CameraVideoCapturer? {
+    CameraStateOwner.shared.currentCapturer
+  }
 
   /// RTCCameraVideoCapturer が保持している AVCaptureSession
-  public var captureSession: AVCaptureSession { native.captureSession }
+  public var captureSession: AVCaptureSession { nativeStorage.captureSession() }
 
   /// 指定したカメラ位置にマッチした最初のデバイスを返します。
   /// captureDevice(for: .back) とすれば背面カメラを取得できます。
@@ -612,7 +794,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   /// completion より前から frame callback を発生させることがあり、静的に再利用される
   /// front / back capturer に前回利用時の stream が残っていると、旧 stream へ frame が
   /// 送信されるためです。stream を先行設定し、start 失敗時は元の stream へ rollback します。
-  /// 連続実行時の競合は camera queue 上の re-entrance フラグで防ぎます。
+  /// 連続実行時の競合は owner の state が持つ flip 実行中フラグで防ぎます。
   /// 引数には CameraVideoCapturer.current を渡してください。
   public static func flip(
     _ capturer: CameraVideoCapturer, completionHandler: @escaping ((Error?) -> Void)
@@ -620,14 +802,10 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     let coordinator = CameraVideoCaptureCoordinator.shared
     let completionBox = CameraOperationCompletionBox(completionHandler)
     coordinator.enqueue {
-      guard coordinator.isAvailable else {
-        completionBox(
-          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
-        return
-      }
-      guard !VideoSourceCoordinator.hasScreenReservation(for: capturer.stream) else {
-        completionBox(
-          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
+      if let error = CameraVideoCapturer.cameraOperationRejectionError(
+        coordinator: coordinator, stream: capturer.stream)
+      {
+        completionBox(error)
         return
       }
       _ = await flipForSDK(capturer, completionBeforeEvent: completionBox)
@@ -641,7 +819,7 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     // camera queue (libwebrtc の capture session queue) で直列化する。
     // 連続した flip (フリップボタンの連続タップ等) が同時に実行され、
     // stop / start の callback が入れ替わる競合を防ぐ。
-    SoraDispatcher.async(on: .camera) {
+    CameraQueueExecutor.async {
       // 引数が現在の capturer と一致することを確認する。
       // (別の capturer を渡すと、停止していない capturer への stop / stream 代入が起こるため)
       guard capturer === CameraVideoCapturer.current else {
@@ -651,26 +829,19 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       }
 
       // 既に flip が実行中の場合はエラーを返す (re-entrance 防止)。
-      // camera queue 上で直列化されるが、stop / start の completion は
-      // 後続の queue hop として実行されるため、フラグで切り替え中を表現する。
-      guard !CameraVideoCapturer.isFlipping else {
+      // owner の state が持つ flip 実行中フラグで判定する。
+      if CameraStateOwner.shared.snapshot.isFlipping {
         completionHandler(
           SoraError.cameraError(reason: "camera flip is already in progress"))
         return
       }
-      CameraVideoCapturer.isFlipping = true
-
-      // フラグは同期ブロックで解除せず、stop / start の完了まで維持する。
-      // (非同期部分の間に 2 回目の flip が呼ばれてもエラーになるようにする)
 
       guard let format = capturer.format else {
-        CameraVideoCapturer.isFlipping = false
         completionHandler(SoraError.cameraError(reason: "format should not be nil"))
         return
       }
 
       guard let capturerFrameRate = capturer.frameRate else {
-        CameraVideoCapturer.isFlipping = false
         completionHandler(SoraError.cameraError(reason: "frameRate should not be nil"))
         return
       }
@@ -679,7 +850,6 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       guard let flip: CameraVideoCapturer = (capturer.device.position == .front ? .back : .front)
       else {
         let name = capturer.device.position == .front ? "back" : "front"
-        CameraVideoCapturer.isFlipping = false
         completionHandler(SoraError.cameraError(reason: "\(name) camera is not found"))
         return
       }
@@ -692,7 +862,6 @@ public final class CameraVideoCapturer: @unchecked Sendable {
           for: flip.device,
           frameRate: capturerFrameRate)
       else {
-        CameraVideoCapturer.isFlipping = false
         completionHandler(
           SoraError.cameraError(
             reason: "CameraVideoCapturer.format failed: suitable format is not found"))
@@ -701,7 +870,6 @@ public final class CameraVideoCapturer: @unchecked Sendable {
 
       guard let frameRate = CameraVideoCapturer.maxFrameRate(capturerFrameRate, for: format)
       else {
-        CameraVideoCapturer.isFlipping = false
         completionHandler(
           SoraError.cameraError(
             reason:
@@ -709,45 +877,70 @@ public final class CameraVideoCapturer: @unchecked Sendable {
         return
       }
 
+      let owner = CameraStateOwner.shared
+      let generation = owner.nextGeneration()
+
       // 切り替え先の stream を start より前に設定する。
       // (元の capturer が保持する stream を引き継ぐ)
-      // start 失敗時はもとの状態 (nil または元の stream) へ rollback する。
+      // start 失敗時は compare-and-swap で rollback する。
+      // (command 実行中に利用者が代入していた値は破壊しない)
       let originalStream = flip.stream
-      flip.stream = capturer.stream
+      let newStream = capturer.stream
+      flip.stream = newStream
 
       Logger.debug(
         type: .cameraVideoCapturer,
         message: "starting flip to \(flip.device)")
 
-      capturer.stopUncoordinated { error in
-        guard error == nil else {
-          // stop に失敗した場合は切り替え先の stream を rollback する
-          flip.stream = originalStream
-          CameraVideoCapturer.isFlipping = false
+      owner.handle(
+        .flipRequested(
+          sourceID: capturer.id, targetID: flip.id, generation: generation))
+
+      // 内部の stop は .stopCompleted として owner へ反映し、 start の完了だけを
+      // 複合コマンドの完了として返す。
+      let finish: (Error?) -> Void = { error in
+        if error != nil {
+          // command が最後に書いた値が残っている場合だけ rollback する。
+          owner.compareAndSetStream(newStream, to: originalStream, id: flip.id)
           Logger.error(
             type: .cameraVideoCapturer,
-            message: "failed to stop capturer: \(String(describing: error))")
-          completionHandler(SoraError.cameraError(reason: "CameraVideoCapturer.stop failed"))
-          return
-        }
-        flip.startUncoordinated(format: format, frameRate: frameRate) { error in
-          guard error == nil else {
-            // start に失敗した場合は切り替え先の stream を rollback する
-            flip.stream = originalStream
-            CameraVideoCapturer.isFlipping = false
-            Logger.error(
-              type: .cameraVideoCapturer,
-              message: "failed to start flip capturer: \(String(describing: error))")
-            completionHandler(
-              SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
-            return
-          }
-          CameraVideoCapturer.isFlipping = false
+            message: "failed to flip capturer: \(String(describing: error))")
+        } else {
+          // 使用した format と frameRate は start 成功時にだけ記録する。
+          owner.setFormat(format, id: flip.id)
+          owner.handle(
+            .formatResolved(id: flip.id, frameRate: frameRate, generation: generation))
           Logger.debug(
             type: .cameraVideoCapturer,
             message: "succeeded to flip to \(flip.device)")
-          completionHandler(nil)
         }
+        owner.handle(
+          .flipCompleted(
+            sourceID: capturer.id, targetID: flip.id, generation: generation,
+            success: error == nil))
+        completionHandler(error)
+        // 利用者 handler は owner の critical section の外で呼ぶ。
+        // start に成功した場合のみ onStart を呼ぶ。
+        if error == nil {
+          CameraVideoCapturer.handlers.onStart?(flip)
+        }
+      }
+
+      capturer.stopNative {
+        // 切り替え元の内部 stop の完了を owner へ反映する。
+        // (この時点で切り替え元の current / isRunning が解除される)
+        owner.handle(.stopCompleted(id: capturer.id, generation: generation))
+        // 切り替え先の start を要求した後に、切り替え元の onStop を呼ぶ。
+        // (単体の stop の完了通知と同じ位置で呼ぶ)
+        flip.startNative(format: format, frameRate: frameRate) { error in
+          if error != nil {
+            // 現行と同じエラー表現を維持する。
+            finish(SoraError.cameraError(reason: "CameraVideoCapturer.start failed"))
+          } else {
+            finish(nil)
+          }
+        }
+        CameraVideoCapturer.handlers.onStop?(capturer)
       }
     }
   }
@@ -755,14 +948,33 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   // MARK: プロパティ
 
   /// 出力先のストリーム
-  public var stream: MediaStream?
+  ///
+  /// owner の resource テーブルへ同期で読み書きします。owner の queue を
+  /// 同期 wait しないため、libwebrtc の capture session queue 上からの代入でも
+  /// deadlock しません。
+  public var stream: MediaStream? {
+    get { CameraStateOwner.shared.stream(id: id) }
+    set { CameraStateOwner.shared.setStream(newValue, id: id) }
+  }
 
   /// カメラが起動中であれば ``true``
-  public private(set) var isRunning: Bool = false
+  ///
+  /// owner の snapshot から読みます。更新は owner の reducer 経由で行います。
+  public var isRunning: Bool {
+    CameraStateOwner.shared.isRunning(id: id)
+  }
 
-  // TODO(zztkm): イベントハンドラを actor 経由で管理し、 @Sendable な API に置き換える。
   /// イベントハンドラ
-  public nonisolated(unsafe) static var handlers = CameraVideoCapturerHandlers()
+  ///
+  /// lock 付き storage から同一インスタンスを返します。利用者の
+  /// `CameraVideoCapturer.handlers.onCapture = ...` という in-place 変更を維持します。
+  public static var handlers: CameraVideoCapturerHandlers {
+    get { handlersStorage.current() }
+    set { handlersStorage.publish(newValue) }
+  }
+
+  /// handlers を保持する lock 付き storage
+  private static let handlersStorage = CameraHandlersStorage()
 
   /// カメラの位置
   public var position: AVCaptureDevice.Position {
@@ -770,31 +982,78 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   }
 
   /// 使用中のデバイス
-  public var device: AVCaptureDevice
+  ///
+  /// lock 付き storage から同期で読み書きします。owner の queue を同期 wait しません。
+  public var device: AVCaptureDevice {
+    get { deviceStorage.current() }
+    set { deviceStorage.setDevice(newValue) }
+  }
+
+  /// `device` を保持する lock 付き storage
+  private let deviceStorage: CameraDeviceStorage
 
   /// フレームレート
-  public private(set) var frameRate: Int?
+  ///
+  /// owner の snapshot から読みます。更新は owner の reducer 経由で行います。
+  public var frameRate: Int? {
+    CameraStateOwner.shared.frameRate(id: id)
+  }
 
   /// フォーマット
-  public private(set) var format: AVCaptureDevice.Format?
+  ///
+  /// `AVCaptureDevice.Format` は non-Sendable のため owner の resource テーブルが
+  /// 保持し、ここから lock 付きで読み出します。更新はカメラ操作が resource テーブルへ
+  /// 同期で行います (`frameRate` は reducer の state が保持します)。
+  public var format: AVCaptureDevice.Format? {
+    CameraStateOwner.shared.format(id: id)
+  }
 
-  // init で必ず初期化されるため安全
-  // swiftlint:disable:next implicitly_unwrapped_optional
-  private var native: RTCCameraVideoCapturer!
-  // init で必ず初期化されるため安全
-  // swiftlint:disable:next implicitly_unwrapped_optional
-  private var nativeDelegate: CameraVideoCapturerDelegate!
+  /// native と delegate を保持する lock 付き storage
+  private let nativeStorage: CameraNativeStorage
 
   /// 引数に指定した device を利用して CameraVideoCapturer を初期化します。
   /// 自動的に初期化される静的プロパティ、 front/back を定義しています。
   /// 上記以外のデバイスを利用したい場合のみ CameraVideoCapturer を生成してください。
   public init(device: AVCaptureDevice) {
-    self.device = device
-    nativeDelegate = CameraVideoCapturerDelegate(cameraVideoCapturer: self)
-    native = RTCCameraVideoCapturer(delegate: nativeDelegate)
+    self.deviceStorage = CameraDeviceStorage(device: device)
+    let delegate = CameraVideoCapturerDelegate()
+    let native = RTCCameraVideoCapturer(delegate: delegate)
+    self.nativeStorage = CameraNativeStorage(native: native, delegate: delegate)
+
+    // 全 stored property の初期化後に delegate と owner へ self を渡す。
+    // (初期化前に self を渡せないため、ID は自身で採番している)
+    delegate.cameraVideoCapturer = self
+    CameraStateOwner.shared.register(id: id, instance: self)
+  }
+
+  deinit {
+    // instance が解放されたら owner の資源と state を破棄する。
+    // (owner が process-wide のため、放置すると format と frameRate が残り続ける)
+    CameraStateOwner.shared.release(id: id)
   }
 
   // MARK: カメラの操作
+
+  /// カメラ操作を開始してよいかを確認し、拒否する場合はエラーを返します。
+  ///
+  /// 隔離中 (クリーンアップ失敗後) と、対象の stream に画面共有が予約されている場合は
+  /// 操作を拒否します。`flip` / `start` / `restart` / `change` が共通で使います。
+  /// 判定順は隔離 → 画面共有で、隔離中は画面共有の予約を確認しません。
+  /// 隔離の判定は引数の coordinator が保持する owner を参照するため、
+  /// テストからも同じ経路を検証できます。
+  static func cameraOperationRejectionError(
+    coordinator: CameraVideoCaptureCoordinator,
+    stream: MediaStream?
+  ) -> Error? {
+    guard coordinator.isAvailable else {
+      return SoraError.cameraError(
+        reason: "camera capture is quarantined after a cleanup failure")
+    }
+    guard !VideoSourceCoordinator.hasScreenReservation(for: stream) else {
+      return SoraError.cameraError(reason: "screen capture is active on the camera stream")
+    }
+    return nil
+  }
 
   /// カメラを起動します。
   ///
@@ -812,17 +1071,13 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     let completionBox = CameraOperationCompletionBox(completionHandler)
     let formatBox = CameraCaptureFormatBox(format: format)
     coordinator.enqueue {
-      guard coordinator.isAvailable else {
-        completionBox(
-          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
+      if let error = CameraVideoCapturer.cameraOperationRejectionError(
+        coordinator: coordinator, stream: self.stream)
+      {
+        completionBox(error)
         return
       }
-      guard !VideoSourceCoordinator.hasScreenReservation(for: self.stream) else {
-        completionBox(
-          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
-        return
-      }
-      guard await CameraVideoCapturer.currentForSDK() == nil else {
+      guard CameraVideoCapturer.current == nil else {
         completionBox(SoraError.cameraError(reason: "another camera is already running"))
         return
       }
@@ -835,6 +1090,10 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   }
 
   /// 共有 coordinator から呼び出す、直列化されていないカメラ開始処理です。
+  ///
+  /// owner の command として `.startRequested` → `.startCompleted` を適用し、
+  /// native start が成功した場合だけ `.formatResolved` で format と frameRate を記録します。
+  /// generation はここで採番し、古い callback は owner が破棄します。
   private func startUncoordinated(
     format: AVCaptureDevice.Format,
     frameRate: Int,
@@ -845,26 +1104,48 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       return
     }
 
-    native.startCapture(
+    let owner = CameraStateOwner.shared
+    let generation = owner.nextGeneration()
+    owner.handle(.startRequested(id: id, generation: generation))
+
+    startNative(format: format, frameRate: frameRate) { [self] error in
+      // 使用した format と frameRate は start 成功時にだけ記録する。
+      // (失敗時に要求値を残すと、失敗した設定値が format / frameRate として観測される)
+      if error == nil {
+        owner.setFormat(format, id: id)
+        owner.handle(.formatResolved(id: id, frameRate: frameRate, generation: generation))
+      }
+      // owner の state を reducer 経由で更新する。
+      // (isRunning / current / phase はここで確定する)
+      owner.handle(.startCompleted(id: id, generation: generation, success: error == nil))
+      completionHandler(error)
+      if error == nil {
+        CameraVideoCapturer.handlers.onStart?(self)
+      }
+    }
+  }
+
+  /// native のカメラ開始のみを行います (owner の state は更新しません)。
+  ///
+  /// restart / change / flip のような複合コマンドが、内部の start として使います。
+  /// 「動作中でない」ことは、単体の start では `startUncoordinated` が確認し、
+  /// 複合コマンドでは内部 stop の完了で動作中から外れていることを前提にします。
+  private func startNative(
+    format: AVCaptureDevice.Format,
+    frameRate: Int,
+    completionHandler: @escaping ((Error?) -> Void)
+  ) {
+    nativeStorage.nativeCapturer().startCapture(
       with: device,
       format: format,
       fps: frameRate
     ) { [self] (error: Error?) in
-      guard error == nil else {
-        completionHandler(error)
-        return
+      if error == nil {
+        Logger.debug(
+          type: .cameraVideoCapturer,
+          message: "succeeded to start \(device) with \(format), \(frameRate)fps")
       }
-      Logger.debug(
-        type: .cameraVideoCapturer,
-        message: "succeeded to start \(device) with \(format), \(frameRate)fps")
-
-      // start が成功した際の処理
-      self.format = format
-      self.frameRate = frameRate
-      isRunning = true
-      CameraVideoCapturer.current = self
-      completionHandler(nil)
-      CameraVideoCapturer.handlers.onStart?(self)
+      completionHandler(error)
     }
   }
 
@@ -879,20 +1160,19 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     let coordinator = CameraVideoCaptureCoordinator.shared
     let completionBox = CameraOperationCompletionBox(completionHandler)
     let stopCompletionBox = CameraOperationCompletionBox { [self] error in
-      if isRunning {
-        coordinator.quarantine(capturer: self)
-      } else {
-        coordinator.clearQuarantineAfterSuccessfulStop(capturer: self)
-        if let stream {
-          VideoSourceCoordinator.releaseCameraReservations(for: stream)
-        }
+      // libwebrtc の stopCapture の完了ハンドラーは成否を受け取らず、AVCaptureSession の
+      // 停止にもエラー通知が無い。停止できなかったという結果を知る手段が無いため、
+      // 停止完了の通知が届いたことを根拠に、停止できたものとして隔離を解除し予約を解放する。
+      coordinator.clearQuarantineAfterSuccessfulStop(capturerID: self.id)
+      if let stream {
+        VideoSourceCoordinator.releaseCameraReservations(for: stream)
       }
       completionBox(error)
     }
     coordinator.enqueue {
-      guard await CameraVideoCapturer.currentForSDK() === self else {
+      guard CameraVideoCapturer.current === self else {
         if self.isRunning {
-          coordinator.quarantine(capturer: self)
+          coordinator.quarantine(capturerID: self.id)
         }
         completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
         return
@@ -903,22 +1183,37 @@ public final class CameraVideoCapturer: @unchecked Sendable {
   }
 
   /// 共有 coordinator から呼び出す、直列化されていないカメラ停止処理です。
+  ///
+  /// owner の command として `.stopRequested` → `.stopCompleted` を適用します。
   private func stopUncoordinated(completionHandler: @escaping ((Error?) -> Void)) {
     guard isRunning else {
       completionHandler(SoraError.cameraError(reason: "isRunning should be true"))
       return
     }
 
-    native.stopCapture { [self] in
+    let owner = CameraStateOwner.shared
+    let generation = owner.nextGeneration()
+    owner.handle(.stopRequested(id: id, generation: generation))
+
+    stopNative { [self] in
+      // owner の state を reducer 経由で更新する。
+      // (native の停止は成否を返さないため、`.stopCompleted` は success を持たず、
+      // 停止完了の通知を停止成功として扱う)
+      owner.handle(.stopCompleted(id: id, generation: generation))
+      completionHandler(nil)
+      CameraVideoCapturer.handlers.onStop?(self)
+    }
+  }
+
+  /// native のカメラ停止のみを行います (owner の state は更新しません)。
+  ///
+  /// restart / change / flip のような複合コマンドが、内部の stop として使います。
+  private func stopNative(completionHandler: @escaping (() -> Void)) {
+    nativeStorage.nativeCapturer().stopCapture { [self] in
       Logger.debug(
         type: .cameraVideoCapturer,
         message: "succeeded to stop \(String(describing: device))")
-
-      // stop が成功した際の処理
-      isRunning = false
-      CameraVideoCapturer.current = nil
-      completionHandler(nil)
-      CameraVideoCapturer.handlers.onStop?(self)
+      completionHandler()
     }
   }
 
@@ -927,23 +1222,19 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     let coordinator = CameraVideoCaptureCoordinator.shared
     let completionBox = CameraOperationCompletionBox(completionHandler)
     coordinator.enqueue {
-      guard coordinator.isAvailable else {
-        completionBox(
-          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
+      if let error = CameraVideoCapturer.cameraOperationRejectionError(
+        coordinator: coordinator, stream: self.stream)
+      {
+        completionBox(error)
         return
       }
-      guard !VideoSourceCoordinator.hasScreenReservation(for: self.stream) else {
-        completionBox(
-          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
-        return
-      }
-      let current = await CameraVideoCapturer.currentForSDK()
+      let current = CameraVideoCapturer.current
       guard current == nil || current === self else {
         completionBox(SoraError.cameraError(reason: "another camera is already running"))
         return
       }
       guard !self.isRunning || current === self else {
-        coordinator.quarantine(capturer: self)
+        coordinator.quarantine(capturerID: self.id)
         completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
         return
       }
@@ -965,38 +1256,45 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       return
     }
 
-    if isRunning {
-      stopUncoordinated { [self] (error: Error?) in
-        guard error == nil else {
-          completionHandler(error)
-          return
-        }
+    let owner = CameraStateOwner.shared
+    let generation = owner.nextGeneration()
+    // 内部 stop の要否はイベント適用より先に確定する。
+    // (.restartRequested は実行中の状態を変えないが、将来の変更に依存しない)
+    let wasRunning = isRunning
+    owner.handle(.restartRequested(id: id, generation: generation))
 
-        startUncoordinated(
-          format: format,
-          frameRate: frameRate
-        ) { (error: Error?) in
-          guard error == nil else {
-            completionHandler(error)
-            return
-          }
+    // 内部 stop は .stopCompleted として owner へ反映し、 start の完了だけを
+    // 複合コマンドの完了として返す。
+    let finish: (Error?) -> Void = { [self] error in
+      // 使用した format と frameRate は start 成功時にだけ記録する。
+      if error == nil {
+        owner.setFormat(format, id: id)
+        owner.handle(.formatResolved(id: id, frameRate: frameRate, generation: generation))
+        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
+      }
+      owner.handle(.restartCompleted(id: id, generation: generation, success: error == nil))
+      completionHandler(error)
+      // 利用者 handler は owner の critical section の外で呼ぶ。
+      // start に成功した場合のみ onStart を呼ぶ。
+      if error == nil {
+        CameraVideoCapturer.handlers.onStart?(self)
+      }
+    }
 
-          Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
-          completionHandler(nil)
+    if wasRunning {
+      stopNative { [self] in
+        // 内部 stop の完了により current / isRunning が解除される。
+        owner.handle(.stopCompleted(id: id, generation: generation))
+        // native start を要求した後に onStop を呼ぶ。
+        // (単体の stop の完了通知と同じ位置で呼ぶ)
+        startNative(format: format, frameRate: frameRate) { error in
+          finish(error)
         }
+        CameraVideoCapturer.handlers.onStop?(self)
       }
     } else {
-      startUncoordinated(
-        format: format,
-        frameRate: frameRate
-      ) { (error: Error?) in
-        guard error == nil else {
-          completionHandler(error)
-          return
-        }
-
-        Logger.debug(type: .cameraVideoCapturer, message: "succeeded to restart")
-        completionHandler(nil)
+      startNative(format: format, frameRate: frameRate) { error in
+        finish(error)
       }
     }
   }
@@ -1010,17 +1308,13 @@ public final class CameraVideoCapturer: @unchecked Sendable {
     let completionBox = CameraOperationCompletionBox(completionHandler)
     let formatBox = format.map(CameraCaptureFormatBox.init)
     coordinator.enqueue {
-      guard coordinator.isAvailable else {
-        completionBox(
-          SoraError.cameraError(reason: "camera capture is quarantined after a cleanup failure"))
+      if let error = CameraVideoCapturer.cameraOperationRejectionError(
+        coordinator: coordinator, stream: self.stream)
+      {
+        completionBox(error)
         return
       }
-      guard !VideoSourceCoordinator.hasScreenReservation(for: self.stream) else {
-        completionBox(
-          SoraError.cameraError(reason: "screen capture is active on the camera stream"))
-        return
-      }
-      guard await CameraVideoCapturer.currentForSDK() === self else {
+      guard CameraVideoCapturer.current === self else {
         completionBox(SoraError.cameraError(reason: "capturer is not the current camera"))
         return
       }
@@ -1052,36 +1346,41 @@ public final class CameraVideoCapturer: @unchecked Sendable {
       return
     }
 
-    stopUncoordinated { [self] (error: Error?) in
-      guard error == nil else {
-        completionHandler(error)
-        return
-      }
+    let owner = CameraStateOwner.shared
+    let generation = owner.nextGeneration()
+    owner.handle(.changeRequested(id: id, generation: generation))
 
-      startUncoordinated(format: format, frameRate: frameRate) { (error: Error?) in
-        guard error == nil else {
-          completionHandler(error)
-          return
-        }
-
+    let finish: (Error?) -> Void = { [self] error in
+      // 使用した format と frameRate は start 成功時にだけ記録する。
+      if error == nil {
+        owner.setFormat(format, id: id)
+        owner.handle(.formatResolved(id: id, frameRate: frameRate, generation: generation))
         Logger.debug(type: .cameraVideoCapturer, message: "succeeded to change")
-        completionHandler(nil)
       }
+      owner.handle(.changeCompleted(id: id, generation: generation, success: error == nil))
+      completionHandler(error)
+      // 利用者 handler は owner の critical section の外で呼ぶ。
+      // start に成功した場合のみ onStart を呼ぶ。
+      if error == nil {
+        CameraVideoCapturer.handlers.onStart?(self)
+      }
+    }
+
+    stopNative { [self] in
+      // 内部 stop の完了により current / isRunning が解除される。
+      owner.handle(.stopCompleted(id: id, generation: generation))
+      // native start を要求した後に onStop を呼ぶ。
+      // (単体の stop の完了通知と同じ位置で呼ぶ)
+      startNative(format: format, frameRate: frameRate) { error in
+        finish(error)
+      }
+      CameraVideoCapturer.handlers.onStop?(self)
     }
   }
 
 }
 
 extension CameraVideoCapturer {
-  /// SDK のカメラキュー上で現在の capturer を取得します。
-  static func currentForSDK() async -> CameraVideoCapturer? {
-    await withCheckedContinuation { continuation in
-      SoraDispatcher.async(on: .camera) {
-        continuation.resume(returning: CameraVideoCapturer.current)
-      }
-    }
-  }
-
   /// SDK のカメラキュー上で起動し、完了時のエラーを返します。
   func startForSDK(
     format: AVCaptureDevice.Format,
@@ -1090,15 +1389,17 @@ extension CameraVideoCapturer {
     completionBeforeEvent: CameraOperationCompletionBox? = nil
   ) async -> Error? {
     await withCheckedContinuation { continuation in
-      SoraDispatcher.async(on: .camera) {
+      CameraQueueExecutor.async {
         // start の完了前からフレームが届く場合があるため、先に送信先を設定する。
         let originalStream = self.stream
         if let senderStream {
           self.stream = senderStream.stream
         }
         self.startUncoordinated(format: format, frameRate: frameRate) { error in
-          if error != nil, senderStream != nil {
-            self.stream = originalStream
+          if error != nil, let senderStream {
+            // command が最後に書いた値が残っている場合だけ rollback する。
+            CameraStateOwner.shared.compareAndSetStream(
+              senderStream.stream, to: originalStream, id: self.id)
           }
           completionBeforeEvent?(error)
           continuation.resume(returning: error)
@@ -1112,7 +1413,7 @@ extension CameraVideoCapturer {
     completionBeforeEvent: CameraOperationCompletionBox? = nil
   ) async -> Error? {
     await withCheckedContinuation { continuation in
-      SoraDispatcher.async(on: .camera) {
+      CameraQueueExecutor.async {
         self.stopUncoordinated { error in
           completionBeforeEvent?(error)
           continuation.resume(returning: error)
@@ -1127,14 +1428,16 @@ extension CameraVideoCapturer {
     completionBeforeEvent: CameraOperationCompletionBox? = nil
   ) async -> Error? {
     await withCheckedContinuation { continuation in
-      SoraDispatcher.async(on: .camera) {
+      CameraQueueExecutor.async {
         let originalStream = self.stream
         if let senderStream {
           self.stream = senderStream.stream
         }
         self.restartUncoordinated { error in
-          if error != nil, senderStream != nil {
-            self.stream = originalStream
+          if error != nil, let senderStream {
+            // command が最後に書いた値が残っている場合だけ rollback する。
+            CameraStateOwner.shared.compareAndSetStream(
+              senderStream.stream, to: originalStream, id: self.id)
           }
           completionBeforeEvent?(error)
           continuation.resume(returning: error)
@@ -1150,7 +1453,7 @@ extension CameraVideoCapturer {
     completionBeforeEvent: CameraOperationCompletionBox? = nil
   ) async -> Error? {
     await withCheckedContinuation { continuation in
-      SoraDispatcher.async(on: .camera) {
+      CameraQueueExecutor.async {
         self.changeUncoordinated(format: format, frameRate: frameRate) { error in
           completionBeforeEvent?(error)
           continuation.resume(returning: error)
@@ -1178,7 +1481,7 @@ public struct CameraSettings: CustomStringConvertible, Sendable {
   /// デフォルトの設定。
   public static var `default`: CameraSettings { CameraSettings() }
 
-  /// `CameraVideoCapturer` で使用する映像解像度を表すenumです。
+  /// `CameraVideoCapturer` で使用する映像解像度を表す enum です。
   public enum Resolution: Sendable {
     /// QVGA, 320x240
     case qvga240p
@@ -1275,10 +1578,6 @@ public struct CameraSettings: CustomStringConvertible, Sendable {
 private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
   weak var cameraVideoCapturer: CameraVideoCapturer?
 
-  init(cameraVideoCapturer: CameraVideoCapturer) {
-    self.cameraVideoCapturer = cameraVideoCapturer
-  }
-
   func capturer(_ capturer: RTCVideoCapturer, didCapture nativeFrame: RTCVideoFrame) {
     guard let cameraVideoCapturer else {
       Logger.debug(type: .cameraVideoCapturer, message: "cameraVideoCapturer is nil")
@@ -1322,12 +1621,18 @@ public class CameraVideoCapturerHandlers {
   /// 返した映像フレームがストリームに渡されます。
   public var onCapture: ((CameraVideoCapturer, VideoFrame) -> VideoFrame)?
 
-  /// CameraVideoCapturer.start(format:frameRate:completionHandler) 内で completionHandler の後に実行されます。
-  /// そのため、 CameraVideoCapturer.restart(completionHandler) のように、 stop の completionHandler で start を実行する場合、
-  /// イベントハンドラは onStart, onStop の順に呼び出されることに注意してください。
+  /// CameraVideoCapturer.start(format:frameRate:completionHandler) の completionHandler の後に実行されます。
+  /// また CameraVideoCapturer.restart(completionHandler) /
+  /// CameraVideoCapturer.change(format:frameRate:completionHandler) /
+  /// CameraVideoCapturer.flip(_:completionHandler) でも、内部の start が成功した場合に呼び出されます。
+  /// 内部の start は非同期に開始され、その完了通知は stop の完了通知より後に届くため、
+  /// restart / change / flip では onStop の後に onStart が呼ばれます。
   public var onStart: ((CameraVideoCapturer) -> Void)?
 
   /// CameraVideoCapturer.stop(completionHandler) 内で completionHandler の後に実行されます。
+  /// また CameraVideoCapturer.restart(completionHandler) /
+  /// CameraVideoCapturer.change(format:frameRate:completionHandler) /
+  /// CameraVideoCapturer.flip(_:completionHandler) でも、内部の stop が完了した場合に呼び出されます。
   /// 注意点については、 onStart のコメントを参照してください。
   public var onStop: ((CameraVideoCapturer) -> Void)?
 

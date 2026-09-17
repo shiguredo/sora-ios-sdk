@@ -17,17 +17,16 @@ libwebrtc の内部 queue identity を公開する `SoraDispatcher` を非推奨
 
 closure は非 `@Sendable` であり、利用者は任意の mutable reference を libwebrtc queue へ移送できる。また `RTCDispatcherQueueType` は libwebrtc の内部実装詳細であり、SDK の将来の thread model を公開契約として固定する。
 
-production code では `Sora/VideoMute.swift` と `Sora/MediaChannel.swift` がカメラ操作のために利用している。これらは generic dispatch ではなく camera owner の command として表現すべき処理である。
+production code からの `SoraDispatcher` の利用は 0 件である。`Sora/CameraVideoCapturer.swift` は以前カメラ操作のために `SoraDispatcher.async(on: .camera)` を利用していたが、`0103` で internal な `CameraQueueExecutor` adapter へ移行済みである (`VideoMute.swift` / `MediaChannel.swift` は `CameraVideoCaptureCoordinator` を経由する)。
 
 ## 前提となる issue
 
-- `0103`: カメラ状態と操作を camera owner へ集約する。
+- `0103` (完了): カメラ状態の所有者を単一化する。`CameraVideoCapturer.swift` から `SoraDispatcher` の参照を除去済み。
 
 audio queue を使用する production code が追加された場合は、その処理の owner / adapter も先に用意する。
 
 ## 設計方針
 
-- `VideoMute` と `MediaChannel` から `SoraDispatcher` の直接利用を除去する。
 - WebRTC / camera / audio 操作は目的別の internal owner / command を経由する。
 - generic な public dispatch API を、新しい internal generic closure API としてそのまま複製しない。
 - `SoraDispatcher` と `async(on:block:)` を deprecated にする。
