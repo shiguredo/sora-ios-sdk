@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-sora-shared-state
-- Polished:
+- Polished: 2026-09-17
 
 ## 目的
 
@@ -21,7 +21,8 @@
 - `audioSessionDelegateAdapter` からの handler 呼び出し
 - static な SDK initialize / finish lifecycle
 - `webRTCCallbackLogger`
-- `webRTCLoggingDateFormatter`
+
+`webRTCLoggingDateFormatter` は immutable な `static let` であり、mutable state ではない。`DateFormatter` は iOS 7 以降 thread-safe である Apple の仕様に基づき同期は不要だが、logger callback から任意のスレッドで同時に参照されるため、この扱いの根拠を設計方針に明記する。
 
 `SoraHandlers` は利用者が任意の executor から property を変更できる。add、remove、connect、disconnect、audio route callback は別 executor から handler を読み出すため、Optional closure 自体の読み書きが競合する。
 
@@ -55,6 +56,7 @@
 - severity 更新、stop、start を同じ排他領域で順序付ける。
 - logger callback は設定時の generation を持ち、古い callback を無視する。
 - callback 内の日時整形と `print` は state lock の外で行う。
+- callback で共有する `webRTCLoggingDateFormatter` は iOS 7 以降 thread-safe である Apple の仕様に基づき、専用 lock を追加せず共有を認め、その根拠を日本語コメントに残す。
 - `webRTCCallbackLogger` の `nonisolated(unsafe)` を除去する。
 
 ### Sendable
@@ -65,16 +67,17 @@
 ## スコープ外
 
 - `Logger.shared` の state は `0106` で扱う。
-- `ConnectionTask` と接続状態は `0092` / `0100` で扱う。
+- `ConnectionTask` と接続状態は `0092` / `0100` で対応済みであり、本 issue の対象にはしない。
 - 新しい Sendable event API は `0110` で扱う。
 - raw `RTCAudioSession` を公開 event から除去する作業は `0110` と `0070` の方針に合わせる。
+- `Sora.setWebRTCLogLevel` のシグネチャと `RTCCallbackLogger` の将来の扱いは `0070` の互換性方針 (webrtc_c 移行での破壊的変更候補) と整合させる。logger owner の設計は移行後も適用できる形にする。
 - 音声 unit の機能仕様は変更しない。
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
-- 複数の実 `Sora` instance と `Sora.shared` を並行して生成・破棄する。
+- 複数の実 `Sora` instance を並行して生成・破棄し、`Sora.shared` を含めた並行利用で handler と SDK lifecycle の競合がないことを確認する。
 - handler の設定変更と add、remove、connect、disconnect、audio route event を競合させる。
 - handler 内から handler を差し替え、connect / disconnect を呼んでも deadlock しないことを確認する。
 - `setWebRTCLogLevel` を複数 Task から反復し、logger callback が重複登録されないことを確認する。
