@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/remove-sora-dispatcher
-- Polished:
+- Polished: 2026-09-17
 
 ## 目的
 
@@ -12,6 +12,7 @@
 ## 前提
 
 - `0116` が完了し、公開 release で `SoraDispatcher` の非推奨化と移行案内が提供されていること。
+- `0107` が完了し、consumer fixture と公開 API baseline が提供されていること。
 - production code が目的別 owner / command へ移行済みであること。
 - 次期 major version の作業として着手すること。
 
@@ -26,7 +27,7 @@
 ## 設計方針
 
 - `Sora/SoraDispatcher.swift` と公開 `SoraDispatcher` 型を削除する。
-- production code、test、sample、documentation から参照を削除する。
+- production code、test、consumer fixture、sample、documentation から参照を削除する。
 - generic な代替 dispatch API を追加しない。
 - WebRTC / camera / audio object は目的別 owner / adapter の外へ返さない。
 - `0070` が先に `RTCDispatcher` を撤去している場合は、その内部 thread model を利用し、互換 wrapper を残さない。
@@ -48,12 +49,13 @@
 - 実カメラと実 AudioSession を利用する既存機能が、目的別 owner 経由で動作することを確認する。
 - `rg` で production code、test、documentation に `SoraDispatcher` が残っていないことを確認する。
 - API baseline が `SoraDispatcher` の削除だけを意図した break として検出することを確認する。
-- `0070` の migration test で旧 dispatcher への依存が再導入されないことを確認する。
+- `0107` の consumer fixture の legacy scenario から `SoraDispatcher` の参照が削除され、fixture が compile できることを確認する。
+- `0070` の webrtc_c 移行が完了している場合は、移行後の code に generic な dispatch API が再導入されていないことを確認する。
 
 ## 完了条件
 
 - `SoraDispatcher` の型と実装ファイルが削除されていること。
-- production code、test、documentation に参照が残っていないこと。
+- production code、test、consumer fixture、documentation に参照が残っていないこと。
 - generic な代替 dispatch API を追加していないこと。
 - camera / audio 機能が目的別 owner / adapter で動作すること。
 - `0070` の thread model と重複する abstraction がないこと。
