@@ -35,7 +35,7 @@ open の `0057` は新しい Media Processors API の追加を目的としてい
 
 - `BasicMediaStream` ごとに frame-processing 用の serial executor または actor を持つ。
 - frame event に stream identity、transport epoch、sequence、owned frame / adapter handle を含める。
-  - stream identity は、非 Sendable な `MediaStream` / `VideoFrame` を executor や actor 境界で扱うための内部 handle とし、既存の `SenderStreamBox` (`Sora/VideoMute.swift`) を置き換えられる形にする。`0098` / `0103` / `0136` は「`0105` が stream 用の内部 handle を導入した場合は、actor へ渡す方式を変更できる」としており、これと整合させる。
+  - stream identity は、非 Sendable な `MediaStream` / `VideoFrame` を executor や actor 境界で扱うための内部 handle とし、既存の `SenderStreamBox` (`Sora/VideoMute.swift`) を置き換えられる形にする。`0098` / `0103` / `0104` は「`0105` が stream 用の内部 handle を導入した場合は、actor へ渡す方式を変更できる」としており、これと整合させる。
   - transport epoch は既存の `ConnectionLifecycleState.transportEpoch` (`Sora/ConnectionLifecycle.swift`) を使う。`transportEpoch` は redirect 受信時のみ増加するため、disconnect / stream terminate の破棄は executor の無効化で行い、epoch の増加に依存しない。
 - camera、screen capture、public send のすべてを 1 本の ordered ingress へ接続する。
 - disconnect または stream terminate 後は executor を無効化し、到着する frame を破棄する。redirect 後は、ingress 時に保持した transport epoch が現在値と一致しない frame を破棄する。re-offer / re-answer による再ネゴシエーション (`Sora/Signaling.swift`) では transport も stream も変わらないため frame の破棄は不要であり、sequence 順の維持だけを保証する。
