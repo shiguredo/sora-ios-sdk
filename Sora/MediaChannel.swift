@@ -1477,6 +1477,12 @@ public final class MediaChannel {
   ///
   /// 送信フレームレートは `ScreenCaptureSettings.targetFPS` で制御できます。
   ///
+  /// `ScreenCaptureSettings.videoSampleBufferTransformer` は SDK 内部の送信キュー上で呼ばれます。
+  /// `targetFPS` による間引きで破棄されるフレームと、送信処理中のために破棄されるフレーム、
+  /// キャプチャ停止中と切断中のフレームでは呼ばれません。引数と戻り値の `CMSampleBuffer` の
+  /// 所有権は SDK に委ねられ、戻り値の pixel buffer は送信のために SDK が retain します。
+  /// 戻り値を返した後にその buffer を書き換えないでください。
+  ///
   /// 同一 senderStream に対してカメラキャプチャが動作中の場合は開始できません。
   /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
   /// 接続後にカメラを停止する場合は `setVideoHardMute(true)` を先に呼んでください。
