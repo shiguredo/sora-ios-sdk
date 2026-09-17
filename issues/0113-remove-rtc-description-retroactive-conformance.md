@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/remove-rtc-description-retroactive-conformance
-- Polished:
+- Polished: 2026-09-17
 - Updated: 2026-08-27
 
 ## 目的
@@ -40,7 +40,7 @@ Swift 6.3 は、別 module の型を別 module の protocol に準拠させる�
 
 ### SDK 内部の文字列化
 
-- 6 つの enum conformance を、SDK internal の formatter function または wrapper property へ置き換える。
+- 6 つの enum の文字列化を、SDK internal の formatter function または wrapper property へ移す(削除経路では conformance を削除し、`@retroactive` 経路では conformance を残したまま SDK 内部の利用箇所を formatter へ切り替える)。
 - `PeerChannel`、`DataChannel`、`MediaChannel` のログおよびエラー文字列は internal formatter を明示的に呼ぶ。
 - `RTCRtpParameters.description` 内の degradation preference 文字列化も internal formatter を使用する。
 - 未知 value は既存の fallback を維持するか、`"unknown"` と raw value 等の診断可能な情報を返し、`fatalError` を呼ばない。
@@ -48,10 +48,10 @@ Swift 6.3 は、別 module の型を別 module の protocol に準拠させる�
 
 ### 互換性
 
-- 現行 release 系で conformance の即時削除が許容できない場合は、一時的に `@retroactive` を明記して warning を抑止する。
-- `@retroactive` は最終対応ではなく、次期 major version または `0070` の該当 phase で conformance を削除する。
-- 削除時期と影響を API baseline と consumer fixture で確認する。
-- conformance 削除後も、SDK のログ文字列が既存の既知 case で変わらないようにする。
+- 削除の可否判定は先に、`0107` の consumer fixture と API baseline で行う。この確認手段は `0107` 実装後に利用できるため、本 issue の互換性確認は `0107` 完了後に行う。
+- 現行 release 系で即時削除が許容される場合: 6 つの conformance を削除する(本 issue の主経路)。
+- 即時削除が許容されない場合: 6 つの conformance に `@retroactive` を明記して warning を抑止し、本 issue の到達点を「retroactive conformance warning 0 件 + SDK 内部の crash 経路解消」とする。SDK 内部の文字列化は削除経路と同じく internal formatter へ移行する。conformance 自体の削除は次期 major version または `0070` の該当 phase へ委ね、`0070` の該当 phase で扱われない場合は、その削除を追跡する issue を別途起票する。
+- どちらの経路でも、SDK のログ文字列が既存の既知 case で変わらないようにする。
 
 ### `0070` との関係
 
@@ -76,17 +76,19 @@ Swift 6.3 は、別 module の型を別 module の protocol に準拠させる�
 - 実 PeerConnection の signaling / ICE state change log が従来どおり出力されることを確認する。
 - 実 DataChannel の ready state log と `MediaChannel.sendMessage(label:data:)` のエラー文字列が従来どおりであることを確認する。
 - Swift 6.3 の warnings-as-errors で retroactive conformance warning が 0 件になることを確認する。
-- `0107` の consumer fixture と API baseline で互換性への影響を確認する。
+- `0107` の consumer fixture と API baseline で互換性への影響を確認する(`0107` 完了後に実施する)。
 - テストには、imported type へ conformance を追加しない理由を日本語コメントで明記する。
 
 ## 完了条件
 
-- 6 つの WebRTC enum に対する `CustomStringConvertible` conformance が削除されていること。
+- 6 つの WebRTC enum に対する `CustomStringConvertible` conformance が、次のいずれかの状態になっていること。
+  - 削除経路: conformance が削除されていること。
+  - `@retroactive` 経路: `@retroactive` が明記されていること。conformance の完全削除は次期 major version または `0070` の該当 phase に委ねること。
 - SDK 内のログが internal formatter を使用すること。
 - internal formatter が未知 value で `fatalError` を呼ばないこと。
 - Swift 6.3 の retroactive conformance warning が 0 件であること。
 - 既知の enum case に対するログ文字列が意図せず変わっていないこと。
-- public conformance 削除の互換性影響が consumer fixture と API baseline で確認されていること。
+- public conformance 削除または `@retroactive` 化の互換性影響が `0107` の consumer fixture と API baseline で確認されていること。
 - `0070` の削除計画と重複していないこと。
 - 追加したテストと既存テストがすべて成功すること。
 
