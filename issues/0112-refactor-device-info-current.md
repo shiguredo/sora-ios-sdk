@@ -2,6 +2,7 @@
 
 - Created: 2026-08-27
 - Completed:
+- Priority: Medium
 - Branch: feature/refactor-device-info-current
 - Polished: 2026-09-17
 
@@ -46,8 +47,8 @@
 
 - `Sora/DeviceInfo.swift`: `nonisolated(unsafe)` の除去、lock 付き private storage と computed property への置き換え、初期 snapshot 生成を lock 外へ移す
 - `SoraTests/DeviceInfoTests.swift` (新規): 並行読み書き、同時初回取得、snapshot 一貫性のテスト
-- `skills/sora-ios-sdk/SKILL.md`: 「スレッド安全でない共有状態」の一覧から `DeviceInfo.current` を除去する
-- `CHANGES.md`: `## develop` へ `[UPDATE]` を追記する
+- `skills/sora-ios-sdk/SKILL.md`: 「スレッド安全でない共有状態」の一覧から `DeviceInfo.current` を除去する (`0106` の完了後に本 issue を実施し、先行した場合は rebase する)。`0106` の完了後に一覧の項目が無くなるため、同節の見出しと導入文を削除し、同節に残るカメラ操作の説明は `### コールバックのスレッド` 節など内容に合う節へ移す (`0106` も同節に `onOutputHandler` の契約を追記するため、同節への追記と段落の移動が重ならないよう `0106` の完了後に実施する)
+- `CHANGES.md`: `## develop` の主リストの `[UPDATE]` の並びへ `[UPDATE]` を追記する
 
 ## テスト方針
 
@@ -71,7 +72,7 @@
 - connect message が一貫した `DeviceInfo` snapshot を使用すること。
 - public getter / setter の source compatibility が維持されること。
 - environment の文字列表現が変わらないこと。
-- `skills/sora-ios-sdk/SKILL.md` の「スレッド安全でない共有状態」の一覧から `DeviceInfo.current` が除去されていること。
+- `skills/sora-ios-sdk/SKILL.md` の「スレッド安全でない共有状態」の一覧から `DeviceInfo.current` が除去され、同節の見出しと導入文が削除され、同節に残るカメラ操作の説明が内容に合う節へ移されていること。
 - `CHANGES.md` の `## develop` へ `[UPDATE]` が追記されていること。
 - 追加したテストと既存テストがすべて成功すること。
 

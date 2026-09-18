@@ -35,6 +35,7 @@
 ## 前提となる issue
 
 - `0102`: 接続設定の snapshot 化。本 issue は `ICEServerInfo.description` と `urlCandidates` のログのマスクを扱うため、`0102` の完了後に着手する。
+- `0106`: Logger の共有可変状態の同期。同じ `Sora/Logger.swift` の `maskSecrets` 周辺を変更するため、どちらかを先行させもう一方を rebase する。
 
 ## 完了条件
 
