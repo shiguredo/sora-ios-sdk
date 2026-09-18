@@ -47,7 +47,7 @@
 
 - `Sora/DeviceInfo.swift`: `nonisolated(unsafe)` の除去、lock 付き private storage と computed property への置き換え、初期 snapshot 生成を lock 外へ移す
 - `SoraTests/DeviceInfoTests.swift` (新規): 並行読み書き、同時初回取得、snapshot 一貫性のテスト
-- `skills/sora-ios-sdk/SKILL.md`: 「スレッド安全でない共有状態」の一覧から `DeviceInfo.current` を除去する (`0106` の完了後に本 issue を実施し、先行した場合は rebase する)。`0106` の完了後に一覧の項目が無くなるため、同節の見出しと導入文を削除し、同節に残るカメラ操作の説明は `### コールバックのスレッド` 節など内容に合う節へ移す (`0106` も同節に `onOutputHandler` の契約を追記するため、同節への追記と段落の移動が重ならないよう `0106` の完了後に実施する)
+- `skills/sora-ios-sdk/SKILL.md`: 「スレッド安全でない共有状態」の一覧から `DeviceInfo.current` を除去する (`0106` は develop にマージ済み)。`0106` の完了により一覧の項目が `DeviceInfo.current` だけになったため、同節の見出しと導入文を削除し、同節に残るカメラ操作の説明は `### コールバックのスレッド` 節など内容に合う節へ移す (`0106` は `onOutputHandler` の契約を `### コールバックのスレッド` 節に追記済みで、本 issue が扱うのは `### スレッド安全でない共有状態` 節の見出し・導入文と `DeviceInfo.current` の行であるため、追記箇所と段落の移動は重ならない)
 - `CHANGES.md`: `## develop` の主リストの `[UPDATE]` の並びへ `[UPDATE]` を追記する
 
 ## テスト方針
