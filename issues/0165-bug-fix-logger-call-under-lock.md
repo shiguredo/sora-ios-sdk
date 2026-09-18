@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-logger-call-under-lock
-- Polished:
+- Polished: 2026-09-18
 
 ## 目的
 
@@ -20,7 +20,7 @@ Logger の出力 handler は logging を呼び出した executor 上で同期に
 - `ConnectionTask.cancel()` は `ConnectionTask.stateLock` を保持したまま `Logger.debug` を呼ぶ。`ConnectionTask.state` は同じ `stateLock` を取る。`cancel()` は public で、`Sora.connect` の戻り値から利用者が呼べる。
 - `ConnectionTask.tryComplete()` は `stateLock` を保持したまま `Logger.debug` を呼ぶ。ログは `connecting` から `completed` へ遷移したときだけ出る (`tryComplete()` は遷移の有無を返し、`complete()` は戻り値を捨てている)。
 - `ConnectionTimer.run(timeout:handler:)` と `ConnectionTimer.stop()` は `ConnectionTimer.stateLock` を保持したまま `Logger.debug` を呼ぶ。Timer callback 内の 3 つのログ (`validate timeout` / `found timeout` / `all OK`) は `stateLock` を解放済みの箇所で呼ばれている。
-- `MediaChannel` は `connectionLifecycleLock` を保持したまま `ConnectionTimer.run` を呼ぶ。`MediaChannel.finishConnect` と `MediaChannel.beginDisconnect` は同じ lock を保持したまま `ConnectionTask.tryComplete()` / `complete()` を呼び、`MediaChannel.finishDisconnect` は同 lock の区間 (2 箇所) と解放後 (1 箇所) で `complete()` を呼ぶ。`MediaChannel.disconnect(error:)` は同じ `connectionLifecycleLock` を取る。
+- `MediaChannel` は `connectionLifecycleLock` を保持したまま `ConnectionTimer.run` を呼ぶ。`MediaChannel.finishConnect` と `MediaChannel.beginDisconnect` は同じ lock を保持したまま `ConnectionTask.tryComplete()` / `complete()` を呼び、`MediaChannel.finishDisconnect` は lock を解放してから 3 箇所 (`disconnectFinished` 済みと `state` が `.disconnecting` でない 2 箇所の early return、通常経路の 1 箇所) で `complete()` を呼ぶ。`MediaChannel.disconnect(error:)` は同じ `connectionLifecycleLock` を取る。
 - `MediaChannel.state` は `didSet` で `Logger.trace` を呼ぶ。`state` への代入のうち `connectionLifecycleLock` を保持して行われるものがある (`connecting` / `connected` / `disconnecting` / `disconnected` への 5 箇所)。
 - `AudioDeviceModuleWrapper.setAudioHardMute(_:)` は serial queue の `queue.sync` 区間内で `Logger.debug` / `Logger.error` を呼ぶ。`MediaChannel.setAudioHardMute(_:)` は public で、接続状態と `audioEnabled` と `isSender` を確認してから wrapper を呼ぶ (この関数自身は Logger を呼ばない)。
 - `Sora/MediaStream.swift` と `Sora/StreamFrameOwner.swift` には、同じ理由で「lock 保持中に Logger を呼ばない」ことを説明するコメントがあり、そこでは既に回避されている。
