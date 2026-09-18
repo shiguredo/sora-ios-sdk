@@ -23,13 +23,20 @@
 public protocol VideoRenderer: AnyObject {
     // nil のとき VideoRendererAdapter 内部のデフォルトキューで実行する
     var queue: DispatchQueue? { get }
-    func renderFrame(_ frame: RTCVideoFrame?)
+    func render(videoFrame: VideoFrame?)
 }
 ```
 
 - デフォルト実装で `queue` を `nil` とし、既存の実装者に変更不要にすることを検討する（`extension VideoRenderer { var queue: DispatchQueue? { nil } }`）
-- `VideoRendererAdapter` は `queue` が指定されていればそのキューで、指定がなければ内部キューで実行する
+- `VideoRendererAdapter` は `queue` が指定されていればそのキューへ最終配送し、指定がなければ main queue へ配送する (順序は `0105` の owner queue が決める)
 - `VideoView` にも専用の内部キューを持たせることを検討する
+
+## `0105` との関係
+
+`0105` で 7 種類の renderer callback の最終配送が main queue に統一された。`0060` はその最終配送先を利用者 queue に置き換える issue である。
+
+- 順序の決定は `0105` の `StreamFrameOwner` の owner queue が担い、利用者 queue は最終配送先としてだけ使う (順序と drop の判断を利用者 queue へ委ねない)。
+- 本 issue の対象は最終配送先の置き換えであり、callback の種類と登録経路は変更しない。
 
 ## `0027` との関係
 

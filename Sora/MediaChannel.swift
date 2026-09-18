@@ -1411,7 +1411,9 @@ public final class MediaChannel {
   /// `senderStream.videoEnabled` の setter は値が変化したときだけ利用者 handler と
   /// `VideoRenderer` を呼びます。呼び出し前が有効な場合は、成功時に `onSwitchVideo(false)` が 1 回、
   /// 復元する失敗時に `onSwitchVideo(false)` と `onSwitchVideo(true)` がこの順に 1 回ずつ発火します。
-  /// 有効化の経路ではこれらの callback は `VideoHardMuteActor` の executor で発火します。
+  /// 有効化の経路ではこれらの handler は `VideoHardMuteActor` の executor で発火します。
+  /// これに対し `VideoRenderer.onSwitch(video:)` の配送 executor は main queue であり、
+  /// handler と renderer の相対順序は保証されません。
   ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Throws: エラー時は `SoraError.cameraError` または `SoraError.mediaChannelError` がスローされます

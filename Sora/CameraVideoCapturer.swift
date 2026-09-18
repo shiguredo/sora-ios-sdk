@@ -1575,6 +1575,13 @@ public struct CameraSettings: CustomStringConvertible, Sendable {
 
 // MARK: -
 
+/// カメラのフレームを `MediaStream` の ingress へ渡す delegate です。
+///
+/// `capturer(_:didCapture:)` は libwebrtc の capture session queue 上で呼ばれる前提とします
+/// (upstream の実装を確認できないため、現行の挙動を前提とします)。
+/// `CameraVideoCapturerHandlers.onCapture` を実行した後、加工後の frame を
+/// `MediaStream.send(videoFrame:)` の ingress へ渡します。ingress 以降の `VideoFilter` の実行と
+/// `RTCVideoSource` への配送は frame ごとの直列 executor 上で行われます。
 private class CameraVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
   weak var cameraVideoCapturer: CameraVideoCapturer?
 
@@ -1619,6 +1626,13 @@ extension CameraSettings.Resolution: Codable {
 public class CameraVideoCapturerHandlers {
   /// 生成された映像フレームを受け取ります。
   /// 返した映像フレームがストリームに渡されます。
+  ///
+  /// このクロージャーは libwebrtc の capture session queue 上で、`MediaStream.send(videoFrame:)` の
+  /// ingress より前に呼ばれます。ingress 以降の処理 (`VideoFilter` の実行と `RTCVideoSource` への
+  /// 配送) は frame ごとの直列 executor 上で行われます。
+  ///
+  /// 返した frame の所有権は SDK へ移ります。`MediaStream.send(videoFrame:)` は配送の完了を
+  /// 待たないため、返した後にその frame と保持する画素データを参照・変更しないでください。
   public var onCapture: ((CameraVideoCapturer, VideoFrame) -> VideoFrame)?
 
   /// CameraVideoCapturer.start(format:frameRate:completionHandler) の completionHandler の後に実行されます。

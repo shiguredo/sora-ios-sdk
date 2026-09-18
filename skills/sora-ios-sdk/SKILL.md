@@ -447,7 +447,11 @@ await mediaChannel.stopScreenCapture()
 
 `VideoView` (`UIView`) を `MediaStream.videoRenderer` に設定する。`VideoRenderer` プロトコルを実装した独自ビューも利用できる。`VideoView.connectionMode` で切断時の挙動 (`.auto` / `.autoClear` / `.manual`) を指定する。
 
-`VideoFilter` プロトコルを実装して `MediaStream.videoFilter` に設定すると、送信する映像フレームを加工できる。
+`VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) はすべて main queue で呼ばれる。`videoRenderer` の setter は callback の配送完了を待たない。同じ instance を再設定した場合と `nil` を `nil` へ代入した場合は何も配送せず、別の instance へ交換した場合は以前の renderer に `onRemoved` が 1 回配送される。`videoRenderer` の getter / setter は内部の lock で直列化されるため、どのスレッドから呼んでもよい。`terminate()` の後に新しい renderer を設定しても何も配送されず (`nil` の代入による取り外しは可能)、`onDisconnect` は `terminate()` を呼んだ時点の renderer に配送される。renderer へ配送するフレームは、配送待ちが上限に達すると破棄される。
+
+`VideoFilter` プロトコルを実装して `MediaStream.videoFilter` に設定すると、送信する映像フレームを加工できる。`filter(videoFrame:)` はストリームごとの直列 executor 上で呼ばれるため、同じストリームで同時に 2 つのフレームが filter へ入ることはない。同じ instance を複数のストリームへ設定した場合の排他は利用者の責任となる。
+
+`MediaStream.send(videoFrame:)` はフレームを内部の ingress へ投入して戻る。フィルターの実行と `RTCVideoSource` への配送は非同期に行われ、配送の完了は待たない。呼び出し側はフレームの所有権を SDK へ移し、`send` が戻った後にフレームとそれが保持する画素データを参照・変更してはならない。映像トラックを持たないストリーム (video source が `nil`) ではフレームは配送されず、フィルターも呼ばれない。処理が滞留している場合、上限を超えて到着したフレームは破棄される。`terminate()` の後に到着したフレームも配送されない (`terminate()` は冪等で、`onDisconnect` は 1 回だけ配送される)。
 
 ## DataChannel メッセージング
 
@@ -540,7 +544,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 - `MediaStreamHandlers` の `onSwitchVideo` / `onSwitchAudio`
 - `RTCAudioTrackSink.onData` は libwebrtc の音声処理スレッド (10 ms ごと)
 - `CameraVideoCapturer.handlers.onCapture` はカメラキャプチャスレッド
-- `VideoRenderer` の `onChange` / `render` は SDK が main thread へ配送する
+- `VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) はすべて SDK が main queue へ配送する
 
 ### コールバックを Swift 6 で扱う
 

@@ -1689,7 +1689,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.debug(type: .peerChannel, message: "redirect: invalidated rpcChannel")
       }
       // 旧 MediaStream を終端して解放する。
-      // (旧 PeerConnection が送出する映像・音声フレームが新しい接続へ混入するのを防ぐ)
+      // (旧 PeerConnection が送出する映像・音声フレームが新しい接続へ混入するのを防ぐ。
+      //  terminate() が何を止めるかは切断経路のコメントを参照)
       for stream in streams {
         stream.terminate()
       }
@@ -1831,6 +1832,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       audioDevice.terminateDevice()
     }
 
+    // stream の owner を無効化する。以降に到着したフレームは VideoFilter と RTCVideoSource へ
+    // 渡らず、 renderer の frame / size / switch も配送されない。 renderer の onDisconnect は
+    // main queue へ非同期に配送される。
     for stream in streams {
       stream.terminate()
     }

@@ -12,6 +12,9 @@ public enum VideoFrame {
 
   /// ネイティブの映像フレーム。
   /// `CMSampleBuffer` から生成した映像フレームは、ネイティブの映像フレームに変換されます。
+  ///
+  /// `capturer` は SDK 内部で `VideoFilter` の入力と `RTCVideoSource.capturer(_:didCapture:)` への
+  /// 引数として使われます。SDK は `RTCVideoCapturer` の `delegate` を読みません。
   case native(capturer: RTCVideoCapturer?, frame: RTCVideoFrame)
 
   // MARK: - プロパティ

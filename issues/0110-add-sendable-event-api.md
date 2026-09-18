@@ -38,7 +38,8 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 - `0100` (完了 2026-09-08): PeerChannel の接続状態フラグの reducer と state snapshot
 - `0101` (完了 2026-09-15): signaling event の ordered ingress
 - `0102` (完了 2026-09-16): mutable handler bag と設定 snapshot の分離
-- `0105` (open): stream frame event の順序保証
+- `0105` (open): stream frame event の順序保証 (ingress の整理と renderer callback の main queue 配送)
+- `0163` (open): `videoEnabled` / `audioEnabled` の変更の operation 単位の直列化 (stream の有効フラグ event の入力源)
 - `0107` (open): 外部 consumer fixture
 
 接続イベントの ordered ingress は、`0010` の `connectionLifecycleLock` (MediaChannel の接続ライフサイクル)、`0100` の `ConnectionStateOwner` (PeerChannel の接続状態フラグ)、`0101` の `SignalingStateOwner` (signaling の phase / URL と delegate callback) が分担する。新 event API の ordered event stream は、この現行実装を入力源とする。
@@ -77,7 +78,7 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 
 - `0035` で追加される audio session event は、raw `RTCAudioSession` を新 Sendable event payload に含めない。
 - `0126` の切断クリーンアップ完了保証とタイムアウトは、接続終了 event の順序と exactly-once 契約へ統合できる構造にする。`onDisconnect` はクリーンアップ完了後に発火する状態が `0010` で実装済みであり、新 event API の接続終了 event はこのタイミングと 1 回性を前提とする (旧 `0047` は対応不要として closed 済み)。
-- `0154` が扱う `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` の closure property の排他と、`0162` が扱う `Configuration.mediaChannelHandlers` の接続間共有は、legacy handler の互換配送と接続ごとの購読に影響するため、実装順序を整合させる。
+- `0154` が扱う `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` の closure property の排他と、`0162` が扱う `Configuration.mediaChannelHandlers` の接続間共有は、legacy handler の互換配送と接続ごとの購読に影響するため、実装順序を整合させる。
 - `0027` の renderer event は MainActor 専用経路として一般 event stream と分離する。
 
 ## スコープ外

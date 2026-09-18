@@ -87,28 +87,11 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       return videoFrame
     }
   }
-  // テストで共通利用するシグナリング URL を返す
-  private func makeTestURL() -> URL {
-    guard let url = URL(string: "wss://example.com") else {
-      fatalError("テスト URL の生成に失敗しました")
-    }
-    return url
-  }
-
-  // テスト用の Configuration を構築する
-  private func makeConfiguration() -> Configuration {
-    let url = makeTestURL()
-    return Configuration(
-      urlCandidates: [url],
-      channelId: "test",
-      role: .sendonly)
-  }
-
   // ScreenCaptureController と MediaChannel を構築する
   private func makeScreenCaptureController() throws -> (
     controller: ScreenCaptureController, mediaChannel: MediaChannel
   ) {
-    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
     let controller = ScreenCaptureController(mediaChannel: mediaChannel)
     return (controller, mediaChannel)
   }
@@ -130,21 +113,6 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
   // CMTime は value / timescale の組み合わせで表されるため、値の比較ではなく CMTimeCompare で判定する。
   private func timeEquals(_ lhs: CMTime, _ rhs: CMTime) -> Bool {
     CMTimeCompare(lhs, rhs) == 0
-  }
-
-  // テストで共通利用する、映像トラックと video source を持つ sender stream を構築する
-  //
-  // makeSenderStream() が使う createNativeStream は video track を作らないため
-  // nativeVideoSource が nil になり、BasicMediaStream.send(videoFrame:) が
-  // videoFilter を呼んだ後に WebRTC の video source へ frame を渡せない。
-  private func makeSenderStreamWithVideoTrack(mediaChannel: MediaChannel) -> MediaStream {
-    let nativeFactory = mediaChannel.peerChannel.nativePeerChannelFactory
-    let nativeStream = nativeFactory.createNativeSenderStream(
-      streamId: "test-stream",
-      videoTrackId: "test-video-track",
-      audioTrackId: nil,
-      constraints: MediaConstraints())
-    return BasicMediaStream(peerChannel: mediaChannel.peerChannel, nativeStream: nativeStream)
   }
 
   // テストで共通利用する実 CMSampleBuffer を生成する
@@ -404,7 +372,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     weak var weakMediaChannel: MediaChannel?
 
     do {
-      let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+      let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
       weakMediaChannel = mediaChannel
       let createdController = mediaChannel.getOrCreateScreenCaptureController()
       let senderStream = makeSenderStream(mediaChannel: mediaChannel)
@@ -522,7 +490,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     }
     await gate.waitUntilBlocked()
 
-    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
     let controller = ScreenCaptureController(
       mediaChannel: mediaChannel,
       recorderCoordinator: coordinator)
@@ -556,7 +524,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     }
     await gate.waitUntilBlocked()
 
-    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
     let controller = mediaChannel.getOrCreateScreenCaptureController(
       recorderCoordinator: coordinator)
     let senderStream = makeSenderStream(mediaChannel: mediaChannel)
@@ -645,7 +613,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: firstSampleBuffer,
       presentationTimestamp: presentationTimestamp)
     XCTAssertTrue(firstEnqueued, "最初の frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "最初の frame は VideoFilter へ到達すること")
     XCTAssertEqual(transformerCallCount, 1, "最初の frame では transformer が 1 回呼ばれること")
 
@@ -660,7 +628,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: secondSampleBuffer,
       presentationTimestamp: presentationTimestamp)
     XCTAssertFalse(secondEnqueued, "間引き対象の frame は enqueue されないこと")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "間引き対象の frame は VideoFilter へ到達しないこと")
     XCTAssertEqual(transformerCallCount, 1, "間引き対象の frame では transformer が呼ばれないこと")
   }
@@ -693,7 +661,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     XCTAssertFalse(droppedEnqueued, "送信中の frame は enqueue されないこと")
 
     // 保持していた flight を返却すると、次の frame は enqueue できる
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     controller.tryAcquireSendFlightRelease()
 
     let nextTimestamp = CMTime(value: 2, timescale: 1)
@@ -705,7 +673,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: nextSampleBuffer,
       presentationTimestamp: nextTimestamp)
     XCTAssertTrue(nextEnqueued, "flight の返却後の frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "flight の返却後の frame は VideoFilter へ到達すること")
   }
 
@@ -735,6 +703,8 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     // transformer 未設定でも frame は破棄されず、送信 timestamp も記録される
     XCTAssertTrue(
       controller.performSend(ownedFrame: ownedFrame), "frame を送信できること")
+    // frame の処理は owner queue 上で行われるため、 VideoFilter を assert する前に drain する
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "transformer 未設定の frame は VideoFilter へ到達すること")
     XCTAssertEqual(
       controller.lastSentVideoPresentationTimestampForTesting,
@@ -780,6 +750,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       "image buffer を持たない sample buffer は VideoFrame に変換できないこと")
 
     XCTAssertTrue(controller.performSend(ownedFrame: ownedFrame), "処理自体は完了すること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 0, "変換に失敗した frame は送信されないこと")
     XCTAssertNil(
       controller.lastSentVideoPresentationTimestampForTesting,
@@ -804,6 +775,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     XCTAssertTrue(
       controller.performSend(ownedFrame: validOwnedFrame),
       "変換失敗の後の frame を送信できること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "変換失敗の後の frame は VideoFilter へ到達すること")
   }
 
@@ -845,6 +817,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     // 送信される frame は transformer が返した buffer から生成される
     XCTAssertTrue(
       controller.performSend(ownedFrame: ownedFrame), "frame を送信できること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(transformerCallCount, 1, "payload の transformer が呼ばれること")
     XCTAssertEqual(filter.count, 1, "transformer が返した frame は VideoFilter へ到達すること")
 
@@ -903,6 +876,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     XCTAssertTrue(
       controller.performSend(ownedFrame: droppedOwnedFrame),
       "処理自体は完了すること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 0, "drop された frame は送信されないこと")
     XCTAssertNil(
       controller.lastSentVideoPresentationTimestampForTesting,
@@ -927,6 +901,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     XCTAssertTrue(
       controller.performSend(ownedFrame: nextOwnedFrame),
       "次の frame を送信できること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "drop の後の frame は VideoFilter へ到達すること")
   }
 
@@ -976,6 +951,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     // 旧世代 (capture A) の frame は送信されない
     XCTAssertTrue(
       controller.performSend(ownedFrame: staleFrame), "処理自体は完了すること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 0, "旧世代の frame は VideoFilter へ到達しないこと")
     XCTAssertNil(
       controller.lastSentVideoPresentationTimestampForTesting,
@@ -985,6 +961,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     XCTAssertTrue(
       controller.performSend(ownedFrame: currentFrame),
       "現行世代の frame を送信できること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "現行世代の frame は VideoFilter へ到達すること")
     XCTAssertEqual(
       controller.lastSentVideoPresentationTimestampForTesting,
@@ -1044,6 +1021,9 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
 
     XCTAssertTrue(controller.tryAcquireSendFlight(), "テスト用に flight を取得できること")
     controller.processOwnedFrame(ownedFrame)
+    // send は非同期のため、filter へ到達しないことを「まだ処理されていないだけ」で
+    // 通さないように owner queue まで drain してから assert する
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(transformerCallCount, 0, "未接続の frame では transformer が実行されないこと")
     XCTAssertEqual(filter.count, 0, "未接続の frame は VideoFilter へ到達しないこと")
     XCTAssertNil(
@@ -1084,13 +1064,13 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: firstSampleBuffer,
       presentationTimestamp: firstTimestamp)
     XCTAssertTrue(firstEnqueued, "最初の frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
 
     let secondEnqueued = controller.enqueueOwnedFrame(
       sampleBuffer: secondSampleBuffer,
       presentationTimestamp: secondTimestamp)
     XCTAssertTrue(secondEnqueued, "間隔の空いた frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
 
     XCTAssertEqual(transformerCallCount, 2, "送信対象の frame では transformer が実行されること")
     XCTAssertEqual(filter.count, 2, "送信対象の frame は VideoFilter へ到達すること")
@@ -1120,6 +1100,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       return
     }
     XCTAssertTrue(controller.performSend(ownedFrame: firstOwnedFrame), "最初の frame を送信できること")
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
 
     // PTS が無効な frame は単調時刻のフォールバックで判定され、直後は破棄される
     XCTAssertFalse(
@@ -1136,7 +1117,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
   /// 送信経路が permit を二重に返却しないことを確認する
   ///
   /// `enqueueOwnedFrame` が取得した permit は `processOwnedFrame` の `defer` が 1 回だけ返却する。
-  /// `drainSendVideoFrameQueue()` は queue の処理完了を待つだけで permit を消費しないため、
+  /// 送信キューと owner queue を drain しても permit は消費されないため、
   /// drain の直後に存在する permit は 1 つだけである。二重 signal があると permit が 2 つになり、
   /// 続けて 2 回取得できてしまい単発 flight の契約が壊れる。
   func testSendFlightIsNotDoublyReleasedAfterSend() throws {
@@ -1155,7 +1136,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: firstSampleBuffer,
       presentationTimestamp: firstTimestamp)
     XCTAssertTrue(firstEnqueued, "最初の frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 1, "送信された frame は VideoFilter へ到達すること")
 
     // permit は 1 つだけ存在するため、2 回目の取得は失敗する
@@ -1175,7 +1156,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: secondSampleBuffer,
       presentationTimestamp: secondTimestamp)
     XCTAssertTrue(secondEnqueued, "2 件目の frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 2, "2 件目の frame も VideoFilter へ到達すること")
     XCTAssertTrue(controller.tryAcquireSendFlight(), "2 件目の後も permit は 1 つだけ存在すること")
     XCTAssertFalse(
@@ -1206,7 +1187,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: sampleBuffer,
       presentationTimestamp: presentationTimestamp)
     XCTAssertTrue(firstEnqueued, "最初の frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
 
     // 同じ PTS の frame は間引きで破棄され、permit を取得しない
     guard let rejectedSampleBuffer = makeSampleBuffer(presentationTimestamp: presentationTimestamp)
@@ -1229,7 +1210,7 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
       sampleBuffer: nextSampleBuffer,
       presentationTimestamp: nextTimestamp)
     XCTAssertTrue(nextEnqueued, "破棄の後の frame は enqueue されること")
-    controller.drainSendVideoFrameQueue()
+    drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
     XCTAssertEqual(filter.count, 2, "破棄の後に送信された frame は VideoFilter へ到達すること")
   }
 }

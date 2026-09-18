@@ -11,6 +11,10 @@ public struct ScreenCaptureSettings {
   /// 既定値は `15` です。
   ///
   /// フレーム送信間隔は PTS に依存して変動します。
+  ///
+  /// 間引きの判定は SDK 内部の送信キュー上で行います。間引かれなかった frame が SDK 内部の
+  /// 滞留上限で破棄された場合も、送信記録は内部の受理直前に行われるため、間引きの基準としては
+  /// 残ります。
   public var targetFPS: Int
 
   /// 映像フレーム送信前に `CMSampleBuffer` を加工するためのクロージャーです。
@@ -26,6 +30,10 @@ public struct ScreenCaptureSettings {
   /// 戻り値の buffer が保持する pixel buffer は SDK が送信のために retain するため、
   /// 利用側で解放や再利用の同期を行う必要はありません。戻り値を返した後にその buffer を
   /// 書き換えないでください (送信中のフレームが変更されると映像が壊れます)。
+  ///
+  /// `MediaStream.send(videoFrame:)` の ingress はこのクロージャーの後に実行されます。
+  /// 以降の処理 (`VideoFilter` の実行と `RTCVideoSource` への配送) は frame ごとの直列
+  /// executor 上で行われます。
   public var videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
 
   /// 画面キャプチャ実行中に発生したエラー通知コールバックです。
@@ -167,7 +175,9 @@ final class ScreenCaptureController: @unchecked Sendable {
   ///   参照カウントの増減は Core Foundation が排他する。
   /// - 値を保持する `ScreenCaptureOwnedFrame` は生成側 (ReplayKit callback の executor) から
   ///   消費側 (`sendVideoFrameQueue`) へ所有権ごと移動し、移動後は生成側が値を参照しない。
-  ///   移動は 1 回だけで、複数の executor が同じ値を同時に読まない。
+  ///   さらに `MediaStream.send(videoFrame:retaining:)` が owner queue へ所有権ごと渡し、
+  ///   `StreamOwnedFrame.retainedBacking` が配送完了まで保持する。各移動は単一の所有者が行い、
+  ///   複数の executor が同じ値を同時に読まない。
   ///
   /// `CMSampleBufferCreateCopy` は image buffer (画素データ) を共有するため、この型が保証するのは
   /// `CMSampleBuffer` オブジェクトの所有権だけであり、画素データの不変性は保証しません。
@@ -199,7 +209,8 @@ final class ScreenCaptureController: @unchecked Sendable {
   /// `CaptureContext` を escaping closure へ持ち込みません。
   ///
   /// `@unchecked Sendable` の根拠は `ScreenCaptureOwnedSampleBuffer` と同じ 2 点です。
-  /// この値は生成側から送信キューへ 1 回だけ移動し、移動後は生成側が参照しません。
+  /// この値は生成側から送信キューへ、さらに `StreamOwnedFrame.retainedBacking` として owner queue へ
+  /// 2 回移動し、各移動の移譲元は以後この値を参照しません。
   struct ScreenCaptureOwnedFrame: @unchecked Sendable {
     /// この frame を取得した時点の capture ID です。
     /// 停止・再開始の競合で旧 capture のフレームを送信しないために使用します。
@@ -676,6 +687,12 @@ final class ScreenCaptureController: @unchecked Sendable {
   /// `performSend`) が取得済みであることを前提とします。signal はこのメソッドの `defer` で
   /// 1 回だけ行います。
   ///
+  /// このメソッドは frame を `MediaStream.send(videoFrame:)` の ingress へ投入して戻ります。
+  /// 画素データの所有権は ingress の payload が配送完了まで保持するため、このメソッドの
+  /// 戻り値の後で frame を参照・変更しません。したがって flight permit の返却 (このメソッドの
+  /// `defer`) は ingress への投入時点で行われ、後段の滞留は `StreamFrameOwner` の
+  /// `maxPendingFrameCount` で制限されます。
+  ///
   /// 接続状態の確認は `mediaChannelConnectionRequired` で制御します。本番の queue closure は
   /// この値が `true` のまま実行し、テストは `performSend` または
   /// `setMediaChannelConnectionRequiredForTesting(_:)` で無効化します。
@@ -724,7 +741,21 @@ final class ScreenCaptureController: @unchecked Sendable {
     // 送信直前のみ PTS / uptime を記録する (ID 照合を通過しなかった stale frame の破棄で
     // throttle 状態を汚染しない)
     markVideoFrameSent(presentationTimestamp: ownedFrame.presentationTimestamp)
-    senderStream.send(videoFrame: videoFrame)
+    // ingress へ画素データの所有者ごと渡します。owner が配送完了まで保持するため、
+    // この frame を send の後で参照・変更しないという契約を満たせばよくなります。
+    if let basicStream = senderStream as? BasicMediaStream {
+      basicStream.send(videoFrame: videoFrame, retaining: ownedFrame)
+    } else {
+      // BasicMediaStream 以外の実装では所有者を渡せないため、public な send へ戻ります。
+      // この経路では frame ごとの所有者の保持 (retainedBacking) は行われません。SDK 内の送信
+      // stream は BasicMediaStream だけなので通常は到達せず、到達した場合は画素データの
+      // 所有者を配送完了まで保てないため不具合として扱います。
+      Logger.debug(
+        type: .mediaChannel,
+        message:
+          "screen capture sender stream is not BasicMediaStream; frame ownership is not retained")
+      senderStream.send(videoFrame: videoFrame)
+    }
   }
 
   /// flight を取得してから `processOwnedFrame` を実行します。テスト専用の seam です。

@@ -155,11 +155,25 @@ public class VideoView: UIView {
   }
 
   /// 映像フレームの描画を開始します。
+  ///
+  /// renderer callback は main queue から呼ばれるため、main queue 上で呼ばれた場合は
+  /// `isRendering` を同期で `true` にします。`DispatchQueue.main.async` を 1 hop 挟むと、
+  /// `onAdded` の直後に配送された frame が `isRendering == false` で破棄されます。
+  /// `bringSubviewToFront` は現行どおり main queue へ非同期に投入します。
   public func start() {
     if !isRendering {
-      DispatchQueue.main.async {
-        self.bringSubviewToFront(self.contentView)
-        self.isRendering = true
+      if Thread.isMainThread {
+        // VideoView は UIView 継承による暗黙の @MainActor 隔離で、VideoRenderer 準拠は
+        // @preconcurrency のため、main queue 上では代入だけを同期で行えます。
+        isRendering = true
+        DispatchQueue.main.async {
+          self.bringSubviewToFront(self.contentView)
+        }
+      } else {
+        DispatchQueue.main.async {
+          self.bringSubviewToFront(self.contentView)
+          self.isRendering = true
+        }
       }
     }
   }

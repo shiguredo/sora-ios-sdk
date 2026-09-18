@@ -6,11 +6,11 @@
 - Model: Opus 4.8
 - Branch: feature/refactor-videorenderer-mainactor-migration
 - Polished: 2026-09-02
-- Updated: 2026-08-27
+- Updated: 2026-09-17
 
 ## 目的
 
-Swift 6 の `sending` チェックにより、`VideoRendererAdapter` で `DispatchQueue.main.async` に `renderer` / `frame` を直接キャプチャするとビルドエラーになる。現在は受け渡し専用イベント型を `@unchecked Sendable` で扱う暫定対応で回避している。
+Swift 6 の `sending` チェックにより、`VideoRendererAdapter` で `DispatchQueue.main.async` に `renderer` / `frame` を直接キャプチャするとビルドエラーになる。`0105` は受け渡し専用イベント型を使わず、owner queue → main queue の 2 段の非同期配送でこの制約を満たしたが、protocol が `@MainActor` を持たないため隔離は型では保証されない。
 
 公開 API の互換性を維持したまま、UI 描画用の `@MainActor` renderer protocol と専用登録 API を追加し、`VideoView` を新しい経路へ移行する。全 renderer callback を同じ順序付き配送経路へ集約し、MainActor への最終配送を型と実行経路で保証する。
 
@@ -23,11 +23,9 @@ Swift 6 の `sending` チェックにより、`VideoRendererAdapter` で `Dispat
 
 `Sora/VideoRenderer.swift` の公開 protocol `VideoRenderer` には `@MainActor` が付与されていない。これに直接 `@MainActor` を付与すると既存実装者の公開 API を破壊する。
 
-Swift 6 の `sending` エラーを回避するため、`VideoRendererSizeEvent` と `VideoRendererFrameEvent` を `@unchecked Sendable` として定義している。いずれも `weak var renderer: VideoRenderer?` を保持するため型として Sendable にできず、同時アクセスが起きない前提に依存している。
+Swift 6 の `sending` エラーを回避するために定義していた `VideoRendererSizeEvent` と `VideoRendererFrameEvent` は `0105` が削除した。`VideoRendererAdapter.setSize(_:)` と `renderFrame(_:)` は `StreamFrameOwner` の owner queue へ非同期に投入し、owner queue が順序を決めて main queue へ配送する。unchecked な event box は残っていない。
 
-`VideoRendererAdapter.setSize(_:)` と `VideoRendererAdapter.renderFrame(_:)` は上記イベント型を生成し、`DispatchQueue.main.async` で main thread へ受け渡している。
-
-一方、`Sora/MediaStream.swift` の `BasicMediaStream` は、`onAdded(from:)`、`onRemoved(from:)`、`onSwitch(video:)`、`onSwitch(audio:)`、`onDisconnect(from:)` を `VideoRendererAdapter` を経由せず、呼び出し元の executor 上で直接呼んでいる。size / frame だけを MainActor へ移しても、全 callback の隔離は成立しない。
+一方、`Sora/MediaStream.swift` の `BasicMediaStream` は、`0105` 以降 `VideoRendererAdapter` と同じ owner queue 経由で `onAdded(from:)`、`onRemoved(from:)`、`onSwitch(video:)`、`onSwitch(audio:)`、`onDisconnect(from:)` を main queue へ配送する。ただし protocol に `@MainActor` が無いため、これは実行時の取り決めであり型では保証されない。
 
 `Sora/VideoView.swift` の `VideoRenderer` 準拠は `@preconcurrency` のままであり、撤去 TODO も残っている。MainActor 型である `VideoView` が nonisolated な legacy protocol へ準拠し続ける間は、Swift 6.3 では `@preconcurrency` を単純に除去できない。
 
@@ -38,7 +36,7 @@ Swift 6 の `sending` エラーを回避するため、`VideoRendererSizeEvent` 
 ### 前提
 
 - `0107` の consumer fixture で legacy と新 API の source compatibility を固定する。
-- `0105` で frame ownership、stream epoch、sequence、全 renderer callback の ordered ingress を確立する。
+- `0105` で frame ownership、sequence、全 renderer callback の ordered ingress と main queue 配送が確立する。
 - `0060` の non-UI renderer 向け custom executor と、本 issue の UI 専用 MainActor 契約を分離する。
 
 ### 新しい UI renderer API
@@ -47,13 +45,14 @@ Swift 6 の `sending` エラーを回避するため、`VideoRendererSizeEvent` 
 - legacy `MediaStream.videoRenderer` は維持し、新 protocol 専用の MainActor-isolated な登録 API を追加する。
 - size、frame、add、remove、switch、disconnect の全 callback を同じ renderer delivery abstraction から配送する。
 - `BasicMediaStream` から利用者 renderer を直接呼ばない。
+- `VideoRendererAdapter` を `RTCVideoTrack` から除去する経路を追加する (`0105` の `terminate()` は adapter を native track から除去しないため、切断後も登録が残る)。
 
 ### payload と順序
 
 - `VideoFrame` 全体へ `@unchecked Sendable` を付与しない。
 - `0105` で lifetime と thread affinity を保証した owned frame または狭い internal handle だけを executor 境界へ渡す。
 - connection / stream の mutable reference が不要な新 callback は、Sendable な ID または immutable snapshot を利用する。
-- 1 event ごとに独立した unstructured Task を生成せず、sequence と epoch を保持する単一経路から MainActor へ配送する。
+- 1 event ごとに独立した unstructured Task を生成せず、sequence を保持する単一経路から MainActor へ配送する。
 - remove / disconnect 後の stale frame を破棄し、buffer 上限と drop 方針を定める。
 
 ### legacy compatibility
@@ -88,6 +87,7 @@ Swift 6 の `sending` エラーを回避するため、`VideoRendererSizeEvent` 
 - legacy `VideoRenderer` 準拠を残す場合だけ、`@preconcurrency` が compatibility boundary に限定されていること。
 - raw `VideoFrame`、`MediaStream`、`MediaChannel` を新たな unchecked box で executor 越境させていないこと。
 - callback の順序、buffer、drop、stale frame の契約が API documentation に記載されていること。
+- `VideoRendererAdapter` が切断後に `RTCVideoTrack` から除去されていること。
 - 既存の `VideoRenderer` 実装が破壊的変更なしでビルドできること。
 - strict concurrency と warnings-as-errors の build が成功すること。
 - `CHANGES.md` の `## develop` セクションに以下を追記すること:

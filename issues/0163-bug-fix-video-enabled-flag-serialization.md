@@ -29,13 +29,22 @@
 
 `setVideoHardMute` 系の操作相互の排他は `VideoHardMuteOperationTracker` (`Sora/VideoMute.swift`) が同一 lease の同時実行を拒否する形で実現しているが、`setVideoSoftMute` / 直接代入との排他は無い。
 
+## 前提となる issue
+
+- `0136` (完了): `setVideoHardMute(true)` の設定と復元を `VideoHardMuteActor` の executor へ移し、`onSwitchVideo` の発火回数と順序を確定した。
+- `0105` (open): frame の処理順序と executor (ingress の直列化と renderer callback の main queue 配送)。本 issue は frame を扱わず、確定値の直列化だけを扱う。
+
+実装順序の依存:
+
+- `0105` と本 issue はどちらも `Sora/MediaStream.swift` の `videoEnabled` / `audioEnabled` setter を変更する。`0105` は setter から `videoRenderer?.onSwitch` を直接呼ぶ経路を `StreamFrameOwner` への委譲に変え、本 issue は setter に operation の世代による確定を入れるため、どちらかを先行させ、もう一方を rebase して実装する (順序は固定しない)。
+
 ## 設計方針
 
 - 直列化の単位は「公開 API の呼び出し 1 回」を 1 operation とし、operation の順序は stream ごとの単一の線形順で確定する。書き込み 1 回ではなく operation を単位とするのは、`setVideoHardMute(true)` の設定と失敗時の復元を同じ operation に含めるためである。
 - operation の識別に世代 (`operationGeneration`) を使う。stream ごとの lock 付き storage が世代と確定値を保持し、operation は開始時に世代を取得する。書き込みと復元は「自分の世代が最新である場合だけ」確定する (compare-and-set)。後続の operation が開始していた場合は、前の operation の復元を破棄して後続の値を保つ。
 - `videoEnabled` / `audioEnabled` の実体値を SDK 側の lock 付き storage に持つ。getter は storage の値を返し、native track への `isEnabled` の反映は operation の確定時に行う。同期 API は現在どおり「呼び出しが戻った時点で値が確定している」契約を維持する。
 - `await` をまたぐ `setVideoHardMute(true)` は、カメラ停止の待機中に他の operation が確定しても、復元の書き込みを自分の世代で判定して破棄する。operation の実行中に他の operation を拒否するのではなく、確定値を世代で調停する方式とし、同期 API の呼び出しを待たせない。
-- `MediaStreamHandlers.onSwitchVideo` / `onSwitchAudio` と `videoRenderer` の `onSwitch` は、値が実際に変化した operation の executor で 1 回だけ呼ぶ。`0136` が確定した「`setVideoHardMute(true)` の経路では `VideoHardMuteActor` の executor で発火する」という契約と、復元時の発火回数・順序を維持する。
+- `MediaStreamHandlers.onSwitchVideo` / `onSwitchAudio` は、値が実際に変化した operation の executor で 1 回だけ呼ぶ。`0136` が確定した「`setVideoHardMute(true)` の経路では `VideoHardMuteActor` の executor で発火する」という契約と、復元時の発火回数・順序を維持する。`videoRenderer` の `onSwitch` は `0105` が main queue へ配送するため、値が変化した operation ごとに 1 回配送されるが実行 executor は handler と異なり、両者の相対順序は保証しない。
 - frame の ingress executor は `0105` が扱う。本 issue は frame の順序や `VideoFilter` の実行を変更しない。
 - `MediaStream` の公開 protocol と `videoEnabled` / `audioEnabled` の同期 setter は変更しない。
 
@@ -43,7 +52,7 @@
 
 - 同一 stream の `videoEnabled` を `setVideoSoftMute` / `setVideoHardMute` / 直接代入から並行に変更しても、線形順で最後に確定した operation の値が `videoEnabled` の getter と native track の `isEnabled` の両方で最終値になること。
 - `setVideoHardMute(true)` の失敗時に、後続の operation が既に確定している場合は復元の書き込みが後続の値を上書きせず、後続の operation が無い場合は呼び出し前の値へ復元されること。
-- 値が変化しない operation では `onSwitchVideo` / `onSwitchAudio` / `videoRenderer.onSwitch` が呼ばれず、変化した operation では operation ごとに 1 回だけ呼ばれること。
+- 値が変化しない operation では `onSwitchVideo` / `onSwitchAudio` / `videoRenderer.onSwitch` が呼ばれず、変化した operation では operation ごとに 1 回だけ呼ばれること。`videoRenderer.onSwitch` の配送 executor は main queue であり、handler と相対順序を持たないこと。
 - `MediaChannel.setVideoHardMute` の doc の「並行する `setVideoSoftMute` や `MediaStream.videoEnabled` への直接代入とは排他されません」という記述が、保証内容に合わせて更新されていること。
 - `CHANGES.md` の `## develop` に `[FIX]` の追記があること。
 - 追加したテストと既存テストがすべて成功すること。
