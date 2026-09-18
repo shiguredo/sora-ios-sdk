@@ -58,6 +58,12 @@
   - 切断時に `RTCVideoSource` へ配送中のフレームが最大 1 つ残ることを許容する (無効化は配送中の処理と同期しないため、そのフレームは切断と並行して配送される)
   - ストリームをまたぐ renderer callback の順序は保証しない
   - @t-miya
+- [UPDATE] Logger の共有可変状態を同期する
+  - `Logger.shared` / `level` / `groups` / `onOutputHandler` の読み書きを lock で保護する
+  - 並行に設定を変更した場合に、1 回の出力が異なる時点の設定を混ぜて観測しなくなる
+  - `Logger` の `@unchecked Sendable` を checked な `Sendable` へ置き換える
+  - 公開名・型・シグネチャと、単一 executor からの利用時の挙動は変わらない (`level` / `groups` / `onOutputHandler` は computed property になるが、読み書きの利用はソース互換である)
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya

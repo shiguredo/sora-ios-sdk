@@ -525,11 +525,11 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
   - 接続と切断: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent`
   - 音声: `AudioMode` / `AudioOutput`
   - カメラ: `CameraSettings` / `CameraSettings.Resolution` / `CameraVideoCapturer`
-  - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group`
+  - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group` / `Logger`
   - 映像表示: `VideoViewConnectionMode`
   - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
   - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
-- `@unchecked Sendable`: `Sora` / `Logger`
+- `@unchecked Sendable`: `Sora`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
 
 `SoraCloseEvent` は `Sendable` だが、`SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない。標準ライブラリの `Error: Sendable` に依存するため、可変状態を持つ `Error` を載せた値を actor 境界へ渡す場合は利用側で注意する。
@@ -545,6 +545,8 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 - `RTCAudioTrackSink.onData` は libwebrtc の音声処理スレッド (10 ms ごと)
 - `CameraVideoCapturer.handlers.onCapture` はカメラキャプチャスレッド
 - `VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) はすべて SDK が main queue へ配送する
+- `Logger.onOutputHandler` はログを出力した executor で同期的に呼ばれる (queue への hop は行わない)。複数の executor から並行に呼ばれ得るため、handler 側の排他は利用者の責任になる。handler の中から Logger の設定変更と再出力ができるが、同じログを再出力すると無限再帰になるため、再入の制御は利用者の責任になる
+- `Logger` の設定 (`level` / `groups` / `onOutputHandler`) と `Sora.logLevel` は SDK 内部の lock で保護され、任意の executor から読み書きできる。`@MainActor` のクラスの中で `onOutputHandler` を設定する場合は、closure が MainActor 隔離を継承するため隔離を外す必要がある (下の「コールバックを Swift 6 で扱う」を参照)
 
 ### コールバックを Swift 6 で扱う
 
@@ -597,7 +599,6 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 次の静的プロパティは `nonisolated(unsafe)` であり、コンパイラによるスレッド安全の検証対象外となる。同時に読み書きしない前提で利用する。
 
 - `DeviceInfo.current`
-- `Logger.shared` / `Sora.logLevel`
 
 カメラ操作 (`start` / `stop` / `restart` / `change` / `flip`) は SDK 内部で直列化される。`CameraVideoCapturer` の状態 (`current` / `isRunning` / `format` / `frameRate` / `stream`) は内部の owner が、`device` は instance の lock 付き storage が、`handlers` は型全体で共有する lock 付き storage が `NSLock` で保護して公開しており、`CameraVideoCapturer` は `Sendable` に準拠する。`CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しないため、利用者が `MediaStream` を保持する必要がある。
 
