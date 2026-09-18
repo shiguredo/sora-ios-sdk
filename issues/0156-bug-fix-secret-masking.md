@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-secret-masking
-- Polished:
+- Polished: 2026-09-18
 
 ## 目的
 
