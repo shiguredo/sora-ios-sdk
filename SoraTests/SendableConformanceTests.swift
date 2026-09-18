@@ -49,7 +49,7 @@ private func assertCrossesBoundaries<Value: Sendable>(
 }
 
 final class SendableConformanceTests: XCTestCase {
-  /// 公開型 (`CameraVideoCapturer` は class) が `Sendable` に準拠していることをコンパイル時に表明する。
+  /// 公開型 (`CameraVideoCapturer` / `Logger` は class) が `Sendable` に準拠していることをコンパイル時に表明する。
   ///
   /// 準拠が欠けた型を 1 つでも渡すとこのテストはコンパイルできない。
   func testPublicTypesConformToSendable() {
@@ -73,6 +73,7 @@ final class SendableConformanceTests: XCTestCase {
     requireSendable(LogLevel.self)
     requireSendable(Log.self)
     requireSendable(Logger.Group.self)
+    requireSendable(Logger.self)
 
     // 映像表示
     requireSendable(VideoViewConnectionMode.self)
