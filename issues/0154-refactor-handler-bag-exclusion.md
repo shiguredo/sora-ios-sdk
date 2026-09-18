@@ -1,4 +1,4 @@
-# MediaChannel と WebSocketChannel と CameraVideoCapturer の handler bag の読み書きを排他する
+# MediaChannel と WebSocketChannel と CameraVideoCapturer と MediaStream の handler bag の読み書きを排他する
 
 - Created: 2026-09-15
 - Completed:
@@ -8,21 +8,21 @@
 
 ## 目的
 
-`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` の closure property は `var` を持つ class であり、利用者スレッドの書き込みと配送スレッドの読み込みが排他されていない。データ競合をなくし、Swift 6 の並行性要件と実行時の安全性を満たす。
+`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` の closure property は `var` を持つ class であり、利用者スレッドの書き込みと配送スレッドの読み込みが排他されていない。データ競合をなくし、Swift 6 の並行性要件と実行時の安全性を満たす。
 
 ## 現状
 
-`Sora/MediaChannel.swift` の `MediaChannelHandlers` / `Sora/WebSocketChannel.swift` の `WebSocketChannelHandlers` は `public final class`、`Sora/CameraVideoCapturer.swift` の `CameraVideoCapturerHandlers` は非 `final` の `public class` で、いずれも closure property を `var` として公開している。
+`Sora/MediaChannel.swift` の `MediaChannelHandlers` / `Sora/WebSocketChannel.swift` の `WebSocketChannelHandlers` は `public final class`、`Sora/CameraVideoCapturer.swift` の `CameraVideoCapturerHandlers` は非 `final` の `public class`、`Sora/MediaStream.swift` の `MediaStreamHandlers` は `public final class` で、いずれも closure property を `var` として公開している。
 
 `MediaChannel.handlers` は `public var` で、`MediaChannel.init` が `Configuration.mediaChannelHandlers` の参照をそのまま代入する。`SignalingChannel` も `Configuration.webSocketChannelHandlers` の参照を `ws.handlers` へ代入する。
 
-配送は `MediaChannel.swift` の `handlers.onXxx?`、`DataChannel.swift` の `mediaChannel.handlers.onDataChannelMessage`、`URLSessionWebSocketChannel.swift` の `handlers.onReceive` で、いずれも配送時に bag を読む。利用者は接続成功後に `mediaChannel.handlers.onDisconnect` などを設定する。
+配送は `MediaChannel.swift` の `handlers.onXxx?`、`DataChannel.swift` の `mediaChannel.handlers.onDataChannelMessage`、`URLSessionWebSocketChannel.swift` の `handlers.onReceive`、`MediaStream.swift` の `handlers.onSwitchVideo` / `onSwitchAudio` で、いずれも配送時に bag を読む。利用者は接続成功後に `mediaChannel.handlers.onDisconnect` などを設定する。
 
-`0110` は handler の `@Sendable` 化と Sendable event API を、`0111` は `SoraHandlers` の同期を対象としており、`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` の closure 排他はどちらの対象でもない。`CameraVideoCapturerHandlers` は `0103` が `CameraVideoCapturer.handlers` を lock 付きアクセサにした際に、closure property 自体の排他を本 issue へ委ねている。
+`0110` は handler の `@Sendable` 化と Sendable event API を、`0111` は `SoraHandlers` の同期を対象としており、`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` の closure 排他はどちらの対象でもない。`CameraVideoCapturerHandlers` は `0103` が `CameraVideoCapturer.handlers` を lock 付きアクセサにした際に、closure property 自体の排他を本 issue へ委ねている。`MediaStreamHandlers` は `0105` が frame の ingress と renderer 配送だけを扱い、closure property の読み書き排他を本 issue へ委ねている。
 
 ## 設計方針
 
-- `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` の closure property の get / set を `NSLock` で排他する。公開シグネチャと配送セマンティクス (接続途中の設定が次の配送から反映される) を維持する。
+- `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` の closure property の get / set を `NSLock` で排他する。公開シグネチャと配送セマンティクス (接続途中の設定が次の配送から反映される) を維持する。
 - 配送側は lock の外で取得値 (closure のコピー) を呼ぶ。lock 保持中に呼ぶと、callback から別の handler を設定したときに deadlock するためである。
 - `MediaChannel.handlers` の参照自体も lock 付きアクセサにし、bag の差し替えと配送の競合をなくす。
 - `MediaChannel.internalHandlers` / `PeerChannel.internalHandlers` / `SignalingChannelInternalHandlers` は接続処理の同期区間で設定され (`SignalingChannelInternalHandlers.onDisconnect` は `PeerChannel.init` と `MediaChannel.connect` の 2 箇所で設定され後者が上書きする)、接続開始以降に書き換える経路が無いため対象外とする。
@@ -33,11 +33,12 @@
 
 - `0102` (完了): handler bag を設定 snapshot から分離する。
 - `0103` (完了): カメラ状態の所有者を単一化する。`CameraVideoCapturerHandlers` の closure 排他を本 issue へ委ねている。
+- `0105` (open): frame の ingress と renderer 配送を整理し、`MediaStreamHandlers` の closure property の読み書き排他を本 issue へ委ねている。
 - `0119`: Thread Sanitizer による実行時検証の基盤。
 
 ## 完了条件
 
-- `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` の handler property の読み書きが排他されていること。
+- `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` の handler property の読み書きが排他されていること。
 - 接続開始後に `MediaChannel.handlers` を変更した場合、次の配送から反映される既存挙動が維持されること。`E2ETestBase` の `disconnectAndVerify` / `disconnectAll` が無修正で成功することを回帰条件とする。
 - 公開 API のシグネチャと配送セマンティクスが変更されていないこと。
 - Thread Sanitizer を有効にした test で、handler の読み書きを並行させても race report が出ないこと。

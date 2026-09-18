@@ -17,6 +17,17 @@
 - 処理モジュールを差し替え可能な設計にし、利用者が独自のプロセッサーを実装・導入できるようにする
 - 時雨堂の `media-processors` が使う技術スタックを参考にする
 
+## 前提となる issue
+
+- `0105` の frame ingress (frame の受理、`VideoFilter` の実行 executor、上限超過の破棄、`terminate()` 後の破棄) が実装済みであること。
+- `0070` の WebRTC C xcframework 移行と整合させること。
+
+責務境界:
+
+- frame の受理順、実行 executor、上限超過の破棄は `0105` の ingress が担う。本 issue の processor は「受理された frame をどう加工するか」だけを担い、順序と drop の判断を processor へ委ねない (`0105` の `VideoFilter` と同じ位置付け)。
+- processor の drop 契約は「加工を完了できなかった frame をどうするか」であり、`0105` の滞留上限による破棄とは別の契約として定義する。
+- 新しい公開 API に raw WebRTC 型 (`RTCVideoFrame` / `RTCVideoSource` など) を出さない。`0070` と衝突するため、processor の入出力は SDK の型で表現する (`VideoFrame` を使うか processor 専用の値型を追加するかは本 issue で決める)。
+
 ## 対応内容
 
 ### SDK 側

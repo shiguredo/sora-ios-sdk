@@ -17,7 +17,10 @@ final class DummyVideoCapturer: @unchecked Sendable {
   /// 起動中かどうか
   private(set) var isRunning: Bool = false
 
-  /// 送信に成功したフレーム数
+  /// `MediaStream.send(videoFrame:)` の ingress へ投入したフレーム数
+  ///
+  /// 送信の完了 (映像フィルターの実行と `RTCVideoSource` への配送) を待った数ではない。
+  /// ingress は同期 API のため、この数は投入した時点で増える。
   private(set) var frameCount: Int = 0
 
   /// フレーム生成用の設定

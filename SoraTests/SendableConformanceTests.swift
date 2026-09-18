@@ -247,4 +247,12 @@ final class SendableConformanceTests: XCTestCase {
       JSONValue.object(["key": .string("value")]),
       message: "JSONValue が actor 境界を越えられない")
   }
+
+  /// `StreamFrameOwner` へ渡す frame payload が `Sendable` に準拠していることをコンパイル時に表明する。
+  ///
+  /// `requireSendable<T: Sendable>(_: T.Type)` は型引数を取るため実 frame を生成しない。
+  /// `@unchecked Sendable` を付与した根拠の妥当性は、型 doc のレビューで確認する。
+  func testStreamOwnedFrameConformsToSendable() {
+    requireSendable(StreamOwnedFrame.self)
+  }
 }

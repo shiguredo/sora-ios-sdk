@@ -43,6 +43,21 @@
   - `ScreenCaptureSettings.videoSampleBufferTransformer` が受け取る `CMSampleBuffer` は、ReplayKit が渡した buffer の浅いコピーになる。画素データは従来どおり共有され、`CMSampleBufferGetPresentationTimeStamp` などの読み取りも従来どおり動作する
   - `ScreenCaptureSettings.videoSampleBufferTransformer` と `MediaChannel.startScreenCapture` のドキュメントに、呼び出し executor と返却した sample buffer の所有契約を明記する
   - @t-miya
+- [UPDATE] MediaStream の映像フレーム処理 executor を単一化する
+  - 映像フレームの受理、`VideoFilter` の実行、`RTCVideoSource` への配送をストリームごとの直列 executor に集約する
+  - `VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) の配送 executor が main queue に統一される (これまでと異なるスレッドから呼ばれる場合がある)
+  - `MediaStream.videoRenderer` の setter は callback の配送完了を待たなくなる。別の instance へ交換した場合は以前の renderer に `onRemoved` が 1 回配送され、同じ instance の再設定と `nil` から `nil` への代入では何も配送しない
+  - `MediaStream.videoEnabled` / `audioEnabled` の setter は callback の配送完了を待たなくなる (getter は即時に新値を返す)
+  - `VideoView.start()` は main queue 上で `isRendering` を即時に更新する (公開 getter が返す値の時点が変わる)
+  - `MediaStream.send(videoFrame:)` は配送の完了を待たずに戻り、呼び出し側はフレームの所有権を SDK へ移す。`send` が戻った後にフレームとそれが保持する画素データを参照・変更してはならない
+  - 映像トラックを持たないストリーム (video source が `nil`) ではフレームが配送されず、`VideoFilter` も呼ばれない
+  - 処理が滞留している場合、上限を超えて到着したフレームが破棄される (renderer へ配送するフレームも、配送待ちが上限に達すると破棄される)
+  - `MediaStream.terminate()` は冪等になり、以降に到着したフレームと renderer の frame / size / switch を受理も配送もしない。`onDisconnect` は 1 回だけ配送し、`onRemoved` は配送しない。`onDisconnect` の配送先は `terminate()` を呼んだ時点の renderer になる
+  - `MediaStream.terminate()` の後に `MediaStream.videoRenderer` へ新しい renderer を設定しても何も配送しない (`nil` の代入による取り外しは行える)
+  - `MediaStream.videoRenderer` の getter / setter は内部の lock で直列化されるため、どのスレッドから呼んでもよい
+  - 切断時に `RTCVideoSource` へ配送中のフレームが最大 1 つ残ることを許容する (無効化は配送中の処理と同期しないため、そのフレームは切断と並行して配送される)
+  - ストリームをまたぐ renderer callback の順序は保証しない
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya
