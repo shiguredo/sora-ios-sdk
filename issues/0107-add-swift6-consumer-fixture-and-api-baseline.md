@@ -85,23 +85,24 @@
 
 - `build.yml` に consumer fixture 専用の job (`consumer-fixture`) を追加する。`runs-on: macos-26` とする (`sudo xcode-select` を使うため self-hosted は使わない)。既存 `build` job の runner / env / step は変更しない。
 - job の matrix は Xcode と SDK の組を 2 つ固定する。
-  - `/Applications/Xcode_26.2.app` + `iphoneos26.2` (`README.md` のシステム条件の Xcode 26.2 と、`build.yml` の `env.XCODE` / `env.XCODE_SDK` の pin に合わせる)
-  - `/Applications/Xcode_26.6.app` + `iphoneos26.5` (`macos-26` イメージの default。self-hosted ランナーの `/Applications/Xcode.app` と同じ version)
+  - `/Applications/Xcode_26.2.app` + `iphoneos26.2` (`README.md` のシステム条件の Xcode 26.2 に合わせた最低要件の leg。compile と負例だけを検証する)
+  - `/Applications/Xcode_26.6.app` + `iphoneos26.5` (`macos-26` イメージの default。self-hosted ランナーの `/Applications/Xcode.app` と同じ version。公開 API baseline の dump と比較に使う leg)
+- 公開 API baseline は `-I` / `-F` に渡す module と同じ SDK で dump する必要があるため、dump と比較を同じ Xcode にそろえる。baseline は 26.6 + `iphoneos26.5` で生成し、`api-check` は同じ 26.6 leg でだけ実行する (26.6 はローカルにあり、dump から比較までの検証を CI に依存せず行える)。26.2 leg は同一のソースが最低要件の Xcode でも compile できることの確認に使う。
 - 「利用可能な最新 26.x」を動的に選ばない (runner image の更新で暗黙に変わると失敗時の再現条件が固定されないため)。26.x が更新されたときは本 issue の matrix と `build.yml` の pin を見直す。`0108` の「最新 26.x」は本 issue の matrix の 26.6 leg を指す。
 - 各 leg の最初に `sudo xcode-select -s '<xcode>/Contents/Developer'` を行い、その後に `xcodebuild -version`、`ls /Applications | grep Xcode`、`xcodebuild -list` をログへ出す (`xcodebuild -list` は `Fixtures/Swift6Consumer` で実行し、3 scheme の存在を確認する)。指定した Xcode と scheme が存在しない場合は skip せず失敗させる。
 - `ConsumerCore` / `ConsumerUI` / `ConsumerLegacy` を scheme ごとの step で build する (`make consumer-build SCHEME=<Target> XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}`)。失敗した契約を step 名で特定できるようにする。
 - `make consumer-check-negative XCODE=... XCODE_SDK=...` を実行する step を置く。
 - `@testable` / `@preconcurrency` が fixture に無いことを検査する step を置く (`git grep -n -E '@testable|@preconcurrency' -- Fixtures/Swift6Consumer` が一致したら失敗させる。追跡ファイルだけを対象にし、`.build` とバイナリを拾わない)。ソースのコメントと README にもこれらの語を書かない (README では「内部 API に依存しない」のように理由で書く)。
 - `ConsumerLegacy` の build はログを `tee` で残し、`is deprecated` を含む warning が出ていることを確認する (xcodebuild は diagnostic group 名を出力しないため `[#DeprecatedDeclaration]` では判定できない。実測では `warning: 'onDisconnectLegacy' is deprecated: …` の形で出る)。導入時に 1 件以上の deprecation warning が実在することの機械的な確認として step に残し、非推奨 API を削除する issue が本 step の期待件数と scenario を同時に更新する。
-- API baseline の検証 step は `matrix.sdk == 'iphoneos26.2'` の leg にだけ置き、`make api-check XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}` として呼ぶ (既定値の `XCODE ?= /Applications/Xcode.app` は 26.6 であり、26.2 leg では `iphoneos26.2` を解決できない)。CI が呼ぶ make target は `api-check` だけとする。
+- API baseline の検証 step は `matrix.sdk == 'iphoneos26.5'` の leg にだけ置き、`make api-check XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}` として呼ぶ (baseline は dump したのと同じ SDK の module と比較する必要があるため、dump に使った leg でだけ実行する)。CI が呼ぶ make target は `api-check` だけとする。
 - `slack_notify` の `needs` に `consumer-fixture` を追加し、`status` を `${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'failure' || 'success' }}` に変更する (`job.status` のままでは `consumer-fixture` の失敗が通知されず、`cancelled` も failure として扱う)。
 - compile fixture には E2E 用 secret を渡さない。`actions/checkout` は既存と同じ `@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` を使い、新しい外部 action を追加しない。
 
 ### 公開 API baseline
 
 - 手段は `swift-api-digester` に固定する (`swift-symbolgraph-extract` は出力が 2.7 MB 程度になり pre-commit のサイズ上限と衝突するため採用しない)。
-- baseline は `Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.2.json`、生成情報は同ディレクトリの `iphoneos26.2.info.txt` に固定して commit する。dump 先は `build/` 配下 (`$(API_BASELINE_DUMP)`) とし、commit 済み baseline とは分ける。
-- dump は Xcode 26.2 をインストールした環境でのみ `make api-baseline` で実行する。**Xcode 26.2 が無い環境では baseline を生成も更新もしない** (`info.txt` の `xcodebuild -version` が matrix の 26.2 と一致しない baseline は commit しない)。CI では dump せず、`api-check` が `$(PRODUCTS)` の module と commit 済み baseline を比較する。
+- baseline は `Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.json`、生成情報は同ディレクトリの `iphoneos26.5.info.txt` に固定して commit する。dump 先は `build/` 配下 (`$(API_BASELINE_DUMP)`) とし、commit 済み baseline とは分ける。
+- dump は Xcode 26.6 と `iphoneos26.5` がある環境で `make api-baseline` で実行する。**`info.txt` の `xcodebuild -version` / SDK が matrix の 26.6 と一致しない baseline は commit しない** (SDK が違うと差分が SDK 差で汚れる)。CI では dump せず、`api-check` が `$(PRODUCTS)` の module と commit 済み baseline を比較する。
 
 ```
 xcrun swift-api-digester -dump-sdk -module Sora -o "$(API_BASELINE_DUMP)" \
@@ -144,18 +145,18 @@ api-check: consumer-build
 - 非推奨シンボルの削除は既定で検出されるため `-enable-remove-deprecated-check` は付けない (既定値へ戻すだけの no-op)。`-disable-remove-deprecated-check` を付けると `0117` / `0122` の削除検出が無効になるため追加しない。
 - `-diagnose-sdk` の出力に API の**追加**は現れない。追加時は同じ変更で baseline を再生成する (更新忘れは差分ゼロのため検出できない)。この点を手順に明記する。
 - dump の出力は 1.7 MB 程度であり `prek.toml` の `check-added-large-files` (`--maxkb=500`) に抵触するため、`check-added-large-files` に `exclude = "^Fixtures/Swift6Consumer/ApiBaseline/.*$"` を追加する (上限値は変更しない)。digester の出力は末尾改行で終わらないため `end-of-file-fixer` も同じ 2 ファイルを除外する (除外しないと再生成のたびに 1 バイトの差分が出る)。除外の追加 → baseline の生成 → commit の順に行う (`check-useless-excludes` と `check-added-large-files` の両方を満たすため)。
-- `Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.2.info.txt` には `xcodebuild -version` / `xcrun --sdk iphoneos --show-sdk-version` / `-target` の値を 1 行 1 項目で書く (タイムスタンプと実行者名は入れない)。
+- `Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.info.txt` には `xcodebuild -version` / `xcrun --sdk iphoneos --show-sdk-version` / `-target` の値を 1 行 1 項目で書く (タイムスタンプと実行者名は入れない)。
 - dump コマンド、比較コマンド、意図的な API の追加と deprecation と削除 (`0113` / `0117` / `0122` が行う `Sendable` 準拠と非推奨 API の削除を含む) で baseline を更新する手順、deprecation annotation 以外の差分を必ずレビューする手順、Xcode を更新したときに baseline を作り直す条件を `CODEBASE.md` (新規) に書く。
 - 検査が機能することを次で確認する。通常時 (シンボル削除なし) に `make api-check` が exit 0 で成功し、SDK の公開シンボルを一時的に 1 つ削除して `make consumer-build` からやり直すと exit 1 で失敗し、ログに `API breakage: … has been removed` が出ること。確認のための一時変更は 1 コミットとして push して CI run の URL を控え、`git revert` の打ち消しコミットを同じ PR に追加する (`git reset` と force push は行わない)。
 
 ### リポジトリのツールチェーンへの組み込み
 
-- `Makefile` に `XCODE ?= /Applications/Xcode.app`、`XCODE_SDK ?= iphoneos26.2`、`DERIVED_DATA ?= $(CURDIR)/build/consumer`、`DERIVED_DATA_ABS := $(abspath $(DERIVED_DATA))`、`PRODUCTS := $(DERIVED_DATA_ABS)/Build/Products/Release-iphoneos`、`MODULE_CACHE := $(DERIVED_DATA_ABS)/module-cache`、`API_CHECK_LOG := $(DERIVED_DATA_ABS)/api-check.log`、`API_BASELINE_DUMP := $(DERIVED_DATA_ABS)/api-baseline.json`、`API_TARGET := arm64-apple-ios14.0`、`API_BASELINE ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.2.json`、`API_BASELINE_INFO ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.2.info.txt` を定義する (`DERIVED_DATA` を相対パスで上書きされても `cd` の影響を受けないよう、build 成果物のパスは `abspath` から導出し `build/consumer` を literal で書かない)。
+- `Makefile` に `XCODE ?= /Applications/Xcode.app`、`XCODE_SDK ?= iphoneos26.5`、`DERIVED_DATA ?= $(CURDIR)/build/consumer`、`DERIVED_DATA_ABS := $(abspath $(DERIVED_DATA))`、`PRODUCTS := $(DERIVED_DATA_ABS)/Build/Products/Release-iphoneos`、`MODULE_CACHE := $(DERIVED_DATA_ABS)/module-cache`、`API_CHECK_LOG := $(DERIVED_DATA_ABS)/api-check.log`、`API_BASELINE_DUMP := $(DERIVED_DATA_ABS)/api-baseline.json`、`API_TARGET := arm64-apple-ios14.0`、`API_BASELINE ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.json`、`API_BASELINE_INFO ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.info.txt` を定義する (`DERIVED_DATA` を相対パスで上書きされても `cd` の影響を受けないよう、build 成果物のパスは `abspath` から導出し `build/consumer` を literal で書かない)。
 - `xcodebuild` には `DEVELOPER_DIR="$(XCODE)/Contents/Developer"` を環境変数として渡す (`xcodebuild` は `XCODE` という引数を解釈しない)。CI の matrix から `make ... XCODE=<path> XCODE_SDK=<sdk>` として渡し、`xcodebuild -version` で選択された Xcode が matrix と一致することを step のログで確認する。
 - 次の target を追加する (`consumer-build` は 1 scheme だけを build し、CI が scheme ごとに step を分ける。loop にすると途中の失敗が最後の成功で隠れる)。`consumer-build` は `cd Fixtures/Swift6Consumer` してから `-derivedDataPath "$(DERIVED_DATA_ABS)"` を渡す。
   - `consumer-build`: `SCHEME ?= ConsumerCore` の 1 scheme を `-configuration Release` / `-destination 'generic/platform=iOS'` / `CODE_SIGNING_REQUIRED=NO` / `CODE_SIGN_IDENTITY=` / `PROVISIONING_PROFILE=` で build する。
   - `consumer-check-negative`: `consumer-build` を前提に、`NegativeChecks` を 1 ファイルずつ typecheck する。
-  - `api-baseline`: `consumer-build` を前提に、(1) `$(API_BASELINE_DUMP)` へ dump、(2) `set -e;` 付きで `$(API_BASELINE_DUMP)` を検証、(3) `xcodebuild -version` と `xcrun --sdk $(XCODE_SDK) --show-sdk-version` が `iphoneos26.2` の組と一致することを確認、(4) 通った場合にだけ `cp` で `$(API_BASELINE)` を上書きし `$(API_BASELINE_INFO)` を再生成する。
+  - `api-baseline`: `consumer-build` を前提に、(1) `$(API_BASELINE_DUMP)` へ dump、(2) `set -e;` 付きで `$(API_BASELINE_DUMP)` を検証、(3) `xcodebuild -version` と `xcrun --sdk $(XCODE_SDK) --show-sdk-version` が 26.6 と `iphoneos26.5` の組と一致することを確認、(4) 通った場合にだけ `cp` で `$(API_BASELINE)` を上書きし `$(API_BASELINE_INFO)` を再生成する。
   - `api-check`: commit 済み `$(API_BASELINE)` を `set -e;` 付きで検証してから比較する。commit 済み baseline は書き換えない。
 - `Makefile` の `.PHONY` に `consumer-build` / `consumer-check-negative` / `api-baseline` / `api-check` を追加する。
 - CI は `api-check` だけを呼ぶ (`api-baseline` を呼ぶと commit 済み baseline を上書きし、自分自身との比較になって常に成功する)。
@@ -207,7 +208,7 @@ api-check: consumer-build
 - `NegativeChecks/` の file が `make consumer-check-negative` で、`EXPECT-DIAGNOSTIC` の group 名を伴って compile に失敗すること
 - fixture が `@testable` と `@preconcurrency` を使用していないこと (`git grep -n -E '@testable|@preconcurrency' -- Fixtures/Swift6Consumer` が 0 件であること)
 - `0027` / `0109` / `0110` / `0114` / `0116` / `0120` / `0124` / `0125` / `0152` が scenario を追加できる構造であること (fixture の README に追加手順、`NegativeChecks` の接頭辞規約と `EXPECT-DIAGNOSTIC` の書き方、どの issue がどの行を追加・削除するかの表がある)
-- Xcode 26.2 と 26.6 の `consumer-fixture` job が存在し、両方の leg で build と検査が成功すること
+- Xcode 26.2 と 26.6 の `consumer-fixture` job が存在し、26.2 leg で compile と負例が、26.6 leg で compile と負例と API baseline の検証が成功すること
 - consumer fixture に secret が渡されていないこと
 - GitHub 公式以外の action、または利用実績のない外部 action を新規追加していないこと
 - 公開 API baseline が commit され、公開 API の削除・変更と `Sendable` 準拠の削除が baseline の差分として検出されること
@@ -215,7 +216,7 @@ api-check: consumer-build
 - `make api-check` が `-module Sora` と `-baseline-path $(API_BASELINE)` を使い (`-input-paths` は使わない)、`-I` / `-F` に `$(PRODUCTS)` を渡し、commit 済み baseline の `ABIRoot.name` とサイズを検証し、壊れた baseline を渡すと検証の行で exit 1 になること
 - `make api-check` が commit 済み baseline を書き換えず、CI が `api-baseline` を呼んでいないこと
 - baseline の更新手順 (追加を含む) が `CODEBASE.md` にあり、API を追加する issue が同一変更で baseline を再生成することになっていること
-- `api-baseline` が `xcodebuild -version` の一致を確認し、Xcode 26.2 以外の環境では commit 済み baseline を上書きしないこと
+- `api-baseline` が `xcodebuild -version` と SDK の一致を確認し、26.6 と `iphoneos26.5` 以外の環境では commit 済み baseline を上書きしないこと
 - fixture の Swift ソースが `make fmt-lint` と `make lint` の対象で違反 0 であり、`Fixtures/Swift6Consumer/.build` が対象に含まれないこと
 - `Fixtures/Swift6Consumer/Sources` の `.swift` のみを変更したコミットで swift-format と SwiftLint のフックが起動すること
 - `Fixtures/Swift6Consumer/ApiBaseline/` の 2 ファイルが `check-added-large-files` と `end-of-file-fixer` の対象外であり、`check-useless-excludes` が通ること
