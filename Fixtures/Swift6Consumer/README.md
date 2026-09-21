@@ -38,11 +38,13 @@ error にならないよう `_ =` で扱い、`async throws` の API は `try aw
    接頭辞は既定隔離を決める (`core-` は `nonisolated`、`ui-` は `MainActor`)。未知の接頭辞は失敗する
 2. 1 行目に `// EXPECT-DIAGNOSTIC: <group 名>` を書く
 3. group 名は推測せず、`swiftc -typecheck` の出力に出る `[#GroupName]` を実測して確定する
-4. `make consumer-check-negative` で、compile に失敗し、かつその group 名が出ることを確認する
+4. `make consumer-check-negative` で、compile に失敗し、かつ `error:` 行に `[#group 名]` が
+   現れることを確認する
 
 compile に失敗したことだけでは不十分 (無関係な typo でも失敗する) なため、
-`make consumer-check-negative` は group 名の一致まで検査する。ObjC SDK や `UIView` 継承型への
-非隔離な呼び出しは error ではなく warning になるため、負例には使えない。
+`make consumer-check-negative` は `error:` 行に現れる `[#group 名]` まで検査する。診断が
+warning に降格した場合や、末尾のリンク行にしか group 名が無い場合は通らない。ObjC SDK や
+`UIView` 継承型への非隔離な呼び出しは error ではなく warning になるため、負例には使えない。
 
 ## 公開 API baseline
 

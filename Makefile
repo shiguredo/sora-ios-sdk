@@ -57,8 +57,10 @@ API_XCODE ?= 26.6
 API_SDK_VERSION ?= 26.5
 SCHEME ?= ConsumerCore
 
-# xcodebuild は XCODE という引数を解釈しないため、環境変数として渡す
-export DEVELOPER_DIR := $(XCODE)/Contents/Developer
+# xcodebuild は XCODE という引数を解釈しないため、環境変数として渡す。
+# fixture 系の target にだけ効かせる (既存の build / fmt / fmt-lint / lint の
+# toolchain 選択と、利用者が指定した DEVELOPER_DIR を変えないため)
+consumer-build consumer-check-negative api-baseline api-check: export DEVELOPER_DIR = $(XCODE)/Contents/Developer
 
 # 1 scheme だけを Release で build する。CI は scheme ごとに step を分ける
 consumer-build:
@@ -99,8 +101,8 @@ consumer-check-negative: consumer-build
 				"$$file" > "$(NEGATIVE_CHECK_LOG)" 2>&1; then \
 				echo "Error: compilation succeeded but a failure is expected: $$file"; exit 1; \
 			fi; \
-			if ! grep -Fq "$$expected" "$(NEGATIVE_CHECK_LOG)"; then \
-				echo "Error: the expected diagnostic '$$expected' was not reported: $$file"; \
+			if ! grep -Eq "error: .*\[#$$expected\]" "$(NEGATIVE_CHECK_LOG)"; then \
+				echo "Error: no 'error' diagnostic with '[#$$expected]' was reported: $$file"; \
 				cat "$(NEGATIVE_CHECK_LOG)"; \
 				exit 1; \
 			fi; \

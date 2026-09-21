@@ -69,15 +69,41 @@ jobs:
         cd Fixtures/Swift6Consumer && xcodebuild -list
     - name: Build ConsumerCore
       run: |
-        make consumer-build SCHEME=ConsumerCore XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+        set -o pipefail && \
+          make consumer-build SCHEME=ConsumerCore XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
+            2>&1 | tee consumer-core.log
     - name: Build ConsumerUI
       run: |
-        make consumer-build SCHEME=ConsumerUI XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+        set -o pipefail && \
+          make consumer-build SCHEME=ConsumerUI XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
+            2>&1 | tee consumer-ui.log
     - name: Build ConsumerLegacy
       run: |
         set -o pipefail && \
           make consumer-build SCHEME=ConsumerLegacy XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
             2>&1 | tee consumer-legacy.log
+    # 各 target の設定 (warnings-as-errors と既定隔離) が compiler まで届いていることを、
+    # 実際の build ログに現れる flag で確認する。設定が無言で消えると gate が弱くなるため
+    - name: Check Compiler Settings
+      run: |
+        for log in consumer-core.log consumer-legacy.log consumer-ui.log; do
+          if ! grep -Fq -- '-warnings-as-errors' "$log"; then
+            echo "Error: '-warnings-as-errors' is missing in $log."
+            exit 1
+          fi
+        done
+        if ! grep -Fq -- '-default-isolation nonisolated' consumer-core.log; then
+          echo "Error: '-default-isolation nonisolated' is missing in consumer-core.log."
+          exit 1
+        fi
+        if ! grep -Fq -- '-default-isolation MainActor' consumer-ui.log; then
+          echo "Error: '-default-isolation MainActor' is missing in consumer-ui.log."
+          exit 1
+        fi
+        if ! grep -Fq -- '-Wwarning DeprecatedDeclaration' consumer-legacy.log; then
+          echo "Error: '-Wwarning DeprecatedDeclaration' is missing in consumer-legacy.log."
+          exit 1
+        fi
     - name: Check Deprecation Warning
       run: |
         if ! grep -Fq 'is deprecated' consumer-legacy.log; then
