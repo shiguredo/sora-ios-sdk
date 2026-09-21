@@ -43,8 +43,8 @@
 - fixture の `Package.swift` は `// swift-tools-version:6.2`、`platforms: [.iOS(.v14)]`、`name: "Swift6Consumer"` とする。
 - root package への依存は `.package(name: "Sora", path: "../..")` と書き、product は `.product(name: "Sora", package: "Sora")` と `.product(name: "WebRTC", package: "Sora")` で参照する。`.package(path: "../..")` だけを使うと package identity が checkout ディレクトリ名になり `package: "Sora"` が解決に失敗するため、`name:` を明示する。
 - target は `ConsumerCore` / `ConsumerUI` / `ConsumerLegacy` の 3 つとし、それぞれに対応する library product を 1 つずつ宣言する。product を宣言しないと `xcodebuild` が生成する scheme が package 名だけになり `-scheme ConsumerCore` が存在しない。
-- scenario は target ごとに `Sources/<Target>/<Scenario>.swift` を 1 ファイル追加するだけで build 対象になる形にする。追加手順、各 target の役割、どの issue がどの行を追加・削除するかの表は fixture の README に書く。
-- root package は `SwiftLintPlugins` に依存しているため、fixture の `Package.resolved` にはその pin が記録される。解決結果を固定するため `Package.resolved` は commit する (fixture の解決には network が必要になる)。
+- scenario は target ごとに `Sources/<Target>/<Scenario>.swift` を 1 ファイル追加するだけで build 対象になる形にする。追加手順、各 target の役割、どの作業がどの file を追加・削除するかの表は fixture の README に書く。
+- fixture の依存は root package への path 依存だけなので `Package.resolved` は生成されない (実装時の確認で SwiftPM の workspace-state に現れる依存は `sora-ios-sdk` だけであり、SwiftLintPlugins は fixture の graph に入らない)。WebRTC の artifact は root の `Package.swift` が URL と checksum で pin しているため解決結果は固定されるが、artifact の取得には network が必要になる。
 - `Fixtures/Swift6Consumer/.swiftpm/` と `.build/` は commit しない。`.build/` は現行の `.gitignore` (`.build/`) で無視されるが `.swiftpm/` は無視されないため、`.gitignore` に `Fixtures/Swift6Consumer/.swiftpm/` を追加する。
 - fixture は library target のみとする (executable target / `@main` / トップレベルコードを置かない)。Xcode app target へのリンク、リソースバンドル、`WebRTC.xcframework` の embed、remote URL 依存での解決は検証対象にしない。
 
@@ -64,9 +64,9 @@
 
 - `Fixtures/Swift6Consumer/NegativeChecks/core-<Scenario>.swift` と `ui-<Scenario>.swift` はどの target にも含めない。`NegativeChecks/` 直下の `.swift` はこの接頭辞を必須とし、接頭辞が無いファイルや未知の接頭辞のファイルがあれば `make consumer-check-negative` は失敗する。
 - 各ファイルの先頭に `// EXPECT-DIAGNOSTIC: <group 名>` を 1 行だけ書く (`0109` / `0110` / `0120` / `0152` がこの規約で負例を追加する)。group 名は toolchain で変わりうるため、ファイルへ書く前に `swiftc -typecheck` の出力で実測して確定する (実測例: `ActorIsolatedCall` / `IsolatedConformances`)。
-- `make consumer-check-negative` は `consumer-build` を前提とし、1 ファイルにつき 1 回の `swiftc -typecheck` 実行で検査する (隔離はプロセス単位の `-default-isolation` で与えるため、複数ファイルを 1 回に渡さない)。`core-` には `-default-isolation nonisolated` と `-scheme ConsumerCore`、`ui-` には `-default-isolation MainActor` と `-scheme ConsumerUI` を使う。付ける引数は `-swift-version 6`、`-sdk "$$(xcrun --sdk $(XCODE_SDK) --show-sdk-path)"`、`-target "$(API_TARGET)"`、`-I "$(PRODUCTS)"`、`-F "$(PRODUCTS)"`、`-module-cache-path "$(MODULE_CACHE)"`。
+- `make consumer-check-negative` は `consumer-build` (既定の `ConsumerCore`) を前提とし、1 ファイルにつき 1 回の `swiftc -typecheck` 実行で検査する (隔離はプロセス単位の `-default-isolation` で与えるため、複数ファイルを 1 回に渡さない)。負例は `Sora` だけを import するため `-scheme` は使わず、`core-` には `-default-isolation nonisolated`、`ui-` には `-default-isolation MainActor` を使う。付ける引数は `-swift-version 6`、`-sdk "$$(xcrun --sdk $(XCODE_SDK) --show-sdk-path)"`、`-target "$(API_TARGET)"`、`-I "$(PRODUCTS)"`、`-F "$(PRODUCTS)"`、`-module-cache-path "$(MODULE_CACHE)"`。
 - 判定は「compile に失敗したこと」だけでは不十分 (無関係な typo でも通ってしまう) ため、そのファイルの `EXPECT-DIAGNOSTIC` の group 名が stderr に現れることを検査する。`ui-` の負例は `@MainActor` (または既定隔離が MainActor) の型を Sora の非隔離 protocol へ準拠させ、その conformance を `nonisolated` 文脈で使う形に限定する。ObjC SDK や `UIView` 継承型 (`VideoView` を含む) への非隔離呼び出しは warning と exit 0 になるため負例に使えない。
-- 本 issue で 1 つ置いて機構が機能することを確認する。以降の scenario 追加は対応する issue が行う。
+- 本 issue で 2 つ置いて機構が機能することを確認する (`core-sendable-capture.swift` は `SendableClosureCaptures`、`ui-isolated-conformance.swift` は `IsolatedConformances`。group 名は実装時に `swiftc -typecheck` の出力から実測して確定した)。以降の scenario 追加は対応する issue が行う。
 
 ### compiler settings
 
@@ -92,7 +92,7 @@
 - 各 leg の最初に `sudo xcode-select -s '<xcode>/Contents/Developer'` を行い、その後に `xcodebuild -version`、`ls /Applications | grep Xcode`、`xcodebuild -list` をログへ出す (`xcodebuild -list` は `Fixtures/Swift6Consumer` で実行し、3 scheme の存在を確認する)。指定した Xcode と scheme が存在しない場合は skip せず失敗させる。
 - `ConsumerCore` / `ConsumerUI` / `ConsumerLegacy` を scheme ごとの step で build する (`make consumer-build SCHEME=<Target> XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}`)。失敗した契約を step 名で特定できるようにする。
 - `make consumer-check-negative XCODE=... XCODE_SDK=...` を実行する step を置く。
-- `@testable` / `@preconcurrency` が fixture に無いことを検査する step を置く (`git grep -n -E '@testable|@preconcurrency' -- Fixtures/Swift6Consumer` が一致したら失敗させる。追跡ファイルだけを対象にし、`.build` とバイナリを拾わない)。ソースのコメントと README にもこれらの語を書かない (README では「内部 API に依存しない」のように理由で書く)。
+- `@testable` / `@preconcurrency` が fixture に無いことを検査する step を置く (`git grep -n -E '@testable|@preconcurrency' -- ':(glob)Fixtures/Swift6Consumer/**/*.swift'` が一致したら失敗させる。git の既定の pathspec では `**` が一致せず検査が無言で無効になるため `:(glob)` を付ける。追跡ファイルの `.swift` だけを対象にし、`.build` と baseline の JSON を拾わない)。ソースのコメントと README にもこれらの語を書かない (README では「内部 API に依存しない」のように理由で書く)。
 - `ConsumerLegacy` の build はログを `tee` で残し、`is deprecated` を含む warning が出ていることを確認する (xcodebuild は diagnostic group 名を出力しないため `[#DeprecatedDeclaration]` では判定できない。実測では `warning: 'onDisconnectLegacy' is deprecated: …` の形で出る)。導入時に 1 件以上の deprecation warning が実在することの機械的な確認として step に残し、非推奨 API を削除する issue が本 step の期待件数と scenario を同時に更新する。
 - API baseline の検証 step は `matrix.sdk == 'iphoneos26.5'` の leg にだけ置き、`make api-check XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}` として呼ぶ (baseline は dump したのと同じ SDK の module と比較する必要があるため、dump に使った leg でだけ実行する)。CI が呼ぶ make target は `api-check` だけとする。
 - `slack_notify` の `needs` に `consumer-fixture` を追加し、`status` を `${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'failure' || 'success' }}` に変更する (`job.status` のままでは `consumer-fixture` の失敗が通知されず、`cancelled` も failure として扱う)。
@@ -151,13 +151,13 @@ api-check: consumer-build
 
 ### リポジトリのツールチェーンへの組み込み
 
-- `Makefile` に `XCODE ?= /Applications/Xcode.app`、`XCODE_SDK ?= iphoneos26.5`、`DERIVED_DATA ?= $(CURDIR)/build/consumer`、`DERIVED_DATA_ABS := $(abspath $(DERIVED_DATA))`、`PRODUCTS := $(DERIVED_DATA_ABS)/Build/Products/Release-iphoneos`、`MODULE_CACHE := $(DERIVED_DATA_ABS)/module-cache`、`API_CHECK_LOG := $(DERIVED_DATA_ABS)/api-check.log`、`API_BASELINE_DUMP := $(DERIVED_DATA_ABS)/api-baseline.json`、`API_TARGET := arm64-apple-ios14.0`、`API_BASELINE ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.json`、`API_BASELINE_INFO ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.info.txt` を定義する (`DERIVED_DATA` を相対パスで上書きされても `cd` の影響を受けないよう、build 成果物のパスは `abspath` から導出し `build/consumer` を literal で書かない)。
+- `Makefile` に `XCODE ?= /Applications/Xcode.app`、`XCODE_SDK ?= iphoneos26.5`、`DERIVED_DATA ?= $(CURDIR)/build/consumer`、`DERIVED_DATA_ABS := $(abspath $(DERIVED_DATA))`、`PRODUCTS := $(DERIVED_DATA_ABS)/Build/Products/Release-iphoneos`、`MODULE_CACHE := $(DERIVED_DATA_ABS)/module-cache`、`API_CHECK_LOG := $(DERIVED_DATA_ABS)/api-check.log`、`NEGATIVE_CHECK_LOG := $(DERIVED_DATA_ABS)/negative-check.log`、`API_BASELINE_DUMP := $(DERIVED_DATA_ABS)/api-baseline.json`、`API_TARGET := arm64-apple-ios14.0`、`API_BASELINE ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.json`、`API_BASELINE_INFO ?= Fixtures/Swift6Consumer/ApiBaseline/iphoneos26.5.info.txt` を定義する (`DERIVED_DATA` を相対パスで上書きされても `cd` の影響を受けないよう、build 成果物のパスは `abspath` から導出し `build/consumer` を literal で書かない)。
 - `xcodebuild` には `DEVELOPER_DIR="$(XCODE)/Contents/Developer"` を環境変数として渡す (`xcodebuild` は `XCODE` という引数を解釈しない)。CI の matrix から `make ... XCODE=<path> XCODE_SDK=<sdk>` として渡し、`xcodebuild -version` で選択された Xcode が matrix と一致することを step のログで確認する。
 - 次の target を追加する (`consumer-build` は 1 scheme だけを build し、CI が scheme ごとに step を分ける。loop にすると途中の失敗が最後の成功で隠れる)。`consumer-build` は `cd Fixtures/Swift6Consumer` してから `-derivedDataPath "$(DERIVED_DATA_ABS)"` を渡す。
   - `consumer-build`: `SCHEME ?= ConsumerCore` の 1 scheme を `-configuration Release` / `-destination 'generic/platform=iOS'` / `CODE_SIGNING_REQUIRED=NO` / `CODE_SIGN_IDENTITY=` / `PROVISIONING_PROFILE=` で build する。
   - `consumer-check-negative`: `consumer-build` を前提に、`NegativeChecks` を 1 ファイルずつ typecheck する。
-  - `api-baseline`: `consumer-build` を前提に、(1) `$(API_BASELINE_DUMP)` へ dump、(2) `set -e;` 付きで `$(API_BASELINE_DUMP)` を検証、(3) `xcodebuild -version` と `xcrun --sdk $(XCODE_SDK) --show-sdk-version` が 26.6 と `iphoneos26.5` の組と一致することを確認、(4) 通った場合にだけ `cp` で `$(API_BASELINE)` を上書きし `$(API_BASELINE_INFO)` を再生成する。
-  - `api-check`: commit 済み `$(API_BASELINE)` を `set -e;` 付きで検証してから比較する。commit 済み baseline は書き換えない。
+  - `api-baseline`: `consumer-build` を前提に、(1) `$(API_BASELINE_DUMP)` へ dump、(2) `set -e;` 付きで `$(API_BASELINE_DUMP)` を検証、(3) `xcodebuild -version` と `xcrun --sdk $(XCODE_SDK) --show-sdk-version` が 26.6 と `iphoneos26.5` の組と一致することを確認、(4) `mkdir -p` で `$(API_BASELINE)` のディレクトリを作り、通った場合にだけ `cp` で `$(API_BASELINE)` を上書きし `$(API_BASELINE_INFO)` を再生成する。
+  - `api-check`: commit 済み `$(API_BASELINE)` を `set -e;` 付きで検証し、`$(API_BASELINE_INFO)` の `xcodebuild` と `sdk` が実行環境と一致することを確認してから比較する (一致しない場合は baseline と別の SDK の module を比較することになるため、差分が SDK の差で汚れる前に失敗させる)。commit 済み baseline は書き換えない。
 - `Makefile` の `.PHONY` に `consumer-build` / `consumer-check-negative` / `api-baseline` / `api-check` を追加する。
 - CI は `api-check` だけを呼ぶ (`api-baseline` を呼ぶと commit 済み baseline を上書きし、自分自身との比較になって常に成功する)。
 - `Makefile` の `fmt` / `fmt-lint` の対象に `Fixtures/Swift6Consumer/Sources` / `Fixtures/Swift6Consumer/NegativeChecks` / `Fixtures/Swift6Consumer/Package.swift` を追加する (`swift format --recursive` は隠しディレクトリを走査しないが、`swift format` に除外オプションは無いため対象を明示的に列挙し、`prek.toml` の glob とそろえる)。
@@ -181,7 +181,7 @@ api-check: consumer-build
 
 ## 変更対象
 
-- `Fixtures/Swift6Consumer/` (新規): fixture の SwiftPM package、`Package.resolved`、3 target の scenario、`NegativeChecks/`、`ApiBaseline/`、README
+- `Fixtures/Swift6Consumer/` (新規): fixture の SwiftPM package、3 target の scenario、`NegativeChecks/`、`ApiBaseline/`、README
 - `.github/workflows/build.yml`: `consumer-fixture` job と matrix、各種検査 step、API baseline の step を追加する
 - `Makefile`: 変数と fixture 用 target の追加、`.PHONY` の更新、`fmt` / `fmt-lint` の対象追加
 - `prek.toml`: swift-format / swiftlint フックの `files.glob`、`check-added-large-files` と `end-of-file-fixer` の除外設定
@@ -206,8 +206,8 @@ api-check: consumer-build
 - `ConsumerUI` の scenario が `@MainActor` を書かずに compile できること
 - `ConsumerLegacy` の導入時検証で `is deprecated` を含む warning が出ること (build ログの grep。xcodebuild は diagnostic group 名を出力しないため `[#DeprecatedDeclaration]` では判定しない)
 - `NegativeChecks/` の file が `make consumer-check-negative` で、`EXPECT-DIAGNOSTIC` の group 名を伴って compile に失敗すること
-- fixture が `@testable` と `@preconcurrency` を使用していないこと (`git grep -n -E '@testable|@preconcurrency' -- Fixtures/Swift6Consumer` が 0 件であること)
-- `0027` / `0109` / `0110` / `0114` / `0116` / `0120` / `0124` / `0125` / `0152` が scenario を追加できる構造であること (fixture の README に追加手順、`NegativeChecks` の接頭辞規約と `EXPECT-DIAGNOSTIC` の書き方、どの issue がどの行を追加・削除するかの表がある)
+- fixture が `@testable` と `@preconcurrency` を使用していないこと (`git grep -n -E '@testable|@preconcurrency' -- ':(glob)Fixtures/Swift6Consumer/**/*.swift'` が 0 件であること)
+- `0027` / `0109` / `0110` / `0114` / `0116` / `0120` / `0124` / `0125` / `0152` が scenario を追加できる構造であること (fixture の README に追加手順、`NegativeChecks` の接頭辞規約と `EXPECT-DIAGNOSTIC` の書き方、どの作業がどの file を追加・削除するかの表がある)
 - Xcode 26.2 と 26.6 の `consumer-fixture` job が存在し、26.2 leg で compile と負例が、26.6 leg で compile と負例と API baseline の検証が成功すること
 - consumer fixture に secret が渡されていないこと
 - GitHub 公式以外の action、または利用実績のない外部 action を新規追加していないこと
