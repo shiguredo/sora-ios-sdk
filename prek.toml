@@ -18,7 +18,8 @@ hooks = [
   # 行末の空白を取り除く
   { id = "trailing-whitespace" },
   # ファイル末尾を改行 1 つで終わらせる
-  { id = "end-of-file-fixer" },
+  # swift-api-digester の出力は末尾改行で終わらないため、baseline は除外する
+  { id = "end-of-file-fixer", exclude = "^Fixtures/Swift6Consumer/ApiBaseline/.*$" },
   # ファイル先頭の UTF-8 BOM を取り除く
   { id = "fix-byte-order-marker" },
   # TOML の構文エラーを検出する
@@ -36,7 +37,8 @@ hooks = [
   # 大文字小文字だけが異なるファイル名の衝突を防ぐ
   { id = "check-case-conflict" },
   # 大きなファイルの誤コミットを防ぐ
-  { id = "check-added-large-files", args = ["--maxkb=500"] },
+  # 公開 API の baseline は 1.7 MB 程度になるため除外する
+  { id = "check-added-large-files", args = ["--maxkb=500"], exclude = "^Fixtures/Swift6Consumer/ApiBaseline/.*$" },
   # 秘密鍵の誤コミットを防ぐ
   { id = "detect-private-key" },
   # 改行コードの混在を防ぐ
@@ -80,7 +82,7 @@ name = "swift format fix"
 language = "system"
 entry = "swift"
 args = ["format", "--in-place"]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
 priority = 10
 
 # SwiftLint: 自動修正
@@ -100,7 +102,7 @@ args = [
   "--",
   ".",
 ]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
 pass_filenames = false
 priority = 20
 
@@ -111,7 +113,7 @@ name = "swift format check"
 language = "system"
 entry = "swift"
 args = ["format", "lint", "--strict", "--parallel"]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
 priority = 30
 
 # SwiftLint: 厳格チェック
@@ -131,6 +133,6 @@ args = [
   "--",
   ".",
 ]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
 pass_filenames = false
 priority = 40

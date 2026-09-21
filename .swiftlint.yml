@@ -1,7 +1,11 @@
 included:
   - Sora
+  - Fixtures/Swift6Consumer/Sources
+  - Fixtures/Swift6Consumer/NegativeChecks
 excluded:
   - Pods
+  - Fixtures/Swift6Consumer/.build
+  - Fixtures/Swift6Consumer/.swiftpm
 disabled_rules:
   - identifier_name
   - force_cast

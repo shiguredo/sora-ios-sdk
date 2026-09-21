@@ -43,6 +43,9 @@ playground.xcworkspace
 # Packages/
 .build/
 
+# consumer fixture の Xcode 作業ディレクトリ (xcodebuild が生成する)
+Fixtures/Swift6Consumer/.swiftpm/
+
 # CocoaPods
 #
 # We recommend against adding the Pods directory to your .gitignore. However
