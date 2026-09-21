@@ -86,6 +86,11 @@
 
 ### misc
 
+- [ADD] 外部の consumer と同じ形で `Sora` を import する fixture と公開 API の baseline を追加する
+  - `Fixtures/Swift6Consumer/` に SwiftPM package の fixture を追加し、`import Sora` する compile (Swift 6 language mode と warnings-as-errors) と、公開 API の baseline 比較を CI で検証する
+  - 公開 API の削除・変更と `Sendable` 準拠の削除を baseline の差分として検出する
+  - SDK の公開 API と `Package.swift` の変更はない
+  - @t-miya
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
   - エラーパスで未 wait の expectation を `XCTWaiter.wait(for:timeout: 0)` で消費する
   - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける
