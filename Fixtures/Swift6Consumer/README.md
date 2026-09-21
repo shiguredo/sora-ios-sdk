@@ -92,7 +92,7 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | `Sources/ConsumerCore/CallbackCompatibility.swift` | handler 型に属さない公開 closure の受け渡し | 公開 closure を追加・変更する作業が更新する |
 | `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC、統計取得、戻り値 `Error?` の API | Sendable な RPC API を追加する作業が、新しい RPC の scenario を追加する |
 | `Sources/ConsumerUI/VideoViewScenario.swift` | 既定隔離が MainActor であること | `VideoRenderer` の隔離を見直す作業が更新する |
-| `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること | 非推奨 API を削除する作業が、対象の参照を削除する |
+| `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること (CI は期待する非推奨 API 名の一覧で検査する) | 非推奨 API を削除する作業が、対象の参照と `build.yml` の期待する非推奨 API 名の一覧を同時に更新する |
 | `NegativeChecks/core-sendable-capture.swift` | `MediaChannel` が Sendable でないこと | `MediaChannel` の Sendable 準拠を検討する作業が更新する |
 | `NegativeChecks/ui-isolated-conformance.swift` | 隔離された conformance は非隔離文脈で使えないこと | 変更しない |
 | `ApiBaseline/` | 公開 API の削除・変更の検出 | 公開 API を変更するすべての作業が、同じ変更で再生成する |

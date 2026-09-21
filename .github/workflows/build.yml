@@ -104,12 +104,17 @@ jobs:
           echo "Error: '-Wwarning DeprecatedDeclaration' is missing in consumer-legacy.log."
           exit 1
         fi
+    # ConsumerLegacy が実際に非推奨 API の warning を出していることを symbol 名で確認する。
+    # 件数ではなく symbol 名で見るのは、Xcode の版で warning の行数が変わり得るため。
+    # fixture の非推奨 API の参照を増減する作業は、この一覧も同時に更新する
     - name: Check Deprecation Warning
       run: |
-        if ! grep -Fq 'is deprecated' consumer-legacy.log; then
-          echo 'Error: deprecation warning is missing in the ConsumerLegacy build log.'
-          exit 1
-        fi
+        for symbol in TLSSecurityPolicy tlsSecurityPolicy onDisconnectLegacy onReceiveSignaling simulcastRid spotlightEnabled; do
+          if ! grep -Fq -- "'$symbol' is deprecated" consumer-legacy.log; then
+            echo "Error: deprecation warning for '$symbol' is missing in the ConsumerLegacy build log."
+            exit 1
+          fi
+        done
     - name: Check Negative Checks
       run: |
         make consumer-check-negative XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
