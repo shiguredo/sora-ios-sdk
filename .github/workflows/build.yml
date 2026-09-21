@@ -46,8 +46,60 @@ jobs:
     - name: Lint
       run: |
         make lint
+  # 外部の consumer と同じ形で Sora を import した fixture を、最低要件の Xcode と
+  # 公開 API baseline を生成した Xcode の両方で検証する
+  consumer-fixture:
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - xcode: /Applications/Xcode_26.2.app
+          sdk: iphoneos26.2
+        - xcode: /Applications/Xcode_26.6.app
+          sdk: iphoneos26.5
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Select Xcode Version
+      run: sudo xcode-select -s '${{ matrix.xcode }}/Contents/Developer'
+    - name: Show Xcode Version
+      run: |
+        xcodebuild -version
+        ls /Applications | grep Xcode
+        cd Fixtures/Swift6Consumer && xcodebuild -list
+    - name: Build ConsumerCore
+      run: |
+        make consumer-build SCHEME=ConsumerCore XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+    - name: Build ConsumerUI
+      run: |
+        make consumer-build SCHEME=ConsumerUI XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+    - name: Build ConsumerLegacy
+      run: |
+        set -o pipefail && \
+          make consumer-build SCHEME=ConsumerLegacy XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
+            2>&1 | tee consumer-legacy.log
+    - name: Check Deprecation Warning
+      run: |
+        if ! grep -Fq 'is deprecated' consumer-legacy.log; then
+          echo 'Error: deprecation warning is missing in the ConsumerLegacy build log.'
+          exit 1
+        fi
+    - name: Check Negative Checks
+      run: |
+        make consumer-check-negative XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+    - name: Check No Test-Only Import
+      run: |
+        if git grep -n -E '@testable|@preconcurrency' -- ':(glob)Fixtures/Swift6Consumer/**/*.swift'; then
+          echo 'Error: the consumer fixture must not use test-only or diagnostic-suppressing imports.'
+          exit 1
+        fi
+    # baseline は dump に使った Xcode と SDK の module とだけ比較できる
+    - name: Check Public API Baseline
+      if: matrix.sdk == 'iphoneos26.5'
+      run: |
+        make api-check XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
   slack_notify:
-    needs: [build]
+    needs: [build, consumer-fixture]
     runs-on: ubuntu-24.04
     if: always()
     permissions:
@@ -56,6 +108,6 @@ jobs:
       - name: Slack Notification
         uses: shiguredo/github-actions/.github/actions/slack-notify@main
         with:
-          status: ${{ job.status }}
+          status: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'failure' || 'success' }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK }}
           slack_channel: sora-ios-sdk
