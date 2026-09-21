@@ -85,11 +85,11 @@ consumer-check-negative: consumer-build
 			case "$$name" in \
 				core-*) isolation=nonisolated ;; \
 				ui-*) isolation=MainActor ;; \
-				*) echo "Error: NegativeChecks の file 名は core- か ui- で始めること: $$file"; exit 1 ;; \
+				*) echo "Error: NegativeChecks file name must start with 'core-' or 'ui-': $$file"; exit 1 ;; \
 			esac; \
 			expected="$$(sed -n '1s|^// EXPECT-DIAGNOSTIC: ||p' "$$file")"; \
 			if [ -z "$$expected" ]; then \
-				echo "Error: EXPECT-DIAGNOSTIC が無い: $$file"; exit 1; \
+				echo "Error: EXPECT-DIAGNOSTIC is missing: $$file"; exit 1; \
 			fi; \
 			echo "typecheck (expect failure): $$file [$$expected]"; \
 			if xcrun swiftc -typecheck -swift-version 6 -default-isolation "$$isolation" \
@@ -97,16 +97,16 @@ consumer-check-negative: consumer-build
 				-I "$(PRODUCTS)" -F "$(PRODUCTS)" \
 				-module-cache-path "$(MODULE_CACHE)" \
 				"$$file" > "$(NEGATIVE_CHECK_LOG)" 2>&1; then \
-				echo "Error: compile に成功した (失敗を期待): $$file"; exit 1; \
+				echo "Error: compilation succeeded but a failure is expected: $$file"; exit 1; \
 			fi; \
 			if ! grep -Fq "$$expected" "$(NEGATIVE_CHECK_LOG)"; then \
-				echo "Error: 期待する診断 '$$expected' が出ていない: $$file"; \
+				echo "Error: the expected diagnostic '$$expected' was not reported: $$file"; \
 				cat "$(NEGATIVE_CHECK_LOG)"; \
 				exit 1; \
 			fi; \
 			count=$$((count + 1)); \
 		done; \
-		echo "$(CONSUMER_DIR): $$count 件の負例が期待どおり失敗した"
+		echo "$(CONSUMER_DIR): $$count negative check(s) failed as expected"
 
 # 公開 API の baseline を生成する。commit 済み baseline を書き換える唯一の target
 api-baseline: consumer-build
@@ -114,7 +114,7 @@ api-baseline: consumer-build
 		actual_xcode="$$(xcodebuild -version | head -1)"; \
 		actual_sdk="$$(xcrun --sdk $(XCODE_SDK) --show-sdk-version)"; \
 		if [ "$$actual_xcode" != "Xcode $(API_XCODE)" ] || [ "$$actual_sdk" != "$(API_SDK_VERSION)" ]; then \
-			echo "Error: baseline は Xcode $(API_XCODE) と $(XCODE_SDK) ($(API_SDK_VERSION)) で生成する (現在: $$actual_xcode / $$actual_sdk)"; \
+			echo "Error: the baseline must be generated with Xcode $(API_XCODE) and $(XCODE_SDK) ($(API_SDK_VERSION)) (current: $$actual_xcode / SDK $$actual_sdk)"; \
 			exit 1; \
 		fi
 	@mkdir -p "$(DERIVED_DATA_ABS)" "$(MODULE_CACHE)"
@@ -140,15 +140,15 @@ api-check: consumer-build
 		assert os.path.getsize(p) >= 1048576" "$(API_BASELINE)"
 	@set -e; \
 		if [ ! -f "$(API_BASELINE_INFO)" ]; then \
-			echo "Error: $(API_BASELINE_INFO) が無い"; exit 1; \
+			echo "Error: $(API_BASELINE_INFO) is missing"; exit 1; \
 		fi; \
 		baseline_xcode="$$(sed -n 's/^xcodebuild: //p' "$(API_BASELINE_INFO)")"; \
 		baseline_sdk="$$(sed -n 's/^sdk: //p' "$(API_BASELINE_INFO)")"; \
 		actual_xcode="$$(xcodebuild -version | head -1)"; \
 		actual_sdk="$$(xcrun --sdk $(XCODE_SDK) --show-sdk-version)"; \
 		if [ "$$baseline_xcode" != "$$actual_xcode" ] || [ "$$baseline_sdk" != "$$actual_sdk" ]; then \
-			echo "Error: baseline は $$baseline_xcode / SDK $$baseline_sdk で生成されているが、実行環境は $$actual_xcode / SDK $$actual_sdk"; \
-			echo "Error: baseline と同じ Xcode と SDK で api-check を実行すること"; \
+			echo "Error: the baseline was generated with $$baseline_xcode / SDK $$baseline_sdk but the current environment is $$actual_xcode / SDK $$actual_sdk"; \
+			echo "Error: run api-check with the same Xcode and SDK that generated the baseline"; \
 			exit 1; \
 		fi
 	@mkdir -p "$(MODULE_CACHE)"
