@@ -17,7 +17,7 @@ Swift 6 language mode と warnings-as-errors で compile できるかを検証�
 
 | ディレクトリ | 役割 |
 | --- | --- |
-| `Sources/<Target>/` | build 対象の scenario。1 file 1 scenario |
+| `Sources/<Target>/` | build 対象の scenario。1 file 1 契約群 |
 | `NegativeChecks/` | compile 失敗を期待する file。どの target にも含めない |
 | `ApiBaseline/` | commit する公開 API baseline とその生成情報 |
 
@@ -46,6 +46,32 @@ compile に失敗したことだけでは不十分 (無関係な typo でも失�
 warning に降格した場合や、末尾のリンク行にしか group 名が無い場合は通らない。ObjC SDK や
 `UIView` 継承型への非隔離な呼び出しは error ではなく warning になるため、負例には使えない。
 
+## 公開 closure の列挙手順
+
+fixture が受け渡しを検証する公開 closure は、次の手順で列挙して突き合わせる。
+
+1. closure プロパティを列挙する: `git grep -nE 'public var [A-Za-z]+: *\(\(' -- Sora` と
+   型が次行以降にある宣言の `git grep -n -A4 -E 'public var [A-Za-z]+:$' -- Sora`
+2. closure 引数を列挙する: `git grep -n -B3 '@escaping' -- Sora | grep 'public func'`
+3. 囲っている型が公開 (`public class` / `public struct` / `public enum` / `public protocol`) の
+   ものだけを対象にする。internal な型の `public` メンバ (`WebSocketChannelInternalHandlers` や
+   `ConnectionTimer` など) は公開 API ではない
+4. 対象の API を、handler 型に属するものは `Sources/ConsumerCore/HandlerCompatibility.swift`、
+   それ以外は `Sources/ConsumerCore/CallbackCompatibility.swift` で受け渡しする
+5. 非推奨の API は `Sources/ConsumerLegacy/DeprecatedAPI.swift` で扱う
+6. 検証できない API は、次の表に理由を書く
+
+| 公開 closure | 検証する file |
+| --- | --- |
+| `SoraHandlers` / `MediaChannelHandlers` / `MediaStreamHandlers` / `CameraVideoCapturerHandlers` / `WebSocketChannelHandlers` の closure プロパティ | `Sources/ConsumerCore/HandlerCompatibility.swift` |
+| `Logger.onOutputHandler` | `Sources/ConsumerCore/CallbackCompatibility.swift` |
+| `ScreenCaptureSettings.videoSampleBufferTransformer` / `onRuntimeError` (init の引数と property) | `Sources/ConsumerCore/CallbackCompatibility.swift` |
+| `CameraVideoCapturer.stop` / `restart` / `change` の完了 handler | `Sources/ConsumerCore/CallbackCompatibility.swift` |
+| `CameraVideoCapturer.start` の完了 handler | 対象外。実機の `AVCaptureDevice.Format` が必要で、compile だけの fixture では作れない |
+| `MediaChannel.getStats(handler:)` | `Sources/ConsumerCore/MediaChannelRPC.swift` |
+| `Sora.configureAudioSession(block:)` | `Sources/ConsumerCore/CallbackCompatibility.swift` |
+| `SoraDispatcher.async(on:block:)` / `Utilities.Stopwatch(handler:)` | 対象外。非推奨化する作業が扱う |
+
 ## 公開 API baseline
 
 - `make api-baseline`: baseline を生成する。Xcode 26.6 と `iphoneos26.5` が必要
@@ -63,6 +89,7 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | --- | --- | --- |
 | `Sources/ConsumerCore/ConnectSignaling.swift` | 接続設定の組み立て、接続、`ConnectionTask` | 変更しない |
 | `Sources/ConsumerCore/HandlerCompatibility.swift` | 非推奨でない handler の closure 型、`VideoRenderer` の非隔離実装 | 非推奨 API を削除する作業が、対応する handler の代入を削除する |
+| `Sources/ConsumerCore/CallbackCompatibility.swift` | handler 型に属さない公開 closure の受け渡し | 公開 closure を追加・変更する作業が更新する |
 | `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC、統計取得、戻り値 `Error?` の API | Sendable な RPC API を追加する作業が、新しい RPC の scenario を追加する |
 | `Sources/ConsumerUI/VideoViewScenario.swift` | 既定隔離が MainActor であること | `VideoRenderer` の隔離を見直す作業が更新する |
 | `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること | 非推奨 API を削除する作業が、対象の参照を削除する |
