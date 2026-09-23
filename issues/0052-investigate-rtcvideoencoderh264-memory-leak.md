@@ -15,7 +15,7 @@
 
 WebRTC プロジェクトの Issue Tracker において `RTCVideoEncoderH264 never released from memory` として報告されている問題がある。
 
-参考: https://bugs.chromium.org/p/webrtc/issues/detail?id=13763
+参考: https://issues.webrtc.org/42223987
 
 現時点の Sora iOS SDK（libwebrtc m150.7871.3.5）ではトラックの数が増減しないため、影響が出る可能性は低いと思われる。ただし、H.264 を利用する接続では SDK は接続ごとに `RTCVideoEncoderH264` を生成し、切断時に `RTCPeerConnection` を close して解放するため、接続・切断を繰り返す用途で未解放が蓄積しないかを確認しておく必要がある。
 
