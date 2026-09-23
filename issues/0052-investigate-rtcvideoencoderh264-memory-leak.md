@@ -21,10 +21,10 @@ WebRTC プロジェクトの Issue Tracker において `RTCVideoEncoderH264 nev
 
 ## 現状
 
-- Sora iOS SDK の公開 API には接続中のトラック追加・削除（`addTrack` / `removeTrack`）が存在しない。`MediaChannel` の公開 API に該当メソッドはなく、`MediaStream.videoEnabled` の切り替えはフレーム供給の停止でありトラックは残る
+- Sora iOS SDK の公開 API には接続中のトラック追加・削除（`addTrack` / `removeTrack`）が存在しない。`MediaChannel` の公開 API に該当メソッドはなく、`MediaStream.videoEnabled` の切り替えはフレーム供給の停止でありトラックは残る。なお `MediaChannel.native` は `RTCPeerConnection` を公開しており、生の `removeTrack(_:)` は呼べるが、シグナリングへ反映されない操作であり SDK の通常の利用経路ではない
 - 映像・音声トラックは `PeerChannel` の `initializeSenderStream` で生成され、offer 由来のトランスシーバーへ `sender.track` として割り当てられる。切断時は `PeerChannel` の `basicDisconnect` が `nativeChannel?.close()` で破棄する
 - エンコーダーファクトリーは `Sora/NativePeerChannelFactory.swift` の `WrapperVideoEncoderFactory`（プロセス共有のシングルトン）で、H.264 は `RTCDefaultVideoEncoderFactory`（サイマルキャスト有効時は `RTCVideoEncoderFactorySimulcast` 経由）で選択される
-- 本 issue が想定していた再現手順（トラック削除）は SDK の公開 API で実行できないため、SDK が実際に行うエンコーダーの生成・解放ライフサイクル（接続・切断）で確認する
+- 本 issue が想定していた再現手順（トラック削除）は Sora が提供するトラック管理 API に存在しないため、SDK が実際に行うエンコーダーの生成・解放ライフサイクル（接続・切断）で確認する
 
 ## 調査内容
 
