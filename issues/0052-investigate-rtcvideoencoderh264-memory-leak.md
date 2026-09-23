@@ -29,6 +29,7 @@ WebRTC プロジェクトの Issue Tracker において `RTCVideoEncoderH264 nev
 ## 調査内容
 
 - `Configuration.videoCodec = .h264` で接続し、切断（`MediaChannel.disconnect`）完了後に Instruments の Leaks / Allocations で `RTCVideoEncoderH264` インスタンスの生成と解放（未解放の蓄積）を確認する。接続・切断を繰り返すシナリオと、`Configuration.simulcastEnabled` の true / false の組み合わせで実施する
+- エンコーダーは映像を実際にエンコードする際に生成されるため、映像フレームが供給される状態（既定の `initialCameraEnabled = true` によるカメラキャプチャ開始）で確認すること。`H.264` は Apple Video Toolbox のハードウェアエンコーダーを利用する（`README.md` に記載）ため、`RTCVideoEncoderH264` が生成されない環境では「リークなし」と断定できない。確認に用いた実行環境（実機 / Simulator）を結果とともに記録すること
 - 未解放が蓄積する場合、libwebrtc 側の問題か SDK 側の保持の問題かを切り分ける。SDK 側の保持候補として `Sora/NativePeerChannelFactory.swift` の `WrapperVideoEncoderFactory`（プロセス共有シングルトン）と、切断経路の `PeerChannel.basicDisconnect` による `nativeChannel?.close()` を確認する
 
 ## 完了条件
