@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Low
 - Branch: feature/fix-handler-bag-sharing
-- Polished:
+- Polished: 2026-09-23
 
 ## 目的
 
@@ -37,7 +37,7 @@
 
 次のいずれかを実装時に決める。
 
-- `MediaChannel.init` で configuration の bag をそのまま使わず、closure をコピーした接続ごとの bag を作る
+- `MediaChannel.init` で configuration の bag をそのまま使わず、closure をコピーした接続ごとの bag を作る。この場合、接続開始後に `Configuration.mediaChannelHandlers` を変更しても接続済みの `MediaChannel.handlers` には反映されなくなる (現行は同じ bag を参照するため反映される)
 - bag の共有を仕様として維持する場合、`Configuration.mediaChannelHandlers` と `MediaChannel.handlers` の doc および `skills/sora-ios-sdk/SKILL.md` に共有されることを明記し、接続ごとに変える場合は接続後に `handlers` へ新しい `MediaChannelHandlers` を代入する手順を示す
 
 ## 優先度根拠
@@ -46,9 +46,10 @@
 
 ## 完了条件
 
-- 同じ configuration から作った 2 接続で handler が互いに影響しないこと、または共有されることが doc に明記されていること
-- 接続ごとに handler を設定する手段が公開 API として成立していること
-- 2 接続で handler が交差しないことを検証するテストが追加されていること
+- 選択した設計方針に一致していること
+  - 接続ごとの bag をコピーする場合: 同じ configuration から作った 2 接続で handler が互いに影響しないこと、および 2 接続で handler が交差しないことを検証するテストが追加されていること
+  - 共有を仕様として維持する場合: `Configuration.mediaChannelHandlers` と `MediaChannel.handlers` の doc および `skills/sora-ios-sdk/SKILL.md` に共有されることが明記され、接続ごとに分ける場合に接続後に `handlers` へ新しい `MediaChannelHandlers` を代入する手順が示されていること
+- いずれの場合も、接続ごとに handler を設定する手段が公開 API として成立していること
 - 追加したテストと既存テストがすべて成功すること
 
 ## 解決方法
