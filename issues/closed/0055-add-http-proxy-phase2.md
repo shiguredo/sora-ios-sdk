@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-09-23
 - Model: Sonnet 4.6
 - Branch: feature/add-http-proxy-phase2
 - Polished: 2026-06-06
@@ -59,3 +59,27 @@ libwebrtc の `RTCProxyType` は `none / socks5 / https` の 3 種のみ。`CFNe
 - [ADD] Configuration.proxy が nil の場合に OS のシステムプロキシ設定を自動参照するようにする
   - @voluntas
 ```
+
+## 解決方法
+
+本 issue は closed とした。主要な変更対象（WebSocket 側の OS システムプロキシ自動参照）は現行実装で既に実現されていることを Apple 公式ドキュメントとの照合で確認し、かつ TURN 側は本 issue 自身の完了条件が別 issue を想定している（分割済み）ため、これ以上対応すべき作業が残っていないと判断した。
+
+- WebSocket 側の「OS プロキシは無視される」前提は Apple 公式ドキュメントと矛盾する
+  - `URLSession` クラスの概要は「transparent support for proxy servers and SOCKS gateways, as configured in the user's system preferences」（https://developer.apple.com/documentation/foundation/urlsession）
+  - `URLSessionConfiguration.connectionProxyDictionary` は「The default value is NULL, which means that tasks use the default system settings」（https://developer.apple.com/documentation/foundation/urlsessionconfiguration/connectionproxydictionary）
+  - `URLSessionConfiguration.ephemeral` は「similar to default sessions」であり、プロキシ設定に関する差異の記述はない
+  - 現行実装の `URLSessionWebSocketChannel.connect(delegateQueue:)` は `Configuration.proxy` が nil の場合に `connectionProxyDictionary` を設定しない（= システム設定を使用）
+  - したがって完了条件 1（Wi-Fi 設定の手動プロキシで WebSocket 接続が確立できること）は実装を待たずに満たされている状態であり、設計方針の追加コードは不要
+- ソース位置の行番号はすべて現行コードと一致しない（作成時点からのずれ）ため、挿入位置の指示は実装者を誤らせる
+  - `URLSessionWebSocketChannel.swift:33-60` とあるが、現行の `if let proxy {` ブロックは `connect(delegateQueue:)` 内の 41〜68 行目。指示の「61 行目の位置」はブロック内であり、挿入しても `proxy` が nil にならない不要な分岐になる
+  - `NativePeerChannelFactory.swift:77-107` とあるが、現行の `createNativePeerChannel(webRTCConfiguration:proxy:caCertificates:delegate:)` は 186〜225 行目であり、「91 行目の else ブランチ」は現行の 209 行目
+  - shiguredo-issues 規約でもソース位置は行番号でなくシンボル名で示すこととされている
+- CHANGES.md の「既存の `[ADD]` エントリ（現在 4 件）」は誤り
+  - `CHANGES.md` の `## develop` セクションには現在 `[ADD]` エントリがなく、`[UPDATE]` / `[FIX]` のみである
+  - Phase 1 の `[ADD] HTTP プロキシに対応する` は `## 2022.5.0` に存在する（この記述だけは正しい）
+- TURN 側の調査事項の細部は libwebrtc の実装と一致しない
+  - `RTCProxyType` は `RTCProxyTypeNone / RTCProxyTypeHttps / RTCProxyTypeSocks5 / RTCProxyTypeUnknown` の 4 種である（shiguredo-webrtc-build/webrtc-build の `patches/ios_proxy.patch` で確認）
+  - `ProxyInfo` は `webrtc::revive::ProxyInfo`（`autodetect` / `autoconfig_url` / `bypass_list` を持つ）だが、iOS の ObjC API は `proxyType / proxyAgent / proxyHostname / proxyPort / proxyUsername / proxyPassword` しか公開しておらず、`CFNetworkCopySystemProxySettings()` の結果をそのまま渡すことはできない。TURN 側の自動参照には webrtc-build 側のパッチ拡張の調査・適用が必要になる
+- TURN 側の対応は本 issue の完了条件 3 が「適用可能であれば別 issue を起票する」としており、元々本 issue で実装する対象ではない（分割済み）。libwebrtc は URLSession と異なりシステムプロキシを自動参照しないため、この別 issue 候補自体は残るが、優先度・時期と webrtc-build 側パッチ拡張の可否判断が必要なため、本 polish では起票しない
+
+以上のことから、本 issue として実装すべき変更は存在せず、closed とした。`Polished:` は更新しない（closed のため）。
