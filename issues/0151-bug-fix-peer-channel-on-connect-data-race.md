@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-peer-channel-on-connect-data-race
-- Polished:
+- Polished: 2026-09-23
 
 ## 目的
 
@@ -37,10 +37,10 @@
 
 ## 設計方針
 
-- `onConnect` の読み書きを 1 つの排他で保護し、take-and-clear をアトミックにして接続 callback の 1 回保証を構造的に成立させる。
+- `onConnect` の読み書きを 1 つの排他で保護し、take-and-clear をアトミックにして接続 callback の 1 回保証を構造的に成立させる。利用者 callback の呼び出しは排他区間の外で行うこと (callback 内から同期的に `disconnect()` されると `waitDisconnect` が同じ排他を取るため、保持したままだとデッドロックする。`testInvokeConnectHandlerReentrantDisconnectRunsOnce` がこの再入を検証する)。
 - `state` が `onConnect` を読む経路に注意する。`state` は `Lock.shouldCancelDisconnectTimerBasedDisconnect` から `Lock.nsLock` 保持中に呼ばれるため、`Lock.nsLock` で `onConnect` を保護したうえで `state` がそれを取る形にすると非再帰ロックでデッドロックする。次のいずれかを選ぶ。
   - `onConnect` 専用の lock を設け、`Lock.nsLock` と入れ子にしない
-  - 接続試行中の判定を `onConnect != nil` ではなく `0100` の `ConnectionStateOwner` が持つ接続状態から導き、`state` から `onConnect` の読み出しをなくす
+  - 接続試行中の判定を `onConnect != nil` ではなく接続試行状態から導き、`state` から `onConnect` の読み出しをなくす。現状 `0100` の `ConnectionStateOwner` が持つ `ConnectionLifecycleState` には接続試行中を表す状態が無いため、この方法を採るには `0100` の reducer へ接続試行の開始 / 終端イベントと状態の追加が必要になる。また、`Lock.waitDisconnect` の `context?.onConnect != nil` の読みも同じ接続試行状態へ置き換え、`onConnect` の読み経路を `state` と `waitDisconnect` の両方からなくすこと
   - `0100` の snapshot storage と同じく lock 保護の snapshot 方式に寄せる
 
 ## 完了条件
