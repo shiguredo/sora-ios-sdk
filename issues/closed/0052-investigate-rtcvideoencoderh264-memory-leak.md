@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-09-24
 - Model: Sonnet 4.6
 - Branch: feature/investigate-rtcvideoencoderh264-memory-leak
 - Polished: 2026-09-24
@@ -41,3 +41,15 @@ WebRTC プロジェクトの Issue Tracker において `RTCVideoEncoderH264 nev
 ## 根拠
 
 メモリリークが蓄積するとアプリが OOM で終了するリスクがある。長時間接続・切断を繰り返す用途では特に問題になる可能性があるため、再現性の有無を確認しておく。
+
+## 解決方法
+
+調査の結果、本 issue は対応不要として closed にする。根拠は以下のとおり。
+
+- 報告されたバグは WebRTC Issue Tracker 42223987 で報告された「RTCVideoEncoderH264 never released from memory」であり、再現手順は接続中のトラック削除（removeTrack）である
+- Sora iOS SDK の公開 API には接続中のトラック追加・削除が存在しない。`MediaChannel` の公開 API に `addTrack` / `removeTrack` はなく、`Sora/` 配下に `removeTrack` の利用箇所も存在しない。`MediaChannel.native` 経由の生 `removeTrack` はシグナリングへ反映されない操作であり SDK の通常の利用経路ではない。`MediaStream.videoEnabled` の切り替えは `track.isEnabled` の変更でありトラックは残る。したがって報告されたバグの再現手順は Sora の利用経路に存在せず、発生しない
+- SDK が行うエンコーダーの生成・解放は、接続時に `PeerChannel.initializeSenderStream` でトラックを生成して offer 由来のトランスシーバーの `sender.track` へ割り当て、切断時に `PeerChannel.basicDisconnect` が `nativeChannel?.close()` で PeerConnection を破棄する、の 2 経路のみである。`PeerConnection.close()` は libwebrtc の標準的な解放経路であり、SDK はエンコーダーを接続を超えて保持するコードを持たない
+- 保持候補として挙げていた `WrapperVideoEncoderFactory`（プロセス共有シングルトン）は、`createEncoder` で生成したエンコーダーを保持しない（`NativePeerChannelFactory.swift` の `WrapperVideoEncoderFactory.createEncoder` は `currentEncoderFactory.createEncoder(info)` を返すのみ）。エンコーダーは `RTCRtpSender` / `RTCPeerConnection` 側が保持し、PeerConnection の破棄で解放される
+- 仮に接続・切断の繰り返しで未解放が観測されたとしても、SDK 側に保持経路が存在しない以上 libwebrtc 側の問題であり SDK で対応できるものではない。libwebrtc 側の問題は今後の libwebrtc のバージョン更新で吸収される
+
+なお、実機 + Instruments での実測は実施していない。上記はソース照合による判断であり、実測で未解放が確認された場合は、libwebrtc 側の問題として扱い、libwebrtc のバージョン更新の issue 側で対応すること。
