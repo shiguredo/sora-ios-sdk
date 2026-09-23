@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-video-enabled-flag-serialization
-- Polished:
+- Polished: 2026-09-23
 
 ## 目的
 
@@ -14,7 +14,7 @@
 
 ## 現状
 
-`MediaStream.videoEnabled` / `audioEnabled` は同期 `get set` の protocol requirement であり、`BasicMediaStream` の setter は「現在値と異なる場合だけ `nativeVideoTrack` / `nativeAudioTrack` の `isEnabled` を書き換え、`MediaStreamHandlers.onSwitchVideo` / `onSwitchAudio` と `videoRenderer` の `onSwitch` を呼ぶ」。getter は native track の `isEnabled` をそのまま読む。
+`MediaStream.videoEnabled` / `audioEnabled` は同期 `get set` の protocol requirement であり、`BasicMediaStream` の setter は「現在値と異なる場合だけ `nativeVideoTrack` / `nativeAudioTrack` の `isEnabled` を書き換え、`MediaStreamHandlers.onSwitchVideo` / `onSwitchAudio` を呼び、`videoRenderer` の `onSwitch` を `streamOwner.submitSwitch` (`Sora/StreamFrameOwner.swift`) へ投入する」。getter は native track の `isEnabled` をそのまま読む。
 
 同じ stream の `videoEnabled` / `audioEnabled` へ書き込む公開 API は次のとおりで、実行される executor が揃っていない。
 
@@ -27,16 +27,16 @@
 
 そのため、`setVideoHardMute(true)` が失敗して復元する間に `setVideoSoftMute` が成功していても、復元の書き込みが後から上書きし得る。setter の「現在値の読み取り」と「書き込み」の間にも同期が無く、2 つの呼び出しが同時に「値が変わった」と判定して callback が二重に発火し得る。
 
-`setVideoHardMute` 系の操作相互の排他は `VideoHardMuteOperationTracker` (`Sora/VideoMute.swift`) が同一 lease の同時実行を拒否する形で実現しているが、`setVideoSoftMute` / 直接代入との排他は無い。
+`setVideoHardMute` 系の操作相互の排他は `VideoHardMuteOperationTracker` (`Sora/VideoMute.swift`) が実現している。`operationTracker.begin` は lease を問わず `activeLease == nil` を要求するため、既に操作が進行していれば別の lease の呼び出しでも拒否される。しかし `setVideoSoftMute` / 直接代入との排他は無い。
 
 ## 前提となる issue
 
 - `0136` (完了): `setVideoHardMute(true)` の設定と復元を `VideoHardMuteActor` の executor へ移し、`onSwitchVideo` の発火回数と順序を確定した。
-- `0105` (open): frame の処理順序と executor (ingress の直列化と renderer callback の main queue 配送)。本 issue は frame を扱わず、確定値の直列化だけを扱う。
+- `0105` (完了): frame の処理順序と executor (ingress の直列化と renderer callback の main queue 配送)。本 issue は frame を扱わず、確定値の直列化だけを扱う。
 
 実装順序の依存:
 
-- `0105` と本 issue はどちらも `Sora/MediaStream.swift` の `videoEnabled` / `audioEnabled` setter を変更する。`0105` は setter から `videoRenderer?.onSwitch` を直接呼ぶ経路を `StreamFrameOwner` への委譲に変え、本 issue は setter に operation の世代による確定を入れるため、どちらかを先行させ、もう一方を rebase して実装する (順序は固定しない)。
+- `0105` は setter から `videoRenderer?.onSwitch` を直接呼ぶ経路を `StreamFrameOwner` への委譲へ変え、renderer の `onSwitch` の配送 executor を main queue に統一した (実装済み)。本 issue は同じ setter に operation の世代による確定を入れるため、現行の `StreamFrameOwner` 経由の実装の上で変更する (rebase は不要)。
 
 ## 設計方針
 
