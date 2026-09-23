@@ -34,7 +34,7 @@ WebRTC プロジェクトの Issue Tracker において `RTCVideoEncoderH264 nev
 
 ## 完了条件
 
-- `Configuration.videoCodec = .h264` で接続した場合の `RTCVideoEncoderH264` の生成と解放が Instruments で確認でき、接続・切断を繰り返しても未解放が蓄積しないこと（`simulcastEnabled` の true / false の両方で確認）
+- `Configuration.videoCodec = .h264` で接続した場合の `RTCVideoEncoderH264` の生成と解放の実態（未解放が蓄積するか否か）が Instruments で確認できていること（`simulcastEnabled` の true / false の両方で確認）。未解放が蓄積しないことが期待されるが、蓄積する場合も完了条件 2 の切り分けと完了条件 3 の記録をもって完了とする
 - 未解放が蓄積する場合は、libwebrtc 側の問題か SDK 側の保持の問題かを切り分け、確認した libwebrtc バージョン（m150.7871.3.5）と実行環境・再現手順を本 issue に追記すること
 - 調査結果（リーク有無、確認した環境、切り分け結果）を本 issue に記録すること
 
