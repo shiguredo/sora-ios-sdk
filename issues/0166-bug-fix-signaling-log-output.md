@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-signaling-log-output
-- Polished:
+- Polished: 2026-09-23
 
 ## 目的
 
@@ -23,8 +23,6 @@
 - `serializeData(_:)` の downcast 失敗 (`Logger.info`)
 - `updateMetadata(signaling:data:)` の JSON デコード失敗の catch (`Logger.error`)
 - `SignalingOffer.Encoding` の `init(from:)` の `default:` (未知の networkPriority) (`Logger.warn`)
-
-実機の `.debug` ログ (11,364 行) にも `Signaling` タイプの行は 1 件も無いが、上記 3 箇所は異常系のため発火していない可能性がある。根拠は filtering のコードにある。
 
 `0106` は filtering の受理リストを変更しておらず、本問題は `0106` の変更前から develop に存在する。
 
