@@ -56,7 +56,7 @@ make api-baseline
 make api-check
 ```
 
-- CI の `iphoneos26.5` の leg が `make api-check-fresh` を呼ぶ (`api-check-fresh` は `api-check` を
+- CI の `swift6-consumer` job が `make api-check-fresh` を呼ぶ (`api-check-fresh` は `api-check` を
   実行してから fresh な dump と比較する)。`api-baseline` は CI から呼ばない (commit 済み baseline を
   上書きして自分自身と比較することになるため)
 - `-input-paths` は使わない。`-diagnose-sdk` は `-I` / `-F` で読み込む module を「今回」側、
@@ -84,11 +84,19 @@ make api-check
 
 ### Xcode を更新するとき
 
-1. `.github/workflows/consumer-test.yml` の `swift6-consumer` の matrix を更新する
-2. `Makefile` の `XCODE_SDK` と `API_XCODE` を更新する (baseline の file 名と `API_SDK_VERSION` は
-   `XCODE_SDK` から導出される)
-3. 新しい Xcode と SDK で `make api-baseline` を実行し、baseline と生成情報を作り直す。
-   再生成後に `make api-check-fresh` が成功することを確認する
-4. 差分をレビューする。SDK の更新に伴う差分 (deprecation の追加など) と、Sora 側の変更に
+1. `README.md` のシステム条件、`skills/sora-ios-sdk/SKILL.md` の動作条件、
+   `TestConsumers/Swift6Consumer/README.md` の Xcode と SDK の記述、
+   `.github/workflows/build.yml` の `env.XCODE` / `env.XCODE_SDK`、
+   `.github/workflows/deploy-apidoc.yml` の `env.XCODE`、`.github/workflows/e2e-test.yml` の
+   `env.XCODE_SDK` を更新する (`e2e-test.yml` の未使用の `XCODE` は更新しない)
+2. `.github/workflows/consumer-test.yml` の `swift6-consumer` の matrix を更新する
+3. `Makefile` の `XCODE_SDK` と `API_XCODE` を更新する (baseline の file 名と `API_SDK_VERSION` は
+   `XCODE_SDK` から導出され、`build` target の SDK も `XCODE_SDK` に追随する)
+4. `XCODE_SDK` / `API_XCODE` を変えた場合、または `*.info.txt` の `xcodebuild` と `sdk` が
+   実行環境と一致しない場合は `make api-baseline` で baseline と生成情報を作り直す。
+   `XCODE_SDK` / `API_XCODE` が同じで `*.info.txt` の `xcodebuild` と `sdk` が実行環境と
+   一致する場合だけ再生成しない。再生成の有無にかかわらず `make api-check-fresh` が
+   成功することを確認する
+5. 差分をレビューする。SDK の更新に伴う差分 (deprecation の追加など) と、Sora 側の変更に
    よる差分を分けて確認する
-5. SDK の版が変わる場合は baseline の file 名も新しい版に変える。古い baseline は残さない
+6. SDK の版が変わる場合は baseline の file 名も新しい版に変える。古い baseline は残さない

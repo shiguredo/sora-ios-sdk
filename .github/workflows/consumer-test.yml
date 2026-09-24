@@ -7,27 +7,22 @@ on:
     - '**.md'
     - 'LICENSE'
 
-# 同じ ref への連続 push では古い実行を打ち切る (WebRTC artifact の取得と 2 leg の build が走るため)
+# 同じ ref への連続 push では古い実行を打ち切る (WebRTC artifact の取得と consumer package の build が走るため)
 concurrency:
   group: consumer-test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # 外部の consumer が Sora を import するのと同じ形の package を、最低要件の Xcode と
-  # 公開 API baseline を生成した Xcode の両方で検証する
+  # 外部の consumer が Sora を import するのと同じ形の package を、最低要件であり
+  # 公開 API baseline を生成した Xcode 26.6 で検証する
   swift6-consumer:
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
-      fail-fast: false
       matrix:
         include:
-        - xcode: /Applications/Xcode_26.2.app
-          sdk: iphoneos26.2
-          api_check: false
         - xcode: /Applications/Xcode_26.6.app
           sdk: iphoneos26.5
-          api_check: true
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: Select Xcode Version
@@ -133,7 +128,6 @@ jobs:
         fi
     # baseline は dump に使った Xcode と SDK の module とだけ比較できる
     - name: Check Public API Baseline
-      if: matrix.api_check
       run: |
         make api-check-fresh XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
     # consumer package だけを変更した push では build.yml が paths-ignore で skip されるため、

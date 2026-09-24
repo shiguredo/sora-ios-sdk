@@ -37,7 +37,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 
 ## 設計方針
 
-- `swift-tools-version` を現在の最低開発環境で利用できる `6.x` へ更新する。最低開発環境は README のシステム条件の Xcode 26.2 とし、Xcode 26.2 が読み取れる tools version を上限に選ぶ。
+- `swift-tools-version` を現在の最低開発環境で利用できる `6.x` へ更新する。最低開発環境は README のシステム条件の Xcode 26.6 とし、Xcode 26.6 が読み取れる tools version を上限に選ぶ。
 - package initializer に `swiftLanguageModes: [.v6]` を明示する。
 - manifest API の正確なシグネチャを採用 Xcode の `PackageDescription` で確認する。
 - iOS deployment target の `.iOS(.v14)` は維持する。
@@ -51,7 +51,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 モックやスタブは使用しない。
 
 - `swift package dump-package` で tools version と Swift 6 language mode を確認する。
-- `0107` の consumer package を Xcode 26.2 と最新 26.x で build する。
+- `0107` の consumer package を Xcode 26.6 の 1 leg で build する。
 - SDK target を strict concurrency / warnings-as-errors で build する。
 - test target は現行 CI 相当で build が成功することを確認する。test target の strict concurrency / warnings-as-errors gate の本対応は `0118` の管轄とする。
 - binary `WebRTC.xcframework` の import と iOS 14 deployment target が維持されることを確認する。
@@ -67,7 +67,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 - package product、target、binary dependency の構成が意図せず変わっていないこと。
 - target 全体を MainActor default にして concurrency 問題を隠していないこと。
 - `0107` の consumer package が strict concurrency / warnings-as-errors で成功すること。
-- Xcode 26.2 と最新 26.x の CI が成功すること。
+- Xcode 26.6 の 1 leg の CI が成功すること。
 - 最低 Xcode version と SwiftPM compatibility への影響が利用者向け文書に記載されていること。
 
 ## 解決方法

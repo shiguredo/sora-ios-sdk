@@ -18,7 +18,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 
 - iOS 14 以降
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
-- Xcode 26.2
+- Xcode 26.6
 - WebRTC SFU Sora 2025.2.0 以降
 
 ## インストール

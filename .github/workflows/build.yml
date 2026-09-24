@@ -12,8 +12,8 @@ jobs:
   build:
     runs-on: macos-26
     env:
-      XCODE: /Applications/Xcode_26.2.app
-      XCODE_SDK: iphoneos26.2
+      XCODE: /Applications/Xcode_26.6.app
+      XCODE_SDK: iphoneos26.5
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: Select Xcode Version
