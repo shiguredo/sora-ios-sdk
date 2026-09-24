@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Low
 - Branch: feature/refactor-document-unreachable-redirect-invalidation
-- Polished:
+- Polished: 2026-09-25
 
 ## 目的
 
@@ -22,11 +22,11 @@ redirect は Sora の仕様上 `connect` への応答としてのみ送信され
 
 `SoraTests/PeerChannelRedirectInvalidationTests.swift` は `peerChannel.switchedToDataChannel = true` を手動で代入して「リダイレクト前の接続済み状態」を作ってから redirect を入力しており、production では到達しない状態を検証している。この意図がコメントから読み取れない。
 
-なお、空の状態への書き込みでも `MediaChannel.sendMessage` と RPC の読み取りとは無同期であるため、`0127` と `0135` が扱う競合は成立する。無効化そのものを削除する判断をする場合は、この 2 件との整合を取る必要がある。
+なお、対象が空でも、`switchedToDataChannel` / `dataChannels` / `rpcChannel` への書き込みは `MediaChannel.sendMessage` と RPC の読み取りとは無同期であり、`0135` が扱うデータ競合は対象が空でも成立する。`0127` が扱う stats 送信の競合も無効化の有無とは独立に成立する。無効化そのものを削除する判断をする場合は、この 2 件へ与える影響 (案 2 の判断材料を参照) との整合を取る必要がある。
 
 ## 設計方針
 
-無効化を残すか削除するかは実装時に決める。どちらの案でも、redirect が接続確立前にのみ発生することと、無効化の対象が常に空であることをコードとテストに明記する。
+無効化を残すか削除するかは実装時に決める。どちらの案でも、redirect が接続確立前にのみ発生することと、無効化の対象が常に空であることをコードに明記する。無効化を残す案 (案 1) ではテストにも明記する。
 
 ### 案 1: 防御コードとして残し、到達しないことを明記する
 
@@ -36,14 +36,15 @@ redirect は Sora の仕様上 `connect` への応答としてのみ送信され
 
 ### 案 2: 到達しない無効化を削除する
 
-- `dataChannels` の参照解放、`rpcChannel` の invalidate と nil 代入、`streams` の `terminate()` と `streams.removeAll()`、および `redirect: terminated N streams` と `redirect: invalidated rpcChannel` のログを削除する。
-- 残すのは redirect に必要な `dataChannelGeneration` の更新、`isRedirecting`、`cancelDisconnectTimer()`、`nativeChannel?.close()`、`signalingChannel.redirect(location:)` とする。
-- 判断材料: 空の状態への書き込みが消えるため、`0135` が扱う競合の経路も消える。`0135` / `0127` の扱い (競合の解消方法と、close してよいか) を合わせて決める必要がある。将来 redirect が接続後に送られる仕様になった場合は旧 stream の終端が無いままになるため、その時点で設計し直すことになる。
+- 削除するのは、`switchedToDataChannel = false`、`dataChannels` の参照解放 (`removeAll()`)、`rpcChannel` の invalidate と nil 代入、`streams` の `terminate()` と `streams.removeAll()`、および `redirect: invalidating old transport` / `redirect: terminated N streams` / `redirect: invalidated rpcChannel` のログである。redirect 受理時はいずれも初期状態のままなので、削除しても production の挙動は変わらない。
+- 残すのは redirect に必要な `dataChannelGeneration` の更新と `isRedirecting` (`handleConnectionEvent(.redirectReceived)`)、`cancelDisconnectTimer()`、`nativeChannel?.close()`、`signalingChannel.redirect(location:)` とする。
+- `SoraTests/PeerChannelRedirectInvalidationTests.swift` の 2 テストは「リダイレクト前の接続済み状態」を手動で作って到達しない無効化を検証しており、無効化を削除すると成立しなくなるため削除する。redirect 受信時の `dataChannelGeneration` 更新と `isRedirecting` の検証は `SoraTests/ConnectionStateReducerTests.swift` が既に担っている。
+- 判断材料: redirect 経由の書き込みが消えることで、`0135` が扱う競合のうち無効化の書き込み経路は消える。しかし `dataChannels` / `switchedToDataChannel` / `rpcChannel` には `peerConnection(_:didOpen:)` などの他の書き込み経路が残るため、`0135` が対象とする排他単位の導入は引き続き必要である。`0127` は stats 送信経路の遮断であり、無効化の削除とは独立に取り組む。`0135` / `0127` の扱い (競合の解消方法と、`nativeChannel?.close()` を残すこと) を合わせて決める必要がある。将来 redirect が接続後に送られる仕様になった場合は旧 stream の終端が無いままになるため、その時点で設計し直すことになる。
 
 ## 完了条件
 
-- `Sora/PeerChannel.swift` と `SoraTests/PeerChannelRedirectInvalidationTests.swift` を読むと、redirect が接続確立前にのみ発生することと、無効化の対象が常に空であることが分かる。
+- `Sora/PeerChannel.swift` (および案 1 の場合は `SoraTests/PeerChannelRedirectInvalidationTests.swift`) を読むと、redirect が接続確立前にのみ発生することと、無効化の対象が常に空であることが分かる。
 - 案 1 を採る場合は、防御として残す理由と、対象が常に空であることによる競合の扱いが書かれている。
-- 案 2 を採る場合は、削除した無効化に依存していた `0127` / `0135` の扱いが issue に記録されている。
+- 案 2 を採る場合は、削除した無効化に依存していた `0127` / `0135` の扱いと、無効化を前提としていたテストの削除が issue に記録されている。
 
 ## 解決方法
