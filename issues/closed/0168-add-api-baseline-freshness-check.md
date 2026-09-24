@@ -1,7 +1,7 @@
 # 公開 API baseline が最新であることを検証する gate を追加する
 
 - Created: 2026-09-24
-- Completed:
+- Completed: 2026-09-24
 - Priority: Medium
 - Branch: feature/add-api-baseline-freshness-check
 - Polished: 2026-09-24
@@ -77,7 +77,7 @@ commit 済みの公開 API baseline が現在の `Sora` module と一致して�
 モックやスタブは使用しない。実際の `Sora` module と baseline で検証する。
 
 - `Sora` に新しい公開型を 1 つ一時的に追加する (空の `public enum` など)。この状態では `make api-check` は exit 0 のまま (追加は `-diagnose-sdk` では検出されない) で、`make api-check-fresh` は差分を検出して失敗し、追加した型の名前が一覧に現れ、`make api-baseline` の実行を案内する
-- 一時変更は 1 コミットとして push し、失敗した CI run の URL を控えてから `git revert` の打ち消しコミットを同じ PR に追加する (`git reset` と force push は行わない)
+- 一時変更は検証用の使い捨てブランチ (issue 番号を含めない `feature/debug-...`) で行い、そのブランチの CI で失敗を確認したらブランチを削除する。CI のログは保持期限があり後から閲覧できないため、URL ではなく確認した事実 (日付・確認した workflow と leg・失敗時の出力) を本 issue の「検証記録」に残す
 - `make api-baseline` で再生成した状態では `make api-check` と `make api-check-fresh` の両方が成功する
 - `$(API_BASELINE_INFO)` の `sdk` を実行環境と異なる値に一時的に書き換え、`make api-check-fresh` が比較の前に環境一致検査で失敗することを確認し、`git checkout --` で元に戻す
 - `make api-check-fresh` のレシピの先頭に一時的に `@echo "DEVELOPER_DIR=$$DEVELOPER_DIR"` を足し、`XCODE` で指定した Xcode が表示されることを確認して元に戻す
@@ -85,12 +85,12 @@ commit 済みの公開 API baseline が現在の `Sora` module と一致して�
 - `Sora` の source の import を 1 つ一時的に別の module に変え、`make api-check-fresh` の一覧に import の追加と削除が現れることを確認して元に戻す (`usr` を持たない宣言ノードの一覧の確認)
 - `grep -E '"/(Users|Applications|usr|private)/' "$(API_BASELINE_FRESH)"` が空であること (fresh dump に絶対パスが含まれないこと) を確認する
 - `make api-check-fresh` の前後で `git diff --exit-code -- TestConsumers/Swift6Consumer/ApiBaseline/` が空であること、`git status --short` で一時変更 (`Sora` / `Makefile`) が残っていないことを確認する
-- 一時変更を revert した後、commit 済み baseline のまま 26.6 leg の鮮度検査が成功する (CI ランナーでも dump が再現する)
+- feature branch の CI で、commit 済み baseline のまま 26.6 leg の鮮度検査が成功する (CI ランナーでも dump が再現する)
 
 ## 完了条件
 
 - `make api-check-fresh` が 26.6 leg (`0169` 完了後は唯一の leg) で skip されずに実行され、commit 済み baseline が現在の `Sora` module と一致していることを検査すること
-- `Sora` に公開 API を一時的に追加して baseline を再生成しない場合に `make api-check-fresh` が失敗し、追加した宣言が一覧に現れ、`make api-baseline` での再生成を案内すること (その CI run の URL が PR 本文にあること)
+- `Sora` に公開 API を一時的に追加して baseline を再生成しない場合に `make api-check-fresh` が失敗し、追加した宣言が一覧に現れ、`make api-baseline` での再生成を案内すること (確認した結果が本 issue の「検証記録」にあること)
 - `make api-check-fresh` が commit 済み baseline を書き換えないこと (CI が `api-baseline` を呼ばないこと)
 - fresh dump が比較の前に `API_VALIDATE` で検証され、絶対パスと実行情報を含まないこと
 - `make api-check` が削除・変更を検出する既存の挙動と出力を保っていること
@@ -99,4 +99,23 @@ commit 済みの公開 API baseline が現在の `Sora` module と一致して�
 - `TestConsumers/Swift6Consumer/README.md` と `CODEBASE.md` に 2 つの target の役割分担が書かれ、`CODEBASE.md` の baseline を更新する手順に再生成後の `make api-check-fresh` の確認が含まれること (更新後に issue 番号が無いこと)
 - `CHANGES.md` の `## develop` の `### misc` に `[ADD]` が担当者行付きで追記されていること
 
+## 検証記録
+
+- 2026-09-24: feature branch の CI (`Check Public API Baseline`, 26.6 leg) が `The committed API baseline matches the current Sora module.` を出力して成功した。`macos-26` ランナーの Xcode 26.6 でも dump が再現することを確認した
+- 2026-09-24: 検証用ブランチ `feature/debug-api-baseline-freshness-verify` に `public enum FreshnessProbe {}` を一時追加して CI を実行し、26.6 leg の `Check Public API Baseline` が失敗することを確認した。失敗時の出力は次のとおり
+  - `Added declarations (1):` / `+ FreshnessProbe [Enum]`
+  - `Error: the committed API baseline does not match the current Sora module.`
+  - `Error: run 'make api-baseline' and include the regenerated baseline in the same change.`
+- 同じ run で 26.2 leg は `if: matrix.api_check` により `Check Public API Baseline` を skip し、Build と E2E Test は成功した。確認後に検証ブランチは削除した (CI のログは保持期限があるため URL は残さない)
+
 ## 解決方法
+
+`Makefile` に `api-check-fresh` target を追加し、commit 済みの公開 API baseline が現在の `Sora` module と一致していることを CI で検証できるようにした。既存の `api-check` が担う削除・変更・準拠の削除の検出はそのままに、`api-check-fresh` が fresh な dump との一致 (追加を含むすべての差分) を確認する。
+
+- `Makefile` に `API_BASELINE_FRESH` / `API_CHECK_FRESH_LOG` と、差分を出す Python (`API_BASELINE_DIFF` を `define` して `export`) を追加し、`api-check-fresh: api-check` を target 固有 `export DEVELOPER_DIR` と `.PHONY` に加えた
+- fresh dump を比較の前に `API_VALIDATE` で検証し、`json.load` した値の `==` で commit 済み baseline と比較する。差分がある場合は宣言ノードの `usr` (持たない `Import` は `(declKind, printedName)`) で追加・削除を一覧にし、整形した JSON の行差分を log に全量、標準出力に先頭 200 行を出す
+- 差分は終了コード 2、比較失敗は 1 として区別し、差分の場合は `make api-baseline` での再生成を案内して失敗させる
+- `.github/workflows/consumer-test.yml` の `Check Public API Baseline` step の `run` を `make api-check-fresh XCODE=... XCODE_SDK=...` に変えた。step 名と `if: matrix.api_check` は変えないため、`0169` の 1 leg 化でも同じ step が使われる
+- `TestConsumers/Swift6Consumer/README.md` と `CODEBASE.md` の検出範囲・CI が呼ぶ target・baseline を更新する手順を更新し、`CHANGES.md` の `## develop` の `### misc` に `[ADD]` を追記した
+
+`make api-check` のレシピと出力は変更していない。公開 API を追加したまま baseline を再生成しない状態を CI が検出することは `## 検証記録` のとおり確認済みである。
