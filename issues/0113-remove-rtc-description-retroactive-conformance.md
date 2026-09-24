@@ -48,7 +48,7 @@ Swift 6.3 は、別 module の型を別 module の protocol に準拠させる�
 
 ### 互換性
 
-- 削除の可否判定は先に、`0107` の consumer fixture と API baseline で行う。この確認手段は `0107` 実装後に利用できるため、本 issue の互換性確認は `0107` 完了後に行う。
+- 削除の可否判定は先に、`0107` の consumer package と API baseline で行う。この確認手段は `0107` 実装後に利用できるため、本 issue の互換性確認は `0107` 完了後に行う。
 - 現行 release 系で即時削除が許容される場合: 6 つの conformance を削除する(本 issue の主経路)。
 - 即時削除が許容されない場合: 6 つの conformance に `@retroactive` を明記して warning を抑止し、本 issue の到達点を「retroactive conformance warning 0 件 + SDK 内部の crash 経路解消」とする。SDK 内部の文字列化は削除経路と同じく internal formatter へ移行する。conformance 自体の削除は次期 major version または `0070` の該当 phase へ委ね、`0070` の該当 phase で扱われない場合は、その削除を追跡する issue を別途起票する。
 - どちらの経路でも、SDK のログ文字列が既存の既知 case で変わらないようにする。
@@ -76,7 +76,7 @@ Swift 6.3 は、別 module の型を別 module の protocol に準拠させる�
 - 実 PeerConnection の signaling / ICE state change log が従来どおり出力されることを確認する。
 - 実 DataChannel の ready state log と `MediaChannel.sendMessage(label:data:)` のエラー文字列が従来どおりであることを確認する。
 - Swift 6.3 の warnings-as-errors で retroactive conformance warning が 0 件になることを確認する。
-- `0107` の consumer fixture と API baseline で互換性への影響を確認する(`0107` 完了後に実施する)。
+- `0107` の consumer package と API baseline で互換性への影響を確認する(`0107` 完了後に実施する)。
 - テストには、imported type へ conformance を追加しない理由を日本語コメントで明記する。
 
 ## 完了条件
@@ -88,7 +88,7 @@ Swift 6.3 は、別 module の型を別 module の protocol に準拠させる�
 - internal formatter が未知 value で `fatalError` を呼ばないこと。
 - Swift 6.3 の retroactive conformance warning が 0 件であること。
 - 既知の enum case に対するログ文字列が意図せず変わっていないこと。
-- public conformance 削除または `@retroactive` 化の互換性影響が `0107` の consumer fixture と API baseline で確認されていること。
+- public conformance 削除または `@retroactive` 化の互換性影響が `0107` の consumer package と API baseline で確認されていること。
 - `0070` の削除計画と重複していないこと。
 - 追加したテストと既存テストがすべて成功すること。
 

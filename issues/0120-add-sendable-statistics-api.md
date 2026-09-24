@@ -40,7 +40,7 @@ WebRTC statistics を actor / Task 境界で安全に受け渡せる、immutable
 - number、string、bool、sequence、map など実 report に現れる value を変換できることを確認する。
 - 未対応の value type を検出した場合の方針を明示し、silent drop しない。
 - legacy `Statistics.jsonObject` と新 snapshot の JSON 表現を、表現可能な既存 field で比較する。
-- `0107` の consumer fixture から async statistics API を利用する。
+- `0107` の consumer package から async statistics API を利用する。
 
 ## 完了条件
 

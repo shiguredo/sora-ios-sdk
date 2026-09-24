@@ -22,7 +22,7 @@ Swift 6 言語モードの利用者が、接続設定を actor / Task 境界へ�
 - 可変 class の `ICEServerInfo`、`webSocketChannelHandlers`、`mediaChannelHandlers`
 - raw WebRTC object の `audioDevice`
 
-`0102` は接続開始時にこれらを internal な `ConnectionConfigurationSnapshot` へ写し取る (handler bag と `audioDevice` は snapshot へ含めず、明示引数として引き渡す) が、internal のため通常の consumer は `import Sora` から参照できない。`0107` の consumer fixture は `@testable` と `@preconcurrency` を禁止しており、internal 型を検証対象にできない。
+`0102` は接続開始時にこれらを internal な `ConnectionConfigurationSnapshot` へ写し取る (handler bag と `audioDevice` は snapshot へ含めず、明示引数として引き渡す) が、internal のため通常の consumer は `import Sora` から参照できない。`0107` の consumer package は `@testable` と `@preconcurrency` を禁止しており、internal 型を検証対象にできない。
 
 ## 設計方針
 
@@ -40,13 +40,13 @@ Swift 6 言語モードの利用者が、接続設定を actor / Task 境界へ�
 - `0102` (完了 2026-09-16): 内部 snapshot の型と変換。フィールド分類を本 issue の設計に再利用する。
 - `0110`: handler を Sendable な event API として提供する。公開設定型から handler を除外する前提である。
 - `0123` (完了 2026-09-15): 公開 value type への `Sendable` 準拠。公開設定型がそのまま保持する型の前提である。
-- `0107`: consumer fixture による strict concurrency 検証の基盤。
+- `0107`: consumer package による strict concurrency 検証の基盤。
 - `0157`: `JSONValue` の public 化。metadata / `dataChannels` / `ForwardingFilter.metadata` の表現に使う。
 
 ### 順序調整
 
 - `0157` の完了後に着手する。公開設定型が保持する公開 `JSONValue` が存在するためである。
-- 実装は `0107` の完了前に進められるが、consumer fixture ができてからでないと完了条件の compile scenario 検証を行えない。
+- 実装は `0107` の完了前に進められるが、consumer package ができてからでないと完了条件の compile scenario 検証を行えない。
 
 ## スコープ外
 
@@ -60,7 +60,7 @@ Swift 6 言語モードの利用者が、接続設定を actor / Task 境界へ�
 - 公開 Sendable な設定型が追加され、利用者が actor / Task 境界で設定値を渡せること。
 - 設定型が handler を含まず、deep Sendable であること。
 - `Configuration` から公開設定型への変換で、metadata / `dataChannels` / codec 別 params / `ForwardingFilter` / WebRTC 設定の値が失われておらず、公開設定型から `Configuration` への復元で同じ接続設定になること。
-- `0107` の consumer fixture へ公開設定型の compile scenario を追加し、`SWIFT_STRICT_CONCURRENCY=complete` と warnings-as-errors により compile できること。
+- `0107` の consumer package へ公開設定型の compile scenario を追加し、`SWIFT_STRICT_CONCURRENCY=complete` と warnings-as-errors により compile できること。
 - 既存の `Configuration` と `Sora.connect` の公開 API が維持されていること。
 - `CHANGES.md` に `[ADD]` として追記していること。
 - 追加したテストと既存テストがすべて成功すること。

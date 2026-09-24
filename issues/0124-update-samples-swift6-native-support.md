@@ -41,7 +41,7 @@ sora-ios-sdk-samples は Swift 6 言語モード対応時に次の暫定対応�
 
 一方、sora-ios-sdk では Swift 6 本対応として次の issue が起票済み。
 
-- `0107`: Swift 6 consumer fixture と strict concurrency CI
+- `0107`: Swift 6 consumer package と strict concurrency CI
 - `0108`: SwiftPM manifest を Swift 6 language mode に更新
 - `0109`: Sendable な RPC API
 - `0110`: executor 契約を持つ Sendable event API

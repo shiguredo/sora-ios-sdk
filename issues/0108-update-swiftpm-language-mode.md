@@ -25,7 +25,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 
 ## 前提となる issue
 
-- `0107`: Swift 6 consumer fixture と strict concurrency CI を追加する。
+- `0107`: Swift 6 consumer package と strict concurrency CI を追加する。
 - `0118`: E2E テストの concurrency 診断抑止を除去する。
 
 加えて、manifest の更新で concurrency warning が一斉に gate されるため、少なくとも次の runtime bug と内部 ownership の対応状況を確認してから着手する。
@@ -51,7 +51,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 モックやスタブは使用しない。
 
 - `swift package dump-package` で tools version と Swift 6 language mode を確認する。
-- `0107` の consumer fixture を Xcode 26.2 と最新 26.x で build する。
+- `0107` の consumer package を Xcode 26.2 と最新 26.x で build する。
 - SDK target を strict concurrency / warnings-as-errors で build する。
 - test target は現行 CI 相当で build が成功することを確認する。test target の strict concurrency / warnings-as-errors gate の本対応は `0118` の管轄とする。
 - binary `WebRTC.xcframework` の import と iOS 14 deployment target が維持されることを確認する。
@@ -66,7 +66,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 - iOS 14 deployment target が維持されていること。
 - package product、target、binary dependency の構成が意図せず変わっていないこと。
 - target 全体を MainActor default にして concurrency 問題を隠していないこと。
-- `0107` の consumer fixture が strict concurrency / warnings-as-errors で成功すること。
+- `0107` の consumer package が strict concurrency / warnings-as-errors で成功すること。
 - Xcode 26.2 と最新 26.x の CI が成功すること。
 - 最低 Xcode version と SwiftPM compatibility への影響が利用者向け文書に記載されていること。
 

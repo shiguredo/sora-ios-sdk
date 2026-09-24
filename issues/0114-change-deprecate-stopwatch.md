@@ -35,7 +35,7 @@ Sora SDK の責務と関係しない一般 utility であり、Swift 6 対応の
 - Foundation の Timer、Swift の Clock / Duration、アプリ側の MainActor timer など、用途に合う仕組みを利用者側で選ぶよう案内する。
 - 単一の万能な置換先があるような説明をしない。
 - 本 issue では API の実装、挙動、executor を変更しない。既存 lifecycle bug を修正する場合は bug category の別 issue とする。
-- `0107` の legacy consumer fixture に deprecated API の compile scenario を追加し、非推奨 warning 以外の source break がないことを確認する。
+- `0107` の legacy consumer package に deprecated API の compile scenario を追加し、非推奨 warning 以外の source break がないことを確認する。
 
 ## スコープ外
 
@@ -49,7 +49,7 @@ Sora SDK の責務と関係しない一般 utility であり、Swift 6 対応の
 
 モックやスタブは使用しない。
 
-- `0107` の consumer fixture から `Utilities.Stopwatch` を従来どおり初期化・呼び出しできることを確認する。
+- `0107` の consumer package から `Utilities.Stopwatch` を従来どおり初期化・呼び出しできることを確認する。
 - deprecated warning に削除予定と移行方針が表示されることを確認する。
 - API baseline で、deprecation annotation 以外の公開 API 変更がないことを確認する。
 - テストには、非推奨期間を設ける理由を日本語コメントで明記する。
@@ -60,7 +60,7 @@ Sora SDK の責務と関係しない一般 utility であり、Swift 6 対応の
 - deprecation message に削除時期と移行方針が記載されていること。
 - 不要な代替 timer abstraction を追加していないこと。
 - `Utilities.Stopwatch` のシグネチャと既存挙動を変更していないこと。
-- consumer fixture で既存利用コードが compile できること。
+- consumer package で既存利用コードが compile できること。
 - API baseline に意図しない変更がないこと。
 - 追加したテストと既存テストがすべて成功すること。
 

@@ -115,7 +115,7 @@ Logger の出力 handler は logging を呼び出した executor 上で同期に
 - `grep -nE "Logger\.(fatal|error|warn|info|debug|trace)\(" Sora/Sora.swift Sora/ConnectionTimer.swift Sora/MediaChannel.swift Sora/AudioDeviceModuleWrapper.swift` の各出現位置について、その直前で `lock()` している区間と `queue.sync` の区間の内側に無いことを、`git diff` とコードで 1 件ずつ対応付けて確認する (`grep` だけでは区間を判定できない)。
 - `git diff -- Sora/Sora.swift Sora/ConnectionTimer.swift Sora/MediaChannel.swift` を読み、`complete()` の `@discardableResult -> Bool` 化、`ConnectionTimer.run` の戻り値化 (`@discardableResult` を付ける)、`MediaChannel.state` の `didSet` の削除と遷移ログの移設を確認する。
 - `git diff -- Sora/MediaChannel.swift` を読み、`MediaChannel` のタイマー開始と接続試行完了の直列化 (切断完了後に遅れてタイマーを再始動する競合の防止) を壊していないことを確認する。
-- `.github/workflows/ci.yml` の E2E job と同じ手順でビルドとテストを実行し、失敗 0 であること。
+- `.github/workflows/e2e-test.yml` の E2E job と同じ手順でビルドとテストを実行し、失敗 0 であること。
 - `make fmt-lint` と `make lint` が違反 0 であること。
 
 ## 解決方法
