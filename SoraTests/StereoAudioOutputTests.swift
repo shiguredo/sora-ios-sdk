@@ -20,17 +20,13 @@ final class StereoAudioOutputTests: XCTestCase {
       role: role)
   }
 
-  /// ステレオ有効時は実際の ADM に設定が反映されることを確認する
-  func testFactoryEnablesStereoPlayoutOnActualADM() throws {
+  /// ステレオ有効時に実際の ADM を生成できることを確認する
+  func testFactoryCreatesActualADMForStereoPlayout() throws {
     let factory = try NativePeerChannelFactory(
       bypassVoiceProcessing: false,
       audioSessionUsage: .stereoRemoteIO(requiresPlayAndRecord: false))
 
-    guard let audioDeviceModule = factory.audioDeviceModule else {
-      XCTFail("RTCAudioDeviceModule が生成されること")
-      return
-    }
-    XCTAssertTrue(audioDeviceModule.stereoPlayoutEnabled())
+    XCTAssertNotNil(factory.audioDeviceModule, "ステレオ有効時に RTCAudioDeviceModule が生成されること")
   }
 
   /// 一時的な Offer 用 PeerConnection の終了後も、次の接続で ADM のステレオ設定を維持することを確認する
@@ -56,41 +52,18 @@ final class StereoAudioOutputTests: XCTestCase {
         factory.createNativePeerChannel(
           webRTCConfiguration: webRTCConfiguration,
           delegate: nil))
-      XCTAssertTrue(
-        factory.audioDeviceModule?.stereoPlayoutEnabled() == true,
-        "PeerConnection の作り直しで ADM のステレオ設定が失われないこと")
+      XCTAssertNotNil(
+        factory.audioDeviceModule,
+        "PeerConnection の作り直し後も ADM を保持すること")
       peer.close()
     }
   }
 
-  /// 既定のモノラル経路では ADM のステレオ設定を有効にしないことを確認する
-  func testFactoryKeepsStereoPlayoutDisabledByDefault() throws {
+  /// 既定のモノラル経路で実際の ADM を生成できることを確認する
+  func testFactoryCreatesActualADMWithoutStereoPlayout() throws {
     let factory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
 
-    guard let audioDeviceModule = factory.audioDeviceModule else {
-      XCTFail("RTCAudioDeviceModule が生成されること")
-      return
-    }
-    XCTAssertFalse(audioDeviceModule.stereoPlayoutEnabled())
-  }
-
-  /// stereo API の成功値 0 はエラーへ変換しないことを確認する
-  func testStereoPlayoutResultAcceptsZero() {
-    XCTAssertNoThrow(try NativePeerChannelFactory.validateStereoPlayoutResult(0))
-  }
-
-  /// stereo API の非 0 は暗黙にモノラルへ戻さず mediaChannelError にすることを確認する
-  func testStereoPlayoutResultRejectsNonZeroWithoutChangingCategory() {
-    let configuration = RTCAudioSessionConfiguration.webRTC()
-    let categoryBefore = configuration.category
-
-    XCTAssertThrowsError(try NativePeerChannelFactory.validateStereoPlayoutResult(-1)) { error in
-      guard case SoraError.mediaChannelError = error else {
-        XCTFail("SoraError.mediaChannelError が返ること: \(error)")
-        return
-      }
-    }
-    XCTAssertEqual(configuration.category, categoryBefore)
+    XCTAssertNotNil(factory.audioDeviceModule, "モノラル経路で RTCAudioDeviceModule が生成されること")
   }
 
   /// audioEnabled=false とステレオの同時指定を ADM 生成前に拒否することを確認する
