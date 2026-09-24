@@ -8,6 +8,7 @@ extension RTCDegradationPreference: CustomStringConvertible {
     switch self {
     case .balanced: "balanced"
     case .disabled: "disabled"
+    case .maintainFramerateAndResolution: "balanced"
     case .maintainFramerate: "maintain-framerate"
     case .maintainResolution: "maintain-resolution"
     @unknown default: "-"

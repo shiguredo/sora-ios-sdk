@@ -108,13 +108,10 @@ final class NativePeerChannelFactory: @unchecked Sendable {
           type: .peerChannel,
           message: "bypassVoiceProcessing is ignored when stereo playout is enabled")
       }
+      // ステレオ設定は ADM の生成時に渡す。
       let adm: RTCAudioDeviceModule = RTCAudioDeviceModule(
-        bypassVoiceProcessing: stereoPlayoutEnabled ? false : bypassVoiceProcessing)
-      if stereoPlayoutEnabled {
-        // この API はファクトリー生成後や再生初期化後には呼べないため、ADM の生成直後に実行する。
-        let result = adm.setStereoPlayoutEnabled(true)
-        try Self.validateStereoPlayoutResult(result)
-      }
+        bypassVoiceProcessing: stereoPlayoutEnabled ? false : bypassVoiceProcessing,
+        stereoPlayoutEnabled: stereoPlayoutEnabled)
       self.audioDevice = nil
       self.audioDeviceModule = adm
       self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
@@ -165,14 +162,6 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 
   deinit {
     releaseAudioSessionRequirement()
-  }
-
-  /// ADM のステレオ再生設定結果を SDK のエラーへ変換します。
-  static func validateStereoPlayoutResult(_ result: Int) throws {
-    guard result == 0 else {
-      throw SoraError.mediaChannelError(
-        reason: "RTCAudioDeviceModule::setStereoPlayoutEnabled failed (result: \(result))")
-    }
   }
 
   /// 接続終了時に音声セッションの要求を明示的に解放します。
