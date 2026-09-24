@@ -137,7 +137,7 @@ dump は `Makefile` の `api-baseline` target が実行する。`-module Sora`�
   - `consumer-check-negative`: `consumer-build` を前提に、`NegativeChecks` を 1 ファイルずつ typecheck する。
   - `api-baseline`: `consumer-build` を前提に、(1) `$(API_BASELINE_DUMP)` へ dump、(2) `set -e;` 付きで `$(API_BASELINE_DUMP)` を検証、(3) `xcodebuild -version` と `xcrun --sdk $(XCODE_SDK) --show-sdk-version` が 26.6 と `iphoneos26.5` の組と一致することを確認、(4) `mkdir -p` で `$(API_BASELINE)` のディレクトリを作り、通った場合にだけ `cp` で `$(API_BASELINE)` を上書きし `$(API_BASELINE_INFO)` を再生成する。
   - `api-check`: commit 済み `$(API_BASELINE)` を `set -e;` 付きで検証し、`$(API_BASELINE_INFO)` の `xcodebuild` と `sdk` が実行環境と一致することを確認してから比較する (一致しない場合は baseline と別の SDK の module を比較することになるため、差分が SDK の差で汚れる前に失敗させる)。commit 済み baseline は書き換えない。
-- 既存 `build` target の `-sdk iphoneos26.1` は Xcode 26.2 に更新したときの追随漏れで、どの環境でも SDK を解決できない。README のシステム条件と `build.yml` が指す `iphoneos26.2` に合わせる (`0167` で最低 Xcode を上げるときにこの値も同時に更新する)。
+- 既存 `build` target の `-sdk iphoneos26.1` は Xcode 26.2 に更新したときの追随漏れで、どの環境でも SDK を解決できない。README のシステム条件と `build.yml` が指す `iphoneos26.2` に合わせる (`0169` で最低 Xcode を上げるときにこの値も同時に更新する)。
 - `Makefile` の `.PHONY` に `consumer-build` / `consumer-check-negative` / `api-baseline` / `api-check` を追加する。
 - CI は `api-check` だけを呼ぶ (`api-baseline` を呼ぶと commit 済み baseline を上書きし、自分自身との比較になって常に成功する)。
 - `Makefile` の `fmt` / `fmt-lint` の対象に `TestConsumers/Swift6Consumer/Sources` / `TestConsumers/Swift6Consumer/NegativeChecks` / `TestConsumers/Swift6Consumer/Package.swift` を追加する (`swift format --recursive` は隠しディレクトリを走査しないが、`swift format` に除外オプションは無いため対象を明示的に列挙し、`prek.toml` の glob とそろえる)。
@@ -215,6 +215,6 @@ dump は `Makefile` の `api-baseline` target が実行する。`-module Sora`�
 - `.github/workflows/ci.yml` を `.github/workflows/e2e-test.yml` にリネームし、`build.yml` と `e2e-test.yml` の `paths-ignore` に `TestConsumers/**` を追加した
 - `Makefile` に consumer package 用の 4 target を追加し、`build` target の `-sdk iphoneos26.1` を `iphoneos26.2` に修正した
 - `prek.toml` / `.swiftlint.yml` / `.gitignore` に consumer package の対象と除外を追加し、`CODEBASE.md` にリポジトリ側の運用 (Makefile の target、baseline の生成・比較・更新手順、Xcode 更新時の手順) を書いた
-- 派生した作業として `0167` (対応する最低 Xcode を 26.6 に上げる) と `0168` (baseline が最新であることを検証する gate) を起票した
+- 派生した作業として `0169` (対応する最低 Xcode を 26.6 に上げる) と `0168` (baseline が最新であることを検証する gate) を起票した
 
 `make api-check` は通常時に exit 0 で成功し、baseline に無いシンボルを加えた JSON に対しては `API breakage: … has been removed` を報告することを実測で確認した。consumer package の 3 scheme は Release で build でき、負例 2 件は期待した diagnostic group で compile に失敗する。PR #393 として develop にマージされた。
