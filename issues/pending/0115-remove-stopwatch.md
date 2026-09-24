@@ -33,7 +33,7 @@ Timer lifecycle、retain cycle、再実行、executor 契約に問題がある�
 
 ## スコープ外
 
-- `ConnectionTimer` は `0096` で扱う。
+- `ConnectionTimer` は本 issue では扱わない (ライフサイクル修正は `0096` で完了済み)。
 - `Utilities.swift` 内の他の API の整理は行わない。
 - Swift concurrency 用の timer wrapper は追加しない。
 
@@ -57,3 +57,18 @@ Timer lifecycle、retain cycle、再実行、executor 契約に問題がある�
 - 既存テストがすべて成功すること。
 
 ## 解決方法
+
+## pending にする理由
+
+前提の「`0114` が完了し、公開 release で `Utilities.Stopwatch` の非推奨化と移行案内が提供されていること」を満たしていない。
+
+- `issues/0114-change-deprecate-stopwatch.md` は open のままで、`Completed:` が空 (磨き上げの `Polished: 2026-09-24` のみ)。実装コミットも `feature/change-deprecate-stopwatch` ブランチも存在しない。
+- `Sora/Utilities.swift` の `Utilities.Stopwatch` に deprecation annotation がない (現行実装は非推奨化されていない)。
+- `TestConsumers/Swift6Consumer/Sources/ConsumerLegacy/DeprecatedAPI.swift` に Stopwatch の参照がなく、`.github/workflows/consumer-test.yml` の `Check Deprecation Warning` が検査する非推奨 symbol 一覧にも `Stopwatch` がない。
+- `CHANGES.md` に `Utilities.Stopwatch` の非推奨化の記録がない。
+
+上記を満たすまで本 issue に着手できないため、外部依存待ちとして pending にする。
+
+## Pending 解除条件
+
+- `0114` が closed になり、`Utilities.Stopwatch` の非推奨化と移行案内が公開 release に含まれること。
