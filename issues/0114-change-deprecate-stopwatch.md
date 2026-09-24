@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/change-deprecate-stopwatch
-- Polished:
+- Polished: 2026-09-24
 
 ## 目的
 
@@ -35,7 +35,14 @@ Sora SDK の責務と関係しない一般 utility であり、Swift 6 対応の
 - Foundation の Timer、Swift の Clock / Duration、アプリ側の MainActor timer など、用途に合う仕組みを利用者側で選ぶよう案内する。
 - 単一の万能な置換先があるような説明をしない。
 - 本 issue では API の実装、挙動、executor を変更しない。既存 lifecycle bug を修正する場合は bug category の別 issue とする。
-- `0107` の legacy consumer package に deprecated API の compile scenario を追加し、非推奨 warning 以外の source break がないことを確認する。
+- `0107` が提供した consumer package (`TestConsumers/Swift6Consumer/`) の `ConsumerLegacy` target
+  (`Sources/ConsumerLegacy/DeprecatedAPI.swift`) に deprecated API の compile scenario を追加する。あわせて
+  `.github/workflows/consumer-test.yml` の `Check Deprecation Warning` step が検査する非推奨 symbol 一覧へ
+  `Stopwatch` を追加する (同 step のコメントが、`DeprecatedAPI.swift` の参照を増減する作業は一覧も
+  同時に更新することを定めている)。非推奨 warning 以外の source break がないことを確認する。
+- 公開 API baseline (`TestConsumers/Swift6Consumer/ApiBaseline/`) を同じ変更で再生成する。deprecation
+  annotation は baseline の差分として現れるため、`CODEBASE.md` の baseline 更新手順に従い、差分の
+  レビューも実施する。
 
 ## スコープ外
 
@@ -49,9 +56,9 @@ Sora SDK の責務と関係しない一般 utility であり、Swift 6 対応の
 
 モックやスタブは使用しない。
 
-- `0107` の consumer package から `Utilities.Stopwatch` を従来どおり初期化・呼び出しできることを確認する。
-- deprecated warning に削除予定と移行方針が表示されることを確認する。
-- API baseline で、deprecation annotation 以外の公開 API 変更がないことを確認する。
+- `TestConsumers/Swift6Consumer/` の `ConsumerLegacy` から `Utilities.Stopwatch` を従来どおり初期化・呼び出しできることを確認する。
+- deprecated warning に削除予定と移行方針が表示されることを確認する (`consumer-test.yml` の `Check Deprecation Warning` が `Stopwatch` の symbol 名で検査する)。
+- 再生成した公開 API baseline の差分を読み、deprecation annotation 以外の公開 API 変更がないことを確認する。
 - テストには、非推奨期間を設ける理由を日本語コメントで明記する。
 
 ## 完了条件
@@ -61,7 +68,7 @@ Sora SDK の責務と関係しない一般 utility であり、Swift 6 対応の
 - 不要な代替 timer abstraction を追加していないこと。
 - `Utilities.Stopwatch` のシグネチャと既存挙動を変更していないこと。
 - consumer package で既存利用コードが compile できること。
-- API baseline に意図しない変更がないこと。
+- 公開 API baseline が再生成され、diff に意図しない変更がないこと (deprecation annotation の追加は意図した差分である)。
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
