@@ -43,8 +43,8 @@ playground.xcworkspace
 # Packages/
 .build/
 
-# consumer fixture の Xcode 作業ディレクトリ (xcodebuild が生成する)
-Fixtures/Swift6Consumer/.swiftpm/
+# consumer package の Xcode 作業ディレクトリ (xcodebuild が生成する)
+TestConsumers/Swift6Consumer/.swiftpm/
 
 # CocoaPods
 #

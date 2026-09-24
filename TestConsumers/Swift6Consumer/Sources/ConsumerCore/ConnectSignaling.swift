@@ -25,15 +25,14 @@ func makeConfiguration(url: URL, channelId: String) -> Configuration {
 
 /// 接続を開始して ConnectionTask を返す。
 /// connect は同期メソッドで handler は非 Sendable な closure 型のため、
-/// nonisolated な文脈からそのまま渡せる。
-func connectToSora(configuration: Configuration) -> ConnectionTask {
+/// nonisolated な文脈から非 Sendable な値を capture した closure をそのまま渡せる。
+func connectToSora(configuration: Configuration, capturing mediaStream: MediaStream)
+  -> ConnectionTask
+{
   let task = Sora.shared.connect(configuration: configuration) { mediaChannel, error in
-    if let error {
-      _ = error
-    }
-    if let mediaChannel {
-      _ = mediaChannel.connectionId
-    }
+    _ = mediaStream
+    _ = error
+    _ = mediaChannel?.connectionId
   }
   return task
 }

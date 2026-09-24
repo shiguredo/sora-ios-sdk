@@ -3,7 +3,7 @@
 import PackageDescription
 
 // Sora を外部の iOS アプリと同じ形 (通常の SwiftPM package 依存) で import し、
-// Swift 6 language mode と warnings-as-errors で compile できるかを検証する fixture。
+// Swift 6 language mode と warnings-as-errors で compile できるかを検証する consumer package。
 // root package の target にはしない (root の scheme 一覧や plugin の対象に影響させないため)。
 let package = Package(
   name: "Swift6Consumer",
@@ -26,6 +26,7 @@ let package = Package(
       name: "ConsumerCore",
       dependencies: [
         .product(name: "Sora", package: "Sora"),
+        // WebRTC product を consumer が import できることの検証に使う (HandlerCompatibility.swift)
         .product(name: "WebRTC", package: "Sora"),
       ],
       swiftSettings: [
@@ -39,8 +40,7 @@ let package = Package(
     .target(
       name: "ConsumerUI",
       dependencies: [
-        .product(name: "Sora", package: "Sora"),
-        .product(name: "WebRTC", package: "Sora"),
+        .product(name: "Sora", package: "Sora")
       ],
       swiftSettings: [
         .swiftLanguageMode(.v6),
@@ -52,8 +52,7 @@ let package = Package(
     .target(
       name: "ConsumerLegacy",
       dependencies: [
-        .product(name: "Sora", package: "Sora"),
-        .product(name: "WebRTC", package: "Sora"),
+        .product(name: "Sora", package: "Sora")
       ],
       swiftSettings: [
         // .treatAllWarnings を先、.treatWarning を後に書く。

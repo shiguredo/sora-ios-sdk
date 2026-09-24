@@ -18,8 +18,8 @@ hooks = [
   # 行末の空白を取り除く
   { id = "trailing-whitespace" },
   # ファイル末尾を改行 1 つで終わらせる
-  # swift-api-digester の出力は末尾改行で終わらないため、baseline は除外する
-  { id = "end-of-file-fixer", exclude = "^Fixtures/Swift6Consumer/ApiBaseline/.*$" },
+  # swift-api-digester の出力 (baseline の JSON) は末尾改行で終わらないため、JSON だけを除外する
+  { id = "end-of-file-fixer", exclude = "^TestConsumers/Swift6Consumer/ApiBaseline/.*\\.json$" },
   # ファイル先頭の UTF-8 BOM を取り除く
   { id = "fix-byte-order-marker" },
   # TOML の構文エラーを検出する
@@ -27,8 +27,9 @@ hooks = [
   # YAML の構文エラーを検出する
   { id = "check-yaml" },
   # JSON の構文エラーを検出する
-  # Package.resolved は identify で json タグが付かないため files / types を上書きする
-  { id = "check-json", files = "(^|/)Package\\.resolved$", types = ["text"] },
+  # Package.resolved は identify で json タグが付かないため files / types を上書きする。
+  # 公開 API の baseline も追跡ファイルなので対象に含める
+  { id = "check-json", files = "(^|/)Package\\.resolved$|^TestConsumers/Swift6Consumer/ApiBaseline/.*\\.json$", types = ["text"] },
   # XML の構文エラーを検出する
   # Info.plist / *.xib は identify で xml タグが付かないため files / types を上書きする
   { id = "check-xml", files = "\\.(plist|xib)$", types = ["text"] },
@@ -37,8 +38,8 @@ hooks = [
   # 大文字小文字だけが異なるファイル名の衝突を防ぐ
   { id = "check-case-conflict" },
   # 大きなファイルの誤コミットを防ぐ
-  # 公開 API の baseline は 1.7 MB 程度になるため除外する
-  { id = "check-added-large-files", args = ["--maxkb=500"], exclude = "^Fixtures/Swift6Consumer/ApiBaseline/.*$" },
+  # 公開 API の baseline は 1.7 MB 程度になるため JSON を除外する
+  { id = "check-added-large-files", args = ["--maxkb=500"], exclude = "^TestConsumers/Swift6Consumer/ApiBaseline/.*\\.json$" },
   # 秘密鍵の誤コミットを防ぐ
   { id = "detect-private-key" },
   # 改行コードの混在を防ぐ
@@ -82,7 +83,7 @@ name = "swift format fix"
 language = "system"
 entry = "swift"
 args = ["format", "--in-place"]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "TestConsumers/Swift6Consumer/**/*.swift"] }
 priority = 10
 
 # SwiftLint: 自動修正
@@ -102,7 +103,7 @@ args = [
   "--",
   ".",
 ]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "TestConsumers/Swift6Consumer/**/*.swift"] }
 pass_filenames = false
 priority = 20
 
@@ -113,7 +114,7 @@ name = "swift format check"
 language = "system"
 entry = "swift"
 args = ["format", "lint", "--strict", "--parallel"]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "TestConsumers/Swift6Consumer/**/*.swift"] }
 priority = 30
 
 # SwiftLint: 厳格チェック
@@ -133,6 +134,6 @@ args = [
   "--",
   ".",
 ]
-files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "Fixtures/Swift6Consumer/**/*.swift"] }
+files = { glob = ["Sora/**/*.swift", "SoraTests/**/*.swift", "TestConsumers/Swift6Consumer/**/*.swift"] }
 pass_filenames = false
 priority = 40

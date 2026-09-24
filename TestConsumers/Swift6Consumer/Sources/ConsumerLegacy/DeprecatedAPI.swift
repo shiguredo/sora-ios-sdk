@@ -5,7 +5,7 @@
 import Foundation
 import Sora
 
-/// 非推奨の ICEServerInfo を組み立てる。
+/// 非推奨の tlsSecurityPolicy 引数と property を持つ ICEServerInfo を組み立てる。
 func makeLegacyICEServerInfo() -> ICEServerInfo {
   let info = ICEServerInfo(
     urls: ["stun:stun.example.com"],
@@ -14,6 +14,8 @@ func makeLegacyICEServerInfo() -> ICEServerInfo {
     tlsSecurityPolicy: .secure
   )
   info.tlsSecurityPolicy = .insecure
+  // CI の deprecation 検査が TLSSecurityPolicy と secure の symbol 名を要求するため、
+  // property 経由ではなく enum と case を明示的に参照する
   _ = TLSSecurityPolicy.secure
   return info
 }
@@ -28,6 +30,8 @@ func makeLegacyConfiguration(url: URL, channelId: String) -> Configuration {
   )
   configuration.simulcastRid = .r1
   configuration.spotlightEnabled = .disabled
+  // init の引数ラベルは非推奨ではないため、property として参照して warning を確認する
+  _ = configuration.multistreamEnabled
   return configuration
 }
 

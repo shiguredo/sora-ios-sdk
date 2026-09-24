@@ -1,0 +1,158 @@
+name: Consumer Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+    - '**.md'
+    - 'LICENSE'
+
+# 同じ ref への連続 push では古い実行を打ち切る (WebRTC artifact の取得と 2 leg の build が走るため)
+concurrency:
+  group: consumer-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 外部の consumer が Sora を import するのと同じ形の package を、最低要件の Xcode と
+  # 公開 API baseline を生成した Xcode の両方で検証する
+  swift6-consumer:
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - xcode: /Applications/Xcode_26.2.app
+          sdk: iphoneos26.2
+          api_check: false
+        - xcode: /Applications/Xcode_26.6.app
+          sdk: iphoneos26.5
+          api_check: true
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Select Xcode Version
+      run: sudo xcode-select -s '${{ matrix.xcode }}/Contents/Developer'
+    - name: Show Xcode Version and Schemes
+      run: |
+        xcodebuild -version
+        ls /Applications | grep Xcode
+        # 期待する scheme が無い場合は xcodebuild -list の出力から検出して失敗させる
+        schemes=$(cd TestConsumers/Swift6Consumer && xcodebuild -list)
+        echo "$schemes"
+        for scheme in ConsumerCore ConsumerUI ConsumerLegacy; do
+          if ! printf '%s\n' "$schemes" | grep -qE "^[[:space:]]+$scheme$"; then
+            echo "Error: scheme '$scheme' is missing."
+            exit 1
+          fi
+        done
+    - name: Build ConsumerCore
+      run: |
+        set -o pipefail && \
+          make consumer-build SCHEME=ConsumerCore XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
+            2>&1 | tee consumer-core.log
+    - name: Build ConsumerUI
+      run: |
+        set -o pipefail && \
+          make consumer-build SCHEME=ConsumerUI XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
+            2>&1 | tee consumer-ui.log
+    - name: Build ConsumerLegacy
+      run: |
+        set -o pipefail && \
+          make consumer-build SCHEME=ConsumerLegacy XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
+            2>&1 | tee consumer-legacy.log
+    # target の設定 (Swift 6 mode / 既定隔離 / warnings-as-errors) が compiler まで届いていることを、
+    # 実際の build ログに現れる flag で確認する。設定が無言で消えると gate が弱くなるため。
+    # なお -swift-version 6 は swift-tools-version 6.x の既定でも渡るため、この検査は
+    # 「Swift 6 mode で build されていること」の確認であり、明示設定の有無までは見ない
+    - name: Check Compiler Settings
+      run: |
+        for log in consumer-core.log consumer-ui.log consumer-legacy.log; do
+          for flag in '-swift-version 6' '-warnings-as-errors'; do
+            if ! grep -Fq -- "$flag" "$log"; then
+              echo "Error: '$flag' is missing in $log."
+              exit 1
+            fi
+          done
+        done
+        for log in consumer-core.log consumer-legacy.log; do
+          if ! grep -Fq -- '-default-isolation nonisolated' "$log"; then
+            echo "Error: '-default-isolation nonisolated' is missing in $log."
+            exit 1
+          fi
+        done
+        if ! grep -Fq -- '-default-isolation MainActor' consumer-ui.log; then
+          echo "Error: '-default-isolation MainActor' is missing in consumer-ui.log."
+          exit 1
+        fi
+        if ! grep -Fq -- '-Wwarning DeprecatedDeclaration' consumer-legacy.log; then
+          echo "Error: '-Wwarning DeprecatedDeclaration' is missing in consumer-legacy.log."
+          exit 1
+        fi
+    # ConsumerLegacy が参照する非推奨 API がそれぞれ warning として出ていることを symbol 名で確認する。
+    # 件数ではなく symbol 名で見るのは、Xcode の版で warning の行数が変わり得るため。
+    # consumer package の非推奨 API の参照 (Sources/ConsumerLegacy/DeprecatedAPI.swift) を増減する作業は、
+    # この一覧も同時に更新する
+    - name: Check Deprecation Warning
+      run: |
+        symbols=(
+          TLSSecurityPolicy
+          init(urls:userName:credential:tlsSecurityPolicy:)
+          insecure
+          multistreamEnabled
+          onDisconnectLegacy
+          onReceiveSignaling
+          secure
+          simulcastRid
+          spotlightEnabled
+          tlsSecurityPolicy
+        )
+        for symbol in "${symbols[@]}"; do
+          if ! grep -Fq -- "'$symbol' is deprecated" consumer-legacy.log; then
+            echo "Error: deprecation warning for '$symbol' is missing in the ConsumerLegacy build log."
+            exit 1
+          fi
+        done
+    - name: Check Negative Checks
+      run: |
+        make consumer-check-negative XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+    - name: Check No Test-Only Import
+      run: |
+        set +e
+        output=$(git grep -n -E '@testable|@preconcurrency' -- ':(glob)TestConsumers/Swift6Consumer/**/*.swift')
+        status=$?
+        set -e
+        if [ "$status" -eq 0 ]; then
+          echo 'Error: the consumer package must not use test-only or diagnostic-suppressing imports.'
+          echo "$output"
+          exit 1
+        fi
+        if [ "$status" -ne 1 ]; then
+          echo "Error: git grep failed (exit $status)."
+          exit 1
+        fi
+    # baseline は dump に使った Xcode と SDK の module とだけ比較できる
+    - name: Check Public API Baseline
+      if: matrix.api_check
+      run: |
+        make api-check XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+    # consumer package だけを変更した push では build.yml が paths-ignore で skip されるため、
+    # 整形と lint の gate をこの workflow にも置く
+    - name: Format Lint
+      run: |
+        make fmt-lint
+    - name: Lint
+      run: |
+        make lint
+  slack_notify:
+    needs: [swift6-consumer]
+    runs-on: ubuntu-24.04
+    if: always()
+    permissions:
+      actions: read
+    steps:
+      - name: Slack Notification
+        uses: shiguredo/github-actions/.github/actions/slack-notify@main
+        with:
+          status: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'failure' || 'success' }}
+          slack_webhook: ${{ secrets.SLACK_WEBHOOK }}
+          slack_channel: sora-ios-sdk

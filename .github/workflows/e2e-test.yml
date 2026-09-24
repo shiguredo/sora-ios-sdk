@@ -1,4 +1,4 @@
-name: CI
+name: E2E Test
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ on:
     - 'THANKS'
     - 'canary.py'
     - '.gitignore'
+    - 'TestConsumers/**'
 
 jobs:
   e2e:
