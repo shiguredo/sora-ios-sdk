@@ -11,6 +11,10 @@
 
 ## develop
 
+- [UPDATE] libwebrtc を m154.8037.1.2 に更新する
+  - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
+  - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
+  - @zztkm
 - [UPDATE] CameraVideoCapturer のカメラ状態の所有者を単一化する
   - `CameraVideoCapturer` の `current` / `isRunning` / `format` / `frameRate` / `stream` を内部の owner (`CameraStateOwner`) が、`device` を instance の lock 付き storage が、`handlers` を型全体で共有する lock 付き storage が保持し、`NSLock` で保護した値から同期で読むようにする
   - カメラ操作 (start / stop / restart / change / flip) の状態遷移を純粋な reducer へ集約し、操作世代で古い callback を破棄する
