@@ -1,7 +1,7 @@
 # Swift 6 consumer の検証と公開 API baseline を追加する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-24
 - Priority: High
 - Branch: feature/add-swift6-consumer-verification-and-api-baseline
 - Polished: 2026-09-18
@@ -144,7 +144,7 @@ dump は `Makefile` の `api-baseline` target が実行する。`-module Sora`�
 - `prek.toml` の swift-format と swiftlint のフックの `files.glob` に `TestConsumers/Swift6Consumer/**/*.swift` を追加する (swiftlint フックは `pass_filenames = false` のため、glob に含めないと consumer package だけを変更したコミットで起動しない)。
 - `.swiftlint.yml` の `included` に `TestConsumers/Swift6Consumer/Sources` と `TestConsumers/Swift6Consumer/NegativeChecks` を追加し、`excluded` に `TestConsumers/Swift6Consumer/.build` を残す (`included` の解釈は SwiftPM plugin の実装に依存するため、`.build` を走査しないことを `excluded` でも担保する)。
 - `.gitignore` に `TestConsumers/Swift6Consumer/.swiftpm/` を追加する。
-- `CODEBASE.md` は develop に既にある (`85148eaa`)。リネーム後のパス (`TestConsumers/Swift6Consumer/`)、baseline の file 名を導出する `XCODE_SDK` と baseline を生成する Xcode を固定する `API_XCODE`、`api-check` の判定 (`API_VALIDATE` の `children` 数の検査を含む)、`consumer-test.yml` の `swift6-consumer` job を指すように更新する。コミットは `shiguredo-git` の AGENTS.md / CODEBASE.md の特別ルールに従い develop へ直接行う。
+- `CODEBASE.md` を develop に追加する。リネーム後のパス (`TestConsumers/Swift6Consumer/`)、baseline の file 名を導出する `XCODE_SDK` と baseline を生成する Xcode を固定する `API_XCODE`、`api-check` の判定 (`API_VALIDATE` の `children` 数の検査を含む)、`consumer-test.yml` の `swift6-consumer` job を指す内容とする。コミットは `shiguredo-git` の AGENTS.md / CODEBASE.md の特別ルールに従い develop へ直接行う。
 - consumer package のコメントは日本語、consumer package が出力するログは英語とする。consumer package のソースと README と `CODEBASE.md` に issue 番号を書かず、未対応である理由を書く。
 
 ## スコープ外
@@ -169,7 +169,7 @@ dump は `Makefile` の `api-baseline` target が実行する。`-module Sora`�
 - `prek.toml`: swift-format / swiftlint フックの `files.glob`、`check-json` の対象追加、`check-added-large-files` と `end-of-file-fixer` の除外設定
 - `.swiftlint.yml`: `included` / `excluded` の追加
 - `.gitignore`: `TestConsumers/Swift6Consumer/.swiftpm/` の追加
-- `CODEBASE.md` (develop に既存): リネーム後のパスと `consumer-test.yml` の job に合わせた baseline の生成・比較・更新手順の更新
+- `CODEBASE.md` (新規): consumer package の運用 (Makefile の target、公開 API baseline の生成・比較・更新手順、Xcode 更新時の手順)
 - `CHANGES.md`: `## develop` の `### misc` に `[ADD]` を、既存の `[FIX]` エントリより前 (種別順 CHANGE → ADD → UPDATE → FIX) に担当者行付きで追記する
 
 ## テスト方針
@@ -207,3 +207,14 @@ dump は `Makefile` の `api-baseline` target が実行する。`-module Sora`�
 - 追加した `swift6-consumer` job と既存の `build` job が成功すること
 
 ## 解決方法
+
+`TestConsumers/Swift6Consumer/` に、外部の iOS アプリと同じ形 (通常の SwiftPM package 依存) で `Sora` を import する consumer package を追加した。`ConsumerCore` / `ConsumerUI` / `ConsumerLegacy` の 3 target を Swift 6 language mode と warnings-as-errors で build し、compile 失敗を期待する負例 2 件 (`Sendable` でない `MediaChannel` の capture と、隔離された conformance の非隔離文脈での使用) を `make consumer-check-negative` で diagnostic group 名まで検査する。
+
+- `.github/workflows/consumer-test.yml` を新設し、Xcode 26.2 (`iphoneos26.2`) と 26.6 (`iphoneos26.5`) の 2 leg で compile、負例、compiler settings、deprecation、test-only import を検査する。26.6 leg では公開 API baseline も比較し、整形と lint も同じ job で実行する
+- 公開 API baseline は Xcode 26.6 と `iphoneos26.5` で `swift-api-digester` の dump を生成し、`TestConsumers/Swift6Consumer/ApiBaseline/` に commit した。`make api-check` が `-diagnose-sdk` で削除・変更・準拠の削除を検出する
+- `.github/workflows/ci.yml` を `.github/workflows/e2e-test.yml` にリネームし、`build.yml` と `e2e-test.yml` の `paths-ignore` に `TestConsumers/**` を追加した
+- `Makefile` に consumer package 用の 4 target を追加し、`build` target の `-sdk iphoneos26.1` を `iphoneos26.2` に修正した
+- `prek.toml` / `.swiftlint.yml` / `.gitignore` に consumer package の対象と除外を追加し、`CODEBASE.md` にリポジトリ側の運用 (Makefile の target、baseline の生成・比較・更新手順、Xcode 更新時の手順) を書いた
+- 派生した作業として `0167` (対応する最低 Xcode を 26.6 に上げる) と `0168` (baseline が最新であることを検証する gate) を起票した
+
+`make api-check` は通常時に exit 0 で成功し、baseline に無いシンボルを加えた JSON に対しては `API breakage: … has been removed` を報告することを実測で確認した。consumer package の 3 scheme は Release で build でき、負例 2 件は期待した diagnostic group で compile に失敗する。PR #393 として develop にマージされた。
