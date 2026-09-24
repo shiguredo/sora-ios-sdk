@@ -135,7 +135,7 @@ jobs:
     - name: Check Public API Baseline
       if: matrix.api_check
       run: |
-        make api-check XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
+        make api-check-fresh XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }}
     # consumer package だけを変更した push では build.yml が paths-ignore で skip されるため、
     # 整形と lint の gate をこの workflow にも置く
     - name: Format Lint

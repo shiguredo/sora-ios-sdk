@@ -96,6 +96,9 @@
   - `TestConsumers/Swift6Consumer/` に Sora を import する独立した SwiftPM package を追加し、`import Sora` する compile (Swift 6 language mode と warnings-as-errors) と、公開 API の baseline 比較を CI (`consumer-test.yml`) で検証する
   - 公開 API の削除・変更と `Sendable` 準拠の削除を baseline の比較で検出し、`MediaChannel` が `Sendable` でないことを負例で検出する
   - @t-miya
+- [ADD] 公開 API baseline が現在の `Sora` module と一致していることを CI で検証する
+  - `make api-check-fresh` を追加し、公開 API を追加したまま baseline を再生成漏れ状態を検出する
+  - @t-miya
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
   - エラーパスで未 wait の expectation を `XCTWaiter.wait(for:timeout: 0)` で消費する
   - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける

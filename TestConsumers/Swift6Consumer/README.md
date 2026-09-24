@@ -5,7 +5,7 @@ Swift 6 language mode と warnings-as-errors で compile できるかを検証�
 外部のアプリが Sora を使う形を再現する検証用の package であり、テストデータでもサンプルアプリでもありません。
 
 - 内部 API へ依存しない。test 用の import 属性や診断抑止の属性を一切使わない
-- Sora の公開 API の baseline を保持し、意図しない削除・変更・準拠の削除を CI で検出する
+- Sora の公開 API の baseline を保持し、意図しない削除・変更・準拠の削除と、baseline が現在の module と一致していないこと (追加を含む) を CI で検出する
 - root package の target ではない。root の scheme 一覧や plugin の対象には影響しない
 - 依存は root package への local path 依存である。公開タグや URL からの解決、iOS アプリへのリンク、
   `WebRTC.xcframework` の embed は検証せず、`import Sora` と `import WebRTC` が通ることだけを検証する
@@ -30,7 +30,8 @@ Swift 6 language mode と warnings-as-errors で compile できるかを検証�
 2. 先頭に「検査する契約」と「期待する診断」を日本語のコメントで書く
 3. `make consumer-build SCHEME=<Target>` で確認する。warnings-as-errors のため warning 1 件でも失敗する
 4. 公開 API の追加 (新しい scenario が新しい API を使う場合) を伴うときは、同じ変更で
-   `make api-baseline` を実行して baseline を更新する。追加は `make api-check` では検出できない
+   `make api-baseline` を実行して baseline を更新する。追加は `make api-check` では検出できないが、
+   CI が呼ぶ `make api-check-fresh` が検出する
 
 scenario は型や関数として定義し、実行経路を持たない。`_ =` は次の 4 つの用途で使う。
 
@@ -101,7 +102,8 @@ compile は通る。これらは closure の型と引数が存在することを
 ## 公開 API baseline
 
 - `make api-baseline`: baseline を生成する。Xcode 26.6 と `iphoneos26.5` が必要
-- `make api-check`: commit 済み baseline と build 済み module を比較する。CI が呼ぶのはこの target だけ
+- `make api-check`: commit 済み baseline と build 済み module を比較し、公開 API の削除・変更・準拠の削除を検出する
+- `make api-check-fresh`: commit 済み baseline が現在の `Sora` module と一致していることを検証する。`make api-check` を実行したうえで fresh な dump と比較するため、追加も検出できる。CI が呼ぶのはこの target
 - baseline は `-I` / `-F` に渡す module と同じ Xcode と SDK で扱う必要がある。生成・比較・更新の手順と、差分をレビューするときの注意は root の `CODEBASE.md` にある
 
 ## 担当
@@ -120,4 +122,4 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること (CI は期待する非推奨 API 名の一覧で検査する) | 非推奨 API を削除する作業が、対象の参照と `consumer-test.yml` の期待する非推奨 API 名の一覧を同時に更新する |
 | `NegativeChecks/core-sendable-capture.swift` | `MediaChannel` が Sendable でないこと | `MediaChannel` の Sendable 準拠を検討する作業が更新する |
 | `NegativeChecks/ui-isolated-conformance.swift` | 隔離された conformance は非隔離文脈で使えないこと | `VideoRenderer` の隔離を見直す作業が更新する |
-| `ApiBaseline/` | 公開 API の削除・変更の検出 | 公開 API を変更するすべての作業が、同じ変更で再生成する |
+| `ApiBaseline/` | 公開 API の削除・変更と、現在の module との不一致 (追加を含む) の検出 | 公開 API を変更するすべての作業が、同じ変更で再生成する |

@@ -15,6 +15,7 @@
 | `make consumer-check-negative` | compile 失敗を期待する file を 1 file ずつ typecheck する |
 | `make api-baseline` | 公開 API baseline を生成し、commit 対象の file を上書きする |
 | `make api-check` | commit 済み baseline と build 済み module を比較する |
+| `make api-check-fresh` | commit 済み baseline が現在の `Sora` module と一致していることを検証する (追加も検出する) |
 
 - `XCODE` と `XCODE_SDK` は `XCODE=/Applications/Xcode_26.6.app XCODE_SDK=iphoneos26.5` のように
   上書きする。CI は `.github/workflows/consumer-test.yml` の `swift6-consumer` job が matrix の値で呼び、
@@ -55,12 +56,14 @@ make api-baseline
 make api-check
 ```
 
-- CI の `iphoneos26.5` の leg が呼ぶ。`api-baseline` は CI から呼ばない (commit 済み baseline を
+- CI の `iphoneos26.5` の leg が `make api-check-fresh` を呼ぶ (`api-check-fresh` は `api-check` を
+  実行してから fresh な dump と比較する)。`api-baseline` は CI から呼ばない (commit 済み baseline を
   上書きして自分自身と比較することになるため)
 - `-input-paths` は使わない。`-diagnose-sdk` は `-I` / `-F` で読み込む module を「今回」側、
   `-baseline-path` の JSON を基準として比較する
-- 検出できるのは公開 API の削除・変更と準拠の削除。**API の追加は検出できない** (API を追加する
-  変更では、同じ変更で baseline を再生成する)
+- `api-check` が検出できるのは公開 API の削除・変更と準拠の削除。**API の追加は `api-check` では
+  検出できない**。`api-check-fresh` が commit 済み baseline と fresh な dump の一致を検証するため、
+  追加と再生成漏れはこちらで検出する (API を追加する変更では、同じ変更で baseline を再生成する)
 - breakage は warning として報告され、終了コードは 0 になり得る。そのため終了コードではなく
   digester の出力で判定し、出力が空でなければ (breakage でも toolchain の出力でも) 失敗させる
 
@@ -74,13 +77,18 @@ make api-check
    準拠の削除、`printedName` や `declKind` の変化、意図しない symbol の消滅を確認する
 4. 差分が SDK の差によるものに見える場合は、`iphoneos26.5.info.txt` の `xcodebuild` と `sdk` が
    実行環境と一致しているかを確認する。一致していない baseline は commit しない
+5. `make api-check-fresh` が成功することを確認する
+
+`children` は source の宣言順を保つため、公開 API を変えずに public 宣言や enum case を
+並べ替えた場合も baseline の再生成が必要になる (差分は並べ替えとして現れる)。
 
 ### Xcode を更新するとき
 
 1. `.github/workflows/consumer-test.yml` の `swift6-consumer` の matrix を更新する
 2. `Makefile` の `XCODE_SDK` と `API_XCODE` を更新する (baseline の file 名と `API_SDK_VERSION` は
    `XCODE_SDK` から導出される)
-3. 新しい Xcode と SDK で `make api-baseline` を実行し、baseline と生成情報を作り直す
+3. 新しい Xcode と SDK で `make api-baseline` を実行し、baseline と生成情報を作り直す。
+   再生成後に `make api-check-fresh` が成功することを確認する
 4. 差分をレビューする。SDK の更新に伴う差分 (deprecation の追加など) と、Sora 側の変更に
    よる差分を分けて確認する
 5. SDK の版が変わる場合は baseline の file 名も新しい版に変える。古い baseline は残さない
