@@ -94,17 +94,18 @@ jobs:
     # この一覧も同時に更新する
     - name: Check Deprecation Warning
       run: |
+        # symbol 名には括弧を含む selector があるため、各要素をクォートする
         symbols=(
-          TLSSecurityPolicy
-          init(urls:userName:credential:tlsSecurityPolicy:)
-          insecure
-          multistreamEnabled
-          onDisconnectLegacy
-          onReceiveSignaling
-          secure
-          simulcastRid
-          spotlightEnabled
-          tlsSecurityPolicy
+          'TLSSecurityPolicy'
+          'init(urls:userName:credential:tlsSecurityPolicy:)'
+          'insecure'
+          'multistreamEnabled'
+          'onDisconnectLegacy'
+          'onReceiveSignaling'
+          'secure'
+          'simulcastRid'
+          'spotlightEnabled'
+          'tlsSecurityPolicy'
         )
         for symbol in "${symbols[@]}"; do
           if ! grep -Fq -- "'$symbol' is deprecated" consumer-legacy.log; then
