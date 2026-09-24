@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/update-samples-swift6-native-support
-- Polished:
+- Polished: 2026-09-24
 
 ## 目的
 
@@ -30,10 +30,11 @@ sora-ios-sdk-samples は Swift 6 言語モード対応時に次の暫定対応�
   - `MediaChannelHandlers` 経由の hook(`configuration.mediaChannelHandlers.onReceiveSignalingJSON` 等)
   - `CameraVideoCapturer.flip` の完了コールバック
   - `ScreenCaptureSettings.onRuntimeError` のコールバック
-- `nonisolated(unsafe)` による非 Sendable な `MediaChannel` の転送
+- `nonisolated(unsafe)` による非 Sendable な `MediaChannel` / `MediaStream` の転送
   - `SoraSDKManager.connect`(接続コールバック)
   - `ScreenCastConnectionManager.connect`(screen / camera の 2 箇所)
   - `RPCRoomViewController.sendRPCAndLog`(MediaChannel / params)
+  - `DecoStreamingVideoViewController`(送信側の `MediaStream` の転送、2 箇所)
 - その他の Swift 6 並行性対応(暫定ではなく本対応と位置づけられるもの)
   - `VideoBitRatePickerTableViewCell.awakeFromNib` の `nonisolated` + `MainActor.assumeIsolated`
   - `ScreenRecorder` の `nonisolated` 化と `@unchecked Sendable`、`ContextThroughBox`
@@ -59,7 +60,7 @@ SDK 側で次のいずれかが実現された後の段階で、対応を開始�
 
 そのうえで、samples 側の対応は次の方針とする。
 
-- `@preconcurrency import Sora` を通常の `import Sora` へ戻す。SDL 側の Sendable 化が完了した型に対しては、SDK の公開 API をそのまま使う
+- `@preconcurrency import Sora` を通常の `import Sora` へ戻す。SDK 側の Sendable 化が完了した型に対しては、SDK の公開 API をそのまま使う
 - `@Sendable` + `Task { @MainActor in }` で束ねる対応は、SDK の新 API(0110 の event API 等)が提供された場合はその利用例へ置き換える
 - `nonisolated(unsafe)` による `MediaChannel` 転送は、SDK 側で Sendable 化された場合はすべて撤去する。撤去できない場合は、SDK 側の設計に合わせた形へ修正する
 - 暫定対応を取り除いた後も、Swift 6 言語モードでビルド・実機確認ができること
@@ -78,6 +79,7 @@ samples は SDK の利用例として提供されている。そのため、SDK 
 - この issue は sora-ios-sdk 本体の Swift 6 対応を含まない
 - sora-ios-sdk-quickstart の対応は 0125 で扱う
 - SDK 側の Swift 6 対応(0092-0123)それ自体の進行管理は SDK 側 issue で扱う
+- 0167(samples をビデオチャットアプリ 1 種類へ集約する)が先行して実施された場合は、削除されるサンプル(Simulcast / Spotlight / DataChannel / ScreenCast / DecoStreaming / RPC)の Swift 6 対応は本 issue の対象外とし、残るビデオチャットサンプルと共通部品のみを対象とする
 
 ## 参考
 
