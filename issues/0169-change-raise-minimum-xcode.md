@@ -4,55 +4,87 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/change-raise-minimum-xcode
-- Polished:
+- Polished: 2026-09-24
 
 ## 目的
 
-対応する最低 Xcode を 26.6 に上げ、リポジトリ内の Xcode と SDK の pin を 1 つにそろえる。
+対応する最低 Xcode を 26.6 に上げ、リポジトリ内で Xcode と SDK の版を明示している箇所を 26.6 / `iphoneos26.5` にそろえる。後方互換のない変更であり、Xcode 26.2 と iOS 26.2 SDK での検証を終了する。
 
-現在は README のシステム条件と `build.yml` が Xcode 26.2 / `iphoneos26.2` を指し、`e2e-test.yml` の self-hosted ランナーと開発環境が Xcode 26.6 / `iphoneos26.5` を指している。`consumer-test.yml` はその両方を leg として持っているが、開発環境には Xcode 26.6 と `iphoneos26.5` しか無いため 26.2 の leg はローカルで再現できず、CI でしか確認できない構成になっている。最低要件を 26.6 に上げれば、この leg を削除して 1 つにそろえられる。
+E2E の self-hosted ランナーと公開 API baseline が Xcode 26.6 / `iphoneos26.5` を前提にしており (`CODEBASE.md`)、これにそろえる。
 
 ## 現状
 
-- `README.md` のシステム条件は `Xcode 26.2`
-- `.github/workflows/build.yml` の `build` job は `env.XCODE` / `env.XCODE_SDK` で 26.2 / `iphoneos26.2` を指定して SDK を build している
-- `.github/workflows/consumer-test.yml` の matrix は 26.2 (`api_check: false`) と 26.6 (`api_check: true`) の 2 leg。26.2 leg は compile と負例だけ、26.6 leg は公開 API baseline の比較も行う
-- `.github/workflows/e2e-test.yml` の `e2e` job は self-hosted ランナーの `/Applications/Xcode.app` (26.6) と `iphoneos26.5` を使っており変更は不要
-- `TestConsumers/Swift6Consumer/ApiBaseline/` の baseline は Xcode 26.6 / `iphoneos26.5` で生成済みで、最低要件を 26.6 に上げても再生成は不要
-- `0108` は `swift-tools-version` の上限を「README のシステム条件の Xcode 26.2 が読み取れる版」として選ぶ設計になっており、最低要件を上げると上限の根拠が変わる
-- `0160` は Xcode 26.2 を現在のシステム条件として言及しており、本 issue の後に記述の整合を確認する必要がある
+- Xcode 26.2 を明示しているのは `README.md` のシステム条件、`skills/sora-ios-sdk/SKILL.md` の動作条件、`build.yml` の `env.XCODE` / `env.XCODE_SDK`、`deploy-apidoc.yml` の `env.XCODE`、`Makefile` の `build` target の `-sdk`、`consumer-test.yml` の matrix の 26.2 leg
+- `consumer-test.yml` の `swift6-consumer` matrix は 26.2 (`api_check: false`) と 26.6 (`api_check: true`) の 2 leg で、26.6 leg だけが `Check Public API Baseline` を実行する。この step は `run` が `make api-check-fresh` で、`if: matrix.api_check` が残っている
+- `e2e-test.yml` の `XCODE` は未使用で、Xcode を選び直さない。self-hosted ランナーの既定 Xcode (現状 26.6) と `-destination` の `OS=26.5` に依存する。`XCODE_SDK` は使用されている
+- consumer 系の `Makefile` 変数 (`XCODE_SDK ?= iphoneos26.5` / `API_XCODE ?= 26.6`) と公開 API baseline (`iphoneos26.5.info.txt` は Xcode 26.6 / SDK 26.5) は既に新値で、baseline の再生成は不要
+- `CHANGES.md` の `## develop` の `### misc` に `[FIX] Makefile の build target の SDK 指定を iphoneos26.2 に修正する` がある
+- 関連 issue: `0108` は `swift-tools-version` の上限を README のシステム条件から選ぶ設計で Xcode 26.2 の記述が 3 箇所ある。`0072` は `Makefile` の `build` が `iphoneos26.2` であることを前提として書いている
 
 ## 設計方針
 
-- `README.md` のシステム条件を Xcode 26.6 に更新する (Swift 6 言語モードの記述はそのまま)
-- `.github/workflows/build.yml` の `env.XCODE` / `env.XCODE_SDK` を 26.6 / `iphoneos26.5` に更新する
-- `.github/workflows/consumer-test.yml` の matrix から 26.2 leg を削除して 26.6 の 1 leg にし、1 leg では不要になる `api_check` フラグと `Check Public API Baseline` step の `if` を削除する
-- Xcode の版は引き続き明示的に pin する (「利用可能な最新 26.x」を動的に選ばない方針は維持)
-- 26.2 の leg を削除することで失われる「最低要件で consumer として compile できること」の検証は行わない。SDK 本体が 26.2 で build できることの検証も本 issue で終了する (最低要件を 26.6 に上げるため)
-- `0107` が実装中で 26.2 leg を完了条件に含む場合は、同じ変更で完了条件の該当箇所を 26.6 の 1 leg に合わせる
+- `README.md` と `skills/sora-ios-sdk/SKILL.md` の Xcode 条件を 26.6 に、`build.yml` と `deploy-apidoc.yml` の `env.XCODE` を `/Applications/Xcode_26.6.app` に、`build.yml` の `env.XCODE_SDK` を `iphoneos26.5` に更新する
+- `consumer-test.yml` の matrix から 26.2 leg を削除して 26.6 の 1 要素にする。`matrix.xcode` / `matrix.sdk` は step が参照しているため残す。1 leg で不要になる `api_check` フラグ、`Check Public API Baseline` step の `if`、`fail-fast: false` を削除し、leg 数を前提とした 2 つのコメントを次のように書き換える
+  - concurrency のコメント (`2 leg の build` と書いている行): `# 同じ ref への連続 push では古い実行を打ち切る (WebRTC artifact の取得と consumer package の build が走るため)`
+  - job の直前のコメント (`最低要件の Xcode と公開 API baseline を生成した Xcode の両方で検証する` と書いている行): `# 外部の consumer が Sora を import するのと同じ形の package を、最低要件であり` / `# 公開 API baseline を生成した Xcode 26.6 で検証する`
+  - step 名と `run` (`make api-check-fresh XCODE=... XCODE_SDK=...`) は変えない
+- `Makefile` の `build` target の `-sdk` を `$(XCODE_SDK)` に変更し、Makefile 内の SDK の指定を `XCODE_SDK` 1 箇所にする (既定値 `iphoneos26.5`)。`# build` の直前に `# SDK は XCODE_SDK (既定 iphoneos26.5)。Xcode を指定する場合は DEVELOPER_DIR を渡す (build は XCODE を参照しない)` を足し、`XCODE` / `XCODE_SDK` の定義の直前のコメント (`# Xcode と SDK は CI の matrix から XCODE=... XCODE_SDK=... として渡す`) を `# XCODE_SDK は build と consumer 系が使い、XCODE は consumer 系の DEVELOPER_DIR にだけ使う` に置き換える
+- GitHub ホストの runner を使う workflow (`build.yml` / `consumer-test.yml` / `deploy-apidoc.yml`) の Xcode は版を明示し、利用可能な最新版を動的に選ばない (`e2e-test.yml` は self-hosted ランナーの既定 Xcode に依存するため対象外)
+- 26.2 leg の削除で失われるのは旧最低要件 26.2 での検証である。新しい最低要件 26.6 の 1 leg が最低要件での compile 検証を兼ねる
+- `CODEBASE.md` の「Xcode を更新するとき」の手順に、新しい手順 1 として「`README.md` / `skills/sora-ios-sdk/SKILL.md` / `TestConsumers/Swift6Consumer/README.md` の Xcode と SDK の記述、`build.yml` の `env.XCODE` / `env.XCODE_SDK`、`deploy-apidoc.yml` の `env.XCODE`、`e2e-test.yml` の `env.XCODE_SDK` を更新する」を追加し、以降を繰り下げる (`consumer-test.yml` は既存の matrix の手順、`Makefile` の `XCODE_SDK` は既存の手順で足りる。`e2e-test.yml` の未使用の `XCODE` は含めない。追加後は 1. 版の記述、2. `consumer-test.yml` の matrix、3. `Makefile` の `XCODE_SDK` / `API_XCODE`、4. baseline の再生成 (条件付き)、5. 差分のレビュー、6. SDK の版が変わる場合の baseline の file 名、の 6 手順になる)。baseline の再生成の手順は「`XCODE_SDK` / `API_XCODE` を変えた場合、または `*.info.txt` の `xcodebuild` と `sdk` が実行環境と一致しない場合は `make api-baseline` で再生成する。`XCODE_SDK` / `API_XCODE` が同じで `*.info.txt` の `xcodebuild` と `sdk` が実行環境と一致する場合だけ再生成しない。再生成の有無にかかわらず `make api-check-fresh` が成功することを確認する」に直す。`CI の iphoneos26.5 の leg` は `swift6-consumer` job に合わせる
+- `CHANGES.md` の `## develop` の main セクション先頭 (最初の `[UPDATE]` より前) に次を追記する。新しいエントリは main に置き、`### misc` へは移さない
+  - `- [CHANGE] 対応する最低 Xcode を 26.6 に上げる`
+  - `  - Xcode 26.6 未満はサポート対象外になる`
+  - `  - @t-miya`
+- 同じ `## develop` の `### misc` の `[FIX]` は、最終差分に合わせて題名を `[FIX] Makefile の build target の SDK 指定を iphoneos26.5 に修正する`、理由を `既存の build target が SDK を直接指定しており、Xcode の更新に追随できていなかった (SDK は XCODE_SDK から導出する)` に直す (変更履歴は派生元ブランチとの最終差分のみを書くため。同じ `## develop` 内の未リリースの記述を最終状態に合わせる作業であり、別目的ではない)
+- `issues/0108-*.md` は、0108 の設計判断には踏み込まず、26.2 leg の削除に伴う参照の更新だけを行う。上限制約の根拠の Xcode 26.2 を 26.6 に直す。検証方針と完了条件の「Xcode 26.2 と最新 26.x」は、26.2 leg が消えて 26.6 の 1 leg になるため `Xcode 26.6 の 1 leg` に置き換える (swift-tools-version の上限の再判断は 0108 側で行う)
+- `issues/0072-*.md` の `Makefile` の `build` は `iphoneos26.2`、consumer 検証は `iphoneos26.5` と書いている箇所を次の完成形に置き換える: `SDK は iOS 26.x SDK でビルドされる。`Makefile` の `build` は `$(XCODE_SDK)` (既定 `iphoneos26.5`)、consumer 検証も `iphoneos26.5` (`CHANGES.md` の `## develop` に記載)。`
 
 ## スコープ外
 
 - `swift-tools-version` の更新と Swift 6 language mode の適用は `0108` で扱う
-- `.xcproj` から JSON 形式へのプロジェクト設定移行は `0160` で扱う
-- self-hosted ランナーの Xcode 更新 (既に 26.6 のため対象外)
-- 26.2 をサポートし続ける場合の matrix 化は本 issue では行わない
+- サンプル集とクイックスタート (別リポジトリ) の Xcode 条件と Xcode プロジェクト設定の JSON 形式への移行は `0160` で扱う
+- 公式ドキュメント (`sora-ios-sdk-doc`) の `source/setup.rst` の Xcode 条件の更新は本 issue では行わない。README 更新後に別途追従し、リリースチェックで README と一致させる
+- self-hosted ランナーの Xcode の版と `e2e-test.yml` の未使用の `XCODE`、`-destination` の `OS=` の更新。ランナーの既定 Xcode が 26.6 で iOS 26.5 の Simulator runtime が使える前提とする
+- 26.6 より新しい Xcode での継続検証は本 issue では行わない (Xcode が上がった時点で `CODEBASE.md` の手順に従う)
 
 ## 変更対象
 
-- `README.md`: システム条件の Xcode の版
+- `README.md` / `skills/sora-ios-sdk/SKILL.md`: Xcode の条件
 - `.github/workflows/build.yml`: `env.XCODE` / `env.XCODE_SDK`
-- `.github/workflows/consumer-test.yml`: matrix を 26.6 の 1 leg にし、`api_check` フラグと step の `if` を削除
-- `Makefile`: `build` target の `-sdk` を `iphoneos26.5` に更新する (`0107` で `iphoneos26.2` に修正済み。SDK の pin を 1 つにするにはここも追随させる)
-- `CHANGES.md`: 対応環境の引き上げなので `## develop` の `[CHANGE]` に担当者行付きで追記する
-- `issues/0107-*.md` (実装中の場合のみ): 完了条件の 26.2 leg の記述
+- `.github/workflows/deploy-apidoc.yml`: `env.XCODE`
+- `.github/workflows/consumer-test.yml`: matrix、`api_check`、`if`、`fail-fast`、コメント
+- `Makefile`: `build` target の `-sdk` とコメント
+- `CODEBASE.md`: 「Xcode を更新するとき」の手順と leg の記述
+- `CHANGES.md`: main の `[CHANGE]` と `### misc` の `[FIX]`
+- `issues/0108-update-swiftpm-language-mode.md` / `issues/0072-add-sample-buffer-video-renderer.md`: Xcode / SDK の記述
+
+## テスト方針
+
+モックやスタブは使用しない。実際の Xcode 26.6 と `iphoneos26.5` で確認する。
+
+- `xcode-select -p` が Xcode 26.6 を指す状態で `make build` が成功する (別の Xcode を指定する場合は `DEVELOPER_DIR=<Xcode 26.6 の path>/Contents/Developer` を渡す)
+- `XCODE=<実行環境の Xcode 26.6 の path> XCODE_SDK=iphoneos26.5` を付けて (CI は `/Applications/Xcode_26.6.app`、ローカルは `/Applications/Xcode.app` など) `make consumer-build SCHEME=ConsumerCore` / `ConsumerUI` / `ConsumerLegacy`、`make consumer-check-negative`、`make api-check-fresh` が成功する
+- `make fmt-lint` と `make lint` が違反 0 である
+- feature branch の CI で `Build` / `Consumer Test` / `E2E Test` が成功する。`Consumer Test` は 1 leg で、compile (3 scheme)、compiler settings、負例、deprecation、test-only import、fmt-lint、lint、`make api-check-fresh` が skip されずに実行され (job サマリーで `Check Public API Baseline` が success になることで確認する)、`E2E Test` の `Show Xcode Version` が Xcode 26.6 を示す
+- develop へのマージ後に `deploy-apidoc` を `workflow_dispatch` (ref: develop) で実行し、jazzy が成功する (`.jazzy.yaml` は版を固定しないため `env.XCODE` の変更だけで追随する)
+- `git diff --exit-code -- TestConsumers/Swift6Consumer/ApiBaseline/` が空である (公開 API の差分が 0)
+- `grep -rn "26\.2\|iphoneos26\.2" README.md skills/sora-ios-sdk/SKILL.md Makefile .github/workflows/` が 0 件である
+- `sed -n '/^## develop/,/^## 2026\.3\.0/p' CHANGES.md | grep "26\.2"` が 0 件である (リリース済みの変更履歴は範囲外)
+- `grep -n "Xcode 26\.2\|最新 26\.x" issues/0108-update-swiftpm-language-mode.md` が 0 件である
+- `grep -n "iphoneos26\.2" issues/0072-add-sample-buffer-video-renderer.md` が 0 件である
 
 ## 完了条件
 
-- README のシステム条件が Xcode 26.6 になっていること
-- `build.yml` と `consumer-test.yml` と `Makefile` の `build` target の Xcode / SDK が 26.6 / `iphoneos26.5` にそろっていること
-- `consumer-test.yml` が 1 leg で、compile、負例、deprecation 検査、公開 API baseline の比較が成功すること
-- 26.2 を前提とした記述が残っていないこと (過去の issue と `CHANGES.md` の履歴は除く)
-- `0108` の `swift-tools-version` の上限の根拠と `0160` の記述を本 issue に合わせて見直すことになっていること
+- `README.md` のシステム条件と `skills/sora-ios-sdk/SKILL.md` の動作条件が Xcode 26.6 で一致していること
+- `build.yml` の `env.XCODE` / `env.XCODE_SDK`、`deploy-apidoc.yml` の `env.XCODE`、`Makefile` の `build` target の `-sdk` (`$(XCODE_SDK)`、既定 `iphoneos26.5`) が 26.6 / `iphoneos26.5` にそろっていること
+- `consumer-test.yml` が 1 leg で、テスト方針に挙げた検査がすべて成功すること
+- `Check Public API Baseline` step の `run` が `make api-check-fresh` のままで、step の `if: matrix.api_check` と matrix の `api_check` key の両方が削除されていること
+- feature branch の CI で `Build` / `Consumer Test` / `E2E Test` が成功し、`E2E Test` のログで self-hosted ランナーの Xcode が 26.6 であること
+- 26.2 を前提とした記述が `README.md` / `skills/sora-ios-sdk/SKILL.md` / `Makefile` / `.github/workflows/` と `CHANGES.md` の `## develop` に残っていないこと (リリース済みの変更履歴と `issues/` は除く)
+- `issues/0108-*.md` / `issues/0072-*.md` の記述が設計方針のとおり更新されていること
+- `CHANGES.md` の `## develop` の main 先頭に `[CHANGE]` が担当者行付きで追記され、`### misc` の `[FIX]` が最終差分に合っていること
+- 公開 API baseline の差分が 0 であること
+- `CODEBASE.md` の「Xcode を更新するとき」の手順が、`XCODE_SDK` / `API_XCODE` が同じで `*.info.txt` の `xcodebuild` と `sdk` が実行環境と一致する場合だけ baseline を再生成しないことを示していること
 
 ## 解決方法
