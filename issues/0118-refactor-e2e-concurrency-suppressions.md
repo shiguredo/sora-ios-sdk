@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/refactor-e2e-concurrency-suppressions
-- Polished: 2026-09-16
+- Polished: 2026-09-24
 
 ## 目的
 
@@ -29,12 +29,13 @@ E2E テストが `@preconcurrency import Sora` と根拠のない `@unchecked Se
 - expectation の fulfill と test state の更新順序を同じ actor 上で決定する。
 - `DummyVideoCapturer` は main RunLoop owner として `@MainActor` に隔離し、`@unchecked Sendable` を削除する。
 - E2E test が production API の concurrency defect を回避するために新しい unchecked box を追加しない。SDK 側の修正が必要なら別の production issue として扱う。
+- `VideoHardMuteRollbackE2ETests` の `ConnectResultBox` / `VideoSwitchRecorder` / `ChannelBox` は利用契約 (main queue 限定 / lock による排他 / テスト文脈限定) をコメントで明記した root 付きの `@unchecked Sendable` であり、本 issue の対象外とする。
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
-- 全 E2E test target を Swift 6、strict concurrency complete、warnings-as-errors で build する。
+- 全 E2E test target を Swift 6、strict concurrency complete、warnings-as-errors で build する。CI で検証するため `.github/workflows/e2e-test.yml` の build-for-testing に `SWIFT_TREAT_WARNINGS_AS_ERRORS=YES` を追加する（Swift 6 言語モードでは strict concurrency は complete が既定のため `SWIFT_STRICT_CONCURRENCY` の指定は不要）。
 - 実 Sora 接続を使う既存 E2E test を実行する。
 - `DummyVideoCapturer` の start / stop / Timer callback が MainActor 上で実行されることを確認する。
 - callback の連続到着中に test cancellation と tearDown を実行し、MainActor 外の state access がないことを確認する。
