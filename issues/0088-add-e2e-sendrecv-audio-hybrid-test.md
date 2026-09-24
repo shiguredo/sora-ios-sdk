@@ -19,7 +19,7 @@
 
 ## 現状
 
-- iOS の E2E テスト（`SoraTests/SignalingE2ETests.swift`）は Simulator で CI 実行される（`.github/workflows/ci.yml` の `e2e` ジョブ）
+- iOS の E2E テスト（`SoraTests/SignalingE2ETests.swift`）は Simulator で CI 実行される（`.github/workflows/e2e-test.yml` の `e2e` ジョブ）
 - sora-js-sdk には Playwright ベースの E2E テスト基盤と `sendrecv` テストページが存在する（`e2e-tests/tests/sendrecv.test.ts`）
 - 音声の送信は `testSendonlyDummyAudio`（0068 で実装済み）で検証されているが、受信は未検証
 

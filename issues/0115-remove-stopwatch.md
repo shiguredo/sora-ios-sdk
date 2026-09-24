@@ -25,7 +25,7 @@ Timer lifecycle、retain cycle、再実行、executor 契約に問題がある�
 ## 設計方針
 
 - `Utilities.Stopwatch` の型定義を削除する。
-- Stopwatch 専用の code、documentation、test、consumer fixture scenario を削除する。
+- Stopwatch 専用の code、documentation、test、consumer package scenario を削除する。
 - `Utilities.randomString`、`PairTable`、`Optional.unwrap` は変更しない。
 - 代替 timer abstraction を SDK へ追加しない。
 - API baseline を次期 major version の意図した破壊的変更として更新する。

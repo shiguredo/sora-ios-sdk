@@ -86,12 +86,21 @@
 
 ### misc
 
+- [CHANGE] E2E テストの workflow を `ci.yml` から `e2e-test.yml` にリネームする
+  - @t-miya
+- [ADD] Sora iOS SDK を利用したアプリ実装と同じ形で `Sora` を import する consumer package と公開 API の baseline を追加する
+  - `TestConsumers/Swift6Consumer/` に Sora を import する独立した SwiftPM package を追加し、`import Sora` する compile (Swift 6 language mode と warnings-as-errors) と、公開 API の baseline 比較を CI (`consumer-test.yml`) で検証する
+  - 公開 API の削除・変更と `Sendable` 準拠の削除を baseline の比較で検出し、`MediaChannel` が `Sendable` でないことを負例で検出する
+  - @t-miya
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
   - エラーパスで未 wait の expectation を `XCTWaiter.wait(for:timeout: 0)` で消費する
   - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける
   - wait のタイムアウトをリクエストより長くし、API コールバックの結果を保持して wait 後に検証することで、コールバックの次のテストへの誤帰属を防ぐ
   - 切断の共通ヘルパー (`disconnectAndVerify` / `disconnectAll`) の早期 return でも未 wait の expectation を残さないようにする
   - `disconnectAndVerify` の切断イベント検証を wait 後に行い、テスト終了後の assertion の誤帰属を防ぐ
+  - @t-miya
+- [FIX] Makefile の build target の SDK 指定を `iphoneos26.2` に修正する
+  - Xcode 26.2 への更新に追随しておらず、`make build` が SDK を解決できなかった
   - @t-miya
 
 ## 2026.3.0

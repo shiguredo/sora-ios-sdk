@@ -13,7 +13,7 @@ Thread Sanitizer と反復 stress test を補助的な gate とし、Swift 6 対
 
 ## 現状
 
-`.github/workflows/build.yml` は SDK の Release build、`.github/workflows/ci.yml` は実 Sora を使う E2E test を実行するが、Thread Sanitizer を有効にした test job は存在しない。
+`.github/workflows/build.yml` は SDK の Release build、`.github/workflows/e2e-test.yml` は実 Sora を使う E2E test を実行するが、Thread Sanitizer を有効にした test job は存在しない。
 
 `0092` から `0112` の concurrency 関連 issue は個別に Thread Sanitizer の実行を求めているが、共通の実行方法、対象 scenario、反復回数、artifact 保存、失敗時の切り分け方針がない。
 

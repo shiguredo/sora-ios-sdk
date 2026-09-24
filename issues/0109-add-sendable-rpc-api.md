@@ -37,7 +37,7 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
   - `RPCChannel` は concurrent queue の barrier 配下で `pendings` / `isInvalidated` を保護し、`@unchecked Sendable` で宣言している。
   - Task cancellation は `CancelledRPCIDStore` (NSLock 保護の `Int?` ストア) 経由で `rpcChannel.cancel(identifier:)` を呼び、`finishPending` で厳密に 1 回終端する。
   - `RPCChannel.call` のシグネチャ変更 (戻り値 `Int?`、completion の `Error` 型) は内部 API のみの変更で、public API の source compatibility には影響しない。
-- `0107` (open): 外部 consumer fixture と API baseline。新 API の compile scenario と API baseline 検証は `0107` の完了を前提とする (未完了の場合は先に完了させる)。
+- `0107` (open): 外部 consumer package と API baseline。新 API の compile scenario と API baseline 検証は `0107` の完了を前提とする (未完了の場合は先に完了させる)。
 - `0157` (open): 既存 `RPCErrorDetail.data: Any?` を deep-Sendable な表現へ変更し、`Sora/JSONValue.swift` の `JSONValue` を public 化する。本 issue は既存 `RPCErrorDetail` を変更しない。新 API 用の error detail で JSON value を使う場合は `0157` が公開する `JSONValue` を利用する。
 - `0123` (完了 2026-09-15): Sendable を付与できない型の分類と受け皿の整理。RPC の params / result / method enum の Sendable 対応は本 issue の新 API 契約で扱う。
 
@@ -80,7 +80,7 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
 
 - 既存 `RPCMethodProtocol`、`RPCResponse`、`RPCErrorDetail`、`SoraError.rpcServerError(detail:)`、`MediaChannel.rpc` を削除・変更しない (宣言の変更と準拠の追加のどちらも行わない)。
 - 新 API の型名・メソッド名は既存の公開 API と衝突させない。
-- 新 API の追加前後を `0107` の consumer fixture と API baseline で検証する。
+- 新 API の追加前後を `0107` の consumer package と API baseline で検証する。
 - 旧 API の deprecation は本 issue に含めない。
 
 ## スコープ外
@@ -95,9 +95,9 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
 モックやスタブは使用しない。
 
 - 実 DataChannel と実 Sora RPC を使い、SDK 組み込み RPC method の成功・server error を検証する。
-- 利用者定義の Sendable params / result を `0107` の consumer fixture から呼び出せることを compile で確認する。
+- 利用者定義の Sendable params / result を `0107` の consumer package から呼び出せることを compile で確認する。
 - nested object、array、null、scalar を含む result と error data を実 JSON で検証する。
-- mutable reference type を新 protocol の associated type に指定した場合、Sendable を満たさなければ compile できないことを fixture で確認する。
+- mutable reference type を新 protocol の associated type に指定した場合、Sendable を満たさなければ compile できないことを consumer package で確認する。
 - Task cancellation、timeout、disconnect、response を競合させ、すべての Task が 1 回だけ終端することを確認する。
 - raw response の `Data` が decode 完了後に残留しないことを確認する。
 - テストには、`Any` を executor 境界へ渡さない理由を日本語コメントで明記する。
@@ -110,7 +110,7 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
 - JSONSerialization container を executor 境界へ渡さず、immutable `Data` または Sendable JSON value を利用すること。
 - Task cancellation、response、timeout、disconnect が競合しても厳密に 1 回終端すること。
 - 既存 RPC protocol と API の source compatibility が維持されること。
-- 新 API が既存 `MediaChannel.rpc` と別名で提供され、新旧両方の protocol へ準拠した型の呼び出しで曖昧さや解決先の変化が発生しないことを consumer fixture で確認していること。
+- 新 API が既存 `MediaChannel.rpc` と別名で提供され、新旧両方の protocol へ準拠した型の呼び出しで曖昧さや解決先の変化が発生しないことを consumer package で確認していること。
 - SDK 組み込み RPC メソッドが新 protocol へ準拠し、`PutSignalingNotifyMetadata` / `PutSignalingNotifyMetadataItem` は型パラメータが非 Sendable でも既存の準拠を壊さないこと。
 - 追加したテストと既存テストがすべて成功すること。
 
