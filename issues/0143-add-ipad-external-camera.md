@@ -27,11 +27,11 @@ iPadOS 17.0 以降の iPad では USB 接続の UVC 外部カメラが利用で�
 - `CameraSettings` に `deviceID: String?` を追加する。 `AVCaptureDevice.uniqueID` を指定する API とし、指定時は `position` より優先する。 外部カメラは `position` で特定できないため、外部カメラを使う場合は `deviceID` を指定する。
   - `CameraSettingsSnapshot` にも `deviceID` を追加する。 `CameraSettings` は `0123` の完了により `Sendable` になった。 `CameraSettingsSnapshot` を廃止して `CameraSettings` をそのまま actor 境界へ渡す形への変更は別 issue とし、本 issue では `deviceID` をスナップショットへ引き継ぐ現行方針を維持する。
   - `PeerChannel.initializeCameraVideoCapture` と `VideoMute.startCameraVideoCapture` の両方で `deviceID` から `CameraVideoCapturer.devices` を検索し、見つかった `AVCaptureDevice` から `CameraVideoCapturer(device:)` を生成する。 `deviceID` が未指定の場合は現状どおり `position` から front / back を選ぶ。
-  - `deviceID` に一致するデバイスが見つからない場合は、 front / back が見つからない場合と同じくカメラを起動せずにエラーログを出力する。
+  - `deviceID` に一致するデバイスが見つからない場合は、 front / back が見つからない場合と同じ扱いにしてカメラを起動しない ( `PeerChannel` の経路ではエラーログを出力し、 `VideoMute` の経路ではエラーを返す) 。
 - `CameraVideoCapturer.flip(_:completionHandler:)` は `device.position` が `.front` / `.back` 以外の場合はエラーを返す。 外部カメラには front / back の区別がないため。
 - 外部カメラは物理的に回転させられるため、回転補正に `AVCaptureDevice.RotationCoordinator` などが必要になる可能性がある。 本 issue では外部カメラの選択と送信までを対応し、回転補正は実機確認の結果に応じて別 issue で扱う。
 - カメラ以外の映像入力ソースの抽象化 (0053) とは別に、既存の `CameraVideoCapturer` の枠組みで外部カメラを扱う。
-- 公開 API の doc コメントと sora-ios-sdk-doc の `camera.rst` に、外部カメラは iOS / iPadOS 17.0 以降で利用できることと `deviceID` の指定方法を追記する。
+- 公開 API の doc コメント、 `skills/sora-ios-sdk/SKILL.md` のカメラ設定の説明、 sora-ios-sdk-doc の `camera.rst` に、外部カメラは iOS / iPadOS 17.0 以降で利用できることと `deviceID` の指定方法を追記する。
 - `CHANGES.md` に ADD として記載する。
 
 ## テスト方針
@@ -49,6 +49,8 @@ iPadOS 17.0 以降の iPad では USB 接続の UVC 外部カメラが利用で�
 - 外部カメラで `CameraVideoCapturer.flip(_:completionHandler:)` を実行するとエラーになり、クラッシュしないこと。
 - `deviceID` を指定しない場合の front / back の挙動と、iOS 16 以前の挙動が変わらないこと。
 - 公開 API の doc コメントを追加すること。
+- `skills/sora-ios-sdk/SKILL.md` のカメラ設定の説明に `deviceID` と iOS / iPadOS 17.0 以降の制約が記載されていること。
+- 公開 API の追加 ( `CameraSettings.deviceID` ) に伴い、 `make api-baseline` で `TestConsumers/Swift6Consumer/ApiBaseline/` を再生成し、 `make api-check-fresh` が通ること (CODEBASE.md の運用に従う)。
 - `CHANGES.md` に追加を記載すること。
 
 ## 変更対象ファイル
@@ -56,6 +58,8 @@ iPadOS 17.0 以降の iPad では USB 接続の UVC 外部カメラが利用で�
 - `Sora/CameraVideoCapturer.swift`
 - `Sora/PeerChannel.swift`
 - `Sora/VideoMute.swift`
+- `TestConsumers/Swift6Consumer/ApiBaseline/`: `make api-baseline` による公開 API baseline の再生成
+- `skills/sora-ios-sdk/SKILL.md`: カメラ設定の説明の更新
 - `SoraTests/` (追加するテスト)
 - `CHANGES.md`
 
