@@ -12,7 +12,7 @@
 ## develop
 
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する
-  - m154 で変更された `RTCAudioDeviceModule` の初期化 API に追従し、ステレオ再生設定を生成時に指定する
+  - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
   - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
   - @zztkm
 - [UPDATE] CameraVideoCapturer のカメラ状態の所有者を単一化する
