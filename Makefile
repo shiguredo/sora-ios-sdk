@@ -14,10 +14,11 @@ fmt:
 	swift format --in-place --recursive $(FORMAT_PATHS)
 
 # build
+# SDK は XCODE_SDK (既定 iphoneos26.5)。Xcode を指定する場合は DEVELOPER_DIR を渡す (build は XCODE を参照しない)
 build:
 	xcodebuild \
 		-scheme 'Sora' \
-		-sdk iphoneos26.2 \
+		-sdk $(XCODE_SDK) \
 		-configuration Release \
 		-derivedDataPath build \
 		-destination 'generic/platform=iOS' \
@@ -37,7 +38,7 @@ lint:
 	swift package plugin --allow-writing-to-package-directory swiftlint --strict .
 
 # Swift 6 consumer package
-# Xcode と SDK は CI の matrix から XCODE=... XCODE_SDK=... として渡す
+# XCODE_SDK は build と consumer 系が使い、XCODE は consumer 系の DEVELOPER_DIR にだけ使う
 XCODE ?= /Applications/Xcode.app
 XCODE_SDK ?= iphoneos26.5
 CONFIGURATION := Release

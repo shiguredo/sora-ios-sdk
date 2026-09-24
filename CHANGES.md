@@ -11,6 +11,8 @@
 
 ## develop
 
+- [CHANGE] システム要件の Xcode バージョンを 26.6+ に更新する
+  - @t-miya
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する
   - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
   - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
@@ -99,15 +101,16 @@
 - [ADD] 公開 API baseline が現在の `Sora` module と一致していることを CI で検証する
   - `make api-check-fresh` を追加し、公開 API を追加したまま baseline を再生成漏れ状態を検出する
   - @t-miya
+- [UPDATE] GitHub Actions の Build ワークフローの XCode バージョン等を更新する
+  - Xcode の version を 26.6 に更新する
+  - SDK を iOS 26.5 に更新する
+  - @t-miya
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
   - エラーパスで未 wait の expectation を `XCTWaiter.wait(for:timeout: 0)` で消費する
   - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける
   - wait のタイムアウトをリクエストより長くし、API コールバックの結果を保持して wait 後に検証することで、コールバックの次のテストへの誤帰属を防ぐ
   - 切断の共通ヘルパー (`disconnectAndVerify` / `disconnectAll`) の早期 return でも未 wait の expectation を残さないようにする
   - `disconnectAndVerify` の切断イベント検証を wait 後に行い、テスト終了後の assertion の誤帰属を防ぐ
-  - @t-miya
-- [FIX] Makefile の build target の SDK 指定を `iphoneos26.2` に修正する
-  - Xcode 26.2 への更新に追随しておらず、`make build` が SDK を解決できなかった
   - @t-miya
 
 ## 2026.3.0
