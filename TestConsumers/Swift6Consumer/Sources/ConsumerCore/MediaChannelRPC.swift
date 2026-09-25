@@ -2,6 +2,7 @@
 //   - RPC を nonisolated な async 文脈から呼べること (RPCMethodProtocol は params / result に
 //     Sendable を要求しないため、非 Sendable な値でも呼べる。Sendable 化は別の作業)
 //   - 利用者定義の RPCMethodProtocol 準拠型 (`static var name`) で rpc を呼べること
+//   - RPC のサーバーエラーが運ぶ `data` を公開 JSONValue の case 分岐で読めること
 //   - 戻り値 Error? の API (sendMessage / setAudioSoftMute) を nonisolated な文脈から呼べること
 //   - getStats(handler:) に非 Sendable な closure を渡せること
 // 期待する診断: なし (error 0 件、warning 0 件)
@@ -100,4 +101,36 @@ func describe(_ mediaChannel: MediaChannel) {
   _ = mediaChannel.senderStream
   _ = mediaChannel.receiverStreams
   _ = mediaChannel.description
+}
+
+/// RPC のサーバーエラーが運ぶ追加情報を `JSONValue` の case 分岐で読む。
+///
+/// `RPCErrorDetail` は利用者側で組み立てられないため、`Error` から受け取って読む。
+/// `data` は JSON-RPC 2.0 では任意フィールドで、サーバーが返したときだけ入る。
+func describeRPCError(_ error: Error) -> String {
+  guard let soraError = error as? SoraError,
+    case .rpcServerError(let detail) = soraError
+  else {
+    return "RPC のサーバーエラーではない"
+  }
+  let dataDescription: String
+  switch detail.data {
+  case .none:
+    dataDescription = "data なし"
+  case .some(.null):
+    dataDescription = "null"
+  case .some(.bool(let value)):
+    dataDescription = "\(value)"
+  case .some(.decimal(let value)):
+    dataDescription = "\(value)"
+  case .some(.double(let value)):
+    dataDescription = "\(value)"
+  case .some(.string(let value)):
+    dataDescription = value
+  case .some(.array(let value)):
+    dataDescription = "配列 \(value.count) 件"
+  case .some(.object(let value)):
+    dataDescription = "辞書 \(value.count) 件"
+  }
+  return "\(detail.message) (\(detail.code)) : \(dataDescription)"
 }

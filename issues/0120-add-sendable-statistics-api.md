@@ -26,7 +26,7 @@ WebRTC statistics を actor / Task 境界で安全に受け渡せる、immutable
 - `0058` (open): `MediaChannel.getStats()` の async 化は本 issue が担当すると明記している。
 - `0107` (完了 2026-09-24): consumer package と API baseline。本 issue の compile scenario と baseline 更新の前提。
 - `0123` (完了 2026-09-15): `Statistics` / `StatisticsEntry` は本 issue の snapshot API を受け皿として分類している。
-- `0157` (open): `Sora/JSONValue.swift` の `JSONValue` の public 化。snapshot の値の表現として利用する。本 issue の実装は `0157` の完了を前提とする (未完了の場合は先に完了させる)。
+- `0157` (実装済み): `Sora/JSONValue.swift` の `JSONValue` の public 化。snapshot の値の表現として利用する。
 
 ## 設計方針
 

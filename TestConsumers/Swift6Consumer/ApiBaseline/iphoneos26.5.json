@@ -12480,6 +12480,515 @@
       },
       {
         "kind": "TypeDecl",
+        "name": "JSONValue",
+        "printedName": "JSONValue",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "null",
+            "printedName": "null",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.JSONValue.Type) -> Sora.JSONValue",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "JSONValue",
+                    "printedName": "Sora.JSONValue",
+                    "usr": "s:4Sora9JSONValueO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.JSONValue.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora9JSONValueO4nullyA2CmF",
+            "mangledName": "$s4Sora9JSONValueO4nullyA2CmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Var",
+            "name": "bool",
+            "printedName": "bool",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.JSONValue.Type) -> (Swift.Bool) -> Sora.JSONValue",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Swift.Bool) -> Sora.JSONValue",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Bool",
+                        "printedName": "Swift.Bool",
+                        "usr": "s:Sb"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.JSONValue.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora9JSONValueO4boolyACSbcACmF",
+            "mangledName": "$s4Sora9JSONValueO4boolyACSbcACmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Var",
+            "name": "decimal",
+            "printedName": "decimal",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.JSONValue.Type) -> (Foundation.Decimal) -> Sora.JSONValue",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Foundation.Decimal) -> Sora.JSONValue",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Decimal",
+                        "printedName": "Foundation.Decimal",
+                        "usr": "c:@SA@NSDecimal"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.JSONValue.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora9JSONValueO7decimalyACSo9NSDecimalacACmF",
+            "mangledName": "$s4Sora9JSONValueO7decimalyACSo9NSDecimalacACmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Var",
+            "name": "double",
+            "printedName": "double",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.JSONValue.Type) -> (Swift.Double) -> Sora.JSONValue",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Swift.Double) -> Sora.JSONValue",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.JSONValue.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora9JSONValueO6doubleyACSdcACmF",
+            "mangledName": "$s4Sora9JSONValueO6doubleyACSdcACmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Var",
+            "name": "string",
+            "printedName": "string",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.JSONValue.Type) -> (Swift.String) -> Sora.JSONValue",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Swift.String) -> Sora.JSONValue",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.JSONValue.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora9JSONValueO6stringyACSScACmF",
+            "mangledName": "$s4Sora9JSONValueO6stringyACSScACmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Var",
+            "name": "array",
+            "printedName": "array",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.JSONValue.Type) -> ([Sora.JSONValue]) -> Sora.JSONValue",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "([Sora.JSONValue]) -> Sora.JSONValue",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Array",
+                        "printedName": "[Sora.JSONValue]",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "JSONValue",
+                            "printedName": "Sora.JSONValue",
+                            "usr": "s:4Sora9JSONValueO"
+                          }
+                        ],
+                        "usr": "s:Sa"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.JSONValue.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora9JSONValueO5arrayyACSayACGcACmF",
+            "mangledName": "$s4Sora9JSONValueO5arrayyACSayACGcACmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Var",
+            "name": "object",
+            "printedName": "object",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.JSONValue.Type) -> ([Swift.String : Sora.JSONValue]) -> Sora.JSONValue",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "([Swift.String : Sora.JSONValue]) -> Sora.JSONValue",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Dictionary",
+                        "printedName": "[Swift.String : Sora.JSONValue]",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "String",
+                            "printedName": "Swift.String",
+                            "usr": "s:SS"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "JSONValue",
+                            "printedName": "Sora.JSONValue",
+                            "usr": "s:4Sora9JSONValueO"
+                          }
+                        ],
+                        "usr": "s:SD"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.JSONValue.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora9JSONValueO6objectyACSDySSACGcACmF",
+            "mangledName": "$s4Sora9JSONValueO6objectyACSDySSACGcACmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_enum_equals",
+            "printedName": "__derived_enum_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "JSONValue",
+                "printedName": "Sora.JSONValue",
+                "usr": "s:4Sora9JSONValueO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "JSONValue",
+                "printedName": "Sora.JSONValue",
+                "usr": "s:4Sora9JSONValueO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora9JSONValueO21__derived_enum_equalsySbAC_ACtFZ",
+            "mangledName": "$s4Sora9JSONValueO21__derived_enum_equalsySbAC_ACtFZ",
+            "moduleName": "Sora",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements",
+              "Semantics"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "encode",
+            "printedName": "encode(to:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Encoder",
+                "printedName": "any Swift.Encoder",
+                "usr": "s:s7EncoderP"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora9JSONValueO6encode2toys7Encoder_p_tKF",
+            "mangledName": "$s4Sora9JSONValueO6encode2toys7Encoder_p_tKF",
+            "moduleName": "Sora",
+            "isFromExtension": true,
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(from:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "JSONValue",
+                "printedName": "Sora.JSONValue",
+                "usr": "s:4Sora9JSONValueO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Decoder",
+                "printedName": "any Swift.Decoder",
+                "usr": "s:s7DecoderP"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:4Sora9JSONValueO4fromACs7Decoder_p_tKcfc",
+            "mangledName": "$s4Sora9JSONValueO4fromACs7Decoder_p_tKcfc",
+            "moduleName": "Sora",
+            "isFromExtension": true,
+            "throwing": true,
+            "init_kind": "Designated"
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:4Sora9JSONValueO",
+        "mangledName": "$s4Sora9JSONValueO",
+        "moduleName": "Sora",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Decodable",
+            "printedName": "Decodable",
+            "usr": "s:Se",
+            "mangledName": "$sSe"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Encodable",
+            "printedName": "Encodable",
+            "usr": "s:SE",
+            "mangledName": "$sSE"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
         "name": "LogType",
         "printedName": "LogType",
         "children": [
@@ -20275,20 +20784,21 @@
               {
                 "kind": "TypeNominal",
                 "name": "Optional",
-                "printedName": "Any?",
+                "printedName": "Sora.JSONValue?",
                 "children": [
                   {
                     "kind": "TypeNominal",
-                    "name": "ProtocolComposition",
-                    "printedName": "Any"
+                    "name": "JSONValue",
+                    "printedName": "Sora.JSONValue",
+                    "usr": "s:4Sora9JSONValueO"
                   }
                 ],
                 "usr": "s:Sq"
               }
             ],
             "declKind": "Var",
-            "usr": "s:4Sora14RPCErrorDetailV4dataypSgvp",
-            "mangledName": "$s4Sora14RPCErrorDetailV4dataypSgvp",
+            "usr": "s:4Sora14RPCErrorDetailV4dataAA9JSONValueOSgvp",
+            "mangledName": "$s4Sora14RPCErrorDetailV4dataAA9JSONValueOSgvp",
             "moduleName": "Sora",
             "declAttributes": [
               "HasStorage"
@@ -20304,20 +20814,21 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Optional",
-                    "printedName": "Any?",
+                    "printedName": "Sora.JSONValue?",
                     "children": [
                       {
                         "kind": "TypeNominal",
-                        "name": "ProtocolComposition",
-                        "printedName": "Any"
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
                       }
                     ],
                     "usr": "s:Sq"
                   }
                 ],
                 "declKind": "Accessor",
-                "usr": "s:4Sora14RPCErrorDetailV4dataypSgvg",
-                "mangledName": "$s4Sora14RPCErrorDetailV4dataypSgvg",
+                "usr": "s:4Sora14RPCErrorDetailV4dataAA9JSONValueOSgvg",
+                "mangledName": "$s4Sora14RPCErrorDetailV4dataAA9JSONValueOSgvg",
                 "moduleName": "Sora",
                 "implicit": true,
                 "declAttributes": [
@@ -20346,6 +20857,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },

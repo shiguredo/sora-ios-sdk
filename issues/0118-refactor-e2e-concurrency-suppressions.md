@@ -21,6 +21,10 @@ E2E テストが `@preconcurrency import Sora` と根拠のない `@unchecked Se
 
 `@preconcurrency import Accelerate` は C API annotation の不足を局所的に補う別の境界であり、根拠を確認せず本 issue で撤去しない。
 
+## 前提となる issue
+
+- `0157`: `SoraError` の concurrency 警告の解消 (詳細は `0157` を参照)。
+
 ## 設計方針
 
 - 11 箇所の `@testable @preconcurrency import Sora` を通常の `@testable import Sora` へ変更する。
