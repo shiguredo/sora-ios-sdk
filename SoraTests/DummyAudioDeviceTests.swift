@@ -19,6 +19,15 @@ final class SineWaveGenerator: @unchecked Sendable {
     self.frequency = frequency
   }
 
+  /// 生成した累積時間 (秒)
+  ///
+  /// 並行呼び出しで位相の更新が失われないことをテストから確認するために公開する。
+  var elapsedTime: Double {
+    lock.lock()
+    defer { lock.unlock() }
+    return phase
+  }
+
   /// 正弦波の PCM データを生成する
   /// - Parameter data: データ書き込み先
   /// - Parameter frameCount: フレーム数
@@ -47,6 +56,15 @@ final class SineWaveGenerator: @unchecked Sendable {
 final class StereoSineWaveGenerator: @unchecked Sendable {
   private let lock = NSLock()
   private var time: Double = 0
+
+  /// 生成した累積時間 (秒)
+  ///
+  /// 並行呼び出しで位相の更新が失われないことをテストから確認するために公開する。
+  var elapsedTime: Double {
+    lock.lock()
+    defer { lock.unlock() }
+    return time
+  }
 
   func generate(data: UnsafeMutableRawPointer, frameCount: Int, sampleRate: Double) {
     lock.lock()
@@ -103,8 +121,8 @@ final class StereoToneProbe: @unchecked Sendable {
 
 /// pcmGenerator が呼ばれたかどうかを callback とテストスレッドで共有する箱
 ///
-/// pcmGenerator は `@Sendable` な closure のため可変な `var` を capture できず、
-/// 呼び出しは ADM の音声スレッドからも起こり得るため lock で保護する。
+/// pcmGenerator は `@Sendable` な closure のため可変な `var` を capture できない。
+/// 注入先の pcmGenerator は ADM の音声スレッドからも呼ばれ得るため、共有状態は lock で保護する。
 private final class CallFlag: @unchecked Sendable {
   private let lock = NSLock()
   private var called = false
@@ -290,6 +308,47 @@ final class DummyAudioDeviceTests: XCTestCase {
     XCTAssertEqual(whole, split, "フレーム境界を跨いでも位相が連続しているべき")
   }
 
+  /// 生成器の lock が並行呼び出しで位相の更新を失わないことを確認する
+  ///
+  /// ADM は lifecycle メソッドを直列化するが、テストから `fillPCMData` を直接呼ぶ経路とは
+  /// 交差し得るため、生成器の可変状態は複数スレッドから保護されている必要がある。
+  /// lock を外すと位相の加算が競合し、総フレーム数ぶん前進しなくなる (TSan でも検出される)。
+  func testGeneratorsAreSafeForConcurrentUse() {
+    /// 同じ生成器を並行に呼び、位相が総フレーム数ぶん前進したことを確認する
+    ///
+    /// 書き込み先は生成器が書き込む分 (`channelCount × frameCount` の Int16) を確保する。
+    func verify(
+      generate: @Sendable (UnsafeMutableRawPointer, Int, Double) -> Void,
+      elapsedTime: () -> Double,
+      channels: Int,
+      name: String
+    ) {
+      let iterations = 64
+      let frameCount = 960
+      let sampleRate = 48000.0
+      DispatchQueue.concurrentPerform(iterations: iterations) { _ in
+        let data = UnsafeMutableRawPointer.allocate(
+          byteCount: frameCount * channels * MemoryLayout<Int16>.size, alignment: 1)
+        defer { data.deallocate() }
+        generate(data, frameCount, sampleRate)
+      }
+
+      XCTAssertEqual(
+        elapsedTime(), Double(iterations * frameCount) / sampleRate, accuracy: 1e-9,
+        "\(name) が並行呼び出しでも総フレーム数ぶん位相を進めること")
+    }
+
+    let sine = SineWaveGenerator(frequency: 440)
+    verify(
+      generate: sine.generate, elapsedTime: { sine.elapsedTime }, channels: 1,
+      name: "SineWaveGenerator")
+
+    let stereo = StereoSineWaveGenerator()
+    verify(
+      generate: stereo.generate, elapsedTime: { stereo.elapsedTime }, channels: 2,
+      name: "StereoSineWaveGenerator")
+  }
+
   /// initialMicrophoneEnabled = false の場合、初期状態でハードミュートされることを確認する
   /// (Configuration.initialMicrophoneEnabled の契約をダミー音声経路でも守る)
   func testInitialMicrophoneDisabledStartsMuted() {
@@ -310,10 +369,10 @@ final class DummyAudioDeviceTests: XCTestCase {
   func testSetHardMuteTogglesState() {
     let device = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in }
 
-    device.setHardMute(true)
+    _ = device.setHardMute(true)
     XCTAssertTrue(device.isHardMuted, "setHardMute(true) でミュートになるべき")
 
-    device.setHardMute(false)
+    _ = device.setHardMute(false)
     XCTAssertFalse(device.isHardMuted, "setHardMute(false) でミュートが解除されるべき")
   }
 }
