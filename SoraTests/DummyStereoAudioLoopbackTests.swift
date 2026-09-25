@@ -1,3 +1,4 @@
+import AVFoundation
 import WebRTC
 import XCTest
 
@@ -49,21 +50,22 @@ private final class CallCounter: @unchecked Sendable {
 ///
 /// `senderFactory` / `receiverFactory` は `AudioSessionRequirement` (共有 AudioSession への要求) を
 /// 保持しており、解放すると接続中でも要求が解除されるため、テストの間は明示的に保持する。
-/// track は PeerConnection 側でも保持されるが、生成元の factory とまとめて保持する。
+/// track は `sender.add(_:streamIds:)` が作る native の sender (RtpSender) が保持するため、
+/// ここでは保持しない。
 private struct ConnectedAudioPair {
   let sender: RTCPeerConnection
   let receiver: RTCPeerConnection
   let senderFactory: NativePeerChannelFactory
   let receiverFactory: NativePeerChannelFactory
-  let track: RTCAudioTrack
 }
 
 /// Sora の接続情報がなくても、実際の Opus / RTP / ADM を通してダミー音声を検証する。
 /// ICE はローカル候補だけを交換し、マイク・スピーカー・STUN / TURN サーバーを使わない。
 ///
-/// `playoutHandler` 経路の左右分離 (`testStereoPCMThroughRealPeerConnections`) と、
+/// `playoutHandler` 経路の左右分離 (`testStereoPCMThroughRealPeerConnections`)、受信あり接続での
+/// AudioUnit (RemoteIO) 経路 (`testReceiverWithoutPlayoutHandlerStartsAndStopsAudioUnit`)、
 /// 接続中の `terminateDevice` 後の終端性 (`testTerminateWhileConnectedStopsRecordingAndPlayout`) を
-/// 検証する。AudioUnit (RemoteIO) 経路は実 Sora 接続が必要な `SendonlyE2ETests` が担う。
+/// 検証する。
 final class DummyStereoAudioLoopbackTests: XCTestCase {
   /// 実際の Opus を通して、再生 PCM の左右を分離して受信できることを確認する
   func testStereoPCMThroughRealPeerConnections() throws {
@@ -94,6 +96,83 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
     XCTAssertGreaterThanOrEqual(probe.stereoDuration, 0.5, "左右を分離した再生 PCM が 0.5 秒以上あること")
   }
 
+  /// `playoutHandler` を渡さない受信側が AudioUnit (RemoteIO) 経路で再生を開始し、停止で終端へ戻ることを確認する
+  ///
+  /// ADM が `initializePlayout` を呼ぶのは受信ストリームを持つ接続だけで、送信専用接続では呼ばれない。
+  /// そのため送信側から音声を送る受信ありの接続を作り、受信側の device にだけ `playoutHandler` を
+  /// 渡さないことで AudioUnit 経路を通す。AudioUnit の再生 PCM は ADM の音声スレッドが device から
+  /// 直接取り出すため、`playoutHandler` 経路のように呼び出し回数では観測できない。ここでは
+  /// `initializePlayout` と `startPlayout` の AudioUnit 分岐が state を更新したこと
+  /// (`isPlayoutInitialized` / `isPlaying`) と、`terminateDevice` が AudioUnit を停止して終端へ
+  /// 戻すことを検証する。
+  ///
+  /// 開始の途中で停止した場合に AudioUnit を停止して巻き戻す分岐は、ADM スレッド契約の下では
+  /// テストから交差を強制できないため検証しない (契約違反の呼び出しに対する防御)。
+  func testReceiverWithoutPlayoutHandlerStartsAndStopsAudioUnit() throws {
+    let generatorCalls = CallCounter()
+    let generator = StereoSineWaveGenerator()
+    let senderDevice = DummyAudioDevice(
+      initialMicrophoneEnabled: true, channelCount: 2,
+      playoutHandler: { _, _ in },
+      pcmGenerator: { data, frameCount, sampleRate in
+        generatorCalls.increment()
+        generator.generate(data: data, frameCount: frameCount, sampleRate: sampleRate)
+      })
+    // 受信専用の接続なので録音は初期化されない。`initialMicrophoneEnabled` は開始時のハードミュート
+    // 状態を定めるだけである。`playoutHandler` を渡さないことで AudioUnit (RemoteIO) 経路になり、
+    // `initialize(with:)` が共有 AudioSession を設定する
+    let receiverDevice = DummyAudioDevice(
+      initialMicrophoneEnabled: true, channelCount: 2,
+      playoutHandler: nil,
+      pcmGenerator: { data, frameCount, _ in
+        data.assumingMemoryBound(to: Int16.self).update(repeating: 0, count: frameCount * 2)
+      })
+    let pair = try connectAudioPair(
+      senderDevice: senderDevice, receiverDevice: receiverDevice, trackId: "audio-unit",
+      enableStereo: false)
+    defer {
+      pair.sender.close()
+      pair.receiver.close()
+      deactivateSharedAudioSession()
+    }
+
+    // positive control: 送信側が PCM を注入している (受信ストリームが存在する) ことを確認してから、
+    // 受信側の AudioUnit 経路が再生を初期化して起動するまで待つ
+    let recording = expectation(
+      for: NSPredicate { _, _ in
+        generatorCalls.value > 0 && senderDevice.isRecording
+      }, evaluatedWith: nil)
+    wait(for: [recording], timeout: 10)
+    let audioUnitPlayout = expectation(
+      for: NSPredicate { _, _ in
+        receiverDevice.isPlayoutInitialized && receiverDevice.isPlaying
+      }, evaluatedWith: nil)
+    wait(for: [audioUnitPlayout], timeout: 10)
+    XCTAssertEqual(pair.receiver.connectionState, .connected)
+    XCTAssertTrue(
+      receiverDevice.isPlayoutInitialized, "受信側の isPlayoutInitialized が true であること")
+    XCTAssertTrue(receiverDevice.isPlaying, "受信側の isPlaying が true であること")
+
+    // AudioUnit は ADM の音声スレッドが動かし続けるため、呼び出し回数ではなく state が終端へ
+    // 戻らないことで、停止の直前まで再生が継続していることを確認する
+    let active = expectation(description: "停止の直前まで受信側の AudioUnit が動作していること")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { active.fulfill() }
+    wait(for: [active], timeout: 3)
+    XCTAssertTrue(receiverDevice.isPlaying, "停止の直前まで受信側の isPlaying が true であること")
+
+    // 接続を維持したまま停止する。lifecycle メソッドの呼び出しはテストスレッドのみで行う
+    XCTAssertTrue(senderDevice.terminateDevice(), "送信側の terminateDevice が成功すること")
+    assertTerminated(senderDevice, "送信側")
+    XCTAssertTrue(receiverDevice.terminateDevice(), "AudioUnit 経路の受信側の terminateDevice が成功すること")
+    assertTerminated(receiverDevice, "AudioUnit 経路の受信側")
+
+    // 停止後に AudioUnit が再起動しないことを確認する
+    let idle = expectation(description: "terminate 後に受信側の AudioUnit が再起動しないこと")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { idle.fulfill() }
+    wait(for: [idle], timeout: 3)
+    assertTerminated(receiverDevice, "terminate 後の AudioUnit 経路の受信側")
+  }
+
   /// 接続中に切断スレッドから terminate しても、停止後に PCM の注入と state の更新が再開しないことを確認する
   ///
   /// `RTCAudioDevice` の lifecycle メソッドは ADM スレッドからのみ呼ぶ契約 (RTCAudioDevice.h) のため、
@@ -105,9 +184,9 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
   /// 停止の直前まで注入と再生が継続していること (positive control) を確認した上で、
   /// 停止後に state が終端へ戻り、timer が発火しても注入と再生が再開しないことを検証する。
   ///
-  /// 交差を強制できないため、`withCurrentLifecycle` が世代不一致で差し込みを拒否する分岐は
-  /// このテストでは実行されない。棄却経路は契約に違反する呼び出しでのみ通り、反復実行
-  /// (0119 の Thread Sanitizer job) で確率的に踏む位置づけとする。
+  /// 交差を強制できないため、世代不一致で差し込みを拒否する分岐 (棄却経路) は ADM スレッド契約が
+  /// 守られる限り実行されない。棄却経路は契約違反の呼び出しに対する防御であり、このテストでは
+  /// 検証しない。
   func testTerminateWhileConnectedStopsRecordingAndPlayout() throws {
     let generatorCalls = CallCounter()
     let playoutCalls = CallCounter()
@@ -197,6 +276,21 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
     XCTAssertFalse(device.isHardMuted, "\(name) の isHardMuted が初期状態 (ミュートなし) であること")
   }
 
+  /// AudioUnit 経路の `initialize(with:)` が設定した共有 AudioSession をテストの最後に解除する
+  ///
+  /// `audioSessionUsage: .custom` の接続は SDK が AudioSession を管理しないため、`playoutHandler` を
+  /// 渡さない device を使ったテストが設定したままの状態を残し得る。後続のテスト (AudioSession を
+  /// 管理する実接続のテスト) へ影響を残さないよう、このテストだけが非アクティブへ戻す。テストは
+  /// 直列に実行されるため、接続を保持したまま実行中のテストの AudioSession を解除することはない。
+  /// カテゴリーは `.playAndRecord` のまま残るが、非アクティブなので後続のテストが自分で設定できる。
+  private func deactivateSharedAudioSession() {
+    do {
+      try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    } catch {
+      // 解除できなくてもテストの判定には影響しない (後続のテストへの影響を減らすための後始末)
+    }
+  }
+
   /// 2 つの `DummyAudioDevice` をローカルの PeerConnection で接続する
   ///
   /// `enableStereo` を true にすると E2E と同じ受信優先指定で SDP を書き換え、
@@ -238,7 +332,7 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
     try setDescription(try XCTUnwrap(receiver.localDescription), peer: sender, local: false)
     return ConnectedAudioPair(
       sender: sender, receiver: receiver, senderFactory: senderFactory,
-      receiverFactory: receiverFactory, track: track)
+      receiverFactory: receiverFactory)
   }
 
   private func description(peer: RTCPeerConnection, answer: Bool) throws -> RTCSessionDescription {

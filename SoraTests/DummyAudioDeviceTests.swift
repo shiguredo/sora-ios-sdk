@@ -325,8 +325,7 @@ final class DummyAudioDeviceTests: XCTestCase {
   ///
   /// このテストは競合が起きれば必ず落ちる (位相が総フレーム数に一致しなくなる) が、
   /// `concurrentPerform` の並列度は保証されないため、単体では best-effort の検出である。
-  /// lock を外した場合の検出は Thread Sanitizer を有効にした実行 (0119 の TS job) を最終的な
-  /// 検出器とする。
+  /// lock を外した場合の検出は Thread Sanitizer を有効にした実行を最終的な検出器とする。
   func testGeneratorsAreSafeForConcurrentUse() {
     /// 同じ生成器を並行に呼び、位相が総フレーム数ぶん前進したことを確認する
     ///

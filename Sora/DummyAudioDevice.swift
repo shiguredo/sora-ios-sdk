@@ -28,8 +28,9 @@ import WebRTC
 ///
 /// timer / AudioUnit / state フラグを差し込む開始処理 (startRecording / startPlayout /
 /// initializePlayout / initializeRecording) は、準備 (delegate や間隔の取得) と差し込みが別の
-/// lock 区間になる。差し込みは `withCurrentLifecycle` で `lifecycleGeneration` を確認してから
-/// 行うため、準備の途中で `terminateDevice` が走った場合に停止後の state が書き換わることはない。
+/// lock 区間になる。差し込みは `updateIfCurrentLifecycle` / `startTimerIfCurrentLifecycle` で
+/// `lifecycleGeneration` を確認してから行うため、準備の途中で `terminateDevice` が走った場合に
+/// 停止後の state が書き換わることはない。
 ///
 /// state が持つ timer は、停止側が常に `cancel` できるよう、`TimerSlot.install(_:)` が差し込みと
 /// `resume()` を同じ lock 区間で行う。
@@ -134,6 +135,35 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     /// `startHardware()` に成功したときだけ true にし、停止側はこれを見て未起動の AudioUnit へ
     /// `stopHardware()` を呼ばない
     var isHardwareRunning = false
+
+    /// `lifecycle` の世代が現在も有効かどうかを判定する
+    ///
+    /// `stateLock` を保持した状態で呼ぶこと。delegate が外れている場合も停止済みとして扱う。
+    func isCurrentLifecycle(_ lifecycle: UInt64) -> Bool {
+      lifecycleGeneration == lifecycle && delegate != nil
+    }
+  }
+
+  /// 録音・再生の timer の種別
+  ///
+  /// `TimerSlot` と稼働中フラグの対応をここに閉じ、開始処理での取り違えを防ぐ。
+  private enum TimerKind {
+    case recording
+    case playout
+
+    var slot: WritableKeyPath<State, TimerSlot> {
+      switch self {
+      case .recording: return \.recording
+      case .playout: return \.playout
+      }
+    }
+
+    var runningFlag: WritableKeyPath<State, Bool> {
+      switch self {
+      case .recording: return \.isRecording
+      case .playout: return \.isPlaying
+      }
+    }
   }
 
   /// 録音用
@@ -156,8 +186,8 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
   /// 開始処理の前提 (delegate とライフサイクルの世代) を同じ lock 区間で取得する
   ///
-  /// 取得した世代を `updateIfCurrentLifecycle` に渡すことで、準備の途中に `terminateDevice` が
-  /// 走っていないことを確認できる。
+  /// 取得した世代を `updateIfCurrentLifecycle` / `startTimerIfCurrentLifecycle` に渡すことで、
+  /// 準備の途中に `terminateDevice` が走っていないことを確認できる。
   /// - Parameter requirePlayoutInitialized: 再生の初期化済みを必要とする場合に true
   /// - Returns: 停止済み・未初期化の場合は nil
   private func startContext(
@@ -170,29 +200,41 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     }
   }
 
-  /// ライフサイクルの世代が変わっていないことを確認してから state を更新し、その結果を返す
-  ///
-  /// timer や AudioUnit を差し込む開始処理は、準備 (delegate や間隔の取得) と差し込みが
-  /// 別の lock 区間になる。準備の途中で `terminateDevice` の後始末が走った場合は nil を返して
-  /// state を変更しないため、停止後に timer / AudioUnit / state フラグは残らない。
-  /// 世代の確認と更新は同じ lock 区間で行うため、両者の間に停止の後始末が入ることもない。
-  private func withCurrentLifecycle<T>(
-    _ lifecycle: UInt64, _ body: (inout State) -> T
-  ) -> T? {
-    withState { state in
-      // delegate が外れている場合も停止済みとして扱う
-      guard state.lifecycleGeneration == lifecycle, state.delegate != nil else { return nil }
-      return body(&state)
-    }
-  }
-
-  /// 更新だけを行う `withCurrentLifecycle`
+  /// ライフサイクルの世代が変わっていないことを確認してから state を更新する
   ///
   /// - Returns: 更新した場合は true、準備の途中で停止していた場合は false (state は変更しない)
   private func updateIfCurrentLifecycle(
     _ lifecycle: UInt64, _ body: (inout State) -> Void
   ) -> Bool {
-    withCurrentLifecycle(lifecycle, body) != nil
+    withState { state in
+      guard state.isCurrentLifecycle(lifecycle) else { return false }
+      body(&state)
+      return true
+    }
+  }
+
+  /// ライフサイクルの世代が変わっていないことを確認して timer を差し込み、稼働中フラグを立てる
+  ///
+  /// 差し込み (`TimerSlot.install(_:)`) と `runningFlag` の更新を同じ lock 区間で行う。
+  /// - Parameter lifecycle: 開始処理の準備で取得したライフサイクルの世代
+  /// - Parameter kind: 録音 / 再生のどちらの timer か
+  /// - Parameter makeTimer: これから差し込む callback を識別する世代を受け取り、timer を組み立てる
+  /// - Returns: 差し込んだ場合は true、準備の途中で停止していた場合は false (state は変更しない)
+  private func startTimerIfCurrentLifecycle(
+    _ lifecycle: UInt64,
+    kind: TimerKind,
+    makeTimer: (UInt64) -> DispatchSourceTimer
+  ) -> Bool {
+    withState { state in
+      guard state.isCurrentLifecycle(lifecycle) else { return false }
+      state[keyPath: kind.runningFlag] = true
+      // 差し替えで外れた timer はここで停止する。cancel() は event handler を同期実行しないため
+      // lock を保持したままでも安全 (handler は別スレッドで lock の解放を待つ)
+      if let previous = state[keyPath: kind.slot].install(makeTimer) {
+        previous.cancel()
+      }
+      return true
+    }
   }
 
   /// AUAudioUnit 経路の開始処理の前提 (audioUnit とライフサイクルの世代) を同じ lock 区間で取得する
@@ -207,7 +249,8 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   }
 
   /// 初期化する
-  /// - Parameter initialMicrophoneEnabled: 初期状態でハードミュートするかどうか
+  /// - Parameter initialMicrophoneEnabled: 初期状態でマイクを有効にするかどうか。false のときは
+  ///   ハードミュートした状態で開始し、`terminateDevice` でその状態へ戻す
   /// - Parameter channelCount: 入出力のチャンネル数。1 または 2 を指定する
   /// - Parameter playoutHandler: 再生 PCM の取得処理。指定時は AudioSession と音声ハードウェアを使わない
   /// - Parameter pcmGenerator: PCM データ生成処理 (波形の内容を決める)。ADM の音声スレッドから呼ばれる
@@ -281,40 +324,46 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   // MARK: - RTCAudioDevice メソッド
 
   func initialize(with delegate: RTCAudioDeviceDelegate) -> Bool {
-    // delegate の設定と isInitialized の更新は同じ lock 区間で行う。別の区間だと、その間に
-    // terminateDevice の後始末が入った場合に delegate だけ / フラグだけが残る
-    if playoutHandler != nil {
-      // PCM を callback で消費する場合は、マイク・スピーカー・共有 AudioSession に触れない。
-      withState { state in
-        state.delegate = delegate
-        state.isInitialized = true
+    // AVAudioSession の設定はブロックし得るため、その間に terminateDevice が走ることがある。
+    // 設定の前後でライフサイクルの世代が変わっていないことを確認してから state を更新する
+    let lifecycle = withState { $0.lifecycleGeneration }
+
+    // playoutHandler を渡した場合はマイク・スピーカー・共有 AudioSession に触れないため、
+    // ハードウェア経路のときだけ AVAudioSession を設定する
+    if playoutHandler == nil {
+      // RTCAudioDevice 実装は AVAudioSession の設定責務を持つ (RTCAudioDevice.h)
+      do {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(
+          .playAndRecord,
+          mode: .default,
+          options: [.defaultToSpeaker])
+        try session.setActive(true)
+      } catch {
+        // 失敗時も true を返す。false を返すと ADM の初期化失敗となり、
+        // 接続処理がクラッシュする (adm_helpers.cc の RTC_CHECK) ため、警告ログのみで継続する。
+        // isInitialized は失敗時も true にする。false のままだと 2 回目以降の ADM の Init で
+        // 再初期化が試みられ、録音・再生が不安定になるためである
+        Logger.warn(
+          type: .dummyAudioDevice,
+          message: "failed to configure AVAudioSession: \(error.localizedDescription)")
       }
-      return true
     }
 
-    withState { state in
+    // delegate と isInitialized は同じ lock 区間で更新する。設定中に terminateDevice の後始末が
+    // 走った場合は世代が変わっているため差し込まず、停止済みの device を初期化済みに戻さない。
+    // 戻り値は ADM の RTC_CHECK を避けるため、差し込めなかった場合も true を返す
+    let initialized = withState { state -> Bool in
+      guard state.lifecycleGeneration == lifecycle else { return false }
       state.delegate = delegate
       state.isInitialized = true
+      return true
     }
-
-    // RTCAudioDevice 実装は AVAudioSession の設定責務を持つ (RTCAudioDevice.h)
-    do {
-      let session = AVAudioSession.sharedInstance()
-      try session.setCategory(
-        .playAndRecord,
-        mode: .default,
-        options: [.defaultToSpeaker])
-      try session.setActive(true)
-    } catch {
-      // 失敗時も true を返す。false を返すと ADM の初期化失敗となり、
-      // 接続処理がクラッシュする (adm_helpers.cc の RTC_CHECK) ため、警告ログのみで継続する。
-      // isInitialized は true に設定したままにする。false のままだと 2 回目以降の
-      // ADM の Init で再初期化が試みられ、録音・再生が不安定になるためである
+    if !initialized {
       Logger.warn(
         type: .dummyAudioDevice,
-        message: "failed to configure AVAudioSession: \(error.localizedDescription)")
+        message: "initialize was superseded by terminateDevice")
     }
-
     return true
   }
 
@@ -455,25 +504,20 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
       // 準備の途中で停止した場合は timer を差し込まずに開始しない (差し込みと resume は
       // `TimerSlot.install(_:)` が同じ lock 区間で行う)
       guard
-        let previous = withCurrentLifecycle(
-          lifecycle,
-          { state -> DispatchSourceTimer? in
-            state.isPlaying = true
-            return state.playout.install { generation in
-              let timer = DispatchSource.makeTimerSource(queue: playoutQueue)
-              timer.schedule(deadline: .now() + interval, repeating: interval)
-              timer.setEventHandler { [weak self, weak delegate] in
-                // ADM は同一スレッドでの callback を要求するため、タイマーの実行スレッドは使わない。
-                delegate?.dispatchAsync { [weak self] in
-                  self?.consumePlayoutData(generation: generation)
-                }
+        startTimerIfCurrentLifecycle(
+          lifecycle, kind: .playout,
+          makeTimer: { generation in
+            let timer = DispatchSource.makeTimerSource(queue: playoutQueue)
+            timer.schedule(deadline: .now() + interval, repeating: interval)
+            timer.setEventHandler { [weak self, weak delegate] in
+              // ADM は同一スレッドでの callback を要求するため、タイマーの実行スレッドは使わない。
+              delegate?.dispatchAsync { [weak self] in
+                self?.consumePlayoutData(generation: generation)
               }
-              return timer
             }
+            return timer
           })
       else { return false }
-      // 差し替えで外れた timer の callback は世代が一致しないため破棄される
-      previous?.cancel()
       return true
     }
 
@@ -571,32 +615,27 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
     // 準備の途中で停止した場合は timer を差し込まずに開始しない (差し込みと resume は
     // `TimerSlot.install(_:)` が同じ lock 区間で行う)
+    // Offer SDP 作成のたびに startRecording が呼ばれ得るため、既存 timer の差し替えは再入可能で
+    // なければならない (差し替えで外れた timer は `startTimerIfCurrentLifecycle` が停止する)
     guard
-      let previous = withCurrentLifecycle(
-        lifecycle,
-        { state -> DispatchSourceTimer? in
-          state.isRecording = true
-          return state.recording.install { generation in
-            let timer = DispatchSource.makeTimerSource(queue: recordingQueue)
-            // ADM 側が recording フラグを立てる前に届いた最初のフレームが破棄されるため、
-            // 1 インターバル分遅らせて開始する
-            timer.schedule(
-              deadline: .now() + .nanoseconds(intervalNs),
-              repeating: .nanoseconds(intervalNs))
-            timer.setEventHandler { [weak self, weak delegate] in
-              // キューのワーカースレッドが変わっても、ADM への PCM 注入は同じスレッドに固定する。
-              delegate?.dispatchAsync { [weak self] in
-                self?.deliverPCMData(generation: generation)
-              }
+      startTimerIfCurrentLifecycle(
+        lifecycle, kind: .recording,
+        makeTimer: { generation in
+          let timer = DispatchSource.makeTimerSource(queue: recordingQueue)
+          // ADM 側が recording フラグを立てる前に届いた最初のフレームが破棄されるため、
+          // 1 インターバル分遅らせて開始する
+          timer.schedule(
+            deadline: .now() + .nanoseconds(intervalNs),
+            repeating: .nanoseconds(intervalNs))
+          timer.setEventHandler { [weak self, weak delegate] in
+            // キューのワーカースレッドが変わっても、ADM への PCM 注入は同じスレッドに固定する。
+            delegate?.dispatchAsync { [weak self] in
+              self?.deliverPCMData(generation: generation)
             }
-            return timer
           }
+          return timer
         })
     else { return false }
-    // 既存タイマーが残っている場合は先に外す。Offer SDP 作成のたびに startRecording が
-    // 呼ばれ得るため、再入は安全でなければならない。外した timer の callback は
-    // 世代が一致しないため破棄される
-    previous?.cancel()
     return true
   }
 

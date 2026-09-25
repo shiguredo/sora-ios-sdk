@@ -210,17 +210,17 @@ final class SendonlyE2ETests: E2ETestBase {
     // 切断し、正常切断コード (1000) が通知されることまで確認する
     disconnectAndVerify(channel: channel)
 
-    // このテストは playoutHandler を渡さないため再生は AudioUnit (RemoteIO) 経路になる。
-    // 切断時の terminateDevice が終端状態へ戻すことを確認する。切断イベントはデバイスの停止より
-    // 先に配送され得るため、停止と同じ lock 区間で更新される isInitialized が false になるまで待つ
+    // 切断時の terminateDevice が state を終端へ戻すことを確認する。切断イベントはデバイスの停止より
+    // 先に配送され得るため、停止と同じ lock 区間で更新される isInitialized が false になるまで待つ。
+    // このテストは送信専用接続のため ADM は再生を初期化せず (initializePlayout は受信ストリームが
+    // ある場合にしか呼ばれない)、検証できるのは録音側と isInitialized の終端性である。
+    // AudioUnit 経路の実行時検証は受信ありの接続が必要で、Simulator では保証できない
     let terminated = expectation(
       for: NSPredicate { _, _ in !audioDevice.isInitialized }, evaluatedWith: nil)
     wait(for: [terminated], timeout: 5)
     XCTAssertFalse(audioDevice.isInitialized, "切断後に isInitialized が false であること")
     XCTAssertFalse(audioDevice.isRecording, "切断後に isRecording が false であること")
     XCTAssertFalse(audioDevice.isRecordingInitialized, "切断後に isRecordingInitialized が false であること")
-    XCTAssertFalse(audioDevice.isPlaying, "切断後に isPlaying が false であること")
-    XCTAssertFalse(audioDevice.isPlayoutInitialized, "切断後に isPlayoutInitialized が false であること")
     XCTAssertFalse(audioDevice.isHardMuted, "切断後に isHardMuted が初期状態 (ミュートなし) であること")
   }
 
