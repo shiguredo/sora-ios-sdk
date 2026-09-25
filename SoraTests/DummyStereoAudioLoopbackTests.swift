@@ -39,20 +39,19 @@ private final class CallCounter: @unchecked Sendable {
   }
 }
 
-/// `DummyAudioDevice` をテストの executor へ渡すための箱
+/// ローカル接続した 2 つの PeerConnection と、接続の生存期間中テストが保持するオブジェクト
 ///
-/// `DummyAudioDevice` は Sendable ではないが、可変状態はすべて内部の lock で保護され、
-/// 複数の executor から lifecycle メソッドを呼ばれる契約である。この箱はその契約を
-/// テストで表すためにだけ使う。
-private final class AudioDeviceBox: @unchecked Sendable {
-  let device: DummyAudioDevice
-
-  init(_ device: DummyAudioDevice) {
-    self.device = device
-  }
+/// factory (ADM を所有する) と track は PeerConnection 側からも参照されるが、
+/// テストの意図を明確にするため戻り値として保持する。
+private struct ConnectedAudioPair {
+  let sender: RTCPeerConnection
+  let receiver: RTCPeerConnection
+  let senderFactory: NativePeerChannelFactory
+  let receiverFactory: NativePeerChannelFactory
+  let track: RTCAudioTrack
 }
 
-/// Sora の接続情報がなくても、実際の Opus / RTP / ADM を通してダミーの左右音声を検証する。
+/// Sora の接続情報がなくても、実際の Opus / RTP / ADM を通してダミー音声を検証する。
 /// ICE はローカル候補だけを交換し、マイク・スピーカー・STUN / TURN サーバーを使わない。
 final class DummyStereoAudioLoopbackTests: XCTestCase {
   func testStereoPCMThroughRealPeerConnections() throws {
@@ -67,66 +66,118 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
       pcmGenerator: { data, frames, _ in
         data.assumingMemoryBound(to: Int16.self).update(repeating: 0, count: frames * 2)
       })
-    let senderFactory = try NativePeerChannelFactory(
-      bypassVoiceProcessing: false, audioDevice: senderDevice, audioSessionUsage: .custom)
-    let receiverFactory = try NativePeerChannelFactory(
-      bypassVoiceProcessing: false, audioDevice: receiverDevice, audioSessionUsage: .custom)
-    let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
-    let configuration = RTCConfiguration()
-    configuration.sdpSemantics = .unifiedPlan
-    let sender = try XCTUnwrap(
-      senderFactory.nativeFactory.peerConnection(
-        with: configuration, constraints: constraints, delegate: nil))
-    let receiver = try XCTUnwrap(
-      receiverFactory.nativeFactory.peerConnection(
-        with: configuration, constraints: constraints, delegate: nil))
+    let pair = try connectAudioPair(
+      senderDevice: senderDevice, receiverDevice: receiverDevice, trackId: "stereo",
+      enableStereo: true)
     defer {
-      sender.close()
-      receiver.close()
+      pair.sender.close()
+      pair.receiver.close()
     }
-    let track = senderFactory.createNativeAudioTrack(trackId: "stereo", constraints: constraints)
-    XCTAssertNotNil(sender.add(track, streamIds: ["stereo"]))
-
-    try setDescription(try description(peer: sender, answer: false), peer: sender, local: true)
-    waitForCandidates(peer: sender)
-    try setDescription(try XCTUnwrap(sender.localDescription), peer: receiver, local: false)
-    let answer = try description(peer: receiver, answer: true)
-    // E2E の Answer と同じ受信優先指定を使い、Opus エンコーダーがモノラルへ落とさないようにする。
-    let stereoAnswer = RTCSessionDescription(
-      type: .answer, sdp: try StereoAudioSDP.enableStereo(in: answer.sdp))
-    try setDescription(stereoAnswer, peer: receiver, local: true)
-    waitForCandidates(peer: receiver)
-    try setDescription(try XCTUnwrap(receiver.localDescription), peer: sender, local: false)
 
     let received = expectation(description: "実際の再生 PCM の左右を分離して受信できること")
     DispatchQueue.main.asyncAfter(deadline: .now() + 5) { received.fulfill() }
     wait(for: [received], timeout: 10)
-    XCTAssertEqual(sender.connectionState, .connected)
-    XCTAssertEqual(receiver.connectionState, .connected)
+    XCTAssertEqual(pair.sender.connectionState, .connected)
+    XCTAssertEqual(pair.receiver.connectionState, .connected)
     XCTAssertGreaterThanOrEqual(probe.stereoDuration, 0.5, "左右を分離した再生 PCM が 0.5 秒以上あること")
   }
 
-  /// start / stop / terminate / hard mute を複数の executor から交差させても、
-  /// 終了後に PCM の注入と state の更新が起きないことを確認する
+  /// 接続中に切断スレッドから terminate しても、停止後に PCM の注入と state の更新が再開しないことを確認する
   ///
-  /// 接続を維持したまま device の lifecycle メソッドを直接呼ぶため、ADM スレッド (lifecycle)、
-  /// `recordingQueue` / `playoutQueue` (timer callback)、このテストのスレッド (`terminateDevice`) の
-  /// 交差ができる。PCM の注入の有無は pcmGenerator の呼び出し回数で観測する
-  func testDeviceLifecycleUnderConcurrentStartStopAndTerminate() throws {
+  /// `RTCAudioDevice` の lifecycle メソッドは ADM スレッドからのみ呼ぶ契約 (RTCAudioDevice.h) のため、
+  /// 交差を作るために別スレッドから start / stop を呼ばない。接続確立時に ADM が開始した録音・再生を
+  /// 維持したまま、SDK の切断経路 (PeerChannel) と同じくテストスレッドから `terminateDevice` を呼ぶ。
+  ///
+  /// ADM スレッド契約の下では、開始処理の準備中に停止を差し込む交差をテストから強制できない
+  /// (開始処理も停止の後始末も同じ ADM スレッドに直列化される)。そのためここでは、
+  /// 停止前に注入と再生が実際に起きていること (positive control) を確認した上で、
+  /// 停止後に state が終端へ戻り、timer が発火しても注入と再生が再開しないことを検証する。
+  func testTerminateWhileConnectedStopsRecordingAndPlayout() throws {
     let generatorCalls = CallCounter()
+    let playoutCalls = CallCounter()
+    // 実際に音声が流れるよう、無音ではなく左右で周波数の異なる正弦波を生成する
+    let generator = StereoSineWaveGenerator()
     let senderDevice = DummyAudioDevice(
       initialMicrophoneEnabled: true, channelCount: 2,
       playoutHandler: { _, _ in },
-      pcmGenerator: { data, frameCount, _ in
+      pcmGenerator: { data, frameCount, sampleRate in
         generatorCalls.increment()
-        data.assumingMemoryBound(to: Int16.self).update(repeating: 0, count: frameCount * 2)
+        generator.generate(data: data, frameCount: frameCount, sampleRate: sampleRate)
       })
     let receiverDevice = DummyAudioDevice(
       initialMicrophoneEnabled: true, channelCount: 2,
-      playoutHandler: { _, _ in },
+      playoutHandler: { _, _ in playoutCalls.increment() },
       pcmGenerator: { data, frameCount, _ in
         data.assumingMemoryBound(to: Int16.self).update(repeating: 0, count: frameCount * 2)
       })
+    let pair = try connectAudioPair(
+      senderDevice: senderDevice, receiverDevice: receiverDevice, trackId: "terminate",
+      enableStereo: false)
+    defer {
+      pair.sender.close()
+      pair.receiver.close()
+    }
+
+    let connected = expectation(
+      for: NSPredicate { _, _ in
+        pair.sender.connectionState == .connected && pair.receiver.connectionState == .connected
+      }, evaluatedWith: nil)
+    wait(for: [connected], timeout: 10)
+
+    // positive control: 停止の前に、ADM が録音と再生を実際に動かしていることを確認する
+    let recording = expectation(
+      for: NSPredicate { _, _ in
+        generatorCalls.value > 0 && senderDevice.isRecording
+      }, evaluatedWith: nil)
+    let playout = expectation(
+      for: NSPredicate { _, _ in
+        playoutCalls.value > 0 && receiverDevice.isPlaying
+      }, evaluatedWith: nil)
+    wait(for: [recording, playout], timeout: 10)
+    XCTAssertGreaterThan(generatorCalls.value, 0, "停止前に送信側が PCM を注入していること")
+    XCTAssertGreaterThan(playoutCalls.value, 0, "停止前に受信側が PCM を再生していること")
+    XCTAssertTrue(senderDevice.isRecording, "停止前に送信側の isRecording が true であること")
+    XCTAssertTrue(receiverDevice.isPlaying, "停止前に受信側の isPlaying が true であること")
+
+    // 接続を維持したまま停止する。lifecycle メソッドの呼び出しはテストスレッドのみで行う
+    XCTAssertTrue(senderDevice.terminateDevice(), "送信側の terminateDevice が成功すること")
+    XCTAssertTrue(receiverDevice.terminateDevice(), "受信側の terminateDevice が成功すること")
+    XCTAssertFalse(senderDevice.isInitialized, "terminate 直後に送信側の isInitialized が false であること")
+    XCTAssertFalse(senderDevice.isRecording, "terminate 直後に送信側の isRecording が false であること")
+    XCTAssertFalse(
+      senderDevice.isRecordingInitialized,
+      "terminate 直後に送信側の isRecordingInitialized が false であること")
+    XCTAssertFalse(
+      receiverDevice.isInitialized, "terminate 直後に受信側の isInitialized が false であること")
+    XCTAssertFalse(receiverDevice.isPlaying, "terminate 直後に受信側の isPlaying が false であること")
+    XCTAssertFalse(
+      receiverDevice.isPlayoutInitialized,
+      "terminate 直後に受信側の isPlayoutInitialized が false であること")
+
+    // 停止後に timer が発火しても注入・再生が再開せず、state が終端のままであることを確認する
+    let generatorCallsAfterTerminate = generatorCalls.value
+    let playoutCallsAfterTerminate = playoutCalls.value
+    let idle = expectation(description: "terminate 後に PCM の注入と再生が再開しないこと")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { idle.fulfill() }
+    wait(for: [idle], timeout: 2)
+    XCTAssertEqual(
+      generatorCalls.value, generatorCallsAfterTerminate, "terminate 後に PCM を注入しないこと")
+    XCTAssertEqual(
+      playoutCalls.value, playoutCallsAfterTerminate, "terminate 後に PCM を再生しないこと")
+    XCTAssertFalse(senderDevice.isRecording, "terminate 後に送信側の isRecording が true に戻らないこと")
+    XCTAssertFalse(receiverDevice.isPlaying, "terminate 後に受信側の isPlaying が true に戻らないこと")
+  }
+
+  /// 2 つの `DummyAudioDevice` をローカルの PeerConnection で接続する
+  ///
+  /// `enableStereo` を true にすると E2E と同じ受信優先指定で SDP を書き換え、
+  /// Opus エンコーダーがモノラルへ落とさないようにする。
+  private func connectAudioPair(
+    senderDevice: DummyAudioDevice,
+    receiverDevice: DummyAudioDevice,
+    trackId: String,
+    enableStereo: Bool
+  ) throws -> ConnectedAudioPair {
     let senderFactory = try NativePeerChannelFactory(
       bypassVoiceProcessing: false, audioDevice: senderDevice, audioSessionUsage: .custom)
     let receiverFactory = try NativePeerChannelFactory(
@@ -140,59 +191,25 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
     let receiver = try XCTUnwrap(
       receiverFactory.nativeFactory.peerConnection(
         with: configuration, constraints: constraints, delegate: nil))
-    defer {
-      sender.close()
-      receiver.close()
-    }
-    let track = senderFactory.createNativeAudioTrack(trackId: "race", constraints: constraints)
-    XCTAssertNotNil(sender.add(track, streamIds: ["race"]))
+    let track = senderFactory.createNativeAudioTrack(trackId: trackId, constraints: constraints)
+    XCTAssertNotNil(sender.add(track, streamIds: [trackId]))
 
     try setDescription(try description(peer: sender, answer: false), peer: sender, local: true)
     waitForCandidates(peer: sender)
     try setDescription(try XCTUnwrap(sender.localDescription), peer: receiver, local: false)
     let answer = try description(peer: receiver, answer: true)
-    try setDescription(
-      RTCSessionDescription(type: .answer, sdp: answer.sdp), peer: receiver, local: true)
+    if enableStereo {
+      let stereoAnswer = RTCSessionDescription(
+        type: .answer, sdp: try StereoAudioSDP.enableStereo(in: answer.sdp))
+      try setDescription(stereoAnswer, peer: receiver, local: true)
+    } else {
+      try setDescription(answer, peer: receiver, local: true)
+    }
     waitForCandidates(peer: receiver)
     try setDescription(try XCTUnwrap(receiver.localDescription), peer: sender, local: false)
-
-    // ADM スレッドの lifecycle と、別の executor からの start / stop / hard mute を交差させる
-    let box = AudioDeviceBox(senderDevice)
-    let iterations = 10
-    let group = DispatchGroup()
-    for _ in 0..<3 {
-      group.enter()
-      DispatchQueue.global().async {
-        for _ in 0..<iterations {
-          _ = box.device.startRecording()
-          _ = box.device.stopRecording()
-          _ = box.device.setHardMute(true)
-          _ = box.device.setHardMute(false)
-          _ = box.device.startPlayout()
-          _ = box.device.stopPlayout()
-        }
-        group.leave()
-      }
-    }
-
-    // 交差の途中で、接続の切断を実行するスレッドから terminate する
-    let terminating = expectation(description: "交差の途中で terminate できること")
-    DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
-      XCTAssertTrue(box.device.terminateDevice())
-      terminating.fulfill()
-    }
-    wait(for: [terminating], timeout: 5)
-    XCTAssertEqual(group.wait(timeout: .now() + 10), .success, "交差させた処理が終了すること")
-
-    // terminate 後に state が終端であり、timer が発火しても PCM を注入しないことを確認する
-    XCTAssertFalse(senderDevice.isRecording, "terminate 後に isRecording が false であること")
-    XCTAssertFalse(senderDevice.isPlaying, "terminate 後に isPlaying が false であること")
-    let callsAfterTerminate = generatorCalls.value
-    let idle = expectation(description: "terminate 後に PCM を注入しないこと")
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { idle.fulfill() }
-    wait(for: [idle], timeout: 2)
-    XCTAssertEqual(
-      generatorCalls.value, callsAfterTerminate, "terminate 後に PCM を注入しないこと")
+    return ConnectedAudioPair(
+      sender: sender, receiver: receiver, senderFactory: senderFactory,
+      receiverFactory: receiverFactory, track: track)
   }
 
   private func description(peer: RTCPeerConnection, answer: Bool) throws -> RTCSessionDescription {
