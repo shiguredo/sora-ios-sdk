@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// sendrecv ダミー映像テスト
 final class SendrecvE2ETests: E2ETestBase {

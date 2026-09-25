@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// recvonly 接続テスト
 final class RecvonlyE2ETests: E2ETestBase {

@@ -1,3 +1,5 @@
+// vImage の C API は concurrency 注釈を持たず、kvImage_ARGBToYpCbCrMatrix_ITU_R_601_4 などの
+// 共有可変状態を参照する診断が error になるため、この import だけ @preconcurrency を付ける
 @preconcurrency import Accelerate
 import CoreGraphics
 import CoreVideo
@@ -10,7 +12,11 @@ import WebRTC
 ///
 /// 物理カメラを使用せずにカラーバー映像を生成して送信する。
 /// `@testable import Sora` により `MediaStream.send(videoFrame:)` にアクセスする。
-final class DummyVideoCapturer: @unchecked Sendable {
+///
+/// `Timer` は main RunLoop に登録するため、可変状態は MainActor が所有する。
+/// `Timer` の block は `@Sendable` なので、`MainActor.assumeIsolated` で main 実行を表明する。
+@MainActor
+final class DummyVideoCapturer {
   /// 出力先のストリーム
   weak var stream: MediaStream?
 
@@ -29,6 +35,10 @@ final class DummyVideoCapturer: @unchecked Sendable {
   let frameRate: Int
 
   /// フレーム生成用の Timer
+  ///
+  /// 生成と無効化は MainActor 上の `start` / `stop` と `deinit` でだけ行う。`deinit` は
+  /// `isolated deinit` として MainActor 上で実行されるため、非 Sendable な `Timer?` を
+  /// そのまま無効化できる
   private var timer: Timer?
 
   /// 連続失敗カウンタ
@@ -65,7 +75,8 @@ final class DummyVideoCapturer: @unchecked Sendable {
     self.frameRate = min(max(1, frameRate), 120)
   }
 
-  deinit {
+  isolated deinit {
+    // MainActor 上で実行されるため、`stop()` を経ずに解放された場合もここで無効化する
     timer?.invalidate()
   }
 
@@ -82,12 +93,17 @@ final class DummyVideoCapturer: @unchecked Sendable {
     warnedStreamNil = false
     isRunning = true
     let interval = 1.0 / Double(frameRate)
-    timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-      self?.onTimer()
+    let createdTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+      // Timer は main RunLoop に登録するため main スレッドで発火する。
+      // block が @Sendable のため、main 実行を明示してから MainActor の状態を更新する
+      MainActor.assumeIsolated {
+        self?.onTimer()
+      }
     }
-    if let timer {
-      RunLoop.main.add(timer, forMode: .common)
-    }
+    RunLoop.main.add(createdTimer, forMode: .common)
+    // add の後で保持する。保持する前に Timer が発火することはない (main thread 上の
+    // 現在の実行が終わるまで RunLoop は動かない) ため、stop() と deinit が無効化できる
+    timer = createdTimer
   }
 
   /// フレーム生成を停止する。重複呼び出しは無視する。

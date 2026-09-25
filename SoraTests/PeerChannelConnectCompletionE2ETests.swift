@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// PeerChannel の接続完了ハンドラーの終端保証に関する E2E テスト
 ///

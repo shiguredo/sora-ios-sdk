@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// DataChannel messaging 送受信と stats 検証テスト
 final class MessagingE2ETests: E2ETestBase {

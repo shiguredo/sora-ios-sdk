@@ -3,6 +3,9 @@ import XCTest
 @testable import Sora
 
 /// DummyVideoCapturer の単体テスト
+///
+/// `DummyVideoCapturer` は MainActor に隔離されているため、テストも MainActor で実行する
+@MainActor
 final class DummyVideoCapturerTests: XCTestCase {
 
   func testStartStopTogglesIsRunning() {
@@ -50,7 +53,51 @@ final class DummyVideoCapturerTests: XCTestCase {
     XCTAssertEqual(capturer.frameRate, 120)
   }
 
-  func testDeinitInvalidatesTimer() {
+  /// Timer の block が main RunLoop 上で発火して `onTimer` が実 stream へ frame を送信し、
+  /// `stop()` で発火が止まることを確認します。
+  ///
+  /// Timer の block は `@Sendable` のため `MainActor.assumeIsolated` で main 実行を表明しています。
+  /// main 実行でなければ `MainActor.assumeIsolated` の precondition でテストプロセスが落ちます。
+  /// 接続は行わず、テスト用の実 `MediaChannel` / `MediaStream` を使います (モックやスタブは
+  /// 使用しません)。
+  /// `frameCount` は ingress へ投入した数であり、配送の完了を待った数ではありません。
+  func testTimerCallbackSendsFramesUntilStop() throws {
+    let mediaChannel = try makeTestMediaChannel()
+    let stream = makeSenderStreamWithVideoTrack(mediaChannel: mediaChannel)
+    let capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+    capturer.stream = stream
+    capturer.start()
+
+    // 30 fps では 33 ms ごとに発火します。main RunLoop を回さないと Timer は発火しないため、
+    // frame が 2 つ投入されるまで (上限 5 秒) main RunLoop を回します。2 つ待つのは、
+    // Timer が repeating であること (1 回で止まらないこと) まで確認するためです
+    let deadline = Date().addingTimeInterval(5)
+    while capturer.frameCount < 2 && Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+
+    XCTAssertGreaterThanOrEqual(capturer.frameCount, 2, "repeating な Timer が frame を送信すること")
+    XCTAssertTrue(capturer.isRunning, "frame 送信後も動作中であること")
+
+    capturer.stop()
+    let frameCountAfterStop = capturer.frameCount
+    // stop 後に main RunLoop を回しても frame が増えないことを確認します。invalidate が
+    // 漏れていると repeating Timer が発火し続けるため、この比較で検出できます
+    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+    XCTAssertEqual(
+      capturer.frameCount, frameCountAfterStop, "stop 後は frame を送信しないこと")
+  }
+
+  /// stop を呼ばずに解放した場合も、capturer が解放されることを確認します。
+  ///
+  /// `deinit` は `isolated` のため MainActor 上で実行されます。実行の完了を待ってから
+  /// weak 参照を確認するため、main queue を drain します。
+  ///
+  /// `deinit` の `timer?.invalidate()` 自体は直接観測できません。Timer の block は `self` を
+  /// weak で capture するため、無効化されなくても capturer は解放され、発火しても何も起きない
+  /// ためです。Timer の無効化は `stop()` の経路
+  /// (`testTimerCallbackSendsFramesUntilStop`) で確認します。
+  func testDeinitWithoutStopReleasesCapturer() {
     weak var weakCapturer: DummyVideoCapturer?
     autoreleasepool {
       let capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
@@ -58,9 +105,8 @@ final class DummyVideoCapturerTests: XCTestCase {
       weakCapturer = capturer
       // stop を呼ばずに autoreleasepool を抜ける
     }
-    // deinit が実行され弱参照が nil になる
-    XCTAssertNil(weakCapturer)
-    // 無効化された Timer が再発火しないことを確認するため RunLoop を回す
+    // MainActor 上の deinit の実行を待つ
     RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    XCTAssertNil(weakCapturer, "deinit が実行されること")
   }
 }

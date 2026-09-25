@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// RPC E2E テスト
 final class RpcE2ETests: E2ETestBase {
@@ -204,6 +204,9 @@ final class RpcE2ETests: E2ETestBase {
     }
 
     capturer.start()
+    // RPC 呼び出しは非 Sendable な MediaChannel を非分離の async API へ渡すため、
+    // テスト内の利用に限定したボックスにまとめる
+    let rpcBox = RPCChannelBox(recvonlyChannel)
     waitForOutboundR0AndR2(
       channel: sendonlyChannel,
       attempt: 1,
@@ -224,7 +227,7 @@ final class RpcE2ETests: E2ETestBase {
           case .failure(let message):
             finishScenario(message, nil)
           case .success(let initialSize):
-            self.callRequestSimulcastRid(channel: recvonlyChannel, rid: .r0) { rpcResult in
+            self.callRequestSimulcastRid(box: rpcBox, rid: .r0) { rpcResult in
               switch rpcResult {
               case .failure(let error):
                 finishScenario("r0 への RPC 呼び出しに失敗した : \(error)", nil)
@@ -252,7 +255,7 @@ final class RpcE2ETests: E2ETestBase {
                     finishScenario(message, nil)
                   case .success(let r0Size):
                     // r0 の解像度が初期解像度 (r2) より小さいことは predicate で保証済み
-                    self.callRequestSimulcastRid(channel: recvonlyChannel, rid: .r2) { rpcResult2 in
+                    self.callRequestSimulcastRid(box: rpcBox, rid: .r2) { rpcResult2 in
                       switch rpcResult2 {
                       case .failure(let error):
                         finishScenario("r2 への RPC 呼び出しに失敗した : \(error)", nil)
@@ -312,21 +315,17 @@ final class RpcE2ETests: E2ETestBase {
 
   /// RequestSimulcastRid を呼び出し、結果を main queue に返す
   private func callRequestSimulcastRid(
-    channel: MediaChannel,
+    box: RPCChannelBox,
     rid: Rid,
     completion: @escaping (Result<RequestSimulcastRidResult, Error>) -> Void
   ) {
     Task {
       do {
-        guard
-          let response = try await channel.rpc(
-            method: RequestSimulcastRid.self,
-            params: RequestSimulcastRidParams(rid: rid))
-        else {
+        guard let result = try await box.callRequestSimulcastRid(rid: rid, timeout: 5) else {
           throw SoraError.rpcDecodingError(reason: "RPC レスポンスが nil")
         }
         DispatchQueue.main.async {
-          completion(.success(response.result))
+          completion(.success(result))
         }
       } catch {
         DispatchQueue.main.async {
@@ -795,12 +794,10 @@ final class RpcE2ETests: E2ETestBase {
       // RPC 呼び出しは RequestSimulcastRid を使用する。
       // これは接続時点で rpc_methods が許可されている必要があるが、この設定は
       // 接続の度に再確立されている。
-      let rpcAttempt = attempt
       let callExpectation = self.expectation(
-        description: "RPC 呼び出しが完了すること (試行 \(rpcAttempt))")
+        description: "RPC 呼び出しが完了すること (試行 \(attempt))")
       callRPCAndDisconnect(
-        channel: currentChannel,
-        attempt: rpcAttempt,
+        box: RPCChannelBox(currentChannel),
         completion: {
           callExpectation.fulfill()
         })
@@ -808,7 +805,7 @@ final class RpcE2ETests: E2ETestBase {
       let callResult = XCTWaiter.wait(for: [callExpectation], timeout: 8)
       if callResult != .completed {
         XCTFail(
-          "RPC 呼び出しが完了しない (試行 \(rpcAttempt)): pending が残存している可能性が高い")
+          "RPC 呼び出しが完了しない (試行 \(attempt)): pending が残存している可能性が高い")
         cleanupChannels()
         return
       }
@@ -823,18 +820,14 @@ final class RpcE2ETests: E2ETestBase {
   /// RPC 呼び出しが終端するまで待つことはせず、RPC の完了時に completion を呼ぶ。
   /// この競合を複数回試行することで、RPC が永遠に完了しないバグを検出する。
   private func callRPCAndDisconnect(
-    channel: MediaChannel,
-    attempt: Int,
+    box: RPCChannelBox,
     completion: @escaping () -> Void
   ) {
     // 接続確認済みメディアチャネルを使用して RPC を開始する。
     // RPC は 2025.2.0/RequestSimulcastRid、rid は r0 を使用する (シミュレーション用)
-    let rpcTask: Task<Void, Never> = Task {
+    Task {
       do {
-        _ = try await channel.rpc(
-          method: RequestSimulcastRid.self,
-          params: RequestSimulcastRidParams(rid: .r0),
-          timeout: 5)
+        _ = try await box.callRequestSimulcastRid(rid: .r0, timeout: 5)
       } catch {
         // RPC が失敗することは問題ではない。重要なのは RPC が終端する (エラーが返る) こと。
       }
@@ -844,12 +837,30 @@ final class RpcE2ETests: E2ETestBase {
     }
     // RPC の start と disconnect の競合を発生させるために、少し待つ (RPC が送信された後に切断)
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-      channel.disconnect(error: nil)
-      _ = rpcTask
+      box.disconnect()
     }
   }
 
   // MARK: - RPC のサーバーエラー
+
+  /// サーバーが受理しない params で RPC を呼び、結果を main queue に返す
+  private func callInvalidParamsRPC(
+    box: RPCChannelBox,
+    completion: @escaping (Result<Void, Error>) -> Void
+  ) {
+    Task {
+      do {
+        try await box.callInvalidParamsRequestSimulcastRid()
+        DispatchQueue.main.async {
+          completion(.success(()))
+        }
+      } catch {
+        DispatchQueue.main.async {
+          completion(.failure(error))
+        }
+      }
+    }
+  }
 
   /// RPC のサーバーエラー応答が `SoraError.rpcServerError(detail:)` として届き、
   /// `code` / `message` が取得できることを確認する。
@@ -934,20 +945,11 @@ final class RpcE2ETests: E2ETestBase {
     // 許可されたメソッドを、サーバーが受理しない params で呼び、サーバーエラー応答を受け取る
     let callExpectation = self.expectation(description: "RPC がサーバーエラーで終わること")
     var observedError: Error?
-    Task {
-      do {
-        _ = try await channel.rpc(
-          method: InvalidParamsRPCMethod.self,
-          params: InvalidParamsRPCMethodParams(rid: "r0", unexpected: "unsupported"))
-        DispatchQueue.main.async {
-          callExpectation.fulfill()
-        }
-      } catch {
-        DispatchQueue.main.async {
-          observedError = error
-          callExpectation.fulfill()
-        }
+    callInvalidParamsRPC(box: RPCChannelBox(channel)) { result in
+      if case .failure(let error) = result {
+        observedError = error
       }
+      callExpectation.fulfill()
     }
 
     wait(for: [callExpectation], timeout: 15)
@@ -968,6 +970,50 @@ final class RpcE2ETests: E2ETestBase {
     print(
       "RPC のサーバーエラー : エラーコード=\(detail.code) メッセージ=\(detail.message)"
         + " data=\(String(describing: detail.data))")
+  }
+}
+
+/// RPC 呼び出しと切断で使う `MediaChannel` をまとめるボックス
+///
+/// `MediaChannel` は Sendable ではないため、MainActor 隔離のテストから非分離の async API
+/// (`rpc`) を呼んだり、`Task` の `@Sendable` closure へ参照を渡したりすると送信診断になる。
+/// テスト内の利用に限定して参照をこのボックスへまとめる。
+///
+/// このボックスは実行文脈を揃えるものではない。`callRequestSimulcastRid` などの async メソッドは
+/// nonisolated のため main actor 上では実行されず、`disconnect` は main queue から呼ばれる。
+/// `callRPCAndDisconnect` は RPC と disconnect の競合を検証するために、同一の `MediaChannel` を
+/// 複数の実行文脈から意図的に操作する。このボックスは可変状態を持たず参照を保持するだけで、
+/// 安全性は `MediaChannel` の内部同期に依存する。
+private final class RPCChannelBox: @unchecked Sendable {
+  private let channel: MediaChannel
+
+  init(_ channel: MediaChannel) {
+    self.channel = channel
+  }
+
+  /// `RequestSimulcastRid` を timeout 付きで呼び出し、結果を返す
+  ///
+  /// timeout は呼び出し元が指定する。SDK の既定値に依存すると、RPC が終端するまでの
+  /// 時間が変わったときにテストの意味が変わってしまうため、明示的に渡す
+  func callRequestSimulcastRid(rid: Rid, timeout: TimeInterval) async throws
+    -> RequestSimulcastRidResult?
+  {
+    try await channel.rpc(
+      method: RequestSimulcastRid.self,
+      params: RequestSimulcastRidParams(rid: rid),
+      timeout: timeout)?.result
+  }
+
+  /// サーバーが受理しない params で `InvalidParamsRPCMethod` を呼び出す
+  func callInvalidParamsRequestSimulcastRid() async throws {
+    _ = try await channel.rpc(
+      method: InvalidParamsRPCMethod.self,
+      params: InvalidParamsRPCMethodParams(rid: "r0", unexpected: "unsupported"))
+  }
+
+  /// チャンネルを切断する
+  func disconnect() {
+    channel.disconnect(error: nil)
   }
 }
 

@@ -7,8 +7,9 @@ import XCTest
 
 // テスト用のヘルパーです。モックやスタブは使用せず、実プロトコルの実装と実 API だけを使います。
 //
-// - 接続の構築 (`makeTestConfiguration` / `makeSenderStreamWithVideoTrack`) と画面キャプチャの
-//   drain は ScreenCaptureFrameGenerationTests と StreamFrameOwner 系テストで共有します。
+// - 接続の構築 (`makeTestConfiguration` / `makeTestMediaChannel` / `makeSenderStreamWithVideoTrack`) は
+//   ScreenCaptureFrameGenerationTests / StreamFrameOwner 系テスト / DummyVideoCapturerTests で共有します。
+// - 画面キャプチャの drain は ScreenCaptureFrameGenerationTests と StreamFrameOwner 系テストで共有します。
 // - owner の観測 (`ownerForTesting` / `drainOwnerAndMainQueue`) と観測用の実装
 //   (`RecordingVideoFilter` / `RecordingVideoRenderer` / `SynchronousFilterGate`) は
 //   StreamFrameOwner 系テスト専用です。

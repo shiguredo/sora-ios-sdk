@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// ConnectionTask の即時キャンセルに関する E2E テスト
 ///

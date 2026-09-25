@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// simulcast ダミー映像テスト
 final class SimulcastE2ETests: E2ETestBase {
