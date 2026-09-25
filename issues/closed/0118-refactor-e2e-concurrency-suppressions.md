@@ -1,7 +1,7 @@
 # E2E テストの concurrency 診断抑止を除去する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-25
 - Priority: Medium
 - Branch: feature/refactor-e2e-concurrency-suppressions
 - Polished: 2026-09-25
@@ -129,4 +129,27 @@ E2E テストが `@testable @preconcurrency import Sora` と根拠のない `@un
 - `issues/0121-bug-fix-dummy-audio-device-state-races.md` の変更対象に `StereoSineWaveGenerator` と `StereoAudioOutputE2ETests.swift` / `DummyStereoAudioLoopbackTests.swift` / `DummyAudioDeviceTests.swift` が含まれていること。
 - `CHANGES.md` の `## develop` の `### misc` に `[UPDATE]` で E2E テストの concurrency 診断抑止の除去が追記され、公開 API と利用者の挙動の変更がないことが補足されていること。
 
+## 検証記録
+
+- 2026-09-25: `xcodebuild clean build-for-testing` (Xcode 26.6 / iPhoneSimulator26.5SDK / `SWIFT_VERSION=6`) が成功し、`SoraTests` の error は 0 件、concurrency 診断 (main actor isolation / Sendable の capture / `sending` / `nonisolated deinit`) は 0 件、warning は concurrency 以外の 20 件 (非推奨 API 10、weak 変数 3、未使用の戻り値 2、未使用の capture 4、未使用の値 1) だけだった
+- 2026-09-25: 補助の `swiftc -typecheck` (`-swift-version 6 -D DEBUG`) は 20 warning / 0 error / concurrency 診断 0 件だった (変更前は concurrency 24 件を含む 44 warning だった)
+- 2026-09-25: `xcodebuild test-without-building` (iPhone 17 Pro / iOS 26.5) で 375 tests / 30 skipped / 0 failures。`DummyVideoCapturerTests` (8 件、repeating な Timer の発火と `stop()` による停止、実 `MediaChannel` / `MediaStream` を使用) と `E2ETestBaseLifecycleTests` (async な `setUp` の呼び出し) を含む
+- 2026-09-25: feature branch の CI が成功した。E2E Test は 375 tests / 6 skipped / 0 failures (`** TEST EXECUTE SUCCEEDED **`)、Build と Consumer Test も成功。skip 6 件は実カメラを必要とする `CameraStateOwnerTests` (Simulator にカメラが無いため) である
+- 2026-09-25: `.github/workflows/build.yml` の検査 step を現ツリーで実行し、exit 0 (対象 45 ファイル、コメント行と `@preconcurrency import Accelerate` 以外の一致なし) を確認した。属性を単独行に書いた形・行末コメント付き・セミコロン付きの再追加を検出できることも疑似入力で確認した
+- 2026-09-25: 最初の E2E で `SendonlyE2ETests.testSendonlyDummyVideo` と `testSendonlyDummyAudio` が `EXC_BREAKPOINT` (SIGTRAP) でクラッシュした。`MediaChannel.getStats` の handler は `@Sendable` ではないため `DispatchQueue.main` の block から渡すと MainActor 隔離を継承し、handler の中で呼ぶ `first(where:)` の closure が WebRTC スレッドで実行時隔離チェック (`_swift_task_checkIsolatedSwift` → `dispatch_assert_queue_fail`) に掛かっていた。handler に `@Sendable` を明示し、`Statistics` を Sendable な snapshot に詰め替えてから main queue へ 1 hop する形へ修正し、CI で成功した
+- 2026-09-25: 非 main スレッドから到達する callback (`getStats` / `Sora.connect` / `handlers.on*` / `DummyAudioDevice`) を監査した。closure を非 main スレッドで呼んでいたのは修正した `getStats` handler だけで、他は main queue へ束ねるか局所変数の更新のみだった。`DummyAudioDevice` の `pcmGenerator` は非 `@Sendable` のため隔離を継承するが、本体が非隔離メソッドの呼び出しだけで closure を呼ばない (`@Sendable` 化は `0121` が行う)
+- 2026-09-25: 使い捨ての検証コードで、`@MainActor` の文脈から渡した非 `@Sendable` handler を非 main スレッドから呼ぶ場合の挙動を確認した。closure の呼び出しと MainActor メンバーへの直接アクセス (後者は trap しないが data race)、main queue への hop と局所変数の更新のそれぞれについて実測し、Swift 6 言語モードでは closure の呼び出しが trap し、Swift 5 言語モードでは trap しないことを確認した
+- 2026-09-25: `make fmt-lint` と `git diff --check` が違反 0 だった
+
 ## 解決方法
+
+`@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、E2E テストが診断を抑止せずに callback と test state の executor 境界をコードで表すようにした。実ビルドで `SoraTests` の concurrency 診断は 0 件になり、残る concurrency 以外の 20 warning は `0171` が解消する。
+
+- `SoraTests/E2ETestBase.swift` の `setUp` / `tearDown` を `async throws` にし、`super` を `try await` で呼ぶようにした。`@MainActor` 隔離の `XCTestCase` では同期版の override が nonisolated とみなされ MainActor の property を更新できないためである。`SendonlyE2ETests` の `setUp` も同じ理由で async 化した
+- `SoraTests/SendonlyE2ETests.swift` の `testSendonlyDummyVideo` / `testSendonlyDummyAudio` を、connect callback では main queue に束ねて失敗の報告・`mediaChannel` が渡る契約の検証・`connectedChannel` の保持だけを行い、`wait` の後に capturer を生成して `start()` し、`DispatchQueue.main.asyncAfter` + `getStats` で統計を検証する形へ組み替えた。接続待ちは `connectAndWait(configuration:)`、統計は `waitForStats(channel:kind:delay:description:verify:)` に集約し、`getStats` の handler は `@Sendable` にして MainActor 隔離を継承させず、非 Sendable な `Statistics` を Sendable な `StatsSnapshot` に詰め替えてから main queue へ 1 hop する (`StereoAudioOutputE2ETests` の `audioCounts` と同じ方式)。接続の失敗・タイムアウト時は、wait の後に発火した callback で assertion を記録せず、残っているチャンネルを切断してから戻る
+- `SoraTests/DummyVideoCapturer.swift` を `@MainActor final class` にし、`@unchecked Sendable` を削除した。`Timer` の block は `@Sendable` なので `MainActor.assumeIsolated` で main 実行を表明し、`deinit` は `isolated deinit` にして MainActor 上で `timer?.invalidate()` する (診断を抑止する `nonisolated(unsafe)` は使わない)。`DummyVideoCapturerTests` を `@MainActor` にし、実 `MediaChannel` / `MediaStream` を使って repeating な Timer の発火と `stop()` による停止を検証するテストを追加した
+- `SoraTests/RpcE2ETests.swift` の `MediaChannel.rpc` 呼び出しを `@unchecked Sendable` の `RPCChannelBox` 経由に組み替え、利用契約 (テスト内の利用に限定し、実行文脈を揃えるものではない) を日本語コメントで明記した。`VideoHardMuteRollbackE2ETests` の `ChannelBox` にあった実行文脈の記述も実装に合わせて是正した。未使用の `attempt` 引数と `rpcTask` の保持を削除し、timeout 付き呼び出しを 1 つのメソッドへ統合した
+- `SoraTests/E2ETestBaseLifecycleTests.swift` を追加し、async な `setUp` が同期の test method でも呼ばれることと、async な `tearDown` の後始末が完了することを、環境変数に依存せず検証するようにした
+- `.github/workflows/build.yml` に、`SoraTests` が `@preconcurrency` で診断を抑止していないことを検査する step を追加した。検査対象が 0 件のときに成功せず、コメント行と `@preconcurrency import Accelerate` 以外の一致をすべて失敗として扱い、属性を単独行に書いた形も検出する
+- `CHANGES.md` の `## develop` の `### misc` に `[UPDATE]` を追記し、`issues/0121-bug-fix-dummy-audio-device-state-races.md` の変更対象に `StereoSineWaveGenerator` と capture 側の 4 ファイルを加えた。あわせて `0110` / `0120` に、legacy callback の実行スレッド契約を API doc に明記する作業を追加した
+- `@preconcurrency import Accelerate` は C API の注釈不足を補うため残し、理由を日本語コメントで書いた
