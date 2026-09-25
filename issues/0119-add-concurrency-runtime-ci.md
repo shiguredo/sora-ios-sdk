@@ -44,7 +44,7 @@ Thread Sanitizer と反復 stress test を補助的な gate とし、Swift 6 対
 
 ## 変更対象
 
-- `.github/workflows/e2e-test.yml`: 専用 job の追加 (Simulator 準備、TSan を有効にした build-for-testing / test-without-building、`.xcresult` と race report の upload)。
+- `.github/workflows/e2e-test.yml`: 専用 job の追加 (Simulator 準備、TSan を有効にした `xcodebuild test` (`-enableThreadSanitizer YES`、build を含む。`test-without-building` では interceptor が働かず race を検出できない)、`.xcresult` と race report の upload)。
 - `SoraTests/`: state reducer へ実際の event sequence を入力する test と、実 Sora 接続を反復して検証する E2E stress test。反復方法と対象範囲は、テストのドキュメントコメントと workflow のコメントに記載する。
 
 ## テスト方針
@@ -54,7 +54,7 @@ Thread Sanitizer と反復 stress test を補助的な gate とし、Swift 6 対
 - production の state reducer へ実際の event sequence を入力する test と、実 Sora 接続を利用する E2E stress test を使う。
 - 同じ scenario を複数回反復し、順序を変えた場合も exactly-once と stale event rejection を確認する。
 - Thread Sanitizer 無効時の通常 test と有効時の専用 test の両方を実行する。
-- TS 実行の対象に、`DummyAudioDevice` の lifecycle を実際の ADM 接続で検証する `SoraTests/DummyStereoAudioLoopbackTests.swift` のテストを明示的に含める。ADM callback の並行実行を検証するテストであり、除外すると `DummyAudioDevice` の state race を検出できない。あわせて生成器の並行利用を検証する `SoraTests/DummyAudioDeviceTests.swift` のテストも含める。
+- TS 実行の対象に、`SoraTests/DummyStereoAudioLoopbackTests.swift` のテスト (テストスレッドの `terminateDevice` と ADM / timer callback の交差を再現する) と、`SoraTests/DummyAudioDeviceTests.swift` のテスト (生成器の並行利用) を明示的に含める。`DummyAudioDevice` の state race を検出できるのはこの 2 つだけである。交差を強制できない分岐 (世代不一致での差し込み棄却と AudioUnit の巻き戻し) があるため、`-test-iterations` などで反復して確率的に踏ませる。
 - sanitizer job 自体に意図的な race を一時的に入れ、CI が検出できることを導入時に確認する。
 
 ## 完了条件
