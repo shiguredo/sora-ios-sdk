@@ -4,10 +4,14 @@ import XCTest
 
 /// E2E テストと単体テストで利用する 440Hz 正弦波ジェネレーター
 ///
-/// DummyAudioDevice の pcmGenerator として注入する。
+/// DummyAudioDevice の pcmGenerator (`@Sendable`) として注入する。
 /// サンプルごとに位相を進めて保持するため、フレーム境界 (20ms) を跨いでも
 /// 波形が不連続にならず、クリックノイズが発生しない。
-final class SineWaveGenerator {
+///
+/// `@unchecked Sendable` としているのは、可変状態が `phase` だけで、その読み書きを
+/// すべて `lock` で排他しているためである (ADM の音声スレッドから呼ばれる)。
+final class SineWaveGenerator: @unchecked Sendable {
+  private let lock = NSLock()
   private var phase: Double = 0
   private let frequency: Double
 
@@ -20,6 +24,8 @@ final class SineWaveGenerator {
   /// - Parameter frameCount: フレーム数
   /// - Parameter sampleRate: サンプルレート
   func generate(data: UnsafeMutableRawPointer, frameCount: Int, sampleRate: Double) {
+    lock.lock()
+    defer { lock.unlock() }
     let pcm = data.assumingMemoryBound(to: Int16.self)
     // 波形は sin(2π × 周波数 × 時刻) で表され、時刻は位相 (phase) で管理する。
     // 振幅はフルスケール (Int16 の最大値 32767) の 30% とする。
@@ -35,10 +41,16 @@ final class SineWaveGenerator {
 }
 
 /// 左を 600 Hz、右を 1200 Hz とする、左右を区別できるステレオ音源。
-final class StereoSineWaveGenerator {
+///
+/// `@unchecked Sendable` としているのは、可変状態が `time` だけで、その読み書きを
+/// すべて `lock` で排他しているためである (ADM の音声スレッドから呼ばれる)。
+final class StereoSineWaveGenerator: @unchecked Sendable {
+  private let lock = NSLock()
   private var time: Double = 0
 
   func generate(data: UnsafeMutableRawPointer, frameCount: Int, sampleRate: Double) {
+    lock.lock()
+    defer { lock.unlock() }
     let pcm = data.assumingMemoryBound(to: Int16.self)
     for frame in 0..<frameCount {
       pcm[frame * 2] = Int16(sin(2 * .pi * 600 * time) * 9830)
@@ -85,6 +97,27 @@ final class StereoToneProbe: @unchecked Sendable {
     else { return }
     lock.lock()
     separatedDuration += Double(frames) / sampleRate
+    lock.unlock()
+  }
+}
+
+/// pcmGenerator が呼ばれたかどうかを callback とテストスレッドで共有する箱
+///
+/// pcmGenerator は `@Sendable` な closure のため可変な `var` を capture できず、
+/// 呼び出しは ADM の音声スレッドからも起こり得るため lock で保護する。
+private final class CallFlag: @unchecked Sendable {
+  private let lock = NSLock()
+  private var called = false
+
+  var isCalled: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return called
+  }
+
+  func set() {
+    lock.lock()
+    called = true
     lock.unlock()
   }
 }
@@ -178,9 +211,9 @@ final class DummyAudioDeviceTests: XCTestCase {
 
   /// fillPCMData が注入した pcmGenerator を呼ぶことを確認する
   func testFillPCMDataInvokesGenerator() {
-    var generatorCalled = false
+    let generatorCalled = CallFlag()
     let device = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in
-      generatorCalled = true
+      generatorCalled.set()
     }
 
     let dataSize = 960 * MemoryLayout<Int16>.size
@@ -188,7 +221,7 @@ final class DummyAudioDeviceTests: XCTestCase {
     defer { data.deallocate() }
     device.fillPCMData(data: data, frameCount: 960, sampleRate: 48000)
 
-    XCTAssertTrue(generatorCalled, "fillPCMData は pcmGenerator を呼ぶべき")
+    XCTAssertTrue(generatorCalled.isCalled, "fillPCMData は pcmGenerator を呼ぶべき")
   }
 
   /// 全 0 を生成する pcmGenerator を注入した場合、全サンプルが 0 になることを確認する

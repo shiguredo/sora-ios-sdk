@@ -53,11 +53,9 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 ## 変更対象
 
-- `Sora/DummyAudioDevice.swift`: ADM lifecycle state を 1 つの synchronized storage / owner へ統一、`recordingTimer` の generation 管理、`pcmGenerator` の `@Sendable` 化
-- `SoraTests/DummyAudioDeviceTests.swift`: `SineWaveGenerator` / `StereoSineWaveGenerator` の Sendable 化 (value 型化または lock / executor 化)、生成器を直接呼ぶ箇所と `StereoSineWaveGenerator` の capture (`pcmGenerator: generator.generate`) の追随
-- `SoraTests/SendonlyE2ETests.swift`: `SineWaveGenerator` の capture の追随
-- `SoraTests/StereoAudioOutputE2ETests.swift`: `StereoSineWaveGenerator` と `SineWaveGenerator` の capture (`pcmGenerator: generator.generate`) の追随
-- `SoraTests/DummyStereoAudioLoopbackTests.swift`: `StereoSineWaveGenerator` の capture (`pcmGenerator: source.generate`) の追随
+- `Sora/DummyAudioDevice.swift`: ADM lifecycle state を 1 つの synchronized storage / owner へ統一、`recordingTimer` / `playoutTimer` の generation 管理、`pcmGenerator` の `@Sendable` 化
+- `SoraTests/DummyAudioDeviceTests.swift`: `SineWaveGenerator` / `StereoSineWaveGenerator` の Sendable 化 (可変状態を lock で保護した `@unchecked Sendable` 準拠)、`pcmGenerator` を `@Sendable` にしたことに伴う capture の追随 (実測では生成器を Sendable にするだけでよく、渡し方の書き換えは不要だった)
+- `SoraTests/DummyStereoAudioLoopbackTests.swift`: 実 ADM を接続したまま start / stop / terminate / hard mute を複数の executor から交差させる lifecycle の競合テストの追加
 - `CHANGES.md`: `## develop` の `### misc` に、test 側の診断を解消する `[FIX]` を追記する (公開 API と利用者の挙動の変更がないことを補足する)
 
 ## テスト方針
