@@ -47,6 +47,40 @@ jobs:
     - name: Lint
       run: |
         make lint
+    - name: Check No @preconcurrency Import in SoraTests
+      run: |
+        set -o pipefail
+        # SoraTests が @preconcurrency で concurrency 診断を抑止していないことを検査する。
+        # @preconcurrency を付けると診断が error にならなくなり、build の成否では再追加を
+        # 検出できないため、ソースの文字列で検査する。
+        # pathspec が 0 件に一致したまま成功しないよう、先に対象のファイル数を確認する
+        count=$(git ls-files -- ':(glob)SoraTests/**/*.swift' | wc -l | tr -d ' ')
+        if [ "$count" -eq 0 ]; then
+          echo 'Error: the pathspec matches no tracked file under SoraTests.'
+          exit 1
+        fi
+        # 許容するのはコメント行と @preconcurrency import Accelerate (C API の注釈不足を補うため)
+        # だけである。属性を単独行に書いた形も検出できるよう、行の形には依存させない。
+        # 新しい抑止が必要になった場合は、この step の許容条件を見直すこと
+        set +e
+        found=$(git grep -n -E '@preconcurrency' -- ':(glob)SoraTests/**/*.swift')
+        status=$?
+        set -e
+        if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+          echo "Error: git grep failed (exit $status)."
+          exit 1
+        fi
+        violations=$(
+          printf '%s\n' "$found" \
+            | grep -v -E ':[0-9]+:[[:space:]]*//' \
+            | grep -v -E '@preconcurrency[[:space:]]+import[[:space:]]+Accelerate$' \
+            | grep -v '^$' || true
+        )
+        if [ -n "$violations" ]; then
+          echo 'Error: SoraTests must not use @preconcurrency except for import Accelerate.'
+          echo "$violations"
+          exit 1
+        fi
   slack_notify:
     needs: [build]
     runs-on: ubuntu-24.04

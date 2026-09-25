@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// sendonly ダミー映像・音声テスト
 final class SendonlyE2ETests: E2ETestBase {
@@ -16,12 +16,119 @@ final class SendonlyE2ETests: E2ETestBase {
   // 結果保持と fulfill を抑止する
   private var apiWaitFinished = false
 
-  override func setUp() {
-    super.setUp()
+  override func setUp() async throws {
+    try await super.setUp()
     apiDisconnectSucceeded = false
     apiError = nil
     apiResponse = nil
     apiWaitFinished = false
+  }
+
+  /// sendonly の接続を待ち、接続できたチャンネルを返す
+  ///
+  /// connect callback は libwebrtc の delegate スレッドから呼ばれるため、state の更新は
+  /// main queue に束ねる。接続に失敗した場合は callback が失敗を報告済みのため、ここでは
+  /// 追加の失敗を記録せず、後始末だけを行って nil を返す。接続に失敗した場合も
+  /// `sora?.mediaChannels` にはチャンネルが残る (一覧から外れるのは切断完了の通知が
+  /// 届いたとき) ため、残っているチャンネルをすべて切断してから戻る
+  private func connectAndWait(configuration: Configuration) -> MediaChannel? {
+    let connectExpectation = self.expectation(description: "sendonly の接続が完了すること")
+    var connectedChannel: MediaChannel?
+    // wait の終了後に発火した callback で assertion を記録しないためのフラグ。
+    // 記録するとテスト終了後の失敗が次のテストへ誤帰属される
+    var waitFinished = false
+    _ = sora?.connect(configuration: configuration) { mediaChannel, error in
+      DispatchQueue.main.async {
+        guard !waitFinished else { return }
+        if let error {
+          // 接続失敗はここで 1 回だけ報告する (wait 後の guard では追加の失敗を記録しない)。
+          // 接続できていないため、channel は採用しない
+          XCTFail("接続に失敗した: \(error)")
+        } else {
+          // 接続成功時は mediaChannel が渡る契約を検証する
+          XCTAssertNotNil(mediaChannel, "接続成功時は mediaChannel が渡ること")
+          connectedChannel = mediaChannel
+        }
+        connectExpectation.fulfill()
+      }
+    }
+
+    // SDK の connectionTimeout (30 秒) より長く待つ
+    wait(for: [connectExpectation], timeout: 35)
+    waitFinished = true
+
+    guard let connectedChannel else {
+      disconnectAll(channels: sora?.mediaChannels ?? [])
+      return nil
+    }
+    return connectedChannel
+  }
+
+  /// main queue へ渡すために `Statistics` から Sendable な値だけを取り出した snapshot
+  ///
+  /// `Statistics` は Sendable ではないため、`getStats` の handler (WebRTC のスレッド) の中で
+  /// この型へ詰め替え、この値だけを main queue へ渡す
+  private struct StatsSnapshot: Sendable {
+    /// `kind` の outbound-rtp が存在するかどうか
+    let hasOutbound: Bool
+    /// `kind` の outbound-rtp が送信したバイト数
+    let bytesSent: Int
+    /// `kind` の outbound-rtp が送信したパケット数
+    let packetsSent: Int
+    /// 音声の場合に OPUS のコーデック統計が存在するかどうか
+    let hasAudioOpusCodec: Bool
+
+    /// `kind` ("video" / "audio") の outbound-rtp と、音声の場合は OPUS のコーデック統計を取り出す
+    init(stats: Statistics, kind: String) {
+      let outbound = stats.entries.first {
+        $0.type == "outbound-rtp" && (($0.values["kind"] as? NSString) as String?) == kind
+      }
+      self.hasOutbound = outbound != nil
+      self.bytesSent = (outbound?.values["bytesSent"] as? NSNumber)?.intValue ?? 0
+      self.packetsSent = (outbound?.values["packetsSent"] as? NSNumber)?.intValue ?? 0
+      self.hasAudioOpusCodec =
+        kind == "audio"
+        && stats.entries.contains {
+          $0.type == "codec" && (($0.values["mimeType"] as? NSString) as String?) == "audio/opus"
+        }
+    }
+  }
+
+  /// 接続済みチャンネルの統計を取得し、成功時に `verify` で検証する
+  ///
+  /// `getStats` の handler は WebRTC のスレッドから呼ばれるため、非 Sendable な `Statistics` を
+  /// そのまま扱わず、必要な値だけを Sendable な snapshot に詰め替えてから main queue へ 1 hop する。
+  /// handler を `@Sendable` にして隔離を継承させないのは、MainActor 隔離の closure を WebRTC
+  /// スレッドから呼ぶと実行時違反 (`dispatch_assert_queue`) になるためである
+  /// (`StereoAudioOutputE2ETests` の `audioCounts` と同じ方式)。`verify` も `@Sendable` にして、
+  /// 非 Sendable な closure を handler へ持ち込まない
+  private func waitForStats(
+    channel: MediaChannel,
+    kind: String,
+    delay: TimeInterval,
+    description: String,
+    verify: @escaping @Sendable (StatsSnapshot) -> Void
+  ) {
+    let statsExpectation = self.expectation(description: description)
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+      channel.getStats { @Sendable result in
+        // WebRTC スレッドでは数値だけを取り出し、非 Sendable な統計オブジェクトは渡さない
+        let snapshot = result.map { StatsSnapshot(stats: $0, kind: kind) }
+        DispatchQueue.main.async {
+          defer { statsExpectation.fulfill() }
+          switch snapshot {
+          case .failure(let error):
+            // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
+            // エラー詳細を含めて出力する
+            XCTFail("getStats に失敗した : \(error)")
+          case .success(let snapshot):
+            verify(snapshot)
+          }
+        }
+      }
+    }
+    // delay の待機を含めて 30 秒待つ
+    wait(for: [statsExpectation], timeout: 30)
   }
 
   /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
@@ -31,70 +138,39 @@ final class SendonlyE2ETests: E2ETestBase {
     config.initialCameraEnabled = false
     // この E2E はダミー映像送信の確認に限定し、音声初期化による不安定要因を避ける
     config.audioEnabled = false
-    let expectation = self.expectation(description: "sendonly でダミー映像を送信できること")
-    var capturer: DummyVideoCapturer?
 
-    _ = sora?.connect(configuration: config) { mediaChannel, error in
-      if let error {
-        XCTFail("接続に失敗した: \(error)")
-        expectation.fulfill()
-        return
-      }
-      guard let channel = mediaChannel, let stream = channel.senderStream else {
-        XCTFail("senderStream が nil")
-        expectation.fulfill()
-        return
-      }
-      let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
-      currentCapturer.stream = stream
-      currentCapturer.start()
-      capturer = currentCapturer
-      // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
-      // ダミー映像送信の継続と WebRTC 統計情報を確認する
-      DispatchQueue.main.async {
-        [channel, currentCapturer, expectation] in
-        let timer = Timer(timeInterval: 2, repeats: false) { _ in
-          channel.getStats { result in
-            defer { expectation.fulfill() }
-            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
-            XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
-            XCTAssertTrue(currentCapturer.isRunning, "DummyVideoCapturer が動作中であること")
-            XCTAssertGreaterThan(currentCapturer.frameCount, 0, "ダミー映像フレームが送信されていること")
-
-            guard case .success(let stats) = result else {
-              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
-              // エラー詳細を含めて出力する
-              if case .failure(let error) = result {
-                XCTFail("getStats に失敗した : \(error)")
-              } else {
-                XCTFail("getStats に失敗した")
-              }
-              return
-            }
-
-            let videoOutbound = stats.entries.first {
-              $0.type == "outbound-rtp"
-                && ($0.values["kind"] as? NSString) == "video"
-            }
-            XCTAssertNotNil(videoOutbound, "outbound video stats が存在すること")
-            let bytesSent = videoOutbound?.values["bytesSent"] as? NSNumber
-            let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
-            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
-            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
-            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
-          }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-      }
+    guard let channel = connectAndWait(configuration: config) else {
+      return
     }
-
-    wait(for: [expectation], timeout: 90)
-    capturer?.stop()
-    // 切断
-    if let channel = sora?.mediaChannels.first {
+    // DummyVideoCapturer は MainActor に隔離されているため、senderStream の取得と capturer の
+    // 生成・開始は MainActor 上で行う (callback 直下で生成すると MainActor 実行時違反になる)
+    guard let stream = channel.senderStream else {
+      XCTFail("senderStream が nil")
       disconnectAndVerify(channel: channel)
+      return
     }
+    let capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+    capturer.stream = stream
+    capturer.start()
+
+    // main RunLoop 上で 2 秒待機してから、ダミー映像送信の継続と WebRTC 統計情報を確認する
+    waitForStats(
+      channel: channel, kind: "video", delay: 2, description: "ダミー映像の統計を確認できること"
+    ) { snapshot in
+      XCTAssertTrue(snapshot.hasOutbound, "outbound video stats が存在すること")
+      XCTAssertGreaterThan(snapshot.bytesSent, 0, "bytesSent が 0 より大きいこと")
+      XCTAssertGreaterThan(snapshot.packetsSent, 0, "packetsSent が 0 より大きいこと")
+    }
+    XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+    XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
+
+    // capturer がバッファ確保の連続失敗で自動停止していないかを直接確認する
+    XCTAssertTrue(capturer.isRunning, "DummyVideoCapturer が動作中であること")
+    XCTAssertGreaterThan(capturer.frameCount, 0, "ダミー映像フレームが送信されていること")
+
+    capturer.stop()
+    // 切断し、正常切断コード (1000) が通知されることまで確認する
+    disconnectAndVerify(channel: channel)
   }
 
   /// sendonly で DummyAudioDevice を使ってダミー音声を送信できることを確認する
@@ -113,67 +189,25 @@ final class SendonlyE2ETests: E2ETestBase {
     // DummyAudioDevice.initialize(with:) が接続試行時に AVAudioSession を有効化するため、
     // tearDown での復元対象とする
     audioSessionActivatedByTest = true
-    let expectation = self.expectation(description: "sendonly でダミー音声を送信できること")
 
-    _ = sora?.connect(configuration: config) { mediaChannel, error in
-      if let error {
-        XCTFail("接続に失敗した: \(error)")
-        expectation.fulfill()
-        return
-      }
-      guard let channel = mediaChannel else {
-        XCTFail("メディアチャネルが nil")
-        expectation.fulfill()
-        return
-      }
-      // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
-      // ダミー音声送信の継続と WebRTC 統計情報を確認する
-      DispatchQueue.main.async { [channel, expectation] in
-        let timer = Timer(timeInterval: 2, repeats: false) { _ in
-          channel.getStats { result in
-            defer { expectation.fulfill() }
-            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
-
-            guard case .success(let stats) = result else {
-              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
-              // エラー詳細を含めて出力する
-              if case .failure(let error) = result {
-                XCTFail("getStats に失敗した : \(error)")
-              } else {
-                XCTFail("getStats に失敗した")
-              }
-              return
-            }
-
-            // 音声コーデック (OPUS) が確定していることを確認する (sora-js-sdk の E2E と同様)
-            let audioCodec = stats.entries.first {
-              $0.type == "codec"
-                && ($0.values["mimeType"] as? NSString) == "audio/opus"
-            }
-            XCTAssertNotNil(audioCodec, "audio codec stats が存在すること")
-
-            let audioOutbound = stats.entries.first {
-              $0.type == "outbound-rtp"
-                && ($0.values["kind"] as? NSString) == "audio"
-            }
-            XCTAssertNotNil(audioOutbound, "outbound audio stats が存在すること")
-            let bytesSent = audioOutbound?.values["bytesSent"] as? NSNumber
-            let packetsSent = audioOutbound?.values["packetsSent"] as? NSNumber
-            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
-            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
-            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
-          }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-      }
+    guard let channel = connectAndWait(configuration: config) else {
+      return
     }
 
-    wait(for: [expectation], timeout: 90)
-    // 切断
-    if let channel = sora?.mediaChannels.first {
-      disconnectAndVerify(channel: channel)
+    // main RunLoop 上で 2 秒待機してから、ダミー音声送信の継続と WebRTC 統計情報を確認する
+    waitForStats(
+      channel: channel, kind: "audio", delay: 2, description: "ダミー音声の統計を確認できること"
+    ) { snapshot in
+      // 音声コーデック (OPUS) が確定していることを確認する (sora-js-sdk の E2E と同様)
+      XCTAssertTrue(snapshot.hasAudioOpusCodec, "audio codec stats が存在すること")
+      XCTAssertTrue(snapshot.hasOutbound, "outbound audio stats が存在すること")
+      XCTAssertGreaterThan(snapshot.bytesSent, 0, "bytesSent が 0 より大きいこと")
+      XCTAssertGreaterThan(snapshot.packetsSent, 0, "packetsSent が 0 より大きいこと")
     }
+    XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+
+    // 切断し、正常切断コード (1000) が通知されることまで確認する
+    disconnectAndVerify(channel: channel)
   }
 
   /// サーバー側からの切断後に再接続できることを確認する

@@ -2,7 +2,7 @@ import AVFoundation
 import CryptoKit
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// iOS E2E テストのベースクラス
 ///
@@ -29,8 +29,12 @@ class E2ETestBase: XCTestCase {
   private struct InvalidURLError: Error {}
   private struct InvalidJSONError: Error {}
 
-  override func setUp() {
-    super.setUp()
+  // XCTestCase を @MainActor で隔離しているため、同期版の setUp / tearDown は nonisolated と
+  // みなされ MainActor の property を更新できない。async 版は MainActor 隔離を継承するためこちらを使う。
+  // 同期版を override してもこの async 版は呼ばれる (XCTest は別のセレクタとして両方を呼ぶ) が、
+  // MainActor の状態を初期化・後始末する override は async 版で書くこと
+  override func setUp() async throws {
+    try await super.setUp()
     originalLogLevel = Logger.shared.level
     Logger.shared.level = .warn
     // ダミー音声テストが AVAudioSession を変更するため、tearDown で復元できるように保存する
@@ -42,7 +46,7 @@ class E2ETestBase: XCTestCase {
     sora = Sora()
   }
 
-  override func tearDown() {
+  override func tearDown() async throws {
     for channel in sora?.mediaChannels ?? [] {
       channel.disconnect(error: nil)
     }
@@ -59,7 +63,7 @@ class E2ETestBase: XCTestCase {
           options: originalAudioOptions ?? [])
       }
     }
-    super.tearDown()
+    try await super.tearDown()
   }
 
   // MARK: - ヘルパー

@@ -1,7 +1,7 @@
 import WebRTC
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// 実際の Sora、Opus、RTP、ADM を使い、ダミー音声のステレオ送受信を検証する。
 /// マイク・スピーカー・外部 Publisher は使わず、再生 PCM の左右の分離まで確認する。

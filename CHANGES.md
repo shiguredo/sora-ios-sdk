@@ -109,6 +109,15 @@
 - [ADD] 公開 API baseline が現在の `Sora` module と一致していることを CI で検証する
   - `make api-check-fresh` を追加し、公開 API を追加したまま baseline を再生成漏れ状態を検出する
   - @t-miya
+- [UPDATE] E2E テストの concurrency 診断抑止を除去する
+  - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する
+  - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback の state 更新を main queue に束ねる。同期の test method でも async な `setUp` が呼ばれることを検証するテストを追加する
+  - `DummyVideoCapturer` は `Timer` を main RunLoop に登録したまま `MainActor.assumeIsolated` で main 実行を表明し、解放時は `isolated deinit` で MainActor 上から Timer を無効化する。`SendonlyE2ETests` の待機の `Timer` は `DispatchQueue.main.asyncAfter` に置き換えて `DummyVideoCapturer` を MainActor 上で生成・開始する
+  - `DummyVideoCapturerTests` は実 `MediaChannel` / `MediaStream` を使って Timer の発火と `stop()` による停止を確認する
+  - `RpcE2ETests` の RPC 呼び出しは `MediaChannel` をまとめた `@unchecked Sendable` のボックス経由にする
+  - `SoraTests` が `@preconcurrency import Sora` を使っていないことを CI で検査する
+  - 公開 API と利用者の挙動の変更はない
+  - @t-miya
 - [UPDATE] GitHub Actions の Build ワークフローの XCode バージョン等を更新する
   - Xcode の version を 26.6 に更新する
   - SDK を iOS 26.5 に更新する
