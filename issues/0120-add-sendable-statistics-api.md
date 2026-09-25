@@ -35,6 +35,7 @@ WebRTC statistics を actor / Task 境界で安全に受け渡せる、immutable
 - `NSObject`、`NSDictionary`、`NSArray`、`Any` を snapshot に保持しない。
 - `RTCStatisticsReport` の callback executor 上で全 entry を deep copy し、raw WebRTC object を snapshot の外へ出さない。
 - snapshot を返す新しい callback / async API を追加し、既存 `getStats(handler:)` と `Statistics` は変更しない。
+- 既存 `getStats(handler:)` の doc に、handler が libwebrtc のスレッドから呼ばれることと Swift 6 言語モードでの書き方を追記する (handler の中で `first(where:)` などの closure を呼ばず、closure に `@Sendable` を付けて Sendable な値へ詰め替えてから main actor / main queue へ渡すか、handler の先頭で main に束ねる。handler の中で closure を呼ぶと実行時隔離チェックで落ちることを実測済み)。既存 API の挙動は変更しない。
 - `MediaChannel.getStats()` の async 版は新 snapshot API を返す設計とし、cancellation と exactly-once (キャンセル・切断・状態遷移が競合しても終端が 1 回だけ) を扱う。
 - legacy API の deprecation と削除は本 issue に含めない。
 
@@ -55,6 +56,7 @@ WebRTC statistics を actor / Task 境界で安全に受け渡せる、immutable
 - snapshot に `Any`、`NSObject`、raw WebRTC object が含まれないこと。
 - snapshot を返す callback API と async API が存在すること。
 - legacy statistics API の source compatibility が維持されていること。
+- legacy `getStats(handler:)` の doc に handler の実行スレッドと Swift 6 言語モードでの書き方が記載されていること。
 - snapshot の値の変換で `JSONValue` へ変換できない value type を検出した場合、silent drop せずエラーとして返すこと。
 - actor / Task 境界で strict concurrency diagnostic が発生しないこと。
 - 追加したテストと既存テストがすべて成功すること。

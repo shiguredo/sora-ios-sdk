@@ -72,6 +72,7 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 - 既存 handler class と property の型は変更しない。
 - 既存 handler は内部 event を compatibility adapter から配送する。
 - 接続開始時に handler snapshot を取る場合は、開始後の差し替えが反映されるかどうかを既存挙動と照合して明文化する。
+- legacy handler bag (`SoraHandlers` / `MediaChannelHandlers` / `WebSocketChannelHandlers` / `MediaStreamHandlers` / `CameraVideoCapturerHandlers`) の doc に、callback の配送 executor / スレッドの契約を明記する。少なくとも「呼び出しスレッドは保証されない」ことと、Swift 6 言語モードで `@MainActor` の文脈から handler を設定する場合の書き方 (closure に `@Sendable` を付けるか `nonisolated` な関数へ分離し、main actor へは `Task { @MainActor in ... }` で渡す) を、handler bag ごとに同じ書式で揃える (現状は `onDataChannel` / `onDataChannelOpened` / `onSwitchVideo` など一部の callback にしか説明がない)。
 - legacy handler の deprecation と削除は本 issue に含めない。
 
 ### 他の open issue との整合
@@ -108,6 +109,7 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 - Sendable な event model と購読 API が公開されていること。
 - event payload に mutable `MediaChannel`、`MediaStream`、raw WebRTC object が含まれないこと。
 - event の配送 executor、順序、lifetime、buffer、購読解除、購読者数契約 (複数購読者 / 1 接続 1 stream) が API documentation に記載されていること。
+- legacy handler bag の doc に callback の配送 executor / スレッドの契約と Swift 6 言語モードでの書き方が、handler bag ごとに同じ書式で記載されていること。
 - Task cancellation と接続終了で購読が確実に終端すること。
 - 利用者 callback を内部 owner の critical section 外で実行すること。
 - UIKit 専用 event 以外を一律 MainActor へ隔離していないこと。
