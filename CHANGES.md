@@ -129,6 +129,12 @@
   - 切断の共通ヘルパー (`disconnectAndVerify` / `disconnectAll`) の早期 return でも未 wait の expectation を残さないようにする
   - `disconnectAndVerify` の切断イベント検証を wait 後に行い、テスト終了後の assertion の誤帰属を防ぐ
   - @t-miya
+- [FIX] `DummyAudioDevice` の共有状態競合を修正する
+  - `RTCAudioDevice` の lifecycle state を 1 つの lock へ統一し、録音・再生の timer に世代を持たせて停止・終了後に届いた callback を破棄する
+  - 停止と開始が交差した場合に timer や AudioUnit が停止後に残らないよう、ライフサイクルの世代で開始処理を検証する
+  - `pcmGenerator` を `@Sendable` にし、テストの波形生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の可変状態を lock で保護する
+  - 公開 API と利用者の挙動の変更はない
+  - @t-miya
 
 ## 2026.3.0
 
