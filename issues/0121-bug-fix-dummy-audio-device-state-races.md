@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/fix-dummy-audio-device-state-races
-- Polished: 2026-08-28
+- Polished: 2026-09-25
 
 ## 目的
 
@@ -23,9 +23,10 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 - `_isRecordingInitialized`
 - `audioUnit`
 - `recordingTimer`
+- `playoutTimer`
 - `isHardMuted` の public getter
 
-`startRecording()` / `stopRecording()`、`terminateDevice()`、property getter、recording timer callback は別 executor から到達し得る。`pcmGenerator` も非 `@Sendable` closure のまま `recordingQueue` から実行される。
+`startRecording()` / `stopRecording()`、`startPlayout()` / `stopPlayout()`、`terminateDevice()`、property getter、recording / playout timer の callback は別 executor から到達し得る。timer の event handler は `recordingQueue` / `playoutQueue` 上で発火し、実処理は `delegate.dispatchAsync` で ADM スレッドへ移してから実行される。`pcmGenerator` も非 `@Sendable` closure のまま、ADM スレッド（単体テストの `fillPCMData` 直接呼び出しではテストスレッド）から実行される。
 
 ## 再現手順
 
@@ -39,10 +40,10 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 - ADM lifecycle state を 1 つの synchronized storage または専用 serial executor で所有する。
 - state property の getter と setter を同じ同期方針へ統一する。
-- `recordingTimer` の生成、交換、cancel と generation を recording owner 上で順序付ける。
+- 録音・再生の両タイマー（`recordingTimer` / `playoutTimer`）の生成、交換、cancel と generation を各 owner（recording / playout owner）上で順序付ける。
 - timer callback は generation と running state を snapshot し、停止後の callback を破棄する。
 - `AUAudioUnit` の操作は AudioUnit の thread contract に従う 1 つの owner へ限定する。
-- `pcmGenerator` は `@Sendable` とし、利用者 capture が必要な場合は thread-safe な value / storage だけを許可する。既存の `SineWaveGenerator`（`SoraTests`）は可変 `phase` を持つ非 `Sendable` class のため、本 issue で Sendable 化（value 型化または lock / executor 化）し、`testSendonlyDummyAudio` の capture を成立させる。変更対象は `Sora/DummyAudioDevice.swift` と、`SoraTests/DummyAudioDeviceTests.swift` / `SoraTests/SendonlyE2ETests.swift` の `SineWaveGenerator` 対応である。
+- `pcmGenerator` は `@Sendable` とし、利用者 capture が必要な場合は thread-safe な value / storage だけを許可する。既存の `SineWaveGenerator` / `StereoSineWaveGenerator`（いずれも `SoraTests/DummyAudioDeviceTests.swift` に定義、可変 `phase` / `time` を持つ非 `Sendable` class）は本 issue で Sendable 化（value 型化または lock / executor 化）し、`pcmGenerator` として capture している `testSendonlyDummyAudio`（`SoraTests/SendonlyE2ETests.swift`）、`testMonoDummyHardMuteStopsAndRestartsOutboundAudio` と `verifyStereoPair`（`SoraTests/StereoAudioOutputE2ETests.swift`）、`testStereoPCMThroughRealPeerConnections`（`SoraTests/DummyStereoAudioLoopbackTests.swift`）、`testStereoProbeRejectsSilenceSwappedAndMixedChannels`（`SoraTests/DummyAudioDeviceTests.swift`）の capture を成立させる。value 型化を採る場合、mutating メソッド参照は `let` から渡せないため、該当 capture 箇所の渡し方も書き換える。変更対象は `Sora/DummyAudioDevice.swift` と、`SoraTests/DummyAudioDeviceTests.swift` / `SoraTests/SendonlyE2ETests.swift` / `SoraTests/StereoAudioOutputE2ETests.swift` / `SoraTests/DummyStereoAudioLoopbackTests.swift` である。
 - delegate、generator、AudioUnit callback は内部 lock を保持したまま呼ばない。
 - `@unchecked Sendable` を class 全体へ追加して診断を抑止しない。
 - Thread Sanitizer の実行環境は `0119`（concurrency runtime stress CI）が提供する。本 issue を先に実施し、`0119` の TS 実行が `DummyAudioDevice` の race によるノイズを出さない前提を整える。
@@ -51,7 +52,7 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 モックやスタブは使用しない。
 
-- 実 `DummyAudioDevice` と実 WebRTC ADM callback を利用する。`RTCAudioDevice` のプロトコルメソッドは ADM スレッドから呼ばれるため、race の実行元は ADM スレッド（lifecycle）、`recordingQueue`（timer callback）、disconnect の呼び出し側スレッド（`terminateDevice` の一部）の交差である。この 3 executor の交差を start / stop / terminate / hard mute の反復で作り、callback と state の順序を記録する。
+- 実 `DummyAudioDevice` と実 WebRTC ADM callback を利用する。`RTCAudioDevice` のプロトコルメソッドは ADM スレッドから呼ばれるため、race の実行元は ADM スレッド（lifecycle）、`recordingQueue` / `playoutQueue`（timer callback）、disconnect の呼び出し側スレッド（`terminateDevice` の一部）の交差である。この executor 群の交差を start / stop / terminate / hard mute の反復で作り、callback と state の順序を記録する。
 - terminate 後に PCM delivery と state 更新が発生しないことは、terminate 完了後に recording timer の発火が起き得ないことを `recordingQueue` 上での確認と、state getter が終端状態を返すことで判定する。
 - Thread Sanitizer を有効にした実行（`0119` が提供する TS 環境または同等の実行）で race report が 0 件であることを確認する。
 - test には、lock 外で callback を呼ぶ理由と generation の境界を日本語コメントで記載する。
