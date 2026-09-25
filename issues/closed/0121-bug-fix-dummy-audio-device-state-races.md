@@ -98,3 +98,20 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 - テストは実 ADM 接続での lifecycle 検証へ作り直した (停止の直前まで注入と再生が継続していることの positive control と、停止後に注入・再生が再開せず state が終端へ戻ることの検証)。あわせて生成器の並行利用と、ハードミュートの復元を検証するテストを追加した。
 
 検証は `make fmt-lint`、`xcodebuild build-for-testing` (Swift 6、error 0)、ローカルの全 378 tests (30 skipped、0 failures)、Thread Sanitizer を有効にした実行 (`xcodebuild test -enableThreadSanitizer YES`、対象 2 suite を 3 回反復、race report 0 件) で行った。Thread Sanitizer は `0119` の CI job が未実装のためローカルで実行している。検出器が動作することは、未修正の既知の race (`0151` の `PeerChannel.onConnect`) を `PeerChannelConnectCompletionTests` の 20 回反復で検出できることで確認した。AudioUnit 経路の実行時検証も試みたが、CI の Simulator では受信あり接続の `initializePlayout` から `AURemoteIO::Initialize()` が音声サーバーの RPC タイムアウトで `abort` し、テストプロセスごと落ちるためテストを追加しない (実行時検証は実機に委ねる)。CI (Build / Consumer Test / E2E Test) は本修正をコミットした後に実行して確認する。
+
+### 2026-09-25 実機での AudioUnit 経路の検証
+
+CI の Simulator では実行できない AudioUnit (RemoteIO) 経路を実機で確認し、`initializePlayout` / `startPlayout` と `terminateDevice` の AudioUnit 停止が動作することを確認した。
+
+- 端末: iPhone 14 (iPhone14,7)、iOS 26.6.1。Xcode 26.6、libwebrtc は Shiguredo-build M154 (154.8037.1.2 c2b761b)、Sora iOS SDK 2026.3.0 + 本修正
+- 方法: quickstart の SDK 依存を一時的にローカルの本リポジトリへ切り替え、`Configuration.audioDevice` に `playoutHandler` を渡さない `DummyAudioDevice` を注入した。送信 PCM は 440 Hz の正弦波とし、device の `isInitialized` / `isPlayoutInitialized` / `isPlaying` / `isRecordingInitialized` / `isRecording` を 1 秒ごとにログへ出した
+- 注入のために `Configuration.audioDevice` と `DummyAudioDevice` を public にする確認用のコードを一時的に追加し、検証後に削除した (テスト専用フックを production へ残さないため、コミットしていない)
+- 接続: 同じチャンネルに他の接続 (recvonly / sendonly / sendrecv) が存在する状態で接続した。受信ストリームが追加されないと ADM は `initializePlayout` を呼ばないため、単独接続ではこの経路を通らない
+- 結果:
+  - 22:02:12 (接続直後): `initialized=true playoutInitialized=false playing=false recordingInitialized=true recording=true` (録音経路のみ動作)
+  - 22:02:32 (受信ストリームの追加時): libwebrtc が `InitPlayout: Did initialize playout` / `StartPlayout: Did start playout` / `Size of playout buffer: 960` を記録し、同時に `playoutInitialized=true playing=true` になった
+  - 22:03:23 の切断 (`reason => user`) で `StopPlayout: Did stop playout` と `StopRecording: Did stop recording`、22:03:24 に全項目 false へ戻った
+  - 実機のスピーカーから受信した 440 Hz が聞こえることを確認した (AudioUnit の出力が実際に鳴っていることの確認)
+  - クラッシュと `AURemoteIO` の初期化失敗は発生しなかった (CI の Simulator で起きた abort は実機では再現しない)
+- 観察: カスタム音声デバイスでは ADM の stereo 設定が失敗として記録された (`adm_helpers.cc:57` / `:77` の "Failed to set stereo playout mode." / "Failed to set stereo recording mode.")。libwebrtc のログレベルを info にしたアプリでのみ見える記録で、AudioUnit 経路の初期化・起動・停止は成功した。本修正はこの設定を変更していない
+- 未検証: 開始の途中で停止した場合の AudioUnit の巻き戻し分岐 (ADM スレッド契約の下で交差を強制できない)、割り込みと出力経路の変更
