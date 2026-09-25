@@ -25,7 +25,7 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 - `audioUnit`
 - `recordingTimer`
 - `playoutTimer`
-- `isHardMuted` の public getter
+- `isHardMuted` の getter
 
 `startRecording()` / `stopRecording()`、`startPlayout()` / `stopPlayout()`、`terminateDevice()`、property getter、recording / playout timer の callback は別 executor から到達し得る。timer の event handler は `recordingQueue` / `playoutQueue` 上で発火し、実処理は `delegate.dispatchAsync` で ADM スレッドへ移してから実行される。`pcmGenerator` も非 `@Sendable` closure のまま、ADM スレッド（単体テストの `fillPCMData` 直接呼び出しではテストスレッド）から実行される。
 
@@ -41,30 +41,34 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 ## 設計方針
 
-- ADM lifecycle state を 1 つの synchronized storage または専用 serial executor で所有する。
+- ADM lifecycle state を 1 つの lock 付き storage で所有する (timer / delegate / AudioUnit を含む)。
 - state property の getter と setter を同じ同期方針へ統一する。
-- 録音・再生の両タイマー（`recordingTimer` / `playoutTimer`）の生成、交換、cancel と generation を各 owner（recording / playout owner）上で順序付ける。
+- 録音・再生の両タイマーの生成、交換、cancel と generation を、timer と世代を対にして持つ値型 (`TimerSlot`) へまとめ、単一の lock が保護する state の中だけで書き換える。
+- 開始処理 (startRecording / startPlayout / initializePlayout) は準備 (delegate や間隔の取得) と state への差し込みが別の lock 区間になるため、ライフサイクルの世代を準備の前後で確認し、`terminateDevice` をまたいだ差し込みを行わない。
+- `terminateDevice` の後始末は、timer の撤去・ライフサイクル世代の更新・`delegate` の解放を同じ lock 区間で行う。
 - timer callback は generation と running state を snapshot し、停止後の callback を破棄する。
 - `AUAudioUnit` の操作は AudioUnit の thread contract に従う 1 つの owner へ限定する。
-- `pcmGenerator` は `@Sendable` とし、利用者 capture が必要な場合は thread-safe な value / storage だけを許可する。既存の `SineWaveGenerator` / `StereoSineWaveGenerator`（いずれも `SoraTests/DummyAudioDeviceTests.swift` に定義、可変 `phase` / `time` を持つ非 `Sendable` class）は本 issue で Sendable 化（value 型化または lock / executor 化）し、`pcmGenerator` として capture している `testSendonlyDummyAudio`（`SoraTests/SendonlyE2ETests.swift`）、`testMonoDummyHardMuteStopsAndRestartsOutboundAudio` と `verifyStereoPair`（`SoraTests/StereoAudioOutputE2ETests.swift`）、`testStereoPCMThroughRealPeerConnections`（`SoraTests/DummyStereoAudioLoopbackTests.swift`）、`testStereoProbeRejectsSilenceSwappedAndMixedChannels`（`SoraTests/DummyAudioDeviceTests.swift`）の capture を成立させる。value 型化を採る場合、mutating メソッド参照は `let` から渡せないため該当 capture 箇所の渡し方も書き換える必要があり、`@Sendable` な closure は可変な `var` を capture して更新できないため value 型化だけでは capture を成立させられない。生成器の状態は synchronized な参照型 / storage に置く。変更対象は `Sora/DummyAudioDevice.swift` と、`SoraTests/DummyAudioDeviceTests.swift` / `SoraTests/SendonlyE2ETests.swift` / `SoraTests/StereoAudioOutputE2ETests.swift` / `SoraTests/DummyStereoAudioLoopbackTests.swift` である。
+- `pcmGenerator` は `@Sendable` とし、利用者 capture が必要な場合は thread-safe な参照型 / storage だけを許可する。既存の `SineWaveGenerator` / `StereoSineWaveGenerator`（いずれも `SoraTests/DummyAudioDeviceTests.swift` に定義、可変 `phase` / `time` を持つ非 `Sendable` class）は本 issue で lock 付き `@unchecked Sendable` とし、`pcmGenerator` として capture している `testSendonlyDummyAudio`（`SoraTests/SendonlyE2ETests.swift`）、`testMonoDummyHardMuteStopsAndRestartsOutboundAudio` と `verifyStereoPair`（`SoraTests/StereoAudioOutputE2ETests.swift`）、`testStereoPCMThroughRealPeerConnections`（`SoraTests/DummyStereoAudioLoopbackTests.swift`）、`testStereoProbeRejectsSilenceSwappedAndMixedChannels`（`SoraTests/DummyAudioDeviceTests.swift`）の capture を成立させる。value 型化は `@Sendable` な closure が可変な `var` を capture して更新できないため採らない。
 - delegate、generator、AudioUnit callback は内部 lock を保持したまま呼ばない。
 - `@unchecked Sendable` を class 全体へ追加して診断を抑止しない。
 - Thread Sanitizer の実行環境は `0119`（concurrency runtime stress CI）が提供する。本 issue を先に実施し、`0119` の TS 実行が `DummyAudioDevice` の race によるノイズを出さない前提を整える。
 
 ## 変更対象
 
-- `Sora/DummyAudioDevice.swift`: ADM lifecycle state を 1 つの synchronized storage / owner へ統一、`recordingTimer` / `playoutTimer` の generation 管理、`pcmGenerator` の `@Sendable` 化
-- `SoraTests/DummyAudioDeviceTests.swift`: `SineWaveGenerator` / `StereoSineWaveGenerator` の Sendable 化 (可変状態を lock で保護した `@unchecked Sendable` 準拠)、`pcmGenerator` を `@Sendable` にしたことに伴う capture の追随 (実測では生成器を Sendable にするだけでよく、渡し方の書き換えは不要だった)
-- `SoraTests/DummyStereoAudioLoopbackTests.swift`: 実 ADM を接続したまま start / stop / terminate / hard mute を複数の executor から交差させる lifecycle の競合テストの追加
-- `CHANGES.md`: `## develop` の `### misc` に、test 側の診断を解消する `[FIX]` を追記する (公開 API と利用者の挙動の変更がないことを補足する)
+- `Sora/DummyAudioDevice.swift`: ADM lifecycle state を 1 つの lock へ統一、`TimerSlot` による timer の世代管理、停止と開始の交差を検出するライフサイクル世代、`pcmGenerator` の `@Sendable` 化
+- `SoraTests/DummyAudioDeviceTests.swift`: `SineWaveGenerator` / `StereoSineWaveGenerator` の Sendable 化 (可変状態を lock で保護した `@unchecked Sendable` 準拠)、`pcmGenerator` を `@Sendable` にしたことに伴う capture の追随 (生成器の Sendable 化だけで capture が成立し、capture 側の書き換えは不要)、生成器を並行に呼んでも位相が失われないことの検証
+- `SoraTests/DummyStereoAudioLoopbackTests.swift`: 実 ADM を接続したまま切断経路から `terminateDevice` を呼ぶ lifecycle の検証テストの追加 (停止前に録音・再生が動いていることの positive control と、停止後に注入・再生が再開せず state が終端へ戻ることの検証)。capture 側の `SoraTests/SendonlyE2ETests.swift` / `SoraTests/StereoAudioOutputE2ETests.swift` は無変更
+- `CHANGES.md`: `## develop` の `### misc` に、`DummyAudioDevice` の共有状態競合の修正を追記する
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
-- 実 `DummyAudioDevice` と実 WebRTC ADM callback を利用する。`RTCAudioDevice` のプロトコルメソッドは ADM スレッドから呼ばれるため、race の実行元は ADM スレッド（lifecycle）、`recordingQueue` / `playoutQueue`（timer callback）、disconnect の呼び出し側スレッド（`terminateDevice` の一部）の交差である。この executor 群の交差を start / stop / terminate / hard mute の反復で作り、callback と state の順序を記録する。
-- terminate 後に PCM delivery と state 更新が発生しないことは、terminate 完了後に recording timer の発火が起き得ないことを `recordingQueue` 上での確認と、state getter が終端状態を返すことで判定する。
-- Thread Sanitizer を有効にした実行（`0119` が提供する TS 環境または同等の実行）で race report が 0 件であることを確認する。
+- 実 `DummyAudioDevice` と実 WebRTC ADM callback を利用する。`RTCAudioDevice` のプロトコルメソッドは ADM スレッドからのみ呼ぶ契約 (RTCAudioDevice.h) のため、テストは別スレッドから start / stop を呼ばず、接続確立時に ADM が開始した録音・再生を維持したまま、切断経路 (PeerChannel) と同じくテストスレッドから `terminateDevice` を呼ぶ。PCM の注入と再生は pcmGenerator / playoutHandler の呼び出し回数で観測する。
+- terminate 後に PCM delivery と state 更新が発生しないことは、停止前に注入と再生が実際に起きていること (positive control) を確認した上で、停止直後と 0.5 秒後に generator / playoutHandler の呼び出し回数が増えず、state getter が終端状態 (`isInitialized` / `isRecording` / `isRecordingInitialized` / `isPlaying` / `isPlayoutInitialized`) を返すことで判定する (`testTerminateWhileConnectedStopsRecordingAndPlayout`)。
+- 開始処理の準備中に停止を差し込む交差は、ADM スレッド契約の下ではテストから強制できない (開始処理も停止の後始末も同じ ADM スレッドに直列化される)。この交差は code 側のライフサイクル世代で防ぎ、テストは停止後の不変条件を検証する。
+- 生成器の lock は、`DispatchQueue.concurrentPerform` で同一生成器を並行に呼び、位相が総フレーム数ぶん前進することで検証する。
+- Thread Sanitizer を有効にした実行（`0119` が提供する TS 環境または同等の実行）で race report が 0 件であることを確認する。実行は build を含む `xcodebuild test -enableThreadSanitizer YES` で行う (`test-without-building` では interceptor が働かない)。
 - test には、lock 外で callback を呼ぶ理由と generation の境界を日本語コメントで記載する。
 - `pcmGenerator` の `@Sendable` 化後に `SoraTests` を build し、`SineWaveGenerator` / `StereoSineWaveGenerator` の capture に concurrency 診断が出ないことを確認する。判定は実ビルド (`xcodebuild build-for-testing`) で行う (swiftc の単発の型検査は explicit module build と診断が一致せず、region isolation の error を見落とす)。
 
@@ -72,11 +76,11 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 - `DummyAudioDevice` の全 mutable state が同じ ownership 方針で管理されていること。
 - property getter と lifecycle method の並行実行でデータ競合がないこと。
-- terminate 後の timer / AudioUnit callback が state と delegate を利用しないこと。
+- terminate 後に state へ timer / AudioUnit が残らず、timer / AudioUnit callback が state と delegate を利用しないこと。
 - `pcmGenerator` の executor と Sendable 契約が明示されていること。
 - `SineWaveGenerator` / `StereoSineWaveGenerator` が `Sendable` になっており、`pcmGenerator` の `@Sendable` 化後も `SoraTests/SendonlyE2ETests.swift` / `SoraTests/StereoAudioOutputE2ETests.swift` / `SoraTests/DummyStereoAudioLoopbackTests.swift` / `SoraTests/DummyAudioDeviceTests.swift` の capture に concurrency 診断が出ないこと。
 - callback を state lock の外で呼んでいること。
-- `CHANGES.md` の `## develop` の `### misc` に、test 側の診断の解消が追記されていること。
+- `CHANGES.md` の `## develop` の `### misc` に、`DummyAudioDevice` の共有状態競合の修正が追記されていること。
 - `0119` の Thread Sanitizer 実行環境（または同等の TS を有効にした実行）で race report が 0 件であり、既存 E2E test が成功すること。
 
 ## 解決方法
