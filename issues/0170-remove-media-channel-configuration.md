@@ -1,9 +1,9 @@
-# 廃止予定の MediaChannelConfiguration クラスを削除する
+# 廃止した MediaChannelConfiguration クラスを削除する
 
 - Created: 2026-09-24
 - Completed: {YYYY-MM-DD}
 - Branch: feature/remove-media-channel-configuration
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-09-25
 
 ## 目的
 
@@ -25,6 +25,7 @@
 
 - `Sora/MediaChannelConfiguration.swift` が削除されている。
 - `Sora/`・`SoraTests/` に `MediaChannelConfiguration` の参照が無い。
+- `skills/sora-ios-sdk/SKILL.md` に `MediaChannelConfiguration` の参照が残っていない。
 - ビルドが通る。
 
 ## 解決方法
