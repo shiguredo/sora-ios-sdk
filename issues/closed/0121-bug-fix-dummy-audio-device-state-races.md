@@ -59,7 +59,7 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 - `Sora/DummyAudioDevice.swift`: ADM lifecycle state を 1 つの lock へ統一、`TimerSlot` による timer の世代管理、停止と開始の交差を検出するライフサイクル世代、`pcmGenerator` の `@Sendable` 化
 - `SoraTests/DummyAudioDeviceTests.swift`: `SineWaveGenerator` / `StereoSineWaveGenerator` の Sendable 化 (可変状態を lock で保護した `@unchecked Sendable` 準拠)、`pcmGenerator` を `@Sendable` にしたことに伴う capture の追随 (生成器のメソッド参照による capture は無変更だが、可変 `var` を capture していた箇所は lock 付きの箱へ置き換えた)、生成器を並行に呼んでも位相が失われないことと `terminateDevice` が初期のハードミュート状態へ戻すことの検証
-- `SoraTests/DummyStereoAudioLoopbackTests.swift`: 実 ADM を接続したまま切断経路から `terminateDevice` を呼ぶ lifecycle の検証テストの追加 (停止の直前まで録音・再生が動いていることの positive control と、停止後に注入・再生が再開せず state が終端へ戻ることの検証)。あわせて、受信あり接続で受信側にだけ `playoutHandler` を渡さず AudioUnit (RemoteIO) 経路を通し、再生の初期化・起動と停止後の終端状態を検証するテストを追加する
+- `SoraTests/DummyStereoAudioLoopbackTests.swift`: 実 ADM を接続したまま切断経路から `terminateDevice` を呼ぶ lifecycle の検証テストの追加 (停止の直前まで録音・再生が動いていることの positive control と、停止後に注入・再生が再開せず state が終端へ戻ることの検証)
 - `SoraTests/SendonlyE2ETests.swift`: 送信専用接続の device が切断で終端状態へ戻ることの検証を追加 (`SoraTests/StereoAudioOutputE2ETests.swift` は無変更)
 - `CHANGES.md`: `## develop` の `### misc` に、`DummyAudioDevice` の共有状態競合の修正を追記する
 
@@ -69,8 +69,8 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 - 実 `DummyAudioDevice` と実 WebRTC ADM callback を利用する。`RTCAudioDevice` のプロトコルメソッドは ADM スレッドからのみ呼ぶ契約 (RTCAudioDevice.h) のため、テストは別スレッドから start / stop を呼ばず、接続確立時に ADM が開始した録音・再生を維持したまま、切断経路 (PeerChannel) と同じくテストスレッドから `terminateDevice` を呼ぶ。PCM の注入と再生は pcmGenerator / playoutHandler の呼び出し回数で観測する。
 - terminate 後に PCM delivery と state 更新が発生しないことは、停止の直前まで注入と再生が継続していること (positive control) を確認した上で、停止後に generator / playoutHandler の呼び出し回数が増えず、state getter が終端状態を返すことで判定する (`testTerminateWhileConnectedStopsRecordingAndPlayout`)。
-- 開始処理の準備中に停止を差し込む交差は、ADM スレッド契約の下ではテストから強制できない (開始処理も停止の後始末も同じ ADM スレッドに直列化される)。この交差は code 側のライフサイクル世代で防ぎ、テストは停止後の不変条件を検証する。世代不一致で差し込みを拒否する分岐と、AudioUnit の起動後に停止を検出して巻き戻す分岐は契約違反の呼び出しに対する防御であり、契約が守られる限り実行されないためテストでは検証しない (検証するには production にテスト専用のフックが必要になる)。AudioUnit の起動と停止そのものは、受信あり接続のテストで検証する。
-- AudioUnit (RemoteIO) 経路は、ADM が `initializePlayout` を呼ぶのが受信ストリームを持つ接続に限られるため (送信専用接続では呼ばれない)、送信側から音声を送る受信ありの接続を作り、受信側にだけ `playoutHandler` を渡さないことで通す。AudioUnit の起動は Simulator (iPhone 17 Pro / iOS 26.5) で実行できることを実測で確認した。ローカルの lifecycle 検証は `playoutHandler` 経路でも行う (`playoutHandler` を渡さないテストは `initialize(with:)` が共有 AudioSession を設定するため、テストの最後に非アクティブへ戻す)。
+- 開始処理の準備中に停止を差し込む交差は、ADM スレッド契約の下ではテストから強制できない (開始処理も停止の後始末も同じ ADM スレッドに直列化される)。この交差は code 側のライフサイクル世代で防ぎ、テストは停止後の不変条件を検証する。世代不一致で差し込みを拒否する分岐と、AudioUnit の起動後に停止を検出して巻き戻す分岐は契約違反の呼び出しに対する防御であり、契約が守られる限り実行されないためテストでは検証しない (検証するには production にテスト専用のフックが必要になる)。
+- AudioUnit (RemoteIO) 経路は、ADM が `initializePlayout` を呼ぶのが受信ストリームを持つ接続に限られるため (送信専用接続では呼ばれない)、実行時検証には送信側から音声を送る受信ありの接続と、受信側に `playoutHandler` を渡さない構成が必要になる。この構成は CI の Simulator では実行できない。`initializePlayout` → `startPlayout` → `AUAudioUnit.startHardware()` → `AURemoteIO::Initialize()` が音声サーバーへの RPC タイムアウトで `abort` し、テストプロセスごと落ちるためである (ローカルの実機に近い環境では起動できるが、CI で再現しないことを保証できない)。実行時検証は実機での確認に委ね、テストでは AudioUnit を起動しない。ローカルの lifecycle 検証は `playoutHandler` 経路で行う。
 - 生成器の lock は、`DispatchQueue.concurrentPerform` で同一生成器を並行に呼び、位相が総フレーム数ぶん前進することで検証する (並列度は保証されないため、lock を外した場合の最終的な検出は Thread Sanitizer に委ねる)。
 - Thread Sanitizer を有効にした実行（`0119` が提供する TS 環境または同等の実行）で race report が 0 件であることを確認する。実行は build を含む `xcodebuild test -enableThreadSanitizer YES` で行う (`test-without-building` では interceptor が働かない)。race は確率的にしか現れないため対象を反復実行し、検出器が動作することは未修正の既知 race を同じ方法で検出できることで確認する。
 - test には、lock 外で callback を呼ぶ理由を日本語コメントで記載する (generation の境界は `TimerSlot` と `deliverPCMData` 側のコメントに記載する)。
@@ -80,7 +80,7 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 
 - `DummyAudioDevice` の全 mutable state が同じ ownership 方針で管理されていること。
 - property getter と lifecycle method の並行実行でデータ競合がないこと。
-- terminate 後に state の全フラグが終端へ戻り、timer callback が state と delegate を利用しないこと。AudioUnit 経路 (`initializePlayout` / `startPlayout` の AU 分岐と AudioUnit の停止) は、受信あり接続の受信側に `playoutHandler` を渡さないテストで実行時検証すること。
+- terminate 後に state の全フラグが終端へ戻り、timer callback が state と delegate を利用しないこと。AudioUnit 経路 (`initializePlayout` / `startPlayout` の AU 分岐と AudioUnit の停止) の実行時検証は受信あり接続が必要で、CI の Simulator では `AURemoteIO` の初期化が RPC タイムアウトで `abort` するため、実機での確認に委ねる。
 - `pcmGenerator` の `@Sendable` 契約と、生成器側が排他すべき範囲が明示されていること。
 - `SineWaveGenerator` / `StereoSineWaveGenerator` が `Sendable` になっており、`pcmGenerator` の `@Sendable` 化後も `SoraTests/SendonlyE2ETests.swift` / `SoraTests/StereoAudioOutputE2ETests.swift` / `SoraTests/DummyStereoAudioLoopbackTests.swift` / `SoraTests/DummyAudioDeviceTests.swift` の capture に concurrency 診断が出ないこと。
 - callback を state lock の外で呼んでいること。
@@ -97,4 +97,4 @@ Thread Sanitizer を有効にした concurrency test の前提として、test h
 - `pcmGenerator` を `@Sendable` にし、テストの波形生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の可変状態を lock で保護した。
 - テストは実 ADM 接続での lifecycle 検証へ作り直した (停止の直前まで注入と再生が継続していることの positive control と、停止後に注入・再生が再開せず state が終端へ戻ることの検証)。あわせて生成器の並行利用と、ハードミュートの復元を検証するテストを追加した。
 
-検証は `make fmt-lint`、`xcodebuild build-for-testing` (Swift 6、error 0)、ローカルの全 379 tests (30 skipped、0 failures)、Thread Sanitizer を有効にした実行 (`xcodebuild test -enableThreadSanitizer YES`、対象 2 suite を 3 回反復、race report 0 件) で行った。Thread Sanitizer は `0119` の CI job が未実装のためローカルで実行している。検出器が動作することは、未修正の既知の race (`0151` の `PeerChannel.onConnect`) を `PeerChannelConnectCompletionTests` の 20 回反復で検出できることで確認した。AudioUnit 経路は受信あり接続のテストでローカルに実行時検証し、`initializePlayout` と `startPlayout` の AU 分岐が動作することを確認した。CI (Build / Consumer Test / E2E Test) は本修正をコミットした後に実行して確認する。
+検証は `make fmt-lint`、`xcodebuild build-for-testing` (Swift 6、error 0)、ローカルの全 378 tests (30 skipped、0 failures)、Thread Sanitizer を有効にした実行 (`xcodebuild test -enableThreadSanitizer YES`、対象 2 suite を 3 回反復、race report 0 件) で行った。Thread Sanitizer は `0119` の CI job が未実装のためローカルで実行している。検出器が動作することは、未修正の既知の race (`0151` の `PeerChannel.onConnect`) を `PeerChannelConnectCompletionTests` の 20 回反復で検出できることで確認した。AudioUnit 経路の実行時検証も試みたが、CI の Simulator では受信あり接続の `initializePlayout` から `AURemoteIO::Initialize()` が音声サーバーの RPC タイムアウトで `abort` し、テストプロセスごと落ちるためテストを追加しない (実行時検証は実機に委ねる)。CI (Build / Consumer Test / E2E Test) は本修正をコミットした後に実行して確認する。

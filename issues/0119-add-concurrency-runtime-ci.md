@@ -30,7 +30,7 @@ Thread Sanitizer と反復 stress test を補助的な gate とし、Swift 6 対
 - `.github/workflows/e2e-test.yml` に、Simulator で Thread Sanitizer を有効にした専用 job を追加する。実 Sora 接続と Simulator の準備 (boot、`.xctestrun` への環境変数注入、system log 収集) を既に持つ唯一の workflow であり、job と step の失敗は通常の test job と識別できる。Runner と Simulator は既存の `e2e` job と揃える (self-hosted macOS ARM64、iPhone 17 Pro / OS 26.5)。
 - 通常 CI と分離し、sanitizer の失敗と通常 test の失敗を識別できるようにする。
 - connect / cancel / disconnect、redirect、RPC timeout / cancellation、DataChannel open / close、handler 交換、logger 設定変更を反復する。
-- camera、ReplayKit、マイク入力など Simulator で保証できない項目は本 issue の対象から除外し、「スコープ外」に列挙して扱いを明示する。実機 test のチェックリストは本 issue で作らない。`DummyAudioDevice` の AudioUnit (RemoteIO) 再生経路は Simulator で実行できるため、この対象に含めない。
+- camera、ReplayKit、AudioUnit (RemoteIO)、マイク入力など Simulator で保証できない項目は本 issue の対象から除外し、「スコープ外」に列挙して扱いを明示する。実機 test のチェックリストは本 issue で作らない。AudioUnit は受信あり接続でしか通らず、CI の Simulator では `AURemoteIO` の初期化が音声サーバーの RPC タイムアウトで `abort` してテストプロセスごと落ちるため、実行時検証の対象にしない。
 - sanitizer を無効にしなければ通らない test を追加しない。
 - race report、crash log、test result bundle を artifact として保存する。
 - flaky test の単純 retry で race を隠さない。再現 seed、iteration、scenario をログへ残す。
@@ -38,7 +38,7 @@ Thread Sanitizer と反復 stress test を補助的な gate とし、Swift 6 対
 
 ## スコープ外
 
-- 実カメラ、ReplayKit、マイク入力など Simulator で保証できない項目の実行時検証。実機での検証手順と結果は、実機検証を目的とする issue が担う (closed `0134` が実例)。`DummyAudioDevice` の AudioUnit (RemoteIO) 再生経路は Simulator で実行できるため、この対象に含めない。
+- 実カメラ、ReplayKit、AudioUnit (RemoteIO)、マイク入力など Simulator で保証できない項目の実行時検証。実機での検証手順と結果は、実機検証を目的とする issue が担う (closed `0134` が実例)。AudioUnit は受信あり接続でしか通らず、CI の Simulator では `AURemoteIO` の初期化が音声サーバーの RPC タイムアウトで `abort` してテストプロセスごと落ちるため、実行時検証の対象にしない。
 - 実機 test のチェックリストの作成。リポジトリに実機 test のチェックリストは存在しない (`0070` の「実機検証チェックリスト」はその issue 内の概念、closed `0103` の「実機チェックリスト」はレビュー時のもの) ため、本 issue の成果物にはしない。
 - Address Sanitizer など Thread Sanitizer 以外の sanitizer の導入。
 
