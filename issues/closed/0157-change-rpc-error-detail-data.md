@@ -1,7 +1,7 @@
 # `RPCErrorDetail.data` を deep-Sendable な表現に変更する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-25
 - Priority: Medium
 - Branch: feature/change-rpc-error-detail-data
 - Polished: 2026-09-24
@@ -142,6 +142,18 @@ finishPending(id: identifier, result: .failure(SoraError.rpcServerError(detail: 
 - 2026-09-24: `make build` (`SWIFT_VERSION=6`) が成功した
 - 2026-09-24: `make consumer-build SCHEME=ConsumerCore` / `ConsumerUI` / `ConsumerLegacy`、`make consumer-check-negative`、`make fmt-lint`、`make lint` が成功した (consumer は warnings-as-errors で build)
 - 2026-09-24: `make api-baseline` で再生成した baseline の差分をレビューし、削除は `RPCErrorDetail.data` の `Any?` (型と `usr` / `mangledName`) だけで、追加は `JSONValue` の公開と `RPCErrorDetail` の `Sendable` 準拠だった。`make api-check-fresh` が `The committed API baseline matches the current Sora module.` を出力して成功した
-- 実 Sora の server error 経路の検証は feature branch の CI で行う (ローカルに Sora のテストサーバーがないため)
+- 2026-09-25: feature branch (`3311fcaf`) の CI が `Build` / `Consumer Test` / `E2E Test` の 3 つとも成功した。`E2E Test` の `testRPCServerErrorReturnsDetail` は 0.265 秒で成功し、実 Sora の応答は `code` = `-32602`、`message` = `JSON-RPC-INVALID-PARAMS`、`data` = `.object(["UNKNOWN-KEYS": .array([.string("unexpected")])])` だった (許可された `RequestSimulcastRid` に不要な `params` を付けた場合の応答)。実サーバーが返した `data` を `JSONValue` として読めることを確認した。ローカルに Sora のテストサーバーがないため、実 Sora の検証はこの CI で行った
 
 ## 解決方法
+
+`RPCErrorDetail.data` を `Any?` から公開型 `JSONValue?` に変更し、`RPCErrorDetail` を `Sendable` に準拠させて、`SoraError.rpcServerError(detail:)` の associated value に出ていた Swift 6 の concurrency 警告を解消した。
+
+- `Sora/JSONValue.swift` の `JSONValue` を public にし、全 case と `encode(to:)` / `init(from:)` の doc を公開向けに書き換えた。`/// :nodoc:` を削除し、数値の復元が `init(from:)` と `JSONSerialization` 経由で変わること、`Equatable` と encode / decode が対称でないこと、NaN の扱いを doc に書いた
+- `JSONSerialization` が返した値を変換する internal な `JSONValue.fromJSONSerializationValue(_:)` を追加した。トップレベルが文字列・数値・bool・null の断片でも扱えるよう `JSONValueKey.value` の key を持つ辞書へ包み、`isValidJSONObject` で検証してから直列化する (検証を外すと `Date` や `-1e999` が返す `NSNumber` で捕捉不能な NSException が発生する)。既存の `fromDataChannels(_:errorReason:)` はこの関数へ委譲し、直列化の手順を 1 箇所に集約した
+- `Sora/RPC.swift` の `RPCErrorDetail` に `: Sendable` を付け、`data` を `JSONValue?` に変更した。エラー応答の辞書から `data` を変換する internal な `init(code:message:errorObject:)` を extension に置き、`RPCChannel.handleMessage` から呼ぶ。`data` key が無い場合は `nil`、`null` の場合は `.null` になり、変換できない値では英語のログを出して `data` を `nil` にし、`code` / `message` は失わない
+- `SoraTests/RPCErrorDetailTests.swift` を追加し、key 欠落 / `null` / 各型 / 小数 / `1e300` (`.double`) / `-1e999` (変換失敗) / `Date` (防御経路) と、`fromJSONSerializationValue` が `EncodingError.invalidValue` を投げることを検証した。`SoraTests/SendableConformanceTests.swift` に `RPCErrorDetail` のコンパイル時表明と actor / Task 境界の表明を追加し、`SoraTests/RpcE2ETests.swift` に実 Sora の server error 経路のテストを追加した
+- consumer package に `SoraError.rpcServerError(detail:)` の `data` を `JSONValue` の case 分岐で読む compile scenario を追加し、公開 API baseline を再生成した
+- `CHANGES.md` の `## develop` の main に `[CHANGE]` (型変更の目的・移行方法・数値の扱い) と `[ADD]` (公開 `JSONValue`) を追加し、`skills/sora-ios-sdk/SKILL.md` の `Sendable` 準拠一覧と `## RPC` を更新した
+- 関連 issue (`0108` / `0109` / `0118` / `0120` / `0152`) の `0157` の状態と前提の記述を実装後の状態へ更新した
+
+公開 API の変更は `make api-baseline` で baseline を再生成し、差分が `RPCErrorDetail.data` の型と `RPCErrorDetail` の `Sendable` 準拠、`JSONValue` の公開だけであることをレビューした。検証の詳細は `## 検証記録` のとおりで、実 Sora の server error 応答で `data` を `JSONValue` として読めることも CI で確認済みである。
