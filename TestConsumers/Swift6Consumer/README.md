@@ -14,7 +14,7 @@ Swift 6 language mode と warnings-as-errors で compile できるかを検証�
 
 | target | 既定隔離 | 検証する契約 |
 | --- | --- | --- |
-| `ConsumerCore` | `nonisolated` | 接続設定の組み立てと接続、handler への closure 代入、RPC と統計取得、`VideoRenderer` の非隔離実装 |
+| `ConsumerCore` | `nonisolated` | 接続設定の組み立てと接続、handler への closure 代入、RPC と統計取得、RPC のサーバーエラー詳細 (`JSONValue`) の読み取り、`VideoRenderer` の非隔離実装 |
 | `ConsumerUI` | `MainActor` | `@MainActor` を書かずに `VideoView` を生成して操作できること (既定隔離が MainActor であることの担保) |
 | `ConsumerLegacy` | `nonisolated` | 非推奨 API が warning に留まり、warnings-as-errors でも build できること |
 
@@ -117,7 +117,7 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | `Sources/ConsumerCore/ConnectSignaling.swift` | 接続設定の組み立て、接続、`ConnectionTask` | `Sora.connect` の handler 型を変更する作業が更新する |
 | `Sources/ConsumerCore/HandlerCompatibility.swift` | 非推奨でない handler の closure 型 (非 Sendable な値の capture で @Sendable 化を検出する)、`VideoRenderer` の非隔離実装、`import WebRTC` で WebRTC product を参照できること | 公開 handler の closure 型を変更する作業が更新する |
 | `Sources/ConsumerCore/CallbackCompatibility.swift` | handler 型に属さない公開 closure の受け渡し | 公開 closure を追加・変更する作業が更新する |
-| `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型を含む)、統計取得、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加する作業が、新しい RPC の scenario を追加する |
+| `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型を含む)、統計取得、RPC のサーバーエラー詳細 (`JSONValue` の case 分岐) の読み取り、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加する作業が、新しい RPC の scenario を追加する |
 | `Sources/ConsumerUI/VideoViewScenario.swift` | 既定隔離が MainActor であること | `VideoRenderer` の隔離を見直す作業が更新する |
 | `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること (CI は期待する非推奨 API 名の一覧で検査する) | 非推奨 API を削除する作業が、対象の参照と `consumer-test.yml` の期待する非推奨 API 名の一覧を同時に更新する |
 | `NegativeChecks/core-sendable-capture.swift` | `MediaChannel` が Sendable でないこと | `MediaChannel` の Sendable 準拠を検討する作業が更新する |

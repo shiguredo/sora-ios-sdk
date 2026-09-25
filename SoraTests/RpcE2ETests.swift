@@ -848,4 +848,149 @@ final class RpcE2ETests: E2ETestBase {
       _ = rpcTask
     }
   }
+
+  // MARK: - RPC のサーバーエラー
+
+  /// RPC のサーバーエラー応答が `SoraError.rpcServerError(detail:)` として届き、
+  /// `code` / `message` が取得できることを確認する。
+  ///
+  /// 発生条件は `rpc_methods` で許可されたメソッドを、サーバーが受理しない `params` (不要な項目を含む)
+  /// で呼ぶことにする (Sora は `params` に不要な項目がある場合にエラーを返すと定めている)。
+  /// `data` の内容はサーバーが決めるため値の形は assert せず、返ってきた値をログに残して
+  /// `## 検証記録` に転記する (`JSONValue` への変換は単体テストで検証している)。
+  /// サーバーがエラーを返さなかった場合はテストを失敗させず、理由を残してスキップする。
+  /// それ以外のエラー (timeout / DataChannel 切断 / decode 失敗) は SDK 側の異常として失敗させる。
+  func testRPCServerErrorReturnsDetail() throws {
+    let channelId = buildChannelId(unique: true)
+
+    let connectExpectation = self.expectation(description: "recvonly の接続が完了すること")
+    let rpcOpenedExpectation = self.expectation(description: "recvonly の rpc ラベルが OPEN すること")
+
+    var channel: MediaChannel?
+    var rpcOpenedExpectationFulfilled = false
+
+    var recvonlyConfig = try buildConfiguration(role: .recvonly)
+    recvonlyConfig.channelId = channelId
+    recvonlyConfig.simulcastEnabled = true
+    recvonlyConfig.simulcastRequestRid = .r2
+    recvonlyConfig.dataChannelSignaling = true
+    recvonlyConfig.ignoreDisconnectWebSocket = true
+    recvonlyConfig.audioEnabled = false
+    recvonlyConfig.videoCodec = .vp8
+
+    struct RPCTestMetadata: Encodable {
+      // swift-format-ignore: AlwaysUseLowerCamelCase
+      let access_token: String
+    }
+    let accessToken = try buildJWTAccessToken(
+      channelId: channelId,
+      privateClaims: [
+        "rpc_methods": [RequestSimulcastRid.name],
+        "simulcast": true,
+        "simulcast_request_rid": "r2",
+        "simulcast_rpc_rids": ["none", "r0", "r1", "r2"],
+      ])
+    recvonlyConfig.signalingConnectMetadata = RPCTestMetadata(access_token: accessToken)
+
+    recvonlyConfig.mediaChannelHandlers.onDataChannelOpened = { _, label in
+      DispatchQueue.main.async {
+        guard label == "rpc", !rpcOpenedExpectationFulfilled else { return }
+        rpcOpenedExpectationFulfilled = true
+        rpcOpenedExpectation.fulfill()
+      }
+    }
+
+    _ = sora?.connect(configuration: recvonlyConfig) { [self] mediaChannel, error in
+      DispatchQueue.main.async {
+        if let error {
+          XCTFail("recvonly の接続に失敗した : \(error)")
+          connectExpectation.fulfill()
+          return
+        }
+        guard let mediaChannel else {
+          XCTFail("recvonly のメディアチャネルが nil")
+          connectExpectation.fulfill()
+          return
+        }
+        channel = mediaChannel
+        connectExpectation.fulfill()
+      }
+    }
+
+    wait(for: [connectExpectation], timeout: 35)
+    guard let channel else {
+      // 接続できなかった場合は rpc ラベルの expectation を消費して終了する
+      _ = XCTWaiter.wait(for: [rpcOpenedExpectation], timeout: 0)
+      return
+    }
+
+    // rpc ラベルが払い出されない環境では RPC 自体を利用できないためスキップする
+    let rpcOpenedResult = XCTWaiter.wait(for: [rpcOpenedExpectation], timeout: 10)
+    guard rpcOpenedResult == .completed else {
+      disconnectAndVerify(channel: channel)
+      throw XCTSkip("Sora サーバーが rpc ラベルの DataChannel を払い出さないためスキップします")
+    }
+
+    // 許可されたメソッドを、サーバーが受理しない params で呼び、サーバーエラー応答を受け取る
+    let callExpectation = self.expectation(description: "RPC がサーバーエラーで終わること")
+    var observedError: Error?
+    Task {
+      do {
+        _ = try await channel.rpc(
+          method: InvalidParamsRPCMethod.self,
+          params: InvalidParamsRPCMethodParams(rid: "r0", unexpected: "unsupported"))
+        DispatchQueue.main.async {
+          callExpectation.fulfill()
+        }
+      } catch {
+        DispatchQueue.main.async {
+          observedError = error
+          callExpectation.fulfill()
+        }
+      }
+    }
+
+    wait(for: [callExpectation], timeout: 15)
+    disconnectAndVerify(channel: channel)
+
+    guard let observedError else {
+      throw XCTSkip("Sora サーバーが params の不要な項目を拒否せず成功応答を返したためスキップします")
+    }
+    guard let soraError = observedError as? SoraError,
+      case .rpcServerError(let detail) = soraError
+    else {
+      XCTFail("rpcServerError を期待したが \(observedError) だった")
+      return
+    }
+    XCTAssertNotEqual(detail.code, 0, "JSON-RPC 2.0 のエラーコードが 0 でないこと")
+    XCTAssertFalse(detail.message.isEmpty, "エラーメッセージが空でないこと")
+    // data は JSON-RPC 2.0 では任意フィールドのため、実際に返った値を検証記録として残す
+    print(
+      "RPC のサーバーエラー : エラーコード=\(detail.code) メッセージ=\(detail.message)"
+        + " data=\(String(describing: detail.data))")
+  }
+}
+
+/// `params` にサーバーが受理しない項目を含めて RPC を呼ぶための型。
+///
+/// Sora の RPC は `params` に不要な項目が含まれている場合にエラー応答を返すため、
+/// server error 経路を実サーバーで確認するために使う。
+private enum InvalidParamsRPCMethod: RPCMethodProtocol {
+  typealias Params = InvalidParamsRPCMethodParams
+  typealias Result = InvalidParamsRPCMethodResult
+
+  static var name: String { RequestSimulcastRid.name }
+}
+
+/// `InvalidParamsRPCMethod` のパラメータ。
+///
+/// `unexpected` は `RequestSimulcastRid` が受理しない項目である。
+private struct InvalidParamsRPCMethodParams: Encodable {
+  let rid: String
+  let unexpected: String
+}
+
+/// `InvalidParamsRPCMethod` の戻り値。
+private struct InvalidParamsRPCMethodResult: Decodable {
+  let rid: String
 }

@@ -13,6 +13,13 @@
 
 - [CHANGE] システム要件の Xcode バージョンを 26.6+ に更新する
   - @t-miya
+- [CHANGE] `RPCErrorDetail.data` の型を `Any?` から `JSONValue?` に変更する
+  - `RPCErrorDetail` を `Sendable` な型とするため
+  - `data` の `as? [String: Any]` のようなキャストは `always fails` の警告が出て常に `nil` になる (warnings-as-errors では build できない)。`JSONValue` の case 分岐へ書き換える
+  - JSON-RPC 2.0 の `error.data` が省略された場合は `nil`、`null` の場合は `.null` になる。数値は `JSONSerialization` を経由するため `decimal` / `double` の case で復元され、小数の表記が変わる場合がある (例: `0.1` は `.decimal(0.10000000000000001)`)
+  - @t-miya
+- [ADD] JSON の値を表す公開型 `JSONValue` を追加する
+  - @t-miya
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する
   - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
   - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
@@ -34,6 +41,7 @@
   - 接続と設定: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent` / `MediaConstraints` / `DegradationPreference` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
   - メディア、ログ、表示: `AudioMode` / `AudioOutput` / `CameraSettings` / `LogType` / `LogLevel` / `Log` / `Logger.Group` / `VideoViewConnectionMode` / `WebSocketMessage`
   - シグナリング: `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
+  - RPC: `RPCErrorDetail`
   - 利用者が actor / Task 境界へ SDK の値をそのまま渡せるようにする
   - `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない (標準ライブラリの `Error: Sendable` に依存する)
   - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要

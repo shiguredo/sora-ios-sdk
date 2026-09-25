@@ -27,6 +27,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 
 - `0107`: Swift 6 consumer package と strict concurrency CI を追加する。
 - `0118`: E2E テストの concurrency 診断抑止を除去する。
+- `0157` (実装済み): `SoraError.rpcServerError(detail:)` の associated value に出ていた Swift 6 の concurrency 警告を解消した。検証方針の「SDK target を strict concurrency / warnings-as-errors で build する」は、`0157` の実装で警告が解消したため以降この検証を有効にする。
 
 加えて、manifest の更新で concurrency warning が一斉に gate されるため、少なくとも次の runtime bug と内部 ownership の対応状況を確認してから着手する。
 

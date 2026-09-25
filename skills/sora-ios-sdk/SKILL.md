@@ -480,6 +480,23 @@ config.dataChannels = [[
 | `PutSignalingNotifyMetadata` | シグナリング通知メタデータを設定する |
 | `PutSignalingNotifyMetadataItem` | メタデータの特定キーに値を設定する |
 
+サーバーがエラー応答を返した場合は `SoraError.rpcServerError(detail:)` が throw される。`detail.data` は JSON-RPC 2.0 の `error.data` を表す `JSONValue?` で、サーバーが返したときだけ入る (省略された場合は `nil`、`null` の場合は `.null`)。
+
+```swift
+do {
+  _ = try await mediaChannel.rpc(
+    method: RequestSimulcastRid.self,
+    params: RequestSimulcastRidParams(rid: .r0)
+  )
+} catch SoraError.rpcServerError(let detail) {
+  print(detail.code, detail.message)
+  // data は JSON-RPC 2.0 の任意フィールド。省略された場合は nil、null の場合は .null になる
+  if case .some(.object(let fields)) = detail.data {
+    print(fields)
+  }
+}
+```
+
 ## 統計
 
 ```swift
@@ -528,6 +545,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
   - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group` / `Logger`
   - 映像表示: `VideoViewConnectionMode`
   - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
+  - RPC と JSON: `RPCErrorDetail` / `JSONValue`
   - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
 - `@unchecked Sendable`: `Sora`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など

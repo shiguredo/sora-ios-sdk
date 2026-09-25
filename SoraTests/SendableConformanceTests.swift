@@ -111,6 +111,9 @@ final class SendableConformanceTests: XCTestCase {
     requireSendable(SignalingPing.self)
     requireSendable(SignalingPong.self)
     requireSendable(SignalingDisconnect.self)
+
+    // RPC のエラー応答
+    requireSendable(RPCErrorDetail.self)
   }
 
   /// 対象の型の値が actor 境界と Task の境界を越えて受け渡せることを確認する。
@@ -189,6 +192,12 @@ final class SendableConformanceTests: XCTestCase {
       SignalingPong(), message: "SignalingPong が actor 境界を越えられない")
     await assertCrossesBoundaries(
       SignalingDisconnect(reason: "切断"), message: "SignalingDisconnect が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      RPCErrorDetail(
+        code: -32601, message: "method not found",
+        data: .object(["key": .string("value")])),
+      message: "RPCErrorDetail が actor 境界を越えられない")
   }
 
   /// internal なカメラ状態型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。
