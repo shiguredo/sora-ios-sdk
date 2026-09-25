@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/update-swiftpm-language-mode
-- Polished: 2026-09-24
+- Polished: 2026-09-25
 
 ## 目的
 
@@ -34,7 +34,7 @@ manifest を変更せずに CI だけで Swift 6 を指定すると、SDK reposi
 - `0092` から `0099` の runtime bug
 - `0100` から `0106` の内部 concurrency refactor
 
-SDK target を warnings-as-errors で build するには、次の open issue が残す警告の解消が前提になる。
+SDK target を warnings-as-errors で build するには、次に挙げる issue が残す警告の解消が前提になる（`0113` / `0155` は open、`0157` は実装済み）。
 
 - `0113`: WebRTC enum の retroactive conformance（`Sora/Extensions/RTC+Description.swift` / `Sora/DataChannel.swift` / `Sora/PeerChannel.swift` の 6 型）。`0113` 自身が「`0108` で SDK target を warnings-as-errors にすると失敗要因になる」と記述している。
 - `0155`: `Sora.connect` の設定エラー通知経路の `#SendableClosureCaptures` 警告。
@@ -61,6 +61,7 @@ SDK target を warnings-as-errors で build するには、次の open issue が
 - `swift package dump-package` で tools version と Swift 6 language mode を確認する。
 - `0107` の consumer package を Xcode 26.6 の 1 leg で build する。
 - SDK target を strict concurrency / warnings-as-errors（`.treatAllWarnings(as: .error)`）で build し、concurrency 系の warning が 0 件であることを確認する。この build 条件は「設計方針」のとおり manifest から有効になり、CI を含む全 build 経路の恒久 gate になる。
+- あわせて `Sora/` を `-swift-version 6` で型検査し、`.treatAllWarnings(as: .error)` が error にする警告が `DeprecatedDeclaration`（`.treatWarning` の除外で warning に戻る）と concurrency 系（`0113` / `0155`。`0157` は解消済み）だけであることを確認する。`0118` は 2026-09-25 に `Sora/` を `-swift-version 6` で型検査すると 53 件の警告が出て、`SWIFT_TREAT_WARNINGS_AS_ERRORS=YES` を渡すと 22 error になると実測している（警告の内訳は未記載）。deprecation と concurrency 系以外の警告が残る場合は本 issue の完了条件を満たせないため、その解消を本 issue の前提として加えるか、本 issue の実装で解消してから進める。
 - test target は現行 CI 相当で build が成功することを確認する。test target の strict concurrency / warnings-as-errors gate の本対応は `0118` の管轄とする。
 - binary `WebRTC.xcframework` の import と iOS 14 deployment target が維持されることを確認する。
 - package product `Sora` と `WebRTC` の名前および依存関係が変わっていないことを確認する。
@@ -81,7 +82,7 @@ SDK target を warnings-as-errors で build するには、次の open issue が
 - iOS 14 deployment target が維持されていること。
 - package product、target、binary dependency の構成が意図せず変わっていないこと。
 - target 全体を MainActor default にして concurrency 問題を隠していないこと。
-- Sora target が strict concurrency / warnings-as-errors（concurrency 系 warning 0 件）で build でき、`Package.swift` の Sora target に `.treatAllWarnings(as: .error)` と `.treatWarning("DeprecatedDeclaration", as: .warning)` がこの順であること。
+- Sora target が strict concurrency / warnings-as-errors（concurrency 系 warning 0 件）で build でき、`Package.swift` の Sora target に `.treatAllWarnings(as: .error)` と `.treatWarning("DeprecatedDeclaration", as: .warning)` がこの順であること。Sora target の警告のうち `.treatAllWarnings(as: .error)` が error にするのが `DeprecatedDeclaration` と concurrency 系（`0113` / `0155` / `0157`。`0157` は解消済み）だけで、それ以外の警告が残っていないこと。
 - `0107` の consumer package が strict concurrency / warnings-as-errors で成功すること。
 - Xcode 26.6 の 1 leg の CI が成功すること。
 - 最低 Xcode version と SwiftPM compatibility への影響が `README.md` と `skills/sora-ios-sdk/SKILL.md` に記載されていること。
