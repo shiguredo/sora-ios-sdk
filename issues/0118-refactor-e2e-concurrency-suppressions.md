@@ -113,6 +113,7 @@ E2E テストが `@testable @preconcurrency import Sora` と根拠のない `@un
 - 実 Sora 接続を使う既存 E2E test を実行する。
 - callback の連続到着中に test cancellation と tearDown を実行し、本 issue が変更するテストの state access が MainActor 上で行われることを確認する (`RecvonlyE2ETests` / `ConnectionTaskCancelE2ETests` / `PeerChannelConnectCompletionE2ETests` の connect callback 直下の state 更新は「スコープ外」のとおり本 issue では変更しない)。
 - テストには、callback から MainActor へ移動する理由と snapshot の境界を日本語コメントで記載する。
+- 非 main スレッドから到達する callback (`getStats` / `Sora.connect` / `handlers.on*` / `DummyAudioDevice`) を監査し、それぞれが `@Sendable` であるか、handler の直後に main queue へ束ねるか、局所変数の更新のみであることを確認する (2026-09-25)。closure を非 main スレッドで呼ぶのは `SendonlyE2ETests` の `getStats` handler だけで、これは `@Sendable` と snapshot で解消した。`StereoAudioOutputE2ETests` の `getStats` handler は元から `@Sendable`、`MessagingE2ETests` / `SendrecvE2ETests` / `SimulcastE2ETests` / `RpcE2ETests` の `getStats` handler は直後に main queue へ束ねている。`DummyAudioDevice` の `pcmGenerator` は非 `@Sendable` のため handler が隔離を継承するが、本体が非隔離メソッドの呼び出しだけで closure を呼ばないため実行時違反にならない (`@Sendable` 化は `0121` が行う)。
 
 ## 完了条件
 

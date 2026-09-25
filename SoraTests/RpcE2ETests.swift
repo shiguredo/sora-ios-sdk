@@ -352,6 +352,10 @@ final class RpcE2ETests: E2ETestBase {
   }
 
   /// sendonly の outbound-rtp で r0 / r2 が立ち上がるまで待つ
+  ///
+  /// getStats の handler は `@Sendable` ではないため MainActor 隔離を継承する。handler の中では
+  /// closure を呼ばず (`first(where:)` など)、main queue に束ねてから扱うこと (WebRTC スレッドから
+  /// closure を呼ぶと実行時違反になる)。
   private func waitForOutboundR0AndR2(
     channel: MediaChannel,
     attempt: Int,
@@ -515,6 +519,10 @@ final class RpcE2ETests: E2ETestBase {
   }
 
   /// inbound-rtp (video) の frameWidth / frameHeight を取得する
+  ///
+  /// getStats の handler は `@Sendable` ではないため MainActor 隔離を継承する。handler の中では
+  /// closure を呼ばず (`first(where:)` など)、main queue に束ねてから扱うこと (WebRTC スレッドから
+  /// closure を呼ぶと実行時違反になる)。
   private func fetchInboundVideoFrameSize(
     channel: MediaChannel,
     attempt: Int = 1,
