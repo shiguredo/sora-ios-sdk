@@ -54,6 +54,7 @@ Thread Sanitizer と反復 stress test を補助的な gate とし、Swift 6 対
 - production の state reducer へ実際の event sequence を入力する test と、実 Sora 接続を利用する E2E stress test を使う。
 - 同じ scenario を複数回反復し、順序を変えた場合も exactly-once と stale event rejection を確認する。
 - Thread Sanitizer 無効時の通常 test と有効時の専用 test の両方を実行する。
+- TS 実行の対象に、`DummyAudioDevice` の lifecycle を実際の ADM 接続で検証する `SoraTests/DummyStereoAudioLoopbackTests.swift` のテストを明示的に含める。ADM callback の並行実行を検証するテストであり、除外すると `DummyAudioDevice` の state race を検出できない。あわせて生成器の並行利用を検証する `SoraTests/DummyAudioDeviceTests.swift` のテストも含める。
 - sanitizer job 自体に意図的な race を一時的に入れ、CI が検出できることを導入時に確認する。
 
 ## 完了条件
