@@ -4,6 +4,9 @@ import XCTest
 @testable import Sora
 
 /// WebRTC の callback とテストスレッド間の値をロックで受け渡す。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `value` だけで、その読み書きをすべて
+/// `lock` で排他しているためである (WebRTC の callback は別スレッドから届く)。
 private final class AudioTestResult<Value>: @unchecked Sendable {
   private let lock = NSLock()
   private var value: Value?
@@ -21,7 +24,10 @@ private final class AudioTestResult<Value>: @unchecked Sendable {
   }
 }
 
-/// 呼び出し回数を数える。ADM の音声スレッドから呼ばれるためロックで保護する。
+/// 呼び出し回数を数える。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `count` だけで、その読み書きをすべて
+/// `lock` で排他しているためである (ADM の音声スレッドから呼ばれる)。
 private final class CallCounter: @unchecked Sendable {
   private let lock = NSLock()
   private var count = 0
@@ -41,8 +47,9 @@ private final class CallCounter: @unchecked Sendable {
 
 /// ローカル接続した 2 つの PeerConnection と、接続の生存期間中テストが保持するオブジェクト
 ///
-/// factory (ADM を所有する) と track は PeerConnection 側からも参照されるが、
-/// テストの意図を明確にするため戻り値として保持する。
+/// `senderFactory` / `receiverFactory` は `AudioSessionRequirement` (共有 AudioSession への要求) を
+/// 保持しており、解放すると接続中でも要求が解除されるため、テストの間は明示的に保持する。
+/// track は PeerConnection 側でも保持されるが、生成元の factory とまとめて保持する。
 private struct ConnectedAudioPair {
   let sender: RTCPeerConnection
   let receiver: RTCPeerConnection
@@ -53,7 +60,12 @@ private struct ConnectedAudioPair {
 
 /// Sora の接続情報がなくても、実際の Opus / RTP / ADM を通してダミー音声を検証する。
 /// ICE はローカル候補だけを交換し、マイク・スピーカー・STUN / TURN サーバーを使わない。
+///
+/// `playoutHandler` 経路の左右分離 (`testStereoPCMThroughRealPeerConnections`) と、
+/// 接続中の `terminateDevice` 後の終端性 (`testTerminateWhileConnectedStopsRecordingAndPlayout`) を
+/// 検証する。AudioUnit (RemoteIO) 経路は実 Sora 接続が必要な `SendonlyE2ETests` が担う。
 final class DummyStereoAudioLoopbackTests: XCTestCase {
+  /// 実際の Opus を通して、再生 PCM の左右を分離して受信できることを確認する
   func testStereoPCMThroughRealPeerConnections() throws {
     let source = StereoSineWaveGenerator()
     let probe = StereoToneProbe()
@@ -90,12 +102,17 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
   ///
   /// ADM スレッド契約の下では、開始処理の準備中に停止を差し込む交差をテストから強制できない
   /// (開始処理も停止の後始末も同じ ADM スレッドに直列化される)。そのためここでは、
-  /// 停止前に注入と再生が実際に起きていること (positive control) を確認した上で、
+  /// 停止の直前まで注入と再生が継続していること (positive control) を確認した上で、
   /// 停止後に state が終端へ戻り、timer が発火しても注入と再生が再開しないことを検証する。
+  ///
+  /// 交差を強制できないため、`withCurrentLifecycle` が世代不一致で差し込みを拒否する分岐は
+  /// このテストでは実行されない。棄却経路は契約に違反する呼び出しでのみ通り、反復実行
+  /// (0119 の Thread Sanitizer job) で確率的に踏む位置づけとする。
   func testTerminateWhileConnectedStopsRecordingAndPlayout() throws {
     let generatorCalls = CallCounter()
     let playoutCalls = CallCounter()
-    // 実際に音声が流れるよう、無音ではなく左右で周波数の異なる正弦波を生成する
+    // 実際の Opus 符号化・復号を通すため、無音ではなく正弦波を生成する。左右の分離は検証しないため
+    // stereo SDP は使わず、channelCount 2 のダミー音声を流す
     let generator = StereoSineWaveGenerator()
     let senderDevice = DummyAudioDevice(
       initialMicrophoneEnabled: true, channelCount: 2,
@@ -124,7 +141,7 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
       }, evaluatedWith: nil)
     wait(for: [connected], timeout: 10)
 
-    // positive control: 停止の前に、ADM が録音と再生を実際に動かしていることを確認する
+    // positive control: 接続後に ADM が録音と再生を動かしていることを確認する
     let recording = expectation(
       for: NSPredicate { _, _ in
         generatorCalls.value > 0 && senderDevice.isRecording
@@ -134,38 +151,50 @@ final class DummyStereoAudioLoopbackTests: XCTestCase {
         playoutCalls.value > 0 && receiverDevice.isPlaying
       }, evaluatedWith: nil)
     wait(for: [recording, playout], timeout: 10)
-    XCTAssertGreaterThan(generatorCalls.value, 0, "停止前に送信側が PCM を注入していること")
-    XCTAssertGreaterThan(playoutCalls.value, 0, "停止前に受信側が PCM を再生していること")
     XCTAssertTrue(senderDevice.isRecording, "停止前に送信側の isRecording が true であること")
     XCTAssertTrue(receiverDevice.isPlaying, "停止前に受信側の isPlaying が true であること")
+
+    // 停止の直前まで注入と再生が継続していることを確認する。1 回でも発火していれば通る形にすると、
+    // カウンタが凍結したまま「停止後に増えない」を満たしてしまう
+    let generatorCallsBefore = generatorCalls.value
+    let playoutCallsBefore = playoutCalls.value
+    let active = expectation(description: "停止の直前まで録音と再生が継続していること")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { active.fulfill() }
+    wait(for: [active], timeout: 2)
+    XCTAssertGreaterThan(
+      generatorCalls.value, generatorCallsBefore, "停止の直前まで送信側が PCM を注入し続けていること")
+    XCTAssertGreaterThan(
+      playoutCalls.value, playoutCallsBefore, "停止の直前まで受信側が PCM を再生し続けていること")
 
     // 接続を維持したまま停止する。lifecycle メソッドの呼び出しはテストスレッドのみで行う
     XCTAssertTrue(senderDevice.terminateDevice(), "送信側の terminateDevice が成功すること")
     XCTAssertTrue(receiverDevice.terminateDevice(), "受信側の terminateDevice が成功すること")
-    XCTAssertFalse(senderDevice.isInitialized, "terminate 直後に送信側の isInitialized が false であること")
-    XCTAssertFalse(senderDevice.isRecording, "terminate 直後に送信側の isRecording が false であること")
-    XCTAssertFalse(
-      senderDevice.isRecordingInitialized,
-      "terminate 直後に送信側の isRecordingInitialized が false であること")
-    XCTAssertFalse(
-      receiverDevice.isInitialized, "terminate 直後に受信側の isInitialized が false であること")
-    XCTAssertFalse(receiverDevice.isPlaying, "terminate 直後に受信側の isPlaying が false であること")
-    XCTAssertFalse(
-      receiverDevice.isPlayoutInitialized,
-      "terminate 直後に受信側の isPlayoutInitialized が false であること")
+    assertTerminated(senderDevice, "送信側")
+    assertTerminated(receiverDevice, "受信側")
 
-    // 停止後に timer が発火しても注入・再生が再開せず、state が終端のままであることを確認する
+    // 停止後に timer が発火しても注入・再生が再開せず、state が終端のままであることを確認する。
+    // 0.02 秒 (既定の IO バッファ期間) の 25 周期分待ち、timer が生きていれば必ず発火する時間を取る
     let generatorCallsAfterTerminate = generatorCalls.value
     let playoutCallsAfterTerminate = playoutCalls.value
     let idle = expectation(description: "terminate 後に PCM の注入と再生が再開しないこと")
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { idle.fulfill() }
-    wait(for: [idle], timeout: 2)
+    wait(for: [idle], timeout: 3)
     XCTAssertEqual(
       generatorCalls.value, generatorCallsAfterTerminate, "terminate 後に PCM を注入しないこと")
     XCTAssertEqual(
       playoutCalls.value, playoutCallsAfterTerminate, "terminate 後に PCM を再生しないこと")
-    XCTAssertFalse(senderDevice.isRecording, "terminate 後に送信側の isRecording が true に戻らないこと")
-    XCTAssertFalse(receiverDevice.isPlaying, "terminate 後に受信側の isPlaying が true に戻らないこと")
+    assertTerminated(senderDevice, "terminate 後の送信側")
+    assertTerminated(receiverDevice, "terminate 後の受信側")
+  }
+
+  /// 停止後の state がすべて終端であることを確認する
+  private func assertTerminated(_ device: DummyAudioDevice, _ name: String) {
+    XCTAssertFalse(device.isInitialized, "\(name) の isInitialized が false であること")
+    XCTAssertFalse(device.isRecording, "\(name) の isRecording が false であること")
+    XCTAssertFalse(device.isRecordingInitialized, "\(name) の isRecordingInitialized が false であること")
+    XCTAssertFalse(device.isPlaying, "\(name) の isPlaying が false であること")
+    XCTAssertFalse(device.isPlayoutInitialized, "\(name) の isPlayoutInitialized が false であること")
+    XCTAssertFalse(device.isHardMuted, "\(name) の isHardMuted が初期状態 (ミュートなし) であること")
   }
 
   /// 2 つの `DummyAudioDevice` をローカルの PeerConnection で接続する

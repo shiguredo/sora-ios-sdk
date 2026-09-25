@@ -79,7 +79,9 @@ final class StereoSineWaveGenerator: @unchecked Sendable {
 }
 
 /// ADM の再生 PCM から左右の周波数成分を測る。受信した実データだけを判定する。
-/// callback とテストスレッドの共有カウンターはロックで保護する。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `separatedDuration` だけで、その読み書きを
+/// すべて `lock` で排他しているためである (ADM の音声スレッドから呼ばれる)。
 final class StereoToneProbe: @unchecked Sendable {
   private let lock = NSLock()
   private var separatedDuration: Double = 0
@@ -122,7 +124,8 @@ final class StereoToneProbe: @unchecked Sendable {
 /// pcmGenerator が呼ばれたかどうかを callback とテストスレッドで共有する箱
 ///
 /// pcmGenerator は `@Sendable` な closure のため可変な `var` を capture できない。
-/// 注入先の pcmGenerator は ADM の音声スレッドからも呼ばれ得るため、共有状態は lock で保護する。
+/// `@unchecked Sendable` としているのは、可変状態が `called` だけで、その読み書きをすべて
+/// `lock` で排他しているためである (注入先の pcmGenerator は ADM の音声スレッドからも呼ばれ得る)。
 private final class CallFlag: @unchecked Sendable {
   private let lock = NSLock()
   private var called = false
@@ -142,9 +145,16 @@ private final class CallFlag: @unchecked Sendable {
 
 /// DummyAudioDevice の単体テスト
 ///
-/// PCM 生成 (fillPCMData) は外部注入された pcmGenerator への委譲のみであるため、
-/// 注入するジェネレーター (SineWaveGenerator) の動作と、
-/// DummyAudioDevice のハードミュート制御を検証する。
+/// `DummyAudioDevice` 自体は次の点を検証する。
+///
+/// - チャンネル数の既定値と 2 ch 指定の反映、2 ch 指定によるステレオ SDP の要求
+/// - `fillPCMData` が外部注入された pcmGenerator へ委譲すること
+/// - ハードミュート制御と、`terminateDevice` で初期状態へ戻ること
+///
+/// 併せてテスト用ヘルパーの動作を検証する。
+///
+/// - 生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の周波数・位相の連続性・並行利用
+/// - ステレオ判定器 (`StereoToneProbe`) が無音・左右交換・モノラル化を成功扱いしないこと
 final class DummyAudioDeviceTests: XCTestCase {
 
   /// チャンネル数の既定値を維持しつつ、2 ch 指定を入出力の双方へ反映する。
@@ -312,11 +322,17 @@ final class DummyAudioDeviceTests: XCTestCase {
   ///
   /// ADM は lifecycle メソッドを直列化するが、テストから `fillPCMData` を直接呼ぶ経路とは
   /// 交差し得るため、生成器の可変状態は複数スレッドから保護されている必要がある。
-  /// lock を外すと位相の加算が競合し、総フレーム数ぶん前進しなくなる (TSan でも検出される)。
+  ///
+  /// このテストは競合が起きれば必ず落ちる (位相が総フレーム数に一致しなくなる) が、
+  /// `concurrentPerform` の並列度は保証されないため、単体では best-effort の検出である。
+  /// lock を外した場合の検出は Thread Sanitizer を有効にした実行 (0119 の TS job) を最終的な
+  /// 検出器とする。
   func testGeneratorsAreSafeForConcurrentUse() {
     /// 同じ生成器を並行に呼び、位相が総フレーム数ぶん前進したことを確認する
     ///
     /// 書き込み先は生成器が書き込む分 (`channelCount × frameCount` の Int16) を確保する。
+    /// `iterations` × `frameCount` は 61440 サンプルで、位相の期待値 1.28 秒に対する
+    /// 加算の丸め誤差の上限 (約 1e-11) より十分大きい 1e-9 を許容誤差にする。
     func verify(
       generate: @Sendable (UnsafeMutableRawPointer, Int, Double) -> Void,
       elapsedTime: () -> Double,
@@ -374,5 +390,25 @@ final class DummyAudioDeviceTests: XCTestCase {
 
     _ = device.setHardMute(false)
     XCTAssertFalse(device.isHardMuted, "setHardMute(false) でミュートが解除されるべき")
+  }
+
+  /// terminateDevice で初期のハードミュート状態へ戻ることを確認する
+  ///
+  /// `Configuration.initialMicrophoneEnabled` は接続時点の状態を定めるため、接続をまたいで
+  /// `setAudioHardMute` の状態を持ち越さない。持ち越すと再接続後も無音のままになる。
+  func testTerminateRestoresInitialHardMute() {
+    let device = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in }
+    _ = device.setHardMute(true)
+    XCTAssertTrue(device.isHardMuted, "setHardMute(true) でミュートになるべき")
+
+    XCTAssertTrue(device.terminateDevice(), "terminateDevice が成功すること")
+    XCTAssertFalse(device.isHardMuted, "terminate 後に初期状態 (ミュートなし) へ戻るべき")
+
+    let mutedDevice = DummyAudioDevice(initialMicrophoneEnabled: false) { _, _, _ in }
+    _ = mutedDevice.setHardMute(false)
+    XCTAssertFalse(mutedDevice.isHardMuted, "setHardMute(false) でミュートが解除されるべき")
+
+    XCTAssertTrue(mutedDevice.terminateDevice(), "terminateDevice が成功すること")
+    XCTAssertTrue(mutedDevice.isHardMuted, "terminate 後に初期状態 (ミュート) へ戻るべき")
   }
 }
