@@ -193,8 +193,10 @@ public final class Sora: @unchecked Sendable {
       // 通常の接続経路と同様に、利用者の callback は connect() の呼び出しスタック外で通知する。
       let connectionTask = ConnectionTask()
       connectionTask.complete()
+      // 接続 handler は `@Sendable` ではないため、公開している引数の型を変えずに box へ包んで渡す。
+      let handlerBox = ConnectErrorHandlerBox(handler)
       DispatchQueue.global().async { [weak self] in
-        handler(nil, error)
+        handlerBox(nil, error)
         self?.handlers.onConnect?(nil, error)
       }
       return connectionTask
@@ -417,6 +419,30 @@ public final class Sora: @unchecked Sendable {
         "\(webRTCLoggingDateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))"
       )
     }
+  }
+}
+
+/// 設定エラー通知の接続 handler を並行処理境界へ渡すための、用途限定の内部ラッパーです。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する handler は `init` で確定した `let` であること
+/// - 変更前から handler を渡していた `DispatchQueue.global()` の block を包み直すだけで、
+///   配送先・通知順序・呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持するのは handler の closure だけで、SDK 内部の参照型を新たに保持しないこと
+///
+/// 生成は `Sora.connect` の設定エラー経路の 1 箇所だけで、1 つの block へ 1 回だけ渡して
+/// 1 回だけ実行する使用契約です (型では強制されません)。`Sendable` にするのはこの入れ物だけで、
+/// handler とその捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出しスレッドを
+/// 保証しない既存の挙動の下で利用者の責務です。実行スレッドの同一性・直列性も契約にしません。
+private final class ConnectErrorHandlerBox: @unchecked Sendable {
+  private let handler: (MediaChannel?, (any Error)?) -> Void
+
+  init(_ handler: @escaping (MediaChannel?, (any Error)?) -> Void) {
+    self.handler = handler
+  }
+
+  func callAsFunction(_ mediaChannel: MediaChannel?, _ error: (any Error)?) {
+    handler(mediaChannel, error)
   }
 }
 

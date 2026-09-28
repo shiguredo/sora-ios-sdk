@@ -10,7 +10,7 @@
 
 `SoraTests` target の warnings-as-errors gate を `Package.swift` の manifest から有効にし、test target の警告を恒久的に検出できるようにする。
 
-`Sora` target には `0108` が同じ gate を入れる。test target 側の gate は `0108` の検証方針と `0155` の前提が `0118` に委譲しており、`0118` の旧記述も同じ gate を対象にしていた。`0118` は concurrency 診断抑止の除去に専念するため、本 issue が引き取る。
+`Sora` target には `0108` が同じ gate を入れる。test target 側の gate は `0108` の検証方針が `0118` に委譲しており、`0118` の旧記述も同じ gate を対象にしていた。`0118` は concurrency 診断抑止の除去に専念したため、gate は本 issue が引き取る。
 
 ## 現状
 
@@ -45,7 +45,7 @@
 
 ## スコープ外
 
-- `Sora` target の warnings-as-errors gate と、`Sora` target に残る concurrency 警告 (`0108` / `0155` が扱う)。
+- `Sora` target の warnings-as-errors gate (`0108` が扱う) と、`Sora` target に残る concurrency 警告 (`0173` / `0174` などの担当 issue が扱う。本 issue の対象外)。
 - 非推奨 API を参照しているテストの書き換え (`0138` が対象外としている)。
 - `SoraTests` の concurrency 診断の解消 (`0118` が扱う)。
 
@@ -55,7 +55,7 @@
 - `SoraTests/StreamFrameOwnerTests.swift` / `SoraTests/ConnectionTimerLifecycleTests.swift`: `weak var` の `let` 化
 - `SoraTests/DummyAudioDeviceTests.swift`: `setHardMute` の未使用の戻り値の解消
 - `SoraTests/SendonlyE2ETests.swift` / `SoraTests/RpcE2ETests.swift`: 未使用の `[self]` capture と未使用の値の解消 (`0118` の変更後もこの警告は残るため、行番号がずれた状態で実測して該当箇所を消す)
-- `issues/0108-update-swiftpm-language-mode.md` / `issues/0155-refactor-connect-error-closure-capture.md`: test target の gate の委譲先を本 issue に更新する (`0108` の `## 前提となる issue` にある `0118` の記述と検証方針の「test target の gate の本対応は `0118` の管轄」、`0155` の `## 前提となる issue` の「`0118`: test target の strict concurrency ゲート」)
+- `issues/0108-update-swiftpm-language-mode.md`: `## 検証方針` の「test target の strict concurrency / warnings-as-errors gate の本対応は `0118` の管轄とする」を本 issue の管轄に更新する (`## 前提となる issue` の `0118` の bullet は E2E の concurrency 診断抑止の前提であり、gate の委譲ではないため変更しない)
 - `CHANGES.md`: `## develop` の `### misc` に `[UPDATE]` で「`SoraTests` target を warnings-as-errors にする」を追記し、公開 API と利用者の挙動の変更がないことを補足行に書く (担当者行 `- @ユーザー名` を含める)
 
 ## テスト方針
@@ -73,7 +73,7 @@
 - fresh な checkout での `xcodebuild build-for-testing` のログに `-warnings-as-errors` と `-Wwarning DeprecatedDeclaration` が現れ、`SoraTests` target の `DeprecatedDeclaration` 以外の警告が 0 件であること。
 - 公開 API、target 構成、iOS deployment target、依存関係が変わっていないこと。
 - 既存テストがすべて成功すること。
-- `0108` と `0155` の test target の gate の委譲先が本 issue に更新されていること。
+- `0108` の test target の gate の委譲先が本 issue に更新されていること。
 - `CHANGES.md` の `## develop` の `### misc` に `[UPDATE]` で `SoraTests` target を warnings-as-errors にしたことが追記され、公開 API と利用者の挙動の変更がないことが補足されていること。
 
 ## 解決方法
