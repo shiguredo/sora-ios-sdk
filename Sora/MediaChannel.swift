@@ -250,16 +250,31 @@ public final class MediaChannel {
   }
 
   /// 接続状態
-  public private(set) var state: ConnectionState = .disconnected {
-    didSet {
-      Logger.trace(
-        type: .mediaChannel,
-        message: "changed state from \(oldValue) to \(state)")
-    }
-  }
+  ///
+  /// 遷移ログは排他区間の外で出すため (`didSet` では lock を保持したまま Logger を呼び得る)、
+  /// `connectionLifecycleLock` を保持して遷移させる箇所では、遷移の直後 (lock の解放後) に
+  /// 呼び出し元が `logStateChange(from:)` を呼ぶ。
+  public private(set) var state: ConnectionState = .disconnected
 
   /// 接続中 (`state == .connected`) であれば ``true``
   public var isAvailable: Bool { state == .connected }
+
+  // 排他区間の外で状態遷移ログを出す。
+  //
+  // A (遷移前) / B (遷移後) は connectionLifecycleLock を保持して確定させた値を渡す
+  // (unlock 後に state を読み直すと、別スレッドの遷移を記録してしまう)。
+  private func logStateChange(from previous: ConnectionState, to next: ConnectionState) {
+    Logger.trace(
+      type: .mediaChannel,
+      message: "changed state from \(previous) to \(next)")
+  }
+
+  // 排他区間の外で ConnectionTask の完了ログを出す。
+  private func logConnectionTaskCompleted(_ completed: Bool) {
+    if completed {
+      Logger.debug(type: .mediaChannel, message: "connection task completed")
+    }
+  }
 
   /// 接続開始時刻。
   /// 接続中にのみ取得可能です。
@@ -683,7 +698,7 @@ public final class MediaChannel {
         SoraError.connectionBusy(
           reason:
             "MediaChannel is already connected"))
-      task.complete()
+      logConnectionTaskCompleted(task.complete())
       return task
     }
 
@@ -710,7 +725,10 @@ public final class MediaChannel {
     peerChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
       // MediaChannel が先に解放されても ConnectionTask は必ず終端させる。
       guard let self else {
-        task.complete()
+        // 完了ログは排他区間の外で出す (この経路は lock を保持していない)。
+        if task.complete() {
+          Logger.debug(type: .mediaChannel, message: "connection task completed")
+        }
         return
       }
       self.finishDisconnect(connectionTask: task, error: error, reason: reason)
@@ -718,9 +736,13 @@ public final class MediaChannel {
 
     // `.connecting` を公開する前に切断完了ハンドラーを登録する。
     // これにより、別スレッドの disconnect が通知登録の隙間へ入ることを防ぐ。
+    let connectingChange = (from: state, to: ConnectionState.connecting)
     state = .connecting
     connectionStartTime = nil
     connectionLifecycleLock.unlock()
+
+    // 状態遷移ログは connectionLifecycleLock の外で出す。
+    logStateChange(from: connectingChange.from, to: connectingChange.to)
 
     // 接続開始を予約して `.connecting` を公開した後に、Sora の管理対象へ登録する。
     // onAddMediaChannel から同期的に disconnect されても、後続の basicConnect は
@@ -855,11 +877,14 @@ public final class MediaChannel {
     }
 
     connectionStartTime = Date()
-    connectionTimer.run {
+    let timeout = connectionTimer.run {
       Logger.error(type: .mediaChannel, message: "connection timeout")
       self.beginDisconnect(error: SoraError.connectionTimeout, reason: .signalingFailure)
     }
     connectionLifecycleLock.unlock()
+
+    // Timer 開始ログは connectionLifecycleLock の外で出す (run() が返した有効な timeout を使う)。
+    Logger.debug(type: .connectionTimer, message: "run (timeout: \(timeout) seconds)")
 
     peerChannel.connect { [weak self] error in
       guard let self else {
@@ -882,12 +907,16 @@ public final class MediaChannel {
   private func finishConnect(connectionTask: ConnectionTask) {
     var connectHandler: ((Error?) -> Void)?
     var shouldCancel = false
+    var completedConnectionTask = false
+    var connectedChange: (from: ConnectionState, to: ConnectionState)?
 
     connectionLifecycleLock.lock()
     if state == .connecting, currentConnectionTask === connectionTask {
       if connectionTask.tryComplete() {
         connectionTimerAuthorization.terminate()
+        connectedChange = (from: state, to: ConnectionState.connected)
         state = .connected
+        completedConnectionTask = true
         connectHandler = _handler
         _handler = nil
         currentConnectionTask = nil
@@ -897,6 +926,12 @@ public final class MediaChannel {
       }
     }
     connectionLifecycleLock.unlock()
+
+    // 完了ログ → 遷移ログの順で、排他区間の外で出す (変更前の同一スレッドでの出力順序を維持する)。
+    logConnectionTaskCompleted(completedConnectionTask)
+    if let connectedChange {
+      logStateChange(from: connectedChange.from, to: connectedChange.to)
+    }
 
     connectionTimer.stop()
 
@@ -934,6 +969,8 @@ public final class MediaChannel {
   /// AudioSession lease の解放を終えた後の `finishDisconnect` で実行します。
   private func beginDisconnect(error: Error?, reason: DisconnectReason) {
     var shouldPrepare = false
+    var completedConnectionTask = false
+    var disconnectingChange: (from: ConnectionState, to: ConnectionState)?
 
     connectionLifecycleLock.lock()
     switch state {
@@ -942,8 +979,9 @@ public final class MediaChannel {
       connectionTimerAuthorization.terminate()
       if disconnectStartedWhileConnecting {
         // 接続試行をここで seal し、遅延切断中の cancel が切断理由を上書きしないようにする。
-        currentConnectionTask?.complete()
+        completedConnectionTask = currentConnectionTask?.complete() ?? false
       }
+      disconnectingChange = (from: state, to: ConnectionState.disconnecting)
       state = .disconnecting
       if disconnectPreparation.begin() {
         shouldPrepare = true
@@ -952,6 +990,12 @@ public final class MediaChannel {
       break
     }
     connectionLifecycleLock.unlock()
+
+    // 完了ログ → 遷移ログの順で、排他区間の外で出す (変更前の同一スレッドでの出力順序を維持する)。
+    logConnectionTaskCompleted(completedConnectionTask)
+    if let disconnectingChange {
+      logStateChange(from: disconnectingChange.from, to: disconnectingChange.to)
+    }
 
     guard shouldPrepare else {
       return
@@ -970,11 +1014,13 @@ public final class MediaChannel {
     var shouldPrepare = false
     var shouldNotifyConnect = false
     var connectHandler: ((Error?) -> Void)?
+    var disconnectingChange: (from: ConnectionState, to: ConnectionState)?
+    var disconnectedChange: (from: ConnectionState, to: ConnectionState)?
 
     connectionLifecycleLock.lock()
     guard !disconnectFinished else {
       connectionLifecycleLock.unlock()
-      connectionTask.complete()
+      logConnectionTaskCompleted(connectionTask.complete())
       return
     }
 
@@ -983,11 +1029,12 @@ public final class MediaChannel {
     if state == .connecting || state == .connected {
       disconnectStartedWhileConnecting = state == .connecting
       connectionTimerAuthorization.terminate()
+      disconnectingChange = (from: state, to: ConnectionState.disconnecting)
       state = .disconnecting
     }
     guard state == .disconnecting else {
       connectionLifecycleLock.unlock()
-      connectionTask.complete()
+      logConnectionTaskCompleted(connectionTask.complete())
       return
     }
 
@@ -1001,6 +1048,8 @@ public final class MediaChannel {
     case .deferred:
       // PeerChannel の cleanup は完了済みでも、MediaChannel 固有の準備が終わるまでは
       // `.disconnected` と公開 callback を通知しない。
+      // この経路は `beginDisconnect` が準備を開始済みの場合だけ成立するため、`.disconnecting` の
+      // 遷移ログは `beginDisconnect` が既に出している (ここで出すものは無い)。
       connectionLifecycleLock.unlock()
       return
     case .ready:
@@ -1009,6 +1058,9 @@ public final class MediaChannel {
 
     if shouldPrepare {
       connectionLifecycleLock.unlock()
+      if let disconnectingChange {
+        logStateChange(from: disconnectingChange.from, to: disconnectingChange.to)
+      }
       startDisconnectPreparation(error: error)
       return
     }
@@ -1020,11 +1072,20 @@ public final class MediaChannel {
     }
     _handler = nil
     currentConnectionTask = nil
+    disconnectedChange = (from: state, to: ConnectionState.disconnected)
     state = .disconnected
     connectionLifecycleLock.unlock()
 
+    // 遷移ログ → 完了ログの順で、排他区間の外で出す (変更前の同一スレッドでの出力順序を維持する)。
+    if let disconnectingChange {
+      logStateChange(from: disconnectingChange.from, to: disconnectingChange.to)
+    }
+    if let disconnectedChange {
+      logStateChange(from: disconnectedChange.from, to: disconnectedChange.to)
+    }
+
     // 利用者ハンドラーから観測した時点で ConnectionTask が必ず終端しているようにする。
-    connectionTask.complete()
+    logConnectionTaskCompleted(connectionTask.complete())
 
     if shouldNotifyConnect {
       // 正常切断でも接続自体は未成立なので、接続結果は取消として通知します。

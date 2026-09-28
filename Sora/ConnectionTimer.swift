@@ -64,14 +64,19 @@ class ConnectionTimer: @unchecked Sendable {
     self.timeout = timeout
   }
 
-  public func run(timeout: Int? = nil, handler: @escaping () -> Void) {
+  /// Timer を開始します。
+  ///
+  /// - returns: この呼び出しで有効になった timeout (秒)。呼び出し元が排他区間の外で
+  ///   開始ログを出すために使います。
+  @discardableResult
+  public func run(timeout: Int? = nil, handler: @escaping () -> Void) -> Int {
     stateLock.lock()
     if let timeout {
       self.timeout = timeout
     }
-    Logger.debug(
-      type: .connectionTimer,
-      message: "run (timeout: \(self.timeout) seconds)")
+    // 有効な timeout はこの時点で確定する。Timer の interval と戻り値 (開始ログ) を
+    // 同じ値にするため、lock を保持している間に 1 回だけ取り出す。
+    let effectiveTimeout = self.timeout
 
     // run() の再実行時に残っている旧 Timer を必ず無効化する。
     // (invalidate しないと main RunLoop に残った旧 Timer が発火し、
@@ -81,7 +86,7 @@ class ConnectionTimer: @unchecked Sendable {
     generation += 1
     let currentGeneration = generation
 
-    let createdTimer = Timer(timeInterval: TimeInterval(self.timeout), repeats: false) {
+    let createdTimer = Timer(timeInterval: TimeInterval(effectiveTimeout), repeats: false) {
       [weak self] _ in
       guard let self else {
         return
@@ -117,18 +122,14 @@ class ConnectionTimer: @unchecked Sendable {
       Logger.debug(type: .connectionTimer, message: "all OK")
     }
     timer = createdTimer
-    guard let timer else {
-      stateLock.unlock()
-      return
-    }
-    RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
+    RunLoop.main.add(createdTimer, forMode: RunLoop.Mode.common)
     _isRunning = true
     stateLock.unlock()
+    return effectiveTimeout
   }
 
   public func stop() {
     stateLock.lock()
-    Logger.debug(type: .connectionTimer, message: "stop")
     // invalidate 前に RunLoop へ配送されたものの、まだ世代照合を通過していない callback を
     // 拒否できるよう、稼働中の Timer を停止するときは世代を進める。
     if timer != nil {
@@ -140,5 +141,9 @@ class ConnectionTimer: @unchecked Sendable {
     timer = nil
     _isRunning = false
     stateLock.unlock()
+
+    // ログは排他区間の外で出す。ロックを保持したまま Logger を呼ぶと、利用者の
+    // onOutputHandler が同じ lock を取る経路で deadlock する。
+    Logger.debug(type: .connectionTimer, message: "stop")
   }
 }

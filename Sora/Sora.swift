@@ -131,13 +131,15 @@ public final class Sora: @unchecked Sendable {
     var added = false
     mediaChannelLock.lock()
     if !_mediaChannels.contains(mediaChannel) {
-      Logger.debug(type: .sora, message: "add media channel")
       _mediaChannels.append(mediaChannel)
       added = true
     }
     mediaChannelLock.unlock()
 
     if added {
+      // ログは排他区間の外で出す。ロックを保持したまま Logger を呼ぶと、利用者の
+      // onOutputHandler が同じロックを取る経路で deadlock する。
+      Logger.debug(type: .sora, message: "add media channel")
       handlers.onAddMediaChannel?(mediaChannel)
     }
   }
@@ -147,13 +149,14 @@ public final class Sora: @unchecked Sendable {
     var removed = false
     mediaChannelLock.lock()
     if _mediaChannels.contains(mediaChannel) {
-      Logger.debug(type: .sora, message: "remove media channel")
       _mediaChannels.remove(mediaChannel)
       removed = true
     }
     mediaChannelLock.unlock()
 
     if removed {
+      // ログは排他区間の外で出す (add と同じ理由)。
+      Logger.debug(type: .sora, message: "remove media channel")
       handlers.onRemoveMediaChannel?(mediaChannel)
     }
   }
@@ -192,7 +195,10 @@ public final class Sora: @unchecked Sendable {
       // 設定エラーや ADM 初期化エラーはチャネルを登録せず接続試行を終端する。
       // 通常の接続経路と同様に、利用者の callback は connect() の呼び出しスタック外で通知する。
       let connectionTask = ConnectionTask()
-      connectionTask.complete()
+      if connectionTask.complete() {
+        // 完了ログは ConnectionTask の排他区間の外で出す。
+        Logger.debug(type: .mediaChannel, message: "connection task completed")
+      }
       // 接続 handler は `@Sendable` ではないため、公開している引数の型を変えずに box へ包んで渡す。
       let handlerBox = ConnectErrorHandlerBox(handler)
       DispatchQueue.global().async { [weak self] in
@@ -529,15 +535,22 @@ public final class ConnectionTask {
     // ロックを保持したまま disconnect を呼ぶと、切断時の callback から complete() や
     // cancel() が再入した場合に deadlock するためである。
     let peerChannel: PeerChannel?
+    var requestedCancellation = false
     stateLock.lock()
     if _internalState == .connecting {
-      Logger.debug(type: .mediaChannel, message: "connection task cancelled")
       _internalState = .cancelRequested
       peerChannel = _peerChannel
+      requestedCancellation = true
     } else {
       peerChannel = nil
     }
     stateLock.unlock()
+
+    // ログは排他区間の外で出す。ロックを保持したまま Logger を呼ぶと、利用者の
+    // onOutputHandler が ConnectionTask.state を読む経路で deadlock する。
+    if requestedCancellation {
+      Logger.debug(type: .mediaChannel, message: "connection task cancelled")
+    }
 
     if let peerChannel {
       // reason: .user としているため、 cancel は SDK 内部で使用してはならない
@@ -553,6 +566,7 @@ public final class ConnectionTask {
   ///
   /// 接続成功と `cancel()` が競合した場合に、どちらが先に終端状態を確定したかを
   /// 呼び出し元が判断できるようにするための操作です。
+  /// ログは排他区間の外で出すため本メソッドでは出力せず、遷移できたかを返します。
   @discardableResult
   func tryComplete() -> Bool {
     stateLock.lock()
@@ -560,12 +574,14 @@ public final class ConnectionTask {
     guard _internalState == .connecting else {
       return false
     }
-    Logger.debug(type: .mediaChannel, message: "connection task completed")
     _internalState = .completed
     return true
   }
 
-  func complete() {
+  /// 接続試行中であれば完了状態へ遷移し、遷移できたかを返します。
+  /// ログは排他区間の外で出すため、呼び出し元が戻り値を確認して出力します。
+  @discardableResult
+  func complete() -> Bool {
     tryComplete()
   }
 }

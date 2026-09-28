@@ -111,6 +111,10 @@
   - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` の `description` の `@unknown default` が `fatalError("unknown state")` を呼んでいた
   - CHANGE エントリの、 WebRTC の enum 型への `CustomStringConvertible` 準拠の削除、によりこれらの `description` はなくなるため、未知の値でもプロセスが終了しなくなる
   - @t-miya
+- [FIX] SDK 内部の排他区間を保持したまま Logger を呼ぶと利用者の出力 handler が deadlock する問題を修正する
+  - `Sora.add(mediaChannel:)` / `remove(mediaChannel:)` / `ConnectionTask.cancel()` / `ConnectionTimer.stop()` / `AudioDeviceModuleWrapper.setAudioHardMute(_:)` のログ出力を排他区間の外へ移し、`ConnectionTask.tryComplete()` / `complete()` と `ConnectionTimer.run(timeout:handler:)` はログを削除して遷移の有無と有効な timeout を返すようにする (`MediaChannel.state` の遷移ログも `didSet` から lock 解放後へ移す)
+  - ログの内容 (`level` / `type` / `message`) と同一スレッド・同一経路での出力順序は変わらない
+  - @t-miya
 
 ### misc
 
