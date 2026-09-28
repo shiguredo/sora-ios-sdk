@@ -28,11 +28,11 @@ Logger.debug(
 
 同じメソッド内で `.failed` のときに渡す `disconnect` の reason は `"peer connection state: failed"` というリテラルであり、ログと reason で表現が一致していない。
 
-`Sora/Extensions/RTC+Description.swift`・`Sora/DataChannel.swift`・`Sora/PeerChannel.swift` にある他の 6 型（`RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority`）は `0113` で internal formatter へ移行する。本 issue は、その移行後もこの 1 型だけが raw 表現のまま残る差を解消する。
+`Sora/Extensions/RTC+Description.swift`・`Sora/DataChannel.swift`・`Sora/PeerChannel.swift` にあった他の 6 型（`RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority`）の文字列化は `0113` で `WebRTCEnumDescription` へ移した。本 issue は、その移行後もこの 1 型だけが raw 表現のまま残る差を解消する。
 
 ## 前提となる issue
 
-- `0113` が完了していること。`0113` が `Sora/Extensions/RTC+Description.swift` に追加する `WebRTCEnumDescription` を利用するため、未完了の場合は本 issue に着手しない。
+- `0113` が完了し、`Sora/Extensions/RTC+Description.swift` に `WebRTCEnumDescription` があること。本 issue は `WebRTCEnumDescription` に `peerConnectionState(_:)` を追加する。
 
 ## 設計方針
 
@@ -66,5 +66,3 @@ Logger.debug(
 - `.failed` の reason の文字列が変わっていないこと。
 - 追加したテストと既存テストがすべて成功すること。
 - `CHANGES.md` の `## develop` に `[FIX]` エントリが担当者行付きで追加されていること。
-
-## 解決方法

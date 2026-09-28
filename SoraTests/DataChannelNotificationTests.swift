@@ -1,9 +1,25 @@
+import WebRTC
 import XCTest
 
 @testable import Sora
 
-/// MediaChannel の DataChannel 一括通知 (onDataChannel) の判定ロジックのテスト
+/// テストの前提が崩れたときに、`XCTFail` の後で呼び出し元へ戻るために投げるエラーです。
+private struct UnexpectedState: Error {}
+
+/// MediaChannel の DataChannel 一括通知 (onDataChannel) とメッセージングの判定ロジックのテスト
 final class DataChannelNotificationTests: XCTestCase {
+  /// 実経路の確認に使う MediaChannel です。
+  ///
+  /// `RTCPeerConnectionFactory` は PeerConnection より長生きさせる必要があります
+  /// (先に解放すると、transceiver の破棄が破棄済みの task queue を参照してクラッシュします)。
+  /// `MediaChannel` は自身の `PeerChannel` 経由で factory を保持するため、instance で保持して
+  /// テストメソッドのローカル変数より後に解放されるようにします。
+  private var mediaChannel: MediaChannel?
+
+  override func tearDown() {
+    mediaChannel = nil
+    super.tearDown()
+  }
 
   // MARK: - shouldNotifyDataChannelAvailable のテスト
 
@@ -103,5 +119,66 @@ final class DataChannelNotificationTests: XCTestCase {
     ]
     let result = MediaChannel.messagingLabels(from: dataChannels)
     XCTAssertTrue(result.isEmpty, "メッセージング用ラベルが存在しない場合は空集合を返すこと")
+  }
+
+  // MARK: - sendMessage の error reason のテスト
+
+  // DataChannel が OPEN でない場合に sendMessage(label:data:) が返す error reason の文字列を
+  // 実経路で確認する
+  //
+  // reason の組み立てが formatter を通ることと、sendMessage が live な readyState をそのまま
+  // 渡していることを、実 DataChannel の 2 つの状態 (交渉前の connecting と close() 後の closed) で
+  // 固定する。
+  func testSendMessageReasonUsesFormatter() throws {
+    let mediaChannel = try makeTestMediaChannel()
+    self.mediaChannel = mediaChannel
+
+    let peerChannel = mediaChannel.peerChannel
+    peerChannel.switchedToDataChannel = true
+
+    // RTCPeerConnectionFactory は MediaChannel が保持するものを利用する
+    let peerConnection = try makeTestPeerConnection(
+      factory: peerChannel.nativePeerChannelFactory)
+    let nativeDataChannel = try makeTestDataChannel(peerConnection: peerConnection, label: "#spam")
+    // generation を一致させないことで、close() 後に届く非同期の状態通知から
+    // PeerChannel.disconnect が呼ばれないようにする (sendMessage は generation を参照しない)
+    peerChannel.dataChannels["#spam"] = DataChannel(
+      dataChannel: nativeDataChannel,
+      compress: false,
+      mediaChannel: mediaChannel,
+      peerChannel: peerChannel,
+      generation: peerChannel.dataChannelGeneration + 1)
+
+    // 交渉前は connecting
+    XCTAssertEqual(
+      nativeDataChannel.readyState, .connecting, "交渉前の readyState が connecting であること")
+    XCTAssertEqual(
+      try messagingErrorReason(mediaChannel: mediaChannel),
+      "readyState of the DataChannel is not open: label => #spam, readyState => connecting",
+      "reason が formatter の文字列になること")
+
+    // close() 後は closed
+    //
+    // 交渉していない DataChannel の close() は同期的に closed になるため、reason の文字列が
+    // readyState に追従すること (固定値ではないこと) を確認できる。
+    nativeDataChannel.close()
+    XCTAssertEqual(nativeDataChannel.readyState, .closed, "close() 後の readyState が closed であること")
+    XCTAssertEqual(
+      try messagingErrorReason(mediaChannel: mediaChannel),
+      "readyState of the DataChannel is not open: label => #spam, readyState => closed",
+      "reason が formatter の文字列になること")
+  }
+
+  // sendMessage(label:data:) が返す `SoraError.messagingError` の reason を取り出す
+  private func messagingErrorReason(mediaChannel: MediaChannel) throws -> String {
+    guard let error = mediaChannel.sendMessage(label: "#spam", data: Data([0x01])) else {
+      XCTFail("readyState が OPEN でない sendMessage はエラーを返すこと")
+      throw UnexpectedState()
+    }
+    guard case SoraError.messagingError(let reason) = error else {
+      XCTFail("messagingError が返ること: \(error)")
+      throw UnexpectedState()
+    }
+    return reason
   }
 }

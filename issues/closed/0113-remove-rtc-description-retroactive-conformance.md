@@ -1,7 +1,7 @@
 # WebRTC enum の retroactive conformance を削除する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-26
 - Priority: High
 - Branch: feature/remove-rtc-description-retroactive-conformance
 - Polished: 2026-09-25
@@ -107,20 +107,22 @@ enum WebRTCEnumDescription {
   static func iceGatheringState(_ value: RTCIceGatheringState) -> String
   static func dataChannelState(_ value: RTCDataChannelState) -> String
   static func priority(_ value: RTCPriority) -> String
-  static func degradationPreference(_ value: RTCDegradationPreference) -> String
   /// `RTCRtpParameters.degradationPreference`（`NSNumber?`）用。 nil は `"-"`。
   static func degradationPreference(rawValue: Int?) -> String {
     guard let rawValue else { return "-" }
-    guard let value = RTCDegradationPreference(rawValue: rawValue) else {
-      return "unknown(\(rawValue))"
+    switch rawValue {
+    case RTCDegradationPreference.maintainFramerateAndResolution.rawValue: "disabled"
+    case RTCDegradationPreference.maintainFramerate.rawValue: "maintain-framerate"
+    case RTCDegradationPreference.maintainResolution.rawValue: "maintain-resolution"
+    case RTCDegradationPreference.balanced.rawValue: "balanced"
+    default: "unknown(\(rawValue))"
     }
-    return degradationPreference(value)
   }
 }
 ```
 
-- `degradationPreference(rawValue:)` は nil を先に `guard let` で束縛する（`Int?` のまま補間すると `unknown(Optional(99))` になり、Optional を補間したという warning も出る）。2 つ目の `guard let` は `init?(rawValue:)` が Optional を返すことによるもので、未知値の表現は `degradationPreference(_:)` の `default` が返す `"unknown(<rawValue>)"` に一本化する。`!` は `.swiftlint.yml` の `force_unwrapping`（`included` に `Sora` がある）に抵触するため使わない。
-- `RTCDegradationPreference` 以外の 5 型は enum の switch と `@unknown default` で実装する。`RTCDegradationPreference` だけは `.disabled` と `.maintainFramerateAndResolution` が同じ raw value のため `value.rawValue` で分岐し、値 0 を `"disabled"` に確定する（`Int` の switch なので `default` を使い、`@unknown default` は書けない）。`case .maintainFramerateAndResolution: "balanced"` の到達しない分岐は削除する。
+- `degradationPreference(rawValue:)` は nil を先に `guard let` で束縛する（`Int?` のまま補間すると `unknown(Optional(99))` になり、Optional を補間したという warning も出る）。`RTCRtpParameters.degradationPreference` は `NSNumber?` のため enum ではなく raw value を受け取る 1 関数に統合し、`RTCDegradationPreference(rawValue:)` は経由しない（`init?(rawValue:)` が未知の raw value でも nil を返さず、enum を経由すると `!` か到達しない `guard let` が必要になるため）。未知値の表現は `default` が返す `"unknown(<rawValue>)"` に一本化する。`!` は `.swiftlint.yml` の `force_unwrapping`（`included` に `Sora` がある）に抵触するため使わない。
+- `RTCDegradationPreference` 以外の 5 型は enum の switch と `@unknown default` で実装する。`RTCDegradationPreference` だけは raw value の switch にし、`.disabled` と `.maintainFramerateAndResolution` が同じ raw value (0) のため削除予定でない `maintainFramerateAndResolution.rawValue` で値 0 を `"disabled"` に確定する（`Int` の switch なので `default` を使い、`@unknown default` は書けない）。`case .maintainFramerateAndResolution: "balanced"` の到達しない分岐は削除する。
 - `@unknown default` を付けた enum の switch では、既知 case を書き忘れても warning 止まりで `@unknown default` に落ちる（`-warnings-as-errors` でのみ error。Sora target はまだ warnings-as-errors ではない）。既知 case を落とさないことは、テスト方針の `RTCDescriptionTests` が「設計方針」の表の全 case を検証することで担保する。
 - 既知 case の戻り値は現行の `description` と完全に一致させる。
 
@@ -138,15 +140,15 @@ enum WebRTCEnumDescription {
 ### 呼び出し箇所の置き換え
 
 - 「現状」の表の 1 から 6 を formatter 経由に変更する。7 は内側と外側の `String(describing:)` を両方やめて `WebRTCEnumDescription.degradationPreference(rawValue:)` を呼ぶ。
-- `Sora/MediaChannel.swift` の `sendMessage(label:data:)` の reason の組み立てを、`shouldNotifyDataChannelAvailable` と同じ形の internal な静的純関数へ切り出し、`sendMessage` からは `Self.messagingErrorReasonDataChannelNotOpen(label:readyState:)` として呼ぶ（`Self.` を付けないと `static member cannot be used on instance of type 'MediaChannel'` のコンパイルエラーになる）。全 case を検証できるよう、状態はそのまま文字列化する（`open` を渡す経路は `sendMessage` の `guard readyState == .open` により実運用では現れないが、純関数のテストでは全 case を網羅する）。
+- `Sora/MediaChannel.swift` の `sendMessage(label:data:)` の reason の組み立て（1 箇所だけ）はその場に置いたまま、`readyState` を `WebRTCEnumDescription.dataChannelState(_:)` へ通す。`open` を渡す経路は `sendMessage` の `guard readyState == .open` により実運用では現れないため、関数を切り出さず実経路のテストで `connecting` と `closed` を確認する。
 
 ```swift
-/// DataChannel が OPEN でないため sendMessage が返す error reason を組み立てます。
-/// 状態を持たない純粋関数であり、単体テストの対象です。
-static func messagingErrorReasonDataChannelNotOpen(
-  label: String, readyState: RTCDataChannelState
-) -> String {
-  "readyState of the DataChannel is not open: label => \(label), readyState => \(WebRTCEnumDescription.dataChannelState(readyState))"
+let readyState = dc.readyState
+guard readyState == .open else {
+  return SoraError.messagingError(
+    reason:
+      "readyState of the DataChannel is not open: label => \(label), readyState => \(WebRTCEnumDescription.dataChannelState(readyState))"
+  )
 }
 ```
 
@@ -167,7 +169,7 @@ static func messagingErrorReasonDataChannelNotOpen(
 ### API baseline の再生成
 
 - 削除と同じ commit で `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` と `iphoneos26.5.info.txt` を再生成する（`CODEBASE.md` の手順に従う。Xcode 26.6 と `iphoneos26.5` が必要）。
-- 期待する差分は、`make api-check-fresh` の要約（Makefile の `API_BASELINE_DIFF`）が Removed declarations 12 件、Added declarations 0 件になること。12 件の内訳は 6 型の `description`（`[Var]`）×6 と 6 型の TypeDecl（`[Enum]`）×6 である（実測）。`description` の accessor（`Get()`）は `collect()` が `accessors` キーを辿らないため要約には現れない。`RTCPriority` も TypeDecl ごと消え、`SignalingOffer.Encoding.networkPriority` の型参照（`TypeNominal`）だけが残る。`WebRTCEnumDescription` と `MediaChannel` の純関数は internal なので baseline には現れない。これ以外の型、`printedName` / `declKind` の変化は意図しない変更として原因を特定する。
+- 期待する差分は、`make api-check-fresh` の要約（Makefile の `API_BASELINE_DIFF`）が Removed declarations 12 件、Added declarations 0 件になること。12 件の内訳は 6 型の `description`（`[Var]`）×6 と 6 型の TypeDecl（`[Enum]`）×6 である（実測）。`description` の accessor（`Get()`）は `collect()` が `accessors` キーを辿らないため要約には現れない。`RTCPriority` も TypeDecl ごと消え、`SignalingOffer.Encoding.networkPriority` の型参照（`TypeNominal`）だけが残る。`WebRTCEnumDescription` は internal なので baseline には現れない。これ以外の型、`printedName` / `declKind` の変化は意図しない変更として原因を特定する。
 - baseline の再生成前は `make api-check` が `API breakage: var <型>.description has been removed` を 6 件出して失敗するため、`make api-check-fresh` は要約を出す前に停止する。要約の内訳を確認する場合は、`swift-api-digester -dump-sdk` の出力と commit 済み baseline を `API_BASELINE_DIFF` と同じ手順で比較する。
 
 ## スコープ外
@@ -181,13 +183,13 @@ static func messagingErrorReasonDataChannelNotOpen(
 
 モックやスタブは使用しない。テストは `SoraTests` の warnings-as-errors（`0171`）の対象なので、追加・変更するテストファイルは `-swift-version 6` で警告を出さないこと（確認は `0171` の手順に委ねる）。
 
-- `SoraTests/RTCDescriptionTests.swift`（新規、`import WebRTC` と `@testable import Sora`）で 6 型の既知 case を formatter へ入力し、「設計方針」の表と一致することを確認する。`RTCDegradationPreference` の `.disabled` と `.maintainFramerateAndResolution` は同じ値なので期待値は raw value ごとに 1 つとし、両シンボルが同じ文字列を返すことも確認する。
-- 同じテストで未知 raw value を `RTCSignalingState(rawValue: 99)` の形で生成し（`init?(rawValue:)` が未知値でも非 nil を返す）、6 型すべてで `"unknown(99)"` を返し `fatalError` を呼ばないことを確認する。
-- 同じテストで `RTCRtpParameters` を生成し `transactionId` を設定して、`degradationPreference` が nil で `<transactionId> -`、raw value 0 で `<transactionId> disabled`、3 で `<transactionId> balanced`、未知値で `<transactionId> unknown(99)` になり、`Optional(` と `__C.` を含まないことを確認する。
-- `SoraTests/SignalingOfferEncodingTests.swift` の `testRTCPriorityDescription` を formatter を検証するテストへ変更する（準拠を削除すると `priority.description` がコンパイルできないため必須）。同じファイルの `\(expectedPriority)`（`testRtpEncodingParametersReflectsNetworkPriority`）と `\(priority)`（失敗メッセージ）も `RTCPriority` を補間しており、準拠の削除後は raw 表現になるため formatter の出力へ変更する。`SoraTests` でこの 6 型を参照するファイルはこの 1 つだけである。
-- `SoraTests/DataChannelNotificationTests.swift`（`import WebRTC` を追加する）に、`MediaChannel.messagingErrorReasonDataChannelNotOpen(label:readyState:)` の戻り値を検証するテストを追加する。`sendMessage` 経由では `open` が現れないため、純関数のテストで `open` / `connecting` / `closing` / `closed` の全 case の文字列を確認する。既存の `PeerChannelRedirectInvalidationTests` は redirect 経路の `reason.contains("not open yet")` を見るだけで、`readyState` を含む reason は検証していない。
-- 同じ `RTCDescriptionTests.swift` に `Logger.shared.onOutputHandler` で 1 から 5 のログを捕捉するテストを追加する。
-  - `Logger.shared` の既定 level は `.info`、既定 groups は `[.channels, .user]` なので、`level = .debug` と `groups = [.channels]` を設定し、`SoraTests/LoggerTests.swift` と同じ方法で `setUp` / `tearDown` に instance と level / groups / onOutputHandler の保存と復元を書く（`LoggerTests` の収集用クラスは file private なので、同等のものを `RTCDescriptionTests.swift` に用意する）。handler は複数の executor から並行に呼ばれ得るため、収集は `NSLock` で排他する。
+- `SoraTests/RTCDescriptionTests.swift`（新規、`import WebRTC` と `@testable import Sora`）で 6 型の既知 case を formatter へ入力し、「設計方針」の表と一致することを確認する。`RTCDegradationPreference` は `.disabled` が削除予定の別名のため、削除予定でない `.maintainFramerateAndResolution` を使い、期待値は raw value ごとに 1 つにする。`degradationPreference(rawValue: nil)` が `"-"` になることも確認する。
+- 同じテストで未知 raw value を `RTCSignalingState(rawValue: 99)` の形で生成し（`init?(rawValue:)` が未知値でも非 nil を返す）、型ごとに異なる値（99 / 98 / 97 / 96 / 95）と負値 (`-1`) で `"unknown(<rawValue>)"` を返しプロセスが終了しないことを確認する。
+- 同じテストで `RTCRtpParameters` を生成し `transactionId` を設定して、`degradationPreference` が nil で `<transactionId> -`、raw value 0 で `<transactionId> disabled`、3 で `<transactionId> balanced`、負値と未知値で `<transactionId> unknown(<rawValue>)` になることを完全一致で確認する。`Optional(` と `__C.` を含まないことはこの完全一致で兼ねる。
+- `SoraTests/SignalingOfferEncodingTests.swift` の `testRTCPriorityDescription` は削除し、formatter の対応表は `RTCDescriptionTests.testPriorityDescription` に一本化する（準拠を削除すると `priority.description` がコンパイルできないため、いずれかの変更は必須）。同じファイルの `\(expectedPriority)`（失敗メッセージ）は検証対象の formatter に依存させず `expectedPriority.rawValue` を出す。
+- `SoraTests/DataChannelNotificationTests.swift`（`import WebRTC` を追加する）に、`sendMessage(label:data:)` の実経路で error reason を検証するテストを追加する。実 `MediaChannel` / `RTCPeerConnection` / `DataChannel` を使い、`readyState` が `connecting`（交渉前）と `closed`（`close()` 後）の 2 つの状態で reason を完全一致で確認し、reason の組み立てが formatter を通ることと live な `readyState` を渡していることの両方を固定する。既存の `PeerChannelRedirectInvalidationTests` は redirect 経路の `reason.contains("not open yet")` を見るだけで、`readyState` を含む reason は検証していない。
+- 同じ `RTCDescriptionTests.swift` に `Logger.shared.onOutputHandler` で 1 から 5 のログを捕捉するテストを出力箇所ごとに追加し、`Log.message` を完全一致で比較する（`signaling` は未知 raw value でも検証し、引数がそのまま formatter へ渡ることを固定する）。
+  - `Logger.shared` の既定 level は `.info`、既定 groups は `[.channels, .user]` なので、`level = .debug` と `groups = [.channels]` を設定し、`setUp` / `tearDown` で level / groups / onOutputHandler の保存と復元を書く（instance 自体は差し替えない）。handler は複数の executor から並行に呼ばれ得るため、収集は `NSLock` で排他する `StringCollector` を `SoraTests/StringCollector.swift` に置き、`LoggerTests` と共有する。
   - `NativePeerChannelFactory` と `PeerChannel.init(snapshot:signalingChannel:nativePeerChannelFactory:mediaChannel:)` で `PeerChannel` を生成する（`SoraTests/PeerChannelRedirectInvalidationTests.swift` と同じ形）。生成時に factory の debug ログが届くため、収集の判定は配列全体の一致ではなくメッセージ単位にし、対象の呼び出し直前に収集を clear する。`nativeChannel` への代入は不要である（1 から 5 は `nativeChannel` を参照しない）。
   - 1 から 3 は factory から生成した実 `RTCPeerConnection` を `peerConnection(_:didChange:)` へ直接渡す。期待値は `signaling state: stable` / `ICE connection state: connected` / `ICE gathering state: complete` のように状態名を含む。`RTCIceConnectionState.new` と `RTCIceGatheringState.new` は同名のため、`.new` を使う場合は型注釈を付ける。
   - 4 は factory から生成した `RTCPeerConnection` に `add(_:streamIds:)` で track（`DummyStereoAudioLoopbackTests.swift` と同じく `createNativeAudioTrack(trackId:constraints:)` などで作る）を追加して得た `RTCRtpSender` の `updateOfferEncodings(_:)` を呼ぶ（`add` の戻り値と `dataChannel(forLabel:configuration:)` は Optional なので `XCTUnwrap` する）。sender の `parameters.encodings` の rid は nil なので、`SignalingOffer.Encoding` は `rid: nil` かつ `networkPriority: .veryLow` などの非 nil で作る（`networkPriority` が nil だとログが出ない。memberwise init の引数は `active` / `rid` / `maxBitrate` / `maxFramerate` / `scaleResolutionDownBy` / `scaleResolutionDownTo` / `scalabilityMode` / `networkPriority`）。期待値は `networkPriority: very-low`。
@@ -231,15 +233,15 @@ xcodebuild test -scheme Sora-Package -derivedDataPath build \
 
 - 6 型の `CustomStringConvertible` 準拠が削除され、`Sora/Extensions/RTC+Description.swift` の formatter が「設計方針」の表の文字列を返すこと（`RTCDescriptionTests` で確認）。
 - 未知 raw value で `fatalError` を呼ばず `"unknown(<rawValue>)"` を返し、`Sora/Extensions/RTC+Description.swift` に `fatalError` が残っていないこと。
-- 「現状」の表の 1 から 7 が formatter を通っていること。1 から 5 は `Logger` 捕捉テスト、6 は 1 つ目の grep と `messagingErrorReasonDataChannelNotOpen(label:readyState:)` のテスト、7 は `RTCRtpParameters.description` のテストと 2 つ目と 3 つ目の grep で確認する。
+- 「現状」の表の 1 から 7 が formatter を通っていること。1 から 5 は出力箇所ごとの `Logger` 捕捉テスト、6 は `sendMessage` の実経路テストと 1 つ目の grep、7 は `RTCRtpParameters.description` のテストと 2 つ目と 3 つ目の grep で確認する。
 - API baseline が同じ commit で再生成され、差分が「設計方針」の期待どおりであること。`make api-check` と `make api-check-fresh` が成功すること。
-- `make fmt-lint` / `make lint` / `make consumer-build`（3 scheme）が成功すること。
+- `make fmt-lint` / `make lint` / `make consumer-build`（3 scheme）が成功すること（`make lint` は sandbox の制約で実行できないため、同一 config の SwiftLint の直接実行で代替した。詳細は「解決方法」）。
 - Sora サーバー無しで実行できるテストがすべて成功すること（E2E は CI の `e2e-test.yml` で確認する）。
 - `CHANGES.md` の `## develop` の種別順の主リスト（`### misc` ではない）に、次のエントリが追加されていること。各エントリの最後に、2 文字インデントで `- @<実装者の GitHub ユーザー名>` の担当者行を付ける。
   - `[CHANGE]` WebRTC enum 6 型の `CustomStringConvertible` 準拠を削除する（`description` の直接利用はコンパイルエラーになり、利用者コードでの文字列補間と `String(describing:)` の出力は raw 表現に変わる）
   - `[CHANGE]` の補足: `RTCRtpParameters.description` が `Optional(...)` を付けなくなること、`RTCDataChannelState` と `RTCDegradationPreference` の未知 value の表現が `"unknown(<rawValue>)"` に変わること
   - `[FIX]` 未知の WebRTC enum 値で `description` が `fatalError` によりプロセスを終了する問題を修正する（対象は状態系 3 型 `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState`）
-  - 既存の libwebrtc m154 エントリの `RTCDegradationPreference.maintainFramerateAndResolution` に対応するという bullet を削除する（対応コードは到達しない分岐だけで、利用者の挙動を変えていない）
+  - 既存の libwebrtc m154 エントリの `RTCDegradationPreference.maintainFramerateAndResolution` に対応するという bullet は残し、`[CHANGE]` 側に「`RTCDegradationPreference` は raw value で判定するようになり、削除予定の `disabled` 別名ではなく `maintainFramerateAndResolution` (値 0) として `"disabled"` を返す」ことを記述する（対応コードは到達しない分岐だけだったため `[CHANGE]` 側で扱いを明示する）
 - 本 issue の完了で前提が古くなる記述が同じ変更で更新されていること。日付付きの実測記録は書き換えない。
   - `issues/0108-update-swiftpm-language-mode.md` の `0113` を参照する 5 箇所（37 行目の open 一覧、39 行目の `0113` の bullet、53 / 64 / 85 行目の「concurrency 系」の列挙）。37 行目は `0113` を削除し、39 行目は bullet ごと削除し、53 / 64 / 85 行目は列挙から `0113` を外す（`0155` は残す。64 行目の `2026-09-25` の実測値は残す）。
   - `issues/0171-update-soratests-warnings-as-errors.md` の 48 行目（スコープ外で `Sora` target の concurrency 警告の担当として `0113` を挙げている記述）から `0113` を外す。19 行目は `2026-09-25` の実測値の内訳なので、書き換えずに注記も不要とする。
@@ -251,12 +253,30 @@ xcodebuild test -scheme Sora-Package -derivedDataPath build \
 - `Sora/Extensions/RTC+Description.swift`: 3 型の準拠を削除し、`WebRTCEnumDescription` を追加する
 - `Sora/DataChannel.swift`: `RTCDataChannelState` の準拠を削除し、`BasicDataChannelDelegate.dataChannelDidChangeState(_:)` を formatter 経由にする
 - `Sora/PeerChannel.swift`: `RTCDegradationPreference` / `RTCPriority` の準拠を削除し、`peerConnection(_:didChange:)` の 3 箇所と `updateOfferEncodings(_:)` の `networkPriority:` ログと `RTCRtpParameters.description`（内側と外側の 2 箇所）を formatter 経由にする
-- `Sora/MediaChannel.swift`: `sendMessage(label:data:)` の error reason を formatter 経由にし、`messagingErrorReasonDataChannelNotOpen(label:readyState:)` を追加する
+- `Sora/MediaChannel.swift`: `sendMessage(label:data:)` の error reason を formatter 経由にする（reason を組み立てる箇所は 1 つだけなので関数は切り出さない）
 - `SoraTests/RTCDescriptionTests.swift`（新規）: formatter / `RTCRtpParameters.description` / 1 から 5 のログ捕捉の検証
-- `SoraTests/SignalingOfferEncodingTests.swift`: `testRTCPriorityDescription` を formatter の検証へ変更し、`RTCPriority` を補間している 2 箇所も formatter 経由にする
-- `SoraTests/DataChannelNotificationTests.swift`: `import WebRTC` を追加し、`messagingErrorReasonDataChannelNotOpen(label:readyState:)` の全 case を検証するテストを追加する
+- `SoraTests/SignalingOfferEncodingTests.swift`: `testRTCPriorityDescription` を削除し、失敗メッセージを raw value 表示にする
+- `SoraTests/DataChannelNotificationTests.swift`: `import WebRTC` を追加し、`sendMessage(label:data:)` の実経路で reason を検証するテストを追加する
+- `SoraTests/StringCollector.swift`（新規）: `LoggerTests` と共有するログ収集用の collector
+- `SoraTests/LoggerTests.swift`: file private の collector を `SoraTests/StringCollector.swift` へ移動する
+- `SoraTests/StreamFrameOwnerTestHelpers.swift`: `makeTestPeerConnection(factory:)` / `makeTestDataChannel(peerConnection:label:)` を追加し、共有の接続構築ヘルパーとして使う
 - `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` / `iphoneos26.5.info.txt`: 再生成する
-- `CHANGES.md`: `## develop` に `[CHANGE]` と `[FIX]` を追加し、libwebrtc m154 エントリの bullet を削除する
+- `CHANGES.md`: `## develop` に `[CHANGE]` と `[FIX]` を追加する。libwebrtc m154 エントリの bullet は残し、`[CHANGE]` に `maintainFramerateAndResolution` (値 0) の扱いを記述する
 - `issues/0108-update-swiftpm-language-mode.md` / `issues/0171-update-soratests-warnings-as-errors.md` / `issues/0070-change-migrate-to-webrtc-c-xcframework.md` / `issues/0172-bug-fix-rtc-peer-connection-state-log.md`: 完了条件に挙げた古くなる記述を更新する（`issues/0172-...md` と `issues/SEQUENCE` の追加は前提のとおり着手前の develop へコミットする）
 
 ## 解決方法
+
+WebRTC の imported enum 6 型への `CustomStringConvertible` 準拠を削除し、SDK 内部の文字列化を `Sora/Extensions/RTC+Description.swift` の `WebRTCEnumDescription` へ移した。状態系 3 型の `description` にあった `fatalError` の経路も解消した。
+
+- `Sora/Extensions/RTC+Description.swift` に `enum WebRTCEnumDescription` を追加し、`signalingState(_:)` / `iceConnectionState(_:)` / `iceGatheringState(_:)` / `dataChannelState(_:)` / `priority(_:)` / `degradationPreference(rawValue:)` を実装した。`RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCPriority` は enum の switch と `@unknown default` で文字列化し、`RTCDegradationPreference` は `RTCRtpParameters.degradationPreference` が `NSNumber?` のため raw value の switch にした。値 0 の正式名は `RTCDegradationPreferenceMaintainFramerateAndResolution` で `RTCDegradationPreferenceDisabled` は削除予定の別名 (`RTCRtpParameters.h` の `TODO(webrtc:450044904)`) のため、削除予定でないシンボルで判定し、既存のログ文字列との互換のため値 0 は `"disabled"` を返す。既知 case の文字列は従来の `description` と一致させ、未知の raw value は 6 型すべて `"unknown(<rawValue>)"` を返す。未設定 (`nil`) は `"-"` を返す。
+- `Sora/PeerChannel.swift` の 2 つの準拠と `case .maintainFramerateAndResolution: "balanced"` の到達しない分岐を削除し、`peerConnection(_:didChange:)` の signaling state / ICE connection state / ICE gathering state の 3 ログと、`extension RTCRtpSender` の `updateOfferEncodings(_:)` の `networkPriority:` ログを formatter 経由にした。`extension RTCRtpParameters` の `description` は内側と外側の `String(describing:)` をやめ、optional をそのまま `WebRTCEnumDescription.degradationPreference(rawValue:)` へ渡す (`"-"` の定義を formatter 側だけにする)。
+- `Sora/DataChannel.swift` の準拠を削除し、`BasicDataChannelDelegate.dataChannelDidChangeState(_:)` の ready state のログを formatter 経由にした。
+- `Sora/MediaChannel.swift` の `sendMessage(label:data:)` の error reason の `readyState` を formatter 経由にした（`readyState` の既知 case の文字列は従来どおり）。reason を組み立てる箇所は 1 つだけなので関数は切り出さず、`connecting`（交渉前）と `closed`（`close()` 後）の実経路をテストで固定した。
+- `SoraTests/RTCDescriptionTests.swift` を追加し、6 型の既知 case の文字列、未知 raw value (型ごとに異なる値と負値を含む) でプロセスが終了しないこと、`RTCRtpParameters.description` の出力 (完全一致で `Optional(` と `__C.` を含まないことの検証も兼ねる)、1 から 5 のログが formatter を通ること (出力箇所ごとの 5 テストに分け、`Logger.shared.onOutputHandler` で `Log.message` を捕捉して完全一致で比較する。実 `RTCPeerConnection` / `PeerChannel` / `DataChannel` を直接操作して決定的に発火させ、未知 raw value のログで引数の受け渡しも固定する) を検証した。
+- `SoraTests/StreamFrameOwnerTestHelpers.swift` に `makeTestPeerConnection(factory:)` と `makeTestDataChannel(peerConnection:label:)` を追加し、`RTCDescriptionTests` と `DataChannelNotificationTests` で共有した。
+- `SoraTests/SignalingOfferEncodingTests.swift` は `RTCPriority` を補間していた失敗メッセージを raw value 表示に変更し、formatter の対応表は `RTCDescriptionTests.swift` に一本化するため重複していた `testRTCPriorityDescription` を削除した。`SoraTests/DataChannelNotificationTests.swift` は実 `MediaChannel` / `RTCPeerConnection` / `DataChannel` を使い、`sendMessage(label:data:)` の実経路で `connecting` と `closed` の reason を検証する `testSendMessageReasonUsesFormatter` を追加した (DataChannel は generation を一致させず、`close()` 後の非同期通知から `PeerChannel.disconnect` を起動しない)。ログ収集用の `StringCollector` は `SoraTests/StringCollector.swift` へ移動して `LoggerTests` と共有し、実 `RTCPeerConnection` / `RTCDataChannel` を構築するヘルパーは `SoraTests/StreamFrameOwnerTestHelpers.swift` に集約した。
+- `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` を再生成した。宣言単位の差分は 6 型の TypeDecl (`[Enum]`) 6 件と `description` (`[Var]`) 6 件の削除のみで、宣言の追加は 0 件である (`Makefile` の `API_BASELINE_DIFF` と同じ手順で確認)。ファイル差分には git の行の対応付けによる追加行が出るが内容は純削除である (`API_BASELINE_DIFF` の手順では追加 0 行 / 削除 834 行で、git diff の `+` 行はすべて削除行と同一文字列)。`RTCRtpParameters.description` は override として残るため差分は出ず、`RTCSessionDescription.sdpDescription` は変更していない。
+- `CHANGES.md` の `## develop` に `[CHANGE]` (6 型の準拠の削除、文字列補間と `String(reflecting:)` / Optional 経由で変わる表現、`RTCRtpParameters.description` の出力変更、`RTCDataChannelState` / `RTCDegradationPreference` の未知 value の表現変更、`RTCDegradationPreference` の raw value 判定による m154 で追加された `maintainFramerateAndResolution` (値 0) の扱い) と `[FIX]` (未知の値でプロセスが終了する問題の修正) を追加した。libwebrtc m154 エントリの `RTCDegradationPreference.maintainFramerateAndResolution` に対応するという bullet は残し、対応の中身を `[CHANGE]` 側に記述した (削除した到達しない分岐の代わりに、削除予定でない `maintainFramerateAndResolution.rawValue` で値 0 を `"disabled"` として扱う)。
+- 完了条件に挙げた関連 issue の記述を同じ変更で更新した (`issues/0108-update-swiftpm-language-mode.md` の `0113` の参照 5 箇所、`issues/0171-update-soratests-warnings-as-errors.md` の担当一覧、`issues/0070-change-migrate-to-webrtc-c-xcframework.md` の行数と型一覧と移行先と Phase 3、`issues/0172-bug-fix-rtc-peer-connection-state-log.md` の現在形の記述と空の `## 解決方法`)。
+
+検証は次のとおり実施した。`Sora/` の `-swift-version 6` 型検査で retroactive conformance warning は 0 行 (未修正時は 12 行)、`SoraTests` 全体で失敗 0 (E2E は環境変数なしで skip)、`make fmt-lint` は成功、`make consumer-build` は `ConsumerCore` / `ConsumerUI` / `ConsumerLegacy` の 3 scheme で成功、`make api-baseline` による再生成後に `make api-check` と `make api-check-fresh` が成功した。`6 型の生の文字列化が残っていないこと` は 3 種類の grep と `Sora/` 内の全出現の目視で確認した (grep は変数名に依存し `git grep` は未追跡ファイルを検索しないため、目視を主たる根拠とする)。`make lint` は SwiftPM の manifest 読み込みが sandbox の制約で実行できないため `make lint` が使う SwiftLint を同じ設定で直接実行した (0 violations)。`.swiftlint.yml` の `included` に `SoraTests` が含まれないため、追加したテストファイルは SwiftLint ではなく `swift format lint --strict` のみで検証している。

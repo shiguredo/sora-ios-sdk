@@ -18,6 +18,12 @@
   - `data` の `as? [String: Any]` のようなキャストは `always fails` の警告が出て常に `nil` になる (warnings-as-errors では build できない)。`JSONValue` の case 分岐へ書き換える
   - JSON-RPC 2.0 の `error.data` が省略された場合は `nil`、`null` の場合は `.null` になる。数値は `JSONSerialization` を経由するため `decimal` / `double` の case で復元され、小数の表記が変わる場合がある (例: `0.1` は `.decimal(0.10000000000000001)`)
   - @t-miya
+- [CHANGE] WebRTC の enum 型への `CustomStringConvertible` 準拠を削除する
+  - 別 module の型へ protocol 準拠を追加していた retroactive conformance の警告 (SE-0364) を解消するため
+  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority` の準拠を削除し、SDK 内部の文字列化を `WebRTCEnumDescription` へ移す。`RTCDegradationPreference` は raw value で判定するようになり、m154 で追加された `maintainFramerateAndResolution` (値 0、削除予定の `disabled` の別名) も `"disabled"` として扱う
+  - 利用者コードの `description` はコンパイルエラーになり、文字列補間と `String(describing:)` は `RTCSignalingState(rawValue: 0)` のような raw 表現に変わる (`debugPrint` や Optional / 配列を経由した場合は `__C.` 付きの表現)
+  - `RTCRtpParameters.description` から `Optional(...)` が消え、未知の値は `RTCDataChannelState` も `RTCDegradationPreference` も `"unknown(<rawValue>)"` になる (`messagingError` の reason と SDK のログにも現れる)
+  - @t-miya
 - [ADD] JSON の値を表す公開型 `JSONValue` を追加する
   - @t-miya
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する
@@ -96,6 +102,10 @@
   - `VideoHardMuteActor` の所有権を取得できなかった呼び出しは `videoEnabled` を変更しない
   - 接続終了中 (lease が無効) の失敗では復元せず、黒塗りのまま終了する
   - `setVideoHardMute(true)` の経路では `onSwitchVideo` が `VideoHardMuteActor` の executor で発火する (これまでと異なるスレッドから呼ばれる場合がある)
+  - @t-miya
+- [FIX] 未知の WebRTC enum 値で `description` が `fatalError` によりプロセスを終了する問題を修正する
+  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` の `description` の `@unknown default` が `fatalError("unknown state")` を呼んでいた
+  - CHANGE エントリの、 WebRTC の enum 型への `CustomStringConvertible` 準拠の削除、によりこれらの `description` はなくなるため、未知の値でもプロセスが終了しなくなる
   - @t-miya
 
 ### misc
