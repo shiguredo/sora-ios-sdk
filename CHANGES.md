@@ -20,7 +20,7 @@
   - @t-miya
 - [CHANGE] WebRTC の enum 型への `CustomStringConvertible` 準拠を削除する
   - 別 module の型へ protocol 準拠を追加していた retroactive conformance の警告 (SE-0364) を解消するため
-  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority` の準拠を削除し、SDK 内部の文字列化を `WebRTCEnumDescription` へ移す
+  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority` の準拠を削除し、SDK 内部の文字列化を `WebRTCEnumDescription` へ移す。`RTCDegradationPreference` は raw value で判定するようになり、m154 で追加された `maintainFramerateAndResolution` (値 0、削除予定の `disabled` の別名) も `"disabled"` として扱う
   - 利用者コードの `description` はコンパイルエラーになり、文字列補間と `String(describing:)` は `RTCSignalingState(rawValue: 0)` のような raw 表現に変わる (`debugPrint` や Optional / 配列を経由した場合は `__C.` 付きの表現)
   - `RTCRtpParameters.description` から `Optional(...)` が消え、未知の値は `RTCDataChannelState` も `RTCDegradationPreference` も `"unknown(<rawValue>)"` になる (`messagingError` の reason と SDK のログにも現れる)
   - @t-miya
@@ -28,6 +28,7 @@
   - @t-miya
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する
   - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
+  - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
   - @zztkm
 - [UPDATE] CameraVideoCapturer のカメラ状態の所有者を単一化する
   - `CameraVideoCapturer` の `current` / `isRunning` / `format` / `frameRate` / `stream` を内部の owner (`CameraStateOwner`) が、`device` を instance の lock 付き storage が、`handlers` を型全体で共有する lock 付き storage が保持し、`NSLock` で保護した値から同期で読むようにする
