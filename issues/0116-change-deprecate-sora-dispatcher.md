@@ -22,7 +22,7 @@ production code からの `SoraDispatcher` の利用は 0 件である。`Sora/C
 ## 前提となる issue
 
 - `0103` (完了): カメラ状態の所有者を単一化する。`CameraVideoCapturer.swift` から `SoraDispatcher` の参照を除去済み。
-- `0107` (open): consumer fixture と公開 API baseline を提供する。本 issue の legacy consumer fixture の compile 検証と API baseline 検証は `0107` の完了を前提とする。
+- `0107` (open): consumer package と公開 API baseline を提供する。本 issue の legacy consumer package の compile 検証と API baseline 検証は `0107` の完了を前提とする。
 
 audio queue を使用する production code が追加された場合は、その処理の owner / adapter も先に用意する。
 
@@ -49,7 +49,7 @@ audio queue を使用する production code が追加された場合は、その
 
 - 実カメラで hard mute、unmute、start、stop、restart が camera owner 経由で動作することを確認する。
 - production code に `SoraDispatcher` の参照が残っていないことを確認する。
-- `0107` の legacy consumer fixture から `SoraDispatcher` を呼び、既存コードが compile できることを確認する。
+- `0107` の legacy consumer package から `SoraDispatcher` を呼び、既存コードが compile できることを確認する。
 - deprecated warning に削除予定と目的別 API への移行案内が表示されることを確認する。
 - API baseline で deprecation 以外の意図しない break がないことを確認する。
 - テストには、generic dispatch ではなく目的別 command を利用する理由を日本語コメントで明記する。
@@ -61,7 +61,7 @@ audio queue を使用する production code が追加された場合は、その
 - `SoraDispatcher` と `async(on:block:)` が deprecated であること。
 - deprecation message に削除予定 (次期 major version) と目的別 API への移行案内が記載されていること。
 - 既存 method の closure 型へ直接 `@Sendable` を追加していないこと。
-- legacy consumer fixture が引き続き compile できること。
+- legacy consumer package が引き続き compile できること。
 - `0070` と重複する dispatcher abstraction を追加していないこと。
 - API baseline に意図しない変更がないこと。
 - 追加したテストと既存テストがすべて成功すること。

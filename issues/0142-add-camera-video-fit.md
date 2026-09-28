@@ -3,7 +3,7 @@
 - Created: 2026-09-10
 - Completed: {YYYY-MM-DD}
 - Branch: feature/add-camera-video-fit
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-09-24
 
 ## 目的
 
@@ -20,13 +20,16 @@
 
 ## 設計方針
 
-- `CameraSettings` に映像の出力サイズ (`width` / `height`) とフィットモード (`contain` / `cover`) を追加する。出力サイズ未指定時はカメラフォーマットのサイズをそのまま送信し、現状の挙動を変えない。
-- 変換は `CameraVideoCapturerDelegate.capturer(_:didCapture:)` で行い、変換後のフレームを `MediaStream.send(videoFrame:)` へ渡す。`onCapture` ハンドラには変換後のフレームを渡し、ハンドラがフレームを返した場合は従来どおりそれを送信する。デフォルト無効のため既存のハンドラ利用者の挙動は変わらない。
+- `CameraSettings` に映像の出力サイズ (`width` / `height`) とフィットモード (`contain` / `cover`) を追加する。フィットモードの既定は `cover` とし、`contain` を明示した場合だけ余白を生成する。出力サイズ未指定時はカメラフォーマットのサイズをそのまま送信し、現状の挙動を変えない。
+- 出力サイズは回転適用後の表示向きで指定する。`cropAndScaleWith:offsetY:cropWidth:cropHeight:scaleWidth:scaleHeight:` へ渡す値と、変換後のフレームバッファのサイズはバッファ座標系の値であるため、`rotation` が 90 / 270 の場合は表示サイズの `width` / `height` を入れ替えて求める。
+- 変換設定は接続ごとの値である。`CameraVideoCapturer` の `front` / `back` は process-wide で共有され、公開 API の `start` / `restart` / `change` / `flip` は設定を受け取らない。そのため、接続側 (`PeerChannel` / `VideoHardMuteActor`) が開始・再開・切替のたびに設定をキャプチャ開始へ渡して capturer に保持し、`CameraVideoCapturerDelegate` が同期的に参照する。接続側の経路では毎回設定し直し、公開 API 経由の操作では直近の設定を維持する。
+- 変換は `CameraVideoCapturerDelegate.capturer(_:didCapture:)` で行い、変換後のフレームを `MediaStream.send(videoFrame:)` へ渡す。`onCapture` ハンドラには変換後のフレームを渡し、ハンドラがフレームを返した場合は従来どおりそれを送信する。出力サイズ未指定時は変換を行わないため、既存のハンドラ利用者の挙動は変わらない。
 - cover は、フレームの回転を考慮した表示サイズと出力サイズから中央基準の切り取り矩形を計算し、`cropAndScaleWith:offsetY:cropWidth:cropHeight:scaleWidth:scaleHeight:` で出力サイズへ拡大縮小する。
-- contain は、フィットする矩形を計算した上で、出力サイズの `CVPixelBuffer` を新規作成して黒で塗り、`cropAndScaleTo:withTempBuffer:` で中央に描画する。出力サイズが同じ間は `CVPixelBuffer` を使い回し、毎フレームの再確保を避ける。
+- contain は、フィットする矩形を計算した上で、出力サイズの `CVPixelBuffer` を黒で塗り、フィット矩形へ変換したカメラ映像を中央へ合成する。`cropAndScaleTo:withTempBuffer:` は出力バッファ全体への拡大縮小にしか対応しておらず、中央へのオフセット配置はできないため、合成には Core Image を用いる (フィットサイズのバッファへ `cropAndScaleTo:withTempBuffer:` で書き出してから、出力バッファへ中央にコピーする方法でもよい)。
+- contain の出力バッファは `CVPixelBufferPool` から取得する。単一の `CVPixelBuffer` を使い回すと、`MediaStream.send(videoFrame:)` が非同期 (`StreamFrameOwner` で最大 4 フレームが滞留し得る) のため、配送待ちまたはエンコード中の前フレームの画素データを上書きする競合が発生する。
 - カメラフレームは `rotation` を持つため、切り取り矩形の計算は `RTCVideoFrame.width` / `height` (回転適用前) と `rotation` から表示サイズを求めて行う。変換後の `RTCVideoFrame` には元の `rotation` と `timeStampNs` を引き継ぐ。
 - 変換の対象はカメラ由来の `RTCCVPixelBuffer` に限定する。画面共有などカメラ以外のフレームは対象外とする。
-- カメラの `restart` / `change` / `flip` をまたいでも指定を維持する。`VideoHardMuteActor` がカメラを再起動する経路があるため、`CameraSettingsSnapshot` にも新しい設定を引き継ぐ。
+- カメラの `restart` / `change` / `flip` をまたいでも指定を維持する。`VideoHardMuteActor` がカメラを再起動する経路があるため、`CameraSettingsSnapshot` にも新しい設定を引き継ぎ、再起動時の受け渡しに使う。
 - 接続中に出力サイズやフィットモードを変更する API は本 issue では追加しない。
 
 ## テスト方針
@@ -48,9 +51,10 @@
 
 ## 変更対象ファイル
 
-- `Sora/CameraVideoCapturer.swift`
-- `Sora/Configuration.swift`
-- `Sora/VideoMute.swift`
+- `Sora/CameraVideoCapturer.swift` (変換の実装と変換設定の保持)
+- `Sora/Configuration.swift` (`CameraSettings` へ出力サイズとフィットモードを追加)
+- `Sora/VideoMute.swift` (`CameraSettingsSnapshot` へ出力サイズとフィットモードを追加)
+- `Sora/PeerChannel.swift` (接続時カメラ起動経路で変換設定を受け渡す)
 - `SoraTests/` (追加するテスト)
 
 ## 解決方法

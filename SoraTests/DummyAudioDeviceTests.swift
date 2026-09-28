@@ -4,10 +4,14 @@ import XCTest
 
 /// E2E テストと単体テストで利用する 440Hz 正弦波ジェネレーター
 ///
-/// DummyAudioDevice の pcmGenerator として注入する。
+/// DummyAudioDevice の pcmGenerator (`@Sendable`) として注入する。
 /// サンプルごとに位相を進めて保持するため、フレーム境界 (20ms) を跨いでも
 /// 波形が不連続にならず、クリックノイズが発生しない。
-final class SineWaveGenerator {
+///
+/// `@unchecked Sendable` としているのは、可変状態が `phase` だけで、その読み書きを
+/// すべて `lock` で排他しているためである (ADM の音声スレッドから呼ばれる)。
+final class SineWaveGenerator: @unchecked Sendable {
+  private let lock = NSLock()
   private var phase: Double = 0
   private let frequency: Double
 
@@ -15,11 +19,22 @@ final class SineWaveGenerator {
     self.frequency = frequency
   }
 
+  /// 生成した累積時間 (秒)
+  ///
+  /// 並行呼び出しで位相の更新が失われないことをテストから確認するために公開する。
+  var elapsedTime: Double {
+    lock.lock()
+    defer { lock.unlock() }
+    return phase
+  }
+
   /// 正弦波の PCM データを生成する
   /// - Parameter data: データ書き込み先
   /// - Parameter frameCount: フレーム数
   /// - Parameter sampleRate: サンプルレート
   func generate(data: UnsafeMutableRawPointer, frameCount: Int, sampleRate: Double) {
+    lock.lock()
+    defer { lock.unlock() }
     let pcm = data.assumingMemoryBound(to: Int16.self)
     // 波形は sin(2π × 周波数 × 時刻) で表され、時刻は位相 (phase) で管理する。
     // 振幅はフルスケール (Int16 の最大値 32767) の 30% とする。
@@ -35,10 +50,25 @@ final class SineWaveGenerator {
 }
 
 /// 左を 600 Hz、右を 1200 Hz とする、左右を区別できるステレオ音源。
-final class StereoSineWaveGenerator {
+///
+/// `@unchecked Sendable` としているのは、可変状態が `time` だけで、その読み書きを
+/// すべて `lock` で排他しているためである (ADM の音声スレッドから呼ばれる)。
+final class StereoSineWaveGenerator: @unchecked Sendable {
+  private let lock = NSLock()
   private var time: Double = 0
 
+  /// 生成した累積時間 (秒)
+  ///
+  /// 並行呼び出しで位相の更新が失われないことをテストから確認するために公開する。
+  var elapsedTime: Double {
+    lock.lock()
+    defer { lock.unlock() }
+    return time
+  }
+
   func generate(data: UnsafeMutableRawPointer, frameCount: Int, sampleRate: Double) {
+    lock.lock()
+    defer { lock.unlock() }
     let pcm = data.assumingMemoryBound(to: Int16.self)
     for frame in 0..<frameCount {
       pcm[frame * 2] = Int16(sin(2 * .pi * 600 * time) * 9830)
@@ -49,7 +79,9 @@ final class StereoSineWaveGenerator {
 }
 
 /// ADM の再生 PCM から左右の周波数成分を測る。受信した実データだけを判定する。
-/// callback とテストスレッドの共有カウンターはロックで保護する。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `separatedDuration` だけで、その読み書きを
+/// すべて `lock` で排他しているためである (ADM の音声スレッドから呼ばれる)。
 final class StereoToneProbe: @unchecked Sendable {
   private let lock = NSLock()
   private var separatedDuration: Double = 0
@@ -89,11 +121,40 @@ final class StereoToneProbe: @unchecked Sendable {
   }
 }
 
+/// pcmGenerator が呼ばれたかどうかを callback とテストスレッドで共有する箱
+///
+/// pcmGenerator は `@Sendable` な closure のため可変な `var` を capture できない。
+/// `@unchecked Sendable` としているのは、可変状態が `called` だけで、その読み書きをすべて
+/// `lock` で排他しているためである (注入先の pcmGenerator は ADM の音声スレッドからも呼ばれ得る)。
+private final class CallFlag: @unchecked Sendable {
+  private let lock = NSLock()
+  private var called = false
+
+  var isCalled: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return called
+  }
+
+  func set() {
+    lock.lock()
+    called = true
+    lock.unlock()
+  }
+}
+
 /// DummyAudioDevice の単体テスト
 ///
-/// PCM 生成 (fillPCMData) は外部注入された pcmGenerator への委譲のみであるため、
-/// 注入するジェネレーター (SineWaveGenerator) の動作と、
-/// DummyAudioDevice のハードミュート制御を検証する。
+/// `DummyAudioDevice` 自体は次の点を検証する。
+///
+/// - チャンネル数の既定値と 2 ch 指定の反映、2 ch 指定によるステレオ SDP の要求
+/// - `fillPCMData` が外部注入された pcmGenerator へ委譲すること
+/// - ハードミュート制御と、`terminateDevice` で初期状態へ戻ること
+///
+/// 併せてテスト用ヘルパーの動作を検証する。
+///
+/// - 生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の周波数・位相の連続性・並行利用
+/// - ステレオ判定器 (`StereoToneProbe`) が無音・左右交換・モノラル化を成功扱いしないこと
 final class DummyAudioDeviceTests: XCTestCase {
 
   /// チャンネル数の既定値を維持しつつ、2 ch 指定を入出力の双方へ反映する。
@@ -178,9 +239,9 @@ final class DummyAudioDeviceTests: XCTestCase {
 
   /// fillPCMData が注入した pcmGenerator を呼ぶことを確認する
   func testFillPCMDataInvokesGenerator() {
-    var generatorCalled = false
+    let generatorCalled = CallFlag()
     let device = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in
-      generatorCalled = true
+      generatorCalled.set()
     }
 
     let dataSize = 960 * MemoryLayout<Int16>.size
@@ -188,7 +249,7 @@ final class DummyAudioDeviceTests: XCTestCase {
     defer { data.deallocate() }
     device.fillPCMData(data: data, frameCount: 960, sampleRate: 48000)
 
-    XCTAssertTrue(generatorCalled, "fillPCMData は pcmGenerator を呼ぶべき")
+    XCTAssertTrue(generatorCalled.isCalled, "fillPCMData は pcmGenerator を呼ぶべき")
   }
 
   /// 全 0 を生成する pcmGenerator を注入した場合、全サンプルが 0 になることを確認する
@@ -257,6 +318,52 @@ final class DummyAudioDeviceTests: XCTestCase {
     XCTAssertEqual(whole, split, "フレーム境界を跨いでも位相が連続しているべき")
   }
 
+  /// 生成器の lock が並行呼び出しで位相の更新を失わないことを確認する
+  ///
+  /// ADM は lifecycle メソッドを直列化するが、テストから `fillPCMData` を直接呼ぶ経路とは
+  /// 交差し得るため、生成器の可変状態は複数スレッドから保護されている必要がある。
+  ///
+  /// このテストは競合が起きれば必ず落ちる (位相が総フレーム数に一致しなくなる) が、
+  /// `concurrentPerform` の並列度は保証されないため、単体では best-effort の検出である。
+  /// lock を外した場合の検出は Thread Sanitizer を有効にした実行を最終的な検出器とする。
+  func testGeneratorsAreSafeForConcurrentUse() {
+    /// 同じ生成器を並行に呼び、位相が総フレーム数ぶん前進したことを確認する
+    ///
+    /// 書き込み先は生成器が書き込む分 (`channelCount × frameCount` の Int16) を確保する。
+    /// `iterations` × `frameCount` は 61440 サンプルで、位相の期待値 1.28 秒に対する
+    /// 加算の丸め誤差の上限 (約 1e-11) より十分大きい 1e-9 を許容誤差にする。
+    func verify(
+      generate: @Sendable (UnsafeMutableRawPointer, Int, Double) -> Void,
+      elapsedTime: () -> Double,
+      channels: Int,
+      name: String
+    ) {
+      let iterations = 64
+      let frameCount = 960
+      let sampleRate = 48000.0
+      DispatchQueue.concurrentPerform(iterations: iterations) { _ in
+        let data = UnsafeMutableRawPointer.allocate(
+          byteCount: frameCount * channels * MemoryLayout<Int16>.size, alignment: 1)
+        defer { data.deallocate() }
+        generate(data, frameCount, sampleRate)
+      }
+
+      XCTAssertEqual(
+        elapsedTime(), Double(iterations * frameCount) / sampleRate, accuracy: 1e-9,
+        "\(name) が並行呼び出しでも総フレーム数ぶん位相を進めること")
+    }
+
+    let sine = SineWaveGenerator(frequency: 440)
+    verify(
+      generate: sine.generate, elapsedTime: { sine.elapsedTime }, channels: 1,
+      name: "SineWaveGenerator")
+
+    let stereo = StereoSineWaveGenerator()
+    verify(
+      generate: stereo.generate, elapsedTime: { stereo.elapsedTime }, channels: 2,
+      name: "StereoSineWaveGenerator")
+  }
+
   /// initialMicrophoneEnabled = false の場合、初期状態でハードミュートされることを確認する
   /// (Configuration.initialMicrophoneEnabled の契約をダミー音声経路でも守る)
   func testInitialMicrophoneDisabledStartsMuted() {
@@ -277,10 +384,30 @@ final class DummyAudioDeviceTests: XCTestCase {
   func testSetHardMuteTogglesState() {
     let device = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in }
 
-    device.setHardMute(true)
+    _ = device.setHardMute(true)
     XCTAssertTrue(device.isHardMuted, "setHardMute(true) でミュートになるべき")
 
-    device.setHardMute(false)
+    _ = device.setHardMute(false)
     XCTAssertFalse(device.isHardMuted, "setHardMute(false) でミュートが解除されるべき")
+  }
+
+  /// terminateDevice で初期のハードミュート状態へ戻ることを確認する
+  ///
+  /// `Configuration.initialMicrophoneEnabled` は接続時点の状態を定めるため、接続をまたいで
+  /// `setAudioHardMute` の状態を持ち越さない。持ち越すと再接続後も無音のままになる。
+  func testTerminateRestoresInitialHardMute() {
+    let device = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in }
+    _ = device.setHardMute(true)
+    XCTAssertTrue(device.isHardMuted, "setHardMute(true) でミュートになるべき")
+
+    XCTAssertTrue(device.terminateDevice(), "terminateDevice が成功すること")
+    XCTAssertFalse(device.isHardMuted, "terminate 後に初期状態 (ミュートなし) へ戻るべき")
+
+    let mutedDevice = DummyAudioDevice(initialMicrophoneEnabled: false) { _, _, _ in }
+    _ = mutedDevice.setHardMute(false)
+    XCTAssertFalse(mutedDevice.isHardMuted, "setHardMute(false) でミュートが解除されるべき")
+
+    XCTAssertTrue(mutedDevice.terminateDevice(), "terminateDevice が成功すること")
+    XCTAssertTrue(mutedDevice.isHardMuted, "terminate 後に初期状態 (ミュート) へ戻るべき")
   }
 }

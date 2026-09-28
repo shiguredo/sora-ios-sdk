@@ -35,7 +35,7 @@ Swift 6 の `sending` エラーを回避するために定義していた `Video
 
 ### 前提
 
-- `0107` の consumer fixture で legacy と新 API の source compatibility を固定する。
+- `0107` の consumer package で legacy と新 API の source compatibility を固定する。
 - `0105` で frame ownership、sequence、全 renderer callback の ordered ingress と main queue 配送が確立する。
 - `0060` の non-UI renderer 向け custom executor と、本 issue の UI 専用 MainActor 契約を分離する。
 
@@ -72,11 +72,11 @@ Swift 6 の `sending` エラーを回避するために定義していた `Video
 
 モック・スタブは使用しない。
 
-- `0107` の consumer fixture で、legacy `VideoRenderer` 実装、新 protocol だけの実装、新登録 API、`VideoView` の 4 ケースを通常の `import Sora` から compile する。
+- `0107` の consumer package で、legacy `VideoRenderer` 実装、新 protocol だけの実装、新登録 API、`VideoView` の 4 ケースを通常の `import Sora` から compile する。
 - 実 WebRTC frame と実 `VideoView` を使用し、全 callback が MainActor 上で実行されることを確認する。
 - add、size、frame、switch、remove、disconnect の順序と、disconnect 後の stale frame 破棄を確認する。
 - Main Thread Checker を補助的に有効化する。
-- strict concurrency と warnings-as-errors で SDK と consumer fixture を build する。
+- strict concurrency と warnings-as-errors で SDK と consumer package を build する。
 
 ## 完了条件
 

@@ -5,11 +5,11 @@
 - Completed:
 - Model: Opus 4.7
 - Branch: feature/change-migrate-to-webrtc-c-xcframework
-- Polished: 2026-06-15
+- Polished: 2026-09-24
 
 ## 本 issue の性質と進行方針
 
-本移行は工事規模が極端に大きく（影響範囲 25 ファイル、`Sora/` 配下計 10,532 行）、1 issue = 1 branch = 1 PR の規約では収まらない。そのため本 issue は **移行全体の方針を保持する親 issue** として扱う。本 issue の `Branch:` で実施するのは **Phase 0（PoC）のみ**。Phase 1〜5 は Phase 0 完了後に個別 issue として新規起票し、それぞれを独立した 1 issue = 1 branch = 1 PR の単位で `shiguredo-issues` / `shiguredo-git` 規約に従って進める。
+本移行は工事規模が極端に大きく（`import WebRTC` を含む影響範囲 28 ファイル、`Sora/` 配下計 19,094 行）、1 issue = 1 branch = 1 PR の規約では収まらない。そのため本 issue は **移行全体の方針を保持する親 issue** として扱う。本 issue の `Branch:` で実施するのは **Phase 0（PoC）のみ**。Phase 1〜5 は Phase 0 完了後に個別 issue として新規起票し、それぞれを独立した 1 issue = 1 branch = 1 PR の単位で `shiguredo-issues` / `shiguredo-git` 規約に従って進める。
 
 本 issue の close 条件は Phase 0 完了基準を満たし、PoC 結果から Phase 1〜5 の起票が可能と判断できる状態（または「移行は得策ではない」という結論）に到達すること。Phase 1〜5 の進捗は本 issue ではなく個別 issue で管理する。
 
@@ -17,7 +17,7 @@
 
 ### 進行ステータス
 
-本 issue は `issues/` 直下（Active）で扱うが、設計判断と外部リポジトリ合意が多数残るため `/auto-resolve` の対象外とする。Phase 0 着手はユーザー指示で `Branch:` のブランチを手動で切って進める。Phase 0 完了時に本 issue を `issues/closed/` に移し、Phase 1〜5 は新規起票された個別 issue で別途追跡する。
+本 issue は `issues/` 直下（open）で扱うが、設計判断と外部リポジトリ合意が多数残るため `/auto-resolve` の対象外とする。Phase 0 着手はユーザー指示で `Branch:` のブランチを手動で切って進める。Phase 0 完了時に本 issue を `issues/closed/` に移し、Phase 1〜5 は新規起票された個別 issue で別途追跡する。
 
 着手前に以下を確認する。確認できない場合は `issues/pending/` に移動し、合意成立後に再 active 化する。
 
@@ -35,13 +35,13 @@ sora-ios-sdk が依存している libwebrtc iOS SDK（`WebRTC.xcframework` / `i
 - iOS SDK 内部のバグ（VideoToolbox / AudioSession / Metal renderer まわり）が Google 側で修正されない
 - 新しい iOS バージョン対応も時雨堂が肩代わりせざるを得ない
 
-時雨堂のスタックでは libwebrtc を `webrtc-build` で自前ビルドし、薄い C ラッパー `webrtc_c` を `shiguredo/webrtc-rs` で開発して `libwebrtc_c.xcframework` として配布している。sora-cpp-sdk と sora-flutter-sdk は既にこの C ラッパー経由で libwebrtc を利用しており、Flutter SDK は iOS で本番投入実績がある。
+時雨堂のスタックでは libwebrtc を `webrtc-build` で自前ビルドし、薄い C ラッパー `webrtc_c` を `shiguredo/webrtc-rs` で開発して `libwebrtc_c.xcframework` として配布している。sora-flutter-sdk は既にこの C ラッパー経由で libwebrtc を利用しており、iOS で本番投入実績がある。sora-cpp-sdk は libwebrtc の C++ API を直接利用しており（webrtc_c は利用していない）、webrtc_c 基盤を共有するのは Flutter SDK と iOS SDK になる。
 
-sora-ios-sdk だけが Google ObjC SDK にぶら下がっている現状は、時雨堂スタックの中で最もメンテ停滞しているコンポーネントへの構造的依存になっている。本 issue ではこの依存を完全に解消し、`libwebrtc_c.xcframework` 経由で libwebrtc を直接利用する形に移行する。これにより sora-cpp-sdk / sora-flutter-sdk / sora-ios-sdk が同じ C API 基盤を共有する状態になる。
+sora-ios-sdk だけが Google ObjC SDK にぶら下がっている現状は、時雨堂スタックの中で最もメンテ停滞しているコンポーネントへの構造的依存になっている。本 issue ではこの依存を完全に解消し、`libwebrtc_c.xcframework` 経由で libwebrtc を直接利用する形に移行する。これにより sora-flutter-sdk / sora-ios-sdk が同じ webrtc_c 基盤を共有する状態になる。
 
 ## 優先度根拠
 
-- 戦略的重要性: 時雨堂 SDK スタック全体で webrtc_c を共通基盤にする方針の最後のピース。iOS だけ取り残されると、新機能・新 API 追従の二重作業が継続する。
+- 戦略的重要性: sora-flutter-sdk / sora-ios-sdk を webrtc_c で共通化する取り組みの最後のピース。iOS だけ取り残されると、新機能・新 API 追従の二重作業が継続する。
 - リスク回避: ObjC SDK のメンテ停滞は現在進行形の問題であり、放置するほど libwebrtc 本体との API 差が広がり追従コストが増大する。
 - 時間的コスト構造: 移行は静的な工事費用だが、放置コストは時間とともに膨らむ。早く着手するほど総コストが小さい。
 - 実証: sora-flutter-sdk が同一スタックで iOS 本番投入されており、技術的な実現可能性は確認済み。
@@ -50,63 +50,77 @@ sora-ios-sdk だけが Google ObjC SDK にぶら下がっている現状は、�
 
 ### 依存定義
 
-`Package.swift` で `m148.7778.7.0` 版の `WebRTC.xcframework` を `binaryTarget` として取り込んでいる。
+`Package.swift` で `m150.7871.3.5` 版の `WebRTC.xcframework` を `binaryTarget` として取り込んでいる（2026-09-24 時点の develop）。
 
 ```swift
-// Package.swift:6, 21-25
-let libwebrtcVersion = "m148.7778.7.0"
+// Package.swift の libwebrtcVersion 定数と WebRTC の binaryTarget 定義
+let libwebrtcVersion = "m150.7871.3.5"
 .binaryTarget(
     name: "WebRTC",
     url: "https://github.com/shiguredo-webrtc-build/webrtc-build/releases/download/\(libwebrtcVersion)/WebRTC.xcframework.zip",
-    checksum: "df0f99daa66231adce88b4ae0e8b4672ab053842cc43ebe8120968e1337084f6"
+    checksum: "518d6f6ca2b0a99f2af048aec99cc4b67797215346019e08630008eb5ff1d583"
 )
 ```
 
 ### `import WebRTC` の分布
 
-`Sora/` 配下（`Sora/*.swift` および `Sora/Extensions/*.swift` を含む）で `import WebRTC` しているファイルは 25 個。`Sora/` 全体は計 10,532 行（`Sora/*.swift` 計 10,452 行 + `Sora/Extensions/*.swift` 計 80 行）。`import WebRTC` を含むファイルを行数順に列挙する:
+`Sora/` 配下（`Sora/*.swift` および `Sora/Extensions/*.swift` を含む）で `import WebRTC` しているファイルは 28 個。`Sora/` 全体は計 19,094 行（`Sora/*.swift` 計 19,014 行 + `Sora/Extensions/*.swift` 計 80 行）。`import WebRTC` を含むファイルを行数順に列挙する（行数は 2026-09-24 時点の develop で計測）:
 
 | ファイル | 行数 | 主に使う `RTC*` 型 |
 |---|---|---|
-| `PeerChannel.swift` | 1,558 | `RTCPeerConnection`, `RTCPeerConnectionDelegate`, `RTCConfiguration`, `RTCDataChannel`, `RTCIceCandidate`, `RTCIceConnectionState`, `RTCIceGatheringState`, `RTCMediaConstraints`, `RTCMediaStream`, `RTCPeerConnectionState`, `RTCSignalingState`, `RTCDegradationPreference`, `RTCVersion` |
-| `Signaling.swift` | 1,443 | `RTCRtpEncodingParameters`, `RTCResolutionRestriction`, libwebrtc バージョン文字列処理（SDP 入出力） |
-| `MediaChannel.swift` | 941 | `RTCStatisticsReport` |
-| `CameraVideoCapturer.swift` | 514 | `RTCCameraVideoCapturer`, `RTCVideoCapturerDelegate` |
-| `Sora.swift` | 490 | `RTCAudioSession`, `RTCAudioSessionDelegate`, `RTCCallbackLogger`, `RTCConfiguration`, `RTCLoggingSeverity` |
-| `VideoView.swift` | 443 | `RTCMTLVideoView`, `RTCVideoRenderer` |
-| `Configuration.swift` | 411 | `import` のみ（コーデック設定は `VideoCodec` / `AudioCodec` 経由） |
-| `MediaStream.swift` | 284 | `RTCMediaStream`, `RTCVideoTrack`, `RTCAudioTrack`, `AudioSource.volume` |
-| `DataChannel.swift` | 277 | `RTCDataChannel`, `RTCDataChannelDelegate` |
-| `NativePeerChannelFactory.swift` | 214 | `RTCPeerConnectionFactory`, `RTCDefaultVideoEncoderFactory`, `RTCDefaultVideoDecoderFactory`, `RTCVideoEncoderFactorySimulcast`, `RTCAudioDeviceModule` |
-| `WebRTCConfiguration.swift` | 197 | `RTCConfiguration`, `RTCMediaConstraints`, `RTCIceServer`, `RTCIceTransportPolicy`, `RTCSdpSemantics` |
-| 他（小規模）| 計 817 | `Utilities.swift`（111 行、`import` のみで RTC 利用無し）, `VideoRenderer.swift`（97 行、`RTCVideoRenderer`）, `ICEServerInfo.swift`（96 行）, `ConnectionState.swift`（74 行）, `VideoFrame.swift`（64 行、`RTCVideoFrame`）, `IOSCertificateVerifier.swift`（61 行、`RTCSSLCertificateVerifier`）, `Extensions/RTC+Description.swift`（60 行、`RTC*` 状態の `CustomStringConvertible`）, `ICETransportPolicy.swift`（59 行）, `Statistics.swift`（55 行、`RTCStatisticsReport`）, `AudioDeviceModuleWrapper.swift`（46 行、`RTCAudioDeviceModule` の `pauseRecording` / `resumeRecording`）, `ICECandidate.swift`（42 行）, `SoraDispatcher.swift`（22 行、`RTCDispatcher`）, `TLSSecurityPolicy.swift`（18 行）, `VideoCapturer.swift`（12 行、`import` のみで RTC 利用無し） |
+| `PeerChannel.swift` | 2,362 | `RTCPeerConnection`, `RTCPeerConnectionDelegate`, `RTCAudioSession`, `RTCDataChannel`, `RTCDataChannelDelegate`, `RTCIceCandidate`, `RTCIceConnectionState`, `RTCIceGatheringState`, `RTCIceTransportState`, `RTCMediaConstraints`, `RTCMediaStream`, `RTCPeerConnectionState`, `RTCPriority`, `RTCRtpSender`, `RTCRtpTransceiverDirection`, `RTCSessionDescription`, `RTCSignalingState`, `RTCVideoSource` |
+| `MediaChannel.swift` | 1,671 | `RTCAudioDevice`, `RTCAudioDeviceModule`, `RTCPeerConnection` |
+| `CameraVideoCapturer.swift` | 1,655 | `RTCCameraVideoCapturer`, `RTCDispatcher`, `RTCVideoCapturer`, `RTCVideoCapturerDelegate`, `RTCVideoFrame`, `RTCVideoSource` |
+| `Signaling.swift` | 1,510 | `RTCPriority`, `RTCResolutionRestriction`, `RTCRtpEncodingParameters` |
+| `StreamFrameOwner.swift` | 634 | `RTCVideoCapturer`, `RTCVideoFrame`, `RTCVideoSource` |
+| `Sora.swift` | 586 | `RTCAudioSession`, `RTCAudioSessionDelegate`, `RTCCallbackLogger`, `RTCCleanupSSL`, `RTCEnableMetrics`, `RTCInitializeSSL`, `RTCLoggingSeverity`, `RTCSetMinDebugLogLevel`, `RTCShutdownInternalTracer` |
+| `Configuration.swift` | 536 | `RTCAudioDevice`, `RTCAudioDeviceModule` |
+| `ConnectionConfigurationSnapshot.swift` | 484 | `RTCAudioDevice`, `RTCConfiguration`, `RTCCryptoOptions`, `RTCIceServer`, `RTCMediaConstraints` |
+| `VideoView.swift` | 460 | `RTCEAGLVideoView`, `RTCMTLVideoView`, `RTCVideoRenderer` |
+| `DummyAudioDevice.swift` | 449 | `RTCAudioDevice`, `RTCAudioDeviceDelegate` |
+| `MediaStream.swift` | 417 | `RTCAudioTrack`, `RTCAudioTrackSink`, `RTCMediaStream`, `RTCVideoSource`, `RTCVideoTrack` |
+| `NativePeerChannelFactory.swift` | 332 | `RTCPeerConnectionFactory`, `RTCDefaultVideoEncoderFactory`, `RTCDefaultVideoDecoderFactory`, `RTCVideoEncoderFactorySimulcast`, `RTCAudioDeviceModule`, `RTCAudioDevice`, `RTCAudioSource`, `RTCAudioTrack`, `RTCConfiguration`, `RTCMediaConstraints`, `RTCMediaStream`, `RTCPeerConnection`, `RTCPeerConnectionDelegate`, `RTCProxyType`, `RTCSSLCertificateVerifier`, `RTCVideoCodecInfo`, `RTCVideoEncoder`, `RTCVideoEncoderFactory`, `RTCVideoSource`, `RTCVideoTrack` |
+| `DataChannel.swift` | 315 | `RTCDataBuffer`, `RTCDataChannel`, `RTCDataChannelDelegate`, `RTCDataChannelState`, `RTCPeerConnection` |
+| `AudioSessionCoordinator.swift` | 217 | `RTCAudioSessionConfiguration` |
+| `WebRTCConfiguration.swift` | 170 | `RTCDegradationPreference`, `RTCMediaConstraints`, `RTCSdpSemantics` |
+| `IOSCertificateVerifier.swift` | 161 | `RTCSSLCertificateVerifier` |
+| `Utilities.swift` | 114 | `import` のみで RTC 利用無し |
+| `VideoRenderer.swift` | 93 | `RTCVideoFrame`, `RTCVideoRenderer`, `RTCVideoSource` |
+| `ICEServerInfo.swift` | 91 | `import` のみで RTC 利用無し |
+| `ConnectionState.swift` | 74 | `RTCPeerConnectionState` |
+| `VideoFrame.swift` | 67 | `RTCCVPixelBuffer`, `RTCVideoCapturer`, `RTCVideoFrame`, `RTCVideoRotation`, `RTCVideoSource` |
+| `ICETransportPolicy.swift` | 61 | `RTCIceTransportPolicy` |
+| `Extensions/RTC+Description.swift` | 60 | `RTCIceConnectionState`, `RTCIceGatheringState`, `RTCSessionDescription`, `RTCSignalingState` |
+| `Statistics.swift` | 55 | `RTCStatistics`, `RTCStatisticsReport` |
+| `ICECandidate.swift` | 42 | `RTCIceCandidate` |
+| `AudioDeviceModuleWrapper.swift` | 41 | `RTCAudioDeviceModule` |
+| `SoraDispatcher.swift` | 22 | `RTCDispatcher`, `RTCDispatcherQueueType` |
+| `VideoCapturer.swift` | 17 | `import` のみで RTC 利用無し |
 
-`Utilities.swift` と `VideoCapturer.swift` は `import WebRTC` だけが残っており実利用がないため、Phase 2 では `import` 文の削除だけで済む。
+`Utilities.swift` / `VideoCapturer.swift` / `ICEServerInfo.swift` は `import WebRTC` だけが残っており実利用がないため、Phase 2 では `import` 文の削除だけで済む。
 
-`ScreenCapture.swift`（389 行）は `import WebRTC` していないが、`MediaStream.send(videoFrame:)` を経由して `RTCVideoSource.capturer(_:didCapture:)` に間接依存しており、Phase 4 で `AdaptedVideoTrackSource` へ書き換える対象に含まれる。
+`ScreenCapture.swift`（940 行）は `import WebRTC` していないが、`MediaStream.send(videoFrame:)` を経由して `RTCVideoSource.capturer(_:didCapture:)` に間接依存しており、Phase 4 で `AdaptedVideoTrackSource` へ書き換える対象に含まれる。
 
-`MediaChannelConfiguration.swift`（19 行）は `import WebRTC` を含まず、`@available(*, unavailable)` でクラスごと廃止予定。内部に `// TODO: RTCConfiguration` コメントだけ残るため、本移行の機会に削除する（Phase 2 で除去）。
+`SoraTests/` 配下にも 9 ファイル（`SoraTests/SoraTests.swift` を含む）が `import WebRTC` している。`SoraTests/SoraTests.swift` は中身が空テンプレートのため、Phase 4 完了時の `WebRTC.xcframework` 削除と同時に `import WebRTC` を取り外す。
 
-`SoraTests/SoraTests.swift` でも `import WebRTC` しているが、中身は空テンプレートのため Phase 4 完了時の `WebRTC.xcframework` 削除と同時に `import WebRTC` を取り外す。
-
-`Sora/Sora.h`（11 行）は ObjC umbrella header。`#import <UIKit/UIKit.h>` のみだが、Swift Package Manager の binaryTarget + `CWebrtc` モジュール（C モジュール）併用時に `module.modulemap` の構成変更が必要になる可能性があるため Phase 0 で確認する。
+`Sora/Sora.h`（9 行）は ObjC umbrella header。`#import <UIKit/UIKit.h>` とプロジェクトバージョンのエクスポート宣言のみだが、Swift Package Manager の binaryTarget + `CWebrtc` モジュール（C モジュール）併用時に `module.modulemap` の構成変更が必要になる可能性があるため Phase 0 で確認する。
 
 ### webrtc_c 側の準備状況
 
-`shiguredo/webrtc-rs` リポジトリの `webrtc/src/webrtc_c.h` が公開する主要 API:
+`shiguredo/webrtc-rs` リポジトリの `webrtc/src/webrtc_c.h` が公開する主要 API（2026-09-24 時点の develop で確認）:
 
 - PeerConnection 系: `api/peer_connection_interface.h`, `api/jsep.h`, `api/set_local_description_observer_interface.h`, `api/set_remote_description_observer_interface.h`
 - RTP 系: `api/rtp_parameters.h`, `api/rtp_sender_interface.h`, `api/rtp_receiver_interface.h`, `api/rtp_transceiver_interface.h`, `api/rtp_transceiver_direction.h`, `api/priority.h`
 - メディア: `api/media_stream_interface.h`, `api/media_types.h`, `api/video/*`, `api/audio/*`, `api/audio_codecs/*`, `api/video_codecs/*`
 - Stats: `api/stats/rtc_stats_collector_callback.h`, `api/stats/rtc_stats_report.h`
-- ベース: `api/environment.h`, `api/ref_count.h`, `api/rtc_error.h`, `rtc_base/{thread, logging, ssl_*, crypto_random, time_utils}.h`, `pc/connection_context.h`
-- iOS 連携: `sdk/objc/components/audio/audio_session.h`, `sdk/objc/components/video_codec/RTCDefaultVideo{Encoder,Decoder}Factory.h`, `sdk/objc/native/api/video_{encoder,decoder}_factory.h`
+- ベース: `api/environment/environment.h` / `api/environment/environment_factory.h`, `api/ref_count.h`, `api/rtc_error.h`, `rtc_base/{thread, logging, ssl_*, crypto_random, time_utils}.h`, `pc/connection_context.h`
+- iOS 連携: `sdk/objc/components/audio/audio_session.h`（webrtc_c.h からは公開されず直接インクルードする）, `sdk/objc/components/video_codec/RTCDefaultVideo{Encoder,Decoder}Factory.h`, `sdk/objc/native/api/video_{encoder,decoder}_factory.h`
 
-`whip.c`（1,603 行）/ `whep.c`（1,359 行）が C のみでの PeerConnection 組み立て例として動作確認済み。これらは sora-ios-sdk の `PeerChannel.swift`（1,558 行）と概ね同規模の C 実装が必要になる規模感の参照になる。`PeerConnectionFactoryDependencies` の組み立て、3 スレッド (network / worker / signaling) 起動、ADM / AudioCodec Factory / VideoCodec Factory 注入、`PeerConnectionObserver` の C コールバック実装、SDP オファー/アンサー生成、ICE 候補処理が C のみで実装されている。
+`whip.c`（1,602 行）/ `whep.c`（1,352 行、いずれも 2026-09-24 時点の develop）が C のみでの PeerConnection 組み立て例として動作確認済み。これらは sora-ios-sdk の `PeerChannel.swift`（2,362 行）より小さいが、C のみでの実装規模感の参照になる。`PeerConnectionFactoryDependencies` の組み立て、3 スレッド (network / worker / signaling) 起動、ADM / AudioCodec Factory / VideoCodec Factory 注入、`PeerConnectionObserver` の C コールバック実装、SDP オファー/アンサー生成、ICE 候補処理が C のみで実装されている。
 
 ### `libwebrtc_c.xcframework` の配布
 
-`https://github.com/shiguredo/webrtc-rs/releases/download/<version>/libwebrtc_c.xcframework.zip` でリリースされている（例: 0.149.0）。sora-flutter-sdk の `ios/sora_sdk/Package.swift` で `binaryTarget` として実取り込み中。
+`https://github.com/shiguredo/webrtc-rs/releases/download/<version>/libwebrtc_c.xcframework.zip` でリリースされている（例: sora-flutter-sdk が実取り込み中の 0.150.3、最新は 0.154.0）。sora-flutter-sdk の `ios/sora_sdk/Package.swift` で `binaryTarget` として実取り込み中。
 
 ### 参考となる Flutter SDK の iOS 実装
 
@@ -114,8 +128,8 @@ let libwebrtcVersion = "m148.7778.7.0"
 
 | ファイル | 行数 | 役割 |
 |---|---|---|
-| `Sources/CWebrtc/apple_bridge.c` | 1,246 | C ブリッジ。AudioSession 設定 / VideoFrame ヘルパ / `AppleRenderingSink` (`VideoSinkInterface` 実装) / `SoraObserverBridge` (PeerConnectionObserver トランポリン) / `DcBridgeContext` (DataChannelObserver トランポリン) |
-| `Sources/CWebrtc/CWebrtc/CWebrtc.h` | ~50 | C モジュールヘッダ |
+| `Sources/CWebrtc/apple_bridge.c` | 1,393 | C ブリッジ。AudioSession 設定 / VideoFrame ヘルパ / `AppleRenderingSink` (`VideoSinkInterface` 実装) / `SoraObserverBridge` (PeerConnectionObserver トランポリン) / `DcBridgeContext` (DataChannelObserver トランポリン) |
+| `Sources/CWebrtc/CWebrtc/CWebrtc.h` | 79 | C モジュールヘッダ |
 | `Sources/CWebrtc/CWebrtc/module.modulemap` | 4 | Swift 連携 |
 | `Sources/sora_sdk/SoraCameraCapturer.swift` | 727 | `AVCaptureSession` から I420 を作って `AdaptedVideoTrackSource` に push |
 | `Sources/sora_sdk/SoraVideoRendererSink.swift` | 141 | `apple_rendering_sink` から `CVPixelBuffer` を受けて `FlutterTexture` 描画（sora-ios-sdk では `MTKView` 描画に置換） |
@@ -131,57 +145,60 @@ let libwebrtcVersion = "m148.7778.7.0"
 
 ### webrtc_c でカバーできない・追加が必要な API（カテゴリと優先度）
 
-Phase 0 PoC で必要性を実測し、`shiguredo/webrtc-rs` リポジトリで各カテゴリの追加検討 issue を起票して合意してから sora-ios-sdk 側の Phase 1 に着手する。webrtc-rs 側が「追加しない」と判断した API は sora-ios-sdk 側の代替戦略を確定する。
+Phase 0 PoC で必要性を実測し、`shiguredo/webrtc-rs` リポジトリで各カテゴリの追加検討 issue を起票して合意してから sora-ios-sdk 側の Phase 1 に着手する。webrtc-rs 側が「追加しない」と判断した API は sora-ios-sdk 側の代替戦略を確定する。なお、既に webrtc_c に存在し追加依頼が不要と確認できたものは **[公開済み]** として併記する（2026-09-24 時点の develop で確認）。
 
 優先度タグ: **[Blocker]** = Phase 1 着手のブロッカー、**[Workaroundable]** = sora-ios-sdk 側で代替実装可能、**[Optional]** = 削除可。
 
 - **Stats**（`api/stats/rtc_stats_report.h`）
   - [Blocker] エントリー単位の `id` / `type` / `timestamp_us` / `values` 列挙 API（または代替案として `webrtc_RTCStatsReport_ToJson` の JSON 文字列ベースに `Statistics.entries` を作り直し、`StatisticsEntry` クラスを廃止する）
 - **PeerConnection**（`api/peer_connection_interface.h`）
-  - [Blocker] `GetTransceivers` / `GetSenders` / `GetReceivers` 相当の C API（再 offer / mid マッピング）
-  - [Blocker] `PeerConnectionObserver.OnSignalingChange` の有効化（現状コメントアウトで未公開）
-  - [Workaroundable] `OnIceCandidatesRemoved`（現状 `PeerChannel.swift` で利用、削除可否を Phase 0 で判定）
-  - [Workaroundable] レガシー Plan B の `OnAddStream` / `OnRemoveStream` は Unified Plan の `OnTrack` ベース実装へ置き換え
-  - [Optional] `OnRenegotiationNeeded`（デバッグログ用途）
+  - [Blocker] `GetTransceivers` / `GetSenders` / `GetReceivers` 相当の C API（再 offer / mid マッピング。`webrtc_PeerConnectionObserver_cbs` の `OnTrack` 経由の transceiver 取得とは別に、現在の transceiver / sender / receiver 一覧を取得する API が無い）
+  - [Blocker] `PeerConnectionObserver.OnSignalingChange` が無い（`webrtc_PeerConnectionObserver_cbs` は `OnStandardizedIceConnectionChange` / `OnConnectionChange` / `OnIceCandidate` / `OnIceCandidateError` / `OnTrack` / `OnRemoveTrack` / `OnDataChannel` / `OnDestroy` / `OnIceGatheringChange` のみ。`PeerChannel.swift` の `peerConnection(_:didChange:)`（`RTCSignalingState`）を置き換えるため追加が必要）
+  - [Workaroundable] `OnIceCandidatesRemoved`（`PeerChannel.swift` の `peerConnection(_:didRemove candidates:)` で利用、削除可否を Phase 0 で判定）
+  - [Workaroundable] レガシー Plan B の `OnAddStream` / `OnRemoveStream`（`PeerChannel.swift` の `peerConnection(_:didAdd stream:)` / `peerConnection(_:didRemove stream:)` で利用）は Unified Plan の `OnTrack` ベース実装へ置き換え
+  - [Optional] `OnRenegotiationNeeded`（`peerConnectionShouldNegotiate` としてデバッグログ用途で利用）
 - **RtpTransceiver / RtpSender**（`api/rtp_transceiver_interface.h` / `api/rtp_sender_interface.h`）
   - [Blocker] RtpTransceiver: `mid()` / `sender()` / `direction()` / `current_direction()` / `SetDirection(WithError)` / `Stop()`
   - [Blocker] RtpSender: `track()` / `SetStreamIds(_:)`（`GetParameters` / `SetParameters` / `SetTrack` は公開済み）
-- **AudioSession**（`sdk/objc/components/audio/audio_session.h`）
-  - [Workaroundable] `useManualAudio` / `isAudioEnabled` / `setCategory(_:with:)` / `setMode(_:)` / `overrideOutputAudioPort(_:)`。代替案として `AVAudioSession.sharedInstance()` を Swift 側から直接叩く（libwebrtc 内部 ADM との排他確保策が別途必要）
-  - [Workaroundable] `RTCAudioSessionConfiguration.webRTC()` 相当の libwebrtc 内部 AudioSession 設定アクセス
+- **AudioSession**（`sdk/objc/components/audio/audio_session.h`。webrtc_c.h からは公開されず直接インクルードする）
+  - 公開済み: `webrtc_objc_RTCAudioSession_sharedInstance` / `_lockForConfiguration` / `_unlockForConfiguration` / `_setConfiguration_active_error` / `_setActive_error` / `_initializeInput`、`webrtc_objc_RTCAudioSessionConfiguration_webRTCConfiguration` / `_setWebRTCConfiguration` / `_setCategory` / `_setMode` / `_setCategoryOptions`（2026-09-24 時点の develop で確認）
+  - [Workaroundable] `useManualAudio` / `isAudioEnabled` / `overrideOutputAudioPort(_:)` は C API に無い。代替案として `AVAudioSession.sharedInstance()` を Swift 側から直接叩く（libwebrtc 内部 ADM との排他確保策が別途必要）
   - 通知（`interruptionNotification` 等）の購読は webrtc_c では公開しない方針。Swift 側で `NotificationCenter` 直接購読を実装する。
 - **AudioDeviceModule**（`api/audio/audio_device.h` 配下）
   - [Blocker] `bypassVoiceProcessing` 指定で iOS の ADM を生成する C API（時雨堂 `webrtc-build` パッチ由来、Configuration の公開 API）
-  - [Blocker] `pauseRecording()` / `resumeRecording()` 相当（`AudioDeviceModuleWrapper.swift` で利用）
+  - [Blocker] `pauseRecording()` / `resumeRecording()` 相当（`AudioDeviceModuleWrapper.swift` で利用。`webrtc_AudioDeviceModule_*` には `StartRecording` / `StopRecording` のみで `PauseRecording` / `ResumeRecording` が無い）
+  - ステレオ再生: `webrtc_AudioDeviceModule_SetStereoPlayout` / `StereoPlayoutIsAvailable` が公開済み。現行の `RTCAudioDeviceModule::setStereoPlayoutEnabled`（`NativePeerChannelFactory.swift`）はこれへ置き換える
 - **DataChannel**（`api/data_channel_interface.h` 周辺）
-  - [Workaroundable] `OnBufferedAmountChange` コールバック（現状ログ目的のみ、削除可否を Phase 0 で判定）
+  - [Workaroundable] `OnBufferedAmountChange` コールバック（`DataChannel.swift` の `dataChannel(_:didChangeBufferedAmount:)` で現在ログ目的のみ、削除可否を Phase 0 で判定。`webrtc_DataChannelObserver_cbs` には `OnStateChange` / `OnMessage` / `OnDestroy` のみ）
 - **Logger**（`rtc_base/logging.h`）
-  - [Workaroundable] `LogMessage` のコールバック登録 API（`RTCCallbackLogger` 相当）。代替案として `Sora.setWebRTCLogLevel` のログコールバックを廃止する破壊的変更を許容
+  - 公開済み: `webrtc_LogSink_new`（`OnLogMessage_log_line_ref` コールバック）と `webrtc_LoggingConfig_AddSink`（2026-09-24 時点の develop で確認）。`RTCCallbackLogger` 相当はこれで実装できる。`LogSeverity` のグローバル設定 API の有無は Phase 0 で確認する
 - **VideoEncoderFactory**（`media/engine/simulcast_encoder_adapter.h` 周辺）
-  - [Blocker] `RTCVideoEncoderFactorySimulcast(primary:fallback:)` 相当の `VideoEncoderFactory` を作る C API。現状 webrtc_c には `SimulcastEncoderAdapter` 単体しかなく PeerConnectionFactory に渡せる Factory が無い
+  - [Blocker] `RTCVideoEncoderFactorySimulcast(primary:fallback:)` 相当の `VideoEncoderFactory` を作る C API。webrtc_c には `webrtc_SimulcastEncoderAdapter_new`（`VideoEncoder` を直接生成）はあるが、PeerConnectionFactory に渡せる `VideoEncoderFactory`（SimulcastEncoderAdapter を生成する側）の C API が無い
 - **SSLCertificateVerifier**（`rtc_base/ssl_certificate.h` 周辺）
-  - [Blocker] `RTCSSLCertificateVerifier.verifyChain` 相当の C コールバック登録 API（TURN-TLS で iOS の CA を利用するために必須）
+  - 公開済み: `webrtc_SSLCertificateVerifier_cbs`（`VerifyChain` / `OnDestroy`）と `webrtc_SSLCertificateVerifier_new`（2026-09-24 時点の develop で確認）。TURN-TLS で iOS の CA を使う検証は、sora-ios-sdk 側で `VerifyChain` コールバック（`SecTrust` 評価）を実装する。追加依頼は不要だが、webrtc_c 経由の TURN-TLS でこの verifier が適用されることを Phase 0 で実測する
 - **AudioSource.volume**（`api/media_stream_interface.h`）
   - [Workaroundable] `AudioSourceInterface.SetVolume(_:Double)` / `GetVolume() -> Double` 相当（`MediaStream.remoteAudioVolume` の維持に必要）
 - **Dispatcher**（webrtc_c 全般）
-  - [Workaroundable] `RTCDispatcher.dispatchAsync` / `RTCDispatcherQueueType` 相当（`SoraDispatcher.swift`）。代替案として GCD 直接利用に切り替え
+  - [Workaroundable] `RTCDispatcher.dispatchAsync` / `RTCDispatcherQueueType` 相当。`Sora/SoraDispatcher.swift` の公開 enum は `issues/0117-remove-sora-dispatcher.md`（open）で削除予定（前提は `0116` の非推奨化）。production code での残存利用は `CameraVideoCapturer.swift` の `RTCDispatcher.dispatchAsync(on: .typeCaptureSession)` の 1 か所のみ。代替案として GCD 直接利用に切り替え（`0117` と重複作業にしないよう、本 issue 側で対応するのは webrtc_c 移行で消える `RTCDispatcher` 依存の置き換えのみ）
 
 webrtc_c 側に依頼する C API 関数名は `webrtc-rs` の `RULES.md` 命名規則（`webrtc_<TypeName>_<snake_case_method>`、例: `webrtc_PeerConnectionInterface_get_transceivers`）に従う。具体的な関数シグネチャは webrtc-rs 側の起票 issue で確定する。
 
 ### 関連 issue
 
-本 issue は以下の issue と相互作用する。着手前後の調整方針も合わせて明記する。
+本 issue は以下の issue と相互作用する。着手前後の調整方針も合わせて明記する（状態は 2026-09-24 時点）。
 
-- `issues/0008-add-network-priority-to-rtp-encoding.md` (Active): `RTCRtpEncodingParameters.networkPriority` を `RTCPriority` 経由で設定する設計。本 issue の Phase 3 で `RTCRtpEncodingParameters` 自体が消えるため、0008 と本 issue のどちらを先に進めるかを着手前に確定する。0008 を先行する場合、本 issue 完了時に再度書き換えが必要。
-- `issues/0032-investigate-libwebrtc-package-update-automation.md` (Active): 現行 `WebRTC.xcframework` のバージョン更新自動化。本 issue 着手時点で `issues/pending/` に移動し、Phase 0 完了後（移行確定後）に `libwebrtc_c.xcframework` 向けに書き直して再 active 化する。
-- `issues/0034-add-onicecandidateerror-log.md` (Active): `RTCPeerConnectionDelegate.peerConnection(_:didFailToGatherIceCandidate:)` を追加する。本 issue の Phase 3 で `OnIceCandidateError` の C コールバックベースに置き換える際、シグネチャ整合を確認する。
-- `issues/0035-add-audio-session-event-handlers.md` (Active): `SoraHandlers.onChangeAudioRoute` の追加。本 issue の AudioSession 通知独自実装と直接競合する。第 1 引数型 `RTCAudioSession` の変更は破壊的変更として確定する（互換性方針参照）。
-- `issues/0066-investigate-notice-file.md` (Active): 依存先が `shiguredo-webrtc-build` から `shiguredo/webrtc-rs` に変わるため、NOTICE / LICENSE の更新方針も合わせて見直す。
-- `issues/0067-add-dummy-video-source.md` / `issues/0068-add-dummy-audio-source.md` (Active): `RTCVideoFrame` / `RTCVideoSource.capturer(_:didCapture:)` 直接依存。本 issue 着手時点で 0067 / 0068 のマージ状態に応じ、Phase 4 でまとめて移行するか、別途追従するかを判断する。
-- `issues/pending/0009-add-stereo-audio-input.md` / `issues/pending/0010-add-stereo-audio-output.md`: `RTCAudioDeviceModule` の API カバレッジ次第。webrtc_c の ADM カバレッジ確認結果（Phase 0）に応じて pending 解除条件が変わる。
+- `issues/closed/0008-add-network-priority-to-rtp-encoding.md` (closed 2026-07-02): `RTCRtpEncodingParameters.networkPriority` への反映は実装済み。本 issue の Phase 3 で `RTCRtpEncodingParameters` 自体が消えるため、`networkPriority` 相当の設定（`webrtc::RtpEncodingParameters::network_priority`）を webrtc_c 側の RtpSender / RtpParameters 経由で維持する必要がある。あわせて encoding デコードの `networkPriority` 対応と `RTCPriority` のログ文字列表現（`PeerChannel.swift`）も移行先で再実装する。
+- `issues/0032-investigate-libwebrtc-package-update-automation.md` (open): 現行 `WebRTC.xcframework` のバージョン更新自動化。本 issue 着手時点で `issues/pending/` に移動し、Phase 0 完了後（移行確定後）に `libwebrtc_c.xcframework` 向けに書き直して再 active 化する。
+- `issues/0034-add-onicecandidateerror-log.md` (open): `RTCPeerConnectionDelegate.peerConnection(_:didFailToGatherIceCandidate:)` を追加する。本 issue の Phase 3 で `OnIceCandidateError` の C コールバックベースに置き換える際、シグネチャ整合を確認する。なお `OnIceCandidateError` は `webrtc_PeerConnectionObserver_cbs` に既に存在するため、0034 との実装分担（ObjC 側で追加するか webrtc_c で最初から C コールバックを使うか）を本 issue の Phase 0 までに調整する。
+- `issues/0035-add-audio-session-event-handlers.md` (open): `SoraHandlers.onChangeAudioRoute` の追加。本 issue の AudioSession 通知独自実装と直接競合する。第 1 引数型 `RTCAudioSession` の変更は破壊的変更として確定する（互換性方針参照）。
+- `issues/closed/0066-investigate-notice-file.md` (closed 2026-09-11): 結論は NOTICE ファイル不要・`THIRD_PARTY_LICENSES.md` 追加（libwebrtc と同梱 22 ライブラリのライセンス全文を記載）。本 issue で依存先が `webrtc-build` から `webrtc-rs` の `libwebrtc_c.xcframework` に変わるため、`THIRD_PARTY_LICENSES.md` の記載対象を同梱ライセンスに合わせて見直す。
+- `issues/closed/0067-add-dummy-video-source.md` (closed 2026-06-24) / `issues/closed/0068-add-dummy-audio-source.md` (closed 2026-08-07): いずれも実装済み。`SoraTests/DummyVideoCapturer.swift` は `RTCVideoFrame` / `RTCCVPixelBuffer` 依存、`Sora/DummyAudioDevice.swift` は `RTCAudioDevice` プロトコル実装（ObjC SDK 依存）。Phase 3 / Phase 4 で webrtc_c ベースへ追従させる（`DummyAudioDevice` は `webrtc_AudioDeviceModule_cbs` ベースのカスタム ADM として再実装する案を Phase 0 で評価）。
+- `issues/pending/0009-add-stereo-audio-input.md`: `RTCAudioDeviceModule` にステレオ録音の公開 API が無いことが原因で pending（2026-09-09 に再確認）。webrtc_c では `webrtc_AudioDeviceModule_SetStereoRecording` / `StereoRecordingIsAvailable` が公開済みのため、pending 解除の検討材料になる。
+- `issues/closed/0010-add-stereo-audio-output.md` (closed 2026-09-05): ステレオ音声出力は実装済みで `RTCAudioDeviceModule::setStereoPlayoutEnabled` に依存。webrtc_c では `webrtc_AudioDeviceModule_SetStereoPlayout` が公開済みのため、Phase 3 / Phase 4 で同機能を維持する。
 - `issues/pending/0049-add-disable-builtin-ssl-certificates.md`: `IOSCertificateVerifier` + `webrtc-build` パッチを前提とした issue。`libwebrtc_c.xcframework` に同パッチが取り込まれるかを Phase 0 で確認する。
 - `issues/pending/0059-add-vp9-hwa-decode.md`: `RTCDefaultVideoDecoderFactory.initWithH265:vp9Profile0:vp9Profile2:vp9VTB:av1:` 前提。webrtc_c で同等の Factory 初期化経路があるかを Phase 0 で確認する。
 - `issues/pending/0064-add-turn-tls-client-certificate.md`: 「ObjC SDK が API を公開していない」が Pending 理由。本 issue で webrtc_c に移行すれば libwebrtc C++ レイヤーに直接アクセスできるため、Pending 解除候補。
+- `issues/0116-change-deprecate-sora-dispatcher.md` (open) / `issues/0117-remove-sora-dispatcher.md` (open): `SoraDispatcher` の非推奨化と削除。`0116` の現状確認では production code からの `SoraDispatcher` 利用は 0 件で、残るのは `CameraVideoCapturer.swift` の `RTCDispatcher.dispatchAsync(on: .typeCaptureSession)` の 1 か所。本移行で `RTCDispatcher` 自体が使えなくなるため、同箇所の GCD 置き換えとの重複作業に注意する（`SoraDispatcher.swift` の削除は `0117` の責務）。
 - `issues/pending/0069-add-priority-to-rtp-encoding.md`: ObjC SDK が露出していない libwebrtc API への対応事例。本 issue 完了後はこの種の追従コストが下がる。
 
 ## 設計方針
@@ -206,7 +223,7 @@ webrtc_c 側に依頼する C API 関数名は `webrtc-rs` の `RULES.md` 命名
 - `MediaStream.addAudioTrackSink(_: RTCAudioTrackSink)` / `removeAudioTrackSink(_:)`（`RTCAudioTrackSink` 露出）
 - `MediaStream.remoteAudioVolume`（`AudioSource.volume` 利用、webrtc_c 側の API 追加結果に依存）
 - `SoraHandlers.onChangeAudioRoute: ((RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription) -> Void)?`（第 1 引数 `RTCAudioSession` を `AVAudioSession` に変更）
-- `Sora.setWebRTCLogLevel(_: RTCLoggingSeverity)`（`RTCCallbackLogger` 利用、webrtc_c でログコールバック登録 API が追加されなければシグネチャ変更不可避）
+- `Sora.setWebRTCLogLevel(_: RTCLoggingSeverity)`（`RTCCallbackLogger` 利用。webrtc_c には `webrtc_LogSink` / `webrtc_LoggingConfig_AddSink` が公開済みのため、`RTCCallbackLogger` を webrtc_c ベースへ置き換えてシグネチャを維持できる可能性が高い）
 - `SignalingOffer.Encoding.rtpEncodingParameters: RTCRtpEncodingParameters`（`Signaling.swift`）
 - `SignalingOffer.Encoding.scaleResolutionDownTo: RTCResolutionRestriction?`（`Signaling.swift`）
 - `WebRTCInfo`（`PackageInfo.swift`、現状は `enum` の namespace で `version` / `branch` / `commitPosition` / `maintenanceVersion` / `revision` を `static let` で公開。取得経路はハードコードを継続するか `webrtc_c` の C 関数経由に切り替えるかを Phase 0 で確定）
@@ -258,7 +275,7 @@ webrtc_c 側に依頼する C API 関数名は `webrtc-rs` の `RULES.md` 命名
 PoC で必ず実施する **必須項目**:
 
 - `Package.swift` を `libwebrtc_c.xcframework` の `binaryTarget` に差し替えてビルドが通る（両 xcframework の併存を許容）。移行後の `Package.swift` 最小スニペットを Flutter SDK 版から不要部分を削除した形で作成し、本 issue の「## 解決方法」セクションに記載する。
-- 採用する `libwebrtc_c.xcframework` のバージョンを確定し、同梱される libwebrtc のバージョンが現行 `m148.7778.7.0` と一致するか確認する。checksum 取得手順（`swift package compute-checksum libwebrtc_c.xcframework.zip` 等）を実例として残す。
+- 採用する `libwebrtc_c.xcframework` のバージョンを確定し、同梱される libwebrtc のバージョンが現行 `m150.7871.3.5` と一致するか確認する。checksum 取得手順（`swift package compute-checksum libwebrtc_c.xcframework.zip` 等）を実例として残す。
 - `Sora/WebRTCConfiguration.swift` または `Sora/ICECandidate.swift` を 1 本だけ webrtc_c の C API 経由に書き換えてビルドと単体起動を確認する。
 - PoC 範囲として「PeerConnection 生成 → AddTransceiver → 簡単な offer/answer 交換 → AddIceCandidate → GetStats → Logger コールバック → ConnectionClose」までの最小 E2E ループを `Sora/` 外の使い捨てサンプル（候補: リポジトリルート直下の `tools/` または `examples/` 配下、もしくはローカル限定ブランチで管理する形。配置場所は Phase 0 着手時に決定）として 1 本書き、libwebrtc_c.xcframework だけで実機（iPhone 実機 1 台 / iOS Simulator 1 台）で動作することを確認する。スレッドモデル・Observer 配線・Stats 取得・Logger コールバックの摩擦点を実測する。
 - `@_implementationOnly import CWebrtc` を Swift 6 言語モードで安定動作させられるかを確認する。不可なら `package` access level / `internal import` 等の代替方針を確定する。
@@ -267,7 +284,7 @@ PoC で必ず実施する **必須項目**:
 - 「webrtc_c でカバーできない・追加が必要な API」のカテゴリごとに `shiguredo/webrtc-rs` リポジトリで追加検討 issue を起票し、合意結果と起票 issue リンクを本 issue の解決方法に転記する。webrtc-rs 側が「追加しない」とした項目には sora-ios-sdk 側の代替戦略を併記する。
 - 「既存ユーザーへの互換性方針」セクションの破壊リストの最終版を確定する（Phase 0 結果を踏まえて項目を追加・削除）。
 - `sora-ios-sdk-samples` 側で `import WebRTC` を直接使っている箇所の有無を調査し、対応 PR の予定を本 issue に追記する。
-- `shiguredo/webrtc-rs` の `RULES.md` を精読し、C API stability / semver 方針が記載されているか確認する。記載がなければ webrtc-rs メンテナと合意する。
+- `shiguredo/webrtc-rs` の `webrtc/RULES.md` を精読する。C API stability / semver 方針の記載は無いことを確認済み（2026-09-24）。webrtc-rs メンテナと合意する。
 - `Sora/Sora.h` の ObjC umbrella header と `CWebrtc` モジュールの共存可否を確認し、`module.modulemap` 新設の要否を判定する。
 - Phase 1〜5 の個別 issue の分割粒度・順序・依存関係を確定する。
 
@@ -276,7 +293,7 @@ Phase 0 で **情報収集する項目**（Go/No-Go 判定の参考値）:
 - `.ipa` サイズ delta と起動時間 delta の計測（両 xcframework 併存中の値であり最終形を代表しないため、Phase 4 で再計測する前提）
 - `apple_bridge.c` 由来のスタックトレースの Crashlytics 等でのシンボリック解決確認
 
-Go/No-Go 基準: Phase 0 着手時に `shiguredo/sora-cpp-sdk` / `shiguredo/sora-flutter-sdk` の webrtc_c 移行実績を調査して数値ターゲットを再校正する。校正前の暫定ターゲットは:
+Go/No-Go 基準: Phase 0 着手時に `shiguredo/sora-flutter-sdk` の webrtc_c 移行実績を調査して数値ターゲットを再校正する（sora-cpp-sdk は webrtc_c を利用していないため対象外）。校正前の暫定ターゲットは:
 
 - PoC で書き換えた範囲の Swift コード行数が **元コードの 2 倍以内** であること（2 倍超過なら本格着手を中止し別案を検討）。
 - 「webrtc_c に追加が必要な API」の [Blocker] のうち、webrtc-rs 側で追加 NG となった項目が **0 件** であること。[Workaroundable] が `3 件以内` で sora-ios-sdk 側の代替戦略が立つこと。
@@ -313,7 +330,7 @@ PoC を完了せずに Phase 1 以降に進むことは禁止する。Phase 0 �
   - Simulcast 接続（rid 指定送受信）
   - Spotlight 接続（focus / unfocus）
   - Multistream 受信（3 名以上）
-  - Stereo Audio（Opus stereo、`0009` / `0010` 関連）
+  - Stereo Audio（Opus stereo。`0009` は pending（ステレオ入力、webrtc_c の `SetStereoRecording` で解除検討）、`0010` は実装済み（ステレオ出力））
   - 映像コーデック切替（VP8 / VP9 / H264 / H265 / AV1）
   - TURN-UDP / TURN-TCP / TURN-TLS 各経路（特に TURN-TLS で iOS CA 検証）
   - ReplayKit 画面共有
@@ -328,7 +345,7 @@ PoC を完了せずに Phase 1 以降に進むことは禁止する。Phase 0 �
 主要作業:
 
 - `Package.swift` を `libwebrtc_c.xcframework` の `binaryTarget` に差し替える。Flutter SDK の `Package.swift` を雛形に最小スニペットを作成する。
-- `WebRTCConfiguration.swift`（197 行、機械置換系）または `ICECandidate.swift`（42 行）のうち 1 本を webrtc_c の C API 経由に書き換える。
+- `WebRTCConfiguration.swift`（170 行、機械置換系）または `ICECandidate.swift`（42 行）のうち 1 本を webrtc_c の C API 経由に書き換える。
 - 上記「Phase 0 完了基準」に列挙した全項目を実測し、本セクションに結果を追記する。
 
 PoC 結果は本セクション末尾に「Phase 0 PoC 結果」として追記する。「Phase 0 完了基準」の各項目に対応する実測値・判定・根拠を網羅する形式とする（Phase 0 完了基準と PoC 結果フォーマットは二重定義しない）。
@@ -338,9 +355,9 @@ PoC 結果は本セクション末尾に「Phase 0 PoC 結果」として追記�
 Phase 0 完了時点で確定する内容（PoC で得た行数膨張率、webrtc_c の追加 API 合意、互換性方針の最終版）を踏まえ、以下の順序で個別 issue を新規起票する。各 issue の分割粒度・カテゴリ・Branch prefix は起票時に決定する。1 issue = 1 branch = 1 PR を厳守する。
 
 - Phase 1: Swift ⇔ C 共通インフラ（ハンドル基盤・トランポリン・エラー変換・Logger 連携）
-- Phase 2: 機械置換系（`WebRTCConfiguration` / `ICE*` / `Statistics` / `ConnectionState` / `TLSSecurityPolicy` / `Utilities` と `VideoCapturer` の `import` 文除去 / `MediaChannelConfiguration` の削除）
-- Phase 3: コア層（`NativePeerChannelFactory` / `PeerChannel` / `DataChannel` / `MediaChannel` / `MediaStream` / `Signaling`、`Extensions/RTC+Description.swift` の削除を含む）
-- Phase 4: メディア・iOS 固有層（`CameraVideoCapturer` / `VideoView.xib` の `customClass` 書き換えを含む `VideoView`+`VideoRenderer`+`VideoFrame` / `ScreenCapture` / `Sora.swift` の AudioSession / `AudioDeviceModuleWrapper` / `IOSCertificateVerifier`）。Phase 4 の最終 issue で `Package.swift` から `WebRTC.xcframework` を削除し、同時に `SoraTests/SoraTests.swift` の `import WebRTC` を除去する。
+- Phase 2: 機械置換系（`WebRTCConfiguration` / `ConnectionConfigurationSnapshot` / `ICE*` / `Statistics` / `ConnectionState`、`Utilities` と `VideoCapturer` と `ICEServerInfo` の `import` 文除去）
+- Phase 3: コア層（`NativePeerChannelFactory` / `PeerChannel` / `DataChannel` / `MediaChannel` / `MediaStream` / `StreamFrameOwner` / `Signaling`、`Extensions/RTC+Description.swift` の削除を含む）
+- Phase 4: メディア・iOS 固有層（`CameraVideoCapturer` / `VideoView.xib` の `customClass` 書き換えを含む `VideoView`+`VideoRenderer`+`VideoFrame` / `ScreenCapture` / `Sora.swift` の AudioSession / `AudioSessionCoordinator` / `AudioDeviceModuleWrapper` / `DummyAudioDevice` / `IOSCertificateVerifier`）。Phase 4 の最終 issue で `Package.swift` から `WebRTC.xcframework` を削除し、同時に `SoraTests/SoraTests.swift` を始めとする `SoraTests/` 配下の `import WebRTC` を除去する。
 - Phase 5: 検証（`SoraTests/` の再構築・`sora-ios-sdk-samples` 対応 PR・「Phase 1〜5 完了時の総合条件」の実機検証チェックリスト全項目の合格判定）
 
 Phase 1〜4 進行中は両 xcframework を `Package.swift` に併存させる（シンボル衝突の有無を Phase 1 着手時に検証）。
@@ -350,11 +367,11 @@ Phase 1〜4 進行中は両 xcframework を `Package.swift` に併存させる�
 - メモリ安全性の低下: Swift ⇔ C 境界で `OpaquePointer` / `Unmanaged.passRetained` / `@convention(c)` トランポリンを多用する。use-after-free / 参照カウント漏れ / observer 循環参照によるクラッシュを Phase 0 で実測する。
 - クラッシュレポートの可読性低下: スタックトレースが C 関数名と libwebrtc 内部 C++ シンボル中心になる。Crashlytics 等でのシンボリック解決手順を Phase 0 で確認する。
 - webrtc_c の若さ: 未対応 API や未発見バグの可能性あり。Flutter SDK で踏まれていない iOS 固有経路で問題が出る可能性がある。「webrtc_c に追加が必要な API」リストの [Blocker] が解消されなければ Phase 1 着手不可。
-- webrtc_c の API スタビリティ: 本 issue 進行中に webrtc_c の C API が破壊的に変更されないかは未保証。Phase 0 で `shiguredo/webrtc-rs/RULES.md` の API stability / semver 方針を確認・合意する。
+- webrtc_c の API スタビリティ: 本 issue 進行中に webrtc_c の C API が破壊的に変更されないかは未保証。`webrtc/RULES.md` に API stability / semver 方針の記載が無いことを確認済み（2026-09-24）のため、webrtc-rs メンテナと合意する。
 - 大規模 PR / 長寿命ブランチ: Phase 1〜5 を進める間、`develop` で進行する他の issue 修正との conflict 解消コストが膨らむ。Phase ごとに小さい PR で `develop` へ小まめにマージする。
 - 外部リポジトリへの波及: `shiguredo/webrtc-rs` への API 追加 PR（複数）、`sora-ios-sdk-samples` への対応 PR、ドキュメント（jazzy / DocC）更新等、本リポジトリ外の作業が複数発生する。
 - xcframework サイズ・起動時間: `-all_load` で全静的ライブラリを強制ロードするため、現行と比較して悪化する可能性がある。Phase 0 で実測（情報収集）、Phase 4 で本格計測する。
-- NOTICE / LICENSE: 依存先が `webrtc-build` から `webrtc-rs` の C ラッパー部に変わる。`issues/0066-investigate-notice-file.md` と整合した NOTICE 更新計画を Phase 0 で確定する。
+- NOTICE / LICENSE: 依存先が `webrtc-build` から `webrtc-rs` の `libwebrtc_c.xcframework` に変わる。`issues/closed/0066-investigate-notice-file.md` の結論（NOTICE 不要・`THIRD_PARTY_LICENSES.md` に帰属表示）に合わせ、`THIRD_PARTY_LICENSES.md` の記載対象を `libwebrtc_c.xcframework` の同梱ライセンスへ更新する計画を Phase 0 で確定する。
 
 ## 参考リソース
 
@@ -368,11 +385,11 @@ Phase 1〜4 進行中は両 xcframework を `Package.swift` に併存させる�
   - `Sources/sora_sdk/SoraMediaAccess.swift`
   - `exported_symbols.exp`
 - `shiguredo/webrtc-rs` リポジトリの `webrtc/`
-  - `RULES.md`（C ラッパー作成ルール、命名規則、API stability 方針）
+  - `RULES.md`（C ラッパー作成ルール、命名規則。C API stability / semver 方針の記載は無い）
   - `src/webrtc_c.h`（メインヘッダ）
   - `src/webrtc_c/api/` 配下の C ヘッダ群
   - `src/webrtc_c/sdk/objc/`（Factory + AudioSession の C ラッパー）
   - `src/whip.c` / `src/whep.c`（C のみでの PeerConnection 組み立て例）
 - libwebrtc 本体（`webrtc-checkout` の `src/sdk/objc/` 等、xcframework 内部で利用される ObjC 実装の参照用）
-- `shiguredo/sora-cpp-sdk` リポジトリ（webrtc_c 利用の C++ 側実例、webrtc_c 移行の数値ターゲット校正にも参照）
+- `shiguredo/sora-cpp-sdk` リポジトリ（libwebrtc を C++ API で直接利用する実例。`cmake/FindWebRTC.cmake` が C++ ヘッダ直参照である証左。webrtc_c 移行の数値ターゲット校正は sora-flutter-sdk の実績を参照する）
 - 既存 sora-ios-sdk: `Sora/` 配下全ファイル

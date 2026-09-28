@@ -14,7 +14,7 @@
 - `0105` の ordered frame / renderer ingress が実装済みであること。
 - `0027` の MainActor UI renderer API が公開 release で提供されていること。
 - `0060` の non-UI renderer 向け custom executor API が公開 release で提供されていること。
-- `0107` の consumer fixture に legacy と新 API の移行例が存在すること。
+- `0107` の consumer package に legacy と新 API の移行例が存在すること。
 - 次期 major version の作業として着手すること。
 
 上記を満たしていない場合は、本 issue に着手しない。

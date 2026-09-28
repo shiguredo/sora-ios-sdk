@@ -1,13 +1,45 @@
 import Foundation
 
 /// RPC エラー応答の詳細。
-public struct RPCErrorDetail {
+public struct RPCErrorDetail: Sendable {
   /// JSON-RPC 2.0 のエラーコード。
   public let code: Int
   /// エラーメッセージ。
   public let message: String
   /// エラーに関する追加情報。
-  public let data: Any?
+  ///
+  /// JSON-RPC 2.0 の `error.data` が省略された場合は `nil`、`null` の場合は `.null` になります。
+  /// 値の読み出しは `JSONValue` の case 分岐で行います。
+  public let data: JSONValue?
+}
+
+extension RPCErrorDetail {
+  /// DataChannel で受け取ったエラー応答の辞書から詳細を作成します。
+  ///
+  /// `data` の変換に失敗した場合も `code` と `message` は失わず、`data` を `nil` にします。
+  /// `data` key が無い場合は変換せず `nil` にします (JSON-RPC 2.0 の `error.data` は省略可能)。
+  /// `{"data": -1e999}` のように JSON の数値として表現できない値が届いた場合は
+  /// `JSONValue` へ変換できないためこの失敗経路に到達します。`1e999` のように
+  /// `JSONSerialization.jsonObject` 自体が失敗する値はここへ到達せず、応答なしとして終端します。
+  /// - parameter code: JSON-RPC 2.0 のエラーコード
+  /// - parameter message: エラーメッセージ
+  /// - parameter errorObject: エラー応答の `error` の辞書
+  init(code: Int, message: String, errorObject: [String: Any]) {
+    self.code = code
+    self.message = message
+    guard let rawData = errorObject["data"] else {
+      self.data = nil
+      return
+    }
+    do {
+      self.data = try JSONValue.fromJSONSerializationValue(rawData)
+    } catch {
+      Logger.error(
+        type: .dataChannel,
+        message: "rpc error data conversion failed: \(String(describing: error))")
+      self.data = nil
+    }
+  }
 }
 
 /// RPC 成功応答。
@@ -245,7 +277,7 @@ final class RPCChannel: @unchecked Sendable {
       let code = error["code"] as? Int,
       let message = error["message"] as? String
     {
-      let detail = RPCErrorDetail(code: code, message: message, data: error["data"])
+      let detail = RPCErrorDetail(code: code, message: message, errorObject: error)
       finishPending(id: identifier, result: .failure(SoraError.rpcServerError(detail: detail)))
       return
     }

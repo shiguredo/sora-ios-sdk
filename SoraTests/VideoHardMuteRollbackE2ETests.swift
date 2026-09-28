@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 // connect の完了 handler の結果を main queue 経由で受け取るためのボックス
 // (生成と読み出しは main queue 上でのみ行う)
@@ -28,8 +28,12 @@ private final class VideoSwitchRecorder: @unchecked Sendable {
 }
 
 // MediaChannel は Sendable ではないため、MainActor 隔離のテストから非分離の async API を
-// 呼ぶと送信警告になる。テスト内の利用に限定して参照をこのボックスへまとめ、
-// テストと同じ実行文脈で操作する。
+// 呼んだり @Sendable な handler へ参照を渡したりすると送信診断になる。テスト内の利用に
+// 限定して参照をこのボックスへまとめる。
+//
+// このボックスは実行文脈を揃えるものではない。async メソッドは nonisolated のため main actor
+// 上では実行されず、handler は SDK 側の任意の実行文脈から呼ばれる。このボックスは可変状態を
+// 持たず参照を保持するだけで、安全性は MediaChannel の内部同期に依存する。
 private final class ChannelBox: @unchecked Sendable {
   let channel: MediaChannel
 

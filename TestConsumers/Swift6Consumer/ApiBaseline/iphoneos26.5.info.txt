@@ -1,0 +1,3 @@
+xcodebuild: Xcode 26.6
+sdk: 26.5
+target: arm64-apple-ios14.0

@@ -563,7 +563,7 @@ public final class MediaChannel {
   ///   - `SoraError.rpcDecodingError`: レスポンスのデコーディングに失敗した
   ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された
   ///   - `SoraError.rpcTimeout`: レスポンスがタイムアウト時間内に返されなかった
-  ///   - `SoraError.rpcServerError`: Sora からエラーレスポンスがあった
+  ///   - `SoraError.rpcServerError`: Sora からエラーレスポンスがあった (詳細は `RPCErrorDetail`、追加情報は `JSONValue?` の `data`)
   ///
   /// # 使用例
   /// ```swift

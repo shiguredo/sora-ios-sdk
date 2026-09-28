@@ -13,6 +13,19 @@
 
 - [UPDATE] libwebrtc m155.8059.1.0 に上げる
   - @zztkm
+- [CHANGE] システム要件の Xcode バージョンを 26.6+ に更新する
+  - @t-miya
+- [CHANGE] `RPCErrorDetail.data` の型を `Any?` から `JSONValue?` に変更する
+  - `RPCErrorDetail` を `Sendable` な型とするため
+  - `data` の `as? [String: Any]` のようなキャストは `always fails` の警告が出て常に `nil` になる (warnings-as-errors では build できない)。`JSONValue` の case 分岐へ書き換える
+  - JSON-RPC 2.0 の `error.data` が省略された場合は `nil`、`null` の場合は `.null` になる。数値は `JSONSerialization` を経由するため `decimal` / `double` の case で復元され、小数の表記が変わる場合がある (例: `0.1` は `.decimal(0.10000000000000001)`)
+  - @t-miya
+- [ADD] JSON の値を表す公開型 `JSONValue` を追加する
+  - @t-miya
+- [UPDATE] libwebrtc を m154.8037.1.2 に更新する
+  - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
+  - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
+  - @zztkm
 - [UPDATE] CameraVideoCapturer のカメラ状態の所有者を単一化する
   - `CameraVideoCapturer` の `current` / `isRunning` / `format` / `frameRate` / `stream` を内部の owner (`CameraStateOwner`) が、`device` を instance の lock 付き storage が、`handlers` を型全体で共有する lock 付き storage が保持し、`NSLock` で保護した値から同期で読むようにする
   - カメラ操作 (start / stop / restart / change / flip) の状態遷移を純粋な reducer へ集約し、操作世代で古い callback を破棄する
@@ -30,6 +43,7 @@
   - 接続と設定: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent` / `MediaConstraints` / `DegradationPreference` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
   - メディア、ログ、表示: `AudioMode` / `AudioOutput` / `CameraSettings` / `LogType` / `LogLevel` / `Log` / `Logger.Group` / `VideoViewConnectionMode` / `WebSocketMessage`
   - シグナリング: `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
+  - RPC: `RPCErrorDetail`
   - 利用者が actor / Task 境界へ SDK の値をそのまま渡せるようにする
   - `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない (標準ライブラリの `Error: Sendable` に依存する)
   - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
@@ -88,12 +102,40 @@
 
 ### misc
 
+- [CHANGE] E2E テストの workflow を `ci.yml` から `e2e-test.yml` にリネームする
+  - @t-miya
+- [ADD] Sora iOS SDK を利用したアプリ実装と同じ形で `Sora` を import する consumer package と公開 API の baseline を追加する
+  - `TestConsumers/Swift6Consumer/` に Sora を import する独立した SwiftPM package を追加し、`import Sora` する compile (Swift 6 language mode と warnings-as-errors) と、公開 API の baseline 比較を CI (`consumer-test.yml`) で検証する
+  - 公開 API の削除・変更と `Sendable` 準拠の削除を baseline の比較で検出し、`MediaChannel` が `Sendable` でないことを負例で検出する
+  - @t-miya
+- [ADD] 公開 API baseline が現在の `Sora` module と一致していることを CI で検証する
+  - `make api-check-fresh` を追加し、公開 API を追加したまま baseline を再生成漏れ状態を検出する
+  - @t-miya
+- [UPDATE] E2E テストの concurrency 診断抑止を除去する
+  - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する
+  - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback の state 更新を main queue に束ねる。同期の test method でも async な `setUp` が呼ばれることを検証するテストを追加する
+  - `DummyVideoCapturer` は `Timer` を main RunLoop に登録したまま `MainActor.assumeIsolated` で main 実行を表明し、解放時は `isolated deinit` で MainActor 上から Timer を無効化する。`SendonlyE2ETests` の待機の `Timer` は `DispatchQueue.main.asyncAfter` に置き換えて `DummyVideoCapturer` を MainActor 上で生成・開始する
+  - `DummyVideoCapturerTests` は実 `MediaChannel` / `MediaStream` を使って Timer の発火と `stop()` による停止を確認する
+  - `RpcE2ETests` の RPC 呼び出しは `MediaChannel` をまとめた `@unchecked Sendable` のボックス経由にする
+  - `SoraTests` が `@preconcurrency import Sora` を使っていないことを CI で検査する
+  - 公開 API と利用者の挙動の変更はない
+  - @t-miya
+- [UPDATE] GitHub Actions の Build ワークフローの XCode バージョン等を更新する
+  - Xcode の version を 26.6 に更新する
+  - SDK を iOS 26.5 に更新する
+  - @t-miya
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
   - エラーパスで未 wait の expectation を `XCTWaiter.wait(for:timeout: 0)` で消費する
   - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける
   - wait のタイムアウトをリクエストより長くし、API コールバックの結果を保持して wait 後に検証することで、コールバックの次のテストへの誤帰属を防ぐ
   - 切断の共通ヘルパー (`disconnectAndVerify` / `disconnectAll`) の早期 return でも未 wait の expectation を残さないようにする
   - `disconnectAndVerify` の切断イベント検証を wait 後に行い、テスト終了後の assertion の誤帰属を防ぐ
+  - @t-miya
+- [FIX] `DummyAudioDevice` の共有状態競合を修正する
+  - `RTCAudioDevice` の lifecycle state を 1 つの lock へ統一し、録音・再生の timer に世代を持たせて停止・終了後に届いた callback を破棄する
+  - 停止と開始が交差した場合に timer や AudioUnit が停止後に残らないよう、ライフサイクルの世代で開始処理を検証する
+  - `pcmGenerator` を `@Sendable` にし、テストの波形生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の可変状態を lock で保護する
+  - 公開 API と利用者の挙動の変更はない
   - @t-miya
 
 ## 2026.3.0
