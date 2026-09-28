@@ -119,6 +119,9 @@
   - `Sora.add(mediaChannel:)` / `remove(mediaChannel:)` / `ConnectionTask.cancel()` / `ConnectionTimer.stop()` / `AudioDeviceModuleWrapper.setAudioHardMute(_:)` のログ出力を排他区間の外へ移し、`ConnectionTask.tryComplete()` / `complete()` と `ConnectionTimer.run(timeout:handler:)` はログを削除して遷移の有無と有効な timeout を返すようにする (`MediaChannel.state` の遷移ログも `didSet` から lock 解放後へ移す)
   - ログの内容 (`level` / `type` / `message`) と同一スレッド・同一経路での出力順序は変わらない
   - @t-miya
+- [FIX] `createAnswer` の `setRemoteDescription` 完了 closure で `self` が解放済みの場合も handler を呼ぶようにし、handler を呼ばずに return する経路をなくす
+  - この経路は現状到達しないため、利用者に見える挙動の変更はない
+  - @t-miya
 
 ### misc
 
