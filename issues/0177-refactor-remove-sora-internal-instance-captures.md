@@ -124,7 +124,7 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 
 - 解消方針: 状態所有の整理 + 参照保持 box。`nativeChannel` は追加する storage から読む。`dataChannelGeneration` は `ConnectionSnapshotStorage` から読む。`initializeSenderStream(mid:)` / `updateSenderOfferEncodings()` は `PeerChannel` のメソッドであるため、box の `value` 経由で呼ぶ。box の doc コメントには、`initializeSenderStream` が読む `nativeChannel` / `streams` / `offerEncodings` が storage の `NSLock` に、`snapshot` と `nativePeerChannelFactory` が `let` に、エラー経路の `disconnect` が `Lock` の管理下の経路に閉じることを書く
 - 前提: エラー経路の `disconnect` は `Lock.waitDisconnect` から `context?.onConnect` を読み、`basicDisconnect` から `invokeConnectHandler` を呼ぶ。この 2 つが `0151` の対象であり、`Lock` の統合先が `0129` の対象である。したがって表の 2 の box の根拠は `0151` と `0129` の結論に依存する。両 issue が未完了の間は着手しない (「前提となる issue」)
-- `0175` (`createAnswer` の `guard let self else` 節で handler を呼ぶ) と同じ closure を変更する。`0175` が確立する「すべての return 経路で handler を厳密に 1 回呼ぶ」契約を壊さない形にし、`0175` が未完了の場合は完了を待つ。box の `value` が nil の経路でも handler が呼ばれることを維持する
+- `0175` (完了 2026-09-28、`createAnswer` の `guard let self else` 節で handler を呼ぶ) と同じ closure を変更する。`0175` が確立した契約 (各 return 経路で高々 1 回。native の完了 block に委ねた経路を除き return する経路では必ず 1 回。native の完了が返らない場合は 0 回) を壊さない形にする。box の `value` が nil の経路でも handler が呼ばれることを維持する
 
 #### 表の 3
 
@@ -200,7 +200,7 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 - `0115` (pending、`issues/pending/0115-remove-stopwatch.md`): `Utilities.Stopwatch` を削除する。`Sora/Utilities.swift` の 1 件はこの削除で消える。`0115` は非推奨化 release と次期 major version を前提にするため本 issue の期間内に完了するとは限らない。本 issue は `0115` を待たず、`0115` の変更対象も書き換えない。`0115` が先に完了した場合は、完了条件の「残る 1 件」を 0 件として読み替える
 - `0151` (open): `PeerChannel.onConnect` のデータ競合。表の 2 と 6 の box の根拠は、`disconnect` 経由で `onConnect` を読む経路が排他に閉じること (`Lock.waitDisconnect` の `context?.onConnect` の読みと、`basicDisconnect` からの `invokeConnectHandler` の呼び出し) に依存する。本 issue は `0151` の変更対象 (`onConnect` の排他) を書き換えず、その結論に従って box の doc コメントを書く
 - `0129` (open): `PeerChannel.Lock` を接続状態 reducer へ統合する。表の 2 と 6 が到達する切断経路の排他と、`PeerChannel` の状態所有の整理先を決めるため、本 issue は `0129` の変更対象 (`Lock` / `webRTCConfigurationLock`) を書き換えず、その結論に従って box の doc コメントと追加する storage の位置を決める
-- `0175` (open): `createAnswer` の `guard let self else` 節でも handler を呼ぶ。表の 2 と同じ closure を変更するため、`0175` が確立する「すべての return 経路で handler を厳密に 1 回呼ぶ」契約を壊さない形にする。本 issue は `0175` の修正内容を先取りしない
+- `0175` (完了 2026-09-28): `createAnswer` の `guard let self else` 節でも handler を呼ぶ。表の 2 と同じ closure を変更するため、`0175` が確立した契約 (各 return 経路で高々 1 回。native の完了 block に委ねた経路を除き return する経路では必ず 1 回。native の完了が返らない場合は 0 回) を壊さない形にする。本 issue は `0175` の修正内容を先取りしない。**表の 2 を実装する前に `0175` の else 節の存否と型検査を再確認し、`0177` の方針でこの節が消えている場合は、`CHANGES.md` の該当エントリと実装を巻き戻す。**
 - `0176` (open): `0173` の参照保持 box の回帰テスト。`0176` の対象は `0173` の 2 経路に限定し、本 issue が追加する box の回帰テストは本 issue で追加する (「テスト方針」)
 
 ## 変更対象
