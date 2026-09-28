@@ -45,7 +45,7 @@
 
 ## スコープ外
 
-- `Sora` target の warnings-as-errors gate (`0108` が扱う) と、`Sora` target に残る concurrency 警告 (`0173` / `0174` などの担当 issue が扱う。本 issue の対象外)。
+- `Sora` target の warnings-as-errors gate (`0108` が扱う) と、`Sora` target に残る concurrency 警告 (C 群を扱う未起票 issue と `0115` が扱う。本 issue の対象外)。
 - 非推奨 API を参照しているテストの書き換え (`0138` が対象外としている)。
 - `SoraTests` の concurrency 診断の解消 (`0118` が扱う)。
 
