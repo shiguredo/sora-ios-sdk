@@ -26,6 +26,8 @@
 - 読み: `PeerChannel.state` の `onConnect != nil`
 - 読み: `PeerChannel.Lock.waitDisconnect` の `context?.onConnect != nil` (`Lock.nsLock` を保持しているが、書き側は `nsLock` を取らない)
 
+`PeerChannel.connect` は `Lock.beginConnectionStart()` で初期ロックを取った後に `onConnect = handler` を実行する (`beginConnectionStart()` は `Lock.nsLock` を解放してから戻る)。その近くにある「切断処理との間で onConnect を競合させない」というコメントが指すのは `isStartingConnection` による切断要求の順序の保護であり、`onConnect` の代入自体を保護するものではない。この代入も保護対象に含めること。
+
 `invokeConnectHandler` は `finishConnecting` / `sendConnectMessage(error:)` / `finishBasicDisconnect` から呼ばれる。`finishBasicDisconnect` は `basicDisconnect` が生成する camera cleanup の `Task` の継続から呼ばれるため、非同期 executor のスレッドで実行される。この `Task` は `003bb738` (ステレオ音声出力対応) で導入された。
 
 `-enableThreadSanitizer YES` で `SoraTests/PeerChannelConnectCompletionTests` を実行したときの検出内容:
@@ -43,6 +45,8 @@
   - 接続試行中の判定を `onConnect != nil` ではなく接続試行状態から導き、`state` から `onConnect` の読み出しをなくす。現状 `0100` の `ConnectionStateOwner` が持つ `ConnectionLifecycleState` には接続試行中を表す状態が無いため、この方法を採るには `0100` の reducer へ接続試行の開始 / 終端イベントと状態の追加が必要になる。また、`Lock.waitDisconnect` の `context?.onConnect != nil` の読みも同じ接続試行状態へ置き換え、`onConnect` の読み経路を `state` と `waitDisconnect` の両方からなくすこと
   - `0100` の snapshot storage と同じく lock 保護の snapshot 方式に寄せる
 
+どの方法を選ぶかは `0129` が決める `Lock` の統合先 (0010 の `connectionLifecycleLock` か 0100 の reducer か) と整合させること。`ConnectionLifecycleState` には接続試行中を表す状態が無いため、接続試行状態を導入するなら `0129` の統合先にも同じ状態を渡す形にする。実施順は本 issue を先とする (「スコープ外」)。
+
 ## 完了条件
 
 - `onConnect` の読み書きがすべて同一の排他で保護されていること
@@ -58,6 +62,7 @@
 ## スコープ外
 
 - `PeerChannel.Lock` の統合 (`0129`) は refactor であり本 issue では扱わない。本 issue はデータ競合の修正に限定する。
+- `0129` との実施順は本 issue を先とする。`0129` は `Lock` を統合して削除する側であり、統合後に `waitDisconnect` の `context?.onConnect != nil` をどこへ移すかが変わるため、先に `0129` を入れると同じ修正を統合後の構造でやり直すことになる。`0129` は逆に、本 issue が `Lock.nsLock` とは別に設けた `onConnect` の排他を、統合先でも維持する必要がある (本 issue の「完了条件」の 1 回保証と、利用者 callback を排他区間の外で呼ぶ性質を壊さないこと)。
 - `MediaChannel` の接続ライフサイクル (`0010`) は変更しない。
 
 ## 解決方法
