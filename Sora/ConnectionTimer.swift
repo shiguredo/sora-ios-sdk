@@ -26,6 +26,32 @@ enum ConnectionMonitor {
   }
 }
 
+/// `ConnectionTimer.run` の timeout handler を `Timer` の block へ渡すための、
+/// 用途限定の内部ラッパーです。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する handler は `init` で確定した `let` であること
+/// - 変更前から handler を渡していた `Timer` の block を包み直すだけで、配送先・
+///   通知順序・呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持するのは handler の closure だけで、SDK 内部の参照型を新たに保持しないこと
+///
+/// 生成は `ConnectionTimer.run` の 1 箇所だけで、1 つの `Timer` の block へ 1 回だけ渡し、
+/// 世代照合を通過した timeout 経路から高々 1 回だけ呼ぶ使用契約です (型では強制されません)。
+/// `Sendable` にするのはこの入れ物だけで、handler とその捕捉状態を `Sendable` にはしません。
+/// 捕捉状態の所有と同期は、呼び出しスレッドを保証しない既存の挙動の下で利用者の責務です。
+/// 実行スレッドの同一性・直列性も契約にしません。
+private final class ConnectionTimerHandlerBox: @unchecked Sendable {
+  private let handler: () -> Void
+
+  init(_ handler: @escaping () -> Void) {
+    self.handler = handler
+  }
+
+  func callAsFunction() {
+    handler()
+  }
+}
+
 class ConnectionTimer: @unchecked Sendable {
   public var monitors: [ConnectionMonitor]
   public var timeout: Int
@@ -70,6 +96,10 @@ class ConnectionTimer: @unchecked Sendable {
   ///   開始ログを出すために使います。
   @discardableResult
   public func run(timeout: Int? = nil, handler: @escaping () -> Void) -> Int {
+    // timeout handler は `@Sendable` ではないため、公開している引数の型を変えずに box へ包む。
+    // block の `[weak self]` と `self.monitors` の読み方は変えない。
+    let handlerBox = ConnectionTimerHandlerBox(handler)
+
     stateLock.lock()
     if let timeout {
       self.timeout = timeout
@@ -114,7 +144,7 @@ class ConnectionTimer: @unchecked Sendable {
               monitor.disconnect()
             }
           }
-          handler()
+          handlerBox()
           self.stop()
           return
         }

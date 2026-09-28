@@ -10,10 +10,24 @@ struct CameraCaptureFormatBox: @unchecked Sendable {
   let format: AVCaptureDevice.Format
 }
 
-/// 公開カメラ API の完了ハンドラーを並行処理境界へ渡すための内部ラッパーです。
+/// カメラ操作の完了通知を並行処理境界へ渡すための、用途限定の内部ラッパーです。
 ///
-/// `@unchecked Sendable` としているのは、保持する closure が init で確定した `let` で、
-/// この box をカメラ操作用の直列 queue へ渡す用途に限定しているためです。
+/// 公開カメラ API から受け取った完了ハンドラーを、次の 3 経路へ渡すために使います。
+/// - カメラ操作用の直列 queue の block
+/// - その queue 上で実行される `completionBeforeEvent:` の引数
+/// - native の `startCapture` の完了 block
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する完了 handler は `init` で確定した `let` であること
+/// - 変更前から完了 handler を渡していたのと同じ系統の境界 (カメラ操作用の直列 queue の
+///   block と、その queue 上で実行される native の完了 block) を包み直すだけで、
+///   配送先・通知順序・呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持するのは完了 handler の closure だけで、SDK 内部の参照型を新たに保持しないこと
+///
+/// 生成はカメラ操作の経路ごとに 1 つだけ行い、1 回だけ実行する使用契約です (型では強制されません)。
+/// `Sendable` にするのはこの入れ物だけで、handler とその捕捉状態を `Sendable` にはしません。
+/// 捕捉状態の所有と同期は、呼び出しスレッドを保証しない既存の挙動の下で利用者の責務です。
+/// 実行スレッドの同一性・直列性も契約にしません。
 final class CameraOperationCompletionBox: @unchecked Sendable {
   private let completionHandler: (Error?) -> Void
 
@@ -23,6 +37,34 @@ final class CameraOperationCompletionBox: @unchecked Sendable {
 
   func callAsFunction(_ error: Error?) {
     completionHandler(error)
+  }
+}
+
+/// 引数を取らないカメラ操作の完了通知を並行処理境界へ渡すための、用途限定の内部ラッパーです。
+///
+/// `CameraOperationCompletionBox` は `(Error?) -> Void` 専用で、`completionBeforeEvent:` の
+/// 型として複数箇所から参照されているため汎用化しません。`() -> Void` 用はこの box に分けます。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する完了 handler は `init` で確定した `let` であること
+/// - 変更前から完了 handler を渡していたのと同じ系統の境界 (native の `stopCapture` の
+///   完了 block) を包み直すだけで、配送先・通知順序・呼び出し回数を変えず、
+///   別系統の境界へ新たに渡さないこと
+/// - 保持するのは完了 handler の closure だけで、SDK 内部の参照型を新たに保持しないこと
+///
+/// 生成は `stopNative` の先頭で 1 つだけ行い、1 回だけ実行する使用契約です (型では強制されません)。
+/// `Sendable` にするのはこの入れ物だけで、handler とその捕捉状態を `Sendable` にはしません。
+/// 捕捉状態の所有と同期は、呼び出しスレッドを保証しない既存の挙動の下で利用者の責務です。
+/// 実行スレッドの同一性・直列性も契約にしません。
+private final class CameraStopCompletionBox: @unchecked Sendable {
+  private let completionHandler: () -> Void
+
+  init(_ completionHandler: @escaping () -> Void) {
+    self.completionHandler = completionHandler
+  }
+
+  func callAsFunction() {
+    completionHandler()
   }
 }
 
@@ -1135,6 +1177,11 @@ public final class CameraVideoCapturer: Sendable {
     frameRate: Int,
     completionHandler: @escaping ((Error?) -> Void)
   ) {
+    let completionBox = CameraOperationCompletionBox(completionHandler)
+    // `AVCaptureDevice.Format` は非 `Sendable` のため、ログに使う文字列表現だけを closure の
+    // 外で作って capture する。`device` は closure の内側で参照し続け、メッセージ全体は外で
+    // 組み立てない (組み立てると closure の `[self]` が未使用になる)。
+    let formatDescription = String(describing: format)
     nativeStorage.nativeCapturer().startCapture(
       with: device,
       format: format,
@@ -1143,9 +1190,9 @@ public final class CameraVideoCapturer: Sendable {
       if error == nil {
         Logger.debug(
           type: .cameraVideoCapturer,
-          message: "succeeded to start \(device) with \(format), \(frameRate)fps")
+          message: "succeeded to start \(device) with \(formatDescription), \(frameRate)fps")
       }
-      completionHandler(error)
+      completionBox(error)
     }
   }
 
@@ -1209,11 +1256,12 @@ public final class CameraVideoCapturer: Sendable {
   ///
   /// restart / change / flip のような複合コマンドが、内部の stop として使います。
   private func stopNative(completionHandler: @escaping (() -> Void)) {
+    let completionBox = CameraStopCompletionBox(completionHandler)
     nativeStorage.nativeCapturer().stopCapture { [self] in
       Logger.debug(
         type: .cameraVideoCapturer,
         message: "succeeded to stop \(String(describing: device))")
-      completionHandler()
+      completionBox()
     }
   }
 

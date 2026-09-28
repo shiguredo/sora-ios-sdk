@@ -88,6 +88,10 @@
   - 非 `@Sendable` な接続 handler を `DispatchQueue.global()` の closure が capture していたことによる `#SendableClosureCaptures` 警告を、handler を包む private の box で解消する
   - 公開 API と利用者の挙動の変更はない (通知順序と配送先は変わらない)
   - @t-miya
+- [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告 14 件を解消する
+  - `PeerChannel` / `MediaChannel` / `CameraVideoCapturer` / `NativePeerChannelFactory` / `ConnectionTimer` で、非 `@Sendable` な handler を包む private の box を追加し、WebRTC / AVFoundation の型を capture していた箇所は `Sendable` な値の capture へ置き換える
+  - 公開 API と利用者の挙動の変更はない
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya

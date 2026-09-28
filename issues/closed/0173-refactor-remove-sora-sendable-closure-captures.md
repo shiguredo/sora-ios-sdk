@@ -1,7 +1,7 @@
 # Sora target の `#SendableClosureCaptures` 警告のうち closure と外部 module の型を捕捉する 14 件を解消する
 
 - Created: 2026-09-28
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-28
 - Priority: Low
 - Branch: feature/refactor-remove-sora-sendable-closure-captures
 - Polished: 2026-09-28
@@ -32,7 +32,7 @@
 | - | 1 | `Utilities.Stopwatch` | Utilities 33 (`0115` の削除で消える) |
 
 - 警告が出るのは、WebRTC / AVFoundation の Objective-C block と `DispatchQueue` / `Timer` の block が `@Sendable` closure として取り込まれるためである。
-- (B) の 6 件は、同じ file の `import WebRTC` 行に出る `add '@preconcurrency'` 警告 4 件の原因でもある。(B) の 6 件を code 側で消すと `add '@preconcurrency'` 4 件も消える (2026-09-28 に実測)。本 issue は code 側で消し、`@preconcurrency` は追加しない。
+- (B) の 6 件は、同じ file の `import WebRTC` 行に出る `add '@preconcurrency'` 警告 4 件の原因でもある。 (B) の 6 件を code 側で消すと `add '@preconcurrency'` 4 件も消える (2026-09-28 に実測)。本 issue は code 側で消し、`@preconcurrency` は追加しない。
 - `0108` のゲート相当の flags を付けた型検査では、`#SendableClosureCaptures` の 25 件と `add '@preconcurrency'` 4 件の計 29 件が error になる (2026-09-28 に実測)。
 - `swiftc -typecheck` は最初の error を含む file で打ち切られるため、`-warnings-as-errors` を付けた 1 回の実行では error を全件列挙できない。全件を列挙するときは `-disable-batch-mode -continue-building-after-errors` を付ける。
 
@@ -54,7 +54,7 @@
 - (A) の 8 件は、`init` で確定した closure を保持する用途限定 box (`@unchecked Sendable`) で解消する。box を適用してよいのは、次の 3 つをすべて満たす経路に限る。満たさない経路は box で消さず、スコープ外の C 群と同じ扱いにする。
   - 保持する closure が `init` で確定した `let` であり、box 自身が可変状態を持たないこと
   - その closure は変更前から同じ系統の非同期境界 (WebRTC / AVFoundation の callback、`DispatchQueue`、`Timer` のいずれか) へ渡されており、box は配送先・順序・呼び出し回数を変えず、別系統の境界へ新たに渡すこともないこと
-  - box が保持してよいのは closure と、次の 2 つの経路が closure と一緒に保持する `RTCPeerConnection` だけである (`MediaChannel.getStats` の box は `handler` と `peerConnection`、(B) の `NativePeerChannelFactory.createClientOfferSDP` の box は `handler` と `peer2`)。SDK 内部の参照型 `self` / `DataChannel` / `ConnectionTask` は保持しない
+  - box が保持してよいのは closure と、次の 2 つの経路が closure と一緒に保持する `RTCPeerConnection` だけである (`MediaChannel.getStats` の box は `handler` と `peerConnection`、 (B) の `NativePeerChannelFactory.createClientOfferSDP` の box は `handler` と `peer2`)。SDK 内部の参照型 `self` / `DataChannel` / `ConnectionTask` は保持しない
 - この 3 条件が `0108` の「未完了項目を `@unchecked Sendable` で隠してはならない」に当たらないことの根拠である。判断の目印は「警告が消えること」ではなく「SDK 内部の状態を新たに並行境界へ出すことになっていないこと」とし、経路ごとの根拠を PR に書く。本 issue は C 群 10 件と `Sora/Utilities.swift` の 1 件を残すため、box の追加でゲートを開ける状態にはならない。
 - (A) の経路ごとの扱いは次のとおり。
   - `CameraVideoCapturer.startNative` の `completionHandler` (1148) は、既存の `CameraOperationCompletionBox` を使う。ただし同 box の doc コメントは「カメラ操作用の直列 queue へ渡す用途に限定する」と書いており、`startCapture` の完了 block へ渡す用途を含まないため、コメントを「カメラ操作の完了通知を非同期境界へ渡す用途」に広げる。
@@ -73,7 +73,7 @@
   - PeerChannel 1210 と 1214: `localAnswer.sdp` と `localAnswer.sdpDescription` の両方を、`setLocalDescription` の closure に入る前 (1197 行の前) に `String` へ取り出す。片方だけでは 1210 の capture が残る。
   - PeerChannel 1151: closure の内側の `nativeChannel.answer(for: constraints)` の実引数であり、`RTCMediaConstraints` のままでは値の写しができない。`createAnswer` の引数を `RTCMediaConstraints` から `MediaConstraints` (`Sendable`。`nativeValue` は `RTCMediaConstraints` を生成する computed property) へ変え、closure の内側で `constraints.nativeValue` を読む。呼び出し元 4 箇所 (1309 / 1359 / 1408 / 1474) は `updatedConfiguration.constraints` / `currentWebRTCConfiguration().constraints` を渡す形に変える。
   - MediaChannel 1173: `currentPeerConnection === peerConnection` の同一性判定だけに使う。`handler` (1161) と `peerConnection` を `let` で保持する参照保持 box を作り、判定を `currentPeerConnection === context.peerConnection` とする。これは「redirect で旧 `RTCPeerConnection` が入れ替わったことの検出」に必要な強参照を維持するためであり、旧 `RTCPeerConnection` の解放が statistics callback の完了まで遅れることを許容する。`ObjectIdentifier` へ写す案は強参照を失い、callback が呼ばれず handler が返らない挙動変化になり得るため採らない。
-  - NativePeerChannelFactory 318: closure の内側で `peer2.close()` を呼ぶため、値の写しができない。`handler` (312) と `peer2` を `let` で保持する参照保持 box を作り、closure の内側で `context.peer2.close()` を呼ぶ。
+  - NativePeerChannelFactory 318: closure の内側で `peer2.close()` を呼ぶため、値の写しができない。`handler` (312) と `peer2` を `let` で保持する参照保持 box を作り、closure の内側で `context.peerConnection.close()` を呼ぶ (box のプロパティ名は `peerConnection`。局所名 `peer2` は同名 shadowing を避けるための名残である)。
   - CameraVideoCapturer 1146: ログの文字列補間だけに使う。`format` を `String` にした値だけを closure の外で作り、`device` は closure の内側で参照し続けて `[self]` を残す。メッセージ全体 (`device` を含む) を closure の外で組み立てると `[self]` が未使用になり `capture 'self' was never used [#no-usage]` が出て、本 issue の完了条件が崩れる。既存の `CameraCaptureFormatBox` は「カメラキュー上の `start` に渡す」用途に限定した doc を持つため流用しない。
 - 参照保持 box のコメントには、closure 保持 box の 3 点に加えて次を書く。
   - 保持する参照が変更前の closure が capture していた参照と同一であり、参照の解放タイミングを遅らせることの影響 (callback の完了まで旧オブジェクトが残ること) を許容すること
@@ -85,8 +85,8 @@
 - `CHANGES.md` の `## develop` の主リスト (`[CHANGE]` → `[ADD]` → `[UPDATE]` → `[FIX]` の順) の既存 `[UPDATE]` 群の末尾 (`[FIX]` の直前) に次を追加する。コードブロックの先頭の 2 スペースはこの節の入れ子のためのもので、`CHANGES.md` へはインデントを外して追記する。
 
   ```
-  - [UPDATE] `Sora` の型検査に残る closure capture の `#SendableClosureCaptures` 警告 14 件を解消する
-    - 非 `@Sendable` な handler を包む private の box を追加し、WebRTC / AVFoundation の型を capture していた箇所は `Sendable` な値の capture へ置き換える
+  - [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告 14 件を解消する
+    - `PeerChannel` / `MediaChannel` / `CameraVideoCapturer` / `NativePeerChannelFactory` / `ConnectionTimer` で、非 `@Sendable` な handler を包む private の box を追加し、WebRTC / AVFoundation の型を capture していた箇所は `Sendable` な値の capture へ置き換える
     - 公開 API と利用者の挙動の変更はない
     - @t-miya
   ```
@@ -112,7 +112,7 @@
   - 上記以外の経路は、振る舞いを変えない値の写しと box の追加であるため、型検査と `SoraTests` 全体を回帰の正本にする (`MediaChannel.getStats` は `state` を `.connected` にする経路が private のため単体 harness を作らない)
 - `CHANGES.md`: `## develop` の主リストへの `[UPDATE]` の追記
 - `issues/0108-update-swiftpm-language-mode.md`: 行番号ではなく現行の文言を目印にして次を直す。`## 前提となる issue` の `- `0173` / `0174`: 残りの `#SendableClosureCaptures` と `add '@preconcurrency'` 4 件 (WebRTC 3 / AVFoundation 1)。` の担当内訳を「`0173` が 14 件 / SDK 内部インスタンスの capture 10 件 (未起票) / `Sora/Utilities.swift` の 1 件 (`0115`)」と書き分け、`add '@preconcurrency'` 4 件は本 issue の (B) 群の解消に伴って消えるため `0174` を担当として挙げない形へ直す。`0157` の重複 bullet の削除、`0155` / `0157` の件数記述、`## 前提となる issue` の導入文、`## 検証方針` の実測値の tree、`## 完了条件` の担当列挙は `0155` 側で更新済みのため、本 issue では扱わない
-- `issues/0174-refactor-remove-preconcurrency-import-warnings.md`: 行番号ではなく現行の文言を目印にして、次のいずれかを選んで issue に書く。`0174` の目的 (4 件を解消して `0108` のゲートを有効化できる状態にする) は本 issue の (B) 群の解消で達成されるため、`0174` を close して本 issue に統合するか、`0174` を本 issue の完了後の検証 (4 件が 0 件であることの確認と、`@preconcurrency` を追加しなかった根拠の記録) に縮小する。close する場合は `## スコープ外` の `- `#SendableClosureCaptures` 警告 24 件 (`0173`)。` を実測 (25 件。本 issue 14 件 / SDK 内部インスタンスの capture 10 件 / `Sora/Utilities.swift` の 1 件) に合わせ、`## 解決方法` に「本 issue の (B) 群の解消で 4 件が消えるため対応不要」と実測根拠を書く。縮小する場合は `## 設計方針` / `## 変更対象` / `## 完了条件` にある `CHANGES.md` への `[UPDATE]` 追記の要求 (本 issue のエントリと重複する) と、`0108` の残存警告の担当を `0174` へ更新する要求 (本 issue が書く 3 区分と矛盾する) を外し、`## 前提となる issue` の `0108` の bullet に実施順 (本 issue が先) を追記する
+- `issues/closed/0174-refactor-remove-preconcurrency-import-warnings.md`: 行番号ではなく現行の文言を目印にして、次のいずれかを選んで issue に書く。`0174` の目的 (4 件を解消して `0108` のゲートを有効化できる状態にする) は本 issue の (B) 群の解消で達成されるため、`0174` を close して本 issue に統合するか、`0174` を本 issue の完了後の検証 (4 件が 0 件であることの確認と、`@preconcurrency` を追加しなかった根拠の記録) に縮小する。close する場合は `## スコープ外` の `- `#SendableClosureCaptures` 警告 24 件 (`0173`)。` を実測 (25 件。本 issue 14 件 / SDK 内部インスタンスの capture 10 件 / `Sora/Utilities.swift` の 1 件) に合わせ、`## 解決方法` に「本 issue の (B) 群の解消で 4 件が消えるため対応不要」と実測根拠を書く。縮小する場合は `## 設計方針` / `## 変更対象` / `## 完了条件` にある `CHANGES.md` への `[UPDATE]` 追記の要求 (本 issue のエントリと重複する) と、`0108` の残存警告の担当を `0174` へ更新する要求 (本 issue が書く 3 区分と矛盾する) を外し、`## 前提となる issue` の `0108` の bullet に実施順 (本 issue が先) を追記する
 
 ## テスト方針
 
@@ -167,6 +167,33 @@
 - `make build` の log で対象 file の `capture of` 警告が減っていること。SwiftPM の cache に書き込めない環境では `Sora/` の型検査で代替し、その旨が「解決方法」に記録されていること。
 - `make consumer-build SCHEME=ConsumerCore`、`make api-check-fresh`、`make fmt-lint`、`make lint` が成功し、`git diff --exit-code -- TestConsumers/Swift6Consumer/ApiBaseline/` が空であること。
 - `CHANGES.md` の `## develop` の主リストの `[UPDATE]` 群の末尾に、`## 設計方針` に書いた文面のエントリが担当者の行 (`- @t-miya`) 付きで追加されていること。
-- `issues/0108-update-swiftpm-language-mode.md` と `issues/0174-refactor-remove-preconcurrency-import-warnings.md` が `## 変更対象` に書いた内容に更新されていること。
+- `issues/0108-update-swiftpm-language-mode.md` と `issues/closed/0174-refactor-remove-preconcurrency-import-warnings.md` が `## 変更対象` に書いた内容に更新されていること。
 
 ## 解決方法
+
+`## 設計方針` のとおり、 (A) の 8 件を用途限定の box (`@unchecked Sendable`) で、 (B) の 6 件を `Sendable` な値の capture へ置き換えて解消した。公開 API のシグネチャと `@Sendable` 化は変更していない。
+
+- `Sora/CameraVideoCapturer.swift`: 既存の `CameraOperationCompletionBox` の doc を「カメラ操作の完了通知を非同期境界へ渡す用途」へ広げて `startNative` の `completionHandler` に使い、`stopNative` の `() -> Void` 用に `CameraStopCompletionBox` を追加した。`format` は closure の外で `String` へ写し、`device` は closure の内側で参照し続けて `[self]` を残した (`#no-usage` は出ていない)
+- `Sora/PeerChannel.swift`: `createAnswer` の `handler` を `CreateAnswerHandlerBox` 1 つで覆い、`offer.sdpDescription` と `localAnswer.sdp` / `localAnswer.sdpDescription` を closure の外で `String` へ写した。`createAnswer` の引数を `RTCMediaConstraints` から `MediaConstraints` へ変え、呼び出し元 4 箇所を更新した
+- `Sora/MediaChannel.swift`: `getStats` の `handler` と `peerConnection` を `MediaChannelGetStatsContext` が保持し、`currentPeerConnection === context.peerConnection` で同一性判定を続ける (強参照を維持し、redirect で入れ替わった旧 `RTCPeerConnection` の解放が statistics callback の完了まで遅れることを許容する)
+- `Sora/NativePeerChannelFactory.swift`: `handler` と `peerConnection` (実装前の局所名は `peer2`) を `ClientOfferSDPCreationContext` が保持し、完了 block の内側で `context.peerConnection.close()` を呼ぶ
+- `Sora/ConnectionTimer.swift`: `handler` を `ConnectionTimerHandlerBox` で包む (`Timer` block の `[weak self]` と `self.monitors` の読み方は変更しない)
+
+回帰テスト (`SoraTests`、モック・スタブなし):
+
+- `ConnectionTimerLifecycleTests.testTimeoutInvokesHandlerOnce`: 接続試行中 (`.connecting`) の実 `PeerChannel` を monitor に渡し、timeout 発火で handler が 1 回だけ呼ばれることを固定した
+- `PeerChannelRedirectInvalidationTests.testReAnswerFromReOfferProducesAnswerMatchingOfferMediaSections`: 実 `RTCPeerConnection` と audio track で有効な offer SDP を作り `.reOffer` を流して、handler 呼び出し 1 回・`onUpdate` の SDP が空でないこと・answer の `m=` 行の種別の並びが offer と一致することを固定した
+- 上記以外の経路は振る舞いを変えない値の写しと box の追加のため、型検査と `SoraTests` 全体を回帰の正本とした (`MediaChannel.getStats` は `state` を `.connected` にする経路が private のため単体 harness を作らない)
+
+検証 (2026-09-28、Xcode 26.6 / Swift 6.3.3):
+
+- 型検査: error 0、warning 46 → 28、`#SendableClosureCaptures` 25 → **11** (残りは `PeerChannel` 6 / `MediaChannel` 3 / `DataChannel` 1 / `Sora/Utilities.swift` 1 で、いずれも `## スコープ外` の C 群と `0115`)、`add '@preconcurrency'` 4 → **0** (`build/0173-typecheck-before.log` / `build/0173-typecheck-after.log`)
+- テスト: 全体 406 件 (skip 30) が失敗 0 (`build/0173-tests-full.log`)。`SoraTests` の concurrency 診断は 0 件
+- `make build` と `make consumer-build SCHEME=ConsumerCore` が成功、`make fmt-lint` / `make lint` は 0 violations、`make api-check-fresh` は baseline 一致で `TestConsumers/Swift6Consumer/ApiBaseline/` に差分なし
+- 完了時点の再実行ログ (2026-09-28、いずれも exit code 0): `make build` (`build/0173-polish-build.log`) / `make consumer-build SCHEME=ConsumerCore` (`build/0173-polish-consumer.log`) / `make fmt-lint` (`build/0173-polish-fmtlint.log`) / `swiftlint lint --strict` (`build/0173-polish-lint.log`) / `make api-check-fresh` (`build/0173-polish-apicheck.log`)
+
+制約:
+
+- `#SendableClosureCaptures` 11 件 (C 群 10 件と `Sora/Utilities.swift` の 1 件) は `## スコープ外` のとおり本 issue では扱わない。C 群は捕捉対象の型の状態所有の扱いを決める別 issue (未起票) が必要で、`MediaChannel` / `ConnectionTask` は公開型のため `Sendable` 準拠の是非も含めて判断する
+- Thread Sanitizer は `0119` に従い完了条件に含めない
+- 追加した box は `@unchecked Sendable` の入れ物であり、保持する closure とその捕捉状態を `Sendable` にするものではない (捕捉状態の所有と同期は利用者の責務)。実行スレッドの同一性・直列性も契約にしない
