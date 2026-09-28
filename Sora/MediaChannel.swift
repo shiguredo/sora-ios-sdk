@@ -181,6 +181,47 @@ private final class WeakMediaChannelBox: @unchecked Sendable {
 
 // MARK: -
 
+/// libwebrtc の統計情報取得 handler と、その取得対象の `RTCPeerConnection` を並行処理境界へ
+/// 渡すための、用途限定の内部ラッパーです。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する handler と `RTCPeerConnection` の参照は `init` で確定した
+///   `let` で、box の生存中に再代入されないこと。`RTCPeerConnection` は class であるため、
+///   ここで主張するのは参照が再代入されないことだけで、オブジェクトの状態の不変性ではない。
+///   box は参照を保持して callback へ渡すだけで、状態を読み書きしないこと
+/// - 変更前から handler と `RTCPeerConnection` を渡していた `RTCPeerConnection.statistics` の
+///   完了 block をそのまま包み直すだけで、配送先・通知順序・呼び出し回数を変えず、
+///   別系統の境界へ新たに渡さないこと
+/// - 保持するのは handler の closure と、変更前に同じ block が参照していた `RTCPeerConnection`
+///   だけで、SDK 内部の参照型 (`MediaChannel` 等) を新たに保持しないこと
+///
+/// 保持する `RTCPeerConnection` は、変更前に完了 block が capture していた参照と同一です。
+/// この参照を保持すると、redirect で `RTCPeerConnection` が入れ替わった後も、旧オブジェクトの
+/// 解放が statistics callback の完了まで遅れます。変更前も完了 block が同じ参照を capture して
+/// いたため callback の完了までは生存しており、入れ替え後の同一性判定
+/// (`currentPeerConnection === context.peerConnection`) に必要な参照の同一性を保つため、
+/// この遅延を許容します。同一性判定は従来どおり「redirect で旧 `RTCPeerConnection` が
+/// 入れ替わったことの検出」だけに使い、この callback の実行スレッドと配送は変更前と同じです。
+///
+/// 生成は `MediaChannel.getStats` の 1 箇所だけで、1 つの block へ 1 回だけ渡して 1 回だけ実行する
+/// 使用契約です (型では強制されません)。`Sendable` にするのはこの入れ物だけで、handler と
+/// その捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出しスレッドを
+/// 保証しない既存の挙動の下で利用者の責務です。実行スレッドの同一性・直列性も契約にしません。
+private final class MediaChannelGetStatsContext: @unchecked Sendable {
+  let handler: (Result<Statistics, any Error>) -> Void
+  let peerConnection: RTCPeerConnection
+
+  init(
+    handler: @escaping (Result<Statistics, any Error>) -> Void,
+    peerConnection: RTCPeerConnection
+  ) {
+    self.handler = handler
+    self.peerConnection = peerConnection
+  }
+}
+
+// MARK: -
+
 /// 一度接続を行ったメディアチャネルは再利用できません。
 /// 同じ設定で接続を行いたい場合は、新しい接続を行う必要があります。
 ///
@@ -1217,30 +1258,36 @@ public final class MediaChannel {
     // ここで self を強参照すると、MediaChannel が切断・解放されたあとでもクロージャが解放されず、deinit が遅れたり循環参照が発生する恐れがあります。
     // そのため [weak self] でキャプチャし、呼び出し時点で MediaChannel がまだ有効かどうかをチェックしています。
     // self が解放済みなら MediaChannel is unavailable エラーを返すことで安全に処理を抜けます。
+    //
+    // handler は公開 API のため `@Sendable` にできず、 peerConnection は `Sendable` ではないため、
+    // 両者を不変の参照保持 box へ移し、クロージャには box (Sendable) だけを capture させます。
+    let context = MediaChannelGetStatsContext(
+      handler: handler,
+      peerConnection: peerConnection)
     peerConnection.statistics { [weak self] report in
       guard let self else {
-        handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is unavailable")))
+        context.handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is unavailable")))
         return
       }
 
       guard self.state == .connected else {
         let message = "MediaChannel is not connected (state: \(self.state))"
         Logger.debug(type: .mediaChannel, message: message)
-        handler(.failure(SoraError.peerChannelError(reason: message)))
+        context.handler(.failure(SoraError.peerChannelError(reason: message)))
         return
       }
 
       guard let currentPeerConnection = self.peerChannel.nativeChannel,
-        currentPeerConnection === peerConnection
+        currentPeerConnection === context.peerConnection
       else {
         let message =
           "RTCPeerConnection is unavailable (state: \(self.state), nativeChannel changed)"
         Logger.debug(type: .mediaChannel, message: message)
-        handler(.failure(SoraError.peerChannelError(reason: message)))
+        context.handler(.failure(SoraError.peerChannelError(reason: message)))
         return
       }
 
-      handler(.success(Statistics(contentsOf: report)))
+      context.handler(.success(Statistics(contentsOf: report)))
     }
   }
 

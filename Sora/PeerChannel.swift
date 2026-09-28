@@ -62,6 +62,33 @@ private final class PeerChannelDisconnectCompletionContext: @unchecked Sendable 
   }
 }
 
+/// `createAnswer` の完了 handler を複数の非同期境界から参照するための、用途限定の内部ラッパーです。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する handler は `init` で確定した `let` であること
+/// - 変更前から handler を渡していた WebRTC の callback を包み直すだけで、配送先・通知順序・
+///   呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持するのは handler の closure だけで、`PeerChannel` / `DataChannel` /
+///   `ConnectionTask` などの SDK 内部の参照型を新たに保持しないこと
+///
+/// 使用契約は「高々 1 回だけ呼ばれるが、複数の closure から参照される」です。
+/// `createAnswer` の先頭で作った 1 つの box を 3 つの非同期 closure と同期経路が共有しますが、
+/// handler を呼ぶ経路はどれも呼び出した後に return するため、handler が複数回呼ばれることは
+/// ありません (型では強制されません)。`Sendable` にするのはこの入れ物だけで、handler と
+/// その捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出しスレッドを
+/// 保証しない既存の挙動の下で利用者の責務です。実行スレッドの同一性・直列性も契約にしません。
+private final class CreateAnswerHandlerBox: @unchecked Sendable {
+  private let handler: (String?, (any Error)?) -> Void
+
+  init(_ handler: @escaping (String?, (any Error)?) -> Void) {
+    self.handler = handler
+  }
+
+  func callAsFunction(_ sdp: String?, _ error: (any Error)?) {
+    handler(sdp, error)
+  }
+}
+
 class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - Constants
 
@@ -1087,17 +1114,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   private func createAnswer(
     isSender: Bool,
     offer: String,
-    constraints: RTCMediaConstraints,
+    // `RTCMediaConstraints` は `Sendable` ではないため、値の写しができる
+    // `MediaConstraints` (`Sendable`) を引数に取り、非同期境界の内側で native 値へ変換する。
+    constraints: MediaConstraints,
     initialOffer: Bool = false,
     mid: [String: String]? = nil,
     generation: Int,
-    handler: @escaping (String?, Error?) -> Void
+    handler: @escaping (String?, (any Error)?) -> Void
   ) {
+    let handlerBox = CreateAnswerHandlerBox(handler)
+
     guard let nativeChannel else {
       // handler を呼ばずに return すると、呼び出し元が lock を解放できない (ロック残留)。
       // 明示的な接続失敗として handler を必ず 1 回呼ぶ。
       Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-      handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
+      handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
       return
     }
 
@@ -1106,8 +1137,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try setting remote description")
     let offer = RTCSessionDescription(type: .offer, sdp: offer)
+    // `RTCSessionDescription` は `Sendable` ではないが、この closure が使うのは
+    // `sdpDescription` だけである。 setRemoteDescription の closure に入る前に
+    // String へ写し、捕捉対象を `Sendable` な値に置き換える。
+    let offerDescription = offer.sdpDescription
     nativeChannel.setRemoteDescription(offer) { [weak self] error in
       guard let self else {
+        // この経路では handler を呼ばずに return する。呼び出し元は handler の完了で lock を
+        // 解放するため、handler が呼ばれないと lock が残留し得る。この挙動は変更せず、
+        // 扱いは別 issue に委ねる。
         return
       }
       guard error == nil else {
@@ -1116,7 +1154,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           // guard の else 節で非 nil が保証されるため安全
           // swiftlint:disable:next force_unwrapping
           message: "failed setting remote description: (\(error!.localizedDescription)")
-        handler(nil, error)
+        handlerBox(nil, error)
         return
       }
 
@@ -1126,19 +1164,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // (チェーンの各ステップは self.nativeChannel を再読取するため、世代照合が
       // 最終クロージャのみだと、旧 offer の SDP・mid・encodings が新 PC に適用される)
       guard generation == self.dataChannelGeneration else {
-        handler(nil, nil)
+        handlerBox(nil, nil)
         return
       }
 
       guard let nativeChannel = self.nativeChannel else {
         // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
         Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-        handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
+        handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
         return
       }
 
       Logger.debug(type: .peerChannel, message: "did set remote description")
-      Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
+      Logger.debug(type: .peerChannel, message: "\(offerDescription)")
 
       if isSender {
         if initialOffer {
@@ -1148,14 +1186,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "try creating native answer")
-      nativeChannel.answer(for: constraints) { answer, error in
+      nativeChannel.answer(for: constraints.nativeValue) { answer, error in
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
             // guard の else 節で非 nil が保証されるため安全
             // swiftlint:disable:next force_unwrapping
             message: "failed creating native answer (\(error!.localizedDescription)")
-          handler(nil, error)
+          handlerBox(nil, error)
           return
         }
 
@@ -1164,21 +1202,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         // (answer 作成中にリダイレクトが発生した場合、以下の再読取で新 PC を取得し、
         // 旧 offer の answer が新 PC に適用されるのを防ぐ)
         guard generation == self.dataChannelGeneration else {
-          handler(nil, nil)
+          handlerBox(nil, nil)
           return
         }
 
         guard let nativeChannel = self.nativeChannel else {
           // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
           Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-          handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
+          handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
           return
         }
 
         Logger.debug(type: .peerChannel, message: "did create answer")
 
         guard let answer else {
-          handler(nil, SoraError.peerChannelError(reason: "answer should not be nil"))
+          handlerBox(nil, SoraError.peerChannelError(reason: "answer should not be nil"))
           return
         }
 
@@ -1189,9 +1227,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             ? try StereoAudioSDP.enableStereo(in: answer.sdp) : answer.sdp
           localAnswer = RTCSessionDescription(type: answer.type, sdp: sdp)
         } catch {
-          handler(nil, error)
+          handlerBox(nil, error)
           return
         }
+
+        // `RTCSessionDescription` は `Sendable` ではないため、 setLocalDescription の closure が
+        // 使う `sdp` と `sdpDescription` の両方を closure に入る前に String へ写す。
+        // 片方だけでは capture が残る。
+        let localAnswerSDP = localAnswer.sdp
+        let localAnswerSDPDescription = localAnswer.sdpDescription
 
         Logger.debug(type: .peerChannel, message: "try setting local description")
         nativeChannel.setLocalDescription(localAnswer) { error in
@@ -1199,7 +1243,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(
               type: .peerChannel,
               message: "failed setting local description")
-            handler(nil, error)
+            handlerBox(nil, error)
             return
           }
           Logger.debug(
@@ -1207,11 +1251,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             message: "did set local description")
           Logger.debug(
             type: .peerChannel,
-            message: "\(localAnswer.sdpDescription)")
+            message: "\(localAnswerSDPDescription)")
           Logger.debug(
             type: .peerChannel,
             message: "did create answer")
-          handler(localAnswer.sdp, nil)
+          handlerBox(localAnswerSDP, nil)
         }
       }
     }
@@ -1309,7 +1353,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: snapshot.isSender,
       offer: offer.sdp,
-      constraints: updatedConfiguration.nativeConstraints,
+      constraints: updatedConfiguration.constraints,
       initialOffer: true,
       mid: offer.mid,
       generation: generation
@@ -1359,7 +1403,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: offer,
-      constraints: currentWebRTCConfiguration().nativeConstraints,
+      constraints: currentWebRTCConfiguration().constraints,
       generation: generation
     ) { answer, error in
       // リダイレクト等で接続が切り替わった場合は、旧接続の update-answer を破棄する。
@@ -1408,7 +1452,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: currentWebRTCConfiguration().nativeConstraints,
+      constraints: currentWebRTCConfiguration().constraints,
       generation: generation
     ) { answer, error in
       // 2025.1.1 までは lock() 呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
@@ -1474,7 +1518,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: currentWebRTCConfiguration().nativeConstraints,
+      constraints: currentWebRTCConfiguration().constraints,
       generation: generation
     ) { answer, error in
       // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要

@@ -11,7 +11,7 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   // テストで共通利用するシグナリング URL を返す
   private func makeTestURL() -> URL {
     guard let url = URL(string: "wss://example.com") else {
-      fatalError("failed to create test URL")
+      fatalError("テスト URL の生成に失敗しました")
     }
     return url
   }
@@ -38,6 +38,27 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
     ConnectionTimer(
       monitors: [.signalingChannel(try makeSignalingChannel())],
       timeout: timeout)
+  }
+
+  // 接続試行中の PeerChannel を構築する
+  //
+  // `onConnect` を設定した状態で `state` を読むと `.connecting` になる。
+  // 切断経路でカメラ停止などの非同期 cleanup を起こさないよう recvonly で構築する。
+  private func makePeerChannel() throws -> PeerChannel {
+    let configuration = Configuration(
+      urlCandidates: [makeTestURL()],
+      channelId: "test",
+      role: .recvonly)
+    let snapshot = try ConnectionConfigurationSnapshot(configuration: configuration)
+    let signalingChannel = SignalingChannel(
+      snapshot: snapshot,
+      webSocketChannelHandlers: configuration.webSocketChannelHandlers)
+    let nativePeerChannelFactory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
+    return PeerChannel(
+      snapshot: snapshot,
+      signalingChannel: signalingChannel,
+      nativePeerChannelFactory: nativePeerChannelFactory,
+      mediaChannel: nil)
   }
 
   /// run() の再実行時に旧 Timer の世代が進むことを確認する
@@ -156,5 +177,42 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
       expectation.fulfill()
     }
     wait(for: [expectation], timeout: 3)
+  }
+
+  /// timeout の発火で run() の handler が 1 回だけ呼ばれることを確認する
+  ///
+  /// makeConnectionTimer が作る monitor は `.disconnected` の SignalingChannel のため
+  /// timeout 経路に入らず handler は発火しない。ここでは接続試行中 (`.connecting`) の
+  /// PeerChannel を monitor に渡し、Timer の満了で timeout 経路が handler を 1 回だけ
+  /// 呼ぶことを固定する (handler を box へ包んだ後も配送先と呼び出し回数が変わらないことの回帰)。
+  ///
+  /// ただし `connect()` を経由せず `onConnect` を直接設定して `.connecting` を作るため、
+  /// この PeerChannel の Lock は count == 0 のままである。実際の接続試行中は `connect()` の
+  /// 初期ロックで count == 1 になるため、切断要求を受けたときの Lock の分岐はこのテストと
+  /// 異なる (このテストが固定するのは ConnectionTimer の timeout 配送であり、Lock の分岐ではない)。
+  func testTimeoutInvokesHandlerOnce() throws {
+    let peerChannel = try makePeerChannel()
+    // connect() を経由せず onConnect を設定すると state は .connecting になる。
+    // この時点で PeerChannel の Lock は count == 0 であり、実際の接続試行中
+    // (connect() の初期ロックで count == 1) とは分岐が異なる点に注意する。
+    peerChannel.onConnect = { _ in }
+    let connectionTimer = ConnectionTimer(
+      monitors: [.peerChannel(peerChannel)],
+      timeout: 1)
+
+    var handlerCallCount = 0
+    let expectation = self.expectation(description: "timeout で handler が 1 回だけ呼ばれること")
+    // 2 回目以降の fulfill を失敗として検出する
+    expectation.assertForOverFulfill = true
+
+    connectionTimer.run {
+      handlerCallCount += 1
+      expectation.fulfill()
+    }
+
+    wait(for: [expectation], timeout: 5)
+
+    XCTAssertEqual(handlerCallCount, 1, "handler は 1 回だけ呼ばれること")
+    XCTAssertFalse(connectionTimer.isRunning, "timeout 後は Timer が停止していること")
   }
 }

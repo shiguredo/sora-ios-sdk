@@ -286,10 +286,49 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     return nativeStream
   }
 
+  /// クライアント Offer SDP 生成の handler と、その生成に使う `RTCPeerConnection` を
+  /// 並行処理境界へ渡すための、用途限定の内部ラッパーです。
+  ///
+  /// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+  /// - 可変状態を持たず、保持する handler と `RTCPeerConnection` の参照は `init` で確定した
+  ///   `let` で、box の生存中に再代入されないこと。`RTCPeerConnection` は class であるため、
+  ///   ここで主張するのは参照が再代入されないことだけで、オブジェクトの状態の不変性ではない。
+  ///   box は参照を保持して callback へ渡すだけで、状態を読み書きしないこと
+  /// - 変更前から handler と `RTCPeerConnection` を渡していた `RTCPeerConnection.offer` の
+  ///   完了 block をそのまま包み直すだけで、配送先・通知順序・呼び出し回数を変えず、
+  ///   別系統の境界へ新たに渡さないこと
+  /// - 保持するのは handler の closure と、変更前に同じ block が参照していた `RTCPeerConnection`
+  ///   だけで、SDK 内部の参照型 (`NativePeerChannelFactory` 等) を新たに保持しないこと
+  ///
+  /// 保持する `RTCPeerConnection` は、変更前に完了 block が capture していた参照と同一です。
+  /// この参照を保持すると、Offer SDP 生成後の解放が callback の完了まで遅れます。変更前も
+  /// 完了 block が同じ参照を capture して `close()` を呼んでいたため callback の完了までは
+  /// 生存しており、その参照をそのまま使うため、この遅延を許容します。`RTCPeerConnection` の
+  /// `close()` は完了 block の内側で行う必要があり、`Sendable` な値へ写すことはできません。
+  /// この callback の実行スレッドと配送は変更前と同じです。
+  ///
+  /// 生成は `createClientOfferSDP` の 1 箇所だけで、1 つの block へ 1 回だけ渡して 1 回だけ
+  /// 実行する使用契約です (型では強制されません)。`Sendable` にするのはこの入れ物だけで、
+  /// handler とその捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出し
+  /// スレッドを保証しない既存の挙動の下で利用者の責務です。実行スレッドの同一性・直列性も
+  /// 契約にしません。
+  private final class ClientOfferSDPCreationContext: @unchecked Sendable {
+    let handler: (String?, (any Error)?) -> Void
+    let peerConnection: RTCPeerConnection
+
+    init(
+      handler: @escaping (String?, (any Error)?) -> Void,
+      peerConnection: RTCPeerConnection
+    ) {
+      self.handler = handler
+      self.peerConnection = peerConnection
+    }
+  }
+
   // クライアント情報としての Offer SDP を生成する
   func createClientOfferSDP(
     webRTCConfiguration: WebRTCConfigurationSnapshot,
-    handler: @escaping (String?, Error?) -> Void
+    handler: @escaping (String?, (any Error)?) -> Void
   ) {
     let peer = createNativePeerChannel(
       webRTCConfiguration: webRTCConfiguration, delegate: nil)
@@ -307,15 +346,19 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       constraints: webRTCConfiguration.constraints)
     peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
     peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
+    // handler は公開 API のため `@Sendable` にできず、 peer2 は完了 block の内側で `close()` を
+    // 呼ぶ必要があって値へ写せないため、両者を不変の参照保持 box へ移し、完了 block には
+    // box (Sendable) だけを capture させます。
+    let context = ClientOfferSDPCreationContext(handler: handler, peerConnection: peer2)
     peer2.offer(for: webRTCConfiguration.nativeConstraints) { sdp, error in
       if let error {
-        handler(nil, error)
+        context.handler(nil, error)
       } else if let sdp {
-        handler(sdp.sdp, nil)
+        context.handler(sdp.sdp, nil)
       } else {
-        handler(nil, SoraError.peerChannelError(reason: "offer creation failed"))
+        context.handler(nil, SoraError.peerChannelError(reason: "offer creation failed"))
       }
-      peer2.close()
+      context.peerConnection.close()
     }
   }
 }
