@@ -1,7 +1,7 @@
 # SDK 内部の排他区間を保持したまま Logger を呼ぶと利用者の出力 handler が deadlock する問題を修正する
 
 - Created: 2026-09-18
-- Completed:
+- Completed: 2026-09-28
 - Priority: Medium
 - Branch: feature/fix-logger-call-under-lock
 - Polished: 2026-09-18
@@ -119,3 +119,32 @@ Logger の出力 handler は logging を呼び出した executor 上で同期に
 - `make fmt-lint` と `make lint` が違反 0 であること。
 
 ## 解決方法
+
+`## 設計方針` の表のとおり、SDK 内部の排他区間を保持したまま Logger を呼ばないようにした。
+
+- `Sora/Sora.swift`: `add(mediaChannel:)` / `remove(mediaChannel:)` のログを `mediaChannelLock` の解放後 (handlers callback の前) へ移し、`ConnectionTask.cancel()` のログを `stateLock` の解放後へ移した。`tryComplete()` からログを削除し、`complete()` を遷移の有無を返す `@discardableResult -> Bool` にした。`Sora.connect` の設定エラー経路は `complete()` の戻り値を見て lock の外で完了ログを出す
+- `Sora/ConnectionTimer.swift`: `run(timeout:handler:)` のログを削除し、その呼び出しで有効になった timeout を返すようにした (`@discardableResult`)。`stop()` のログを `stateLock` の解放後へ移した (Timer callback 内の 3 つのログは元から lock 外のため変更しない)
+- `Sora/MediaChannel.swift`: `basicConnect` が `run` の戻り値を使って `connectionLifecycleLock` の解放後にタイマー開始ログを出し、`connect` / `finishConnect` / `beginDisconnect` / `finishDisconnect` が完了ログと遷移ログを lock の外で出すようにした。`state` の `didSet` からログを削除し、遷移前後 (`A` / `B`) を lock 内で確定して unlock 後に出す。完了ログと遷移ログの相対順序は現行のまま (`finishConnect` と `beginDisconnect` は完了ログ → 遷移ログ、`finishDisconnect` は遷移ログ → 完了ログ)
+- `Sora/AudioDeviceModuleWrapper.swift`: `setAudioHardMute(_:)` は vendor object の操作だけを `queue.sync` で行い、戻り値を受け取ってから lock の外でログを出す
+- `CHANGES.md`: `## develop` の主リストの `[FIX]` の末尾にエントリを追加した
+
+テスト (`SoraTests/LoggerCallUnderLockTests.swift` を新規追加 (10 件)、`SoraTests/AudioDeviceModuleWrapperTests.swift` に 1 件追加):
+
+- `Logger.shared.onOutputHandler` から同じ lock / serial queue を使う SDK の API (`mediaChannels` / `ConnectionTask.state` / `MediaChannel.disconnect(error:)` / `ConnectionTimer.isRunning` / `setAudioHardMute(_:)`) を呼ぶ経路で deadlock しないことを検証する。入口の SDK 呼び出しは専用 queue から実行し、テストスレッドは expectation を待つだけにした (退行時にテスト実行全体が停止しない)。handler の再入は 1 段に制限した。非 Sendable な instance を `@Sendable` closure へ capture しないよう box を介する
+- 対象ログの到達は expectation で、`level` / `type` / `message` と経路ごとの相対順序は collector に記録した `Log` で確認する。遷移ログは `SignalingChannel` も同じ文言で出すため `type` で限定する
+- 順序は `MediaChannel.beginDisconnect` の「完了ログ → 遷移ログ」を検証する。`finishDisconnect` の「遷移ログ → 完了ログ」は `beginDisconnect` を経由しない自発的な切断でしか到達せず、`ConnectionTask.cancel()` の経路では `complete()` が `false` を返すため観測できない。`finishConnect` の順序は実接続の成功が必要なため E2E の範囲とする
+
+検証 (2026-09-28、Xcode 26.6 / Swift 6.3.3):
+
+- 変異テスト (現行のテストで実測): `Sora.add(mediaChannel:)` のログを `mediaChannelLock` の内側へ戻すと `testAddMediaChannelFromOutputHandlerDoesNotDeadlock` が timeout で失敗し (`build/0165-polish-m1.log`)、`AudioDeviceModuleWrapper.setAudioHardMute(_:)` のログを `queue.sync` の内側へ戻すと `testSetAudioHardMuteFromOutputHandlerDoesNotDeadlock` が timeout で失敗する (`build/0165-polish-m2.log`)。完了ログを遷移の有無に関わらず出すと `testDisconnectLogsCompletionBeforeStateChange` が、完了ログの level を `.info` に変えると `testDisconnectMediaChannelFromOutputHandlerDoesNotDeadlock` が level 不一致で失敗する (`build/0165-polish-m3.log` / `build/0165-polish-m4.log`)
+- `Sora/` の Swift 6 言語モードの型検査: error 0、warning 46、`#SendableClosureCaptures` 25 は実装前後で変わらない (`build/0165-typecheck.log`)
+- `SoraTests` の実ビルドの concurrency 診断は実装前後で 0 件 (`0118` で解消済みの状態を退行させない。テストの入口呼び出しは box を介する)
+- テスト: 対象 12 件 (新規 11 件 + 既存 1 件)・全体 401 件超 (skip 30) が失敗 0 (`build/0165-tests.log` / `build/0165-tests-full.log`)
+- `make build` 成功、`make fmt-lint` / `make lint` 0 violations、`make api-check-fresh` は baseline 一致で `TestConsumers/Swift6Consumer/ApiBaseline/` に差分なし
+- `grep -nE "Logger\.(fatal|error|warn|info|debug|trace)\(" Sora/{Sora,ConnectionTimer,MediaChannel,AudioDeviceModuleWrapper}.swift` の各出現位置を `git diff` と対応付け、排他区間と `queue.sync` の内側に無いことを確認した (call site を追加した箇所はすべて unlock の後)
+
+制約:
+
+- Thread Sanitizer は `0119` に従い完了条件に含めない
+- ログの順序は同一スレッド・同一経路のみ保証し、スレッドをまたぐ順序は保証しない (状態遷移の直列化は維持)
+- `Logger.shared` と `Sora.shared` はプロセス全体の共有状態のため、追加したテストは直列実行を前提とする

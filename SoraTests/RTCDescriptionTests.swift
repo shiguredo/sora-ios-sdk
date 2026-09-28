@@ -208,6 +208,25 @@ final class RTCDescriptionTests: XCTestCase {
 
   // MARK: - ログの文字列
 
+  // collector が他のコンポーネントのログを collect しないことを確認する
+  //
+  // `PeerChannel` 以外のログ (他のテストが残した接続試行の非同期ログなど) を collect すると、
+  // ログの一覧を完全一致で比較するテストが実行順に依存して失敗する。
+  func testLogCollectorIgnoresLogsFromOtherComponents() {
+    let collector = makeLogCollector()
+
+    Logger.debug(type: .webSocketChannel, message: "other component log")
+    XCTAssertEqual(
+      collector.snapshot(), [],
+      "収集対象外のログを collect しないこと")
+
+    Logger.debug(type: .peerChannel, message: "peer channel log")
+    Logger.debug(type: .dataChannel, message: "data channel log")
+    XCTAssertEqual(
+      collector.snapshot(), ["peer channel log", "data channel log"],
+      "収集対象のログを collect すること")
+  }
+
   // 1 から 5 の文字列化が formatter を通っていることをログで確認する
   //
   // 実 RTCPeerConnection と PeerChannel を使い、delegate メソッドを直接呼んで決定的に
@@ -373,7 +392,15 @@ final class RTCDescriptionTests: XCTestCase {
     Logger.shared.level = .debug
     Logger.shared.groups = [.channels]
     Logger.shared.onOutputHandler = { log in
-      collector.append(log.message)
+      // 確認するのは、この fixture が使う PeerChannel と DataChannel のログだけである。
+      // 他のテストが残した接続試行の非同期ログ (WebSocket のエラーなど) が
+      // 完全一致の比較へ混入しないよう、ログ種別で絞り込む。
+      switch log.type {
+      case .peerChannel, .dataChannel:
+        collector.append(log.message)
+      default:
+        break
+      }
     }
     return collector
   }
