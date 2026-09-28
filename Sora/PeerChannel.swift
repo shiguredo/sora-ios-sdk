@@ -394,18 +394,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   var state: PeerChannelConnectionState {
+    // 接続試行中の判定は、ここで 1 度だけ読んだ onConnect の有無で行う。
+    // 分岐ごとに読み直すと、読み出しの間に接続が終端した場合に判定がぶれる。
+    let hasConnectHandler = onConnect != nil
     if let nativeChannel {
       let state = PeerChannelConnectionState(nativeChannel.connectionState)
       // connect() 開始後から finishConnecting() / basicDisconnect() までは onConnect が保持される。
       // そのため、 RTCPeerConnection を生成済みでも connectionState が .new の間は
       // 接続試行中として扱う。
-      if onConnect != nil, state == .new {
+      if hasConnectHandler, state == .new {
         return .connecting
       }
       return state
     }
 
-    if onConnect != nil {
+    if hasConnectHandler {
       // offer.configuration を受け取るまで RTCPeerConnection を生成しないため、
       // nativeChannel が未生成でも、onConnect が保持されていれば接続試行中として扱う。
       return .connecting
@@ -447,7 +450,45 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var bundleId: String?
   var connectionId: String?
 
-  var onConnect: ((Error?) -> Void)?
+  /// 接続完了 callback の読み書きを保護する lock
+  ///
+  /// `onConnect` の保護に `Lock.nsLock` を再利用しない。`state` は
+  /// `Lock.shouldCancelDisconnectTimerBasedDisconnect` から `Lock.nsLock` を保持したまま
+  /// 呼ばれ、そこから `onConnect` を読む。この経路は `Lock.waitDisconnect` /
+  /// `Lock.startConnection` / `Lock.unlock` の 3 か所から到達する。`Lock.waitDisconnect` 自身も
+  /// `Lock.nsLock` を保持したまま `onConnect` を読む。`Lock.nsLock` を再利用すると
+  /// 非再帰ロックでデッドロックする。
+  ///
+  /// lock 順序は `Lock.nsLock` → `connectHandlerLock` の一方向とする。
+  /// `connectHandlerLock` を保持したまま `Lock.nsLock` を取る経路を作らないこと。
+  private let connectHandlerLock = NSLock()
+
+  /// 接続完了 callback の実体
+  ///
+  /// 読み書きはすべて `connectHandlerLock` で行う。外部からは `onConnect` を経由する。
+  private var storedOnConnect: ((Error?) -> Void)?
+
+  /// 接続完了 callback
+  ///
+  /// 接続の開始 (`connect`)、終端 (`invokeConnectHandler` の取り出しとクリア)、
+  /// 接続試行中の判定 (`state` / `Lock.waitDisconnect`) のすべてが
+  /// `connectHandlerLock` を通る。利用者 callback 自身の呼び出しは排他区間の外で行う。
+  var onConnect: ((Error?) -> Void)? {
+    get {
+      connectHandlerLock.lock()
+      defer { connectHandlerLock.unlock() }
+      return storedOnConnect
+    }
+    set {
+      connectHandlerLock.lock()
+      // 旧値は lock を解放してから解放する。lock 区間の中で旧 closure を解放すると、
+      // closure が捕捉しているオブジェクトの deinit (= 外部コード) が区間内で走り得る。
+      let previous = storedOnConnect
+      storedOnConnect = newValue
+      connectHandlerLock.unlock()
+      withExtendedLifetime(previous) {}
+    }
+  }
 
   var isAudioInputInitialized: Bool = false
 
@@ -517,8 +558,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       handler(SoraError.connectionCancelled)
       return
     }
-    // 開始ロックの取得後に設定することで、切断処理との間で onConnect を競合させない。
+    // 開始ロックの取得後に設定することで、切断処理との間で onConnect の有無を確定させる。
     // この区間の切断要求は startConnection まで保存される。
+    // (この時点で Lock.nsLock は解放済みであり、代入自体は connectHandlerLock で保護される)
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
@@ -590,14 +632,30 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// (callback 内から同期的に disconnect() された場合でも、二重実行を防ぐための
   /// take-and-clear である。onConnect は呼び出し前に必ず nil へクリアされる)
   ///
+  /// 利用者 callback は排他区間の外で呼ぶ。callback 内から同期的に disconnect() されると
+  /// `Lock.waitDisconnect` が `state` 経由で `connectHandlerLock` を取るため、
+  /// 保持したまま呼ぶとデッドロックする。
+  ///
   /// テストから呼び出すため internal としている。
   func invokeConnectHandler(_ error: Error?) {
-    let connectHandler = onConnect
-    onConnect = nil
+    let connectHandler = takeConnectHandler()
     if let connectHandler {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
       connectHandler(error)
     }
+  }
+
+  /// 保持中の接続完了 callback を取り出し、同じ排他区間で nil へクリアします。
+  ///
+  /// 取り出しとクリアを分けると、並行する `invokeConnectHandler` が同じ callback を
+  /// 2 回取り出し得る。1 回の lock 区間で行うことで 1 回保証を成立させる。
+  /// 呼び出し元は取り出した callback を排他区間の外で実行すること。
+  private func takeConnectHandler() -> ((Error?) -> Void)? {
+    connectHandlerLock.lock()
+    defer { connectHandlerLock.unlock() }
+    let connectHandler = storedOnConnect
+    storedOnConnect = nil
+    return connectHandler
   }
 
   private func sendConnectMessage(error: Error?) {

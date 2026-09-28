@@ -122,6 +122,10 @@
 - [FIX] `createAnswer` の `setRemoteDescription` 完了 closure で `self` が解放済みの場合も handler を呼ぶようにし、handler を呼ばずに return する経路をなくす
   - この経路は現状到達しないため、利用者に見える挙動の変更はない
   - @t-miya
+- [FIX] `PeerChannel.onConnect` が複数スレッドから排他制御なしで読み書きされるデータ競合を解消する
+  - 接続完了 callback の読み書きを専用の lock に統一し、接続試行中の判定 (`PeerChannel.state` と `Lock.waitDisconnect`) の読み出しも同じ排他へ入れる
+  - 接続完了 callback が呼ばれる回数 (高々 1 回) と呼び出し元のスレッドは変わらず、データ競合が解消される
+  - @t-miya
 
 ### misc
 
