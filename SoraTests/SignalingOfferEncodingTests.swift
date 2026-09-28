@@ -87,7 +87,7 @@ class SignalingOfferEncodingTests: XCTestCase {
       let params = encoding.rtpEncodingParameters
       XCTAssertEqual(
         params.networkPriority, expectedPriority,
-        "networkPriority が \(jsonValue) の場合に expectedPriority \(expectedPriority) と一致しません")
+        "networkPriority が \(jsonValue) の場合に params.networkPriority が期待と一致しません")
     }
   }
 
@@ -100,22 +100,5 @@ class SignalingOfferEncodingTests: XCTestCase {
     let params = encoding.rtpEncodingParameters
     let defaultParams = RTCRtpEncodingParameters()
     XCTAssertEqual(params.networkPriority, defaultParams.networkPriority)
-  }
-
-  // MARK: - RTCPriority 文字列表現テスト
-
-  // RTCPriority の CustomStringConvertible が正しい文字列を返すことを確認する
-  func testRTCPriorityDescription() throws {
-    let cases: [(RTCPriority, String)] = [
-      (.veryLow, "very-low"),
-      (.low, "low"),
-      (.medium, "medium"),
-      (.high, "high"),
-    ]
-    for (priority, expected) in cases {
-      XCTAssertEqual(
-        priority.description, expected,
-        "RTCPriority.\(priority) の description が \(expected) と一致しません")
-    }
   }
 }

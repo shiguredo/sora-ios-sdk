@@ -1208,7 +1208,7 @@ public final class MediaChannel {
     guard readyState == .open else {
       return SoraError.messagingError(
         reason:
-          "readyState of the DataChannel is not open: label => \(label), readyState => \(readyState)"
+          "readyState of the DataChannel is not open: label => \(label), readyState => \(WebRTCEnumDescription.dataChannelState(readyState))"
       )
     }
 

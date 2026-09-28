@@ -7,8 +7,10 @@ import XCTest
 
 // テスト用のヘルパーです。モックやスタブは使用せず、実プロトコルの実装と実 API だけを使います。
 //
-// - 接続の構築 (`makeTestConfiguration` / `makeTestMediaChannel` / `makeSenderStreamWithVideoTrack`) は
-//   ScreenCaptureFrameGenerationTests / StreamFrameOwner 系テスト / DummyVideoCapturerTests で共有します。
+// - 接続の構築 (`makeTestConfiguration` / `makeTestMediaChannel` / `makeTestPeerConnection` /
+//   `makeTestDataChannel` / `makeSenderStreamWithVideoTrack`) は ScreenCaptureFrameGenerationTests /
+//   StreamFrameOwner 系テスト / DummyVideoCapturerTests / RTCDescriptionTests /
+//   DataChannelNotificationTests で共有します。
 // - 画面キャプチャの drain は ScreenCaptureFrameGenerationTests と StreamFrameOwner 系テストで共有します。
 // - owner の観測 (`ownerForTesting` / `drainOwnerAndMainQueue`) と観測用の実装
 //   (`RecordingVideoFilter` / `RecordingVideoRenderer` / `SynchronousFilterGate`) は
@@ -28,6 +30,28 @@ func makeTestConfiguration() -> Configuration {
 /// テストで共通利用する `MediaChannel` を構築します。
 func makeTestMediaChannel() throws -> MediaChannel {
   try MediaChannel(configuration: makeTestConfiguration())
+}
+
+/// テストで共通利用する `RTCPeerConnection` を構築します。
+///
+/// factory は `RTCPeerConnection` より長生きさせる必要があります (先に解放すると transceiver の
+/// 破棄が破棄済みの task queue を参照してクラッシュします)。呼び出し側で factory を保持してください。
+func makeTestPeerConnection(factory: NativePeerChannelFactory) throws -> RTCPeerConnection {
+  let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
+  let configuration = RTCConfiguration()
+  configuration.sdpSemantics = .unifiedPlan
+  return try XCTUnwrap(
+    factory.nativeFactory.peerConnection(
+      with: configuration, constraints: constraints, delegate: nil),
+    "RTCPeerConnection を生成できること")
+}
+
+/// テストで共通利用する `RTCDataChannel` を構築します。
+func makeTestDataChannel(peerConnection: RTCPeerConnection, label: String) throws -> RTCDataChannel
+{
+  try XCTUnwrap(
+    peerConnection.dataChannel(forLabel: label, configuration: RTCDataChannelConfiguration()),
+    "RTCDataChannel を生成できること")
 }
 
 /// 映像トラックと video source を持つ sender stream を構築します。

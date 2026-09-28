@@ -99,23 +99,6 @@ private enum ZLibUtil {
   }
 }
 
-extension RTCDataChannelState: CustomStringConvertible {
-  public var description: String {
-    switch self {
-    case .connecting:
-      return "connecting"
-    case .open:
-      return "open"
-    case .closing:
-      return "closing"
-    case .closed:
-      return "closed"
-    @unknown default:
-      return "unknown"
-    }
-  }
-}
-
 class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
   let compress: Bool
   weak var peerChannel: PeerChannel?
@@ -139,7 +122,8 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     Logger.debug(
       type: .dataChannel,
       message:
-        "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
+        "\(#function): label => \(dataChannel.label), state => \(WebRTCEnumDescription.dataChannelState(dataChannel.readyState))"
+    )
 
     // リダイレクト前に生成された DataChannel からの通知は無視する。
     // これにより、旧 RTCPeerConnection の close() に伴う .closed 通知が

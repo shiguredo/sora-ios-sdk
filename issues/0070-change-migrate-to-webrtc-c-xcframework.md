@@ -9,7 +9,7 @@
 
 ## 本 issue の性質と進行方針
 
-本移行は工事規模が極端に大きく（`import WebRTC` を含む影響範囲 28 ファイル、`Sora/` 配下計 19,094 行）、1 issue = 1 branch = 1 PR の規約では収まらない。そのため本 issue は **移行全体の方針を保持する親 issue** として扱う。本 issue の `Branch:` で実施するのは **Phase 0（PoC）のみ**。Phase 1〜5 は Phase 0 完了後に個別 issue として新規起票し、それぞれを独立した 1 issue = 1 branch = 1 PR の単位で `shiguredo-issues` / `shiguredo-git` 規約に従って進める。
+本移行は工事規模が極端に大きく（`import WebRTC` を含む影響範囲 28 ファイル、`Sora/` 配下計 19,435 行（2026-09-26 時点））、1 issue = 1 branch = 1 PR の規約では収まらない。そのため本 issue は **移行全体の方針を保持する親 issue** として扱う。本 issue の `Branch:` で実施するのは **Phase 0（PoC）のみ**。Phase 1〜5 は Phase 0 完了後に個別 issue として新規起票し、それぞれを独立した 1 issue = 1 branch = 1 PR の単位で `shiguredo-issues` / `shiguredo-git` 規約に従って進める。
 
 本 issue の close 条件は Phase 0 完了基準を満たし、PoC 結果から Phase 1〜5 の起票が可能と判断できる状態（または「移行は得策ではない」という結論）に到達すること。Phase 1〜5 の進捗は本 issue ではなく個別 issue で管理する。
 
@@ -64,33 +64,33 @@ let libwebrtcVersion = "m150.7871.3.5"
 
 ### `import WebRTC` の分布
 
-`Sora/` 配下（`Sora/*.swift` および `Sora/Extensions/*.swift` を含む）で `import WebRTC` しているファイルは 28 個。`Sora/` 全体は計 19,094 行（`Sora/*.swift` 計 19,014 行 + `Sora/Extensions/*.swift` 計 80 行）。`import WebRTC` を含むファイルを行数順に列挙する（行数は 2026-09-24 時点の develop で計測）:
+`Sora/` 配下（`Sora/*.swift` および `Sora/Extensions/*.swift` を含む）で `import WebRTC` しているファイルは 28 個。`Sora/` 全体は計 19,435 行（`Sora/*.swift` 計 19,305 行 + `Sora/Extensions/*.swift` 計 130 行）。`import WebRTC` を含むファイルを行数順に列挙する（行数は 2026-09-26 時点の develop で計測）:
 
 | ファイル | 行数 | 主に使う `RTC*` 型 |
 |---|---|---|
-| `PeerChannel.swift` | 2,362 | `RTCPeerConnection`, `RTCPeerConnectionDelegate`, `RTCAudioSession`, `RTCDataChannel`, `RTCDataChannelDelegate`, `RTCIceCandidate`, `RTCIceConnectionState`, `RTCIceGatheringState`, `RTCIceTransportState`, `RTCMediaConstraints`, `RTCMediaStream`, `RTCPeerConnectionState`, `RTCPriority`, `RTCRtpSender`, `RTCRtpTransceiverDirection`, `RTCSessionDescription`, `RTCSignalingState`, `RTCVideoSource` |
+| `PeerChannel.swift` | 2,335 | `RTCPeerConnection`, `RTCPeerConnectionDelegate`, `RTCAudioSession`, `RTCDataChannel`, `RTCDataChannelDelegate`, `RTCIceCandidate`, `RTCIceConnectionState`, `RTCIceGatheringState`, `RTCIceTransportState`, `RTCMediaConstraints`, `RTCMediaStream`, `RTCPeerConnectionState`, `RTCPriority`, `RTCRtpSender`, `RTCRtpTransceiverDirection`, `RTCSessionDescription`, `RTCSignalingState`, `RTCVideoSource` |
 | `MediaChannel.swift` | 1,671 | `RTCAudioDevice`, `RTCAudioDeviceModule`, `RTCPeerConnection` |
 | `CameraVideoCapturer.swift` | 1,655 | `RTCCameraVideoCapturer`, `RTCDispatcher`, `RTCVideoCapturer`, `RTCVideoCapturerDelegate`, `RTCVideoFrame`, `RTCVideoSource` |
 | `Signaling.swift` | 1,510 | `RTCPriority`, `RTCResolutionRestriction`, `RTCRtpEncodingParameters` |
+| `DummyAudioDevice.swift` | 730 | `RTCAudioDevice`, `RTCAudioDeviceDelegate` |
 | `StreamFrameOwner.swift` | 634 | `RTCVideoCapturer`, `RTCVideoFrame`, `RTCVideoSource` |
 | `Sora.swift` | 586 | `RTCAudioSession`, `RTCAudioSessionDelegate`, `RTCCallbackLogger`, `RTCCleanupSSL`, `RTCEnableMetrics`, `RTCInitializeSSL`, `RTCLoggingSeverity`, `RTCSetMinDebugLogLevel`, `RTCShutdownInternalTracer` |
 | `Configuration.swift` | 536 | `RTCAudioDevice`, `RTCAudioDeviceModule` |
 | `ConnectionConfigurationSnapshot.swift` | 484 | `RTCAudioDevice`, `RTCConfiguration`, `RTCCryptoOptions`, `RTCIceServer`, `RTCMediaConstraints` |
 | `VideoView.swift` | 460 | `RTCEAGLVideoView`, `RTCMTLVideoView`, `RTCVideoRenderer` |
-| `DummyAudioDevice.swift` | 449 | `RTCAudioDevice`, `RTCAudioDeviceDelegate` |
 | `MediaStream.swift` | 417 | `RTCAudioTrack`, `RTCAudioTrackSink`, `RTCMediaStream`, `RTCVideoSource`, `RTCVideoTrack` |
-| `NativePeerChannelFactory.swift` | 332 | `RTCPeerConnectionFactory`, `RTCDefaultVideoEncoderFactory`, `RTCDefaultVideoDecoderFactory`, `RTCVideoEncoderFactorySimulcast`, `RTCAudioDeviceModule`, `RTCAudioDevice`, `RTCAudioSource`, `RTCAudioTrack`, `RTCConfiguration`, `RTCMediaConstraints`, `RTCMediaStream`, `RTCPeerConnection`, `RTCPeerConnectionDelegate`, `RTCProxyType`, `RTCSSLCertificateVerifier`, `RTCVideoCodecInfo`, `RTCVideoEncoder`, `RTCVideoEncoderFactory`, `RTCVideoSource`, `RTCVideoTrack` |
-| `DataChannel.swift` | 315 | `RTCDataBuffer`, `RTCDataChannel`, `RTCDataChannelDelegate`, `RTCDataChannelState`, `RTCPeerConnection` |
+| `NativePeerChannelFactory.swift` | 321 | `RTCPeerConnectionFactory`, `RTCDefaultVideoEncoderFactory`, `RTCDefaultVideoDecoderFactory`, `RTCVideoEncoderFactorySimulcast`, `RTCAudioDeviceModule`, `RTCAudioDevice`, `RTCAudioSource`, `RTCAudioTrack`, `RTCConfiguration`, `RTCMediaConstraints`, `RTCMediaStream`, `RTCPeerConnection`, `RTCPeerConnectionDelegate`, `RTCProxyType`, `RTCSSLCertificateVerifier`, `RTCVideoCodecInfo`, `RTCVideoEncoder`, `RTCVideoEncoderFactory`, `RTCVideoSource`, `RTCVideoTrack` |
+| `DataChannel.swift` | 299 | `RTCDataBuffer`, `RTCDataChannel`, `RTCDataChannelDelegate`, `RTCDataChannelState`, `RTCPeerConnection` |
 | `AudioSessionCoordinator.swift` | 217 | `RTCAudioSessionConfiguration` |
 | `WebRTCConfiguration.swift` | 170 | `RTCDegradationPreference`, `RTCMediaConstraints`, `RTCSdpSemantics` |
 | `IOSCertificateVerifier.swift` | 161 | `RTCSSLCertificateVerifier` |
 | `Utilities.swift` | 114 | `import` のみで RTC 利用無し |
+| `Extensions/RTC+Description.swift` | 110 | `RTCDataChannelState`, `RTCDegradationPreference`, `RTCIceConnectionState`, `RTCIceGatheringState`, `RTCPriority`, `RTCSessionDescription`, `RTCSignalingState`（enum の文字列化は `WebRTCEnumDescription`） |
 | `VideoRenderer.swift` | 93 | `RTCVideoFrame`, `RTCVideoRenderer`, `RTCVideoSource` |
 | `ICEServerInfo.swift` | 91 | `import` のみで RTC 利用無し |
 | `ConnectionState.swift` | 74 | `RTCPeerConnectionState` |
 | `VideoFrame.swift` | 67 | `RTCCVPixelBuffer`, `RTCVideoCapturer`, `RTCVideoFrame`, `RTCVideoRotation`, `RTCVideoSource` |
 | `ICETransportPolicy.swift` | 61 | `RTCIceTransportPolicy` |
-| `Extensions/RTC+Description.swift` | 60 | `RTCIceConnectionState`, `RTCIceGatheringState`, `RTCSessionDescription`, `RTCSignalingState` |
 | `Statistics.swift` | 55 | `RTCStatistics`, `RTCStatisticsReport` |
 | `ICECandidate.swift` | 42 | `RTCIceCandidate` |
 | `AudioDeviceModuleWrapper.swift` | 41 | `RTCAudioDeviceModule` |
@@ -101,7 +101,7 @@ let libwebrtcVersion = "m150.7871.3.5"
 
 `ScreenCapture.swift`（940 行）は `import WebRTC` していないが、`MediaStream.send(videoFrame:)` を経由して `RTCVideoSource.capturer(_:didCapture:)` に間接依存しており、Phase 4 で `AdaptedVideoTrackSource` へ書き換える対象に含まれる。
 
-`SoraTests/` 配下にも 9 ファイル（`SoraTests/SoraTests.swift` を含む）が `import WebRTC` している。`SoraTests/SoraTests.swift` は中身が空テンプレートのため、Phase 4 完了時の `WebRTC.xcframework` 削除と同時に `import WebRTC` を取り外す。
+`SoraTests/` 配下にも 11 ファイル（`SoraTests/SoraTests.swift` を含む）が `import WebRTC` している（2026-09-26 時点）。`SoraTests/SoraTests.swift` は中身が空テンプレートのため、Phase 4 完了時の `WebRTC.xcframework` 削除と同時に `import WebRTC` を取り外す。
 
 `Sora/Sora.h`（9 行）は ObjC umbrella header。`#import <UIKit/UIKit.h>` とプロジェクトバージョンのエクスポート宣言のみだが、Swift Package Manager の binaryTarget + `CWebrtc` モジュール（C モジュール）併用時に `module.modulemap` の構成変更が必要になる可能性があるため Phase 0 で確認する。
 
@@ -116,7 +116,7 @@ let libwebrtcVersion = "m150.7871.3.5"
 - ベース: `api/environment/environment.h` / `api/environment/environment_factory.h`, `api/ref_count.h`, `api/rtc_error.h`, `rtc_base/{thread, logging, ssl_*, crypto_random, time_utils}.h`, `pc/connection_context.h`
 - iOS 連携: `sdk/objc/components/audio/audio_session.h`（webrtc_c.h からは公開されず直接インクルードする）, `sdk/objc/components/video_codec/RTCDefaultVideo{Encoder,Decoder}Factory.h`, `sdk/objc/native/api/video_{encoder,decoder}_factory.h`
 
-`whip.c`（1,602 行）/ `whep.c`（1,352 行、いずれも 2026-09-24 時点の develop）が C のみでの PeerConnection 組み立て例として動作確認済み。これらは sora-ios-sdk の `PeerChannel.swift`（2,362 行）より小さいが、C のみでの実装規模感の参照になる。`PeerConnectionFactoryDependencies` の組み立て、3 スレッド (network / worker / signaling) 起動、ADM / AudioCodec Factory / VideoCodec Factory 注入、`PeerConnectionObserver` の C コールバック実装、SDP オファー/アンサー生成、ICE 候補処理が C のみで実装されている。
+`whip.c`（1,602 行）/ `whep.c`（1,352 行、いずれも 2026-09-24 時点の develop）が C のみでの PeerConnection 組み立て例として動作確認済み。これらは sora-ios-sdk の `PeerChannel.swift`（2,335 行、2026-09-26 時点）より小さいが、C のみでの実装規模感の参照になる。`PeerConnectionFactoryDependencies` の組み立て、3 スレッド (network / worker / signaling) 起動、ADM / AudioCodec Factory / VideoCodec Factory 注入、`PeerConnectionObserver` の C コールバック実装、SDP オファー/アンサー生成、ICE 候補処理が C のみで実装されている。
 
 ### `libwebrtc_c.xcframework` の配布
 
@@ -187,7 +187,7 @@ webrtc_c 側に依頼する C API 関数名は `webrtc-rs` の `RULES.md` 命名
 
 本 issue は以下の issue と相互作用する。着手前後の調整方針も合わせて明記する（状態は 2026-09-24 時点）。
 
-- `issues/closed/0008-add-network-priority-to-rtp-encoding.md` (closed 2026-07-02): `RTCRtpEncodingParameters.networkPriority` への反映は実装済み。本 issue の Phase 3 で `RTCRtpEncodingParameters` 自体が消えるため、`networkPriority` 相当の設定（`webrtc::RtpEncodingParameters::network_priority`）を webrtc_c 側の RtpSender / RtpParameters 経由で維持する必要がある。あわせて encoding デコードの `networkPriority` 対応と `RTCPriority` のログ文字列表現（`PeerChannel.swift`）も移行先で再実装する。
+- `issues/closed/0008-add-network-priority-to-rtp-encoding.md` (closed 2026-07-02): `RTCRtpEncodingParameters.networkPriority` への反映は実装済み。本 issue の Phase 3 で `RTCRtpEncodingParameters` 自体が消えるため、`networkPriority` 相当の設定（`webrtc::RtpEncodingParameters::network_priority`）を webrtc_c 側の RtpSender / RtpParameters 経由で維持する必要がある。あわせて encoding デコードの `networkPriority` 対応と `RTCPriority` のログ文字列表現も移行先で再実装する（`0113` で `RTCPriority` の文字列化は `Sora/Extensions/RTC+Description.swift` の `WebRTCEnumDescription` へ移し、`RTCRtpParameters.description` から `Optional(...)` を除去した。Phase 3 では C API の型を引数に取る formatter として再実装する）。
 - `issues/0032-investigate-libwebrtc-package-update-automation.md` (open): 現行 `WebRTC.xcframework` のバージョン更新自動化。本 issue 着手時点で `issues/pending/` に移動し、Phase 0 完了後（移行確定後）に `libwebrtc_c.xcframework` 向けに書き直して再 active 化する。
 - `issues/0034-add-onicecandidateerror-log.md` (open): `RTCPeerConnectionDelegate.peerConnection(_:didFailToGatherIceCandidate:)` を追加する。本 issue の Phase 3 で `OnIceCandidateError` の C コールバックベースに置き換える際、シグネチャ整合を確認する。なお `OnIceCandidateError` は `webrtc_PeerConnectionObserver_cbs` に既に存在するため、0034 との実装分担（ObjC 側で追加するか webrtc_c で最初から C コールバックを使うか）を本 issue の Phase 0 までに調整する。
 - `issues/0035-add-audio-session-event-handlers.md` (open): `SoraHandlers.onChangeAudioRoute` の追加。本 issue の AudioSession 通知独自実装と直接競合する。第 1 引数型 `RTCAudioSession` の変更は破壊的変更として確定する（互換性方針参照）。
@@ -356,7 +356,7 @@ Phase 0 完了時点で確定する内容（PoC で得た行数膨張率、webrt
 
 - Phase 1: Swift ⇔ C 共通インフラ（ハンドル基盤・トランポリン・エラー変換・Logger 連携）
 - Phase 2: 機械置換系（`WebRTCConfiguration` / `ConnectionConfigurationSnapshot` / `ICE*` / `Statistics` / `ConnectionState`、`Utilities` と `VideoCapturer` と `ICEServerInfo` の `import` 文除去）
-- Phase 3: コア層（`NativePeerChannelFactory` / `PeerChannel` / `DataChannel` / `MediaChannel` / `MediaStream` / `StreamFrameOwner` / `Signaling`、`Extensions/RTC+Description.swift` の削除を含む）
+- Phase 3: コア層（`NativePeerChannelFactory` / `PeerChannel` / `DataChannel` / `MediaChannel` / `MediaStream` / `StreamFrameOwner` / `Signaling`、`Extensions/RTC+Description.swift` の `WebRTCEnumDescription` を C API の型を引数に取る formatter へ置き換え、同ファイルの削除を含む）
 - Phase 4: メディア・iOS 固有層（`CameraVideoCapturer` / `VideoView.xib` の `customClass` 書き換えを含む `VideoView`+`VideoRenderer`+`VideoFrame` / `ScreenCapture` / `Sora.swift` の AudioSession / `AudioSessionCoordinator` / `AudioDeviceModuleWrapper` / `DummyAudioDevice` / `IOSCertificateVerifier`）。Phase 4 の最終 issue で `Package.swift` から `WebRTC.xcframework` を削除し、同時に `SoraTests/SoraTests.swift` を始めとする `SoraTests/` 配下の `import WebRTC` を除去する。
 - Phase 5: 検証（`SoraTests/` の再構築・`sora-ios-sdk-samples` 対応 PR・「Phase 1〜5 完了時の総合条件」の実機検証チェックリスト全項目の合格判定）
 

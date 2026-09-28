@@ -3,46 +3,16 @@ import Security
 import WebRTC
 
 /// :nodoc:
-extension RTCDegradationPreference: CustomStringConvertible {
-  public var description: String {
-    switch self {
-    case .balanced: "balanced"
-    case .disabled: "disabled"
-    case .maintainFramerateAndResolution: "balanced"
-    case .maintainFramerate: "maintain-framerate"
-    case .maintainResolution: "maintain-resolution"
-    @unknown default: "-"
-    }
-  }
-}
-
-/// :nodoc:
-/// デバッグログ出力用に RTCPriority の文字列表現を提供する
-extension RTCPriority: CustomStringConvertible {
-  public var description: String {
-    switch self {
-    case .veryLow: "very-low"
-    case .low: "low"
-    case .medium: "medium"
-    case .high: "high"
-    @unknown default: "unknown(\(rawValue))"
-    }
-  }
-}
-
-/// :nodoc:
 extension RTCRtpParameters {
   override open var description: String {
-    let degradationPreference =
-      if let unwrapped = self.degradationPreference {
-        String(describing: RTCDegradationPreference(rawValue: unwrapped.intValue))
-      } else {
-        "-"
-      }
-
     // RTCRtpParameters は他にもプロパティーを持つが、ここでは SDK で利用している値のみ出力する
     // encodings もここに追加したい
-    return "\(transactionId) \(String(describing: degradationPreference))"
+    //
+    // degradationPreference が未設定 (nil) の場合の表現は formatter が持つため、ここでは
+    // optional のまま渡す
+    let degradationPreference = WebRTCEnumDescription.degradationPreference(
+      rawValue: self.degradationPreference?.intValue)
+    return "\(transactionId) \(degradationPreference)"
   }
 }
 
@@ -2015,7 +1985,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     Logger.debug(
       type: .peerChannel,
-      message: "signaling state: \(stateChanged)")
+      message: "signaling state: \(WebRTCEnumDescription.signalingState(stateChanged))")
   }
 
   func peerConnection(
@@ -2071,7 +2041,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     Logger.debug(
       type: .peerChannel,
-      message: "ICE connection state: \(newState)")
+      message: "ICE connection state: \(WebRTCEnumDescription.iceConnectionState(newState))")
   }
 
   func peerConnection(
@@ -2080,7 +2050,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     Logger.debug(
       type: .peerChannel,
-      message: "ICE gathering state: \(newState)")
+      message: "ICE gathering state: \(WebRTCEnumDescription.iceGatheringState(newState))")
   }
 
   /// 通知元の RTCPeerConnection が現在の接続のものであるかを判定する。
@@ -2331,7 +2301,9 @@ extension RTCRtpSender {
         }
 
         if let value = encoding.networkPriority {
-          Logger.debug(type: .peerChannel, message: "networkPriority: \(value)")
+          Logger.debug(
+            type: .peerChannel,
+            message: "networkPriority: \(WebRTCEnumDescription.priority(value))")
           oldEncoding.networkPriority = value
         }
 
