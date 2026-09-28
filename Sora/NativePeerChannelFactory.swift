@@ -46,6 +46,21 @@ final class NativePeerChannelFactory: @unchecked Sendable {
 
   var nativeFactory: RTCPeerConnectionFactory
 
+  #if DEBUG
+    /// 直近の `createClientOfferSDP` が生成した一時 `RTCPeerConnection` です。テストの観測にだけ使います。
+    ///
+    /// 完了 block の末尾で一時 PC を `close()` していることを回帰テストから確認するために参照を
+    /// 保持します。`weak` にするのは、Debug 構成の利用者に対して、テスト用の保持が対象の寿命へ
+    /// 影響しないようにするためです。テスト側は handler の内側で一時 PC を強参照して保持する
+    /// 必要があります (保持しないと `close()` 後の `.closed` を観測できません)。
+    /// 直近の 1 個だけを保持するため、この accessor を使うテストは `createClientOfferSDP` を
+    /// 1 回だけ呼び、他の呼び出しと重ならないようにします。
+    /// 代入と保持は Debug 構成だけで行います。Debug 構成では `createClientOfferSDP` のたびに
+    /// weak 代入が 1 回入り、Release では宣言も代入も存在しないため、この accessor も Debug 構成
+    /// でのみ参照できます。
+    private(set) weak var lastClientOfferPeerConnectionForTesting: RTCPeerConnection?
+  #endif
+
   init(
     bypassVoiceProcessing: Bool,
     audioDevice: RTCAudioDevice? = nil,
@@ -334,23 +349,29 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       webRTCConfiguration: webRTCConfiguration, delegate: nil)
 
     // `guard let peer = peer {` と書いた場合、 Xcode 12.5 でビルド・エラーになった
-    guard let peer2 = peer else {
+    guard let tempPeer = peer else {
       handler(nil, SoraError.peerChannelError(reason: "createNativePeerChannel failed"))
       return
     }
+
+    #if DEBUG
+      // 観測用に保持する
+      lastClientOfferPeerConnectionForTesting = tempPeer
+    #endif
 
     let stream = createNativeSenderStream(
       streamId: "offer",
       videoTrackId: "video",
       audioTrackId: "audio",
       constraints: webRTCConfiguration.constraints)
-    peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
-    peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
-    // handler は公開 API のため `@Sendable` にできず、 peer2 は完了 block の内側で `close()` を
+    tempPeer.add(stream.videoTracks[0], streamIds: [stream.streamId])
+    tempPeer.add(stream.audioTracks[0], streamIds: [stream.streamId])
+    // handler は公開 API のため `@Sendable` にできず、 tempPeer は完了 block の内側で `close()` を
     // 呼ぶ必要があって値へ写せないため、両者を不変の参照保持 box へ移し、完了 block には
     // box (Sendable) だけを capture させます。
-    let context = ClientOfferSDPCreationContext(handler: handler, peerConnection: peer2)
-    peer2.offer(for: webRTCConfiguration.nativeConstraints) { sdp, error in
+    let context = ClientOfferSDPCreationContext(
+      handler: handler, peerConnection: tempPeer)
+    tempPeer.offer(for: webRTCConfiguration.nativeConstraints) { sdp, error in
       if let error {
         context.handler(nil, error)
       } else if let sdp {

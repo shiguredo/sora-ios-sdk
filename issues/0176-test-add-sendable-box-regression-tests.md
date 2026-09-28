@@ -21,6 +21,10 @@
 
 ## 現状
 
+### 部分完了の記録
+
+`createClientOfferSDP` 側 (`Sora/NativePeerChannelFactory.swift` の `#if DEBUG` アクセサと `SoraTests/SendableBoxRegressionTests.swift` の `close()` の回帰テスト) は実装・検証済みである。`getStats` 側 (`Sora/MediaChannel.swift` の同一性判定と `#if DEBUG` の seam、`setConnectionStateForTesting(_:)`) は `0177` の完了後に実施する。`getStats` 側を実装した時点で `CHANGES.md` の同一エントリを『同一性判定と `close()`』へ更新する。
+
 ### 対象の 2 箇所
 
 `Sora/MediaChannel.swift` の `MediaChannel.getStats` は、handler と統計取得対象の `RTCPeerConnection` を不変の参照保持 box `MediaChannelGetStatsContext` へ移し、`peerConnection.statistics` の完了 block で統計要求時のオブジェクトと現在の `peerChannel.nativeChannel` の同一性を判定する。
@@ -46,7 +50,7 @@ private final class MediaChannelGetStatsContext: @unchecked Sendable {
 
 `peerChannel.nativeChannel` を差し替えるのは `Sora/PeerChannel.swift` の `PeerChannel.createAndSendAnswer(offer:)` であり、新しい offer を受信するたびに `nativeChannel = nativePeerChannelFactory.createNativePeerChannel(...)` で新しい `RTCPeerConnection` に置き換わる。同一性判定は、統計要求後にこの差し替えが起きた場合に旧オブジェクトの統計を成功として返さないためのものである。
 
-`Sora/NativePeerChannelFactory.swift` の `createClientOfferSDP` は、局所名 `peer2` の一時 `RTCPeerConnection` と handler を `ClientOfferSDPCreationContext` へ移し、`peer2.offer(for:)` の完了 block の最後で一時 PC を閉じる。
+`Sora/NativePeerChannelFactory.swift` の `createClientOfferSDP` は、局所名 `tempPeer` の一時 `RTCPeerConnection` と handler を `ClientOfferSDPCreationContext` へ移し、`tempPeer.offer(for:)` の完了 block の最後で一時 PC を閉じる。
 
 ```swift
   private final class ClientOfferSDPCreationContext: @unchecked Sendable {
@@ -55,8 +59,8 @@ private final class MediaChannelGetStatsContext: @unchecked Sendable {
 ```
 
 ```swift
-    let context = ClientOfferSDPCreationContext(handler: handler, peerConnection: peer2)
-    peer2.offer(for: webRTCConfiguration.nativeConstraints) { sdp, error in
+    let context = ClientOfferSDPCreationContext(handler: handler, peerConnection: tempPeer)
+    tempPeer.offer(for: webRTCConfiguration.nativeConstraints) { sdp, error in
       if let error {
         context.handler(nil, error)
       } else if let sdp {
@@ -132,11 +136,12 @@ private final class MediaChannelGetStatsContext: @unchecked Sendable {
 
 ### 一時 PC の `close()` の観測
 
-- `Sora/NativePeerChannelFactory.swift` に、`createClientOfferSDP` が作った一時 PC をテストから参照するための internal な `weak` アクセサ (例: `lastClientOfferPeerConnectionForTesting`) を追加し、`createClientOfferSDP` の `guard let peer2` の直後に代入する。代入と宣言はどちらも同じ `#if DEBUG` で囲む (Release では宣言が無いため、代入だけを残すと build できない)。`weak` にするのは、production の参照寿命と Release の挙動を変えないためである (前例 `StreamFrameOwner.processedSequencesForTesting`)。このアクセサは直近の 1 個だけを保持するため、テストは `createClientOfferSDP` を 1 回だけ呼び、他の呼び出しと重ならないようにする。
+- `Sora/NativePeerChannelFactory.swift` に、`createClientOfferSDP` が作った一時 PC をテストから参照するための internal な `weak` アクセサ (例: `lastClientOfferPeerConnectionForTesting`) を追加し、`createClientOfferSDP` の `guard let tempPeer` の直後に代入する。代入と宣言はどちらも同じ `#if DEBUG` で囲む (Release では宣言が無いため、代入だけを残すと build できない)。`weak` にするのは、production の参照寿命と Release の挙動を変えないためである (前例 `StreamFrameOwner.processedSequencesForTesting`)。このアクセサは直近の 1 個だけを保持するため、テストは `createClientOfferSDP` を 1 回だけ呼び、他の呼び出しと重ならないようにする。
 - テストは `createClientOfferSDP` の handler の内側でアクセサから一時 PC を取り出してテスト側で強参照し、同じ handler の内側で `RTCPeerConnectionDelegate` を設定する。handler は `close()` より前に呼ばれるため、delegate の設定は `close()` に間に合う。`RTCPeerConnection.delegate` は `weak` なので、delegate はテストクラス自身 (XCTest がテスト中は保持する) にするか、テストが保持する property に置く。
 - delegate の型は `NSObject` に準拠させ、`RTCPeerConnectionDelegate` の**必須メソッド 9 個** (Swift 名で `peerConnection(_:didChange:)` ×3 (`RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState`)、`peerConnection(_:didAdd:)`、`peerConnection(_:didRemove:)` ×2 (`RTCMediaStream` / `[RTCIceCandidate]`)、`peerConnectionShouldNegotiate(_:)`、`peerConnection(_:didGenerate:)`、`peerConnection(_:didOpen:)`) を空実装する必要がある (WebRTC のヘッダで `@optional` の前にあるため)。観測に使う `peerConnection(_:didChange newState: RTCPeerConnectionState)` は `@optional` (ObjC selector は `peerConnection:didChangeConnectionState:`) で、`.closed` のときだけ `XCTestExpectation` を fulfill する。この delegate は WebRTC の callback をテストへ中継する観測用の実装であり、SDK の振る舞いを差し替えるモックやスタブではない。空実装を避けたい場合は、実 `PeerChannel` を delegate にして `peerChannel.nativeChannel` へ一時 PC を設定し、`.closed` による `internalHandlers.onDisconnect` を待つ方法もある (`PeerChannel.peerConnection(_:didChange:)` は `isCurrentPeerConnection` の判定を通る必要があるため、`nativeChannel` の設定が要る)。
-- `close()` が削られた場合も、box が `peer2` 以外のオブジェクトを保持して実際の一時 PC が閉じられない場合も、`.closed` へ遷移せず timeout するため失敗する。
+- `close()` が削られた場合も、box が `tempPeer` 以外のオブジェクトを保持して実際の一時 PC が閉じられない場合も、`.closed` へ遷移せず timeout するため失敗する。
 - 実 `RTCPeerConnection` の `close()` で `.closed` の delegate 通知が届くことは `testNativePeerConnectionCloseReleasesRequirement` で観測済みである (「現状」)。届かない場合に限り、`connectionState` を 10 ms 間隔・上限 5 秒で確認する条件待ちに置き換える (実 `RTCPeerConnection` の `connectionState` が `.closed` になることは `testMediaChannelDeinitClosesNativePeerConnectionAndReleasesRequirement` で観測済みである)。
+- 観測用 delegate を使わない代替案として、`connectionState == .closed` になるまで条件待ちする方式がある。この方式にすれば delegate の必須メソッド 9 個の空実装と観測用の型をテストへ置かずに済む。現行は delegate の `.closed` 通知で `close()` の完了そのものを観測する方式を採っており、この代替案は条件待ちの間隔と上限に依存する点を許容できる場合の判断材料として残す。
 
 ### `getStats` の同一性判定の観測
 

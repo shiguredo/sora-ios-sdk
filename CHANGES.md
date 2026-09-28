@@ -134,6 +134,10 @@
 - [ADD] 公開 API baseline が現在の `Sora` module と一致していることを CI で検証する
   - `make api-check-fresh` を追加し、公開 API を追加したまま baseline を再生成漏れ状態を検出する
   - @t-miya
+- [ADD] 参照保持 box が担う `createClientOfferSDP` の一時 `RTCPeerConnection` の `close()` の回帰テストを追加する
+  - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
+  - 観測に使う `weak` アクセサは `#if DEBUG` で囲み、公開 API と Release の利用者の挙動の変更はない
+  - @t-miya
 - [UPDATE] E2E テストの concurrency 診断抑止を除去する
   - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する
   - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback の state 更新を main queue に束ねる。同期の test method でも async な `setUp` が呼ばれることを検証するテストを追加する
