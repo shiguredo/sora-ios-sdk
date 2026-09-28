@@ -16,6 +16,40 @@ final class SendonlyE2ETests: E2ETestBase {
   // 結果保持と fulfill を抑止する
   private var apiWaitFinished = false
 
+  // MARK: - このファイル専用の E2E 用定数
+
+  /// E2E テスト用の接続タイムアウト (秒)
+  ///
+  /// CI の E2E はサーバーの応答が遅い場合があるため、SDK の既定値 (30 秒) より長くする。
+  /// SDK の既定値は変更せず、このファイルの E2E 用 Configuration にだけ設定する
+  private let connectionTimeout = 60
+
+  /// E2E テストの接続待ちタイムアウト (秒)
+  ///
+  /// ConnectionTimer による connectionTimeout の発火を wait の内側で処理し、
+  /// テスト終了後に遅延コールバックが残らないよう、connectionTimeout (60 秒) に
+  /// 余裕 (30 秒) を足した 90 秒とする
+  private var connectWaitTimeout: TimeInterval {
+    TimeInterval(connectionTimeout + 30)
+  }
+
+  /// 接続失敗がタイムアウトで終端する実装の回帰を短時間で検出するための接続タイムアウト (秒)
+  ///
+  /// 接続失敗がタイムアウト以外のエラーで終端することを検証するテストが、
+  /// このファイルの接続タイムアウト (60 秒) の影響で長くならないよう、
+  /// そのテスト自身の Configuration にだけ設定する
+  private let connectionFailureTimeout = 3
+
+  /// このファイル専用の E2E 用 Configuration を構築する
+  ///
+  /// `E2ETestBase.buildConfiguration(role:)` が返す Configuration に、
+  /// このファイル専用の接続タイムアウトを設定して返す。SDK の既定値 (30 秒) は変更しない
+  private func makeConfiguration(role: Role) throws -> Configuration {
+    var config = try buildConfiguration(role: role)
+    config.connectionTimeout = connectionTimeout
+    return config
+  }
+
   override func setUp() async throws {
     try await super.setUp()
     apiDisconnectSucceeded = false
@@ -53,8 +87,10 @@ final class SendonlyE2ETests: E2ETestBase {
       }
     }
 
-    // SDK の connectionTimeout (30 秒) より長く待つ
-    wait(for: [connectExpectation], timeout: 35)
+    // ConnectionTimer による connectionTimeout (60 秒) の発火を wait の内側で処理し、
+    // テスト終了後に遅延コールバックが残らないよう、wait のタイムアウトは
+    // connectionTimeout より長い connectWaitTimeout (90 秒) とする
+    wait(for: [connectExpectation], timeout: connectWaitTimeout)
     waitFinished = true
 
     guard let connectedChannel else {
@@ -133,7 +169,7 @@ final class SendonlyE2ETests: E2ETestBase {
 
   /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
   func testSendonlyDummyVideo() throws {
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     // 接続時の物理カメラ自動起動を抑止し、senderStream 生成後にダミー映像を流す
     config.initialCameraEnabled = false
     // この E2E はダミー映像送信の確認に限定し、音声初期化による不安定要因を避ける
@@ -175,7 +211,7 @@ final class SendonlyE2ETests: E2ETestBase {
 
   /// sendonly で DummyAudioDevice を使ってダミー音声を送信できることを確認する
   func testSendonlyDummyAudio() throws {
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     // この E2E はダミー音声送信の確認に限定し、映像は無効にする
     config.videoEnabled = false
     config.audioEnabled = true
@@ -253,7 +289,7 @@ final class SendonlyE2ETests: E2ETestBase {
     var disconnectEvent: SoraCloseEvent?
 
     // sendonly 用の Configuration (channelId は一意な値に上書きする)
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     config.channelId = channelId
     config.videoEnabled = true
     config.audioEnabled = false
@@ -294,7 +330,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // 初回接続の完了を待つ
-    wait(for: [connect1Expectation], timeout: 35)
+    wait(for: [connect1Expectation], timeout: connectWaitTimeout)
     guard let channel1, let connectionId1 else {
       XCTFail("初回接続に失敗した")
       capturer?.stop()
@@ -402,7 +438,7 @@ final class SendonlyE2ETests: E2ETestBase {
       }
     }
     // 再接続の完了を待つ
-    wait(for: [connect2Expectation], timeout: 35)
+    wait(for: [connect2Expectation], timeout: connectWaitTimeout)
     guard let channel2 else {
       XCTFail("再接続に失敗した")
       capturer?.stop()
@@ -457,7 +493,7 @@ final class SendonlyE2ETests: E2ETestBase {
     var signalingOpenedExpectationFulfilled = false
 
     // sendonly 用の Configuration
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     config.channelId = channelId
     config.dataChannelSignaling = true
     config.ignoreDisconnectWebSocket = true
@@ -575,7 +611,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // 接続完了を待つ
-    wait(for: [connectExpectation], timeout: 35)
+    wait(for: [connectExpectation], timeout: connectWaitTimeout)
     guard let channel, let capturer else {
       XCTFail("接続に失敗した")
       disconnectAll(channels: [channel])
@@ -676,6 +712,11 @@ final class SendonlyE2ETests: E2ETestBase {
       channelId: buildChannelId(unique: true),
       role: .sendonly)
     config.ignoreDisconnectWebSocket = true
+    // このテストは接続失敗がタイムアウト以外のエラーで終端することを検証する。
+    // 旧実装の回帰 (接続タイムアウトで終端する) をこのファイルの接続タイムアウト
+    // (60 秒) で待たずに検出できるよう、connectionTimeout を短く (3 秒に) しておく。
+    // これにより回帰時もテストが 3 秒で終端する
+    config.connectionTimeout = connectionFailureTimeout
 
     // connect がエラーで終端することを待つ expectation
     let connectExpectation = self.expectation(
@@ -686,7 +727,8 @@ final class SendonlyE2ETests: E2ETestBase {
         XCTAssertNotNil(error, "接続失敗時は error が渡ること")
         // 新実装では接続失敗が即時検出され、接続タイムアウトではないエラーで終端する。
         // 旧実装 (ignoreDisconnectWebSocket を接続確立前に適用) では接続失敗が検出されず、
-        // connectionTimeout (30 秒) で終端するため、error 種別で回帰を検出できる。
+        // このテストで設定した connectionTimeout (3 秒) で終端するため、
+        // error 種別で回帰を検出できる。
         if let error = error as? SoraError, case .connectionTimeout = error {
           XCTFail("接続失敗がタイムアウトで終端しないこと (旧実装の挙動)")
         }
@@ -694,6 +736,8 @@ final class SendonlyE2ETests: E2ETestBase {
       }
     }
 
+    // wait のタイムアウトは、このテスト自身の connectionTimeout (3 秒) より長くする。
+    // 新実装では接続失敗が即時に検出されるため、通常はこの待ち時間を使い切らない
     wait(for: [connectExpectation], timeout: 35)
   }
 
@@ -742,7 +786,7 @@ final class SendonlyE2ETests: E2ETestBase {
     var disconnectExpectationFulfilled = false
 
     // sendonly 用の Configuration (DataChannel シグナリング有効 + WebSocket 切断の無視)
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     config.channelId = channelId
     config.dataChannelSignaling = true
     config.ignoreDisconnectWebSocket = true
@@ -823,7 +867,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // 接続完了を待つ
-    wait(for: [connectExpectation], timeout: 35)
+    wait(for: [connectExpectation], timeout: connectWaitTimeout)
     guard let channel, let capturer else {
       XCTFail("接続に失敗した")
       disconnectAll(channels: [channel])
