@@ -84,6 +84,10 @@
   - `Logger` の `@unchecked Sendable` を checked な `Sendable` へ置き換える
   - 公開名・型・シグネチャと、単一 executor からの利用時の挙動は変わらない (`level` / `groups` / `onOutputHandler` は computed property になるが、読み書きの利用はソース互換である)
   - @t-miya
+- [UPDATE] `Sora.connect` の設定エラー通知経路の closure capture を解消する
+  - 非 `@Sendable` な接続 handler を `DispatchQueue.global()` の closure が capture していたことによる `#SendableClosureCaptures` 警告を、handler を包む private の box で解消する
+  - 公開 API と利用者の挙動の変更はない (通知順序と配送先は変わらない)
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya
