@@ -71,10 +71,17 @@ private final class PeerChannelDisconnectCompletionContext: @unchecked Sendable 
 /// - 保持するのは handler の closure だけで、`PeerChannel` / `DataChannel` /
 ///   `ConnectionTask` などの SDK 内部の参照型を新たに保持しないこと
 ///
-/// 使用契約は「高々 1 回だけ呼ばれるが、複数の closure から参照される」です。
-/// `createAnswer` の先頭で作った 1 つの box を 3 つの非同期 closure と同期経路が共有しますが、
-/// handler を呼ぶ経路はどれも呼び出した後に return するため、handler が複数回呼ばれることは
-/// ありません (型では強制されません)。`Sendable` にするのはこの入れ物だけで、handler と
+/// 使用契約は「`createAnswer` の各 return 経路で高々 1 回呼ばれる」です。実行単位は `createAnswer`
+/// の呼び出し 1 回で、そこで作られる box は 1 つです。これを `createAnswer` 本体の同期経路と、
+/// `setRemoteDescription` / `answer(for:)` / `setLocalDescription` の 3 つの非同期完了 closure が
+/// 共有します。成功経路は return する時点では box を呼ばず、handler の呼び出しを native の完了
+/// block に委ねます。native の完了 block に委ねた経路を除き、return する経路では必ず 1 回呼びます。
+/// native の完了が返らない場合は呼ばれず 0 回のままです。
+/// `self` が解放済みの場合は `self` を参照できないため、`setRemoteDescription` 完了 closure の
+/// `guard let self else` の else 節で handler を 1 回呼びます。この節は `self` が nil のときだけ通り、
+/// `guard let self` を通過した後の呼び出しは `self` が non-nil のときだけ通るため、1 回の closure
+/// 実行で handler が 2 回呼ばれることはありません (型では強制されません)。
+/// `Sendable` にするのはこの入れ物だけで、handler と
 /// その捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出しスレッドを
 /// 保証しない既存の挙動の下で利用者の責務です。実行スレッドの同一性・直列性も契約にしません。
 private final class CreateAnswerHandlerBox: @unchecked Sendable {
@@ -1143,9 +1150,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let offerDescription = offer.sdpDescription
     nativeChannel.setRemoteDescription(offer) { [weak self] error in
       guard let self else {
-        // この経路では handler を呼ばずに return する。呼び出し元は handler の完了で lock を
-        // 解放するため、handler が呼ばれないと lock が残留し得る。この挙動は変更せず、
-        // 扱いは別 issue に委ねる。
+        // `self` が解放済みでも handler を 1 回呼んで return する。handler の完了で lock を
+        // 解放する呼び出し元では、呼ばれないと取得済みの lock が残留し得る。
+        // 現状この節は到達しない (完了 block は handlerBox → handler → `self` の順に強参照し、
+        // `nativeChannel` も `PeerChannel` のプロパティであるため、`PeerChannel` が解放されると
+        // `RTCPeerConnection` への強参照も失われて callback が届かない) が、
+        // 「到達状況に関わらず handler を必ず 1 回呼ぶ」不変条件を満たすために呼ぶ。
+        Logger.error(type: .peerChannel, message: "peerChannel is unavailable")
+        handlerBox(nil, SoraError.peerChannelError(reason: "PeerChannel is unavailable"))
         return
       }
       guard error == nil else {
