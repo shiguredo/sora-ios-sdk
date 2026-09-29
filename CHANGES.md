@@ -20,7 +20,7 @@
   - @t-miya
 - [CHANGE] WebRTC の enum 型への `CustomStringConvertible` 準拠を削除する
   - 別 module の型へ protocol 準拠を追加していた retroactive conformance の警告 (SE-0364) を解消するため
-  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority` の準拠を削除し、SDK 内部の文字列化を `WebRTCEnumDescription` へ移す。`RTCDegradationPreference` は raw value で判定するようになり、m154 で追加された `maintainFramerateAndResolution` (値 0、削除予定の `disabled` の別名) も `"disabled"` として扱う
+  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority` の準拠を削除する。`RTCDegradationPreference` は raw value で判定するようになり、m154 で追加された `maintainFramerateAndResolution` (値 0、削除予定の `disabled` の別名) も `"disabled"` として扱う
   - 利用者コードの `description` はコンパイルエラーになり、文字列補間と `String(describing:)` は `RTCSignalingState(rawValue: 0)` のような raw 表現に変わる (`debugPrint` や Optional / 配列を経由した場合は `__C.` 付きの表現)
   - `RTCRtpParameters.description` から `Optional(...)` が消え、未知の値は `RTCDataChannelState` も `RTCDegradationPreference` も `"unknown(<rawValue>)"` になる (`messagingError` の reason と SDK のログにも現れる)
   - @t-miya
@@ -31,16 +31,11 @@
   - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
   - @zztkm
 - [UPDATE] CameraVideoCapturer のカメラ状態の所有者を単一化する
-  - `CameraVideoCapturer` の `current` / `isRunning` / `format` / `frameRate` / `stream` を内部の owner (`CameraStateOwner`) が、`device` を instance の lock 付き storage が、`handlers` を型全体で共有する lock 付き storage が保持し、`NSLock` で保護した値から同期で読むようにする
-  - カメラ操作 (start / stop / restart / change / flip) の状態遷移を純粋な reducer へ集約し、操作世代で古い callback を破棄する
-  - `CameraVideoCapturer` から `@unchecked Sendable` と `nonisolated(unsafe)` を除去し、`Sendable` に準拠させる
-  - `front` / `back` / `current` / `isRunning` / `format` / `frameRate` は computed property になるが、読み取り専用の利用はソース互換である
-  - `CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しなくなる。SDK 内部の経路は接続側が `MediaStream` を保持するため影響しないが、利用者が capturer 以外に強参照を保たない場合は `nil` になる
+  - `CameraVideoCapturer` から `@unchecked Sendable` と `nonisolated(unsafe)` を除去して `Sendable` に準拠させ、`front` / `back` / `current` / `isRunning` / `format` / `frameRate` を computed property にする (読み取り専用の利用はソース互換である)
+  - `CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しなくなり、利用者が capturer 以外に強参照を保たない場合は `nil` になる (SDK 内部の経路は接続側が `MediaStream` を保持するため影響しない)
   - @t-miya
 - [UPDATE] SignalingChannel と URLSessionWebSocketChannel の状態所有者を統一する
-  - signaling の phase、接続 URL、`data_channel_signaling` / `ignore_disconnect_websocket` のフラグを純粋な reducer と単一の owner で管理する
-  - `connect` / `send` / `redirect` / `disconnect` / URLSession delegate callback を同じ直列 queue へ投入し、順序を確定する
-  - `URLSessionWebSocketChannel` の可変状態 (`urlSession` / `webSocketTask` / `isClosing`) へのアクセスを owner queue に限定する
+  - signaling の phase、接続 URL、`data_channel_signaling` / `ignore_disconnect_websocket` のフラグと `URLSessionWebSocketChannel` の可変状態を 1 つの owner が保持し、`connect` / `send` / `redirect` / `disconnect` と URLSession delegate callback を同じ直列 queue で順序付ける
   - @t-miya
 - [UPDATE] 公開値型を `Sendable` に対応させる
   - 接続と設定: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent` / `MediaConstraints` / `DegradationPreference` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
@@ -52,8 +47,6 @@
   - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
   - @t-miya
 - [UPDATE] 接続設定を immutable な Sendable snapshot へ変換する
-  - 接続開始時に利用者の `Configuration` を内部の snapshot へ写し取り、接続開始後に走る非同期処理が利用者所有の可変値を参照しないようにする
-  - 公開 API の変更はない
   - 数値の表記が変わる場合がある (`Float` / `Double` の指数表記の展開、`-0.0` の符号)
   - `dataChannels` を設定している場合は connect message の `Double` / `Float` の 17 桁表記が解消され、`JSONEncoder` の表記に揃う
   - JSON オブジェクトのキー順は不定になる (`Dictionary` の順序のため。JSON として等価)
@@ -63,36 +56,21 @@
   - `ScreenCaptureSettings.videoSampleBufferTransformer` と `MediaChannel.startScreenCapture` のドキュメントに、呼び出し executor と返却した sample buffer の所有契約を明記する
   - @t-miya
 - [UPDATE] MediaStream の映像フレーム処理 executor を単一化する
-  - 映像フレームの受理、`VideoFilter` の実行、`RTCVideoSource` への配送をストリームごとの直列 executor に集約する
-  - `VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) の配送 executor が main queue に統一される (これまでと異なるスレッドから呼ばれる場合がある)
-  - `MediaStream.videoRenderer` の setter は callback の配送完了を待たなくなる。別の instance へ交換した場合は以前の renderer に `onRemoved` が 1 回配送され、同じ instance の再設定と `nil` から `nil` への代入では何も配送しない
-  - `MediaStream.videoEnabled` / `audioEnabled` の setter は callback の配送完了を待たなくなる (getter は即時に新値を返す)
-  - `VideoView.start()` は main queue 上で `isRendering` を即時に更新する (公開 getter が返す値の時点が変わる)
-  - `MediaStream.send(videoFrame:)` は配送の完了を待たずに戻り、呼び出し側はフレームの所有権を SDK へ移す。`send` が戻った後にフレームとそれが保持する画素データを参照・変更してはならない
-  - 映像トラックを持たないストリーム (video source が `nil`) ではフレームが配送されず、`VideoFilter` も呼ばれない
-  - 処理が滞留している場合、上限を超えて到着したフレームが破棄される (renderer へ配送するフレームも、配送待ちが上限に達すると破棄される)
-  - `MediaStream.terminate()` は冪等になり、以降に到着したフレームと renderer の frame / size / switch を受理も配送もしない。`onDisconnect` は 1 回だけ配送し、`onRemoved` は配送しない。`onDisconnect` の配送先は `terminate()` を呼んだ時点の renderer になる
-  - `MediaStream.terminate()` の後に `MediaStream.videoRenderer` へ新しい renderer を設定しても何も配送しない (`nil` の代入による取り外しは行える)
-  - `MediaStream.videoRenderer` の getter / setter は内部の lock で直列化されるため、どのスレッドから呼んでもよい
-  - 切断時に `RTCVideoSource` へ配送中のフレームが最大 1 つ残ることを許容する (無効化は配送中の処理と同期しないため、そのフレームは切断と並行して配送される)
-  - ストリームをまたぐ renderer callback の順序は保証しない
+  - `VideoRenderer` の callback の配送 executor を main queue に統一する (これまでと異なるスレッドから呼ばれる場合がある)。ストリームをまたぐ callback の順序は保証しない
+  - `MediaStream.videoRenderer` / `videoEnabled` / `audioEnabled` の setter と `VideoView.start()` は callback の配送完了を待たず、getter は即時に新値を返す (`VideoView.start()` は main queue 上で `isRendering` を同期で更新する)。`videoRenderer` を別の instance へ交換した場合は以前の renderer に `onRemoved` が 1 回配送され、同じ instance の再設定と `nil` から `nil` への代入では何も配送しない
+  - `MediaStream.send(videoFrame:)` は配送の完了を待たずに戻り、呼び出し側はフレームの所有権を SDK へ移す (`send` が戻った後にフレームとそれが保持する画素データを参照・変更してはならない)。映像トラックを持たないストリーム (video source が `nil`) では `VideoFilter` が呼ばれず、処理の滞留時は上限を超えて到着したフレームが破棄される
+  - `MediaStream.terminate()` は冪等になり、以降に到着したフレームと renderer の frame / size / switch を受理も配送もしない。`onDisconnect` は 1 回だけ配送し、`onRemoved` は配送しない。`terminate()` の後に `videoRenderer` へ新しい renderer を設定しても何も配送しない (`nil` の代入による取り外しは行える)
   - @t-miya
 - [UPDATE] Logger の共有可変状態を同期する
-  - `Logger.shared` / `level` / `groups` / `onOutputHandler` の読み書きを lock で保護する
+  - `Logger.shared` / `level` / `groups` / `onOutputHandler` の読み書きを lock で保護し、`Logger` の `@unchecked Sendable` を checked な `Sendable` へ置き換える
   - 並行に設定を変更した場合に、1 回の出力が異なる時点の設定を混ぜて観測しなくなる
-  - `Logger` の `@unchecked Sendable` を checked な `Sendable` へ置き換える
-  - 公開名・型・シグネチャと、単一 executor からの利用時の挙動は変わらない (`level` / `groups` / `onOutputHandler` は computed property になるが、読み書きの利用はソース互換である)
+  - `level` / `groups` / `onOutputHandler` は computed property になるが、読み書きの利用はソース互換である
   - @t-miya
 - [UPDATE] `Sora.connect` の設定エラー通知経路の closure capture を解消する
-  - 非 `@Sendable` な接続 handler を `DispatchQueue.global()` の closure が capture していたことによる `#SendableClosureCaptures` 警告を、handler を包む private の box で解消する
-  - 公開 API と利用者の挙動の変更はない (通知順序と配送先は変わらない)
   - @t-miya
 - [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告 14 件を解消する
-  - `PeerChannel` / `MediaChannel` / `CameraVideoCapturer` / `NativePeerChannelFactory` / `ConnectionTimer` で、非 `@Sendable` な handler を包む private の box を追加し、WebRTC / AVFoundation の型を capture していた箇所は `Sendable` な値の capture へ置き換える
-  - 公開 API と利用者の挙動の変更はない
   - @t-miya
 - [UPDATE] `PeerChannel` の接続ライフサイクルの排他を接続状態の所有者へ統合する
-  - `PeerChannel.Lock` が持っていた接続開始の初期ロック、進行中の非同期処理数、遅延させる切断要求を `ConnectionStateOwner` へ移し、接続状態フラグと同じ直列 queue で保護する
   - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
@@ -105,28 +83,23 @@
   - @t-miya
 - [FIX] connect message に載る metadata の encode に失敗すると接続がタイムアウトする問題を修正する
   - `Configuration.signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別パラメーター / `ForwardingFilter.metadata` の encode に失敗した場合に、接続開始前に `SoraError.configurationError` として返す
-  - `JSONEncoder` がエラーにしない `Decimal` の `NaN` も、出力した JSON の再パースで検出する
+  - `JSONEncoder` がエラーにしない `Decimal` の `NaN` も検出する
   - @t-miya
 - [FIX] setVideoHardMute(true) の失敗時に映像が黒塗りのまま残る問題を修正する
-  - `MediaChannel.setVideoHardMute(true)` の黒塗り設定と失敗時の復元を `VideoHardMuteActor.setMute` 内へ移す
   - `VideoHardMuteActor` の所有権を取得できなかった呼び出しは `videoEnabled` を変更しない
   - 接続終了中 (lease が無効) の失敗では復元せず、黒塗りのまま終了する
   - `setVideoHardMute(true)` の経路では `onSwitchVideo` が `VideoHardMuteActor` の executor で発火する (これまでと異なるスレッドから呼ばれる場合がある)
   - @t-miya
 - [FIX] 未知の WebRTC enum 値で `description` が `fatalError` によりプロセスを終了する問題を修正する
-  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` の `description` の `@unknown default` が `fatalError("unknown state")` を呼んでいた
-  - CHANGE エントリの、 WebRTC の enum 型への `CustomStringConvertible` 準拠の削除、によりこれらの `description` はなくなるため、未知の値でもプロセスが終了しなくなる
+  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` の `description` の `@unknown default` が `fatalError("unknown state")` を呼んでいた (これらの `description` は WebRTC の enum 型への `CustomStringConvertible` 準拠の削除でなくなる)
   - @t-miya
 - [FIX] SDK 内部の排他区間を保持したまま Logger を呼ぶと利用者の出力 handler が deadlock する問題を修正する
-  - `Sora.add(mediaChannel:)` / `remove(mediaChannel:)` / `ConnectionTask.cancel()` / `ConnectionTimer.stop()` / `AudioDeviceModuleWrapper.setAudioHardMute(_:)` のログ出力を排他区間の外へ移し、`ConnectionTask.tryComplete()` / `complete()` と `ConnectionTimer.run(timeout:handler:)` はログを削除して遷移の有無と有効な timeout を返すようにする (`MediaChannel.state` の遷移ログも `didSet` から lock 解放後へ移す)
+  - 排他区間を保持したままログを出していた箇所のログ出力を排他区間の外へ移す
   - ログの内容 (`level` / `type` / `message`) と同一スレッド・同一経路での出力順序は変わらない
   - @t-miya
 - [FIX] `createAnswer` の `setRemoteDescription` 完了 closure で `self` が解放済みの場合も handler を呼ぶようにし、handler を呼ばずに return する経路をなくす
-  - この経路は現状到達しないため、利用者に見える挙動の変更はない
   - @t-miya
 - [FIX] `PeerChannel.onConnect` が複数スレッドから排他制御なしで読み書きされるデータ競合を解消する
-  - 接続完了 callback の読み書きを専用の lock に統一し、接続試行中の判定 (`PeerChannel.state` と `Lock.waitDisconnect`) の読み出しも同じ排他へ入れる
-  - 接続完了 callback が呼ばれる回数 (高々 1 回) と呼び出し元のスレッドは変わらず、データ競合が解消される
   - @t-miya
 
 ### misc
@@ -142,33 +115,22 @@
   - @t-miya
 - [ADD] 参照保持 box が担う `createClientOfferSDP` の一時 `RTCPeerConnection` の `close()` の回帰テストを追加する
   - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
-  - 観測に使う `weak` アクセサは `#if DEBUG` で囲み、公開 API と Release の利用者の挙動の変更はない
   - @t-miya
 - [UPDATE] E2E テストの concurrency 診断抑止を除去する
-  - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する
-  - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback の state 更新を main queue に束ねる。同期の test method でも async な `setUp` が呼ばれることを検証するテストを追加する
-  - `DummyVideoCapturer` は `Timer` を main RunLoop に登録したまま `MainActor.assumeIsolated` で main 実行を表明し、解放時は `isolated deinit` で MainActor 上から Timer を無効化する。`SendonlyE2ETests` の待機の `Timer` は `DispatchQueue.main.asyncAfter` に置き換えて `DummyVideoCapturer` を MainActor 上で生成・開始する
-  - `DummyVideoCapturerTests` は実 `MediaChannel` / `MediaStream` を使って Timer の発火と `stop()` による停止を確認する
-  - `RpcE2ETests` の RPC 呼び出しは `MediaChannel` をまとめた `@unchecked Sendable` のボックス経由にする
-  - `SoraTests` が `@preconcurrency import Sora` を使っていないことを CI で検査する
-  - 公開 API と利用者の挙動の変更はない
+  - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する。`SoraTests` が `@preconcurrency import Sora` を使っていないことを CI で検査する
+  - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback と `Timer` の扱いを main queue に束ねる。`RpcE2ETests` の RPC 呼び出しは `MediaChannel` をまとめた `@unchecked Sendable` のボックス経由にする
   - @t-miya
 - [UPDATE] GitHub Actions の Build ワークフローの XCode バージョン等を更新する
   - Xcode の version を 26.6 に更新する
   - SDK を iOS 26.5 に更新する
   - @t-miya
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
-  - エラーパスで未 wait の expectation を `XCTWaiter.wait(for:timeout: 0)` で消費する
-  - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける
-  - wait のタイムアウトをリクエストより長くし、API コールバックの結果を保持して wait 後に検証することで、コールバックの次のテストへの誤帰属を防ぐ
-  - 切断の共通ヘルパー (`disconnectAndVerify` / `disconnectAll`) の早期 return でも未 wait の expectation を残さないようにする
-  - `disconnectAndVerify` の切断イベント検証を wait 後に行い、テスト終了後の assertion の誤帰属を防ぐ
+  - エラーパスと共通ヘルパーの早期 return で未 wait の expectation を残さず、切断イベントの検証を wait 後に行って assertion の誤帰属を防ぐ
+  - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける。wait のタイムアウトをリクエストより長くし、コールバックの結果を保持して wait 後に検証する
   - @t-miya
 - [FIX] `DummyAudioDevice` の共有状態競合を修正する
-  - `RTCAudioDevice` の lifecycle state を 1 つの lock へ統一し、録音・再生の timer に世代を持たせて停止・終了後に届いた callback を破棄する
-  - 停止と開始が交差した場合に timer や AudioUnit が停止後に残らないよう、ライフサイクルの世代で開始処理を検証する
+  - `RTCAudioDevice` の lifecycle state を 1 つの lock へ統一し、録音・再生の timer に世代を持たせて停止・終了後に届いた callback を破棄する。停止と開始が交差した場合に timer や AudioUnit が停止後に残らないよう、ライフサイクルの世代で開始処理を検証する
   - `pcmGenerator` を `@Sendable` にし、テストの波形生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の可変状態を lock で保護する
-  - 公開 API と利用者の挙動の変更はない
   - @t-miya
 
 ## 2026.3.0
