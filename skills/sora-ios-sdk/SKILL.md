@@ -359,7 +359,7 @@ configuration.audioStereoOutputEnabled = true
 - Bluetooth HFP はモノラル。A2DP はステレオ出力を利用できるが、SDK は route を自動で切り替えない
 - 接続後に `setAudioMode(.voiceChat(...))` を呼ぶとモノラルへ切り替わる場合がある
 
-`recvonly` のマイク権限不要化と、ステレオ送信側の入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要となる。`Package.swift` は m150.7871.3.5 を参照している。
+`recvonly` のマイク権限不要化と、ステレオ送信側の入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要となる。`Package.swift` は m155.8059.1.0 を参照している。
 
 ### ミュート
 

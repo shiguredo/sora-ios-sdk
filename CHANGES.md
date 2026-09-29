@@ -11,6 +11,8 @@
 
 ## develop
 
+- [UPDATE] libwebrtc m155.8059.1.0 に上げる
+  - @zztkm
 - [CHANGE] システム要件の Xcode バージョンを 26.6+ に更新する
   - @t-miya
 - [CHANGE] `RPCErrorDetail.data` の型を `Any?` から `JSONValue?` に変更する
