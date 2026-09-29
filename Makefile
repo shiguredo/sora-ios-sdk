@@ -26,7 +26,8 @@ build:
 		CODE_SIGNING_REQUIRED=NO \
 		CODE_SIGN_IDENTITY= \
 		PROVISIONING_PROFILE= \
-		SWIFT_VERSION=6
+		SWIFT_VERSION=6 \
+		OTHER_SWIFT_FLAGS='-warnings-as-errors -Wwarning DeprecatedDeclaration'
 
 # swift-format lint
 fmt-lint:

@@ -30,6 +30,10 @@
   - 経過時間の計測だけが目的の場合は、`ContinuousClock` / `SuspendingClock` の `now` の差分 (`Duration`) へ移行する
   - 用途によって移行先が異なるため、SDK 固有の代替 timer は提供しない。単一の万能な代替があるわけではないため、用途に合う仕組みを選ぶ
   - @t-miya
+- [CHANGE] `swift-tools-version` を 6.3 に上げ、Swift 6 言語モードを manifest で宣言する
+  - SwiftPM 6.3 未満 (Xcode 26.6 未満) では package を解決できなくなる。README のシステム条件は Xcode 26.6 以降であり、サポート範囲内の利用者への影響はない
+  - `swiftLanguageModes: [.v6]` により、SwiftPM で取り込んだ consumer も SDK を Swift 6 言語モードで compile する。公開 API と SDK の挙動は変わらない
+  - @t-miya
 - [ADD] JSON の値を表す公開型 `JSONValue` を追加する
   - @t-miya
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する

@@ -33,7 +33,8 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             PROVISIONING_PROFILE= \
-            SWIFT_VERSION=6
+            SWIFT_VERSION=6 \
+            OTHER_SWIFT_FLAGS='-warnings-as-errors -Wwarning DeprecatedDeclaration'
     - name: Check WebRTC Non-public API
       run: |
         WEBRTC_FRAMEWORK=$(find build -name "WebRTC.framework" -path "*/WebRTC.xcframework/ios-arm64/*" | head -1)
