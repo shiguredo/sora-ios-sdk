@@ -47,7 +47,7 @@ release とは `CHANGES.md` に `## <version>` 節がある version とし、can
 
 Sora SDK 固有の機能ではないため、問題を修正して公開 abstraction として維持するより、削除して SDK の責務を明確にする。
 
-`0177` (2026-09-29 完了) が SDK 内部インスタンスを捕捉する `#SendableClosureCaptures` の 10 件を解消したため、`Sora` target を Swift 6 言語モードで型検査したときに残る `#SendableClosureCaptures` は本 issue が削除する `Utilities.Stopwatch` の 1 件だけである (`build/0177-stage2-typecheck.log`。`0108` のゲート相当の flags を付けた型検査の error も同じ 1 件)。`0108` の warnings-as-errors ゲートは、本 issue が `Stopwatch` を削除するまで有効化できない。
+`0177` (2026-09-29 完了) が SDK 内部インスタンスを捕捉する `#SendableClosureCaptures` の 10 件を解消したため、`Sora` target を Swift 6 言語モードで型検査したときに残った `#SendableClosureCaptures` は本 issue が削除する `Utilities.Stopwatch` の 1 件だけであった (`build/0177-stage2-typecheck.log`。`0108` のゲート相当の flags を付けた型検査の error も同じ 1 件)。この 1 件は `0181` (完了 2026-09-29) が `Stopwatch` の内部構造を変更し、`Timer` closure の捕捉対象を `self` から lock 付きの storage へ移したことで解消して `#SendableClosureCaptures` は 0 件になった。`0108` の warnings-as-errors ゲートは、本 issue が `Stopwatch` を削除するのを待たずに有効化できる。
 
 ## 設計方針
 
@@ -76,6 +76,7 @@ Sora SDK 固有の機能ではないため、問題を修正して公開 abstrac
 - `CHANGES.md`: `## develop` の種別順の主リストに `[CHANGE]` を追加する。
 - `issues/0070-change-migrate-to-webrtc-c-xcframework.md`: 行数表の全行、`Sora/*.swift` 計、`Sora/Extensions/*.swift` 計、`Sora/` 配下計、および 12 行目と 67 行目の計測日の注記を、着手時に `wc -l` で再計測した値と実施日で更新する (`0113` と同じ粒度)。`Sora/Utilities.swift` は行数順を保つ位置 (`ICEServerInfo.swift` と `ConnectionState.swift` の間) へ移す (削除による減少は 36 行。前後の空行の整理で 1 行前後し得る)。`0070` の Phase 2 が先行して `Utilities.swift` の `import WebRTC` が既に除去されている場合は、行を復活させない。`SoraTests/` の file を削除した場合は、同表の `SoraTests/` の file 数と計測日の注記も更新する。
 - `SoraTests/`: `0114` 完了後に `Stopwatch` を参照する宣言がある場合だけ削除する (参照だけの場合はその行、テスト関数内の場合は関数ごと、file 全体が Stopwatch 専用の場合は file ごと)。
+- `SoraTests/StopwatchTests.swift`: file 全体が `Utilities.Stopwatch` 専用のテストであるため、`Stopwatch` の型宣言と同じ変更で file ごと削除する (`0181` が追加し、`SoraTests` 内で `Stopwatch` を参照する唯一の file である)。
 
 ## テスト方針
 
