@@ -202,23 +202,40 @@ jobs:
         echo "== coreaudiod log (last 15m) =="
         log show --last 15m --predicate 'process == "coreaudiod"' --style compact 2>/dev/null | tail -100 || echo "(none)"
 
-        # 調査用: 失敗したテスト名を job log から拾う。ハングしたテストを特定する
+        # 調査用: 失敗したテストの行を job log から拾う。SDK の error ログと区別するため
+        # XCTest の失敗行と失敗した Test Case の行だけを出す
         if [ -f build/logs/e2e-test.log ]; then
           echo "== failed tests =="
-          grep -E "error: " build/logs/e2e-test.log | tail -40 || echo "(none)"
+          grep -E "error: -\[|Test Case .* failed" build/logs/e2e-test.log | tail -40 || echo "(none)"
+        fi
+
+        # 調査用: DummyAudioDevice が出す音声サブシステム操作の phase を並べる。
+        # end が出ていない最後の begin の操作が、ホストの音声サービスの応答を待って止まっている
+        if [ -f build/logs/e2e-test.log ]; then
+          echo "== audio device phases =="
+          grep -E "DummyAudioDevice INFO: (initialize|initializePlayout|startPlayout): " \
+            build/logs/e2e-test.log | tail -20 || echo "(none)"
         fi
 
         # 音声サブシステムを待っているスレッドのスタックを sample の出力から抜き出す。
-        # sample の出力はスレッド単位で並ぶため、該当するフレームを含むスレッドのブロックだけを出す
+        # sample の出力はスレッド単位で並ぶため、該当するフレームを含むスレッドのブロックだけを出す。
+        # Call graph の終端より後 (Total number in stack / Sort by top of stack / Binary Images) は
+        # スレッドのブロックではないため含めない。含めると Binary Images の CoreAudio の行に
+        # 誤って一致し、ハングしていないスレッドをハングしていると誤報告する
         extract_threads() {
           awk -v pattern="$2" '
-            /^ *[0-9]+ Thread_/ {
+            function flush() {
               if (block != "" && block ~ pattern) printf "%s", block
-              block = $0 "\n"
-              next
+              block = ""
             }
-            { if (block != "") block = block $0 "\n" }
-            END { if (block != "" && block ~ pattern) printf "%s", block }
+            /^Call graph:$/ { in_graph = 1; next }
+            /^Total number in stack/ { flush(); in_graph = 0; next }
+            /^Sort by top of stack/ { flush(); in_graph = 0; next }
+            /^Binary Images:/ { flush(); in_graph = 0; next }
+            !in_graph { next }
+            /^ *[0-9]+ Thread_/ { flush(); block = $0 "\n"; next }
+            { block = block $0 "\n" }
+            END { flush() }
           ' "$1"
         }
 
