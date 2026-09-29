@@ -1,7 +1,7 @@
 # `Utilities.Stopwatch` の `Timer` closure の `#SendableClosureCaptures` 警告を解消する
 
 - Created: 2026-09-29
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-09-29
 - Priority: Medium
 - Branch: feature/refactor-remove-stopwatch-sendable-closure-capture
 - Polished: 2026-09-29
@@ -190,3 +190,72 @@ storage の `NSLock` は非再帰であり、保持したまま同じ lock を�
 - `SoraTests` target の warnings-as-errors ゲート (`0171`)
 
 ## 解決方法
+
+### 変更内容
+
+- `Sora/Utilities.swift` に `private final class StopwatchStorage: @unchecked Sendable` を追加した。保持するのは利用者の `handler` (`init` で確定する `let`) と可変状態の `seconds` だけで、`seconds` の読み書きはすべて storage が持つ単一の `NSLock` 区間内に閉じている
+- `Utilities.Stopwatch` の stored property は `timer` と `storage` になった。`Stopwatch` 自身には `@unchecked Sendable` も `Sendable` 準拠も付けていない。`timer` は変更前と同じく storage へ移していない
+- `init` では `let storage = StopwatchStorage(handler: handler)` のローカル束縛を作り、`Timer` の closure は `self.storage` ではなくこのローカル束縛の `storage` だけを捕捉する。closure の中に `self` 参照は無い
+- storage が公開する操作は値だけを扱う 3 つにした。`elapsedSeconds()` は経過秒数を返し、文字列への整形 (`String(format:arguments:)`) は closure 側で行う。`increment()` は加算、`reset()` は 0 リセットである。`handler` は storage の internal な `let` であり、closure が lock の外で読む。当初の試作にあった「文字列と `handler` の tuple を返す `takeNotification()`」は採用しなかった。`handler` は不変で lock 内で取り出す必然性が無く、整形まで storage に置くと状態保持と同期という責務を超え、`take` prefix (consume-and-clear の慣習) と `Foundation.Notification` の連想も招くためである
+- lock 区間は次のとおり。closure は `elapsedSeconds()` で経過秒数を 1 回読み、lock の外で文字列を作って `handler` を呼び、その後に `increment()` で加算する (`seconds` の読み出し、`handler` の呼び出し、加算という変更前の順序を変えない)。`run()` は `reset()` の区間を閉じてから `RunLoop.main.add(_:forMode:)` と `timer.fire()` を呼ぶ。`fire()` は closure を同期実行し、その closure が同じ非再帰 `lock` を取るため、lock 保持中に呼ぶと deadlock する。`stop()` は `timer?.invalidate()` を先に lock の外で呼び、その後に `reset()` を取る
+- 利用者の `handler` は lock の外で呼ぶ (排他区間を保持したまま利用者コードを呼ばない)
+- `Timer` closure が `self` を捕捉しないため、`Timer` と `Stopwatch` の相互参照は解消される。通知は closure が保持する storage が `handler` を保持して行うため変わらない。変わるのは解放の時期だけで、利用者が `Stopwatch` の参照を手放すと `Stopwatch` が解放され得る (変更前は `Timer` の closure が `self` を強参照していたため解放されなかった)
+- `@unchecked Sendable` を認めた根拠は storage の doc コメントと本節に記録する。可変状態を持つ型に対する 3 条件の適用は次のとおり
+  - (1) は「可変状態を持たないこと」を求める条件であり、「`seconds` の読み書きがすべて単一の `NSLock` に閉じていること」と読み替えて適用した。`handler` は `init` で確定する不変値であり lock では保護しない。この読み替えの前例は `0106` の `LoggerStateStorage` と `0177` の `PeerChannelTransportStorage` である
+  - (2) は変更前から同じ `Timer(timeInterval:repeats:block:)` と `RunLoop.main` へ渡る closure の捕捉対象を置き換えるだけで、配送先・順序・呼び出し回数を変えないこと
+  - (3) は保持するのが `handler` と `seconds` だけで、`Timer` / `RunLoop` / `Stopwatch` の参照を保持しないこと
+- storage の `@unchecked Sendable` が主張するのは `seconds` の読み書きが単一の `lock` に閉じていることだけである。`handler` の closure 自体が `Sendable` であることや `Timer` のオブジェクト状態の不変性は主張しない
+- `0108` の 3 条件の (1) に、この読み替えと前例 (`0106` / `0177`) を注記し、`0108` の判定基準として承認済みにした。`0108` の担当範囲と完了条件の趣旨は変えていない
+- 公開 API のシグネチャ (`init(handler:)` / `run()` / `stop()`)、`timer` の扱い、`PairTable` / `Optional.unwrap(ifNone:)` / `Utilities.randomString` は変えていない
+
+### 捕捉が消えた実測
+
+- 実装前の型検査 (Swift 6.3.3 / `arm64-apple-ios14.0-simulator`) は一次行 18 件 / error 0 で、うち `#SendableClosureCaptures` は `Sora/Utilities.swift:33:13` の 1 件 (`build/0181-typecheck-before.log`)。実装後は一次行 17 件 / error 0 で `#SendableClosureCaptures` は 0 件 (`build/0181-typecheck-after.log`)。差分はこの 1 件の削除だけで、`#no-usage` などの新しい警告は増えていない
+- `0108` のゲート相当 (`-warnings-as-errors -Wwarning DeprecatedDeclaration`) は、実装前が error 1 件 / warning 17 件 (`build/0181-gate-before.log`)、実装後が error 0 件 / warning 17 件 (`build/0181-gate-after.log`)
+
+### TSan の実測
+
+- `-enableThreadSanitizer YES` の `build-for-testing` (`build/polish-0181-tsan-build.log`) が作った `SoraTests.xctest` を `SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=<SoraTests.xctest>/Frameworks/libclang_rt.tsan_iossim_dynamic.dylib` 付きの `xcrun simctl spawn` で全件実行し、`ThreadSanitizer` の検出行は 0 行、441 件 / skip 31 / 失敗 0 (`build/polish-0181-tsan-run.log`)。`StopwatchTests` 5 件も完走し (2.534 秒)、追加した 2 件の再入テストは TSan 有効時もハングしない
+- interceptor が有効であることは `TSAN_OPTIONS=verbosity=1` で `ThreadSanitizer: parsing ...` と `ThreadSanitizer: parsed suppression entry ...` が出力されることで確認した (`build/polish-0181-tsan-verbosity.log`)
+- この 0 行は「既存スイートに新しい競合が無い」ことの証拠に留まる。新しい `NSLock` の正しさや `handler` の並行実行を検証したものではない (`StopwatchTests` は main thread だけで動き、`handler` を並行に呼ばない)。lock の正しさは 2 件の再入 deadlock テストと「`seconds` の読み書きがすべて区間内にあること」のコード上の確認で担保する
+- `SoraTests.xctest` は `WebRTC.framework` を `PackageFrameworks` に持たないため、`simctl spawn` には `SIMCTL_CHILD_DYLD_FRAMEWORK_PATH=<Build/Products/Debug-iphonesimulator>` も渡した (0177 の手順への追加)
+
+### テストの追加
+
+- `SoraTests/StopwatchTests.swift` を追加した (5 件)。モック・スタブは使わず、実 `Stopwatch` と実 `Timer` だけを使う
+  - `run()` の直後に handler が `"00:00:00"` で 1 回だけ呼ばれ、`run()` の再呼び出しで最初の通知が `"00:00:00"` に戻ること (`timer.fire()` の同期実行と `seconds` の 0 リセット。wall clock に依存しない)。当初の 2 件 (`testRunNotifiesImmediately` / `testRunResetsSeconds`) は同じ assert で観測できたため 1 件にまとめた
+  - `stop()` の後は通知が同期通知の 1 回だけに留まること (invalidate 済み Timer は発火しない)。main RunLoop を回す待ち時間は Timer の 1 周期 (1 秒) を確実に超える 1.5 秒にした
+  - 1 秒経過で 2 回目の通知 `"00:00:01"` が届くこと (`wait(for:timeout:)` の timeout で「文字列が進まない」退行を、`assertForOverFulfill` で「同じ文字列が 2 回届く」退行を検出する。1 秒ごとの通知の回数の比較はしない)
+  - 利用者の `handler` から `stop()` を呼んでも deadlock しないこと (再入テスト)
+  - 利用者の `handler` から `run()` を呼んでも deadlock しないこと (`fire()` の同期再入テスト。再入は 1 回で止め、2 回目の通知が届くことで再入が起きたことを確認する)
+- 追加した 2 件は、本リファクタが新設した唯一の失敗モード「非再帰 `NSLock` を保持したまま利用者の `handler` を呼ぶ」の回帰テストである。他の 3 件の handler は再入しないため、`handler` を lock 内へ移す退行では緑のままになる
+- 退行時は deadlock でハングし、XCTest の timeout では検出できない (`wait(for:timeout:)` を挟んでも返らない)。このため `handler` を lock 内で呼ぶ一時ビルドで `SoraTests` を実行し、`testHandlerCanCallRunReentrantly` の開始後に停止することを実測した (`build/polish-0181-deadlock-regression.log`)。確認用の変更は commit しておらず、確認後に元へ戻した
+- `handler` を lock の外で呼ぶ最終形では 5 件とも完走し、ハングしない (`build/polish-0181-tests-final.log` の `StopwatchTests` は 2.537 秒)
+- 1 秒ごとの通知の回数を比較する観測は行っていない。`stop()` の後の `run()` が動作しない既知の lifecycle の問題は変更前のままである
+
+### 実行した検証
+
+- 型検査: 一次行 17 件 / error 0、`#SendableClosureCaptures` 0 件 (`build/polish-0181-typecheck.log`)。`0108` ゲート相当は error 0 件 / warning 17 件 (`build/polish-0181-gate.log`)
+- 全体テスト: `xcodebuild test` はこの検証環境ではテスト実行の起動時に Pseudo Terminal を確保できず `Pseudo Terminal Setup Error` で失敗するため (`build/polish-0181-stopwatch-tests.log`)、`CFFIXED_USER_HOME` / `HOME` を `build/home` に向けた `build-for-testing` (`build/polish-0181-build-for-testing-final.log`) の成果物を `xcrun simctl spawn 643CF0FB-...` で実行し、441 件 / skip 31 / 失敗 0 (`build/polish-0181-tests-final.log`)。内訳は、develop 時点の 436 件 / skip 31 (0177 の 435 件 / skip 30 に `0178` の `SendonlyE2ETests.testSendonlyDummyAudioActivatesSharedAudioSession` が加わったもの) に `StopwatchTests` の 5 件を加えたものである
+- `make build` 成功 (`build/polish-0181-make-build.log`)、`make consumer-build SCHEME=ConsumerCore` 成功 (`build/polish-0181-consumer-build.log`)
+- `make api-check-fresh` 成功し `The committed API baseline matches the current Sora module.` (`build/polish-0181-api-check-fresh.log`)。`git diff --exit-code -- TestConsumers/Swift6Consumer/ApiBaseline/` は空 (`build/polish-0181-api-baseline-diff.log`)
+- `make fmt-lint` は成功 (`build/polish-0181-fmt-lint.log`)、`swiftlint lint --strict --cache-path build/swiftlint-cache` は 0 violations / 64 files (`build/polish-0181-swiftlint.log`)
+- 0177 と同じく、xcodebuild 系 (`make build` / `make consumer-build` / `make api-check-fresh`) は `CFFIXED_USER_HOME` / `HOME` を `build/home` に向けないと manifest cache に書けず終了する。上記の成功は向けた実行の結果である
+
+### 退行検出
+
+- closure の `handler` 呼び出しを storage のローカル束縛ではなく `self.storage` 参照に戻し、storage ではなく `Stopwatch` の `self` を捕捉する形にすると、型検査の一次行が 18 件に戻り `#SendableClosureCaptures` が `Sora/Utilities.swift:33:28` の 1 件に戻ることを確認した (`build/0181-regression-typecheck.log`)。元の実装の捕捉位置は `self.seconds` の行の `:33:13` であり、このとき使った `self.storage` 参照形は同じ `self` 捕捉の同等形であって、元の形そのものではない。確認用の変更は commit しておらず、確認後に元へ戻した
+- もう 1 つの退行候補である「利用者の `handler` を lock 区間の中で呼ぶ」形は deadlock になり、追加した 2 件の再入テストがハングとして検出する (「テストの追加」に実測を記載)
+
+### ドキュメントの更新
+
+- `issues/0108-update-swiftpm-language-mode.md` の 4 箇所 (`## 前提となる issue` / `## 設計方針` / `## 検証方針` / `## 完了条件`) の「`0115` 待ち」を、本 issue の完了で `#SendableClosureCaptures` が 0 件になり gate を有効化できる記述へ更新した。あわせて判定に使う 3 条件の (1) に、可変状態を持つ lock 付き storage に対する読み替えと前例 (`0106` の `LoggerStateStorage` / `0177` の `PeerChannelTransportStorage`)、本 issue の `StopwatchStorage` を注記し、`0108` の判定基準として承認済みにした。`0108` の担当範囲と完了条件の趣旨は変えていない
+- `issues/pending/0115-remove-stopwatch.md` の「`0108` のゲートは `Stopwatch` の削除まで有効化できない」を、本 issue が捕捉を解消したため削除を待たずに有効化できる旨へ更新した。あわせて「変更対象」に `SoraTests/StopwatchTests.swift` (file 全体が `Stopwatch` 専用) の削除を 1 行明記した。削除の計画と前提は変更していない
+- `CHANGES.md` の `## develop` の `[UPDATE]` の末尾に担当者行付きのエントリを追加した。通知が storage 経由で継続することと、変わるのが解放の時期だけであることも書いた
+
+### 残った懸念
+
+- 追加した `SoraTests/StopwatchTests.swift` は `Stopwatch` を参照するため、`0115` が `Stopwatch` を削除するときの削除対象になる。`0115` の「変更対象」に file ごとの削除として明記した
+- 検証環境の制約により、issue の「テスト方針」が示す `xcodebuild test` は実行できず (起動時の `Pseudo Terminal Setup Error`)、0177 と同じ `build-for-testing` + `xcrun simctl spawn` で代替した。加えて `SIMCTL_CHILD_DYLD_FRAMEWORK_PATH` の指定が必要だった
+- `String(format:)` の分が `seconds / 60` で剰余になっておらず、3600 秒で `"01:60:00"` を通知する既知の表示の不具合が残る。`develop` の `Stopwatch` も同じで本 issue の退行ではないため修正しない (`0115` の削除で対象コードごと消える)
+- `stop()` の後の `run()` が動作しない既知の lifecycle の問題と、handler の executor 契約が無いことは変更前のままである (スコープ外)。追加した再入テストは handler が main thread で呼ばれる前提 (実 `Timer` を `RunLoop.main` へ登録) で動き、`Timer` の block が別スレッドで発火する場合の handler の並行実行は検証していない

@@ -38,11 +38,11 @@ SDK target を warnings-as-errors で build するには、次に挙げる issue
 
 - `0155` (完了): `Sora.connect` の設定エラー通知経路の `#SendableClosureCaptures` 警告 (1 件)。
 - `0173` (完了 2026-09-28): 残りの `#SendableClosureCaptures` のうち closure と外部 module の型の capture 14 件 (2026-09-28 の実測。`add '@preconcurrency'` 4 件は `0173` の (B) 群の解消に伴って消えるため担当として挙げない)。
-- `0177` (完了 2026-09-29): SDK 内部インスタンスの capture 10 件 (C 群)。`Sora/Utilities.swift` の 1 件は `0115` の `Stopwatch` 削除待ちで、`0115` が完了するまで gate を有効化できない。
+- `0177` (完了 2026-09-29): SDK 内部インスタンスの capture 10 件 (C 群)。`Sora/Utilities.swift` の `Stopwatch` の 1 件は `0181` (完了 2026-09-29) が解消したため、`#SendableClosureCaptures` は 0 件になり gate を有効化できる。
 
 すべての refactor 完了を機械的な必須条件にはしないが、未完了項目を `@unchecked Sendable` や `@preconcurrency` の追加で隠して manifest 更新だけを通してはならない。ここでいう「隠す」に当たるかどうかは、警告が消えたかどうかではなく、追加する型が次の 3 条件をすべて満たすかどうかで判定する。満たす場合は例外として認め、どの経路のどの型をなぜ認めたかを、その型の doc コメントと、その型を追加した issue の「解決方法」に記録する。
 
-- 追加する型自身が可変状態を持たず、保持する値が `init` で確定した不変値であること。
+- 追加する型自身が可変状態を持たず、保持する値が `init` で確定した不変値であること。可変状態を持つ型を追加する場合は、この条件を「可変状態の読み書きのすべてが単一の排他に閉じていること」と読み替えて適用する。この読み替えで例外として認めた前例は `0106` の `LoggerStateStorage` (NSLock が `level` / `groups` / `onOutputHandler` への全アクセスを保護する) と `0177` の `PeerChannelTransportStorage` であり、`0181` の `StopwatchStorage` (NSLock が `seconds` への全アクセスを保護し、`handler` は `init` で確定する不変値) も同じ読み替えで認める。
 - その値が変更前から同じ系統の非同期境界 (`DispatchQueue` / WebRTC や AVFoundation の callback / `Timer`) へ渡されており、追加する型は配送先・順序・呼び出し回数を変えず、別系統の境界へ新たに渡すこともないこと。
 - 追加する型が保持するのは closure と、その closure が変更前から一緒に捕捉していた参照だけであり、SDK 内部の参照型 (`MediaChannel` / `PeerChannel` / `DataChannel` / `ConnectionTask` など) を新たに保持しないこと。
 
@@ -54,7 +54,7 @@ SDK target を warnings-as-errors で build するには、次に挙げる issue
 - iOS deployment target の `.iOS(.v14)` は維持する。
 - target 全体の default actor isolation を MainActor にしない。core API は nonisolated を基本とし、UI 型だけを明示的に MainActor へ隔離する。
 - CI の `SWIFT_VERSION=6` は manifest と異なる値が混入していないことを確認する冗長な検査として残してよいが、正本は manifest とする。
-- SDK target の warnings-as-errors を manifest から有効にし、xcodebuild / `swift build` / consumer からの依存 build のすべてで gate にする。`Package.swift` の Sora target の `swiftSettings` に `.treatAllWarnings(as: .error)` を追加し、続けて `.treatWarning("DeprecatedDeclaration", as: .warning)` を書く（宣言順に compiler flag が並ぶため、逆順にすると deprecation が error になる。`0107` の ConsumerLegacy と同じ方式）。この除外は、`0138` が対象外とする iOS SDK 由来の deprecation 警告と、`0072` が許容する iOS 18 の deprecation 警告を error にしないためである。concurrency 系の警告は error になり、この計測に含まれる concurrency 警告のうち `0155` が解消するのは 1 件である (`0157` は 2026-09-25 に完了済みのため、この計測には含まれない)。`add '@preconcurrency'` は `0173` の完了で 0 件になり、SDK 内部インスタンスの capture (C 群 10 件) は `0177` の完了 (2026-09-29) で 0 件になった。残る `#SendableClosureCaptures` は `0115` (`Sora/Utilities.swift` の `Stopwatch` 削除の 1 件) だけで、`0115` が完了するまで gate を有効化できない。
+- SDK target の warnings-as-errors を manifest から有効にし、xcodebuild / `swift build` / consumer からの依存 build のすべてで gate にする。`Package.swift` の Sora target の `swiftSettings` に `.treatAllWarnings(as: .error)` を追加し、続けて `.treatWarning("DeprecatedDeclaration", as: .warning)` を書く（宣言順に compiler flag が並ぶため、逆順にすると deprecation が error になる。`0107` の ConsumerLegacy と同じ方式）。この除外は、`0138` が対象外とする iOS SDK 由来の deprecation 警告と、`0072` が許容する iOS 18 の deprecation 警告を error にしないためである。concurrency 系の警告は error になり、この計測に含まれる concurrency 警告のうち `0155` が解消するのは 1 件である (`0157` は 2026-09-25 に完了済みのため、この計測には含まれない)。`add '@preconcurrency'` は `0173` の完了で 0 件になり、SDK 内部インスタンスの capture (C 群 10 件) は `0177` の完了 (2026-09-29) で 0 件になった。`Sora/Utilities.swift` の `Stopwatch` の 1 件も `0181` の完了 (2026-09-29) で解消し、`#SendableClosureCaptures` は 0 件になったため gate を有効化できる。
 - tools version の引き上げにより古い SwiftPM が package を読み込めなくなるため、最低 Xcode version と互換性への影響を README と `skills/sora-ios-sdk/SKILL.md` とリリース時の変更履歴で明示する。`SKILL.md` の「Swift 6 と並行性」と「現状の制約」は manifest の 5.3 を前提に書かれており、更新しないと実装後の状態と矛盾する。
 - `Package.swift` 内の既存 product、target、binary target、platform、dependency の意味を変更しない。
 
@@ -65,7 +65,7 @@ SDK target を warnings-as-errors で build するには、次に挙げる issue
 - `swift package dump-package` で tools version と Swift 6 language mode を確認する。
 - `0107` の consumer package を Xcode 26.6 の 1 leg で build する。
 - SDK target を strict concurrency / warnings-as-errors（`.treatAllWarnings(as: .error)`）で build し、concurrency 系の warning が 0 件であることを確認する。この build 条件は「設計方針」のとおり manifest から有効になり、CI を含む全 build 経路の恒久 gate になる。
-- あわせて `Sora/` を `-swift-version 6` で型検査し、`.treatAllWarnings(as: .error)` が error にする警告が `DeprecatedDeclaration`（`.treatWarning` の除外で warning に戻る）と concurrency 系だけであることを確認する (2026-09-28 の型検査では 47 warning = `#SendableClosureCaptures` 26 件 + `add '@preconcurrency'` 4 件 + `#DeprecatedDeclaration` 17 件。このうち `0155` が解消したのは 1 件 (`0157` は 2026-09-25 に完了済みで、この計測には含まれない) で、`add '@preconcurrency'` は `0173` の完了で 0 件になり、SDK 内部インスタンスの capture (C 群 10 件) は `0177` の完了 (2026-09-29) で 0 件になった。残る `#SendableClosureCaptures` は `0115` (`Sora/Utilities.swift` の `Stopwatch` 削除の 1 件) だけである)。`0118` は 2026-09-25 に `Sora/` を `-swift-version 6` で型検査すると 53 件の警告が出て、`SWIFT_TREAT_WARNINGS_AS_ERRORS=YES` を渡すと 22 error になると実測している（警告の内訳は未記載）。deprecation と concurrency 系以外の警告が残る場合は本 issue の完了条件を満たせないため、その解消を本 issue の前提として加えるか、本 issue の実装で解消してから進める。
+- あわせて `Sora/` を `-swift-version 6` で型検査し、`.treatAllWarnings(as: .error)` が error にする警告が `DeprecatedDeclaration`（`.treatWarning` の除外で warning に戻る）と concurrency 系だけであることを確認する (2026-09-28 の型検査では 47 warning = `#SendableClosureCaptures` 26 件 + `add '@preconcurrency'` 4 件 + `#DeprecatedDeclaration` 17 件。このうち `0155` が解消したのは 1 件 (`0157` は 2026-09-25 に完了済みで、この計測には含まれない) で、`add '@preconcurrency'` は `0173` の完了で 0 件になり、SDK 内部インスタンスの capture (C 群 10 件) は `0177` の完了 (2026-09-29) で 0 件になり、`Sora/Utilities.swift` の `Stopwatch` の 1 件も `0181` の完了 (2026-09-29) で解消したため `#SendableClosureCaptures` は 0 件である)。`0118` は 2026-09-25 に `Sora/` を `-swift-version 6` で型検査すると 53 件の警告が出て、`SWIFT_TREAT_WARNINGS_AS_ERRORS=YES` を渡すと 22 error になると実測している（警告の内訳は未記載）。deprecation と concurrency 系以外の警告が残る場合は本 issue の完了条件を満たせないため、その解消を本 issue の前提として加えるか、本 issue の実装で解消してから進める。
 - test target は現行 CI 相当で build が成功することを確認する。test target の strict concurrency / warnings-as-errors gate の本対応は `0118` の管轄とする。
 - binary `WebRTC.xcframework` の import と iOS 14 deployment target が維持されることを確認する。
 - package product `Sora` と `WebRTC` の名前および依存関係が変わっていないことを確認する。
@@ -86,7 +86,7 @@ SDK target を warnings-as-errors で build するには、次に挙げる issue
 - iOS 14 deployment target が維持されていること。
 - package product、target、binary dependency の構成が意図せず変わっていないこと。
 - target 全体を MainActor default にして concurrency 問題を隠していないこと。
-- Sora target が strict concurrency / warnings-as-errors（concurrency 系 warning 0 件）で build でき、`Package.swift` の Sora target に `.treatAllWarnings(as: .error)` と `.treatWarning("DeprecatedDeclaration", as: .warning)` がこの順であること。Sora target の警告のうち `.treatAllWarnings(as: .error)` が error にするのが `DeprecatedDeclaration` と concurrency 系だけで、それ以外の警告が残っていないこと (concurrency 系の解消は `0155` の 1 件 (`0157` は完了済み) で、`add '@preconcurrency'` は `0173` の完了で 0 件、SDK 内部インスタンスの capture (C 群 10 件) は `0177` の完了 (2026-09-29) で 0 件、残る `#SendableClosureCaptures` は `0115` (`Sora/Utilities.swift` の `Stopwatch` 削除の 1 件) が担う)。
+- Sora target が strict concurrency / warnings-as-errors（concurrency 系 warning 0 件）で build でき、`Package.swift` の Sora target に `.treatAllWarnings(as: .error)` と `.treatWarning("DeprecatedDeclaration", as: .warning)` がこの順であること。Sora target の警告のうち `.treatAllWarnings(as: .error)` が error にするのが `DeprecatedDeclaration` と concurrency 系だけで、それ以外の警告が残っていないこと (concurrency 系の解消は `0155` の 1 件 (`0157` は完了済み) で、`add '@preconcurrency'` は `0173` の完了で 0 件、SDK 内部インスタンスの capture (C 群 10 件) は `0177` の完了 (2026-09-29) で 0 件、`Sora/Utilities.swift` の `Stopwatch` の 1 件も `0181` の完了 (2026-09-29) で 0 件になり、`#SendableClosureCaptures` は 0 件である)。
 - `0107` の consumer package が strict concurrency / warnings-as-errors で成功すること。
 - Xcode 26.6 の 1 leg の CI が成功すること。
 - 最低 Xcode version と SwiftPM compatibility への影響が `README.md` と `skills/sora-ios-sdk/SKILL.md` に記載されていること。

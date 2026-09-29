@@ -75,6 +75,8 @@
 - [UPDATE] `Sora` target の SDK 内部インスタンスを捕捉する `#SendableClosureCaptures` 警告 10 件を解消する
   - 通常の接続経路で利用者の挙動は変わらないが、 `MediaChannel` の解放中に `getStats` の完了 closure が走る場合に限り、解放済みチャンネルの統計が成功として返る可能性がある
   - @t-miya
+- [UPDATE] `Utilities.Stopwatch` の `Timer` closure が `self` を捕捉する `#SendableClosureCaptures` 警告を解消する
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya
