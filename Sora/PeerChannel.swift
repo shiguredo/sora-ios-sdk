@@ -111,217 +111,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// タイマーは `.connecting` への遷移でキャンセルされる。
   private static let disconnectedGracePeriod: TimeInterval = 5.0
 
-  final class Lock {
-    weak var context: PeerChannel?
-
-    // 進行中の非同期処理数。lock() でインクリメント、unlock() でデクリメントする
-    private var count: Int = 0
-
-    // 切断処理が開始されたことを示すフラグ。true の場合 lock() は false を返す。
-    // 不変条件: isDisconnecting == true ならば count == 0
-    private var isDisconnecting: Bool = false
-
-    // connect() が初期ロックを取得してから signalingChannel.connect() の開始を
-    // 確定するまでの区間を示す。区間中の切断要求は、開始処理側で受け取る。
-    private var isStartingConnection: Bool = false
-
-    // count > 0 の間に切断要求があった場合に遅延実行用パラメータを保持する
-    private var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
-
-    // count, isDisconnecting, shouldDisconnect への全アクセスを保護する排他ロック
-    private let nsLock = NSLock()
-
-    /// 猶予タイマー由来の切断要求が、接続の回復により無効化されるかを返す。
-    ///
-    /// タイマー発火時点の確認から切断実行までの間に接続が回復している場合、
-    /// 切断すると一時的な切断の回復を阻害するためキャンセルする。
-    /// `.disconnected` のままなら切断を継続する。 `.failed` は終端状態であり
-    /// 回復し得ないためキャンセルしない。他の reason はユーザーの意図または
-    /// 確定した切断なので、この再確認の対象外とする。
-    private func shouldCancelDisconnectTimerBasedDisconnect(reason: DisconnectReason) -> Bool {
-      reason == .peerConnectionStateDisconnected
-        && context?.state != .disconnected
-        && context?.state != .failed
-    }
-
-    func waitDisconnect(error: Error?, reason: DisconnectReason) {
-      var shouldCallBasicDisconnect = false
-      nsLock.lock()
-      if isDisconnecting {
-        // 切断処理が既に開始されている場合、追加の切断要求は無視する
-      } else if isStartingConnection {
-        // signaling の開始可否を確定する前の切断要求は保存する。
-        // startConnection が開始前に検出した場合は signaling を開始せずに切断する。
-        shouldDisconnect = (true, error, reason)
-      } else if count == 0 {
-        // 猶予タイマー由来の切断は、タイマー発火時点の確認からここまでの間に
-        // 接続が回復している場合は切断しない
-        if !shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-          isDisconnecting = true
-          shouldCallBasicDisconnect = true
-        }
-      } else if count == 1, context?.onConnect != nil {
-        // 接続試行中 (connect() の初期ロックのみが残っている状態) の切断要求。
-        // 初期ロックは finishConnecting() か sendConnectMessage(error:) でのみ解放されるため、
-        // answer 送信後の接続失敗などではそのまま解放されず basicDisconnect が呼ばれない。
-        // その結果 RTCPeerConnection がクローズされずに残り続けるため、
-        // ここで初期ロックを解放して basicDisconnect を直接実行する。
-        count = 0
-        isDisconnecting = true
-        shouldCallBasicDisconnect = true
-      } else {
-        // 進行中の非同期処理が完了するまで切断要求を遅延保存する。
-        // 保存済みの切断要求は最後の切断要求で上書きされる。猶予タイマー由来の
-        // 切断要求がその後の .failed 遷移の切断要求で上書きされると NO-ERROR 送信が
-        // 失われるが (sendDisconnectMessageIfNeeded の state == .failed ガード)、
-        // .failed は ICE の完全失敗であり送信が届く可能性が低いため妥当とする
-        shouldDisconnect = (true, error, reason)
-      }
-      nsLock.unlock()
-
-      if shouldCallBasicDisconnect {
-        context?.basicDisconnect(error: error, reason: reason)
-      }
-    }
-
-    /// 接続開始用の初期ロックを取得し、signaling 開始前の区間へ入ります。
-    @discardableResult
-    func beginConnectionStart() -> Bool {
-      nsLock.lock()
-      guard !isDisconnecting, !isStartingConnection else {
-        nsLock.unlock()
-        return false
-      }
-      count += 1
-      isStartingConnection = true
-      nsLock.unlock()
-      return true
-    }
-
-    /// signaling 開始と、その直前に到着した切断要求を直列化します。
-    ///
-    /// beginConnectionStart() の後に呼び出します。開始前に切断要求があれば
-    /// operation を実行せず、開始中に切断要求があれば operation の復帰後に切断します。
-    func startConnection(_ operation: () -> Void) {
-      var shouldStart = false
-      var disconnectParams: (Error?, DisconnectReason)?
-
-      nsLock.lock()
-      if !isDisconnecting {
-        switch shouldDisconnect {
-        case (true, let error, let reason):
-          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-            shouldDisconnect = (false, nil, .unknown)
-            shouldStart = true
-          } else {
-            count = 0
-            isStartingConnection = false
-            isDisconnecting = true
-            shouldDisconnect = (false, nil, .unknown)
-            disconnectParams = (error, reason)
-          }
-        default:
-          shouldStart = true
-        }
-      }
-      nsLock.unlock()
-
-      if let (error, reason) = disconnectParams {
-        context?.basicDisconnect(error: error, reason: reason)
-        return
-      }
-      guard shouldStart else {
-        return
-      }
-
-      operation()
-
-      // operation の実行中にも切断要求が到着し得るため、開始区間を閉じる処理と
-      // 保存済み要求の取り出しを同じ排他領域で行う。
-      nsLock.lock()
-      isStartingConnection = false
-      if !isDisconnecting {
-        switch shouldDisconnect {
-        case (true, let error, let reason):
-          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-            shouldDisconnect = (false, nil, .unknown)
-          } else {
-            count = 0
-            isDisconnecting = true
-            shouldDisconnect = (false, nil, .unknown)
-            disconnectParams = (error, reason)
-          }
-        default:
-          break
-        }
-      }
-      nsLock.unlock()
-
-      if let (error, reason) = disconnectParams {
-        context?.basicDisconnect(error: error, reason: reason)
-      }
-    }
-
-    @discardableResult
-    func lock() -> Bool {
-      nsLock.lock()
-      if isDisconnecting {
-        nsLock.unlock()
-        return false
-      }
-      count += 1
-      nsLock.unlock()
-      return true
-    }
-
-    func unlock() {
-      var disconnectParams: (Error?, DisconnectReason)?
-      nsLock.lock()
-      if isDisconnecting {
-        // 切断処理の開始後に非同期処理が完了した場合の unlock は無視する。
-        // waitDisconnect が接続試行中の切断要求を basicDisconnect へ直接到達させるため、
-        // 後続の非同期処理が unlock を呼んでも count は 0 のままである。
-        nsLock.unlock()
-        return
-      }
-      if count <= 0 {
-        fatalError("count is already 0")
-      }
-      count -= 1
-      // count == 0 になった場合に加えて、接続試行中 (count == 1) に切断要求が
-      // あった場合も、進行中の非同期処理が完了したここで basicDisconnect へ到達させる。
-      // これがないと、 createAndSendAnswer 実行中の切断要求が保存されたまま
-      // 初期ロックが解放されず、 basicDisconnect が呼ばれない。
-      if count == 0 || (count == 1 && shouldDisconnect.0) {
-        switch shouldDisconnect {
-        case (true, let error, let reason):
-          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-            // 接続が回復しているため切断をキャンセルする。
-            // isDisconnecting は設定しない (設定すると以後の切断・再ネゴシエーションが
-            // すべて不能になり、 Lock が恒久的に破壊されるため。キャンセル後は再び
-            // .disconnected になればタイマーが再開始される)
-            shouldDisconnect = (false, nil, .unknown)
-          } else {
-            count = 0
-            isDisconnecting = true
-            shouldDisconnect = (false, nil, .unknown)
-            disconnectParams = (error, reason)
-          }
-        default:
-          break
-        }
-      }
-      nsLock.unlock()
-
-      if let (error, reason) = disconnectParams {
-        // waitDisconnect で受理した切断要求は、nativeChannel が先に .closed へ
-        // 遷移していても後始末が必要である。二重実行は isDisconnecting が防ぐ。
-        context?.basicDisconnect(error: error, reason: reason)
-      }
-    }
-
-  }
-
   // MARK: - Properties
 
   var internalHandlers = PeerChannelInternalHandlers()
@@ -352,10 +141,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   // MARK: - 接続状態フラグ
 
-  // PeerChannel の接続状態フラグ 5 つは、単一所有者である ConnectionStateOwner が管理する。
-  // これにより nonisolated(unsafe) によるベストエフォートの同期を廃止する。
+  // PeerChannel の接続状態フラグ 5 つと接続ライフサイクルの排他が扱う接続試行状態
+  // (進行中の非同期処理数 / 切断開始フラグ / 接続開始区間フラグ / 遅延する切断要求) は、
+  // 単一所有者である ConnectionStateOwner が同じ直列 queue で管理する。
+  // これにより nonisolated(unsafe) によるベストエフォートの同期と、
+  // 接続状態とは別に存在していた lock を廃止する。
   // (MediaChannel の接続ライフサイクルは connectionLifecycleLock (NSLock ベースの直列化)
-  // が担うため、ここで扱うのは PeerChannel 自身のフラグのみである)
+  // が担うため、ここで扱うのは PeerChannel 自身の状態のみである)
 
   /// 接続状態フラグの単一所有者
   private let connectionStateOwner: ConnectionStateOwner
@@ -452,15 +244,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   /// 接続完了 callback の読み書きを保護する lock
   ///
-  /// `onConnect` の保護に `Lock.nsLock` を再利用しない。`state` は
-  /// `Lock.shouldCancelDisconnectTimerBasedDisconnect` から `Lock.nsLock` を保持したまま
-  /// 呼ばれ、そこから `onConnect` を読む。この経路は `Lock.waitDisconnect` /
-  /// `Lock.startConnection` / `Lock.unlock` の 3 か所から到達する。`Lock.waitDisconnect` 自身も
-  /// `Lock.nsLock` を保持したまま `onConnect` を読む。`Lock.nsLock` を再利用すると
-  /// 非再帰ロックでデッドロックする。
+  /// `onConnect` の保護に接続状態 owner の排他を再利用しない。`state` は
+  /// 接続状態 owner の排他を保持したまま `ConnectionStateOwner` の判定 closure から
+  /// 呼ばれ、そこから `onConnect` を読む。この経路は `requestDisconnect` /
+  /// `prepareSignalingStart` / `finishSignalingStart` / `endAsyncOperation` から到達する。
+  /// 接続状態 owner の排他は同じ直列 queue へ再入できないため、これを再利用すると
+  /// deadlock する。
   ///
-  /// lock 順序は `Lock.nsLock` → `connectHandlerLock` の一方向とする。
-  /// `connectHandlerLock` を保持したまま `Lock.nsLock` を取る経路を作らないこと。
+  /// lock 順序は「接続状態 owner の排他 → `connectHandlerLock`」の一方向とする。
+  /// `connectHandlerLock` を保持したまま接続状態 owner の排他を取る経路を作らないこと。
   private let connectHandlerLock = NSLock()
 
   /// 接続完了 callback の実体
@@ -471,7 +263,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// 接続完了 callback
   ///
   /// 接続の開始 (`connect`)、終端 (`invokeConnectHandler` の取り出しとクリア)、
-  /// 接続試行中の判定 (`state` / `Lock.waitDisconnect`) のすべてが
+  /// 接続試行中の判定 (`state` / `ConnectionStateOwner.requestDisconnect`) のすべてが
   /// `connectHandlerLock` を通る。利用者 callback 自身の呼び出しは排他区間の外で行う。
   var onConnect: ((Error?) -> Void)? {
     get {
@@ -491,8 +283,6 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   var isAudioInputInitialized: Bool = false
-
-  let lock: Lock
 
   private var offerEncodings: [SignalingOffer.Encoding]?
 
@@ -526,9 +316,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     connectionStateOwner = ConnectionStateOwner(
       snapshotStorage: connectionStateSnapshotStorage)
-    lock = Lock()
     super.init()
-    lock.context = self
 
     signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
       self?.disconnect(error: error, reason: reason)
@@ -553,21 +341,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     Logger.debug(type: .peerChannel, message: "try connecting")
-    // このロックは finishConnecting() で解除される
-    guard lock.beginConnectionStart() else {
+    // ここで取得する接続開始の初期ロックは、接続が終端するまで
+    // endAsyncOperation() (finishConnecting() または sendConnectMessage(error:)) で解放される。
+    // 解放されない限り切断要求は遅延されたままになる。
+    guard beginConnectionStart() else {
       handler(SoraError.connectionCancelled)
       return
     }
     // 開始ロックの取得後に設定することで、切断処理との間で onConnect の有無を確定させる。
     // この区間の切断要求は startConnection まで保存される。
-    // (この時点で Lock.nsLock は解放済みであり、代入自体は connectHandlerLock で保護される)
+    // (この時点で接続状態 owner の排他は解放済みであり、代入自体は connectHandlerLock で保護される)
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
     // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
     WrapperVideoEncoderFactory.shared.simulcastEnabled = snapshot.simulcastEnabled
 
-    lock.startConnection {
+    startConnection {
       signalingChannel.connect { [weak self] error in
         guard let weakSelf = self else {
           return
@@ -619,7 +409,94 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   func disconnect(error: Error?, reason: DisconnectReason) {
     Logger.debug(type: .peerChannel, message: "wait to disconnect")
-    lock.waitDisconnect(error: error, reason: reason)
+    if let pending = connectionStateOwner.requestDisconnect(
+      error: error,
+      reason: reason,
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect,
+      isConnectHandlerHeld: { self.onConnect != nil }
+    ) {
+      basicDisconnect(error: pending.error, reason: pending.reason)
+    }
+  }
+
+  // MARK: - 接続ライフサイクルの排他
+
+  /// 接続開始の初期ロックを取得します。
+  ///
+  /// `connect()` が最初に取得し、`finishConnecting()` または
+  /// `sendConnectMessage(error:)` まで保持します。取得できた場合のみ
+  /// `startConnection(_:)` へ進めます。
+  ///
+  /// テストから呼び出すため internal としている。
+  @discardableResult
+  func beginConnectionStart() -> Bool {
+    connectionStateOwner.beginConnectionStart()
+  }
+
+  /// signaling の開始を、開始の前後に到着した切断要求と直列化します。
+  ///
+  /// 開始前に保存された切断要求がある場合は signaling を開始せずに切断します。
+  /// 開始中に到着した切断要求は `operation` の復帰後に実行します。
+  ///
+  /// テストから呼び出すため internal としている。
+  func startConnection(_ operation: () -> Void) {
+    switch connectionStateOwner.prepareSignalingStart(
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect)
+    {
+    case .ignored:
+      return
+    case .disconnect(let pending):
+      basicDisconnect(error: pending.error, reason: pending.reason)
+      return
+    case .start:
+      break
+    }
+
+    operation()
+
+    // operation の実行中にも切断要求が到着し得るため、開始区間を閉じる処理と
+    // 保存済み要求の取り出しを同じ排他領域で行う。
+    if let pending = connectionStateOwner.finishSignalingStart(
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect)
+    {
+      basicDisconnect(error: pending.error, reason: pending.reason)
+    }
+  }
+
+  /// 進行中の非同期処理の開始を登録します。
+  ///
+  /// 切断処理が開始済みの場合は false を返し、呼び出し側は処理を開始しません。
+  ///
+  /// テストから呼び出すため internal としている。
+  @discardableResult
+  func beginAsyncOperation() -> Bool {
+    connectionStateOwner.beginAsyncOperation()
+  }
+
+  /// 進行中の非同期処理の終了を登録し、保存された切断要求があれば実行します。
+  ///
+  /// テストから呼び出すため internal としている。
+  func endAsyncOperation() {
+    if let pending = connectionStateOwner.endAsyncOperation(
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect)
+    {
+      // 切断要求は、 nativeChannel が先に .closed へ遷移していても後始末が必要である。
+      // 二重実行は接続状態 owner の isDisconnecting が防ぐ。
+      basicDisconnect(error: pending.error, reason: pending.reason)
+    }
+  }
+
+  /// 猶予タイマー由来の切断要求が、接続の回復により無効化されるかを返します。
+  ///
+  /// タイマー発火時点の確認から切断実行までの間に接続が回復している場合、
+  /// 切断すると一時的な切断の回復を阻害するためキャンセルします。
+  /// `.disconnected` のままなら切断を継続します。 `.failed` は終端状態であり
+  /// 回復し得ないためキャンセルしません。他の reason はユーザーの意図または
+  /// 確定した切断なので、この再確認の対象外とします。
+  private func shouldCancelDisconnectTimerBasedDisconnect(reason: DisconnectReason) -> Bool {
+    reason == .peerConnectionStateDisconnected
+      && state != .disconnected
+      && state != .failed
   }
 
   // MARK: - Private methods
@@ -633,7 +510,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// take-and-clear である。onConnect は呼び出し前に必ず nil へクリアされる)
   ///
   /// 利用者 callback は排他区間の外で呼ぶ。callback 内から同期的に disconnect() されると
-  /// `Lock.waitDisconnect` が `state` 経由で `connectHandlerLock` を取るため、
+  /// `ConnectionStateOwner.requestDisconnect` が `state` 経由で `connectHandlerLock` を取るため、
   /// 保持したまま呼ぶとデッドロックする。
   ///
   /// テストから呼び出すため internal としている。
@@ -660,7 +537,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func sendConnectMessage(error: Error?) {
     if let error {
-      lock.unlock()
+      endAsyncOperation()
       Logger.error(
         type: .peerChannel,
         message: "failed connecting to signaling channel (\(error.localizedDescription))")
@@ -1190,7 +1067,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let handlerBox = CreateAnswerHandlerBox(handler)
 
     guard let nativeChannel else {
-      // handler を呼ばずに return すると、呼び出し元が lock を解放できない (ロック残留)。
+      // handler を呼ばずに return すると、呼び出し元が接続ライフサイクルの排他を
+      // 解放できない (解放漏れ)。
       // 明示的な接続失敗として handler を必ず 1 回呼ぶ。
       Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
       handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
@@ -1208,8 +1086,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let offerDescription = offer.sdpDescription
     nativeChannel.setRemoteDescription(offer) { [weak self] error in
       guard let self else {
-        // `self` が解放済みでも handler を 1 回呼んで return する。handler の完了で lock を
-        // 解放する呼び出し元では、呼ばれないと取得済みの lock が残留し得る。
+        // `self` が解放済みでも handler を 1 回呼んで return する。handler の完了で
+        // 接続ライフサイクルの排他を解放する呼び出し元では、呼ばれないと解放漏れになる。
         // 現状この節は到達しない (完了 block は handlerBox → handler → `self` の順に強参照し、
         // `nativeChannel` も `PeerChannel` のプロパティであるため、`PeerChannel` が解放されると
         // `RTCPeerConnection` への強参照も失われて callback が届かない) が、
@@ -1239,7 +1117,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       guard let nativeChannel = self.nativeChannel else {
-        // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
+        // handler を呼ばずに return すると呼び出し元が接続ライフサイクルの排他を
+        // 解放できないため、エラーを渡す
         Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
         handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
         return
@@ -1277,7 +1156,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
 
         guard let nativeChannel = self.nativeChannel else {
-          // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
+          // handler を呼ばずに return すると呼び出し元が接続ライフサイクルの排他を
+          // 解放できないため、エラーを渡す
           Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
           handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
           return
@@ -1387,7 +1267,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     do {
       caCertificates = try snapshot.parsedCACertificates()
     } catch {
-      lock.unlock()
+      endAsyncOperation()
       disconnect(
         error: error,
         reason: .signalingFailure)
@@ -1406,7 +1286,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     guard let nativeChannel else {
       // connect() で取得した初期ロックをここで解放しないと、
       // disconnect が defer されたままになってしまう。
-      lock.unlock()
+      endAsyncOperation()
       disconnect(
         error: SoraError.peerChannelError(reason: "createNativePeerChannel failed"),
         reason: .signalingFailure)
@@ -1433,19 +1313,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 旧 offer の answer が新接続に送信されるのを防ぐ)
       guard generation == self.dataChannelGeneration else {
         Logger.debug(type: .peerChannel, message: "generation changed, skip create answer")
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create answer (\(error.localizedDescription))")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let sdp else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1454,14 +1334,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
       let answer = SignalingAnswer(sdp: sdp)
       self.signalingChannel.send(message: Signaling.answer(answer))
-      self.lock.unlock()
+      self.endAsyncOperation()
       Logger.debug(type: .peerChannel, message: "did send answer")
     }
   }
 
   private func createAndSendUpdateAnswer(forOffer offer: String) {
     Logger.debug(type: .peerChannel, message: "create and send update-answer")
-    guard lock.lock() else {
+    guard beginAsyncOperation() else {
       Logger.debug(type: .peerChannel, message: "already disconnecting, skip create update-answer")
       return
     }
@@ -1478,19 +1358,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     ) { answer, error in
       // リダイレクト等で接続が切り替わった場合は、旧接続の update-answer を破棄する。
       guard generation == self.dataChannelGeneration else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create update-answer (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let answer else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created update-answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1507,7 +1387,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(type: .peerChannel, message: "call onUpdate")
       self.internalHandlers.onUpdate?(answer)
 
-      self.lock.unlock()
+      self.endAsyncOperation()
     }
   }
 
@@ -1525,11 +1405,11 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       constraints: currentWebRTCConfiguration().constraints,
       generation: generation
     ) { answer, error in
-      // 2025.1.1 までは lock() 呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
+      // 2025.1.1 までは beginAsyncOperation() の呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
       // この場合、 SDP 再ハンドシェイク時に SDP を local description に設定する際に EXC_BAD_ACCESS (不正なメモリアクセス) が発生し、
-      // アプリがクラッシュしてしまうことがあったが、lock() の呼び出しをクロージャー内にすることで、不正なメモリアクセスを防ぐことができるように
-      // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で lock() の位置を移動)
-      guard self.lock.lock() else {
+      // アプリがクラッシュしてしまうことがあったが、beginAsyncOperation() の呼び出しをクロージャー内にすることで、不正なメモリアクセスを防ぐことができるように
+      // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で呼び出し位置を移動)
+      guard self.beginAsyncOperation() else {
         Logger.debug(type: .peerChannel, message: "already disconnecting, skip re-answer")
         return
       }
@@ -1538,19 +1418,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 旧 offer の answer が新接続に適用されるのを防ぐ)
       guard generation == self.dataChannelGeneration else {
         Logger.debug(type: .peerChannel, message: "generation changed, skip re-answer")
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create re-answer (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let answer else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created re-answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1567,7 +1447,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(type: .peerChannel, message: "call onUpdate")
       self.internalHandlers.onUpdate?(answer)
 
-      self.lock.unlock()
+      self.endAsyncOperation()
     }
   }
 
@@ -1592,7 +1472,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       generation: generation
     ) { answer, error in
       // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
-      guard self.lock.lock() else {
+      guard self.beginAsyncOperation() else {
         Logger.debug(
           type: .peerChannel, message: "already disconnecting, skip re-answer over DataChannel")
         return
@@ -1603,19 +1483,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard generation == self.dataChannelGeneration else {
         Logger.debug(
           type: .peerChannel, message: "generation changed, skip re-answer over DataChannel")
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create re-answer: error => (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let answer else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created re-answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1631,7 +1511,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.error(
           type: .peerChannel,
           message: "failed to encode re-answer: error => (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(
             reason: "failed to encode re-answer message to json"),
@@ -1645,7 +1525,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           Logger.error(
             type: .peerChannel,
             message: "failed to send re-answer message over DataChannel")
-          self.lock.unlock()
+          self.endAsyncOperation()
           self.disconnect(
             error: SoraError.peerChannelError(
               reason: "failed to send re-answer message over DataChannel"),
@@ -1661,7 +1541,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       Logger.debug(type: .peerChannel, message: "call onUpdate")
       self.internalHandlers.onUpdate?(answer)
 
-      self.lock.unlock()
+      self.endAsyncOperation()
     }
   }
 
@@ -1673,7 +1553,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .offer(let offer):
       // 切断後にキューから遅れて配送された offer は、接続識別子の更新や
       // RTCPeerConnection の生成を行う前に破棄する。
-      guard lock.lock() else {
+      guard beginAsyncOperation() else {
         Logger.debug(type: .peerChannel, message: "already disconnecting, skip offer")
         return
       }
@@ -1746,7 +1626,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       //   生成時点の世代と現在の世代の照合で無視
       // - PC delegate (didOpen / didChange): isCurrentPeerConnection
       //   (リダイレクト窓は isRedirecting、新 PC 生成後は PC アイデンティティ)
-      // - 切断 (disconnect / Lock.unlock): isRedirecting 中は切断処理を続行
+      // - 切断 (disconnect / endAsyncOperation): isRedirecting 中は切断処理を続行
       // - WS 接続 (SignalingChannel): 切断後は state == .disconnected で受け入れ拒否
       //
       // 旧 PC を明示的にクローズする (遅延 OPEN 通知による OPEN 追跡状態の汚染防止と
@@ -1872,7 +1752,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // (callback 内から同期的に disconnect() されても二重実行されない)
     invokeConnectHandler(nil)
-    lock.unlock()
+    endAsyncOperation()
   }
 
   private func basicDisconnect(error: Error?, reason: DisconnectReason) {
@@ -1941,7 +1821,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       nativeChannel?.close()
     }
     // 実際の PeerConnection を閉じた後、利用者の切断 callback より前に要求を解放する。
-    // Lock が切断を遅延した場合も、AudioUnit の利用中に解放されない。
+    // 接続ライフサイクルの排他が切断を遅延した場合も、AudioUnit の利用中に解放されない。
     nativePeerChannelFactory.releaseAudioSessionRequirement()
 
     var error = error
@@ -2214,7 +2094,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       scheduleDisconnectTimerIfNeeded()
     case .closed:
       // 公開 native が SDK より先に close された場合も、stream、signaling、
-      // AudioSession lease を残さない。SDK 自身の close による再入は Lock が防ぐ。
+      // AudioSession lease を残さない。SDK 自身の close による再入は接続ライフサイクルの排他が防ぐ。
       disconnect(error: nil, reason: .noError)
     default:
       break
@@ -2225,7 +2105,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// 猶予時間の経過後に切断するためのタイマーを開始する。
   ///
   /// 発火時に `RTCPeerConnectionState` を再確認し、 `.disconnected` のままの場合のみ
-  /// 切断する。また、 `Lock.unlock` の遅延実行経路では接続が回復している場合は
+  /// 切断する。また、 `ConnectionStateOwner.endAsyncOperation` の遅延実行経路では接続が回復している場合は
   /// 切断をキャンセルする (いずれも発火・実行と `.connected` への回復の競合対策)。
   private func scheduleDisconnectTimerIfNeeded() {
     guard connectedAtLeastOnce else {

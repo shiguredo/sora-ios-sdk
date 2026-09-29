@@ -292,7 +292,7 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
     var disconnectCallbackCount = 0
     var receivedError: Error?
 
-    XCTAssertTrue(peerChannel.lock.beginConnectionStart())
+    XCTAssertTrue(peerChannel.beginConnectionStart())
     peerChannel.onConnect = { error in
       connectCallbackCount += 1
       receivedError = error
@@ -303,9 +303,9 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
       callbacksExpectation.fulfill()
     }
 
-    // connect() が初期ロックを取得した直後の順序を、実際の Lock と PeerChannel で再現する。
+    // connect() が接続開始の初期ロックを取得した直後の順序を、実際の PeerChannel で再現する。
     peerChannel.disconnect(error: disconnectError, reason: .user)
-    peerChannel.lock.startConnection {
+    peerChannel.startConnection {
       didStartSignaling = true
     }
 
@@ -328,7 +328,7 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
     var connectCallbackCount = 0
     var disconnectCallbackCount = 0
 
-    XCTAssertTrue(peerChannel.lock.beginConnectionStart())
+    XCTAssertTrue(peerChannel.beginConnectionStart())
     peerChannel.onConnect = { error in
       XCTAssertTrue(didFinishOperation, "開始処理の復帰後に接続 callback を終端すること")
       XCTAssertEqual(error?.localizedDescription, disconnectError.localizedDescription)
@@ -341,7 +341,7 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
       callbacksExpectation.fulfill()
     }
 
-    peerChannel.lock.startConnection {
+    peerChannel.startConnection {
       didRunOperation = true
       peerChannel.disconnect(error: disconnectError, reason: .user)
       XCTAssertEqual(connectCallbackCount, 0)
