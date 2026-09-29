@@ -43542,8 +43542,10 @@
             "usr": "s:4Sora9UtilitiesO9StopwatchC",
             "mangledName": "$s4Sora9UtilitiesO9StopwatchC",
             "moduleName": "Sora",
+            "deprecated": true,
             "declAttributes": [
-              "Final"
+              "Final",
+              "Available"
             ],
             "conformances": [
               {

@@ -24,6 +24,12 @@
   - 利用者コードの `description` はコンパイルエラーになり、文字列補間と `String(describing:)` は `RTCSignalingState(rawValue: 0)` のような raw 表現に変わる (`debugPrint` や Optional / 配列を経由した場合は `__C.` 付きの表現)
   - `RTCRtpParameters.description` から `Optional(...)` が消え、未知の値は `RTCDataChannelState` も `RTCDegradationPreference` も `"unknown(<rawValue>)"` になる (`messagingError` の reason と SDK のログにも現れる)
   - @t-miya
+- [CHANGE] 公開 API `Utilities.Stopwatch` を非推奨にする
+  - `Stopwatch` は 1 秒ごとに経過時間を `"時:分:秒"` の文字列で handler へ通知するカウンタで、Sora SDK 固有の機能ではなく SDK 内でも利用していない。2027 年中に廃止予定であり、削除までに移行する
+  - 1 秒ごとの定期実行や表示の更新には、Foundation の `Timer` を MainActor 上のタイマーとして管理する方法か、Swift の `ContinuousClock` と `Task.sleep(for:)` を組み合わせる方法へ移行する
+  - 経過時間の計測だけが目的の場合は、`ContinuousClock` / `SuspendingClock` の `now` の差分 (`Duration`) へ移行する
+  - 用途によって移行先が異なるため、SDK 固有の代替 timer は提供しない。単一の万能な代替があるわけではないため、用途に合う仕組みを選ぶ
+  - @t-miya
 - [ADD] JSON の値を表す公開型 `JSONValue` を追加する
   - @t-miya
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する

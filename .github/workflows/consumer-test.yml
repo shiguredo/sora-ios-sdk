@@ -91,6 +91,7 @@ jobs:
       run: |
         # symbol 名には括弧を含む selector があるため、各要素をクォートする
         symbols=(
+          'Stopwatch'
           'TLSSecurityPolicy'
           'init(urls:userName:credential:tlsSecurityPolicy:)'
           'insecure'

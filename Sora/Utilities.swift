@@ -18,6 +18,16 @@ public enum Utilities {
     return chars.joined()
   }
 
+  @available(
+    *, deprecated,
+    message: """
+      2027 年中に廃止予定です。
+      1 秒ごとに経過時間を handler へ通知するカウンタであり、Sora SDK 固有の機能ではないため、用途に合う仕組みを選んでください。
+      1 秒ごとの定期実行や表示の更新には、Foundation の Timer を MainActor 上のタイマーとして管理するか、Swift の ContinuousClock と Task.sleep(for:) を組み合わせてください。
+      経過時間の計測だけが目的であれば、ContinuousClock や SuspendingClock の now の差分 (Duration) を利用してください。
+      Sora SDK 固有の代替 timer は提供しません。
+      """
+  )
   public final class Stopwatch {
     private var timer: Timer?
     private let storage: StopwatchStorage
