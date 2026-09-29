@@ -210,22 +210,65 @@ final class SendonlyE2ETests: E2ETestBase {
   }
 
   /// sendonly で DummyAudioDevice を使ってダミー音声を送信できることを確認する
+  ///
+  /// 共有 AudioSession と音声ハードウェアに触れない playoutHandler 経路で実行する。
+  /// `DummyAudioDevice.initialize(with:)` が AVAudioSession を有効化する経路は、ホストの
+  /// 音声サブシステムがハングした環境では setActive が戻らず connectionTimeout になる。
+  /// CI の成否をホストの音声サブシステムの状態に依存させないため、接続の検証はこの経路で行う。
+  /// AudioSession を有効化する経路の確認は実機専用の
+  /// `testSendonlyDummyAudioActivatesSharedAudioSession` が担う
   func testSendonlyDummyAudio() throws {
+    try runSendonlyDummyAudioTest(activatesSharedAudioSession: false)
+  }
+
+  /// sendonly で共有 AudioSession を有効化する経路でもダミー音声を送信できることを確認する
+  ///
+  /// `DummyAudioDevice.initialize(with:)` は playoutHandler を渡さない場合に AVAudioSession を
+  /// 有効化する。Simulator の AudioSession は実機の代替にならず、CI ではホストの音声
+  /// サブシステムの状態に依存するため、この経路は実機でだけ確認する
+  func testSendonlyDummyAudioActivatesSharedAudioSession() throws {
+    #if targetEnvironment(simulator)
+      throw XCTSkip("Simulator では共有 AudioSession の有効化経路を確認しない (実機で実行する)")
+    #else
+      try runSendonlyDummyAudioTest(activatesSharedAudioSession: true)
+    #endif
+  }
+
+  /// sendonly で DummyAudioDevice を使ってダミー音声を送信する検証の本体
+  ///
+  /// - Parameter activatesSharedAudioSession: true のときは playoutHandler を渡さず、
+  ///   `DummyAudioDevice.initialize(with:)` が共有 AVAudioSession を有効化する経路を検証する。
+  ///   false のときは共有 AudioSession と音声ハードウェアに触れない経路を検証する
+  private func runSendonlyDummyAudioTest(activatesSharedAudioSession: Bool) throws {
     var config = try makeConfiguration(role: .sendonly)
     // この E2E はダミー音声送信の確認に限定し、映像は無効にする
     config.videoEnabled = false
     config.audioEnabled = true
-    // 440Hz 正弦波を生成するダミー音声デバイスを注入する
+    // 440Hz 正弦波を生成する PCM 生成処理とダミー音声デバイスを用意する
     let sineWaveGenerator = SineWaveGenerator(frequency: 440)
-    let audioDevice = DummyAudioDevice(
-      initialMicrophoneEnabled: true,
-      pcmGenerator: { data, frameCount, sampleRate in
-        sineWaveGenerator.generate(data: data, frameCount: frameCount, sampleRate: sampleRate)
-      })
+    let pcmGenerator: @Sendable (UnsafeMutableRawPointer, Int, Double) -> Void = {
+      data, frameCount, sampleRate in
+      sineWaveGenerator.generate(data: data, frameCount: frameCount, sampleRate: sampleRate)
+    }
+    // playoutHandler を渡さない場合だけ DummyAudioDevice.initialize(with:) が共有 AudioSession を
+    // 有効化する。渡した場合の再生 PCM は送信専用のこのテストでは使わないため破棄する
+    let audioDevice: DummyAudioDevice
+    if activatesSharedAudioSession {
+      audioDevice = DummyAudioDevice(
+        initialMicrophoneEnabled: true,
+        pcmGenerator: pcmGenerator)
+    } else {
+      audioDevice = DummyAudioDevice(
+        initialMicrophoneEnabled: true,
+        playoutHandler: { _, _ in },
+        pcmGenerator: pcmGenerator)
+    }
     config.audioDevice = audioDevice
-    // DummyAudioDevice.initialize(with:) が接続試行時に AVAudioSession を有効化するため、
-    // tearDown での復元対象とする
-    audioSessionActivatedByTest = true
+    if activatesSharedAudioSession {
+      // DummyAudioDevice.initialize(with:) が接続試行時に AVAudioSession を有効化するため、
+      // tearDown での復元対象とする
+      audioSessionActivatedByTest = true
+    }
 
     guard let channel = connectAndWait(configuration: config) else {
       return

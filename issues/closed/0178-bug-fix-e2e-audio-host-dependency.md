@@ -1,7 +1,7 @@
 # E2E の testSendonlyDummyAudio がホストの音声サブシステムの状態に依存して失敗する問題を修正する
 
 - Created: 2026-09-29
-- Completed:
+- Completed: 2026-09-29
 - Priority: High
 - Branch: feature/fix-e2e-audio-host-dependency
 - Polished:
@@ -78,4 +78,15 @@ DispatchQueue: DefaultDeviceAggregate (serial)
 
 ## 解決方法
 
-(実装時に記載する)
+`SoraTests/SendonlyE2ETests.swift` の `testSendonlyDummyAudio` を、`DummyAudioDevice` に `playoutHandler` を渡す経路で実行するように変更した。接続の同期パスで `AVAudioSession.setActive(true)` を呼ばなくなり、ホストの音声サブシステムの状態に CI の成否が左右されなくなる。
+
+- `testSendonlyDummyAudio` は `runSendonlyDummyAudioTest(activatesSharedAudioSession: false)` を呼ぶテストにした
+- `AVAudioSession` を有効化する経路は、実機でだけ実行する `testSendonlyDummyAudioActivatesSharedAudioSession` に切り出した。Simulator では `#if targetEnvironment(simulator)` で `XCTSkip` する
+- 録音側の経路 (timer による PCM 生成から ADM への注入) と assert (OPUS 統計、bytesSent / packetsSent、接続 / 切断、終端状態) は変更していない
+- SDK の production コード (`Sora/DummyAudioDevice.swift`) は変更していない
+
+検証:
+
+- ローカル: 全テスト 258 件中 23 件 skip、失敗 0 件。`make fmt-lint` / `make lint` が成功
+- CI: 失敗していた `macos-m1-2` で `testSendonlyDummyAudio` が 3.313 秒で成功した。修正後の run の 1 回目は、この変更と無関係な `LoggerTests` の flaky 1 件だけで失敗し、再実行で成功した
+- ホストの音声サブシステムのハング自体はランナー側の運用で解消する (リポジトリ側の変更ではない)
