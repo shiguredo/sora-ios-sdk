@@ -187,14 +187,15 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   /// 呼ぶことを固定する (handler を box へ包んだ後も配送先と呼び出し回数が変わらないことの回帰)。
   ///
   /// ただし `connect()` を経由せず `onConnect` を直接設定して `.connecting` を作るため、
-  /// この PeerChannel の Lock は count == 0 のままである。実際の接続試行中は `connect()` の
-  /// 初期ロックで count == 1 になるため、切断要求を受けたときの Lock の分岐はこのテストと
-  /// 異なる (このテストが固定するのは ConnectionTimer の timeout 配送であり、Lock の分岐ではない)。
+  /// この PeerChannel の `ConnectionStateOwner` は `asyncOperationCount == 0` のままである。
+  /// 実際の接続試行中は `connect()` の初期ロックで `asyncOperationCount == 1` になるため、
+  /// 切断要求を受けたときの接続ライフサイクルの分岐はこのテストと異なる (このテストが固定するのは
+  /// ConnectionTimer の timeout 配送であり、接続ライフサイクルの分岐ではない)。
   func testTimeoutInvokesHandlerOnce() throws {
     let peerChannel = try makePeerChannel()
     // connect() を経由せず onConnect を設定すると state は .connecting になる。
-    // この時点で PeerChannel の Lock は count == 0 であり、実際の接続試行中
-    // (connect() の初期ロックで count == 1) とは分岐が異なる点に注意する。
+    // この時点で PeerChannel の asyncOperationCount は 0 であり、実際の接続試行中
+    // (connect() の初期ロックで 1) とは分岐が異なる点に注意する。
     peerChannel.onConnect = { _ in }
     let connectionTimer = ConnectionTimer(
       monitors: [.peerChannel(peerChannel)],

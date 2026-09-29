@@ -577,7 +577,7 @@ public final class MediaChannel {
     prepareForDisconnect(error: nil)
 
     // Sora と利用者の双方が参照を解放した場合も、接続中の PeerChannel を明示的に閉じる。
-    // 実処理が進行中なら PeerChannel.Lock が安全な時点まで切断を遅延する。
+    // 実処理が進行中なら PeerChannel の接続ライフサイクルの排他が安全な時点まで切断を遅延する。
     _peerChannel?.disconnect(error: nil, reason: .user)
   }
 

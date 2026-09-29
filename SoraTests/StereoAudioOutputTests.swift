@@ -559,7 +559,7 @@ final class StereoAudioOutputTests: XCTestCase {
   }
 
   /// PeerChannel の処理中は切断を遅延し、実切断時に lease を解放することを確認する
-  func testDelayedPeerChannelDisconnectKeepsRequirementUntilUnlock() throws {
+  func testDelayedPeerChannelDisconnectKeepsRequirementUntilOperationEnds() throws {
     let coordinator = AudioSessionCoordinator()
     var configuration = makeConfiguration()
     configuration.audioStereoOutputEnabled = true
@@ -568,16 +568,16 @@ final class StereoAudioOutputTests: XCTestCase {
       audioSessionCoordinator: coordinator)
     let peerChannel = mediaChannel.peerChannel
 
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     peerChannel.disconnect(error: nil, reason: .user)
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
   }
 
   /// MediaChannel が先に解放されても PeerChannel の処理中は lease を維持することを確認する
-  func testMediaChannelDeinitKeepsRequirementUntilPeerUnlock() throws {
+  func testMediaChannelDeinitKeepsRequirementUntilOperationEnds() throws {
     let coordinator = AudioSessionCoordinator()
     var configuration = makeConfiguration()
     configuration.audioStereoOutputEnabled = true
@@ -589,7 +589,7 @@ final class StereoAudioOutputTests: XCTestCase {
       return
     }
 
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     peerChannel.disconnect(error: nil, reason: .user)
     mediaChannel = nil
 
@@ -598,12 +598,12 @@ final class StereoAudioOutputTests: XCTestCase {
       1,
       "PeerChannel と ADM が生存している間は lease を解放しないこと")
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
   }
 
   /// 遅延切断では Peer の後始末前に状態と公開 callback を完了扱いにしないことを確認する
-  func testMediaChannelDisconnectFinishesAfterPeerUnlock() throws {
+  func testMediaChannelDisconnectFinishesAfterOperationEnds() throws {
     let coordinator = AudioSessionCoordinator()
     let hardMuteLease = VideoHardMuteLease()
     var stereoConfiguration = makeConfiguration()
@@ -619,7 +619,7 @@ final class StereoAudioOutputTests: XCTestCase {
     var callbackError: Error?
     let disconnectExpectation = expectation(description: "Peer cleanup 後に切断 callback が届くこと")
 
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     let connectionTask = mediaChannel.connect(
       webRTCConfiguration: WebRTCConfiguration()
     ) { _ in
@@ -645,7 +645,7 @@ final class StereoAudioOutputTests: XCTestCase {
     XCTAssertEqual(disconnectCallbackCount, 0)
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
 
     wait(for: [disconnectExpectation], timeout: 3)
 
@@ -763,13 +763,13 @@ final class StereoAudioOutputTests: XCTestCase {
 
     // 別の PeerChannel 処理が進行中の状態を作り、.closed 通知だけでは cleanup を
     // 先行させないことを確認する。
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     nativeChannel.close()
 
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
     XCTAssertEqual(disconnectCount, 0)
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
     wait(for: [disconnectExpectation], timeout: 3)
 
     // libwebrtc から重複した .closed 通知が届いても cleanup が再実行されないことを確認する。

@@ -41,7 +41,6 @@
   - signaling の phase、接続 URL、`data_channel_signaling` / `ignore_disconnect_websocket` のフラグを純粋な reducer と単一の owner で管理する
   - `connect` / `send` / `redirect` / `disconnect` / URLSession delegate callback を同じ直列 queue へ投入し、順序を確定する
   - `URLSessionWebSocketChannel` の可変状態 (`urlSession` / `webSocketTask` / `isClosing`) へのアクセスを owner queue に限定する
-  - 公開 API の変更はない
   - @t-miya
 - [UPDATE] 公開値型を `Sendable` に対応させる
   - 接続と設定: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent` / `MediaConstraints` / `DegradationPreference` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
@@ -91,6 +90,9 @@
 - [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告 14 件を解消する
   - `PeerChannel` / `MediaChannel` / `CameraVideoCapturer` / `NativePeerChannelFactory` / `ConnectionTimer` で、非 `@Sendable` な handler を包む private の box を追加し、WebRTC / AVFoundation の型を capture していた箇所は `Sendable` な値の capture へ置き換える
   - 公開 API と利用者の挙動の変更はない
+  - @t-miya
+- [UPDATE] `PeerChannel` の接続ライフサイクルの排他を接続状態の所有者へ統合する
+  - `PeerChannel.Lock` が持っていた接続開始の初期ロック、進行中の非同期処理数、遅延させる切断要求を `ConnectionStateOwner` へ移し、接続状態フラグと同じ直列 queue で保護する
   - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
