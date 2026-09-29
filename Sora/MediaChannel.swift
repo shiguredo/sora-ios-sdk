@@ -169,8 +169,28 @@ struct MediaChannelConnectionTimerAuthorization {
 
 // MARK: -
 
-/// 非同期 cleanup の完了通知から MediaChannel を弱参照するための内部ラッパーです。
-/// MediaChannel 自体を Sendable とせず、終端処理だけを lifecycle lock 配下へ戻します。
+/// `MediaChannel` を弱参照で並行処理境界へ渡すための、用途限定の内部ラッパーです。
+/// `MediaChannel` 自体を Sendable とせず、終端処理と接続開始だけを lifecycle lock 配下へ戻します。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する参照は `init` でのみ代入する `weak var value` だけであること
+///   (`weak` は runtime が参照の load / store を原子的に扱い、代入後に値を書き換えない)
+/// - 変更前から `MediaChannel` を捕捉していた非同期 cleanup の完了通知と
+///   `DispatchQueue.global().async` の block を包み直すだけで、配送先・実行順序・
+///   呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持する `MediaChannel` に対して closure が呼ぶメソッドが到達する状態アクセスが、
+///   既存の排他 (`connectionLifecycleLock`、`MediaChannelStateStorage` /
+///   `PeerChannelTransportStorage` の `NSLock`) と `init` で確定した不変値に閉じること
+///
+/// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
+/// 安全である」という限定した主張であり、`MediaChannel` 全体が thread-safe であることも、
+/// `MediaChannel` に `Sendable` 準拠を追加することも主張しません。
+/// 参照する状態の所有と同期が `MediaChannel` 側の責務であることは変更前と同じです。
+///
+/// `value` を弱参照にするのは、変更前の `[weak self]` と同じく「`MediaChannel` が解放済みなら
+/// 何もしない」挙動を維持するためです。強参照にすると、`Task` や `DispatchQueue` が
+/// 完了 closure を保持し、その closure が box を、box が `MediaChannel` を保持する経路で
+/// `MediaChannel` が解放されなくなります。
 private final class WeakMediaChannelBox: @unchecked Sendable {
   weak var value: MediaChannel?
 
@@ -181,19 +201,96 @@ private final class WeakMediaChannelBox: @unchecked Sendable {
 
 // MARK: -
 
-/// libwebrtc の統計情報取得 handler と、その取得対象の `RTCPeerConnection` を並行処理境界へ
-/// 渡すための、用途限定の内部ラッパーです。
+/// `MediaChannel.connect` の非同期 hop が接続試行の `ConnectionTask` を参照するための、
+/// 用途限定の参照保持 box です。
 ///
 /// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
-/// - 可変状態を持たず、保持する handler と `RTCPeerConnection` の参照は `init` で確定した
-///   `let` で、box の生存中に再代入されないこと。`RTCPeerConnection` は class であるため、
-///   ここで主張するのは参照が再代入されないことだけで、オブジェクトの状態の不変性ではない。
-///   box は参照を保持して callback へ渡すだけで、状態を読み書きしないこと
+/// - 可変状態を持たず、保持する `ConnectionTask` の参照は `init` で確定した `let` であること。
+///   box は参照を保持して block へ渡すだけで、状態を読み書きしないこと
+/// - 変更前から `ConnectionTask` を捕捉していた `DispatchQueue.global().async` の block を
+///   包み直すだけで、配送先・実行順序・呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持する `ConnectionTask` に対して block が行う状態アクセスが、`ConnectionTask` の
+///   `stateLock` (`NSLock`) に閉じること。`ConnectionTask` の可変状態は `_internalState` と
+///   `_peerChannel` の 2 つだけで、`state` / `attach(peerChannel:)` / `markCanceled()` /
+///   `tryComplete()` / `complete()` / `cancel()` のすべてが `stateLock` を取る。
+///   `cancel()` は lock を解放してから `disconnect` を呼び、lock を保持したまま
+///   利用者 handler や libwebrtc を呼ばない
+///
+/// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
+/// 安全である」という限定した主張であり、`ConnectionTask` 全体が thread-safe であることは
+/// 主張しません。`ConnectionTask` に `Sendable` 準拠を追加することも主張しません。
+///
+/// 強参照で保持するのは、変更前に block が `ConnectionTask` を強参照で捕捉していたためです。
+/// 戻り値の `ConnectionTask` を利用者が即座に手放しても、block が実行されるまでは
+/// この box が生存させます。
+private final class MediaChannelConnectionTaskBox: @unchecked Sendable {
+  let value: ConnectionTask
+
+  init(_ value: ConnectionTask) {
+    self.value = value
+  }
+}
+
+// MARK: -
+
+/// `MediaChannel.state` の写しを `NSLock` で保護して保持する storage です。
+///
+/// `MediaChannel.state` は公開 API の表現 (`public private(set) var` の stored property) を
+/// 変えられないため stored property のまま維持します。この storage は、`getStats` の完了
+/// closure が `MediaChannel` 自身を捕捉せずに現在の接続状態を読むための経路です。
+/// 状態の書き込みは `MediaChannel` の `connectionLifecycleLock` 配下でだけ行い、
+/// この storage への写しも同じ区間で更新します。したがって lock 順序は
+/// `connectionLifecycleLock` → この storage の一方向だけです。
+///
+/// `@unchecked Sendable` を認める根拠は、可変状態 (`state`) の読み書きをすべて
+/// この `lock` 配下で行うことです。保持する `ConnectionState` は値型であり、
+/// 参照型を保持しません。`getStats` の完了 closure へは `MediaChannelGetStatsContext` が
+/// 強参照で渡し、この storage 自身の生存はその box の生存にも従います。
+private final class MediaChannelStateStorage: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedState: ConnectionState = .disconnected
+
+  /// 現在の接続状態の写し。読み出しと書き込みの両方を `lock` で排他する。
+  var state: ConnectionState {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return storedState
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      storedState = newValue
+    }
+  }
+}
+
+// MARK: -
+
+/// libwebrtc の統計情報取得 handler、その取得対象の `RTCPeerConnection`、接続状態と
+/// `nativeChannel` を読むための storage を並行処理境界へ渡すための、用途限定の内部ラッパーです。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する handler / `RTCPeerConnection` / `MediaChannelStateStorage` の
+///   参照は `init` で確定した `let`、`PeerChannelTransportStorage` は `init` でのみ代入する
+///   `weak var` であること (`weak` は runtime が参照の load / store を原子的に扱い、
+///   代入後に値を書き換えない)。`RTCPeerConnection` は class であるため、ここで主張するのは
+///   参照が再代入されないことだけで、オブジェクトの状態の不変性ではない。box は参照を保持して
+///   callback へ渡すだけで、状態を読み書きしないこと
 /// - 変更前から handler と `RTCPeerConnection` を渡していた `RTCPeerConnection.statistics` の
 ///   完了 block をそのまま包み直すだけで、配送先・通知順序・呼び出し回数を変えず、
 ///   別系統の境界へ新たに渡さないこと
-/// - 保持するのは handler の closure と、変更前に同じ block が参照していた `RTCPeerConnection`
-///   だけで、SDK 内部の参照型 (`MediaChannel` 等) を新たに保持しないこと
+/// - 保持する参照型に対する closure の状態アクセスが、既存または本変更で確立した排他に
+///   閉じること。`MediaChannelStateStorage` は自身の `NSLock` が `state` の読み書きを保護し、
+///   storage への書き込みは `MediaChannel` の `connectionLifecycleLock` 配下でだけ行う
+///   (`connectionLifecycleLock` → storage の一方向)。`PeerChannelTransportStorage` も
+///   自身の `NSLock` が `nativeChannel` / `streams` / `offerEncodings` の読み書きを保護する。
+///   どちらの lock も保持したまま libwebrtc や利用者 handler を呼ばないこと
+///
+/// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
+/// 安全である」という限定した主張であり、`MediaChannel` / `PeerChannel` 全体が thread-safe で
+/// あることも、両者に `Sendable` 準拠を追加することも主張しません。参照する状態の所有と
+/// 同期が各クラス側の責務であることは変更前と同じです。
 ///
 /// 保持する `RTCPeerConnection` は、変更前に完了 block が capture していた参照と同一です。
 /// この参照を保持すると、redirect で `RTCPeerConnection` が入れ替わった後も、旧オブジェクトの
@@ -203,6 +300,12 @@ private final class WeakMediaChannelBox: @unchecked Sendable {
 /// この遅延を許容します。同一性判定は従来どおり「redirect で旧 `RTCPeerConnection` が
 /// 入れ替わったことの検出」だけに使い、この callback の実行スレッドと配送は変更前と同じです。
 ///
+/// `transportStorage` を弱参照で保持するのは、変更前の `[weak self]` と同じく
+/// `MediaChannel` (と `PeerChannel`) が解放済みなら `MediaChannel is unavailable` を返して
+/// 1 回で終端するためです。強参照にすると、`MediaChannel` の解放後も
+/// `PeerChannelTransportStorage` が `RTCPeerConnection` の参照を保持し続け、解放済みの
+/// チャンネルの統計を成功として返してしまいます。
+///
 /// 生成は `MediaChannel.getStats` の 1 箇所だけで、1 つの block へ 1 回だけ渡して 1 回だけ実行する
 /// 使用契約です (型では強制されません)。`Sendable` にするのはこの入れ物だけで、handler と
 /// その捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出しスレッドを
@@ -211,12 +314,30 @@ private final class MediaChannelGetStatsContext: @unchecked Sendable {
   let handler: (Result<Statistics, any Error>) -> Void
   let peerConnection: RTCPeerConnection
 
+  /// 現在の接続状態を読む storage。
+  ///
+  /// `MediaChannel.state` の写しを `MediaChannel` の `connectionLifecycleLock` 配下で更新し、
+  /// この storage 自身の `NSLock` で保護して読む。closure は `MediaChannel` を捕捉せず、
+  /// この storage 経由で読む。
+  let stateStorage: MediaChannelStateStorage
+
+  /// 現在の `nativeChannel` を読む `PeerChannel` の storage。
+  ///
+  /// 弱参照にするのは、`PeerChannel` が解放済みであることを検出して handler を 1 回だけ
+  /// 失敗で終端するためである。`PeerChannel` は `MediaChannel` が単一所有するため、
+  /// この参照が nil であることは `MediaChannel` が解放済みであることと同じである。
+  weak var transportStorage: PeerChannelTransportStorage?
+
   init(
     handler: @escaping (Result<Statistics, any Error>) -> Void,
-    peerConnection: RTCPeerConnection
+    peerConnection: RTCPeerConnection,
+    stateStorage: MediaChannelStateStorage,
+    transportStorage: PeerChannelTransportStorage
   ) {
     self.handler = handler
     self.peerConnection = peerConnection
+    self.stateStorage = stateStorage
+    self.transportStorage = transportStorage
   }
 }
 
@@ -295,7 +416,34 @@ public final class MediaChannel {
   /// 遷移ログは排他区間の外で出すため (`didSet` では lock を保持したまま Logger を呼び得る)、
   /// `connectionLifecycleLock` を保持して遷移させる箇所では、遷移の直後 (lock の解放後) に
   /// 呼び出し元が `logStateChange(from:)` を呼ぶ。
+  ///
+  /// 公開 API の表現を変えられないため stored property のまま維持する。非同期の完了 closure が
+  /// `MediaChannel` を捕捉せずに現在の接続状態を読む経路は `stateStorage` であり、遷移は
+  /// `setState(_:)` に集約して両者を同じ区間で更新する。
+  ///
+  /// `state` に `didSet` を付けて `stateStorage` の写しを追随させる方式は採らない。
+  /// 観測器を持つ stored property は、暗黙の getter から `Transparent` が外れて
+  /// `swift-api-digester` の dump が変わり、commit 済みの公開 API baseline と一致しなくなる
+  /// (`VideoView.backgroundView` が同じ形である)。`state` を直接代入する経路を足す場合は
+  /// `setState(_:)` を経由すること。
   public private(set) var state: ConnectionState = .disconnected
+
+  /// ``state`` の写しを lock 付きで保持する storage
+  ///
+  /// `getStats` の完了 closure は `MediaChannel` を捕捉できないため、現在の接続状態を
+  /// この storage 経由で読む。書き込みは `setState(_:)` にだけ置き、`connectionLifecycleLock` を
+  /// 保持した区間で `state` と同じ値へ更新する。これにより lock 順序は
+  /// `connectionLifecycleLock` → この storage の一方向に揃う。
+  private let stateStorage = MediaChannelStateStorage()
+
+  /// 接続状態を遷移させ、完了 closure が読む storage へ写しを残します。
+  ///
+  /// 呼び出し側は `connectionLifecycleLock` を保持した状態で呼びます。`state` への直接代入を
+  /// 残すと storage の写しが古くなるため、接続状態の遷移はこの 1 箇所に集約します。
+  private func setState(_ next: ConnectionState) {
+    state = next
+    stateStorage.state = next
+  }
 
   /// 接続中 (`state == .connected`) であれば ``true``
   public var isAvailable: Bool { state == .connected }
@@ -778,7 +926,7 @@ public final class MediaChannel {
     // `.connecting` を公開する前に切断完了ハンドラーを登録する。
     // これにより、別スレッドの disconnect が通知登録の隙間へ入ることを防ぐ。
     let connectingChange = (from: state, to: ConnectionState.connecting)
-    state = .connecting
+    setState(.connecting)
     connectionStartTime = nil
     connectionLifecycleLock.unlock()
 
@@ -790,10 +938,16 @@ public final class MediaChannel {
     // 接続試行が終端済みであることを確認してシグナリングを開始しない。
     onPrepared?()
 
-    DispatchQueue.global().async { [weak self] in
+    // 非同期 hop へ渡すのは、MediaChannel を弱参照する box と ConnectionTask を保持する
+    // 用途限定の box だけにする。MediaChannel / ConnectionTask を直接捕捉すると
+    // DispatchQueue の block が @Sendable として取り込むため診断が出る。
+    // 呼び出す basicConnect も、参照する状態の所有と同期は接続ライフサイクルの排他に閉じる。
+    let weakSelf = WeakMediaChannelBox(self)
+    let taskBox = MediaChannelConnectionTaskBox(task)
+    DispatchQueue.global().async { [weakSelf, taskBox] in
       // basicConnect は接続設定を snapshot から読む。webRTCConfiguration は既存テストの
       // 呼び出し互換のために受け取るだけで、接続処理では使わない。
-      self?.basicConnect(connectionTask: task)
+      weakSelf.value?.basicConnect(connectionTask: taskBox.value)
     }
     return task
   }
@@ -956,7 +1110,7 @@ public final class MediaChannel {
       if connectionTask.tryComplete() {
         connectionTimerAuthorization.terminate()
         connectedChange = (from: state, to: ConnectionState.connected)
-        state = .connected
+        setState(.connected)
         completedConnectionTask = true
         connectHandler = _handler
         _handler = nil
@@ -1023,7 +1177,7 @@ public final class MediaChannel {
         completedConnectionTask = currentConnectionTask?.complete() ?? false
       }
       disconnectingChange = (from: state, to: ConnectionState.disconnecting)
-      state = .disconnecting
+      setState(.disconnecting)
       if disconnectPreparation.begin() {
         shouldPrepare = true
       }
@@ -1071,7 +1225,7 @@ public final class MediaChannel {
       disconnectStartedWhileConnecting = state == .connecting
       connectionTimerAuthorization.terminate()
       disconnectingChange = (from: state, to: ConnectionState.disconnecting)
-      state = .disconnecting
+      setState(.disconnecting)
     }
     guard state == .disconnecting else {
       connectionLifecycleLock.unlock()
@@ -1114,7 +1268,7 @@ public final class MediaChannel {
     _handler = nil
     currentConnectionTask = nil
     disconnectedChange = (from: state, to: ConnectionState.disconnected)
-    state = .disconnected
+    setState(.disconnected)
     connectionLifecycleLock.unlock()
 
     // 遷移ログ → 完了ログの順で、排他区間の外で出す (変更前の同一スレッドでの出力順序を維持する)。
@@ -1235,7 +1389,8 @@ public final class MediaChannel {
 
   /// libwebrtc の統計情報を取得します。
   /// 非同期取得中に切断された場合でも安全になるよう、コールバック内で
-  /// self の生存確認、state == .connected の再確認、peerChannel.nativeChannel が同一インスタンスかどうか、をチェックしています。
+  /// チャンネルの生存確認、state == .connected の再確認、peerChannel.nativeChannel が
+  /// 同一インスタンスかどうか、をチェックしています。
   ///
   /// - parameter handler: 統計情報取得後に呼ばれるクロージャー
   public func getStats(handler: @escaping (Result<Statistics, Error>) -> Void) {
@@ -1254,34 +1409,47 @@ public final class MediaChannel {
       return
     }
 
-    // peerConnection.statistics クロージャはlibwebrtc 側のスレッドから遅れて呼ばれ、内部で MediaChannel をキャプチャします。
-    // ここで self を強参照すると、MediaChannel が切断・解放されたあとでもクロージャが解放されず、deinit が遅れたり循環参照が発生する恐れがあります。
-    // そのため [weak self] でキャプチャし、呼び出し時点で MediaChannel がまだ有効かどうかをチェックしています。
-    // self が解放済みなら MediaChannel is unavailable エラーを返すことで安全に処理を抜けます。
+    // peerConnection.statistics クロージャは libwebrtc 側のスレッドから遅れて呼ばれ、変更前は
+    // 内部で MediaChannel を捕捉していた。self を強参照すると、MediaChannel が切断・解放された
+    // あとでもクロージャが解放されず、deinit が遅れたり循環参照が発生する恐れがある。
     //
-    // handler は公開 API のため `@Sendable` にできず、 peerConnection は `Sendable` ではないため、
-    // 両者を不変の参照保持 box へ移し、クロージャには box (Sendable) だけを capture させます。
+    // handler は公開 API のため `@Sendable` にできず、peerConnection は `Sendable` ではない。
+    // MediaChannel の state と peerChannel.nativeChannel も完了 closure から直接読めないため、
+    // これらを不変の参照保持 box (MediaChannelGetStatsContext) へ移し、クロージャには
+    // box (Sendable) だけを capture させる。
+    //
+    // state は MediaChannelStateStorage (NSLock) 経由で読み、nativeChannel の同一性判定は
+    // PeerChannelTransportStorage (NSLock) の参照で行う。transportStorage を弱参照で持つことで、
+    // 変更前の [weak self] と同じく解放済みのチャンネルへは 1 回だけ失敗を返して終端する。
     let context = MediaChannelGetStatsContext(
       handler: handler,
-      peerConnection: peerConnection)
-    peerConnection.statistics { [weak self] report in
-      guard let self else {
+      peerConnection: peerConnection,
+      stateStorage: stateStorage,
+      transportStorage: peerChannel.transportStorage)
+    peerConnection.statistics { [context] report in
+      // PeerChannel (と MediaChannel) が解放済みである。変更前の [weak self] と同じ経路で、
+      // 統計を返さず 1 回だけ失敗を返す。
+      guard let transportStorage = context.transportStorage else {
         context.handler(.failure(SoraError.peerChannelError(reason: "MediaChannel is unavailable")))
         return
       }
 
-      guard self.state == .connected else {
-        let message = "MediaChannel is not connected (state: \(self.state))"
+      // 切断で state が遷移した後は、nativeChannel の参照が残っていても旧接続の統計を
+      // 成功として返さない。state は storage の lock 配下で読み、lock は保持しない。
+      let state = context.stateStorage.state
+      guard state == .connected else {
+        let message = "MediaChannel is not connected (state: \(state))"
         Logger.debug(type: .mediaChannel, message: message)
         context.handler(.failure(SoraError.peerChannelError(reason: message)))
         return
       }
 
-      guard let currentPeerConnection = self.peerChannel.nativeChannel,
+      // 参照の取り出しは storage の lock 配下で行い、同一性判定 (`===`) は lock の外で行う。
+      guard let currentPeerConnection = transportStorage.native,
         currentPeerConnection === context.peerConnection
       else {
         let message =
-          "RTCPeerConnection is unavailable (state: \(self.state), nativeChannel changed)"
+          "RTCPeerConnection is unavailable (state: \(state), nativeChannel changed)"
         Logger.debug(type: .mediaChannel, message: message)
         context.handler(.failure(SoraError.peerChannelError(reason: message)))
         return

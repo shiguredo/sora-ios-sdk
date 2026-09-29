@@ -96,6 +96,146 @@ private final class CreateAnswerHandlerBox: @unchecked Sendable {
   }
 }
 
+/// `PeerChannel` の transport 状態 (`nativeChannel` / `streams` / `offerEncodings`) を
+/// 単一の NSLock で保護する storage。
+///
+/// これら 3 つは変更前は lock 保護のない `var` であり、WebRTC の callback と
+/// `DispatchQueue` の block から読まれていた。読み書きを 1 つの排他へ移すことで、
+/// `PeerChannel` の完了 closure が参照する状態アクセスをこの storage に閉じる。
+///
+/// `@unchecked Sendable` を認める根拠は、可変状態をすべてこの `lock` 配下でだけ
+/// 読み書きすることである。保持する `RTCPeerConnection` / `MediaStream` /
+/// `SignalingOffer.Encoding` のオブジェクト状態の不変性は主張しない。参照の取り出しと、
+/// 取り出した参照に対する `connectionState` や `close()`、`terminate()` の呼び出しは
+/// 別の区間で行う (`lock` を保持したまま libwebrtc を呼ばない)。
+///
+/// lock 順序は、`ConnectionStateOwner` の排他 / `connectHandlerLock` →
+/// この storage の一方向だけを許す。この storage を保持したまま
+/// `ConnectionStateOwner` の排他や `connectHandlerLock`、`webRTCConfigurationLock` を
+/// 取らないこと (`connectHandlerLock` とこの storage は入れ子にしない)。
+final class PeerChannelTransportStorage: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedNativeChannel: RTCPeerConnection?
+  private var storedStreams: [MediaStream] = []
+  private var storedOfferEncodings: [SignalingOffer.Encoding]?
+
+  /// 現在の `RTCPeerConnection` の参照を返す。参照の読み出しだけを排他し、
+  /// 返した参照に対する呼び出しは呼び出し側が排他区間の外で行う。
+  var native: RTCPeerConnection? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return storedNativeChannel
+    }
+    set {
+      lock.lock()
+      // 旧参照の解放 (libwebrtc の deinit) を lock 区間の外で行う。
+      // lock 区間の中で解放すると、外部コードが区間内で走り得る。
+      let previous = storedNativeChannel
+      storedNativeChannel = newValue
+      lock.unlock()
+      withExtendedLifetime(previous) {}
+    }
+  }
+
+  /// 現在の `MediaStream` の配列の写しを返す。
+  var streams: [MediaStream] {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedStreams
+  }
+
+  /// 現在の offer encodings を返す。
+  var offerEncodings: [SignalingOffer.Encoding]? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return storedOfferEncodings
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      storedOfferEncodings = newValue
+    }
+  }
+
+  /// `MediaStream` を追加する。読み出しと書き戻しの間に他のスレッドの更新が
+  /// 入らないよう、1 回の `lock` 区間で行う。
+  func append(stream: MediaStream) {
+    lock.lock()
+    defer { lock.unlock() }
+    storedStreams.append(stream)
+  }
+
+  /// 指定した streamId の `MediaStream` をすべて取り除き、取り除いた要素を返す。
+  ///
+  /// 読み出しと削除を 1 回の `lock` 区間で行う。返した要素の解放は呼び出し側の
+  /// lock 区間の外で行う。
+  @discardableResult
+  func remove(streamId: String) -> [MediaStream] {
+    lock.lock()
+    defer { lock.unlock() }
+    var removed: [MediaStream] = []
+    storedStreams.removeAll { stream in
+      guard stream.streamId == streamId else {
+        return false
+      }
+      removed.append(stream)
+      return true
+    }
+    return removed
+  }
+
+  /// すべての `MediaStream` を取り除く。1 回の `lock` 区間で行い、
+  /// 取り除いた要素の解放は lock 区間の外で行う。
+  func removeAllStreams() {
+    lock.lock()
+    let removed = storedStreams
+    storedStreams.removeAll()
+    lock.unlock()
+    withExtendedLifetime(removed) {}
+  }
+}
+
+/// `PeerChannel` の完了 closure が `PeerChannel` のメソッドを呼ぶための、
+/// 用途限定の参照保持 box。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことである。
+/// - 可変状態を持たず、保持する参照は `init` でのみ代入する `weak var value` だけであること
+///   (`weak` は runtime が参照の load / store を原子的に扱い、代入後に値を書き換えない)
+/// - 変更前から `PeerChannel` を捕捉していた WebRTC の callback と `DispatchQueue` の
+///   block を包み直すだけで、配送先・通知順序・呼び出し回数を変えず、別系統の境界へ
+///   新たに渡さないこと
+/// - 保持する `PeerChannel` に対して closure が行う状態アクセスが、既存または本変更で
+///   確立した排他 (`ConnectionStateOwner` の直列 queue、`connectHandlerLock`、
+///   `ConnectionSnapshotStorage` / `PeerChannelTransportStorage` の NSLock) と
+///   `init` で確定した不変値 (`signalingChannel` / `snapshot` などの `let`) に閉じること
+///
+/// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
+/// 安全である」という限定した主張であり、`PeerChannel` 全体が thread-safe であることも、
+/// `PeerChannel` に `Sendable` 準拠を追加することも主張しない。
+/// 参照する状態の所有と同期が `PeerChannel` 側の責務であることは変更前と同じである。
+///
+/// `value` を弱参照にするのは、変更前の `[weak self]` と同じく「`PeerChannel` が解放済みなら
+/// 何もしない」挙動を維持するためである。強参照にすると、WebRTC が完了 closure を保持し、
+/// その closure が box を、box が `PeerChannel` を保持する経路で `PeerChannel` が
+/// 解放されなくなる。
+///
+/// box は `PeerChannel` 以外の参照を保持しない。`transportStorage` を box に持たせると、
+/// `box → transportStorage → RTCPeerConnection → 保留中の完了 block → box` の循環ができ、
+/// この循環は完了 block が 1 回実行されるまで続く。完了 block は WebRTC 側が保持するため、
+/// `PeerChannel` を解放しても `RTCPeerConnection` の生存が完了まで延びる点が
+/// 変更前の `[weak self]` との差になる。closure からは `self.transportStorage` で読めるため、
+/// box には持たせない。
+private final class WeakPeerChannelBox: @unchecked Sendable {
+  /// 捕捉対象の `PeerChannel`。解放済みの場合は nil になる。
+  weak var value: PeerChannel?
+
+  init(value: PeerChannel) {
+    self.value = value
+  }
+}
+
 class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - Constants
 
@@ -129,7 +269,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// この接続でカメラと画面共有のどちらを送信するかを、非同期開始より前に予約する coordinator
   private let videoSourceCoordinator: VideoSourceCoordinator
 
-  private(set) var streams: [MediaStream] = []
+  /// 現在の `MediaStream` の配列
+  ///
+  /// 追加・削除は `transportStorage` の操作経由で行うため、getter だけを公開する。
+  var streams: [MediaStream] {
+    transportStorage.streams
+  }
   private(set) var iceCandidates: [ICECandidate] = []
 
   var dataChannels: [String: DataChannel] = [:]
@@ -142,7 +287,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - 接続状態フラグ
 
   // PeerChannel の接続状態フラグ 5 つと接続ライフサイクルの排他が扱う接続試行状態
-  // (進行中の非同期処理数 / 切断開始フラグ / 接続開始区間フラグ / 遅延する切断要求) は、
+  // (進行中の非同期処理数 / 切断開始フラグ / 接続開始区間フラグ / 遅延する切断要求)、
+  // および音声入力の初期化済みフラグは、
   // 単一所有者である ConnectionStateOwner が同じ直列 queue で管理する。
   // これにより nonisolated(unsafe) によるベストエフォートの同期と、
   // 接続状態とは別に存在していた lock を廃止する。
@@ -154,6 +300,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   /// 接続状態フラグの snapshot を保持する storage
   private let connectionStateSnapshotStorage = ConnectionSnapshotStorage()
+
+  /// `nativeChannel` / `streams` / `offerEncodings` を保護する storage
+  ///
+  /// internal にしているのは、`MediaChannel.getStats` の完了 closure が `MediaChannel` を
+  /// 捕捉せずに現在の `nativeChannel` の同一性を判定するため、この storage の参照を
+  /// `MediaChannelGetStatsContext` へ渡す必要があるためである。
+  let transportStorage = PeerChannelTransportStorage()
 
   /// 接続状態のイベントを投げる
   private func handleConnectionEvent(_ event: ConnectionEvent) {
@@ -188,8 +341,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   var state: PeerChannelConnectionState {
     // 接続試行中の判定は、ここで 1 度だけ読んだ onConnect の有無で行う。
     // 分岐ごとに読み直すと、読み出しの間に接続が終端した場合に判定がぶれる。
+    // (onConnect は connectHandlerLock、nativeChannel は transportStorage の排他で
+    //  読み、両者を入れ子にしない)
     let hasConnectHandler = onConnect != nil
-    if let nativeChannel {
+    // nativeChannel の参照は storage から 1 度だけ取り出す。connectionState の読みは
+    // storage の lock を解放してから行う。
+    if let nativeChannel = transportStorage.native {
       let state = PeerChannelConnectionState(nativeChannel.connectionState)
       // connect() 開始後から finishConnecting() / basicDisconnect() までは onConnect が保持される。
       // そのため、 RTCPeerConnection を生成済みでも connectionState が .new の間は
@@ -209,7 +366,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     return PeerChannelConnectionState(RTCPeerConnectionState.new)
   }
 
-  var nativeChannel: RTCPeerConnection?
+  /// 現在の `RTCPeerConnection`。
+  ///
+  /// 読み書きは `transportStorage` の `NSLock` で排他する。参照の取り出しと、
+  /// 取り出した参照に対する `connectionState` などの呼び出しは別の区間で行う。
+  var nativeChannel: RTCPeerConnection? {
+    get {
+      transportStorage.native
+    }
+    set {
+      transportStorage.native = newValue
+    }
+  }
 
   /// 接続所有の WebRTC 設定
   ///
@@ -282,9 +450,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
   }
 
-  var isAudioInputInitialized: Bool = false
-
-  private var offerEncodings: [SignalingOffer.Encoding]?
+  // `isAudioInputInitialized` は `ConnectionStateOwner` が単一所有する。読みは
+  // `connectionStateOwner.isAudioInputInitialized()`、書きは `.audioInputInitialized`
+  // イベントで行う。`offerEncodings` は `transportStorage` が保護する。
 
   private var connectedAtLeastOnce: Bool = false
 
@@ -381,20 +549,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   func add(stream: MediaStream) {
-    streams.append(stream)
+    transportStorage.append(stream: stream)
     Logger.debug(type: .peerChannel, message: "call onAddStream")
     internalHandlers.onAddStream?(stream)
   }
 
   func remove(streamId: String) {
-    let stream = streams.first { stream in stream.streamId == streamId }
-    if let stream {
-      remove(stream: stream)
+    // 読み出しと削除は storage の 1 回の lock 区間で行い、通知には取り除いた要素を使う。
+    let removed = transportStorage.remove(streamId: streamId)
+    guard let stream = removed.first else {
+      return
     }
-  }
-
-  func remove(stream: MediaStream) {
-    streams = streams.filter { each in each.streamId != stream.streamId }
     Logger.debug(type: .peerChannel, message: "call onRemoveStream")
     internalHandlers.onRemoveStream?(stream)
   }
@@ -658,7 +823,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func initializeSenderStream(mid: [String: String]? = nil) {
-    guard let nativeChannel else {
+    // nativeChannel の参照は storage から 1 度だけ取り出し、以降はこのローカルを使う。
+    // (storage の lock を保持したまま transceivers などの libwebrtc を呼ばない)
+    guard let nativeChannel = transportStorage.native else {
       Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
       return
     }
@@ -796,7 +963,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func initializeAudioInput() {
-    if isAudioInputInitialized {
+    // 初期化済みフラグは ConnectionStateOwner が単一所有する。読みは owner の同期 API を
+    // 使う (この関数は owner の排他区間から呼ばれないため、同期 wait で再入しない)。
+    if connectionStateOwner.isAudioInputInitialized() {
       Logger.debug(
         type: .peerChannel,
         message: "audio input is already initialized")
@@ -817,7 +986,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
       }
 
-      session.initializeInput { error in
+      // 完了 closure は WebRTC 側のスレッドから呼ばれる。捕捉するのは
+      // ConnectionStateOwner (@unchecked Sendable) だけで、PeerChannel 自身は捕捉しない。
+      //
+      // owner を弱参照で捕捉する。強参照にすると、RTCAudioSession が完了 closure を保持し、
+      // その closure が owner を、owner が PeerChannel を保持する経路で PeerChannel が
+      // 解放されなくなる。弱参照にすると、PeerChannel の解放後に完了 closure が走った場合は
+      // フラグを立てない。これは変更前の [weak self] と同じ挙動である。
+      let connectionStateOwner = self.connectionStateOwner
+      session.initializeInput { [weak connectionStateOwner] error in
         if let error {
           Logger.debug(
             type: .peerChannel,
@@ -825,7 +1002,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           )
           return
         }
-        self.isAudioInputInitialized = true
+        // 書きは owner の直列 queue 上の event で行う。完了 closure の実行スレッドに
+        // 関わらず、この同期 wait が直列 queue の実行を待つ。
+        connectionStateOwner?.handle(.audioInputInitialized)
         Logger.debug(
           type: .peerChannel,
           message:
@@ -1065,8 +1244,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     handler: @escaping (String?, (any Error)?) -> Void
   ) {
     let handlerBox = CreateAnswerHandlerBox(handler)
+    // 完了 closure が捕捉するのはこの box だけである。box は PeerChannel を弱参照で保持し、
+    // PeerChannel が解放された場合は value が nil になって handler の 1 回保証の経路へ入る
+    // (変更前の [weak self] と同じ挙動)。transportStorage は box を経由せず self から読む。
+    let box = WeakPeerChannelBox(value: self)
 
-    guard let nativeChannel else {
+    guard let nativeChannel = transportStorage.native else {
       // handler を呼ばずに return すると、呼び出し元が接続ライフサイクルの排他を
       // 解放できない (解放漏れ)。
       // 明示的な接続失敗として handler を必ず 1 回呼ぶ。
@@ -1084,14 +1267,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // `sdpDescription` だけである。 setRemoteDescription の closure に入る前に
     // String へ写し、捕捉対象を `Sendable` な値に置き換える。
     let offerDescription = offer.sdpDescription
-    nativeChannel.setRemoteDescription(offer) { [weak self] error in
-      guard let self else {
+    nativeChannel.setRemoteDescription(offer) { [box] error in
+      guard let self = box.value else {
         // `self` が解放済みでも handler を 1 回呼んで return する。handler の完了で
         // 接続ライフサイクルの排他を解放する呼び出し元では、呼ばれないと解放漏れになる。
         // 現状この節は到達しない (完了 block は handlerBox → handler → `self` の順に強参照し、
-        // `nativeChannel` も `PeerChannel` のプロパティであるため、`PeerChannel` が解放されると
-        // `RTCPeerConnection` への強参照も失われて callback が届かない) が、
-        // 「到達状況に関わらず handler を必ず 1 回呼ぶ」不変条件を満たすために呼ぶ。
+        // `nativeChannel` も `PeerChannel` の transportStorage が保持するため、
+        // `PeerChannel` が解放されると `RTCPeerConnection` への強参照も失われて callback が
+        // 届かない) が、「到達状況に関わらず handler を必ず 1 回呼ぶ」不変条件を満たすために呼ぶ。
         Logger.error(type: .peerChannel, message: "peerChannel is unavailable")
         handlerBox(nil, SoraError.peerChannelError(reason: "PeerChannel is unavailable"))
         return
@@ -1109,14 +1292,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // リダイレクト等で接続が切り替わった場合は、以後の SDP パイプライン
       // (initializeSenderStream / updateSenderOfferEncodings / answer / setLocalDescription)
       // を実行せずに破棄する。
-      // (チェーンの各ステップは self.nativeChannel を再読取するため、世代照合が
+      // (チェーンの各ステップは transportStorage の nativeChannel を再読取するため、世代照合が
       // 最終クロージャのみだと、旧 offer の SDP・mid・encodings が新 PC に適用される)
       guard generation == self.dataChannelGeneration else {
         handlerBox(nil, nil)
         return
       }
 
-      guard let nativeChannel = self.nativeChannel else {
+      // 世代照合でリダイレクトが無いことを確認した後にだけ storage を再読するため、
+      // 「常に現在の RTCPeerConnection を使う」性質は変更前と同じである。
+      guard let nativeChannel = self.transportStorage.native else {
         // handler を呼ばずに return すると呼び出し元が接続ライフサイクルの排他を
         // 解放できないため、エラーを渡す
         Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
@@ -1135,7 +1320,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "try creating native answer")
-      nativeChannel.answer(for: constraints.nativeValue) { answer, error in
+      nativeChannel.answer(for: constraints.nativeValue) { [box] answer, error in
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
@@ -1143,6 +1328,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             // swiftlint:disable:next force_unwrapping
             message: "failed creating native answer (\(error!.localizedDescription)")
           handlerBox(nil, error)
+          return
+        }
+
+        guard let self = box.value else {
+          // 外側の closure と同じく、`self` が解放済みでも handler を 1 回呼んで return する。
+          // この節も現状は到達しない (handlerBox が handler を強参照し、handler が
+          // `PeerChannel` を強参照するため) が、1 回保証の不変条件を満たすために呼ぶ。
+          Logger.error(type: .peerChannel, message: "peerChannel is unavailable")
+          handlerBox(nil, SoraError.peerChannelError(reason: "PeerChannel is unavailable"))
           return
         }
 
@@ -1155,7 +1349,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           return
         }
 
-        guard let nativeChannel = self.nativeChannel else {
+        // 世代照合でリダイレクトが無いことを確認した後にだけ storage を再読する。
+        guard let nativeChannel = self.transportStorage.native else {
           // handler を呼ばずに return すると呼び出し元が接続ライフサイクルの排他を
           // 解放できないため、エラーを渡す
           Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
@@ -1212,12 +1407,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func updateSenderOfferEncodings() {
-    guard let nativeChannel else {
+    // nativeChannel と offerEncodings は transportStorage から 1 度ずつ取り出す。
+    // 取り出した後の libwebrtc 呼び出しは storage の lock を解放してから行う。
+    guard let nativeChannel = transportStorage.native else {
       Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
       return
     }
 
-    guard let oldEncodings = offerEncodings else {
+    guard let oldEncodings = transportStorage.offerEncodings else {
       return
     }
 
@@ -1229,7 +1426,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func createAndSendAnswer(offer: SignalingOffer) {
     Logger.debug(type: .peerChannel, message: "try sending answer")
-    offerEncodings = offer.encodings
+    transportStorage.offerEncodings = offer.encodings
 
     // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
     // (リダイレクトで接続が切り替わった場合に、旧接続の answer が新接続に送信されるのを防ぐ)
@@ -1276,14 +1473,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // 上で更新した値をそのまま使う。lock は読み出しごとに解放されるため、
     // currentWebRTCConfiguration() を再読すると同一の値を参照する保証がコード上に無い。
-    nativeChannel =
+    transportStorage.native =
       nativePeerChannelFactory
       .createNativePeerChannel(
         webRTCConfiguration: updatedConfiguration,
         proxy: snapshot.proxy,
         caCertificates: caCertificates,
         delegate: self)
-    guard let nativeChannel else {
+    guard let nativeChannel = transportStorage.native else {
       // connect() で取得した初期ロックをここで解放しないと、
       // disconnect が defer されたままになってしまう。
       endAsyncOperation()
@@ -1592,8 +1789,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .ping(let ping):
       let pong = SignalingPong()
       if ping.statisticsEnabled == true {
-        nativeChannel?.statistics { [weak self] report in
-          guard let self else {
+        // 完了 closure は box だけを捕捉し、PeerChannel 自身は捕捉しない。
+        // `signalingChannel` は再代入されない `let` であり、その状態の読み書きは
+        // `SignalingChannel` の `SignalingStateOwner` の直列 queue が所有する。
+        // `signalingChannel.internalHandlers` は `PeerChannel.init` と
+        // `MediaChannel.connect` で接続開始前に設定され、この closure は読まない。
+        // 世代や state を読まないため、接続状態 owner の排他には依存しない。
+        let box = WeakPeerChannelBox(value: self)
+        let nativeChannel = transportStorage.native
+        nativeChannel?.statistics { [box] report in
+          guard let self = box.value else {
             return
           }
           var json: [String: Any] = ["type": "pong"]
@@ -1656,16 +1861,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 旧 MediaStream を終端して解放する。
       // (旧 PeerConnection が送出する映像・音声フレームが新しい接続へ混入するのを防ぐ。
       //  terminate() が何を止めるかは切断経路のコメントを参照)
-      for stream in streams {
+      // storage から配列を 1 度だけ取り出し、空判定・件数ログ・終端に同じ写しを使う。
+      let streamsToTerminate = transportStorage.streams
+      for stream in streamsToTerminate {
         stream.terminate()
       }
-      if !streams.isEmpty {
+      if !streamsToTerminate.isEmpty {
         Logger.debug(
           type: .peerChannel,
-          message: "redirect: terminated \(streams.count) streams")
+          message: "redirect: terminated \(streamsToTerminate.count) streams")
       }
-      streams.removeAll()
+      transportStorage.removeAllStreams()
       cancelDisconnectTimer()
+      // 参照の取り出しと close() を分ける (storage の lock を保持したまま close() しない)。
+      let nativeChannel = transportStorage.native
       nativeChannel?.close()
       signalingChannel.redirect(location: redirect.location)
     default:
@@ -1716,11 +1925,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // DataChannel 確立直後も WebSocket 経由の送信キューにメッセージが残っている可能性があるため、
     // 既存の遅延 (switchedDisconnectDelay) を維持する
+    //
+    // 完了 block は box だけを捕捉する。判定に使う `state` の代わりに storage の
+    // nativeChannel を使うが、`state != .closed` と `nativeChannel?.connectionState != .closed`
+    // は等価である。`state` は `nativeChannel?.connectionState` を
+    // PeerChannelConnectionState へ写した値で、唯一の上書き (`onConnect` を保持していて
+    // `.new` のとき `.connecting` を返す) は `.closed` を対象にしない。`nativeChannel == nil`
+    // のときも `state` は `.new` か `.connecting` で `.closed` にならず、
+    // `nil` は `.closed` ではないため一致する。
+    let box = WeakPeerChannelBox(value: self)
     DispatchQueue.global(qos: .background).asyncAfter(
       deadline: .now() + Self.switchedDisconnectDelay
-    ) { [weak self] in
-      guard let self else { return }
-      if self.state != .closed {
+    ) { [box] in
+      guard let self = box.value else { return }
+      let nativeChannel = self.transportStorage.native
+      if nativeChannel?.connectionState != .closed {
         Logger.info(
           type: .peerChannel,
           message: "disconnecting WebSocket after DataChannel signaling established")
@@ -1800,10 +2019,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // stream の owner を無効化する。以降に到着したフレームは VideoFilter と RTCVideoSource へ
     // 渡らず、 renderer の frame / size / switch も配送されない。 renderer の onDisconnect は
     // main queue へ非同期に配送される。
-    for stream in streams {
+    // storage から配列を 1 度だけ取り出し、同じ写しを終端とクリアに使う。
+    let streamsToTerminate = transportStorage.streams
+    for stream in streamsToTerminate {
       stream.terminate()
     }
-    streams.removeAll()
+    transportStorage.removeAllStreams()
 
     // 接続完了後の切断検出タイマーを破棄する。
     // close 後に遅延して届く .disconnected 通知でタイマーが再開始されても、
@@ -1817,6 +2038,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // 利用者が公開 native を先に close した場合も、残りの cleanup は必ず行う。
     // すでに closed の PeerConnection に対する二度目の close だけを省略する。
+    // 参照の取り出しと connectionState の読み、 close() は storage の lock を
+    // 解放してから行う。
+    let nativeChannel = transportStorage.native
     if nativeChannel?.connectionState != .closed {
       nativeChannel?.close()
     }
@@ -2055,7 +2279,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// DataChannel delegate は世代照合 (generation == dataChannelGeneration) で別途ガードするため、
   /// DataChannel 側の通知にこのヘルパーを使わないこと)
   private func isCurrentPeerConnection(_ nativePeerConnection: RTCPeerConnection) -> Bool {
-    !isRedirecting && nativePeerConnection === nativeChannel
+    // isRedirecting は snapshot storage、nativeChannel は transportStorage の排他で読み、
+    // 両者を入れ子にしない。
+    !isRedirecting && nativePeerConnection === transportStorage.native
   }
 
   func peerConnection(
@@ -2119,10 +2345,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "scheduling disconnect timer after \(Self.disconnectedGracePeriod) seconds")
     let generation = disconnectTimerGeneration
+    // 完了 block は box だけを捕捉する。`disconnectTimerGeneration` は snapshot storage、
+    // `handleConnectionEvent` は ConnectionStateOwner、`disconnect(error:reason:)` は
+    // ConnectionStateOwner.requestDisconnect の経路であり、
+    // `nativeChannel` は transportStorage の排他で読む。
+    //
+    // `state == .disconnected` の代わりに storage の `nativeChannel?.connectionState` を使う。
+    // 両者は等価である。`state` は `onConnect` の有無で `.new` を `.connecting` へ
+    // 上書きするが、`.disconnected` はこの上書きの対象外である。また `nativeChannel == nil`
+    // のとき `state` は `.new` / `.connecting` のどちらかで `.disconnected` にならないため、
+    // `nativeChannel?.connectionState == nil` (`.disconnected` 以外) と一致する。
+    let box = WeakPeerChannelBox(value: self)
     DispatchQueue.global(qos: .background).asyncAfter(
       deadline: .now() + Self.disconnectedGracePeriod
-    ) { [weak self] in
-      guard let self else {
+    ) { [box] in
+      guard let self = box.value else {
         return
       }
       guard generation == self.disconnectTimerGeneration else {
@@ -2132,7 +2369,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel,
         message: "disconnect timer fired (generation: \(generation))")
       self.handleConnectionEvent(.disconnectTimerFired)
-      guard self.state == .disconnected else {
+      let nativeChannel = self.transportStorage.native
+      guard nativeChannel?.connectionState == .disconnected else {
         return
       }
       self.disconnect(

@@ -1,7 +1,7 @@
 # Sora target の `#SendableClosureCaptures` 警告のうち SDK 内部インスタンスを捕捉する 10 件を解消する
 
 - Created: 2026-09-28
-- Completed:
+- Completed: 2026-09-29
 - Priority: Medium
 - Branch: feature/refactor-remove-sora-internal-instance-captures
 - Polished: 2026-09-29
@@ -159,6 +159,7 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
   - 一致しなくなるのは、`basicDisconnect` が `nativeChannel` を close して `connectionState` が `.closed` になった後、`storedOnConnect` がまだ保持されている間に closure が `state` を読む場合である。この場合に限り、`state` は `nativeChannel` の `.closed` を `.connecting` または `.new` として返し、閉じた channel への WebSocket 切断が起き得る。この切断は `webSocketDisconnectScheduled` の 1 回保証と、閉じた channel への切断が無害であること (`basicDisconnect` のコメント) で抑止される
   - この判断をコードのコメントに書く
 - `nativeChannel` は storage 配下で参照を取り出し、`connectionState` の読みは `NSLock` を解放してから行う (`0165` の教訓)
+- 実装時の訂正: 上記の「次の 1 つの場合を除いて一致する」は誤りである。`PeerChannelConnectionState(RTCPeerConnectionState.closed)` は `.closed` に写像され (`Sora/ConnectionState.swift` の `init(_:)`)、`state` getter の上書きは `hasConnectHandler && state == .new` の 1 条件だけで `.closed` を対象にしない。production のコードに `nativeChannel` を nil にする代入は無い。したがって `state != .closed` と storage の `nativeChannel?.connectionState != .closed` は常に等価であり、食い違いが起き得るという記述はコードのコメントから削除した。表の 6 と同じ等価論証をコードのコメントに書いた
 
 #### 表の 6
 
@@ -297,3 +298,125 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 - `MediaChannel.handlers` / `internalHandlers` / `connectionStartTime` / `connectionCount` / `publisherCount` / `subscriberCount` など、表の 10 件の捕捉対象以外の未整理な可変状態。`state` 以外の `MediaChannel` の状態所有は本 issue で整理しない。
 
 ## 解決方法
+
+`Sora` target を Swift 6 言語モードで型検査したときに残る `#SendableClosureCaptures` 警告のうち、SDK 内部インスタンスを捕捉する 10 件を解消した。`Sora/Utilities.swift` の `Utilities.Stopwatch` の 1 件は `0115` の削除待ちとして残る。
+
+### 表の 1 から 6 (`PeerChannel`)
+
+- `isAudioInputInitialized` の所有者を `ConnectionStateOwner` へ移し、`ConnectionLifecycleState` の field と `ConnectionEvent` の書き込み用 case、読み取り用の同期 API で読み書きする。`RTCAudioSession.initializeInput` の完了 closure は owner を弱参照で捕捉し、`PeerChannel` の lock 保護のない同名の `var` は削除した
+- `nativeChannel` / `streams` / `offerEncodings` の読み書きを `PeerChannelTransportStorage` (NSLock + `@unchecked Sendable`) へ移し、`basicDisconnect` と redirect 経路は配列・参照を 1 度だけ取り出してから storage の区間外で使う形へ揃えた
+- `createAnswer` / `handleSignalingOverWebSocket(_:)` の `.ping` / `scheduleWebSocketDisconnectIfNeeded()` / `scheduleDisconnectTimerIfNeeded()` の完了 closure は `WeakPeerChannelBox` (用途限定の参照保持 box) だけを捕捉する。`value` を弱参照にして `[weak self]` の「解放済みなら何もしない」挙動を維持した
+- `transportStorage` は box に持たせず、`guard let self = box.value` で取り出した `self` の property から読む。設計方針では box に `let` で持たせる計画だったが、その形では `box → transportStorage → RTCPeerConnection → 保留中の完了 block → box` の循環ができ、完了 block が 1 回実行されるまで `PeerChannel` の解放後も `RTCPeerConnection` の生存が延びる (変更前の `[weak self]` には無い差)。完了 block は WebRTC 側が保持するため、完了が返らない場合はこの差が残る。box の doc コメントにこの理由を書いた
+
+### 表の 7 / 8 (`MediaChannel.connect`)
+
+- `WeakMediaChannelBox` の用途を「終端処理と接続開始を lifecycle lock 配下へ戻す」へ広げ、`DispatchQueue.global().async` の block は `[weakSelf, taskBox]` の 2 つの box だけを捕捉する
+- `MediaChannelConnectionTaskBox` は `ConnectionTask` を `init` で確定した `let` で保持する。`ConnectionTask` の可変状態は `_internalState` と `_peerChannel` の 2 つだけで、`state` / `attach(peerChannel:)` / `markCanceled()` / `tryComplete()` / `complete()` / `cancel()` のすべてが `stateLock` を取る (`cancel()` は lock を解放してから `disconnect` を呼ぶ)
+- `basicConnect(connectionTask:)` の引数は外していない。外すと `connectionLifecycleLock` の外で `currentConnectionTask` を読み直すことになり、切断と競合したときの挙動が変わる
+
+### 表の 9 (`MediaChannel.getStats`)
+
+- `MediaChannelGetStatsContext` に `stateStorage` と `transportStorage` を追加し、完了 closure は `[context]` だけを捕捉する。state は `context.stateStorage.state`、同一性判定は `context.transportStorage.native` で行い、`currentPeerConnection === context.peerConnection` の意味は変えていない
+- `transportStorage` は弱参照で保持する。変更前の `[weak self]` と同じく `MediaChannel` (と `PeerChannel`) が解放済みなら `MediaChannel is unavailable` を 1 回だけ返して終端する。強参照にすると、解放後も `PeerChannelTransportStorage` が `RTCPeerConnection` の参照を保持し、解放済みのチャンネルの統計を成功として返してしまう
+- `state` の storage 化は設計の主案 (computed property 化) ではなく、stored property を維持して lock 付き storage を追加する方式へ切り替えた。`public private(set) var state` を computed property にすると ABI dump の `declAttributes` (`HasStorage` / `HasInitialValue`) と getter の `Transparent` / `implicit` が変わり、`make api-check-fresh` の fresh な dump が committed baseline と一致しない (最小 module の ABI probe で実測して確認した。手順と log は「ABI probe」)。設計方針の「差分が出た場合は、この storage 化を別 issue に分離し、本 issue では `state` の読みを別の排他に閉じる方式へ切り替える」に従った。分離先は `0178` (open、`MediaChannel.state` の単一所有への整理) である。遷移は `setState(_:)` の 1 箇所へ集約し、`connectionLifecycleLock` 配下で `state` と `stateStorage` を同時に更新する
+- `state` に `didSet` を付けて `stateStorage` の写しを追随させる方式も採らない。観測器を持つ stored property は、暗黙の getter から `Transparent` が外れて `swift-api-digester` の dump が committed baseline と一致しなくなる (ABI probe で実測。`VideoView.backgroundView` が同じ形である)。`state` を直接代入する経路を足す場合は `setState(_:)` を経由する
+
+### 表の 10 (`DataChannel`)
+
+- `DataChannelSendBox` を追加し、`statistics` の完了 block は `sendBox.value.send(_:)` を呼ぶ。`DataChannel` の格納プロパティは `let native` と `let delegate` の 2 つだけで、`BasicDataChannelDelegate` の `weak var` への代入は `init` の 2 箇所だけである
+- 「box 経由で `send` が呼ばれること」を実 `RTCDataChannel` で観測する回帰テストを追加した。`SoraTests/DataChannelStatsSendTests.swift` の `testStatsCompletionSendsOverRealDataChannel` が、2 つの実 `RTCPeerConnection` を 2 つの実 `NativePeerChannelFactory` でローカル接続し、両側で同じ channelId の externally negotiated な実 `RTCDataChannel` を作る。受信側の channel を `DataChannel` として実 `PeerChannel.dataChannels` へ登録し、統計要求を送ると `BasicDataChannelDelegate` が `statistics` の完了 block から統計 JSON を送り返すので、送信側の channel でそれを受信して `type` が `stats` であることを確認する。ICE はローカル候補だけを交換し、Sora サーバー・STUN / TURN を使わない。5 回連続で成功し、`sendBox.value.send(data)` を呼ばない変更で失敗することを確認した (`build/0177-polish-newtest.log` / `build/0177-polish-newtest-regression.log`)
+- 追加前の `SoraTests` は DataChannel の offer / answer / ICE の交渉 harness を持っていなかったが、2 PC の交渉の前例は `SoraTests/DummyStereoAudioLoopbackTests.swift` にあり、`RTCDataChannel` の生成の前例は `SoraTests/StreamFrameOwnerTestHelpers.swift` の `makeTestDataChannel` にある。不足していたのは DataChannel の交渉と open 待ちだけだったため、同じ形の harness を追加できた
+
+### 維持した不変条件
+
+- `0151` の `connectHandlerLock` の 3 条件 (callback の 1 回保証、利用者 callback を lock 区間外で呼ぶこと、lock を保持したまま他の lock を取らないこと)
+- `0129` の `ConnectionStateOwner` のセマンティクス (`basicDisconnect` を排他外で呼ぶ、`state` を owner の直列 queue へ `sync` しない)
+- `0175` の `createAnswer` の handler 契約 (各 return 経路で高々 1 回)
+- 公開 API のシグネチャと利用者に見える挙動。`@Sendable` 化、`@preconcurrency` の追加、default actor isolation の変更はしていない。`MediaChannel` / `ConnectionTask` に `Sendable` 準拠を足していない
+- `0165` の教訓 (lock を保持したまま libwebrtc や利用者 handler を呼ばない)。`getStats` の完了 closure は `stateStorage` と `transportStorage` の lock を入れ子にせず、参照を取り出してから判定する
+
+### lock 順序
+
+- `ConnectionStateOwner` の排他 → `connectHandlerLock` / `PeerChannelTransportStorage`
+- `connectionLifecycleLock` → `MediaChannelStateStorage`
+- `webRTCConfigurationLock` は葉。上記のいずれとも入れ子にしない
+- `connectHandlerLock` と `PeerChannelTransportStorage` は入れ子にしない
+
+### 捕捉件数の実測
+
+- 着手時 (develop): 一次行 28 件 / `#SendableClosureCaptures` 11 件 (`PeerChannel` 6 / `MediaChannel` 3 / `DataChannel` 1 / `Utilities` 1)
+- 表の 1 から 6 の適用後: 一次行 22 件 / `#SendableClosureCaptures` 5 件 (`MediaChannel` 3 / `DataChannel` 1 / `Utilities` 1。`build/0177-stage2-typecheck-before.log`)
+- 表の 7 から 10 の適用後: 一次行 18 件 / `#SendableClosureCaptures` 1 件 (`Utilities.Stopwatch` のみ。`build/0177-stage2-typecheck.log`)。一次行の内訳は `#SendableClosureCaptures` 1 件と deprecation 由来の 17 件 (`#DeprecatedDeclaration` 12 件と非推奨 API の使用 5 件) で、新しい種類の警告は増えていない
+- `0108` のゲート相当の flags を付けた型検査の error は 1 件 (`Utilities.Stopwatch` のみ。`build/0177-gate-after.log`)
+- 完了時の再測 (レビュー反映後): 一次行 18 件 / `#SendableClosureCaptures` 1 件 (`Utilities.Stopwatch` のみ) / error 0 (`build/0177-polish-typecheck.log`)。内訳と件数は `build/0177-stage2-typecheck.log` と同じで、レビューでの変更は捕捉件数を変えていない
+
+### 表の 10 件の捕捉の消失
+
+表の 10 件それぞれについて、捕捉対象の closure を渡す file とシンボル、変更後の捕捉対象を示す。位置はファイルパスとシンボル名で示す。
+
+| # | file | closure を渡すシンボル | 変更前の捕捉 | 変更後の捕捉 |
+| --- | --- | --- | --- | --- |
+| 1 | `Sora/PeerChannel.swift` | `PeerChannel.initializeAudioInput()` の `RTCAudioSession.initializeInput(_:)` の完了 closure | `self` | `ConnectionStateOwner` (弱参照) |
+| 2 | `Sora/PeerChannel.swift` | `PeerChannel.createAnswer(isSender:offer:constraints:initialOffer:mid:generation:handler:)` の `RTCPeerConnection.setRemoteDescription(_:completion:)` の完了 closure | `self` (`PeerChannel?`) | `WeakPeerChannelBox` |
+| 3 | `Sora/PeerChannel.swift` | 同じ `PeerChannel.createAnswer` の `RTCPeerConnection.answer(for:completion:)` の完了 closure | `self` | `WeakPeerChannelBox` |
+| 4 | `Sora/PeerChannel.swift` | `PeerChannel.handleSignalingOverWebSocket(_:)` の `case .ping` が渡す `RTCPeerConnection.statistics(_:)` の完了 closure | `self` (`PeerChannel?`) | `WeakPeerChannelBox` |
+| 5 | `Sora/PeerChannel.swift` | `PeerChannel.scheduleWebSocketDisconnectIfNeeded()` の `DispatchQueue.global(qos: .background).asyncAfter(deadline:execute:)` の block | `self` (`PeerChannel?`) | `WeakPeerChannelBox` |
+| 6 | `Sora/PeerChannel.swift` | `PeerChannel.scheduleDisconnectTimerIfNeeded()` の `DispatchQueue.global(qos: .background).asyncAfter(deadline:execute:)` の block | `self` (`PeerChannel?`) | `WeakPeerChannelBox` |
+| 7 | `Sora/MediaChannel.swift` | `MediaChannel.connect(webRTCConfiguration:onPrepared:handler:)` の `DispatchQueue.global().async(execute:)` の block (`basicConnect(connectionTask:)` の呼び出し) | `self` (`MediaChannel?`) | `WeakMediaChannelBox` |
+| 8 | `Sora/MediaChannel.swift` | 同じ `MediaChannel.connect` の block (`ConnectionTask`) | `ConnectionTask` | `MediaChannelConnectionTaskBox` |
+| 9 | `Sora/MediaChannel.swift` | `MediaChannel.getStats(handler:)` の `RTCPeerConnection.statistics(_:)` の完了 closure | `self` (`MediaChannel?`) | `MediaChannelGetStatsContext` |
+| 10 | `Sora/DataChannel.swift` | `BasicDataChannelDelegate.dataChannel(_:didReceiveMessageWith:)` の `RTCPeerConnection.statistics(_:)` の完了 closure | `DataChannel` | `DataChannelSendBox` |
+
+`build/0177-typecheck-before.log` の `#SendableClosureCaptures` 11 件は `Sora/PeerChannel.swift` 6 件 (1 から 6)、`Sora/MediaChannel.swift` 3 件 (7 から 9)、`Sora/DataChannel.swift` 1 件 (10)、`Sora/Utilities.swift` 1 件 (`Utilities.Stopwatch`) である。変更後の log に残る `#SendableClosureCaptures` は `Sora/Utilities.swift` の 1 件だけで、上の 10 件に対応する file とシンボルの警告は残っていない (`build/0177-stage2-typecheck.log` / `build/0177-polish-typecheck.log`)。
+
+### ABI probe
+
+`MediaChannel.state` の ABI dump が変わることは、`Sora` module を build せずに最小 module で確認した。手順は次の 1 行である (stored / computed の 2 通りを作り、JSON を `diff` する)。
+
+```
+swiftc -emit-module -module-name Probe -swift-version 6 -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -target arm64-apple-ios14.0-simulator -emit-module-path build/abi-probe/<stored|computed>/Probe.swiftmodule build/abi-probe/<stored|computed>/Probe.swift && xcrun swift-api-digester -dump-sdk -module Probe -o build/abi-probe/<stored|computed>.json -I build/abi-probe/<stored|computed> -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -target arm64-apple-ios14.0-simulator -avoid-location -avoid-tool-args
+```
+
+- probe の source は `build/abi-probe/stored/Probe.swift` / `build/abi-probe/computed/Probe.swift` / `build/abi-probe/didset/Probe.swift`、dump は `build/abi-probe/stored.json` / `build/abi-probe/computed.json` / `build/abi-probe/didset.json`、差分は `build/abi-probe/diff.txt` (stored と computed) と `build/abi-probe/diff-didset.txt` (stored と didSet 付き stored) である
+- `public private(set) var state: Int = 0` (stored property) から、lock 付き storage を explicit な get / set で読む computed property へ変えた差分は、`declAttributes` の `HasInitialValue` と `HasStorage` の消失、`hasStorage: true` の消失、getter の `implicit: true` と `Transparent` の消失である (`SetterAccess` と `Final` は残る)。したがって `make api-baseline` による baseline の再生成が必要であり、`0178` へ分離した
+- stored property に `didSet` を足した場合の差分は、getter の `Transparent` の消失だけである (`HasInitialValue` / `HasStorage` / `hasStorage` / `implicit` は残る)。`Sora` module の `make api-check-fresh` でも `MediaChannel.state` の getter から `Transparent` が外れて baseline と一致しなかったため、`state` に `didSet` を付けて `stateStorage` の写しを追随させる方式は採らず、`setState(_:)` で `state` と `stateStorage` を同時に更新する形にした
+
+### TSan の実測
+
+- `-enableThreadSanitizer YES` の `build-for-testing` (`build/0177-stage2-tsan-build.log`) が作った `SoraTests.xctest` を `xcrun simctl spawn` で全件実行し、`ThreadSanitizer` の検出行は 0 行。**434 件 / skip 30 / 失敗 0** (`build/0177-stage2-tsan-run.log`)
+- interceptor が有効であることは `TSAN_OPTIONS=verbosity=1` で `ThreadSanitizer: parsing ...` が出力されることで確認した (`build/0177-stage2-tsan-verbosity.log`)
+- 完了時の再測 (レビュー反映後): `-enableThreadSanitizer YES` の `build-for-testing` (`build/0177-polish-tsan-build.log`) の `SoraTests.xctest` を全件実行し、`ThreadSanitizer` の検出行は 0 行。**435 件 / skip 30 / 失敗 0** (`build/0177-polish-tsan-run.log`)。表の 10 の回帰テスト 1 件を追加したため 434 件から 1 件増えている
+- TSan の `xctest` を直接起動する場合は、TSan の dylib を先に読み込ませないと `==N==ERROR: Interceptors are not working. This may be because ThreadSanitizer is loaded too late` で abort する (exit 134)。`xcrun simctl spawn` に `SIMCTL_CHILD_DYLD_INSERT_LIBRARIES=<SoraTests.xctest>/Frameworks/libclang_rt.tsan_iossim_dynamic.dylib` を渡す。interceptor が有効であることは `TSAN_OPTIONS=verbosity=1` の `ThreadSanitizer: parsing ...` で確認した (`build/0177-polish-tsan-verbosity.log`)
+
+### 実行した検証
+
+- `swift format --in-place` の後、`make fmt-lint` は exit 0 (`build/0177-stage2-fmtlint.log`)
+- 型検査 (Swift 6 / `arm64-apple-ios14.0-simulator`): warning 18 件 (うち `#SendableClosureCaptures` 1 件) / error 0
+- `0108` のゲート相当: error 1 件
+- 全体テスト: `xcodebuild test` はこの検証環境では (a) SwiftPM の manifest cache (`~/Library/Caches/org.swift.swiftpm`) への書き込みが拒否されて exit 74 の `Could not resolve package dependencies`、(b) `CFFIXED_USER_HOME` / `HOME` を `build/home` に向けると PTY を作成できず `Pseudo Terminal Setup Error` で起動できない (`build/0177-stage2-tests.log`)。そのため `build-for-testing` (`build/0177-stage2-build-for-testing.log`) の成果物を `xcrun simctl spawn <booted-udid> $(xcode-select -p)/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/xctest build/Build/Products/Debug-iphonesimulator/SoraTests.xctest` で実行し、**434 件 / skip 30 / 失敗 0** (`build/0177-stage2-xctest-full.log`)。`0151` / `0129` と同じ環境制約である
+- `make build` は成功 (`build/0177-stage2-build.log`)
+- `make consumer-build SCHEME=ConsumerCore` は成功 (`build/0177-stage2-consumer-build.log`)
+- `make api-check-fresh` は成功し `The committed API baseline matches the current Sora module.` (`build/0177-stage2-api-check-fresh.log`)。`git diff --exit-code -- TestConsumers/Swift6Consumer/ApiBaseline/` と `NegativeChecks/` は空
+- `make consumer-check-negative` は成功 (`build/0177-stage2-consumer-negative.log`)
+- `swiftlint lint --strict --cache-path build/swiftlint-cache` は 0 violations (`build/0177-stage2-swiftlint.log`)
+
+### 完了時の再検証 (レビュー反映後)
+
+コードを凍結した状態で、次の検証をやり直した。
+
+- `swift format --in-place` の後、`make fmt-lint` は exit 0
+- 型検査 (Swift 6 / `arm64-apple-ios14.0-simulator`): 一次行 18 件 (うち `#SendableClosureCaptures` 1 件) / error 0 (`build/0177-polish-typecheck.log`)
+- 全体テスト: `xcodebuild test` はこの検証環境では `Pseudo Terminal Setup Error` (Operation not permitted) で起動できない (`build/0177-polish-xcodebuild-test.log`)。そのため `build-for-testing` (`build/0177-polish-build-for-testing.log`) の成果物を `xcrun simctl spawn <booted-udid> $(xcode-select -p)/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/xctest <SoraTests.xctest>` で実行し、**435 件 / skip 30 / 失敗 0** (`build/0177-polish-tests.log`)。表の 10 の回帰テスト 1 件を追加したため、434 件から 1 件増えている
+- 表の 10 の回帰テストは 5 回連続で成功し、`sendBox.value.send(data)` を呼ばない変更で失敗することを確認した (`build/0177-polish-newtest.log` / `build/0177-polish-newtest-regression.log`)
+- `make build` は成功 (`build/0177-polish-build.log`)。`make consumer-build SCHEME=ConsumerCore` も成功 (`build/0177-polish-consumer-build.log`)
+- `make api-check-fresh` は成功し `The committed API baseline matches the current Sora module.` (`build/0177-polish-api-check-fresh.log`)。`git diff --exit-code -- TestConsumers/Swift6Consumer/ApiBaseline/` と `NegativeChecks/` は空。`state` の `didSet` を付けた作業ツリーでは同じ target が fresh な dump の `Transparent` の差で失敗したため、この成功は `didSet` を外したことの確認にもなっている
+- `make consumer-check-negative` は成功 (`build/0177-polish-consumer-negative.log`)
+- `swiftlint lint --strict --cache-path build/swiftlint-cache` は 0 violations / 64 files。`make lint` は使えない。`make lint` は `swift package plugin --allow-writing-to-package-directory swiftlint --fix .` を実行するが、この検証環境では sandbox が `sandbox-exec: sandbox_apply: Operation not permitted` で拒否し、`~/Library/org.swift.swiftpm` と `~/Library/Caches/org.swift.swiftpm` への書き込みも拒否される (`build/0177-polish-make-lint.log`)。そのため同じ swiftlint を直接実行する `swiftlint lint --strict` を代替とした (`make lint` が先に走らせる `swiftlint --fix` は、`make fmt-lint` が exit 0 であることから差分を生まない)
+- `make build` / `make consumer-build` / `make api-check-fresh` / `make consumer-check-negative` も、この検証環境では `CFFIXED_USER_HOME` と `HOME` を `build/home` に向けないと `~/Library/Caches/org.swift.swiftpm` の manifest cache に書けず exit 74 で失敗する。上記の成功は `CFFIXED_USER_HOME="$PWD/build/home" HOME="$PWD/build/home"` を付けた実行の結果である
+
+### 残った懸念
+
+- `MediaChannel.state` の単一所有への整理は本 issue では行っていない。stored property の公開 getter は lock の外のままである。computed property 化は公開 API baseline の再生成を伴うため、`0176` の `.connected` を作る seam の追随と合わせて `0178` (open) で行う
+- `MediaChannelGetStatsContext.transportStorage` の弱参照は、`PeerChannel` が `MediaChannel` に単一所有されることを前提にする。`PeerChannel` が別経路で生存したまま `MediaChannel` だけが解放される構成を将来作る場合は、この判定の前提を見直す必要がある
+- `MediaChannel` の `deinit` 中に statistics の完了 block が走る狭い窓では、`transportStorage` が生存しているため `MediaChannel is unavailable` ではなく、`stateStorage` が `.connected` のままなら同一性判定を通過して success を返し得る。変更前の `[weak self]` はこの窓でも failure を返していた。解放開始時に読み取り経路を終端する扱いは `0179` (open、bug) で決める
+- `MediaChannelConnectionTaskBox` が `ConnectionTask` を強参照で保持するため、利用者が戻り値を即座に手放しても block の実行までは `ConnectionTask` が生存する。変更前に block が強参照で捕捉していた挙動と同じである

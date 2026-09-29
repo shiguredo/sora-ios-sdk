@@ -99,6 +99,37 @@ private enum ZLibUtil {
   }
 }
 
+/// `BasicDataChannelDelegate.dataChannel(_:didReceiveMessageWith:)` の `statistics` 完了 block が
+/// `DataChannel` を参照するための、用途限定の参照保持 box です。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する `DataChannel` の参照は `init` で確定した `let` であること。
+///   box は参照を保持して block へ渡すだけで、状態を読み書きしないこと
+/// - 変更前から `DataChannel` を捕捉していた `RTCPeerConnection.statistics` の完了 block を
+///   包み直すだけで、配送先・通知順序・呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持する `DataChannel` に対して closure が行う状態アクセスが、`init` で確定した不変値に
+///   閉じること。`DataChannel` の格納プロパティは `let native` と `let delegate` の 2 つだけで
+///   可変状態を持たない。`compress` は `delegate.compress` (`let`) を返す computed property で、
+///   `send(_:)` は `delegate.compress` を読んで `native.sendData(_:)` を呼ぶ。
+///   `BasicDataChannelDelegate` の `weak var peerChannel` / `weak var mediaChannel` への代入は
+///   `init` の 2 箇所だけで、代入後に値を書き換えない
+///
+/// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
+/// 安全である」という限定した主張であり、`DataChannel` 全体が thread-safe であることも、
+/// `DataChannel` に `Sendable` 準拠を追加することも主張しません。
+/// 参照の同一性は変更前の capture と同じで、`DataChannel` の生存期間は box が保持する間だけ
+/// 延びます。
+///
+/// 生成は `didReceiveMessageWith` の `stats` ラベルの 1 箇所だけで、1 つの block へ
+/// 1 回だけ渡して 1 回だけ実行する使用契約です (型では強制されません)。
+private final class DataChannelSendBox: @unchecked Sendable {
+  let value: DataChannel
+
+  init(_ value: DataChannel) {
+    self.value = value
+  }
+}
+
 class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
   let compress: Bool
   weak var peerChannel: PeerChannel?
@@ -192,6 +223,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     if !dataChannel.label.starts(with: "#") {
       switch dataChannel.label {
       case "stats":
+        // statistics の完了 block は @Sendable として取り込まれるため、DataChannel を
+        // 直接捕捉せず、用途限定の参照保持 box 経由で参照する。
+        let sendBox = DataChannelSendBox(dc)
         peerChannel.nativeChannel?.statistics {
           // NOTE: stats の型を Signaling.swift に定義していない
           let reports = Statistics(contentsOf: $0).jsonObject
@@ -210,7 +244,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
           }
 
           if let data {
-            let ok = dc.send(data)
+            let ok = sendBox.value.send(data)
             if !ok {
               Logger.error(
                 type: .dataChannel,
