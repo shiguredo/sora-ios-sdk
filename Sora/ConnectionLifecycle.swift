@@ -6,10 +6,11 @@ import Foundation
 /// disconnectTimerScheduled / disconnectTimerGeneration / transportEpoch /
 /// isRedirecting) と、接続ライフサイクルの排他が扱う接続試行状態
 /// (asyncOperationCount / isDisconnecting / isStartingConnection) を保持する。
-/// 状態は単一所有者である `ConnectionStateOwner` が所有する。
+/// あわせて、音声入力の初期化済みフラグ (isAudioInputInitialized) を接続試行状態と
+/// 同じ扱いで保持する。状態は単一所有者である `ConnectionStateOwner` が所有する。
 /// 接続状態フラグ 5 つは NSLock で保護された snapshot storage を通じて他のスレッドからも
-/// 観測できるが、接続試行状態は同じ storage へ publish せず、所有者の直列 queue 上でのみ
-/// 読む (同期 getter を持たない)。
+/// 観測できるが、接続試行状態と isAudioInputInitialized の更新だけでは snapshot を
+/// publish せず、所有者の直列 queue 上でのみ読む (同期 getter を持たない)。
 struct ConnectionLifecycleState: Sendable {
   /// transport 世代。接続の transport が変わるたびに増加する。
   ///
@@ -86,6 +87,22 @@ struct ConnectionLifecycleState: Sendable {
   /// 区間中に到着した切断要求は signaling を開始せずに実行するか、
   /// 開始の復帰後に実行するため `ConnectionStateOwner` へ保存する。
   var isStartingConnection: Bool = false
+
+  /// 音声入力 (`RTCAudioSession.initializeInput`) の初期化が成功したか管理するフラグ。
+  ///
+  /// 削除前の `PeerChannel.isAudioInputInitialized` に対応する。読み書きは単一所有者である
+  /// `ConnectionStateOwner` の直列 queue 上でだけ行う。接続状態フラグ 5 つとは異なり、
+  /// このフラグの更新だけでは snapshot を publish しない (別のイベントが publish する際は
+  /// state 全体の写しとして一緒に写る)。別スレッドの同期 getter から観測する必要が
+  /// 無く、`ConnectionEffect.publishSnapshot` を返すイベントを増やすと `ConnectionEvent` の
+  /// 追加時に publish の要否が曖昧になるためである。読みは所有者の同期 API
+  /// (`ConnectionStateOwner.isAudioInputInitialized()`) から行う。
+  ///
+  /// check-then-act の原子性は持たない。`PeerChannel.initializeAudioInput()` の
+  /// 「初期化済みなら何もしない」判定と、成功時の書き込みは別の区間であり、
+  /// 同時に 2 回呼ばれた場合は両方が初期化処理へ進み得る。この原子性は変更前から
+  /// 無いため、ここでは 1 回保証を設けない。
+  var isAudioInputInitialized: Bool = false
 }
 
 /// PeerChannel の接続状態フラグを駆動するイベント。
@@ -136,6 +153,9 @@ enum ConnectionEvent: Sendable {
   /// 接続試行中に切断要求を受理した
   /// (初期ロックを解放し、非同期処理数を 0 にして切断処理を開始する)
   case disconnectAcceptedWhileConnecting
+
+  /// 音声入力の初期化が成功した (初期化済みフラグを立てる)
+  case audioInputInitialized
 }
 
 /// reducer が返す副作用。
@@ -143,9 +163,11 @@ enum ConnectionEvent: Sendable {
 /// reducer は副作用を直接実行せず、Effect として返す。
 /// 接続状態フラグを変える 7 つのイベント (redirect / WebSocket 切断スケジュール /
 /// 猶予タイマー / 切断完了) は snapshot を publish する。接続ライフサイクルの排他が
-/// 扱うイベント (接続開始 / signaling 開始区間 / 非同期処理数 / 切断受理) は publish しない。
+/// 扱うイベント (接続開始 / signaling 開始区間 / 非同期処理数 / 切断受理) と
+/// 音声入力の初期化完了は publish の契機にしない。
 /// これらは同期 getter から観測する必要が無い (`PeerChannel` は snapshot storage の
-/// getter を 5 つの接続状態フラグにしか持たず、接続試行状態は owner が直接読む) ため、
+/// getter を 5 つの接続状態フラグにしか持たず、接続試行状態と音声入力の初期化済みフラグは
+/// owner が直接読む) ため、
 /// NSLock の取得を増やさない。
 /// 将来、Sendable event API で効果 (callback 配送等) を追加する際は、
 /// この enum へケースを追加し、reducer が返す Effect を呼び出し側で実行する。
@@ -261,6 +283,12 @@ enum ConnectionStateReducer {
     case .disconnectAcceptedWhileConnecting:
       state.asyncOperationCount = 0
       state.isDisconnecting = true
+
+    // 音声入力の初期化完了: 初期化済みフラグを立てる。
+    // (接続試行状態と同じく同期 getter を持たない値であるため、このイベントでは
+    //  snapshot を publish しない)
+    case .audioInputInitialized:
+      state.isAudioInputInitialized = true
     }
 
     return (state, effects)
@@ -345,6 +373,23 @@ final class ConnectionStateOwner: @unchecked Sendable {
   func stateForTesting() -> ConnectionLifecycleState {
     eventQueue.sync {
       currentState
+    }
+  }
+
+  /// 音声入力の初期化が完了しているかを返す。
+  ///
+  /// `stateForTesting()` と同じく、単一所有者の直列 queue へ同期 wait して読む。
+  /// `isAudioInputInitialized` の更新だけでは snapshot storage へ publish しないため、
+  /// 本番コードからこの値を観測できるのはこの API だけである (テストは
+  /// `stateForTesting()` でも観測できる)。
+  ///
+  /// この読み取り API を、owner の排他区間で呼ばれる closure
+  /// (`shouldCancelDisconnectTimerBasedDisconnect` / `isConnectHandlerHeld`) から呼ばないこと。
+  /// 直列 queue は再入できないため、排他区間から呼ぶと deadlock する。
+  /// `isAudioInputInitialized` は切断判定から読まないため、この制約には触れない。
+  func isAudioInputInitialized() -> Bool {
+    eventQueue.sync {
+      currentState.isAudioInputInitialized
     }
   }
 

@@ -47,6 +47,8 @@ release とは `CHANGES.md` に `## <version>` 節がある version とし、can
 
 Sora SDK 固有の機能ではないため、問題を修正して公開 abstraction として維持するより、削除して SDK の責務を明確にする。
 
+`0177` (2026-09-29 完了) が SDK 内部インスタンスを捕捉する `#SendableClosureCaptures` の 10 件を解消したため、`Sora` target を Swift 6 言語モードで型検査したときに残る `#SendableClosureCaptures` は本 issue が削除する `Utilities.Stopwatch` の 1 件だけである (`build/0177-stage2-typecheck.log`。`0108` のゲート相当の flags を付けた型検査の error も同じ 1 件)。`0108` の warnings-as-errors ゲートは、本 issue が `Stopwatch` を削除するまで有効化できない。
+
 ## 設計方針
 
 - `Utilities.Stopwatch` の型定義を削除する。

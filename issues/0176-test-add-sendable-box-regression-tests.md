@@ -17,13 +17,24 @@
 
 ## 優先度根拠
 
-利用者に見える挙動と公開 API を変えないテストの追加であり、実装済みの変更に対する補強であるため Low とする。ただし `0173` の 2 経路は、同じ型のまま同一性判定を削る変更も `close()` の呼び出しを削る変更も型検査と既存テストでは落ちない。`getStats` 側は `0177` が同じ closure を触るため、`0177` の設計が確定するまで着手しない (「前提となる issue」)。
+利用者に見える挙動と公開 API を変えないテストの追加であり、実装済みの変更に対する補強であるため Low とする。ただし `0173` の 2 経路は、同じ型のまま同一性判定を削る変更も `close()` の呼び出しを削る変更も型検査と既存テストでは落ちない。`getStats` 側は `0177` が同じ closure を触るため `0177` の設計が確定するまで着手しないとしてきたが、`0177` は 2026-09-29 に完了した。`0177` が別 issue (`0178`) へ分離した `MediaChannel.state` の単一所有化は本 issue の前提ではなく、本 issue は `0177` が確立した `setState(_:)` の経路に合わせて着手できる (「部分完了の記録」)。
 
 ## 現状
 
 ### 部分完了の記録
 
-`createClientOfferSDP` 側 (`Sora/NativePeerChannelFactory.swift` の `#if DEBUG` アクセサと `SoraTests/SendableBoxRegressionTests.swift` の `close()` の回帰テスト) は実装・検証済みである。`getStats` 側 (`Sora/MediaChannel.swift` の同一性判定と `#if DEBUG` の seam、`setConnectionStateForTesting(_:)`) は `0177` の完了後に実施する。`getStats` 側を実装した時点で `CHANGES.md` の同一エントリを『同一性判定と `close()`』へ更新する。
+`createClientOfferSDP` 側 (`Sora/NativePeerChannelFactory.swift` の `#if DEBUG` アクセサと `SoraTests/SendableBoxRegressionTests.swift` の `close()` の回帰テスト) は実装・検証済みである。
+
+`getStats` 側 (`Sora/MediaChannel.swift` の同一性判定と `#if DEBUG` の seam、`setConnectionStateForTesting(_:)`) は `0177` (2026-09-29 完了) の完了により着手できる。`0177` は `getStats` の完了 closure から `self` の読みを消し、次の形にした。
+
+- closure は `MediaChannelGetStatsContext` (`@unchecked Sendable`) だけを捕捉し、state は `context.stateStorage` (`MediaChannelStateStorage` の `NSLock`)、`nativeChannel` の同一性判定は `context.transportStorage` (`PeerChannelTransportStorage` の `NSLock`、弱参照) 経由で読む
+- `MediaChannel.state` は公開 API の表現 (ABI dump の `HasStorage` / `HasInitialValue` と getter の `Transparent`) を変えられないため stored property のまま維持し、`connectionLifecycleLock` 配下で `state` と `stateStorage` を同時に更新する遷移ヘルパー (`setState(_:)`) を追加した。computed property へ移すと `make api-check-fresh` の fresh な dump が committed baseline と一致しないため、`0177` の設計方針の「差分が出た場合は storage 化を別 issue に分離し、本 issue では `state` の読みを別の排他に閉じる方式へ切り替える」に従った。分離先は `0178` (open、`MediaChannel.state` の単一所有への整理) である。`state` に `didSet` を付けて `stateStorage` の写しを追随させる方式も、暗黙の getter から `Transparent` が外れて baseline と一致しなくなるため採らない
+- したがって `setConnectionStateForTesting(_:)` は `connectionLifecycleLock` 配下で `state` を直接代入せず、`0177` の遷移ヘルパー (`setState(_:)`) と同じ経路を通して `stateStorage` も更新する。`state` だけを代入すると `getStats` の完了 closure が読む `stateStorage` の写しが古くなり、テストが観測する同一性判定の分岐へ到達しない。`0178` が `state` を computed property 化した後は、このアクセサも `0178` の書き込み経路に合わせる
+- seam は `0177` 後の実装に合わせ、`getStats` が box へ渡す不変の値として持たせ、closure は `context` 経由で呼ぶ (`self` の読みを再導入しない)
+
+`MediaChannel.state` を単一の lock 付き storage へ移す整理 (ABI 変更と baseline の再生成、上記の seam の追随を伴う) は `0177` が `0178` へ分離した。本 issue はその整理を待たず、`0177` が確立した `setState(_:)` の経路に合わせて `getStats` 側の同一性判定を観測する。
+
+`getStats` 側を実装した時点で `CHANGES.md` の同一エントリを『同一性判定と `close()`』へ更新する。
 
 ### 対象の 2 箇所
 
@@ -126,7 +137,7 @@ private final class MediaChannelGetStatsContext: @unchecked Sendable {
 ## 前提となる issue
 
 - `0173` (完了 2026-09-28): box の追加元。`## スコープ外` と `## 解決方法` が「`MediaChannel.getStats` は `state` を `.connected` にする経路が private のため単体 harness を作らない」と記録しており、本 issue はこの判断の穴を埋める。
-- `0177` (open): `#SendableClosureCaptures` の残り 11 件のうち `0177` が扱う 10 件に、`MediaChannel.getStats(handler:)` の `RTCPeerConnection.statistics` 完了 closure が捕捉する `self` と `self.peerChannel.nativeChannel` の読みが含まれる。`0177` は `MediaChannelGetStatsContext` に state と `PeerChannel` の storage の参照を追加して closure が `context` 経由で読む形にし、`currentPeerConnection === context.peerConnection` の同一性判定の意味は変えない方針である。`0177` の `## テスト方針` も `MediaChannel.getStats` の同一性判定の回帰テストを挙げているため、同一経路のテストを重複させない。本 issue が追加するテストを正本とし、`0177` 側は本 issue の観測方法 (`.connected` を作るアクセサと seam) に合わせるか、テストを本 issue に委ねる。`getStats` 側のテストと `#if DEBUG` の seam (「設計方針」) は `0177` の完了後に `0177` 後の実装へ向けて設計し、`0177` が closure から `self` の読みを消した後も seam が `self` の読みを再導入しない形 (`getStats` が box へ渡す不変の値として持たせる) にする。`createClientOfferSDP` 側は `0177` の対象ではないため、`0177` を待たずに実施できる。
+- `0177` (2026-09-29 完了): `#SendableClosureCaptures` の 10 件を解消し、`MediaChannel.getStats(handler:)` の `RTCPeerConnection.statistics` 完了 closure は `MediaChannelGetStatsContext` だけを捕捉する形になった。`context` は state storage (`MediaChannelStateStorage`) と `PeerChannel` の transport storage (`PeerChannelTransportStorage`、弱参照) を保持し、`currentPeerConnection === context.peerConnection` の同一性判定の意味は変えていない。本 issue が追加するテストを正本とし、`0177` は同一経路のテストを追加していない。`getStats` 側のテストと `#if DEBUG` の seam (「設計方針」) は `0177` 後の実装へ向けて設計し、seam が `self` の読みを再導入しない形 (`getStats` が box へ渡す不変の値として持たせる) にする。`0177` は `MediaChannel.state` を computed property 化せず stored property のまま維持したため、`.connected` を作る `setConnectionStateForTesting(_:)` は `0177` の遷移ヘルパー (`setState(_:)`) と同じ経路で `stateStorage` も更新すること (「部分完了の記録」)。`MediaChannel.state` の単一所有化は `0178` が扱う。`createClientOfferSDP` 側は `0177` の対象ではないため、`0177` を待たずに実施できる。
 - `0164` (open): redirect が接続確立前にのみ届くことの調査。本 issue が内部アクセサを使う根拠である。
 - `0118` (完了 2026-09-25) と `0171` (open): `SoraTests` は Swift 6 言語モードで build され、`0171` の完了後は warnings-as-errors になる。追加するテストは concurrency 診断を出さない書き方にする。
 

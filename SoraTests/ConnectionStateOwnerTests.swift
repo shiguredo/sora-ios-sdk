@@ -399,4 +399,38 @@ final class ConnectionStateOwnerTests: XCTestCase {
     XCTAssertNil(pending, "切断処理の開始後は何も返さないこと")
     XCTAssertTrue(owner.stateForTesting().isDisconnecting, "切断処理の開始は変わらないこと")
   }
+
+  // MARK: - 音声入力の初期化
+
+  /// 音声入力の初期化完了イベントで初期化済みフラグが立ち、そのイベントだけでは snapshot を publish しないことを確認する
+  ///
+  /// `isAudioInputInitialized` は接続試行状態と同じく snapshot を publish する契機にしない値で
+  /// あるため、所有者の同期 API から読み、接続試行状態の不変条件を変えないことを確認する。
+  func testAudioInputInitializedIsOwnedByConnectionStateOwner() {
+    let storage = ConnectionSnapshotStorage()
+    let owner = ConnectionStateOwner(snapshotStorage: storage)
+
+    XCTAssertFalse(owner.isAudioInputInitialized(), "初期状態は未初期化であること")
+    XCTAssertFalse(
+      storage.current().isAudioInputInitialized,
+      "初期状態の snapshot は未初期化であること")
+
+    owner.handle(.audioInputInitialized)
+
+    XCTAssertTrue(owner.isAudioInputInitialized(), "イベントで初期化済みになること")
+    XCTAssertFalse(
+      storage.current().isAudioInputInitialized,
+      "このイベントだけでは snapshot を publish しないこと")
+    XCTAssertEqual(
+      owner.stateForTesting().asyncOperationCount,
+      0,
+      "接続試行状態の非同期処理数を変えないこと")
+    XCTAssertFalse(owner.stateForTesting().isDisconnecting, "切断処理を開始しないこと")
+
+    // snapshot を publish する別のイベントでは、state 全体の写しとしてこのフラグも現れる
+    owner.handle(.redirectReceived)
+    XCTAssertTrue(
+      storage.current().isAudioInputInitialized,
+      "snapshot を publish するイベントでは state 全体の写しとして現れること")
+  }
 }
