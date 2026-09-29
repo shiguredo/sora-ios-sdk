@@ -46,3 +46,16 @@ func makeLegacyMediaChannelHandlers() -> MediaChannelHandlers {
   }
   return handlers
 }
+
+/// 非推奨の Utilities.Stopwatch を従来どおり初期化して呼び出す。
+///
+/// 公開 API を非推奨期間を設けずに削除すると、利用側の source compatibility が壊れる。
+/// そのため非推奨期間の間は、SDK が代替 timer を提供しなくても既存の利用コードが
+/// そのまま compile できることをここで確認する。通知された経過時間は使わない。
+func makeLegacyStopwatch() {
+  let stopwatch = Utilities.Stopwatch(handler: { text in
+    _ = text
+  })
+  stopwatch.run()
+  stopwatch.stop()
+}
