@@ -14,6 +14,7 @@ let package = Package(
     .library(name: "ConsumerCore", targets: ["ConsumerCore"]),
     .library(name: "ConsumerUI", targets: ["ConsumerUI"]),
     .library(name: "ConsumerLegacy", targets: ["ConsumerLegacy"]),
+    .library(name: "ConsumerSwift5", targets: ["ConsumerSwift5"]),
   ],
   dependencies: [
     // name を明示しないと package identity が checkout ディレクトリ名になり、
@@ -62,6 +63,21 @@ let package = Package(
         .defaultIsolation(nil),
         .treatAllWarnings(as: .error),
         .treatWarning("DeprecatedDeclaration", as: .warning),
+      ]
+    ),
+    // Swift 5 言語モードの consumer から Sora を利用できることを検証する scenario
+    .target(
+      name: "ConsumerSwift5",
+      dependencies: [
+        .product(name: "Sora", package: "Sora")
+      ],
+      swiftSettings: [
+        // SDK は root package の swiftLanguageModes で Swift 6 言語モードになるが、
+        // consumer の言語モードは consumer 側の target 設定で決まる。Swift 5 言語モードの
+        // アプリが import Sora して build できることを compile 行の -swift-version で確認する
+        .swiftLanguageMode(.v5),
+        .defaultIsolation(nil),
+        .treatAllWarnings(as: .error),
       ]
     ),
   ]

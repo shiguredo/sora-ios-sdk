@@ -131,6 +131,10 @@
 - [ADD] 参照保持 box が担う `createClientOfferSDP` の一時 `RTCPeerConnection` の `close()` の回帰テストを追加する
   - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
   - @t-miya
+- [ADD] Swift 5 言語モードの consumer が `Sora` を import して build できることを検証する
+  - `TestConsumers/Swift6Consumer` に `ConsumerSwift5` target を追加し、SDK が Swift 6 言語モードで compile される一方で consumer の言語モードは consumer 側の設定で独立に決まることを、`consumer-test.yml` の compile 行 (`-swift-version`) の検査で固定する
+  - SDK の公開 API と挙動は変わらない
+  - @t-miya
 - [UPDATE] E2E テストの concurrency 診断抑止を除去する
   - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する。`SoraTests` が `@preconcurrency import Sora` を使っていないことを CI で検査する
   - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback と `Timer` の扱いを main queue に束ねる。`RpcE2ETests` の RPC 呼び出しは `MediaChannel` をまとめた `@unchecked Sendable` のボックス経由にする

@@ -34,12 +34,20 @@ jobs:
         # 期待する scheme が無い場合は xcodebuild -list の出力から検出して失敗させる
         schemes=$(cd TestConsumers/Swift6Consumer && xcodebuild -list)
         echo "$schemes"
-        for scheme in ConsumerCore ConsumerUI ConsumerLegacy; do
+        for scheme in ConsumerCore ConsumerUI ConsumerLegacy ConsumerSwift5; do
           if ! printf '%s\n' "$schemes" | grep -qE "^[[:space:]]+$scheme$"; then
             echo "Error: scheme '$scheme' is missing."
             exit 1
           fi
         done
+    # Swift 5 言語モードの consumer を最初に build する。Sora target は同じ derivedDataPath では
+    # 最初の build でだけ compile されるため、この log に「Sora は -swift-version 6、
+    # ConsumerSwift5 は -swift-version 5」の compile 行を残すには最初に置く必要がある
+    - name: Build ConsumerSwift5
+      run: |
+        set -o pipefail && \
+          make consumer-build SCHEME=ConsumerSwift5 XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
+            2>&1 | tee consumer-swift5.log
     - name: Build ConsumerCore
       run: |
         set -o pipefail && \
@@ -55,21 +63,18 @@ jobs:
         set -o pipefail && \
           make consumer-build SCHEME=ConsumerLegacy XCODE=${{ matrix.xcode }} XCODE_SDK=${{ matrix.sdk }} \
             2>&1 | tee consumer-legacy.log
-    # target の設定 (Swift 6 mode / 既定隔離 / warnings-as-errors) が compiler まで届いていることを、
+    # target の設定 (既定隔離 / warnings-as-errors / 非推奨の降格) が compiler まで届いていることを、
     # 実際の build ログに現れる flag で確認する。設定が無言で消えると gate が弱くなるため。
-    # なお -swift-version 6 は swift-tools-version 6.x の既定でも渡るため、この検査は
-    # 「Swift 6 mode で build されていること」の確認であり、明示設定の有無までは見ない
+    # 言語モードは target ごとに決まるため、この検査ではなく次の Check Language Mode で見る
     - name: Check Compiler Settings
       run: |
-        for log in consumer-core.log consumer-ui.log consumer-legacy.log; do
-          for flag in '-swift-version 6' '-warnings-as-errors'; do
-            if ! grep -Fq -- "$flag" "$log"; then
-              echo "Error: '$flag' is missing in $log."
-              exit 1
-            fi
-          done
+        for log in consumer-swift5.log consumer-core.log consumer-ui.log consumer-legacy.log; do
+          if ! grep -Fq -- '-warnings-as-errors' "$log"; then
+            echo "Error: '-warnings-as-errors' is missing in $log."
+            exit 1
+          fi
         done
-        for log in consumer-core.log consumer-legacy.log; do
+        for log in consumer-swift5.log consumer-core.log consumer-legacy.log; do
           if ! grep -Fq -- '-default-isolation nonisolated' "$log"; then
             echo "Error: '-default-isolation nonisolated' is missing in $log."
             exit 1
@@ -83,6 +88,28 @@ jobs:
           echo "Error: '-Wwarning DeprecatedDeclaration' is missing in consumer-legacy.log."
           exit 1
         fi
+    # consumer の言語モードは consumer 側の target 設定で決まり、SDK の manifest とは独立である。
+    # Swift 5 言語モードの consumer が Swift 6 言語モードの SDK を import して build できることを、
+    # compile 行の -module-name と -swift-version の組合せで確認する。log 全体の grep では
+    # 別の target の flag でも通ってしまうため、module ごとに見る
+    - name: Check Language Mode
+      run: |
+        check_language_mode() {
+          log="$1"
+          module="$2"
+          version="$3"
+          if ! grep -F -- "-module-name $module " "$log" | grep -Fq -- "-swift-version $version"; then
+            echo "Error: $module is not compiled with -swift-version $version in $log."
+            exit 1
+          fi
+        }
+        # Sora は root package の swiftLanguageModes で Swift 6 言語モードになる
+        check_language_mode consumer-swift5.log Sora 6
+        # consumer target は自分自身の swiftSettings の言語モードで compile される
+        check_language_mode consumer-swift5.log ConsumerSwift5 5
+        check_language_mode consumer-core.log ConsumerCore 6
+        check_language_mode consumer-ui.log ConsumerUI 6
+        check_language_mode consumer-legacy.log ConsumerLegacy 6
     # ConsumerLegacy が参照する非推奨 API がそれぞれ warning として出ていることを symbol 名で確認する。
     # 件数ではなく symbol 名で見るのは、Xcode の版で warning の行数が変わり得るため。
     # consumer package の非推奨 API の参照 (Sources/ConsumerLegacy/DeprecatedAPI.swift) を増減する作業は、
