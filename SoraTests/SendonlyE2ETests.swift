@@ -211,6 +211,14 @@ final class SendonlyE2ETests: E2ETestBase {
 
   /// sendonly で DummyAudioDevice を使ってダミー音声を送信できることを確認する
   func testSendonlyDummyAudio() throws {
+    // 調査用: DummyAudioDevice が AVAudioSession のどの操作で止まるかを確認するため、
+    // このテストの間だけログレベルを info へ下げる。E2ETestBase.setUp の既定は warn で、
+    // DummyAudioDevice の調査ログ (info) が出ないためである。
+    // debug にはしない。debug は接続処理の全 phase を出力して CI のログ量を増やすが、
+    // この事象の切り分けには info (AVAudioSession の各操作の前後) で足りるためである。
+    // tearDown が setUp 前のレベルへ戻すため、他のテストへの影響は残らない
+    Logger.shared.level = .info
+
     var config = try makeConfiguration(role: .sendonly)
     // この E2E はダミー音声送信の確認に限定し、映像は無効にする
     config.videoEnabled = false

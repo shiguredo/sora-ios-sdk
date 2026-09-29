@@ -2,6 +2,13 @@ name: E2E Test
 
 on:
   workflow_dispatch:
+    inputs:
+      # 調査用: Simulator デバイスの汚染 (仮説 B/C) を切り分けるため、テスト前にデバイスを erase する。
+      # 既定は false で、push 実行と手動実行の通常の挙動は変えない
+      erase_simulator:
+        description: '調査用: テスト前に Simulator デバイスを erase する'
+        type: boolean
+        default: false
   push:
     paths-ignore:
     - '**.md'
@@ -27,9 +34,53 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: Show Xcode Version
       run: xcodebuild -version
+    # 調査用: macos-m1-2 でだけ testSendonlyDummyAudio が connectionTimeout で失敗する事象の
+    # 切り分けのため、テスト前のホスト状態を残す。音声サブシステム (ホストの coreaudiod) の
+    # ハング、ホストの音声デバイス構成、他 job の残存プロセスを後から確認できるようにする
+    - name: Show Host Diagnostics
+      run: |
+        # この job より前に Simulator のデバイスへ記録された crash report を stale と判定できる
+        # よう、job の開始時刻を残す
+        echo "E2E_STARTED_AT_EPOCH=$(date -u +%s)" >> "$GITHUB_ENV"
+        echo "E2E_STARTED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+        echo "== date =="
+        date -u +%Y-%m-%dT%H:%M:%SZ
+        echo "== runner =="
+        echo "name=$RUNNER_NAME os=$RUNNER_OS arch=$RUNNER_ARCH"
+        echo "== sw_vers =="
+        sw_vers
+        echo "== uname =="
+        uname -a
+        echo "== uptime =="
+        uptime
+        echo "== hardware =="
+        sysctl -n hw.model machdep.cpu.brand_string 2>/dev/null || true
+        echo "== disk =="
+        df -h / /System/Volumes/Data
+        echo "== audio devices =="
+        system_profiler SPAudioDataType 2>&1 || true
+        echo "== audio processes =="
+        ps -Ao pid,ppid,etime,%cpu,%mem,comm | grep -i -E "coreaudio|AudioComponentRegistrar" | grep -v grep || echo "(none)"
+        echo "== audio launchd jobs =="
+        launchctl list 2>/dev/null | grep -i "audio" || echo "(none)"
+        echo "== simulator processes =="
+        ps -Ao pid,ppid,etime,%cpu,%mem,comm | grep -i -E "Simulator|CoreSimulator|launchd_sim|SimulatorTrampoline|xctest" | grep -v grep || echo "(none)"
+        echo "== simctl devices =="
+        xcrun simctl list devices || true
+        echo "== simctl booted =="
+        xcrun simctl list devices booted || true
     - name: Setup iOS Simulator
+      env:
+        # 手動実行で erase を指定したときだけデバイスを初期化する。push 実行では空文字になる
+        ERASE_SIMULATOR: ${{ inputs.erase_simulator }}
       run: |
         SIMULATOR_NAME="iPhone 17 Pro"
+
+        # 調査用: デバイスの汚染 (仮説 B) を切り分けるため、setup 前のデバイス一覧と重複作成の有無を残す
+        echo "== devices before setup =="
+        xcrun simctl list devices available
+        echo "Number of devices named '$SIMULATOR_NAME': $(xcrun simctl list devices available | grep -c "$SIMULATOR_NAME (")"
 
         # デバイスの存在を確認し、存在しなければ作成する
         if ! xcrun simctl list devices available | grep -q "$SIMULATOR_NAME ("; then
@@ -38,18 +89,60 @@ jobs:
             "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro"
         fi
 
+        # 調査用: 同じデバイスを使い回しているかを追えるよう UDID を残す。失敗 job 間で
+        # UDID が一致していれば、デバイスに残った状態 (音声 HAL、クラッシュログ) が持ち越される
+        SIMULATOR_UDID=$(xcrun simctl list devices available |
+          sed -n "s/^ *$SIMULATOR_NAME (\([0-9A-Fa-f-]*\)).*/\1/p" | head -1)
+        echo "Simulator UDID: $SIMULATOR_UDID"
+        echo "SIMULATOR_UDID=$SIMULATOR_UDID" >> "$GITHUB_ENV"
+
+        # 調査用: 切り分け実験として erase が指定されたときだけ、テスト前のデバイス状態を消す。
+        # 既定 (false) では何も消さず、従来と同じデバイスを再利用する
+        if [ "$ERASE_SIMULATOR" = "true" ]; then
+          echo "Erasing simulator '$SIMULATOR_UDID' (investigation)"
+          xcrun simctl shutdown "$SIMULATOR_UDID" || true
+          xcrun simctl erase "$SIMULATOR_UDID" || true
+        fi
+
         # 起動
         xcrun simctl boot "$SIMULATOR_NAME"
         xcrun simctl bootstatus "$SIMULATOR_NAME" -b
+
+        # 調査用: boot 後の状態を残す
+        echo "== devices after boot =="
+        xcrun simctl list devices booted
     - name: Run E2E Tests
       id: e2e_tests
       run: |
         rm -rf build
+        mkdir -p build/logs build/hang-samples
 
         # Simulator の system log をバックグラウンドで収集する
         xcrun simctl spawn booted log stream --predicate 'processImagePath contains "Sora"' &
         LOG_PID=$!
-        trap 'kill $LOG_PID 2>/dev/null || true' EXIT
+
+        # 調査用: 接続処理がハングしたときのスタックを残すため、xctest を定期的に sample する。
+        # xctest は Simulator のホスト側プロセスなのでホストから sample できる。sample は対象を
+        # 短時間停止させるため、間隔を 30 秒、取得回数を 20 回に制限してテストへの影響を抑える
+        (
+          count=0
+          while [ "$count" -lt 20 ]; do
+            for pid in $(pgrep -x xctest); do
+              timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+              output="build/hang-samples/sample-$timestamp-$pid.txt"
+              if sample "$pid" 1 -file "$output" >>build/hang-samples/sample.log 2>&1; then
+                echo "Sampled xctest pid $pid -> $output"
+              else
+                echo "Failed to sample xctest pid $pid"
+              fi
+              count=$((count + 1))
+            done
+            sleep 30
+          done
+        ) &
+        SAMPLE_PID=$!
+
+        trap 'kill $LOG_PID $SAMPLE_PID 2>/dev/null || true' EXIT
 
         set -o pipefail && \
           xcodebuild build-for-testing \
@@ -81,16 +174,78 @@ jobs:
         plutil -insert TestConfigurations.0.TestTargets.0.EnvironmentVariables.TEST_API_URL \
           -string "$TEST_API_URL" "$XCTESTRUN"
 
+        # 調査用: 失敗したテストの出力を後続 step から検索できるよう、テストの出力を保存する
+        set -o pipefail
         xcodebuild test-without-building \
             -xctestrun "$XCTESTRUN" \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             -resultBundlePath build/e2e.xcresult \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
-            PROVISIONING_PROFILE=
+            PROVISIONING_PROFILE= 2>&1 | tee build/logs/e2e-test.log
     - name: Show E2E Crash Diagnostics
       if: failure() && steps.e2e_tests.outcome == 'failure'
       run: |
+        echo "== host state after failure =="
+        date -u +%Y-%m-%dT%H:%M:%SZ
+        echo "job started at: ${E2E_STARTED_AT_UTC:-unknown}"
+        echo "simulator UDID: ${SIMULATOR_UDID:-unknown}"
+        uptime
+        echo "== audio processes =="
+        ps -Ao pid,ppid,etime,%cpu,%mem,comm | grep -i -E "coreaudio|AudioComponentRegistrar" | grep -v grep || echo "(none)"
+        echo "== simulator processes =="
+        ps -Ao pid,ppid,etime,%cpu,%mem,comm | grep -i -E "Simulator|CoreSimulator|launchd_sim|SimulatorTrampoline|xctest" | grep -v grep || echo "(none)"
+        echo "== simulator devices =="
+        xcrun simctl list devices || true
+        echo "== audio devices =="
+        system_profiler SPAudioDataType 2>&1 | head -60 || true
+        echo "== coreaudiod log (last 15m) =="
+        log show --last 15m --predicate 'process == "coreaudiod"' --style compact 2>/dev/null | tail -100 || echo "(none)"
+
+        # 調査用: 失敗したテスト名を job log から拾う。ハングしたテストを特定する
+        if [ -f build/logs/e2e-test.log ]; then
+          echo "== failed tests =="
+          grep -E "error: " build/logs/e2e-test.log | tail -40 || echo "(none)"
+        fi
+
+        # 音声サブシステムを待っているスレッドのスタックを sample の出力から抜き出す。
+        # sample の出力はスレッド単位で並ぶため、該当するフレームを含むスレッドのブロックだけを出す
+        extract_threads() {
+          awk -v pattern="$2" '
+            /^ *[0-9]+ Thread_/ {
+              if (block != "" && block ~ pattern) printf "%s", block
+              block = $0 "\n"
+              next
+            }
+            { if (block != "") block = block $0 "\n" }
+            END { if (block != "" && block ~ pattern) printf "%s", block }
+          ' "$1"
+        }
+
+        # 調査用: ハング時に取得した sample のうち、直近 8 件から音声サブシステムを待っている
+        # スレッドのスタックを出す。ホストの user 名を含む path は公開しないよう伏せる
+        echo "== hang samples =="
+        mkdir -p build/hang-samples/audio-threads
+        for file in $(ls -1 build/hang-samples/sample-*.txt 2>/dev/null | tail -8); do
+          echo "--- $file ---"
+          summary="build/hang-samples/audio-threads/$(basename "$file")"
+          extract_threads "$file" 'AVAudioSession|AURemoteIO|AudioToolbox|AudioUnit|coreaudiod|_ReportRPCTimeout' \
+            >"$summary"
+          if [ -s "$summary" ]; then
+            head -120 "$summary" | sed -E 's#/Users/[^/ ]+#/Users/<redacted>#g'
+          else
+            echo "(no audio subsystem frame in this sample; showing the beginning of the call graph)"
+            sed -n '/^Call graph:/,$p' "$file" |
+              head -40 |
+              sed -E 's#/Users/[^/ ]+#/Users/<redacted>#g'
+          fi
+        done
+
+        if [ -s build/hang-samples/sample.log ]; then
+          echo "== hang sample errors =="
+          grep -i -E "error|fail" build/hang-samples/sample.log | tail -20 || true
+        fi
+
         if [ ! -d build/e2e.xcresult ]; then
           echo 'No E2E result bundle is available.'
           exit 0
@@ -100,8 +255,51 @@ jobs:
         xcrun xcresulttool export diagnostics \
           --path build/e2e.xcresult \
           --output-path build/e2e-diagnostics
+
+        # .ips の captureTime を epoch 秒へ変換する。変換できない場合は失敗を返す
+        capture_epoch() {
+          local capture normalized
+          capture=$(jq -r 'select(.threads? != null) | .captureTime // .timestamp' "$1" 2>/dev/null |
+            head -1)
+          if [ -z "$capture" ]; then
+            capture=$(jq -r '.timestamp // empty' "$1" 2>/dev/null | head -1)
+          fi
+          [ -n "$capture" ] || return 1
+          normalized=$(printf '%s' "$capture" | sed -E 's/\.[0-9]+ / /')
+          date -j -f "%Y-%m-%d %H:%M:%S %z" "$normalized" +%s 2>/dev/null || return 1
+        }
+
+        # 調査用: Simulator のデバイスに残った過去の crash report を毎回 export してしまうため、
+        # この job の開始より前に記録された report は stale として区別する。stale な report の
+        # スタックを失敗の原因として扱わないための判定
+        is_fresh_report() {
+          local epoch
+          epoch=$(capture_epoch "$1") || return 1
+          [ "$epoch" -ge "${E2E_STARTED_AT_EPOCH:-0}" ]
+        }
+
+        echo "== crash report inventory =="
         find build/e2e-diagnostics -type f -name '*.ips' -print0 |
           while IFS= read -r -d '' report; do
+            proc=$(jq -r 'select(.threads? != null) | .procName // empty' "$report" 2>/dev/null | head -1)
+            incident=$(jq -r 'select(.threads? != null) | .incident // empty' "$report" 2>/dev/null | head -1)
+            capture=$(jq -r 'select(.threads? != null) | .captureTime // .timestamp // empty' "$report" 2>/dev/null | head -1)
+            if is_fresh_report "$report"; then
+              freshness="fresh"
+            else
+              freshness="stale-or-unknown"
+            fi
+            echo "$report: proc=$proc incident=$incident captureTime=$capture freshness=$freshness"
+          done
+
+        # この job で記録された report だけを従来どおり解析する
+        echo "== crash report frames (fresh only) =="
+        find build/e2e-diagnostics -type f -name '*.ips' -print0 |
+          while IFS= read -r -d '' report; do
+            if ! is_fresh_report "$report"; then
+              echo "skip stale report: $report"
+              continue
+            fi
             jq '
               select(.threads? != null) |
               select(.procName == "xctest" or (.procName | startswith("Sora"))) |
@@ -110,6 +308,11 @@ jobs:
                 process: .procName,
                 exception: (.exception | {type, signal, codes}),
                 termination: (.termination | {namespace, code, indicator}),
+                images: [
+                  .usedImages[]? |
+                  select(.name == "xctest" or (.name | startswith("Sora"))) |
+                  {name, uuid}
+                ],
                 frames: [
                   .threads[.faultingThread].frames[]? |
                   {image: $crash.usedImages[.imageIndex].name, symbol, symbolLocation}

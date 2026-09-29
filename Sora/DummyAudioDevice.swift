@@ -321,6 +321,16 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
   var isRecording: Bool { withState { $0.isRecording } }
   var isHardMuted: Bool { withState { $0.isHardMuted } }
 
+  // MARK: - 調査用
+
+  /// 調査用: 音声サブシステムの操作に要した時間をミリ秒で返す
+  ///
+  /// CI の E2E (macos-m1-2) でだけ接続が connectionTimeout で失敗する事象の切り分けに使う。
+  /// ホストの音声サービスが応答しない場合、操作が戻らずこの値が極端に大きくなる
+  private func elapsedMilliseconds(since start: Date) -> Int {
+    Int(Date().timeIntervalSince(start) * 1000)
+  }
+
   // MARK: - RTCAudioDevice メソッド
 
   func initialize(with delegate: RTCAudioDeviceDelegate) -> Bool {
@@ -332,13 +342,32 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
     // ハードウェア経路のときだけ AVAudioSession を設定する
     if playoutHandler == nil {
       // RTCAudioDevice 実装は AVAudioSession の設定責務を持つ (RTCAudioDevice.h)
+      //
+      // 調査用: AVAudioSession の各操作はホストの音声サービス (coreaudiod) の応答を待つため、
+      // 接続処理の同期パスでブロックし得る。どの操作で止まるかを特定できるよう、操作の前後と
+      // 所要時間を info レベルで残す (E2E テストがレベルを info へ下げて取得する)。
+      // begin だけが出て end が出ない操作がブロックしている
+      func runPhase<T>(_ name: String, _ body: () throws -> T) rethrows -> T {
+        let startedAt = Date()
+        Logger.info(
+          type: .dummyAudioDevice,
+          message: "initialize: \(name) begin")
+        let value = try body()
+        Logger.info(
+          type: .dummyAudioDevice,
+          message: "initialize: \(name) end (took \(elapsedMilliseconds(since: startedAt)) ms)")
+        return value
+      }
+
       do {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
-          .playAndRecord,
-          mode: .default,
-          options: [.defaultToSpeaker])
-        try session.setActive(true)
+        let session = runPhase("sharedInstance") { AVAudioSession.sharedInstance() }
+        try runPhase("setCategory") {
+          try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.defaultToSpeaker])
+        }
+        try runPhase("setActive") { try session.setActive(true) }
       } catch {
         // 失敗時も true を返す。false を返すと ADM の初期化失敗となり、
         // 接続処理がクラッシュする (adm_helpers.cc の RTC_CHECK) ため、警告ログのみで継続する。
@@ -435,12 +464,22 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
       componentFlags: 0,
       componentFlagsMask: 0)
 
+    // 調査用: AURemoteIO の初期化はホストの音声サービスの応答待ちで止まり得るため、
+    // AudioUnit の生成とレンダーリソース確保の前後と所要時間を info レベルで残す
+    let createStartedAt = Date()
+    Logger.info(
+      type: .dummyAudioDevice,
+      message: "initializePlayout: AUAudioUnit begin")
     guard let au = try? AUAudioUnit(componentDescription: desc) else {
       Logger.warn(
         type: .dummyAudioDevice,
         message: "failed to create AUAudioUnit")
       return false
     }
+    let createElapsed = elapsedMilliseconds(since: createStartedAt)
+    Logger.info(
+      type: .dummyAudioDevice,
+      message: "initializePlayout: AUAudioUnit end (took \(createElapsed) ms)")
     au.isOutputEnabled = true
     au.isInputEnabled = false  // 録音は別経路（タイマー）のため入力不要
     au.maximumFramesToRender = 1024
@@ -469,6 +508,11 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
       return getPlayoutData(actionFlags, timestamp, inputBusNumber, frameCount, outputData)
     }
 
+    // 調査用: レンダーリソースの確保も音声サービスの応答待ちで止まり得るため前後を残す
+    let allocateStartedAt = Date()
+    Logger.info(
+      type: .dummyAudioDevice,
+      message: "initializePlayout: allocateRenderResources begin")
     do {
       try au.allocateRenderResources()
     } catch {
@@ -477,6 +521,11 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
         message: "failed to allocate render resources: \(error.localizedDescription)")
       return false
     }
+    Logger.info(
+      type: .dummyAudioDevice,
+      message:
+        "initializePlayout: allocateRenderResources end (took \(elapsedMilliseconds(since: allocateStartedAt)) ms)"
+    )
 
     // 準備の途中で停止した場合は、作成した AudioUnit を解放して初期化しない
     guard
@@ -523,6 +572,11 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
 
     // AudioUnit の起動と isPlaying の更新は別の lock 区間になるため、世代で停止を検出する
     guard let (audioUnit, lifecycle) = playoutContext() else { return false }
+    // 調査用: startHardware も音声サービスの応答待ちで止まり得るため前後を残す
+    let startStartedAt = Date()
+    Logger.info(
+      type: .dummyAudioDevice,
+      message: "startPlayout: startHardware begin")
     do {
       try audioUnit.startHardware()
     } catch {
@@ -531,6 +585,10 @@ final class DummyAudioDevice: NSObject, RTCAudioDevice {
         message: "failed to start hardware: \(error.localizedDescription)")
       return false
     }
+    Logger.info(
+      type: .dummyAudioDevice,
+      message:
+        "startPlayout: startHardware end (took \(elapsedMilliseconds(since: startStartedAt)) ms)")
     // 起動の途中で停止した場合は、起動したハードウェアを停止して開始しない
     guard
       updateIfCurrentLifecycle(
