@@ -318,7 +318,7 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 
 - `MediaChannelGetStatsContext` に `stateStorage` と `transportStorage` を追加し、完了 closure は `[context]` だけを捕捉する。state は `context.stateStorage.state`、同一性判定は `context.transportStorage.native` で行い、`currentPeerConnection === context.peerConnection` の意味は変えていない
 - `transportStorage` は弱参照で保持する。変更前の `[weak self]` と同じく `MediaChannel` (と `PeerChannel`) が解放済みなら `MediaChannel is unavailable` を 1 回だけ返して終端する。強参照にすると、解放後も `PeerChannelTransportStorage` が `RTCPeerConnection` の参照を保持し、解放済みのチャンネルの統計を成功として返してしまう
-- `state` の storage 化は設計の主案 (computed property 化) ではなく、stored property を維持して lock 付き storage を追加する方式へ切り替えた。`public private(set) var state` を computed property にすると ABI dump の `declAttributes` (`HasStorage` / `HasInitialValue`) と getter の `Transparent` / `implicit` が変わり、`make api-check-fresh` の fresh な dump が committed baseline と一致しない (最小 module の ABI probe で実測して確認した。手順と log は「ABI probe」)。設計方針の「差分が出た場合は、この storage 化を別 issue に分離し、本 issue では `state` の読みを別の排他に閉じる方式へ切り替える」に従った。分離先は `0178` (open、`MediaChannel.state` の単一所有への整理) である。遷移は `setState(_:)` の 1 箇所へ集約し、`connectionLifecycleLock` 配下で `state` と `stateStorage` を同時に更新する
+- `state` の storage 化は設計の主案 (computed property 化) ではなく、stored property を維持して lock 付き storage を追加する方式へ切り替えた。`public private(set) var state` を computed property にすると ABI dump の `declAttributes` (`HasStorage` / `HasInitialValue`) と getter の `Transparent` / `implicit` が変わり、`make api-check-fresh` の fresh な dump が committed baseline と一致しない (最小 module の ABI probe で実測して確認した。手順と log は「ABI probe」)。設計方針の「差分が出た場合は、この storage 化を別 issue に分離し、本 issue では `state` の読みを別の排他に閉じる方式へ切り替える」に従った。分離先は `0180` (open、`MediaChannel.state` の単一所有への整理) である。遷移は `setState(_:)` の 1 箇所へ集約し、`connectionLifecycleLock` 配下で `state` と `stateStorage` を同時に更新する
 - `state` に `didSet` を付けて `stateStorage` の写しを追随させる方式も採らない。観測器を持つ stored property は、暗黙の getter から `Transparent` が外れて `swift-api-digester` の dump が committed baseline と一致しなくなる (ABI probe で実測。`VideoView.backgroundView` が同じ形である)。`state` を直接代入する経路を足す場合は `setState(_:)` を経由する
 
 ### 表の 10 (`DataChannel`)
@@ -378,7 +378,7 @@ swiftc -emit-module -module-name Probe -swift-version 6 -sdk "$(xcrun --sdk ipho
 ```
 
 - probe の source は `build/abi-probe/stored/Probe.swift` / `build/abi-probe/computed/Probe.swift` / `build/abi-probe/didset/Probe.swift`、dump は `build/abi-probe/stored.json` / `build/abi-probe/computed.json` / `build/abi-probe/didset.json`、差分は `build/abi-probe/diff.txt` (stored と computed) と `build/abi-probe/diff-didset.txt` (stored と didSet 付き stored) である
-- `public private(set) var state: Int = 0` (stored property) から、lock 付き storage を explicit な get / set で読む computed property へ変えた差分は、`declAttributes` の `HasInitialValue` と `HasStorage` の消失、`hasStorage: true` の消失、getter の `implicit: true` と `Transparent` の消失である (`SetterAccess` と `Final` は残る)。したがって `make api-baseline` による baseline の再生成が必要であり、`0178` へ分離した
+- `public private(set) var state: Int = 0` (stored property) から、lock 付き storage を explicit な get / set で読む computed property へ変えた差分は、`declAttributes` の `HasInitialValue` と `HasStorage` の消失、`hasStorage: true` の消失、getter の `implicit: true` と `Transparent` の消失である (`SetterAccess` と `Final` は残る)。したがって `make api-baseline` による baseline の再生成が必要であり、`0180` へ分離した
 - stored property に `didSet` を足した場合の差分は、getter の `Transparent` の消失だけである (`HasInitialValue` / `HasStorage` / `hasStorage` / `implicit` は残る)。`Sora` module の `make api-check-fresh` でも `MediaChannel.state` の getter から `Transparent` が外れて baseline と一致しなかったため、`state` に `didSet` を付けて `stateStorage` の写しを追随させる方式は採らず、`setState(_:)` で `state` と `stateStorage` を同時に更新する形にした
 
 ### TSan の実測
@@ -416,7 +416,7 @@ swiftc -emit-module -module-name Probe -swift-version 6 -sdk "$(xcrun --sdk ipho
 
 ### 残った懸念
 
-- `MediaChannel.state` の単一所有への整理は本 issue では行っていない。stored property の公開 getter は lock の外のままである。computed property 化は公開 API baseline の再生成を伴うため、`0176` の `.connected` を作る seam の追随と合わせて `0178` (open) で行う
+- `MediaChannel.state` の単一所有への整理は本 issue では行っていない。stored property の公開 getter は lock の外のままである。computed property 化は公開 API baseline の再生成を伴うため、`0176` の `.connected` を作る seam の追随と合わせて `0180` (open) で行う
 - `MediaChannelGetStatsContext.transportStorage` の弱参照は、`PeerChannel` が `MediaChannel` に単一所有されることを前提にする。`PeerChannel` が別経路で生存したまま `MediaChannel` だけが解放される構成を将来作る場合は、この判定の前提を見直す必要がある
 - `MediaChannel` の `deinit` 中に statistics の完了 block が走る狭い窓では、`transportStorage` が生存しているため `MediaChannel is unavailable` ではなく、`stateStorage` が `.connected` のままなら同一性判定を通過して success を返し得る。変更前の `[weak self]` はこの窓でも failure を返していた。解放開始時に読み取り経路を終端する扱いは `0179` (open、bug) で決める
 - `MediaChannelConnectionTaskBox` が `ConnectionTask` を強参照で保持するため、利用者が戻り値を即座に手放しても block の実行までは `ConnectionTask` が生存する。変更前に block が強参照で捕捉していた挙動と同じである
