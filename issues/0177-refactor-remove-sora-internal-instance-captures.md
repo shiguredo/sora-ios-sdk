@@ -62,7 +62,7 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 - `PeerChannel` (internal。`Sora/PeerChannel.swift`)
   - 接続状態フラグ 5 つ (`isRedirecting` / `webSocketDisconnectScheduled` / `disconnectTimerScheduled` / `dataChannelGeneration` / `disconnectTimerGeneration`) は `ConnectionStateOwner` が単一所有し、`ConnectionSnapshotStorage` の snapshot 経由で読む。`handleConnectionEvent(_:)` が更新経路である (`0100` の成果)。`ConnectionStateOwner` は `@unchecked Sendable` で、可変状態を serial `DispatchQueue` 上でのみ読み書きする。`ConnectionSnapshotStorage` は `NSLock` で `snapshot` の全アクセスを保護するが `Sendable` 宣言を持たない
   - `isAudioInputInitialized` は `var isAudioInputInitialized: Bool = false` として宣言され、読み (`PeerChannel.initializeAudioInput()` の先頭) と書き (`RTCAudioSession.initializeInput(_:)` の完了 closure) のいずれも lock 保護を持たない。所有者と保護区間が未定である
-  - `nativeChannel` / `onConnect` / `dataChannels` / `switchedToDataChannel` / `signalingOfferMessageDataChannels` / `rpcChannel` / `streams` / `offerEncodings` は lock 保護のない `var` である。`PeerChannel.Lock` (プロパティ名 `lock`) が保護すると doc コメントに書かれているのは `count` / `isDisconnecting` / `shouldDisconnect` であり、これら `var` の相互排他ではない。`lock` は非同期処理の生存数と切断の遅延を管理するため、進行中の非同期処理が無い状態 (`count == 0`、または接続試行中の `count == 1` から `onConnect != nil` を確認して強制的に `count = 0` にした状態) で `basicDisconnect` を走らせることは保証するが、`state` getter のような任意スレッドからの読みと `createAndSendAnswer` の `nativeChannel` 書き込みを直列化しない。したがって表の 1 から 6 の経路には、`PeerChannel` の状態を `Sendable` と主張できる排他が無い
+  - `nativeChannel` / `dataChannels` / `switchedToDataChannel` / `signalingOfferMessageDataChannels` / `rpcChannel` / `streams` / `offerEncodings` は lock 保護のない `var` である (`onConnect` は `0151` (完了 2026-09-28) で `connectHandlerLock` に閉じたため、着手時点の対象外である)。`PeerChannel.Lock` (プロパティ名 `lock`) が保護すると doc コメントに書かれているのは `count` / `isDisconnecting` / `shouldDisconnect` であり、これら `var` の相互排他ではない。`lock` は非同期処理の生存数と切断の遅延を管理するため、進行中の非同期処理が無い状態 (`count == 0`、または接続試行中の `count == 1` から `onConnect != nil` を確認して強制的に `count = 0` にした状態) で `basicDisconnect` を走らせることは保証するが、`state` getter のような任意スレッドからの読みと `createAndSendAnswer` の `nativeChannel` 書き込みを直列化しない。したがって表の 1 から 6 の経路には、`PeerChannel` の状態を `Sendable` と主張できる排他が無い
   - `webRTCConfiguration` は `webRTCConfigurationLock` 配下で読み書きする。`signalingChannel` と `snapshot` は `let` である。`snapshot` は `ConnectionConfigurationSnapshot` (checked `Sendable`) である
   - `PeerChannel.state` の値は `nativeChannel.connectionState` の写像を基本とし、`onConnect != nil` のとき `.new` だけを `.connecting` に上書きする。このため表の 5 の `state != .closed` と表の 6 の `state == .disconnected` は、`nativeChannel == nil` の場合を含めて `nativeChannel?.connectionState` だけで判定でき、`onConnect` を読まない
 - `MediaChannel` (public。`Sora/MediaChannel.swift`)
@@ -109,10 +109,12 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 #### `PeerChannel` の共通整理 (表の 1 から 6)
 
 - `isAudioInputInitialized` の所有者を `ConnectionStateOwner` にする。`ConnectionLifecycleState` に `isAudioInputInitialized` を追加し、`ConnectionEvent` に書き込み用の case を追加し、`ConnectionSnapshotStorage` 経由で読む。これで読み書きが単一所有者の直列 queue と `NSLock` に閉じる。`PeerChannel` の lock 保護のない `var` は削除する
-- `nativeChannel` / `streams` / `offerEncodings` の読み書きを単一の排他へ移す。`ConnectionSnapshotStorage` と同じ「`NSLock` で保護した storage を 1 つ持ち、`@unchecked Sendable` を付ける」形の内部型を追加し、`PeerChannel` はその storage 経由で読み書きする。`nativeChannel` は `RTCPeerConnection` の参照を保持するため、storage の doc コメントには「参照の再代入を `NSLock` で直列化するだけで、`RTCPeerConnection` のオブジェクト状態の不変性は主張しない。参照の取り出しと、取り出した参照に対する `connectionState` などの呼び出しは別の区間で行う」と書く。`streams` と `offerEncodings` も同じ storage に置く。lock の順序は既存の `Lock.nsLock` → storage → `webRTCConfigurationLock` の向きだけを許し、storage を保持したまま `Lock.nsLock` や `webRTCConfigurationLock` を取らない (逆順を作らない)
+- `nativeChannel` / `streams` / `offerEncodings` の読み書きを単一の排他へ移す。`ConnectionSnapshotStorage` と同じ「`NSLock` で保護した storage を 1 つ持ち、`@unchecked Sendable` を付ける」形の内部型を追加し、`PeerChannel` はその storage 経由で読み書きする。`nativeChannel` は `RTCPeerConnection` の参照を保持するため、storage の doc コメントには「参照の再代入を `NSLock` で直列化するだけで、`RTCPeerConnection` のオブジェクト状態の不変性は主張しない。参照の取り出しと、取り出した参照に対する `connectionState` などの呼び出しは別の区間で行う」と書く。`streams` と `offerEncodings` も同じ storage に置く。lock の順序は既存の `Lock.nsLock` → `connectHandlerLock` と `Lock.nsLock` → storage → `webRTCConfigurationLock` の向きだけを許し、`connectHandlerLock` / storage を保持したまま `Lock.nsLock` を取らず、storage を保持したまま `webRTCConfigurationLock` も取らない (逆順を作らない)。`connectHandlerLock` と storage / `webRTCConfigurationLock` は入れ子にしない
+
+  `connectHandlerLock` は `onConnect` 専用に導入された lock であり、`0129` の統合対象外として維持する。本 issue は (a) callback の 1 回保証、(b) 利用者 callback を `connectHandlerLock` の区間外で呼ぶこと、(c) `connectHandlerLock` を保持したまま他の lock を取らないこと、の 3 条件を壊さない
 - 表の 2 から 6 は `PeerChannel` を捕捉するため、用途限定の参照保持 box を 1 つ追加して共用する。box は `weak var value: PeerChannel?` を持ち、`init` でのみ代入する。これにより `[weak self]` の「`self` が解放済みなら何もしない」挙動を維持する (`PeerChannelDisconnectCompletionContext` のように強参照にすると、`0175` が扱う `self` 解放時の handler 呼び出し経路が到達不能になり、`0007` が見送った判断を覆すことになる)
-- box の doc コメントには、closure が呼ぶメソッドが到達する状態ごとにどの排他が守るかを列挙する。表の 3 / 4 / 5 が読む状態は本 issue の整理で閉じる。表の 2 / 6 は `disconnect` 経由で `onConnect` と切断経路の状態に到達するため、`0151` と `0129` の結論を反映する (「前提となる issue」)
-- `PeerChannel` 全体への `@unchecked Sendable` は主張しない。`onConnect` (`0151` が扱う) / `dataChannels` / `rpcChannel` / `switchedToDataChannel` / `signalingOfferMessageDataChannels` / `dataChannelSignalingClose` / `connectedAtLeastOnce` / `sdp` / `internalHandlers` が未整理のまま残り、これらを本 issue で整理すると `0129` の変更対象に踏み込むためである
+- box の doc コメントには、closure が呼ぶメソッドが到達する状態ごとにどの排他が守るかを列挙する。表の 3 / 4 / 5 が読む状態は本 issue の整理で閉じる。表の 2 / 6 は `disconnect` 経由で `onConnect` と切断経路の状態に到達する。`onConnect` の読み書きは `0151` で `connectHandlerLock` に閉じたため、box の doc コメントはその排他を根拠にする。切断経路の残りの状態は `0129` の結論を反映する (「前提となる issue」)
+- `PeerChannel` 全体への `@unchecked Sendable` は主張しない。`dataChannels` / `rpcChannel` / `switchedToDataChannel` / `signalingOfferMessageDataChannels` / `dataChannelSignalingClose` / `connectedAtLeastOnce` / `sdp` / `internalHandlers` が未整理のまま残り (`onConnect` は `0151` で `connectHandlerLock` に閉じた)、これらを本 issue で整理すると `0129` の変更対象に踏み込むためである
 
 #### 表の 1
 
@@ -123,7 +125,7 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 #### 表の 2
 
 - 解消方針: 状態所有の整理 + 参照保持 box。`nativeChannel` は追加する storage から読む。`dataChannelGeneration` は `ConnectionSnapshotStorage` から読む。`initializeSenderStream(mid:)` / `updateSenderOfferEncodings()` は `PeerChannel` のメソッドであるため、box の `value` 経由で呼ぶ。box の doc コメントには、`initializeSenderStream` が読む `nativeChannel` / `streams` / `offerEncodings` が storage の `NSLock` に、`snapshot` と `nativePeerChannelFactory` が `let` に、エラー経路の `disconnect` が `Lock` の管理下の経路に閉じることを書く
-- 前提: エラー経路の `disconnect` は `Lock.waitDisconnect` から `context?.onConnect` を読み、`basicDisconnect` から `invokeConnectHandler` を呼ぶ。この 2 つが `0151` の対象であり、`Lock` の統合先が `0129` の対象である。したがって表の 2 の box の根拠は `0151` と `0129` の結論に依存する。両 issue が未完了の間は着手しない (「前提となる issue」)
+- 前提: エラー経路の `disconnect` は `Lock.waitDisconnect` から `context?.onConnect` を読み、`basicDisconnect` から `invokeConnectHandler` を呼ぶ。`onConnect` の読み書きは `0151` で `connectHandlerLock` に閉じたため、この 2 つはその排他を根拠にできる。`Lock` の統合先が `0129` の対象である。したがって表の 2 の box の根拠は `connectHandlerLock` と `0129` の結論に依存する。`0129` が未完了の間は着手しない (「前提となる issue」)
 - `0175` (完了 2026-09-28、`createAnswer` の `guard let self else` 節で handler を呼ぶ) と同じ closure を変更する。`0175` が確立した契約 (各 return 経路で高々 1 回。native の完了 block に委ねた経路を除き return する経路では必ず 1 回。native の完了が返らない場合は 0 回) を壊さない形にする。box の `value` が nil の経路でも handler が呼ばれることを維持する
 
 #### 表の 3
@@ -144,7 +146,7 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 #### 表の 6
 
 - 解消方針: 状態所有の整理 + 参照保持 box。`disconnectTimerGeneration` は `ConnectionSnapshotStorage`、`handleConnectionEvent(_:)` は `ConnectionStateOwner`、`state == .disconnected` は `nativeChannel?.connectionState == .disconnected` と等価、`disconnect(error:reason:)` は `Lock` の管理下の経路である
-- 前提: `disconnect` は `rpcChannel` / `dataChannelSignalingClose` / `connectedAtLeastOnce` / `streams` / `nativeChannel` / `onConnect` / `internalHandlers` に到達する。これらの排他は `0129` (単一 ingress への統合) と `0151` (`onConnect`) の結論に依存するため、表の 2 と同じく両 issue の完了後に着手する
+- 前提: `disconnect` は `rpcChannel` / `dataChannelSignalingClose` / `connectedAtLeastOnce` / `streams` / `nativeChannel` / `onConnect` / `internalHandlers` に到達する。`onConnect` は `0151` で `connectHandlerLock` に閉じた。残りの排他は `0129` (単一 ingress への統合) の結論に依存するため、表の 2 と同じく `0129` の完了後に着手する
 - `disconnect` の呼び出し回数・順序・配送先を変えないこと。`Lock` の遅延実行セマンティクスを維持する
 
 #### 表の 7
@@ -193,12 +195,12 @@ file 別の内訳は `Sora/PeerChannel.swift` 6 件、`Sora/MediaChannel.swift` 
 
 ## 前提となる issue
 
-本 issue は `0151` / `0129` / `0175` の完了後に着手する。3 つとも、本 issue が変更する `PeerChannel` の状態所有または同じ closure の契約を扱うため、先行して develop に入っていることを着手条件にする。`0176` は並行して進めてよいが、`MediaChannel.getStats` の同一性判定の回帰テストは重複させない (「テスト方針」)。
+本 issue は `0129` の完了後に着手する。`0129` は、本 issue が変更する `PeerChannel` の状態所有または同じ closure の契約を扱うため、先行して develop に入っていることを着手条件にする。`0151` (完了 2026-09-28) と `0175` (完了 2026-09-28) は完了済みで、`0151` が `onConnect` の読み書きを `connectHandlerLock` に閉じたことを着手時の前提にする。`0176` は並行して進めてよいが、`MediaChannel.getStats` の同一性判定の回帰テストは重複させない (「テスト方針」)。
 
 - `0173` (完了 2026-09-28): 切り分けの根拠。`## スコープ外` が本 issue の 10 件 (C 群) を切り分け、用途限定 box で包まない理由と、`MediaChannel` / `ConnectionTask` が公開型のため `Sendable` 準拠の是非も含めて判断することを書いている。本 issue はこの切り分けを引き継ぐ
 - `0108` (open): Sora target の warnings-as-errors 化。本 issue の完了が `0108` の前提であり、その逆ではない。`0108` は本 issue を未起票として扱っているため、本 issue の起票後に `0108` 側の記述を更新する必要がある。この更新は `0108` 側の作業として行い、本 issue の変更対象には含めない
 - `0115` (pending、`issues/pending/0115-remove-stopwatch.md`): `Utilities.Stopwatch` を削除する。`Sora/Utilities.swift` の 1 件はこの削除で消える。`0115` は非推奨化 release と次期 major version を前提にするため本 issue の期間内に完了するとは限らない。本 issue は `0115` を待たず、`0115` の変更対象も書き換えない。`0115` が先に完了した場合は、完了条件の「残る 1 件」を 0 件として読み替える
-- `0151` (open): `PeerChannel.onConnect` のデータ競合。表の 2 と 6 の box の根拠は、`disconnect` 経由で `onConnect` を読む経路が排他に閉じること (`Lock.waitDisconnect` の `context?.onConnect` の読みと、`basicDisconnect` からの `invokeConnectHandler` の呼び出し) に依存する。本 issue は `0151` の変更対象 (`onConnect` の排他) を書き換えず、その結論に従って box の doc コメントを書く
+- `0151` (完了 2026-09-28): `PeerChannel.onConnect` のデータ競合。`onConnect` の読み書きは専用の `connectHandlerLock` に閉じた (接続試行中の判定 (`state` / `Lock.waitDisconnect`) の読みも同じ排他に入る)。表の 2 と 6 の box の根拠は、`disconnect` 経由で `onConnect` を読む経路 (`Lock.waitDisconnect` の `context?.onConnect` の読みと、`basicDisconnect` からの `invokeConnectHandler` の呼び出し) がこの排他に閉じることに依存する。`connectHandlerLock` を `0129` の統合対象外として維持し `0129` が壊してはならない 3 条件は「設計方針」に書く。本 issue は `0151` の変更対象 (`onConnect` の排他) を書き換えず、その結論に従って box の doc コメントを書く
 - `0129` (open): `PeerChannel.Lock` を接続状態 reducer へ統合する。表の 2 と 6 が到達する切断経路の排他と、`PeerChannel` の状態所有の整理先を決めるため、本 issue は `0129` の変更対象 (`Lock` / `webRTCConfigurationLock`) を書き換えず、その結論に従って box の doc コメントと追加する storage の位置を決める
 - `0175` (完了 2026-09-28): `createAnswer` の `guard let self else` 節でも handler を呼ぶ。表の 2 と同じ closure を変更するため、`0175` が確立した契約 (各 return 経路で高々 1 回。native の完了 block に委ねた経路を除き return する経路では必ず 1 回。native の完了が返らない場合は 0 回) を壊さない形にする。本 issue は `0175` の修正内容を先取りしない。**表の 2 を実装する前に `0175` の else 節の存否と型検査を再確認し、`0177` の方針でこの節が消えている場合は、`CHANGES.md` の該当エントリと実装を巻き戻す。**
 - `0176` (open): `0173` の参照保持 box の回帰テスト。`0176` の対象は `0173` の 2 経路に限定し、本 issue が追加する box の回帰テストは本 issue で追加する (「テスト方針」)
