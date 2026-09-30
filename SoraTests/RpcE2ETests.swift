@@ -705,7 +705,9 @@ final class RpcE2ETests: E2ETestBase {
     }
 
     wait(for: [sendonlyExpectation], timeout: 35)
-    guard let sendonlyChannel else {
+    // sendonly の接続が成立したことを確認してから recvonly の完了を待つ
+    guard sendonlyChannel != nil else {
+      XCTFail("sendonly のメディアチャネルが nil")
       cleanupChannels()
       return
     }
@@ -919,7 +921,7 @@ final class RpcE2ETests: E2ETestBase {
       }
     }
 
-    _ = sora?.connect(configuration: recvonlyConfig) { [self] mediaChannel, error in
+    _ = sora?.connect(configuration: recvonlyConfig) { mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
           XCTFail("recvonly の接続に失敗した : \(error)")

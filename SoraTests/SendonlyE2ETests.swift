@@ -342,7 +342,7 @@ final class SendonlyE2ETests: E2ETestBase {
     // 初回接続
     // connect コールバックは実行キューが固定されていないため、共有状態の更新と
     // 後続処理は main queue に束ねる
-    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
           XCTFail("初回接続に失敗した : \(error)")
@@ -630,7 +630,7 @@ final class SendonlyE2ETests: E2ETestBase {
     // 接続する
     // connect コールバックは実行キューが固定されていないため、共有状態の更新と
     // 後続処理は main queue に束ねる
-    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
           XCTFail("接続に失敗した : \(error)")
@@ -888,7 +888,7 @@ final class SendonlyE2ETests: E2ETestBase {
     // 接続する
     // connect コールバックは実行キューが固定されていないため、共有状態の更新と
     // 後続処理は main queue に束ねる
-    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
           XCTFail("接続に失敗した : \(error)")

@@ -33,7 +33,14 @@ let package = Package(
         .testTarget(
             name: "SoraTests",
             dependencies: ["Sora"],
-            path: "SoraTests"
+            path: "SoraTests",
+            swiftSettings: [
+                // .treatAllWarnings を先、.treatWarning を後に書く。SwiftPM は宣言順に
+                // -warnings-as-errors と -Wwarning を並べるため、逆順にすると後方互換検証の
+                // ために参照している非推奨 API の警告 (DeprecatedDeclaration) が error になる
+                .treatAllWarnings(as: .error),
+                .treatWarning("DeprecatedDeclaration", as: .warning),
+            ]
         ),
     ],
     // SDK を Swift 6 言語モードで compile する。SwiftPM で取り込む consumer にも適用される。

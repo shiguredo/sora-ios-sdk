@@ -143,6 +143,9 @@
   - Xcode の version を 26.6 に更新する
   - SDK を iOS 26.5 に更新する
   - @t-miya
+- [UPDATE] `SoraTests` target を warnings-as-errors にする
+  - `SoraTests` の警告を gate で error として検出する (非推奨 API の警告だけは残す)
+  - @t-miya
 - [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
   - エラーパスと共通ヘルパーの早期 return で未 wait の expectation を残さず、切断イベントの検証を wait 後に行って assertion の誤帰属を防ぐ
   - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける。wait のタイムアウトをリクエストより長くし、コールバックの結果を保持して wait 後に検証する

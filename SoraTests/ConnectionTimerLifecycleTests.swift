@@ -94,7 +94,7 @@ final class ConnectionTimerLifecycleTests: XCTestCase {
   /// 設定するため、weak 参照で解放を確認できる。
   func testStopReleasesTimer() throws {
     var connectionTimer: ConnectionTimer? = try makeConnectionTimer(timeout: 100)
-    weak var weakTimer = connectionTimer
+    weak let weakTimer = connectionTimer
 
     connectionTimer?.run { [] in
       XCTFail("停止した Timer の handler は実行されないこと")

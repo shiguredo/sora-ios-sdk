@@ -566,7 +566,7 @@ final class StreamFrameOwnerTests: XCTestCase {
     let mediaChannel = try makeTestMediaChannel()
     let senderStream = makeSenderStreamWithVideoTrack(mediaChannel: mediaChannel)
     var firstRenderer: RecordingVideoRenderer? = RecordingVideoRenderer()
-    weak var weakFirstRenderer = firstRenderer
+    weak let weakFirstRenderer = firstRenderer
     senderStream.videoRenderer = firstRenderer
     drainOwnerAndMainQueue(senderStream)
     XCTAssertEqual(firstRenderer?.callbacks, [.added], "最初の設定で onAdded が配送されること")
@@ -852,7 +852,7 @@ final class StreamFrameOwnerTests: XCTestCase {
     let mediaChannel = try makeTestMediaChannel()
     let senderStream = makeSenderStreamWithVideoTrack(mediaChannel: mediaChannel)
     var firstRenderer: RecordingVideoRenderer? = RecordingVideoRenderer()
-    weak var weakFirstRenderer = firstRenderer
+    weak let weakFirstRenderer = firstRenderer
     senderStream.videoRenderer = firstRenderer
     guard
       let firstAdapter = (senderStream as? BasicMediaStream)?.videoRendererAdapterForTesting
