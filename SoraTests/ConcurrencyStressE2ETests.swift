@@ -22,10 +22,20 @@ import XCTest
 // - iteration の開始と終了、scenario 名、iteration 番号をログへ出します。失敗したときに
 //   どの iteration のどの scenario かを切り分けるためです。
 //
+// 実 Sora が connect を拒否する組み合わせは使いません。通っている E2E test と同じ組み立てに
+// 揃えるための前提は次の 2 点です。
+// - recvonly で音声と映像の両方を無効にした connect は、Sora が 4490 INVALID-MESSAGE で
+//   拒否します (CI で iteration 1 がこの組み合わせで拒否された)。このため recvonly の
+//   scenario では音声と映像を同時に無効にせず、既存の `RecvonlyE2ETests` と同じく
+//   既定 (有効) のままにします。recvonly は `PeerChannel.initializeAudioInput` を
+//   通らないため、音声を有効にしても Simulator の AURemoteIO の問題は起きません。
+// - `rpc_methods` は connect メッセージの `metadata` ではなく access token のクレームとして
+//   渡します。Sora が認証時に払い出す項目であり、既存の `RpcE2ETests` と同じ組み立てにします。
+//
 // redirect はサーバー側の指示で発生しクライアントから任意に起こせないため、この stress の
 // scenario には含めません (redirect は既存の `PeerChannelRedirectInvalidationTests` が
-// TSan の対象に入ります)。0154 が扱う handler bag の読み書きを並行させる stress も
-// 本ファイルの対象に含めません (issue 0119 のスコープ外)。
+// TSan の対象に入ります)。handler bag の排他は未完了のため、その読み書きを並行させる
+// stress も本ファイルの対象に含めません。
 
 /// 実 Sora 接続を反復する E2E concurrency runtime stress test です。
 final class ConcurrencyStressE2ETests: E2ETestBase {
@@ -128,11 +138,13 @@ final class ConcurrencyStressE2ETests: E2ETestBase {
   /// `role` だけで接続する scenario で共通に使います。切断は呼び出し側が行います。
   private func connectAndVerifyChannel(role: Role) throws -> MediaChannel {
     var config = try buildConfiguration(role: role)
-    // 実カメラと音声入力を起動しない (接続と切断の経路の検証に限定する)。
-    // Simulator では受信あり接続の音声入力の初期化が abort するため、音声は無効にする。
+    // 実カメラを起動しない (接続と切断の経路の検証に限定する)。
     config.initialCameraEnabled = false
-    config.audioEnabled = false
-    config.videoEnabled = false
+    // audioEnabled と videoEnabled は既定 (どちらも true) のままにする。recvonly で音声と
+    // 映像の両方を無効にした connect は Sora が 4490 INVALID-MESSAGE で拒否するため、この
+    // 2 つを同時に false にしてはならない。recvonly は音声入力の初期化経路
+    // (`PeerChannel.initializeAudioInput`) を通らないため、音声を有効のままにしても
+    // Simulator の AURemoteIO の問題は起きない (既存の `RecvonlyE2ETests` と同じ組み立て)。
     return try connectAndVerifyChannel(configuration: config)
   }
 
@@ -149,9 +161,12 @@ final class ConcurrencyStressE2ETests: E2ETestBase {
   /// connect() の戻り値を直ちにキャンセルする iteration です。
   private func runImmediateCancelIteration() throws {
     var config = try buildConfiguration(role: .sendonly)
+    // 実カメラと音声入力を起動しない (接続キャンセルの経路の検証に限定する)。
+    // 音声は無効にするが、映像は無効にしない。音声と映像の両方を無効にした connect は
+    // Sora が 4490 INVALID-MESSAGE で拒否するため (既存の `ConnectionTaskCancelE2ETests`
+    // と同じ組み立て)。
     config.initialCameraEnabled = false
     config.audioEnabled = false
-    config.videoEnabled = false
 
     let cancelExpectation = self.expectation(description: "接続キャンセルが完了すること")
     let task = sora?.connect(configuration: config) { _, error in
@@ -182,6 +197,10 @@ final class ConcurrencyStressE2ETests: E2ETestBase {
   /// 実 Sora へ接続し、RPC の timeout または cancellation を実行する iteration です。
   private func runRPCIteration(shouldCancel: Bool) throws {
     var config = try buildConfiguration(role: .recvonly)
+    // RPC の scenario は signaling の項目が他の scenario と異なる (simulcast と DataChannel
+    // signaling)。先行する scenario の残留セッションと signaling 項目が衝突しないよう、
+    // 一意なチャンネル ID を使う (既存の `RpcE2ETests` と同じ)
+    config.channelId = buildChannelId(unique: true)
     // RPC の DataChannel を開くため、DataChannel signaling を有効にする
     config.simulcastEnabled = true
     config.simulcastRequestRid = .r2
@@ -189,23 +208,27 @@ final class ConcurrencyStressE2ETests: E2ETestBase {
     config.ignoreDisconnectWebSocket = true
     config.videoCodec = .vp8
     config.initialCameraEnabled = false
+    // 音声は無効にする。映像は無効にしない (音声と映像の両方を無効にした connect は Sora が
+    // 4490 INVALID-MESSAGE で拒否するため。既存の `RpcE2ETests` の recvonly 接続と同じ組み立て)
     config.audioEnabled = false
-    config.videoEnabled = false
 
-    // RequestSimulcastRid を rpc_methods で許可する (接続前に設定する必要がある)
-    struct StressRPCMetadata: Encodable {
+    // RequestSimulcastRid を許可する。`rpc_methods` は connect メッセージの `metadata` では
+    // なく access token のクレームとして渡す (Sora が認証時に払い出す項目のため)
+    struct StressAccessTokenMetadata: Encodable {
       // Sora が受理するキー名に合わせるため、lowerCamelCase の規則を意図的に外す
       // swift-format-ignore: AlwaysUseLowerCamelCase
       let access_token: String
-      // swift-format-ignore: AlwaysUseLowerCamelCase
-      let rpc_methods: [String]
     }
+    // simulcast のクレームは `RpcE2ETests` の recvonly 接続と同じ組み合わせにする
     let accessToken = try buildJWTAccessToken(
       channelId: config.channelId,
-      privateClaims: ["rpc_methods": [RequestSimulcastRid.name]])
-    config.signalingConnectMetadata = StressRPCMetadata(
-      access_token: accessToken,
-      rpc_methods: [RequestSimulcastRid.name])
+      privateClaims: [
+        "rpc_methods": [RequestSimulcastRid.name],
+        "simulcast": true,
+        "simulcast_request_rid": "r2",
+        "simulcast_rpc_rids": ["none", "r0", "r1", "r2"],
+      ])
+    config.signalingConnectMetadata = StressAccessTokenMetadata(access_token: accessToken)
 
     let channel = try connectAndVerifyChannel(configuration: config)
 

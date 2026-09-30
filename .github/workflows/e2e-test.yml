@@ -305,7 +305,8 @@ jobs:
       - name: Slack Notification
         uses: shiguredo/github-actions/.github/actions/slack-notify@main
         with:
-          status: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+          # 真偽値では failure_and_fixed の判定で通知がスキップされるため、結果文字列へ畳んで渡す
+          status: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK }}
           slack_channel: sora-ios-sdk
         env:

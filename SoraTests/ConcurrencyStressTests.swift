@@ -18,9 +18,9 @@ import XCTest
 //   実行順序に依存し、また XCTest の内部状態を別スレッドから触ることになるためです
 //   (`PeerChannelConnectCompletionTests` / `LoggerTests` / `StreamFrameOwnerTests` と同じ方針)。
 //
-// 0154 が扱う handler bag (`MediaChannelHandlers` / `WebSocketChannelHandlers` /
-// `CameraVideoCapturerHandlers` / `MediaStreamHandlers`) の読み書きを並行させる stress は、
-// 本ファイルの対象に含めません (issue 0119 のスコープ外)。
+// handler bag (`MediaChannelHandlers` / `WebSocketChannelHandlers` /
+// `CameraVideoCapturerHandlers` / `MediaStreamHandlers`) の排他は未完了のため、その読み書きを
+// 並行させる stress は本ファイルの対象に含めません。
 
 /// 並行実行した受理 / 棄却と、スレッドをまたいで数える残高を集約する accumulator です。
 ///

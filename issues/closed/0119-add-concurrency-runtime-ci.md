@@ -201,7 +201,9 @@ retry (`-retry-tests-on-failure` / `-test-iterations` / `-run-tests-until-failur
 
 ### `slack_notify` の更新
 
-`needs` を `[e2e, tsan]` にし、`status` を `contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')` にした (`consumer-test.yml` の `swift6-consumer` と同じ形)。`needs.e2e.result` のままでは TSan の失敗が通知されない。`on.push.paths-ignore` は変更していない。
+`needs` を `[e2e, tsan]` にし、`status` を `contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success'` にした。`needs.e2e.result` のままでは TSan の失敗が通知されない。`on.push.paths-ignore` は変更していない。
+
+`status` を真偽値にしていたため、`slack-notify` が failure と認識せず失敗通知をスキップした (run 36670380572、`ステータス=true`)。`slack-notify` は `failure_and_fixed` の判定に結果文字列を使うため、真偽値ではなく `failure` / `cancelled` / `success` の文字列を返す式に直した。`notify_cancelled` (既定 true) に合わせ、cancelled は failure へ潰さず区別する (`consumer-test.yml` の `swift6-consumer` は潰しているが、`e2e-test.yml` は cancelled の通知を有効にしている)。
 
 ### 追加した stress test の内容 (対象・反復・timeout)
 
@@ -245,9 +247,25 @@ retry (`-retry-tests-on-failure` / `-test-iterations` / `-run-tests-until-failur
 - workflow の構文: `ruby -ryaml` で YAML を parse できること、`jobs` が `e2e` / `tsan` / `slack_notify` であること、`tsan` の step 名・`timeout-minutes: 20`・env のキー・`slack_notify` の `needs` が `[e2e, tsan]` であること、`uses` がすべて commit SHA で pin されていることを確認した。`actionlint` は環境に無い。既存 `e2e` job の差分は `slack_notify` の `needs` と `status` の 2 行だけで、`e2e` job 自体は変更していない
 - `git status --short`: `.github/workflows/e2e-test.yml` と `CHANGES.md` の変更、`SoraTests/ConcurrencyStressE2ETests.swift` と `SoraTests/ConcurrencyStressTests.swift` の新規のみ。コミットと push はしていない
 
+### CI で検出した 4490 INVALID-MESSAGE と scenario の修正
+
+2026-09-30 の `E2E Test` workflow (run 36670380572) の `e2e` job と `tsan` job の両方で、`ConcurrencyStressE2ETests.testConnectionStressScenarios` が失敗した。`e2e` job は `** TEST EXECUTE FAILED **` (exit 65) で `Executed 445 tests, with 7 tests skipped and 2 failures (1 unexpected)`、`tsan` job は同じ失敗で `Check Thread Sanitizer Report` が失敗した (`Run Thread Sanitizer Tests` step 自体は成功、`WARNING: ThreadSanitizer` は 0 行)。
+
+- 失敗したのは iteration 1 (`connect-and-disconnect`、recvonly) の connect である。test の stdout は `stress iteration 1/5 started: scenario=connect-and-disconnect` の 1 行だけで、test の実行時間は 0.46 秒 (`e2e` job) / 0.72 秒 (`tsan` job) であり、connect の送信から約 0.1 秒で `webSocketClosed(statusCode: other(4490), reason: "INVALID-MESSAGE")` が返っている (同じ実行で通っている recvonly の接続は約 0.3 秒で完了しているため、offer の処理まで進まずに拒否されている)
+- 原因は iteration 1 の connect が `"audio": false` と `"video": false` を同時に指定していたことである (`config.audioEnabled = false` と `config.videoEnabled = false`)。Sora は recvonly で音声も映像も有効にしない connect を拒否する (`details.reason` の `no_media` に相当すると推測する。Sora のドキュメントは `no_media` を「音声も映像も有効にせずに type: connect を送ってきた場合のエラー」とし、`signaling_error.jsonl` の `details.reason` はクライアントには返らない)。Sora のシグナリングエラーは理由にかかわらず close code 4490 で返り、クライアントが見る reason は `INVALID-MESSAGE` になる
+- 同じ CI 実行で通っている E2E test との差分が根拠である。recvonly の接続は `RecvonlyE2ETests` が音声と映像のフラグを既定 (有効) のまま、`RpcE2ETests` / `SimulcastE2ETests` が `audioEnabled = false` かつ映像は有効 (`videoCodec = .vp8`) で通っている。音声と映像を同時に無効にしているのは本 stress test の iteration 1 と 3 だけで、この組み合わせを使う他の E2E test は無い。`videoEnabled = false` と `audioEnabled = false` を同時に使う `MessagingE2ETests` (sendrecv) は通っているため、拒否の条件は「recvonly かつ音声と映像の両方が無効」である
+- `RequestSimulcastRid` はこの Sora で許可されている。同じ CI 実行で `RpcE2ETests.testRequestSimulcastRid` が skip せず 10.9 秒で pass している (rpc ラベルの DataChannel も払い出されている)。「残った懸念」に書いた RPC scenario の失敗は今回の原因ではない
+- scenario は削減していない。iteration 数は issue の設計どおり 5 のままにし、失敗した connect の組み立てだけを既存の通っている test に揃えた
+  - iteration 1 / 3 (recvonly の connect と切断): `RecvonlyE2ETests` と同じ組み立てにした。音声と映像は既定 (有効) のままにし、`initialCameraEnabled = false` だけを指定する。recvonly は `PeerChannel.initializeAudioInput` を通らない (送信側の経路のみ) ため、音声を有効にしても Simulator の AURemoteIO の問題は起きない
+  - iteration 2 (sendonly の即時キャンセル): 音声だけを無効にし、映像は無効にしない。`ConnectionTaskCancelE2ETests` / `PeerChannelConnectCompletionE2ETests` と同じ組み立てにした
+  - iteration 4 / 5 (RPC の timeout と cancellation): `RpcE2ETests` の recvonly 接続と同じ組み立てにした。`audioEnabled = false`、映像は有効 (`videoCodec = .vp8`)、`simulcastEnabled = true`、`simulcastRequestRid = .r2`、`dataChannelSignaling = true`、`ignoreDisconnectWebSocket = true`。`rpc_methods` は connect メッセージの `metadata` から外し、access token のクレーム (`rpc_methods` / `simulcast` / `simulcast_request_rid` / `simulcast_rpc_rids`) として渡す。RPC の scenario は signaling の項目が他の scenario と異なるため、`RpcE2ETests` と同じく一意な channel ID を使う
+- retry は追加していない。失敗した iteration と scenario は test のログへ出る
+- ローカルでは `SORA_SIGNALING_URL` と `TEST_SECRET_KEY` が無いため E2E は skip され、実サーバーでの確認はできない。修正の根拠は「同じ CI 実行で通っている E2E test との差分の解消」である
+- 接続メッセージそのものはローカルで確認した。一時的な probe (`SoraTests/TemporaryConnectMessageProbeTests.swift`、確認後に削除) で `Configuration` → `ConnectionConfigurationSnapshot` → `PeerChannel.makeSignalingConnect` → JSON の経路を実行し、修正前の iteration 1 の connect が `"video": false` と `"audio": false` を含むこと、修正後の iteration 1 の connect が `RecvonlyE2ETests` の connect と同じキー (`audio` / `video` を含まない) になること、修正後の RPC scenario の connect が `RpcE2ETests` の recvonly 接続と同じキー (`audio: false` / `video: {codec_type: VP8}` / `simulcast` / `simulcast_request_rid` / `data_channel_signaling` / `ignore_disconnect_websocket`) になることを確認した。probe は削除済みで `git status --short` に現れない
+
 ### 残った懸念
 
-- 実 Sora 接続を含む 5 iteration の E2E stress は、ローカルに `SORA_SIGNALING_URL` と `TEST_SECRET_KEY` が無いため skip され、実測できていない。PR の `e2e-test.yml` (`tsan` job) で確認する。RPC の scenario は接続前の access token に `rpc_methods` を含める必要があり、Sora のバージョンが `RequestSimulcastRid` を許可しない場合は RPC の 2 scenario が失敗し得る (`RpcE2ETests` は同じ理由で skip する)。PR で失敗が再現する場合は retry を足さず、scenario を減らすか別 issue へ切り出す
+- 実 Sora 接続を含む 5 iteration の E2E stress は、ローカルに `SORA_SIGNALING_URL` と `TEST_SECRET_KEY` が無いため skip され、実測できていない。PR の `e2e-test.yml` (`e2e` job と `tsan` job) で確認する。2026-09-30 の CI で iteration 1 が `4490 INVALID-MESSAGE` で失敗したため「CI で検出した 4490 INVALID-MESSAGE と scenario の修正」のとおり修正した。修正後も iteration 4 / 5 (RPC) は実サーバーで実行できていないため、接続の組み立てを `RpcE2ETests` に揃えたこと以外の確認はできていない。PR で失敗が再現する場合は retry を足さず、scenario を減らすか別 issue へ切り出す (Sora のバージョンが `RequestSimulcastRid` を許可しない場合は `RpcE2ETests` と同じく skip にする判断も残る)
 - interceptor 無効時の挙動が issue の想定 (race が検出されない) と異なり、`ERROR: Interceptors are not working` で abort した。判定 step は banner と test 数の判定でこの状態を失敗させるため job の目的は満たすが、issue の記述とは食い違う
 - `TSAN_EXIT_CODE` は TSan の race 検出時に非 0 になるが、`simctl spawn` の exit code は子プロセスの abort を必ず伝えるとは限らない。そのため job の主判定は `WARNING: ThreadSanitizer` の行数であり、exit code は補助の失敗条件として残している
 - `SoraTests` は `.swiftlint.yml` の対象外のため、追加 file の lint は `fmt-lint` (`swift format`) だけである
