@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/add-sendable-rpc-api
-- Polished: 2026-09-16
+- Polished: 2026-09-30
 
 ## 目的
 
@@ -20,9 +20,8 @@ RPC の parameter、result、server error を actor / Task 境界で安全に扱
 
 参照型や mutable state を保持する型でも準拠できるため、RPC の非同期処理を越えて安全に受け渡せる保証がない。
 
-`Sora/RPC.swift` には次の non-Sendable な公開・内部表現がある。
+`Sora/RPC.swift` には次の non-Sendable な公開・内部表現がある (`RPCErrorDetail` は `0157` で `data: JSONValue?` と `Sendable` 準拠へ変更済み)。
 
-- `RPCErrorDetail.data: Any?`
 - `RPCResponse<Result>` に `Result: Sendable` 制約がない。
 - `RPCRawResponse.result: Any`
 - `RPCRawResponse: @unchecked Sendable`
@@ -37,8 +36,8 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
   - `RPCChannel` は concurrent queue の barrier 配下で `pendings` / `isInvalidated` を保護し、`@unchecked Sendable` で宣言している。
   - Task cancellation は `CancelledRPCIDStore` (NSLock 保護の `Int?` ストア) 経由で `rpcChannel.cancel(identifier:)` を呼び、`finishPending` で厳密に 1 回終端する。
   - `RPCChannel.call` のシグネチャ変更 (戻り値 `Int?`、completion の `Error` 型) は内部 API のみの変更で、public API の source compatibility には影響しない。
-- `0107` (open): 外部 consumer package と API baseline。新 API の compile scenario と API baseline 検証は `0107` の完了を前提とする (未完了の場合は先に完了させる)。
-- `0157` (実装済み): 既存 `RPCErrorDetail.data` を `Any?` から `JSONValue?` へ変更し、`RPCErrorDetail` を `Sendable` にした。`Sora/JSONValue.swift` の `JSONValue` は public になっている。本 issue はこの状態を前提にし、既存 `RPCErrorDetail` の宣言をさらに変更しない。新 API 用の error detail で JSON value を使う場合は `0157` が公開した `JSONValue` を利用する。
+- `0107` (完了 2026-09-24): 外部 consumer package と API baseline。本 issue は `0107` が整備した consumer package (compile scenario と負例の置き場) と公開 API baseline の検査 (`make api-check-fresh` を含む) を利用する。
+- `0157` (完了 2026-09-25): 既存 `RPCErrorDetail.data` を `Any?` から `JSONValue?` へ変更し、`RPCErrorDetail` を `Sendable` にした。`Sora/JSONValue.swift` の `JSONValue` は public になっている。本 issue はこの状態を前提にし、既存 `RPCErrorDetail` の宣言をさらに変更しない。新 API 用の error detail で JSON value を使う場合は `0157` が公開した `JSONValue` を利用する。
 - `0123` (完了 2026-09-15): Sendable を付与できない型の分類と受け皿の整理。RPC の params / result / method enum の Sendable 対応は本 issue の新 API 契約で扱う。
 
 本 issue は RPC lifecycle が厳密に 1 回終端する状態 (`0094`) を前提に、新しい RPC API と、その実現に必要な内部表現 (`RPCRawResponse` の `Any` 排除) の変更を追加する。
@@ -52,7 +51,7 @@ DataChannel callback で `JSONSerialization` が返した Foundation container �
 - `Params: Encodable & Sendable` と `Result: Decodable & Sendable` を要求する新しい public protocol を追加する。
 - 既存 `RPCMethodProtocol` の制約は変更せず、互換 API として維持する。
 - 新 API の呼び出しメソッドは、既存 `MediaChannel.rpc` とは別名の新メソッドとして追加する (同名 overload にしない)。同名 overload にすると、新旧両方の protocol へ準拠した型 (SDK 組み込み RPC メソッドを含む) の呼び出しが新 overload へ解決されて戻り値の型が変わり、source compatibility を壊す。
-- SDK 組み込み RPC メソッドは、新 protocol へも準拠させる。`RequestSimulcastRid` / `RequestSpotlightRid` / `ResetSpotlightRid` は params / result の構成値がすべて Sendable なため、そのまま準拠できる。`PutSignalingNotifyMetadata` / `PutSignalingNotifyMetadataItem` は型パラメータ (`Metadata` / `Value`) が `Encodable` / `Decodable` のみで Sendable を要求していないため、**型パラメータが Sendable の場合に成立する conditional conformance** で準拠させる (既存の準拠と公開 API には影響しない)。
+- SDK 組み込み RPC メソッドは、新 protocol へも準拠させる。`RequestSimulcastRid` / `RequestSpotlightRid` / `ResetSpotlightRid` の params / result は `Rid` / `String` などの deep Sendable な構成値だけを持つが、public 非 frozen 型へは `Sendable` が推論されないため、本 issue で params / result 型へ checked `Sendable` を明示的に付与する (`0123` が本 issue に委ねた作業であり、既存の `RPCMethodProtocol` 準拠と source compatibility には影響しない)。`PutSignalingNotifyMetadata` / `PutSignalingNotifyMetadataItem` は型パラメータ (`Metadata` / `Value`) が `Encodable` / `Decodable` のみで Sendable を要求していないため、**型パラメータが Sendable の場合に成立する conditional conformance** (method enum と params / result 型の両方) で準拠させる (既存の準拠と公開 API には影響しない)。これらの公開型と `Sendable` 準拠の追加は公開 API の変更であるため、API baseline を同じ変更で再生成し (追加は `make api-check` では検出されず `make api-check-fresh` が検出する)、`0123` と同様に利用者側の重複適合の影響を `CHANGES.md` へ記す。
 
 ### response の越境
 
