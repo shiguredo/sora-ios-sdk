@@ -1,5 +1,4 @@
 import Foundation
-import WebRTC
 
 /// ICE サーバーの情報を表します。
 public final class ICEServerInfo {
@@ -16,9 +15,19 @@ public final class ICEServerInfo {
   /// クレデンシャル
   public var credential: String?
 
+  /// TURN-TLS のポリシーが insecure かどうかの真値
+  ///
+  /// 既定値を持たせず、designated イニシャライザが必ず設定するため、
+  /// イニシャライザを追加したときに設定漏れがコンパイルエラーになります。
+  var isTLSInsecure: Bool
+
   /// TLS のセキュリティポリシー
+  /// このプロパティは非推奨です。代わりに `Configuration.insecure` を使用してください。
   @available(*, deprecated, message: "2027 年中に廃止予定です。Configuration.insecure を使用してください")
-  public var tlsSecurityPolicy: TLSSecurityPolicy = .secure
+  public var tlsSecurityPolicy: TLSSecurityPolicy {
+    get { isTLSInsecure ? .insecure : .secure }
+    set { isTLSInsecure = (newValue == .insecure) }
+  }
 
   /// 初期化します。
   public init(
@@ -29,7 +38,7 @@ public final class ICEServerInfo {
     self.urls = urls
     self.userName = userName
     self.credential = credential
-    self.tlsSecurityPolicy = .secure
+    self.isTLSInsecure = false
   }
 
   /// 初期化します。
@@ -46,7 +55,7 @@ public final class ICEServerInfo {
     self.urls = urls
     self.userName = userName
     self.credential = credential
-    self.tlsSecurityPolicy = tlsSecurityPolicy
+    self.isTLSInsecure = (tlsSecurityPolicy == .insecure)
   }
 }
 

@@ -21,7 +21,7 @@ struct ICEServerSnapshot: Sendable {
 
   /// TURN-TLS のポリシーが insecure かどうか
   ///
-  /// `ICEServerInfo.tlsSecurityPolicy` の真値です。
+  /// `ICEServerInfo` から写し取った値です。
   let isTLSInsecure: Bool
 
   /// 初期化します。
@@ -34,12 +34,11 @@ struct ICEServerSnapshot: Sendable {
 
   /// `ICEServerInfo` から写し取ります。
   init(_ info: ICEServerInfo) {
-    // tlsSecurityPolicy は非推奨のため、読み取りはここ 1 箇所に閉じる。
     self.init(
       urls: info.urls,
       username: info.userName,
       credential: info.credential,
-      isTLSInsecure: info.tlsSecurityPolicy == .insecure)
+      isTLSInsecure: info.isTLSInsecure)
   }
 
   /// `RTCIceServer` を生成します。

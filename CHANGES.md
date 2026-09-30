@@ -88,6 +88,10 @@
   - @t-miya
 - [UPDATE] `Utilities.Stopwatch` の `Timer` closure が `self` を捕捉する `#SendableClosureCaptures` 警告を解消する
   - @t-miya
+- [UPDATE] `ICEServerInfo.tlsSecurityPolicy` の実装を変更する
+  - 非推奨化した TLSSecurityPolicy を SDK 内部で使わないようにする
+  - 宣言・型・非推奨の扱いと読み書きの挙動は変わらない
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya
