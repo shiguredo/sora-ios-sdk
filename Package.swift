@@ -1,4 +1,4 @@
-// swift-tools-version:5.3
+// swift-tools-version:6.3
 
 import Foundation
 import PackageDescription
@@ -35,5 +35,9 @@ let package = Package(
             dependencies: ["Sora"],
             path: "SoraTests"
         ),
-    ]
+    ],
+    // SDK を Swift 6 言語モードで compile する。SwiftPM で取り込む consumer にも適用される。
+    // warnings-as-errors の gate は consumer の compile 条件と衝突するため manifest には置かず、
+    // repo の build 経路 (Makefile の build と .github/workflows/build.yml) に置く
+    swiftLanguageModes: [.v6]
 )

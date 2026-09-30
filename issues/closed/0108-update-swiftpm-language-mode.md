@@ -1,7 +1,7 @@
 # SwiftPM manifest を Swift 6 language mode に更新する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-29
 - Branch: feature/update-swiftpm-language-mode
 - Polished: 2026-09-29
 
@@ -164,3 +164,46 @@ gate が止めた警告を `@unchecked Sendable` や `@preconcurrency` の追加
 - 公開 API の追加・変更 (差分が出た場合は別 issue に分離する)
 
 ## 解決方法
+
+### manifest
+
+- `Package.swift` の `swift-tools-version` を `5.3` から `6.3` へ上げ、package initializer の `targets` の後に `swiftLanguageModes: [.v6]` を追加した。`Sora` target と `SoraTests` target の `swiftSettings` は追加していない (gate を manifest に置かない)。`platforms` / `products` / `dependencies` / `targets` / `WebRTC` の `binaryTarget` は変更していない
+- `swift package dump-package` の実測 (2026-09-29、Xcode 26.6 / Swift 6.3.3) は `toolsVersion` が `6.3.0`、`swiftLanguageVersions` が `["6"]`、`platforms` が iOS `14.0` で、`WebRTC` / `Sora` / `SoraTests` の `settings` はすべて空である
+
+### warnings-as-errors gate
+
+- gate は manifest に置かず、repo の build 経路に `OTHER_SWIFT_FLAGS='-warnings-as-errors -Wwarning DeprecatedDeclaration'` として置いた
+  - `Makefile` の `build` target の `xcodebuild` (`SWIFT_VERSION=6` の直後)
+  - `.github/workflows/build.yml` の `Build Xcode Project` の `xcodebuild` (同じ文字列)
+- `git grep -n OTHER_SWIFT_FLAGS` で 2 file の文字列が一致することを確認した。`.github/workflows/e2e-test.yml` の `build-for-testing` (scheme `Sora-Package`) には追加していない (`SoraTests` の gate は `0171`)
+
+### ドキュメント
+
+- `README.md` の「システム条件」の Xcode 26.6 の箇条に、SwiftPM 6.3 以降が必要であることと、manifest が Swift 6 言語モードを宣言しているため consumer 側の設定なしに SDK が Swift 6 言語モードでコンパイルされることを追記した
+- `skills/sora-ios-sdk/SKILL.md` の「Swift 6 と並行性」の冒頭を、`swift-tools-version` 6.3 と `swiftLanguageModes: [.v6]` により SwiftPM consumer でも Swift 6 言語モードになる記述へ差し替え、「現状の制約」の manifest 未対応の箇条を削除した
+- `CHANGES.md` の `## develop` の主リストの `[CHANGE]` の末尾 (最初の `[ADD]` の前) に `[CHANGE]` エントリと担当者行 `- @t-miya` を追加した。`## develop` の `### misc` への `[UPDATE]` は `0171` の担当であり、本 issue では追加していない
+
+### 実測
+
+- `make build` (scheme `Sora` / iOS device / Release): **BUILD SUCCEEDED**。`-module-name Sora ` の compile 行 (SwiftDriver / Swift-Compilation / Swift-Compilation-Requirements の 3 行) に `-warnings-as-errors -Wwarning DeprecatedDeclaration` がこの順で現れ、同じ行の `-swift-version` が `6` である。一次行の warning 17 件 (すべて非推奨 API) / error 0 件
+- `git grep -n OTHER_SWIFT_FLAGS`: `Makefile` と `.github/workflows/build.yml` の文字列が一致する (`-warnings-as-errors -Wwarning DeprecatedDeclaration`)
+- consumer (`rm -rf build/consumer` の後に `make consumer-build`): `ConsumerCore` / `ConsumerUI` / `ConsumerLegacy` の 3 scheme とも BUILD SUCCEEDED。`Sora` target の compile 行は `-suppress-warnings` のままで `-warnings-as-errors` を含まず、`-swift-version 6` である。`-swift-version 5` で走る compile 行は 3 scheme で 0 件
+- `make consumer-check-negative`: `core-sendable-capture.swift` (`SendableClosureCaptures`) と `ui-isolated-conformance.swift` (`IsolatedConformances`) の 2 件が期待どおり失敗した
+- `Sora/` の型検査 (`-swift-version 6`): 一次行 17 件 / error 0 件 / `#SendableClosureCaptures` 0 件 / `add '@preconcurrency'` 0 件。同じ flags に `-warnings-as-errors -Wwarning DeprecatedDeclaration` を足しても error 0 件 / warning 17 件
+- 全体テスト: `xcodebuild test` は PTY 制約 (`Pseudo Terminal Setup Error ... Operation not permitted`) で起動できないため、`build-for-testing` (`** TEST BUILD SUCCEEDED **`) と `xcrun simctl spawn <booted-udid> .../Agents/xctest SoraTests.xctest` で代替した。441 件実行 / skip 31 / 失敗 0 件で基準どおり
+- `make fmt-lint` 成功、`swiftlint lint --strict --cache-path build/swiftlint-cache` は 0 violations / 0 serious
+- ApiBaseline: language mode の変更で公開 API dump に差分は出ず、`make api-check-fresh` が「The committed API baseline matches the current Sora module.」で成功した。`TestConsumers/Swift6Consumer/ApiBaseline/` は再生成していない (差分なし)
+- `make lint` は検証環境の sandbox で `sandbox-exec: sandbox_apply: Operation not permitted` となり実行できない。manifest 自体は `-package-description-version 6.3.0` として compile されており、失敗は sandbox の入れ子制限による。`swift package --disable-sandbox plugin ... swiftlint --strict .` では 0 violations で plugin 経路の manifest 解決も確認した
+
+### 退行検出
+
+- `OTHER_SWIFT_FLAGS` を `-Wwarning DeprecatedDeclaration -warnings-as-errors` に逆順にすると `make build` は error 17 件で **BUILD FAILED** になった (確認後に戻した)
+- `swiftLanguageModes` を外すと consumer の `Sora` target は `-swift-version 6` のままで、`-swift-version 5` には戻らなかった。`swiftLanguageModes: [.v5]` を明示すると `-swift-version 5` になることを実測した。tools version 6.3 の package は manifest で指定しなくても既定が Swift 6 言語モードであるため、`swiftLanguageModes: [.v6]` は既定と一致する明示宣言として機能する (検証方針の「外すと `-swift-version 5` に戻る」という記述は実測と食い違う)
+- `swift build` (SwiftPM CLI) は host 向けに `no such module 'UIKit'` で、`--triple arm64-apple-ios14.0-simulator` でも host の SDK が選ばれて失敗するため、検証経路に使えないことを再確認した
+
+### 残った懸念
+
+- `Sora` target の gate は repo の build 経路にしか無いため、consumer の build では SDK の concurrency 系の警告は gate されない (`.treatAllWarnings` を公開 manifest に置くと consumer が `conflicting options` で壊れる制約による意図的な範囲)
+- `-Wwarning DeprecatedDeclaration` で warning のまま残る 17 件は `0138` / `0072` の担当である。`0138` の完了後も後方互換のための非推奨 API 内部参照は残る
+- `make lint` の `swift package plugin` 経路は検証環境の sandbox 制限で実行できない。`swiftlint lint --strict` の直接実行では 0 violations である
+- tools version 6.3 では `swiftLanguageModes` の既定が Swift 6 のため、consumer の `-swift-version 5` への退行は `swiftLanguageModes` の削除ではなく tools version の引き下げでしか起きない

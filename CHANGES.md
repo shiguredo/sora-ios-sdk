@@ -11,6 +11,10 @@
 
 ## develop
 
+- [CHANGE] `swift-tools-version` を 6.3 に上げ、Swift 6 言語モードを manifest で宣言する
+  - SwiftPM 6.3 未満 (Xcode 26.6 未満) では package を解決できなくなる
+  - `swiftLanguageModes: [.v6]` により、SwiftPM で取り込んだ consumer も SDK を Swift 6 言語モードで compile する。公開 API と SDK の挙動は変わらない
+  - @t-miya
 - [CHANGE] システム要件の Xcode バージョンを 26.6+ に更新する
   - @t-miya
 - [CHANGE] `RPCErrorDetail.data` の型を `Any?` から `JSONValue?` に変更する

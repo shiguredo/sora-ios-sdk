@@ -40,6 +40,8 @@ Please read https://github.com/shiguredo/oss before use.
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
 - Xcode 26.6 以降
   - Swift 6 言語モードでビルドしています
+  - SwiftPM で取り込む場合は SwiftPM 6.3 以降が必要です (Xcode 26.6 に同梱)
+  - `Package.swift` が Swift 6 言語モードを宣言しているため、SwiftPM で取り込んだ場合も SDK は consumer 側の設定なしに Swift 6 言語モードでコンパイルされます
 - WebRTC SFU Sora 2025.2.0 以降
 
 Xcode と Swift のバージョンによっては、 取得できるバイナリに互換性がない可能性があります。詳しくはドキュメントを参照してください。

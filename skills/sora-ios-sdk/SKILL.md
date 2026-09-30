@@ -531,7 +531,7 @@ config.mediaChannelHandlers.onDisconnect = { event in
 
 ## Swift 6 と並行性
 
-SDK 本体は Swift 6 言語モードでビルド・ CI 検証している。ただし `Package.swift` の `swift-tools-version` は 5.3 のため、SwiftPM で取り込んだ場合にパッケージ側へ適用される言語モードは Swift 5 になる。CI の `SWIFT_VERSION=6` は通常の SwiftPM consumer へ伝播しない。利用側のアプリを Swift 6 言語モードでビルドする場合は、次の点に注意する。
+SDK 本体は Swift 6 言語モードでビルド・ CI 検証している。`Package.swift` の `swift-tools-version` は 6.3 で、package initializer の `swiftLanguageModes: [.v6]` により Swift 6 言語モードを宣言している。このため SwiftPM で取り込んだ場合もパッケージ側へ適用される言語モードは Swift 6 になり、利用側で言語モードを指定する必要はない。manifest を読むために SwiftPM 6.3 以降 (Xcode 26.6 以降に同梱) が必要になる。利用側のアプリを Swift 6 言語モードでビルドする場合は、次の点に注意する。
 
 ### Sendable 準拠
 
@@ -622,7 +622,6 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 
 ### 現状の制約
 
-- `Package.swift` の `swift-tools-version` は 5.3 のままで、manifest からの Swift 6 言語モード指定は未対応
 - Sendable な event / RPC / statistics API はまだ提供されていない。`MediaChannel` / `MediaStream` を境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要
 - サンプル集とクイックスタートは Swift 6 言語モードだが、`@preconcurrency import Sora` と `nonisolated(unsafe)` の暫定対応を含む。Swift 6 の模範例ではなく、暫定対応を含む参考実装として扱う
 
