@@ -62,12 +62,46 @@ public struct RPCResponse<Result> {
   }
 }
 
-// `result` は JSONSerialization が返す読み取り専用の値として扱う前提で
-// actor 境界を越えるために `@unchecked Sendable` を付与します。
-struct RPCRawResponse: @unchecked Sendable {
+/// `RPCResponse` と同じ挙動を持つ、Swift 6 言語モードの検査に対応した RPC 成功応答。
+///
+/// `jsonrpc` / `id` / `result` の意味、notification で `nil` が返ること、失敗時に
+/// `SoraError` が投げられることは `RPCResponse` と共通です。`Result` が `Sendable` な型で
+/// あれば、応答全体を actor 境界や `Task` の `@Sendable` closure を越えて受け渡せます
+/// (`MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)` が返す型です)。
+///
+/// `Result` へ `Decodable` を要求しないのは、decode が `SendableRPCMethodProtocol.Result` の
+/// 制約 (`RPCMethodProtocol` の `Result: Decodable`) で成立し、この型自身は値の保持だけを
+/// 担うためです。`Result` が `Sendable` でない場合は `Sendable` へ準拠できません。
+///
+/// 既存の `RPCResponse` の宣言と準拠は互換 API として変更していません。
+public struct SendableRPCResponse<Result: Sendable>: Sendable {
+  /// JSON-RPC プロトコルのバージョン。
+  public let jsonrpc: String
+  /// リクエストと対応する ID。
+  public let id: Int
+  /// リクエストが正常終了した場合の結果情報。
+  public let result: Result
+
+  /// RPC 成功応答を作成する。
+  /// - Parameters:
+  ///   - id: リクエストと対応する ID。
+  ///   - result: RPC 呼び出しの結果。
+  public init(id: Int, result: Result) {
+    self.jsonrpc = "2.0"
+    self.id = id
+    self.result = result
+  }
+}
+
+/// DataChannel の同期区間で受け取った RPC 応答。
+///
+/// result は `JSONSerialization` が返す container ではなく、immutable な `Data` として保持します。
+/// container は `RPCChannel.handleMessage` の同期区間だけで扱い、executor 境界を越えさせません。
+/// `Data` は `Sendable` のため、`@unchecked Sendable` ではなく checked な `Sendable` に準拠できます。
+struct RPCRawResponse: Sendable {
   let jsonrpc: String
   let id: Int
-  let result: Any
+  let result: Data
 }
 
 /// DataChannel 経由の RPC を扱うクラス。
@@ -223,6 +257,36 @@ final class RPCChannel: @unchecked Sendable {
       timeoutWorkItem: workItem)
   }
 
+  /// `JSONSerialization.jsonObject` が返した 1 つの値を JSON の `Data` へ直列化する。
+  ///
+  /// response の `result` は JSON の断片 (scalar / `null` / array / object) であり得るため、
+  /// 断片を許す `.fragmentsAllowed` を使う。`JSONSerialization.data(withJSONObject:)` は
+  /// `isValidJSONObject` が false の値 (JSON の数値として表現できない `-inf` など) を渡すと
+  /// 捕捉できない NSException を送出してプロセスを終了させるため、直列化の前に
+  /// `isValidJSONObject` で検証する。この検証により、呼び出し側の `do-catch` で
+  /// `SoraError.rpcDecodingError` へ写せる捕捉可能な error だけを投げる。
+  ///
+  /// `isValidJSONObject` はトップレベルの断片に対して false を返すため、object / array 以外は
+  /// 1 つの key を持つ辞書へ包んで検証する (`JSONValue.fromJSONSerializationValue` と同じ形)。
+  /// 包んだ値も `isValidJSONObject` を通れば、直列化した `Data` は元の断片と同じ JSON 値になる。
+  /// - parameter fragment: `JSONSerialization.jsonObject` が返した値
+  static func jsonData(fromFragment fragment: Any) throws -> Data {
+    let object: Any
+    if fragment is [String: Any] || fragment is [Any] {
+      object = fragment
+    } else {
+      object = ["value": fragment]
+    }
+    guard JSONSerialization.isValidJSONObject(object) else {
+      throw EncodingError.invalidValue(
+        fragment,
+        EncodingError.Context(
+          codingPath: [],
+          debugDescription: "the result is not a JSON value"))
+    }
+    return try JSONSerialization.data(withJSONObject: object, options: [.fragmentsAllowed])
+  }
+
   /// DataChannel で受信したメッセージを処理する。
   func handleMessage(_ data: Data) {
     let object: Any
@@ -268,7 +332,20 @@ final class RPCChannel: @unchecked Sendable {
     }
 
     if let result = json["result"] {
-      let response = RPCRawResponse(jsonrpc: version, id: identifier, result: result)
+      // JSONSerialization が返す container はこの同期区間だけで扱い、executor 境界を越えさせない。
+      // pending へ渡す値は immutable な Data に変換する。変換に失敗した場合も
+      // (数値として表現できない値を含む場合など) pending を残さず decode エラーで終端する。
+      let resultData: Data
+      do {
+        resultData = try Self.jsonData(fromFragment: result)
+      } catch {
+        finishPending(
+          id: identifier,
+          result: .failure(
+            SoraError.rpcDecodingError(reason: error.localizedDescription)))
+        return
+      }
+      let response = RPCRawResponse(jsonrpc: version, id: identifier, result: resultData)
       finishPending(id: identifier, result: .success(response))
       return
     }

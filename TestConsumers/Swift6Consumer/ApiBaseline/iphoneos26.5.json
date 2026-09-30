@@ -18539,6 +18539,82 @@
           },
           {
             "kind": "Function",
+            "name": "sendableRPC",
+            "printedName": "sendableRPC(method:params:isNotificationRequest:timeout:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Sora.SendableRPCResponse<M.Result>?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SendableRPCResponse",
+                    "printedName": "Sora.SendableRPCResponse<M.Result>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "DependentMember",
+                        "printedName": "M.Result"
+                      }
+                    ],
+                    "usr": "s:4Sora19SendableRPCResponseV"
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Metatype",
+                "printedName": "M.Type",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "M"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "DependentMember",
+                "printedName": "M.Params"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNameAlias",
+                "name": "TimeInterval",
+                "printedName": "Foundation.TimeInterval",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ],
+                "hasDefaultArg": true
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora12MediaChannelC11sendableRPC6method6params21isNotificationRequest7timeoutAA19SendableRPCResponseVy6ResultQzGSgxm_6ParamsQzSbSdtYaKAA0L17RPCMethodProtocolRzlF",
+            "mangledName": "$s4Sora12MediaChannelC11sendableRPC6method6params21isNotificationRequest7timeoutAA19SendableRPCResponseVy6ResultQzGSgxm_6ParamsQzSbSdtYaKAA0L17RPCMethodProtocolRzlF",
+            "moduleName": "Sora",
+            "genericSig": "<M where M : Sora.SendableRPCMethodProtocol>",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
             "name": "disconnect",
             "printedName": "disconnect(error:)",
             "children": [
@@ -21073,6 +21149,224 @@
       },
       {
         "kind": "TypeDecl",
+        "name": "SendableRPCResponse",
+        "printedName": "SendableRPCResponse",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "jsonrpc",
+            "printedName": "jsonrpc",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora19SendableRPCResponseV7jsonrpcSSvp",
+            "mangledName": "$s4Sora19SendableRPCResponseV7jsonrpcSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora19SendableRPCResponseV7jsonrpcSSvg",
+                "mangledName": "$s4Sora19SendableRPCResponseV7jsonrpcSSvg",
+                "moduleName": "Sora",
+                "genericSig": "<Result where Result : Swift.Sendable>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "id",
+            "printedName": "id",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora19SendableRPCResponseV2idSivp",
+            "mangledName": "$s4Sora19SendableRPCResponseV2idSivp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora19SendableRPCResponseV2idSivg",
+                "mangledName": "$s4Sora19SendableRPCResponseV2idSivg",
+                "moduleName": "Sora",
+                "genericSig": "<Result where Result : Swift.Sendable>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "result",
+            "printedName": "result",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenericTypeParam",
+                "printedName": "Result"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora19SendableRPCResponseV6resultxvp",
+            "mangledName": "$s4Sora19SendableRPCResponseV6resultxvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "Result"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora19SendableRPCResponseV6resultxvg",
+                "mangledName": "$s4Sora19SendableRPCResponseV6resultxvg",
+                "moduleName": "Sora",
+                "genericSig": "<Result where Result : Swift.Sendable>",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(id:result:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SendableRPCResponse",
+                "printedName": "Sora.SendableRPCResponse<Result>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "Result"
+                  }
+                ],
+                "usr": "s:4Sora19SendableRPCResponseV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GenericTypeParam",
+                "printedName": "Result"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:4Sora19SendableRPCResponseV2id6resultACyxGSi_xtcfc",
+            "mangledName": "$s4Sora19SendableRPCResponseV2id6resultACyxGSi_xtcfc",
+            "moduleName": "Sora",
+            "genericSig": "<Result where Result : Swift.Sendable>",
+            "init_kind": "Designated"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora19SendableRPCResponseV",
+        "mangledName": "$s4Sora19SendableRPCResponseV",
+        "moduleName": "Sora",
+        "genericSig": "<Result where Result : Swift.Sendable>",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
         "name": "RPCMethodProtocol",
         "printedName": "RPCMethodProtocol",
         "children": [
@@ -21159,6 +21453,39 @@
             "printedName": "Copyable",
             "usr": "s:s8CopyableP",
             "mangledName": "$ss8CopyableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SendableRPCMethodProtocol",
+        "printedName": "SendableRPCMethodProtocol",
+        "declKind": "Protocol",
+        "usr": "s:4Sora25SendableRPCMethodProtocolP",
+        "mangledName": "$s4Sora25SendableRPCMethodProtocolP",
+        "moduleName": "Sora",
+        "genericSig": "<Self : Sora.RPCMethodProtocol, Self.Params : Swift.Sendable, Self.Result : Swift.Sendable>",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "RPCMethodProtocol",
+            "printedName": "RPCMethodProtocol",
+            "usr": "s:4Sora17RPCMethodProtocolP",
+            "mangledName": "$s4Sora17RPCMethodProtocolP"
           }
         ]
       },
@@ -21398,6 +21725,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -21689,6 +22030,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -21843,6 +22198,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -22058,6 +22427,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -22326,6 +22709,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -22636,6 +23033,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -22922,6 +23333,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -23104,6 +23529,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -23250,6 +23689,13 @@
             ],
             "usr": "s:4Sora17RPCMethodProtocolP",
             "mangledName": "$s4Sora17RPCMethodProtocolP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableRPCMethodProtocol",
+            "printedName": "SendableRPCMethodProtocol",
+            "usr": "s:4Sora25SendableRPCMethodProtocolP",
+            "mangledName": "$s4Sora25SendableRPCMethodProtocolP"
           },
           {
             "kind": "Conformance",
@@ -23413,6 +23859,13 @@
           },
           {
             "kind": "Conformance",
+            "name": "SendableRPCMethodProtocol",
+            "printedName": "SendableRPCMethodProtocol",
+            "usr": "s:4Sora25SendableRPCMethodProtocolP",
+            "mangledName": "$s4Sora25SendableRPCMethodProtocolP"
+          },
+          {
+            "kind": "Conformance",
             "name": "Copyable",
             "printedName": "Copyable",
             "usr": "s:s8CopyableP",
@@ -23570,6 +24023,13 @@
             ],
             "usr": "s:4Sora17RPCMethodProtocolP",
             "mangledName": "$s4Sora17RPCMethodProtocolP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableRPCMethodProtocol",
+            "printedName": "SendableRPCMethodProtocol",
+            "usr": "s:4Sora25SendableRPCMethodProtocolP",
+            "mangledName": "$s4Sora25SendableRPCMethodProtocolP"
           },
           {
             "kind": "Conformance",
@@ -23902,6 +24362,352 @@
             ],
             "usr": "s:4Sora17RPCMethodProtocolP",
             "mangledName": "$s4Sora17RPCMethodProtocolP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SendablePutSignalingNotifyMetadata",
+        "printedName": "SendablePutSignalingNotifyMetadata",
+        "children": [
+          {
+            "kind": "TypeAlias",
+            "name": "Params",
+            "printedName": "Params",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PutSignalingNotifyMetadataParams",
+                "printedName": "Sora.PutSignalingNotifyMetadataParams<Metadata>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "Metadata"
+                  }
+                ],
+                "usr": "s:4Sora32PutSignalingNotifyMetadataParamsV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:4Sora34SendablePutSignalingNotifyMetadataO6Paramsa",
+            "mangledName": "$s4Sora34SendablePutSignalingNotifyMetadataO6Paramsa",
+            "moduleName": "Sora",
+            "genericSig": "<Metadata where Metadata : Swift.Decodable, Metadata : Swift.Encodable, Metadata : Swift.Sendable>"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "Result",
+            "printedName": "Result",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenericTypeParam",
+                "printedName": "Metadata"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:4Sora34SendablePutSignalingNotifyMetadataO6Resulta",
+            "mangledName": "$s4Sora34SendablePutSignalingNotifyMetadataO6Resulta",
+            "moduleName": "Sora",
+            "genericSig": "<Metadata where Metadata : Swift.Decodable, Metadata : Swift.Encodable, Metadata : Swift.Sendable>"
+          },
+          {
+            "kind": "Var",
+            "name": "name",
+            "printedName": "name",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora34SendablePutSignalingNotifyMetadataO4nameSSvpZ",
+            "mangledName": "$s4Sora34SendablePutSignalingNotifyMetadataO4nameSSvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora34SendablePutSignalingNotifyMetadataO4nameSSvgZ",
+                "mangledName": "$s4Sora34SendablePutSignalingNotifyMetadataO4nameSSvgZ",
+                "moduleName": "Sora",
+                "genericSig": "<Metadata where Metadata : Swift.Decodable, Metadata : Swift.Encodable, Metadata : Swift.Sendable>",
+                "static": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:4Sora34SendablePutSignalingNotifyMetadataO",
+        "mangledName": "$s4Sora34SendablePutSignalingNotifyMetadataO",
+        "moduleName": "Sora",
+        "genericSig": "<Metadata where Metadata : Swift.Decodable, Metadata : Swift.Encodable, Metadata : Swift.Sendable>",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "RPCMethodProtocol",
+            "printedName": "RPCMethodProtocol",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "Params",
+                "printedName": "Params",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "Params",
+                    "printedName": "Sora.SendablePutSignalingNotifyMetadata<Metadata>.Params",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PutSignalingNotifyMetadataParams",
+                        "printedName": "Sora.PutSignalingNotifyMetadataParams<Metadata>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GenericTypeParam",
+                            "printedName": "Metadata"
+                          }
+                        ],
+                        "usr": "s:4Sora32PutSignalingNotifyMetadataParamsV"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "Result",
+                "printedName": "Result",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "Result",
+                    "printedName": "Sora.SendablePutSignalingNotifyMetadata<Metadata>.Result",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GenericTypeParam",
+                        "printedName": "Metadata"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "usr": "s:4Sora17RPCMethodProtocolP",
+            "mangledName": "$s4Sora17RPCMethodProtocolP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableRPCMethodProtocol",
+            "printedName": "SendableRPCMethodProtocol",
+            "usr": "s:4Sora25SendableRPCMethodProtocolP",
+            "mangledName": "$s4Sora25SendableRPCMethodProtocolP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SendablePutSignalingNotifyMetadataItem",
+        "printedName": "SendablePutSignalingNotifyMetadataItem",
+        "children": [
+          {
+            "kind": "TypeAlias",
+            "name": "Params",
+            "printedName": "Params",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "PutSignalingNotifyMetadataItemParams",
+                "printedName": "Sora.PutSignalingNotifyMetadataItemParams<Value>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenericTypeParam",
+                    "printedName": "Value"
+                  }
+                ],
+                "usr": "s:4Sora36PutSignalingNotifyMetadataItemParamsV"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:4Sora38SendablePutSignalingNotifyMetadataItemO6Paramsa",
+            "mangledName": "$s4Sora38SendablePutSignalingNotifyMetadataItemO6Paramsa",
+            "moduleName": "Sora",
+            "genericSig": "<Metadata, Value where Metadata : Swift.Decodable, Metadata : Swift.Sendable, Value : Swift.Encodable, Value : Swift.Sendable>"
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "Result",
+            "printedName": "Result",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenericTypeParam",
+                "printedName": "Metadata"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:4Sora38SendablePutSignalingNotifyMetadataItemO6Resulta",
+            "mangledName": "$s4Sora38SendablePutSignalingNotifyMetadataItemO6Resulta",
+            "moduleName": "Sora",
+            "genericSig": "<Metadata, Value where Metadata : Swift.Decodable, Metadata : Swift.Sendable, Value : Swift.Encodable, Value : Swift.Sendable>"
+          },
+          {
+            "kind": "Var",
+            "name": "name",
+            "printedName": "name",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora38SendablePutSignalingNotifyMetadataItemO4nameSSvpZ",
+            "mangledName": "$s4Sora38SendablePutSignalingNotifyMetadataItemO4nameSSvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora38SendablePutSignalingNotifyMetadataItemO4nameSSvgZ",
+                "mangledName": "$s4Sora38SendablePutSignalingNotifyMetadataItemO4nameSSvgZ",
+                "moduleName": "Sora",
+                "genericSig": "<Metadata, Value where Metadata : Swift.Decodable, Metadata : Swift.Sendable, Value : Swift.Encodable, Value : Swift.Sendable>",
+                "static": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:4Sora38SendablePutSignalingNotifyMetadataItemO",
+        "mangledName": "$s4Sora38SendablePutSignalingNotifyMetadataItemO",
+        "moduleName": "Sora",
+        "genericSig": "<Metadata, Value where Metadata : Swift.Decodable, Metadata : Swift.Sendable, Value : Swift.Encodable, Value : Swift.Sendable>",
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "RPCMethodProtocol",
+            "printedName": "RPCMethodProtocol",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "Params",
+                "printedName": "Params",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "Params",
+                    "printedName": "Sora.SendablePutSignalingNotifyMetadataItem<Metadata, Value>.Params",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "PutSignalingNotifyMetadataItemParams",
+                        "printedName": "Sora.PutSignalingNotifyMetadataItemParams<Value>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "GenericTypeParam",
+                            "printedName": "Value"
+                          }
+                        ],
+                        "usr": "s:4Sora36PutSignalingNotifyMetadataItemParamsV"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "TypeWitness",
+                "name": "Result",
+                "printedName": "Result",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "Result",
+                    "printedName": "Sora.SendablePutSignalingNotifyMetadataItem<Metadata, Value>.Result",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "GenericTypeParam",
+                        "printedName": "Metadata"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "usr": "s:4Sora17RPCMethodProtocolP",
+            "mangledName": "$s4Sora17RPCMethodProtocolP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableRPCMethodProtocol",
+            "printedName": "SendableRPCMethodProtocol",
+            "usr": "s:4Sora25SendableRPCMethodProtocolP",
+            "mangledName": "$s4Sora25SendableRPCMethodProtocolP"
           },
           {
             "kind": "Conformance",
