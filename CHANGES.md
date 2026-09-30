@@ -135,6 +135,10 @@
 - [ADD] 参照保持 box が担う `createClientOfferSDP` の一時 `RTCPeerConnection` の `close()` の回帰テストを追加する
   - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
   - @t-miya
+- [ADD] Thread Sanitizer を有効にした concurrency runtime stress CI を追加する
+  - `e2e-test.yml` に `tsan` job を追加し、`-enableThreadSanitizer YES` の `build-for-testing` が作った `SoraTests.xctest` を `simctl spawn` で全件実行する。compile-time の Sendable / actor isolation 検査では検出できない実行時のデータ競合を検出し、race の report だけを artifact として保存する
+  - `ConnectionStateOwner` と `ConnectionTimer` の交差を反復する stress test と、実 Sora 接続を反復する E2E stress test を追加する
+  - @t-miya
 - [UPDATE] E2E テストの concurrency 診断抑止を除去する
   - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する。`SoraTests` が `@preconcurrency import Sora` を使っていないことを CI で検査する
   - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback と `Timer` の扱いを main queue に束ねる。`RpcE2ETests` の RPC 呼び出しは `MediaChannel` をまとめた `@unchecked Sendable` のボックス経由にする

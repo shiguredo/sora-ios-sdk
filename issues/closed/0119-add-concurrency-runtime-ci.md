@@ -1,7 +1,7 @@
 # concurrency runtime stress CI を追加する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-09-30
 - Branch: feature/add-concurrency-runtime-ci
 - Polished: 2026-09-30
 
@@ -34,7 +34,7 @@ compile-time の Sendable / actor isolation 検査と `SoraTests` の warnings-a
 ### job の配置
 
 - `.github/workflows/e2e-test.yml` に `tsan` job を追加する (既存 `e2e` job とは別 job)。実 Sora の secret と Simulator の boot を既に持つ唯一の workflow であり、job の失敗を通常の test job と識別できる。
-- `runs-on` と `env` は既存 `e2e` job と揃える (`[self-hosted, macOS, ARM64, Apple-M1]`、`XCODE_SDK=iphoneos26.5`、iPhone 17 Pro / OS 26.5)。同じ self-hosted runner を `e2e` job と共有するため、実行時間は CI 全体に加算される。TSan は通常 test より遅いので `timeout-minutes: 60` にする (既存 `e2e` job は 45)。
+- `runs-on` と `env` は既存 `e2e` job と揃える (`[self-hosted, macOS, ARM64, Apple-M1]`、`XCODE_SDK=iphoneos26.5`、iPhone 17 Pro / OS 26.5)。同じ self-hosted runner を `e2e` job と共有するため、実行時間は CI 全体に加算される。TSan は通常 test より遅いため余裕を見て `timeout-minutes: 20` にする (実測は build と全件実行を合わせて約 1 分、既存 `e2e` job は 45)。
 - `slack_notify` の `needs` に `tsan` を加え、`status` を `contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')` の形にする (`consumer-test.yml` の `swift6-consumer` と同じ)。現状の `status: ${{ needs.e2e.result }}` のままでは TSan の失敗が通知されない。
 - `on.push.paths-ignore` は変更しない。
 
@@ -76,7 +76,7 @@ SIMCTL_CHILD_TEST_API_URL="$TEST_API_URL" \
 
 - `SIMCTL_CHILD_` 接頭辞は TSan の `DYLD_*` だけでなく E2E の環境変数にも必要である。2026-09-30 の実測で `SIMCTL_CHILD_SORA_SIGNALING_URL` と `SIMCTL_CHILD_TEST_SECRET_KEY` を渡すと `RecvonlyE2ETests.testConnectRecvonly` が skip ではなく接続を試行して失敗した。`.xctestrun` への `plutil` 注入は `test-without-building` 経路のものであり、この経路では効かない。
 - 実行対象は `SoraTests` 全体とする。対象 suite を列挙すると、後から追加した test が無言で TSan の外へ落ちる。
-- job の step では反復しない (1 回の実行)。race を確率的に踏むための反復は、追加する stress test の内部で行う。test 実行の実測は約 26 秒 (build を含まない、skip 31 の状態) であり、実 Sora 接続を含む CI でも `timeout-minutes: 60` に収まる。
+- job の step では反復しない (1 回の実行)。race を確率的に踏むための反復は、追加する stress test の内部で行う。test 実行の実測は約 26 秒 (build を含まない、skip 31 の状態) であり、実 Sora 接続を含む CI でも `timeout-minutes: 20` に収まる。
 - `xcrun simctl spawn` は `.xcresult` を作らないため、判定と artifact にはこの step の標準出力 (`build/tsan.log`) を使う。
 
 ### 判定 (失敗条件)
@@ -153,3 +153,101 @@ SIMCTL_CHILD_TEST_API_URL="$TEST_API_URL" \
 - `0151` / `0121` / `0118` / `0129` / `0171` の完了を前提として、`Build` / `Consumer Test` / `E2E Test` と `tsan` job が成功すること。実装時に TSan が race を検出した場合は「スコープ外」のとおり別 issue として起票し、その修正後に `tsan` job が成功することを本 issue の完了条件とする。
 
 ## 解決方法
+
+### 追加した job と step
+
+`.github/workflows/e2e-test.yml` に `tsan` job を追加した。実 Sora の secret と Simulator の boot を既に持つ workflow に置くため、`e2e` job とは別 job にしている。実測はクリーンビルド 16 秒 + 全件実行 32 秒の約 1 分であり、cold cache を見込んで `timeout-minutes: 20` にした。
+
+- `runs-on`: `[self-hosted, macOS, ARM64, Apple-M1]` (`e2e` job と同じ)
+- `env`: `XCODE` / `XCODE_SDK` / `DESTINATION` / `SORA_SIGNALING_URL` / `TEST_SECRET_KEY` / `TEST_CHANNEL_ID_PREFIX` / `TEST_CHANNEL_ID_SUFFIX` / `TEST_API_URL`。secret 名は既存の `e2e` job と同じ 4 つ (`TEST_SIGNALING_URL` / `TEST_SECRET_KEY` / `TEST_CHANNEL_ID_PREFIX` / `TEST_API_URL`) を使う
+- step の並び (既存 `e2e` job の書き方に揃えた)
+  1. `actions/checkout` (`3d3c42e5aac5ba805825da76410c181273ba90b1`、v7.0.1)
+  2. `Show Xcode Version` (step 名なしの uses は既存 job と同じ)
+  3. `Setup iOS Simulator` (`boot` + `bootstatus`)
+  4. `Run Thread Sanitizer Tests` (`id: tsan_tests`)
+  5. `Check Thread Sanitizer Report`
+  6. `Upload TSan Report` (`if: failure()`)
+  7. `Shutdown Simulator` (`if: always()`)
+
+### TSan の実行手順
+
+`e2e` job の `test-without-building` は使わない。TSan runtime が load されないためである。
+
+1. `rm -rf build` で incremental build の TSan runtime 複製の省略を防ぐ
+2. `xcodebuild build-for-testing -scheme Sora-Package -sdk iphoneos26.5 -derivedDataPath build -enableThreadSanitizer YES -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= PROVISIONING_PROFILE= SWIFT_VERSION=6`
+3. `xcrun simctl list devices booted --json` を python3 で読み、runtime 名に `iOS-26-5` を含み、名前が `iPhone 17 Pro` で `Booted` の device の UDID を取る (booted が複数ある場合があるため名前と OS で特定する)。見つからない場合は `exit 1`
+4. `xcrun simctl spawn <UDID> $(xcode-select -p)/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/xctest <BUNDLE>` で全件実行する。`simctl spawn` は親の環境変数を渡さないため、次のすべてを `SIMCTL_CHILD_` 接頭辞で渡す
+   - `DYLD_FRAMEWORK_PATH`: `build/Build/Products/Debug-iphonesimulator`
+   - `DYLD_INSERT_LIBRARIES`: `<BUNDLE>/Frameworks/libclang_rt.tsan_iossim_dynamic.dylib`
+   - `TSAN_OPTIONS=verbosity=1`
+   - `SORA_SIGNALING_URL` / `TEST_SECRET_KEY` / `TEST_CHANNEL_ID_PREFIX` / `TEST_CHANNEL_ID_SUFFIX` / `TEST_API_URL` (E2E の secret を `e2e` job と同じ名前で揃える)
+
+つまり `SIMCTL_CHILD_` は TSan の `DYLD_*` と E2E の環境変数の両方に必要である。実行対象は `SoraTests` 全体で、suite を列挙しない (後から追加した test が無言で TSan の外へ落ちるのを防ぐ)。反復は job の step では行わない (1 回実行)。step の先頭で `set -eo pipefail` を設定し、pipeline の exit code は `grep` より先に `TSAN_EXIT_CODE=$?` で取り出す (`set -e` は非 0 で即座に shell を終了させるため、取り出す間だけ `set +e` にする)。
+
+### 判定 (失敗条件)
+
+順に判定し、いずれかに該当すると step を失敗させる。
+
+1. `WARNING: ThreadSanitizer` の行数が 1 以上なら失敗 (race の report)。`verbosity=1` では `ThreadSanitizer: parsing` と `***** Running under ThreadSanitizer *****` の行も現れるため、`ThreadSanitizer` の単純な行数は使わない
+2. `***** Running under ThreadSanitizer` が log に無ければ失敗 (interceptor 無効の「検出 0」は空振り)
+3. `Executed N tests` から全体の test 数を取り出し、0 件なら失敗。XCTest は suite ごとに同じ行を出すため、入れ子の重複を避けて最大値 (最も外側の suite の値) を使う。bundle の path を誤っても 0 件で終了し得る
+4. pipeline の exit code が 0 でなければ失敗 (race を検出した TSan はプロセスを `BUS` で終了させ非 0 になる)。`grep` は「0 行」のとき exit 1 になり、そのままでは job の成否に使えないため、exit code を主、`WARNING` の行数と interceptor と test 数を従の判定にしている
+
+retry (`-retry-tests-on-failure` / `-test-iterations` / `-run-tests-until-failure`) は使っていない。
+
+### artifact の設計
+
+`actions/upload-artifact` (`ea165f8d65b6e75b540449e92b4886f43607fa02`、v4.6.2) で、失敗時のみ `build/tsan-report.txt` を保存する。`simctl spawn` は `.xcresult` を作らないため log から抽出する。log 全体ではなく `WARNING: ThreadSanitizer` の行から `==================` の行までの report ブロックだけを `awk` で抽出する。`0156` の secret masking が未完了であり、`simctl spawn` の log には接続情報が出得るため、通常のログ行は artifact へ持ち出さない。抽出は `e2e` job の diagnostics 抽出と同じく `grep` / `awk` で行い、report の件数は `grep -c` で数える (`grep` の「0 行」の exit 1 は `|| true` で吸収する)。`actions/upload-artifact` は `actions/*` の commit SHA pin とし、tag をコメントに残す。
+
+### `slack_notify` の更新
+
+`needs` を `[e2e, tsan]` にし、`status` を `contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')` にした (`consumer-test.yml` の `swift6-consumer` と同じ形)。`needs.e2e.result` のままでは TSan の失敗が通知されない。`on.push.paths-ignore` は変更していない。
+
+### 追加した stress test の内容 (対象・反復・timeout)
+
+`SoraTests/ConcurrencyStressTests.swift` (新規、3 件)。モックやスタブは使わず、実 `ConnectionStateOwner` / 実 `ConnectionTimer` だけを使う。並行区間の中から `XCTAssert*` を呼ばず、結果を lock 付き recorder へ集めて区間の終了後に検証する。乱数は使わず、iteration 番号と scenario 名をログ (`print`) へ出す。0154 が扱う handler bag の読み書きを並行させる stress は含めない (スコープ外)。
+
+- `testConnectionStartRaceAcceptsAtMostOncePerRound`: `beginConnectionStart` を `DispatchQueue.concurrentPerform(iterations: 64)` で交差させる。1 ラウンドで受理されるのは高々 1 回であること、受理した 1 スレッドが `finishSignalingStart` と `endAsyncOperation` で解放し、ラウンド終了時に `asyncOperationCount == 0` / `isStartingConnection == false` / `isDisconnecting == false` になることを検証する。8 ラウンド反復する
+- `testAsyncOperationRaceBalancesCountToZero`: `beginAsyncOperation` / `endAsyncOperation` / `requestDisconnect` を 64 スレッドで交差させる。開始に成功したスレッドは必ず 1 回終了を登録し、切断要求を即時に受理する呼び出しは高々 1 回であること、ラウンド終了時に残高が 0 に戻り `isDisconnecting == true` になることを検証する。8 ラウンド反復する
+- `testConnectionTimerRunStopRaceDeliversHandlerAtMostOncePerGeneration`: 実 `PeerChannel` (`onConnect` を設定して `.connecting`) を monitor にした実 `ConnectionTimer` に対し、`run(timeout: 1)` と `stop()` を 64 スレッドで交差させる。`run()` は呼ばれるたびに旧 Timer を invalidate して世代を進めるため、handler を呼べるのは最後に確定した世代だけである。各ラウンドで handler の呼び出し回数が高々 1 世代分であることを検証し、最後に 1 回だけ `run()` して main RunLoop 上で timeout が配送され handler が呼ばれること (世代照合が機能していること) と、配送後に `isRunning == false` になることを確認する。8 ラウンド反復する
+
+`SoraTests/ConcurrencyStressE2ETests.swift` (新規、1 件)。`E2ETestBase` を継承し、async な `setUp` / `tearDown` 契約に従う。5 iteration の E2E stress とし、iteration 番号から scenario を決める (乱数を使わない)。
+
+- iteration 1: connect / DataChannel open / 切断完了 (正常切断コード 1000) の確認
+- iteration 2: `connect` の戻り値を直ちに `cancel()` し、接続が開始されず `mediaChannels` に残らないことの確認
+- iteration 3: iteration 1 と同じ connect / disconnect を 3 回繰り返す
+- iteration 4: recvonly を接続し、`rpc_methods` に `RequestSimulcastRid` を許可した access token で接続して rpc ラベルの DataChannel の OPEN を待ち、短い timeout (0.001 秒) の RPC を実行して終端を待つ (timeout 経路)
+- iteration 5: 同じ接続で実行中の RPC をキャンセルし、終端を待つ (cancellation 経路)
+
+1 iteration の完了待ちは 30 秒、test 全体の timeout は `executionTimeAllowance = 300` 秒にした。`disconnectAndVerify` / `disconnectAll` を使い、iteration の間に接続を残さない。各 iteration の開始と終了、scenario 名、iteration 番号をログへ出す。redirect はサーバー側の指示で発生しクライアントから任意に起こせないため scenario に含めない (`PeerChannelRedirectInvalidationTests` が TSan の対象に入る)。
+
+### 実測 (TSan 全件・negative control・通常 test・基準 test 数)
+
+検証環境は sandbox のため `~/Library/Caches/org.swift.swiftpm` と `~/Library/Developer` への書き込みが拒否される。`CFFIXED_USER_HOME="$PWD/build/home" HOME="$PWD/build/home"` を付けて実行した (`0114` / `0171` / `0177` / `0181` と同じ制約)。
+
+- TSan 全件: `-enableThreadSanitizer YES` の `build-for-testing` (`build/0119-evidence/0119-tsan-build.log`, `** TEST BUILD SUCCEEDED **`, 追加 test は warning / error 0) が作った `SoraTests.xctest` を、`SIMCTL_CHILD_DYLD_FRAMEWORK_PATH` / `SIMCTL_CHILD_DYLD_INSERT_LIBRARIES` (`<bundle>/Frameworks/libclang_rt.tsan_iossim_dynamic.dylib`) / `SIMCTL_CHILD_TSAN_OPTIONS=verbosity=1` 付きの `xcrun simctl spawn <UDID> .../Agents/xctest <bundle>` で全件実行した。**445 件 / skip 32 / 失敗 0 / `WARNING: ThreadSanitizer` 0 行 / `***** Running under ThreadSanitizer v3` あり / exit 0** (`build/0119-evidence/0119-tsan-all.log`、約 27 秒)。interceptor は `TSAN_OPTIONS=verbosity=1` の `ThreadSanitizer: parsing` と banner で確認した。追加した 4 件は 3 件 pass + `ConcurrencyStressE2ETests` 1 件 skip (`SORA_SIGNALING_URL` 未設定)
+- negative control (TSan 有効): 一時的に `SoraTests/TemporaryTSanNegativeControlTests.swift` を追加し、`@unchecked Sendable` な class の stored property を 4096 スレッドで排他なしに読み書きする意図的な race を作り、job と同じ build と実行を行った。**`WARNING: ThreadSanitizer` 5 行 (すべて `TemporaryTSanNegativeControlTests.testIntentionalDataRace()` を指す `Swift access race` / `data race`) / exit code 134 (signal 6, `ThreadSanitizer: reported 5 warnings`) / 445+1 件実行**。判定スクリプトも report 5 件で失敗した。「検出 0 行」の判定が空振りでないことを確認した。計測後に probe を削除し、`git status --short` に現れないことを確認した
+- negative control (interceptor 無効): `SIMCTL_CHILD_DYLD_INSERT_LIBRARIES` を外して同じ bundle を実行した。race を含まない実行では `ERROR: Interceptors are not working. ... loaded too late` で abort し、`***** Running under ThreadSanitizer` が出ず `Executed N tests` も出ないため、判定 step は失敗する。issue の「race が検出されない (空振りになる)」という記述とは挙動が異なるが、**空振りを失敗させる**という判定の目的は満たす (interceptor の banner と test 数の判定が捕まえる)。probe が無い bundle では検出 0 と区別できないため、interceptor の確認は上の probe の実行で行った
+- 通常 test (`build-for-testing` + `simctl spawn`、TSan 無効): **445 件 / skip 32 / 失敗 0** (`build/0119-plain-tests.log`)。追加した 4 件は 3 件 pass + 1 件 skip
+- 基準 test 数: 事前実測 (`0171` / `0181`) の 441 件 / skip 31 に本 issue の追加分 4 件 (unit 3 + E2E 1) を加えると **445 件 / skip 32** になり、上の 2 つの実測と一致する。skip の増分 1 は `ConcurrencyStressE2ETests` が `SORA_SIGNALING_URL` 未設定でスキップされる分である
+- `0171` の gate: `Package.swift` の `SoraTests` 設定 (`.treatAllWarnings(as: .error)` と `DeprecatedDeclaration` の例外) を効かせた実 build (`build-for-testing`) で、追加 test の warning / error は 0。build log の `warning:` は `Sora` module が非推奨 API を内部で参照する既存のものだけで、`SoraTests/*.swift` からの warning は無い
+- workflow の判定ロジック: 実 YAML から `Run Thread Sanitizer Tests` と `Check Thread Sanitizer Report` の `run` を取り出し、実 log に対して実行した。正常 log (445 件 / report 0 / exit 0) は成功、race を含む実 log (report 5 / exit 134) は失敗、banner なしの log は失敗、test 数 0 の log は失敗、report の抽出は `WARNING: ThreadSanitizer` の report ブロックだけを含み接続情報を含む行を含まないことを確認した
+
+### 実行した検証と結果
+
+- `make build` (`-warnings-as-errors -Wwarning DeprecatedDeclaration`): `** BUILD SUCCEEDED **`、error 0
+- `make consumer-build SCHEME=ConsumerCore`: `** BUILD SUCCEEDED **`
+- `make api-check-fresh`: `The committed API baseline matches the current Sora module.` (公開 API の差分なし)
+- `make fmt-lint`: 成功 (追加した 2 file は `swift format --in-place` で整形した)
+- `swiftlint lint --strict --cache-path build/swiftlint-cache`: `Found 0 violations, 0 serious in 65 files`。`.swiftlint.yml` の `included` が `Sora` / `TestConsumers` のため `SoraTests` は対象外だが、追加 file は `fmt-lint` の `swift format` で `AlwaysUseLowerCamelCase` と `LineLength` を解消済み
+- `make lint` (`swift package plugin ... swiftlint`): 検証環境の sandbox が `sandbox-exec` を拒否する (`sandbox-exec: sandbox_apply: Operation not permitted`) ため実行できない (`0177` と同じ制約)。`swiftlint lint --strict` で代替した
+- 全体 test: `xcodebuild test -scheme Sora-Package -derivedDataPath build -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' SWIFT_VERSION=6 ...` は、検証環境が PTY を作成できず `Pseudo Terminal Setup Error` (IDEPseudoTerminalDomain code 7) で起動できない (`0177` と同じ制約)。同一の `build-for-testing` 成果物を `simctl spawn` で実行した **445 件 / skip 32 / 失敗 0** で代替した
+- workflow の構文: `ruby -ryaml` で YAML を parse できること、`jobs` が `e2e` / `tsan` / `slack_notify` であること、`tsan` の step 名・`timeout-minutes: 20`・env のキー・`slack_notify` の `needs` が `[e2e, tsan]` であること、`uses` がすべて commit SHA で pin されていることを確認した。`actionlint` は環境に無い。既存 `e2e` job の差分は `slack_notify` の `needs` と `status` の 2 行だけで、`e2e` job 自体は変更していない
+- `git status --short`: `.github/workflows/e2e-test.yml` と `CHANGES.md` の変更、`SoraTests/ConcurrencyStressE2ETests.swift` と `SoraTests/ConcurrencyStressTests.swift` の新規のみ。コミットと push はしていない
+
+### 残った懸念
+
+- 実 Sora 接続を含む 5 iteration の E2E stress は、ローカルに `SORA_SIGNALING_URL` と `TEST_SECRET_KEY` が無いため skip され、実測できていない。PR の `e2e-test.yml` (`tsan` job) で確認する。RPC の scenario は接続前の access token に `rpc_methods` を含める必要があり、Sora のバージョンが `RequestSimulcastRid` を許可しない場合は RPC の 2 scenario が失敗し得る (`RpcE2ETests` は同じ理由で skip する)。PR で失敗が再現する場合は retry を足さず、scenario を減らすか別 issue へ切り出す
+- interceptor 無効時の挙動が issue の想定 (race が検出されない) と異なり、`ERROR: Interceptors are not working` で abort した。判定 step は banner と test 数の判定でこの状態を失敗させるため job の目的は満たすが、issue の記述とは食い違う
+- `TSAN_EXIT_CODE` は TSan の race 検出時に非 0 になるが、`simctl spawn` の exit code は子プロセスの abort を必ず伝えるとは限らない。そのため job の主判定は `WARNING: ThreadSanitizer` の行数であり、exit code は補助の失敗条件として残している
+- `SoraTests` は `.swiftlint.yml` の対象外のため、追加 file の lint は `fmt-lint` (`swift format`) だけである

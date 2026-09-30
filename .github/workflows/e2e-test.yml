@@ -120,8 +120,183 @@ jobs:
     - name: Shutdown Simulator
       if: always()
       run: xcrun simctl shutdown 'iPhone 17 Pro' || true
+  tsan:
+    runs-on: [self-hosted, macOS, ARM64, Apple-M1]
+    # 実測はクリーンビルド 16 秒 + 全件実行 32 秒の約 1 分であり、cold cache を見込んで 20 分にする。
+    timeout-minutes: 20
+    env:
+      XCODE: /Applications/Xcode.app
+      XCODE_SDK: iphoneos26.5
+      DESTINATION: platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5
+      SORA_SIGNALING_URL: ${{ secrets.TEST_SIGNALING_URL }}
+      TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
+      TEST_CHANNEL_ID_PREFIX: ${{ secrets.TEST_CHANNEL_ID_PREFIX }}
+      TEST_CHANNEL_ID_SUFFIX: _${{ github.run_id }}
+      TEST_API_URL: ${{ secrets.TEST_API_URL }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Show Xcode Version
+      run: xcodebuild -version
+    - name: Setup iOS Simulator
+      run: |
+        SIMULATOR_NAME="iPhone 17 Pro"
+
+        # デバイスの存在を確認し、存在しなければ作成する
+        if ! xcrun simctl list devices available | grep -q "$SIMULATOR_NAME ("; then
+          echo "Creating simulator '$SIMULATOR_NAME'"
+          xcrun simctl create "$SIMULATOR_NAME" \
+            "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro"
+        fi
+
+        # 起動
+        xcrun simctl boot "$SIMULATOR_NAME"
+        xcrun simctl bootstatus "$SIMULATOR_NAME" -b
+    - name: Run Thread Sanitizer Tests
+      id: tsan_tests
+      env:
+        # 判定の grep が 0 行のときに exit 1 になるため、pipe の exit code は判定より先に
+        # 変数へ取り出す。race を検出した TSan はプロセスを BUS で終了させるため非 0 になり、
+        # grep だけに依存しない失敗条件として使う。
+        # 接続情報を含む通常のログは artifact へ持ち出さず、report の抽出はこの step で行う。
+        REPORT_PATH: build/tsan-report.txt
+      run: |
+        # build と bundle の検査など、途中の失敗で step を終了させる
+        set -eo pipefail
+
+        # incremental build では TSan runtime の bundle への複製が省略されるため、先に build を消す
+        rm -rf build
+
+        # TSan runtime を .xctest bundle へ複製させるため、build から行う
+        # (test-without-building では TSan runtime が load されず race を検出しない)
+        xcodebuild build-for-testing \
+          -scheme Sora-Package \
+          -sdk ${{ env.XCODE_SDK }} \
+          -derivedDataPath build \
+          -enableThreadSanitizer YES \
+          -destination '${{ env.DESTINATION }}' \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY= \
+          PROVISIONING_PROFILE= \
+          SWIFT_VERSION=6
+
+        # destination と同じ Simulator の UDID を取る (booted が複数ある場合があるため、
+        # 名前と OS で特定する)
+        UDID=$(xcrun simctl list devices booted --json |
+          python3 -c "
+        import json, sys
+
+        devices = json.load(sys.stdin)['devices']
+        for runtime, device_list in devices.items():
+            if 'iOS-26-5' not in runtime:
+                continue
+            for device in device_list:
+                if device['name'] == 'iPhone 17 Pro' and device.get('state') == 'Booted':
+                    print(device['udid'])
+                    sys.exit(0)
+        ")
+        if [ -z "$UDID" ]; then
+          echo "Error: iPhone 17 Pro (iOS 26.5) の booted device が見つかりません"
+          exit 1
+        fi
+        echo "UDID: $UDID"
+
+        BUNDLE="$PWD/build/Build/Products/Debug-iphonesimulator/SoraTests.xctest"
+        if [ ! -d "$BUNDLE" ]; then
+          echo "Error: $BUNDLE が見つかりません"
+          exit 1
+        fi
+
+        # simctl spawn は親の環境変数を渡さないため、TSan の DYLD_* と E2E の環境変数は
+        # どちらも SIMCTL_CHILD_ 接頭辞で渡す
+        # set -e は pipeline が非 0 を返した時点で shell を終了させるため、exit code を
+        # 取り出す間だけ無効化する (race を検出した TSan はプロセスを BUS で終了させ、
+        # pipeline の exit code は非 0 になる)。
+        set +e
+        SIMCTL_CHILD_DYLD_FRAMEWORK_PATH="$PWD/build/Build/Products/Debug-iphonesimulator" \
+        SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$BUNDLE/Frameworks/libclang_rt.tsan_iossim_dynamic.dylib" \
+        SIMCTL_CHILD_TSAN_OPTIONS=verbosity=1 \
+        SIMCTL_CHILD_SORA_SIGNALING_URL="$SORA_SIGNALING_URL" \
+        SIMCTL_CHILD_TEST_SECRET_KEY="$TEST_SECRET_KEY" \
+        SIMCTL_CHILD_TEST_CHANNEL_ID_PREFIX="$TEST_CHANNEL_ID_PREFIX" \
+        SIMCTL_CHILD_TEST_CHANNEL_ID_SUFFIX="$TEST_CHANNEL_ID_SUFFIX" \
+        SIMCTL_CHILD_TEST_API_URL="$TEST_API_URL" \
+          xcrun simctl spawn "$UDID" \
+            "$(xcode-select -p)/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/xctest" \
+            "$BUNDLE" 2>&1 | tee build/tsan.log
+
+        # pipefail により pipeline の exit code がそのまま入る。
+        # pipeline の直後で取り出す (grep は「0 行」のとき exit 1 になるため、
+        # そのままでは job の成否に使えない)。
+        TSAN_EXIT_CODE=$?
+        set -e
+
+        # 異常終了した場合の証跡として、log の末尾にも exit code と実行結果を残す
+        echo "tsan exit code: $TSAN_EXIT_CODE" >> build/tsan.log
+        echo "tsan_exit_code=$TSAN_EXIT_CODE" >> "$GITHUB_ENV"
+
+        # artifact には log 全体ではなく TSan の report ブロックだけを入れる。
+        # report は「WARNING: ThreadSanitizer」の行から「==================」の行までで、
+        # 接続情報や環境変数を含む通常のログ行は持ち出さない。
+        awk '
+          /^WARNING: ThreadSanitizer/ { report++; in_report = 1; print; next }
+          in_report { print }
+          in_report && /^==================$/ { in_report = 0 }
+        ' build/tsan.log > "$REPORT_PATH"
+        TSAN_REPORT_COUNT=$(grep -c '^WARNING: ThreadSanitizer' "$REPORT_PATH" || true)
+        echo "tsan_report_count=$TSAN_REPORT_COUNT" >> "$GITHUB_ENV"
+        echo "TSan report count: $TSAN_REPORT_COUNT (log: build/tsan.log)"
+    - name: Check Thread Sanitizer Report
+      env:
+        REPORT_PATH: build/tsan-report.txt
+      run: |
+        # grep は「0 行」のとき exit 1 になるため、行数は先に数える。
+        # verbosity=1 では banner と parsing の行にも ThreadSanitizer が現れるため、
+        # race の判定には「ThreadSanitizer」の単純な行数を使わない。
+        REPORT_COUNT=${tsan_report_count:-0}
+        EXIT_CODE=${tsan_exit_code:-1}
+        if [ "$REPORT_COUNT" -gt 0 ]; then
+          echo "Error: Thread Sanitizer がデータ競合を $REPORT_COUNT 件報告しました。"
+          cat "$REPORT_PATH"
+          exit 1
+        fi
+
+        # interceptor が有効でなければ「検出 0」は空振りである
+        # (DYLD_INSERT_LIBRARIES の path 誤りや TSan 無効 build を検出する)
+        if ! grep -q '\*\*\*\*\* Running under ThreadSanitizer' build/tsan.log; then
+          echo "Error: TSan runtime が load されていません (interceptor 無効のため検出 0 は空振りです)。"
+          exit 1
+        fi
+
+        # test 数が 0 件でないことを確認する (bundle の path 誤りでも 0 件で終了し得る)。
+        # XCTest は suite ごとに "Executed N tests" を出すため、最も外側の suite の値
+        # (最大値) を全体の test 数として使う。合計すると suite の入れ子の分だけ重複する。
+        TEST_COUNT=$(grep -o 'Executed [0-9]* tests\?' build/tsan.log |
+          awk '{ if ($2 > max) max = $2 } END { print max + 0 }')
+        if [ -z "$TEST_COUNT" ] || [ "$TEST_COUNT" -eq 0 ]; then
+          echo "Error: 実行した test 数が 0 件です。"
+          exit 1
+        fi
+        echo "Executed tests: $TEST_COUNT"
+
+        # race を検出した TSan はプロセスを BUS で終了させるため、exit code も失敗条件にする
+        if [ "$EXIT_CODE" -ne 0 ]; then
+          echo "Error: TSan 実行の exit code が $EXIT_CODE です。"
+          exit 1
+        fi
+
+        echo "Thread Sanitizer: no data race detected ($TEST_COUNT tests)"
+    - name: Upload TSan Report
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: tsan-report
+        path: build/tsan-report.txt
+        if-no-files-found: ignore
+    - name: Shutdown Simulator
+      if: always()
+      run: xcrun simctl shutdown 'iPhone 17 Pro' || true
   slack_notify:
-    needs: [e2e]
+    needs: [e2e, tsan]
     runs-on: ubuntu-slim
     if: always()
     permissions:
@@ -130,7 +305,7 @@ jobs:
       - name: Slack Notification
         uses: shiguredo/github-actions/.github/actions/slack-notify@main
         with:
-          status: ${{ needs.e2e.result }}
+          status: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK }}
           slack_channel: sora-ios-sdk
         env:
