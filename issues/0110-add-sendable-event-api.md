@@ -3,7 +3,7 @@
 - Created: 2026-08-27
 - Completed:
 - Branch: feature/add-sendable-event-api
-- Polished: 2026-09-17
+- Polished: 2026-09-30
 
 ## 目的
 
@@ -38,9 +38,9 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 - `0100` (完了 2026-09-08): PeerChannel の接続状態フラグの reducer と state snapshot
 - `0101` (完了 2026-09-15): signaling event の ordered ingress
 - `0102` (完了 2026-09-16): mutable handler bag と設定 snapshot の分離
-- `0105` (open): stream frame event の順序保証 (ingress の整理と renderer callback の main queue 配送)
+- `0105` (完了 2026-09-18): stream frame event の順序保証 (ingress の整理と renderer callback の main queue 配送)
 - `0163` (open): `videoEnabled` / `audioEnabled` の変更の operation 単位の直列化 (stream の有効フラグ event の入力源)
-- `0107` (open): 外部 consumer package
+- `0107` (完了 2026-09-24): 外部 consumer package
 
 接続イベントの ordered ingress は、`0010` の `connectionLifecycleLock` (MediaChannel の接続ライフサイクル)、`0100` の `ConnectionStateOwner` (PeerChannel の接続状態フラグ)、`0101` の `SignalingStateOwner` (signaling の phase / URL と delegate callback) が分担する。新 event API の ordered event stream は、この現行実装を入力源とする。
 
@@ -85,7 +85,7 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 ## スコープ外
 
 - legacy handler API の削除は次期 major version の別 issue とする。
-- `CameraVideoCapturerHandlers` の `onCapture` / `onStart` / `onStop` は、新しい event API の対象としない。カメラ状態の所有は `0103`、frame の lifetime と順序保証は `0105` が扱う。
+- `CameraVideoCapturerHandlers` の `onCapture` / `onStart` / `onStop` は、新しい event API の対象としない。カメラ状態の所有は `0103` (完了 2026-09-16)、frame の lifetime と順序保証は `0105` (完了 2026-09-18) が扱っている。
 - `SoraHandlers` の closure property の読み書き排他は `0111` で扱う。新 event API は `SoraHandlers` のイベントも購読対象にするが、排他は `0111` の範囲とする。
 - MainActor renderer protocol の追加は `0027` で扱う。
 - raw WebRTC 型の公開 API からの撤去は `0070` と整合させる。
@@ -101,7 +101,7 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 - 購読 Task を cancel し、continuation と購読者が残留しないことを確認する。
 - buffer overflow を実 event の連続発生で再現し、定義した drop / backpressure 方針どおりになることを確認する。
 - 2 接続の event が connection ID / epoch で混線しないことを確認する。
-- `0107` の consumer package から nonisolated actor と MainActor の両方で購読できることを確認する。
+- `0107` (完了 2026-09-24) の consumer package から nonisolated actor と MainActor の両方で購読できることを確認する。
 - テストには、event ordering、buffer 方針、reentrancy の期待を日本語コメントで明記する。
 
 ## 完了条件
