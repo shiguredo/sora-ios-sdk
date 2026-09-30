@@ -38,7 +38,7 @@
 - `0177` (2026-09-29 完了): `MediaChannelStateStorage` と `setState(_:)` の追加元。本 issue は `0177` が別 issue へ分離した「`state` の ABI を変えてでも単一所有にする」整理を引き取る。
 - `0176` (完了 2026-09-29): `MediaChannel.getStats` の同一性判定の回帰テスト。`createClientOfferSDP` 側は実装済みで、`setConnectionStateForTesting(_:)` と `#if DEBUG` の seam は未実施のまま残した。`0176` から引き継いだ `getStats` 側の seam と回帰テストは本 issue で扱う。`state` を computed property 化して公開 API baseline を再生成する同じ変更で seam を本 issue の書き込み経路へ合わせるのが最も無駄がなく、`0176` はこの引き継ぎでクローズしている。
 - `0164` (open): redirect が接続確立前にのみ届くことの調査。`getStats` の同一性判定を E2E で観測できない根拠である。
-- `0118` (完了 2026-09-25) と `0171` (open): `SoraTests` は Swift 6 言語モードで build され、`0171` の完了後は warnings-as-errors になる。追加するテストは concurrency 診断を出さない書き方にする。
+- `0118` (完了 2026-09-25) と `0171` (完了 2026-09-30): `SoraTests` は Swift 6 言語モードで build され、warnings-as-errors が有効になっている。追加するテストは concurrency 診断を出さない書き方にする。
 
 ## 変更対象
 

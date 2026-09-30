@@ -39,7 +39,10 @@ final class ConnectionStateOwnerTests: XCTestCase {
     XCTAssertTrue(owner.stateForTesting().isStartingConnection, "開始区間へ入ること")
     XCTAssertFalse(owner.beginConnectionStart(), "開始区間中の 2 重取得は拒否されること")
 
-    owner.endAsyncOperation { _ in false }
+    // endAsyncOperation は保存された切断要求だけを返す。要求が無いここでは nil になる
+    XCTAssertNil(
+      owner.endAsyncOperation { _ in false },
+      "初期ロックの終了では切断要求を取り出さないこと")
     XCTAssertEqual(owner.stateForTesting().asyncOperationCount, 0, "初期ロックが解放されること")
     XCTAssertFalse(owner.stateForTesting().isDisconnecting, "切断処理は開始されないこと")
   }
@@ -52,10 +55,15 @@ final class ConnectionStateOwnerTests: XCTestCase {
     XCTAssertTrue(owner.beginAsyncOperation(), "重ねて開始できること")
     XCTAssertEqual(owner.stateForTesting().asyncOperationCount, 2, "残高が 2 になること")
 
-    owner.endAsyncOperation { _ in false }
+    // 保存された切断要求は無いため、1 件目と 2 件目のどちらの終了でも nil が返る
+    XCTAssertNil(
+      owner.endAsyncOperation { _ in false },
+      "1 件目の終了では切断要求を取り出さないこと")
     XCTAssertEqual(owner.stateForTesting().asyncOperationCount, 1, "1 件目の終了で 1 になること")
 
-    owner.endAsyncOperation { _ in false }
+    XCTAssertNil(
+      owner.endAsyncOperation { _ in false },
+      "2 件目の終了では切断要求を取り出さないこと")
     XCTAssertEqual(owner.stateForTesting().asyncOperationCount, 0, "2 件目の終了で 0 になること")
     XCTAssertFalse(owner.stateForTesting().isDisconnecting, "終了だけでは切断処理を開始しないこと")
   }
