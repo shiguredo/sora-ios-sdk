@@ -2,6 +2,8 @@
 
 Sora を外部の iOS アプリと同じ形 (通常の SwiftPM package 依存) で `import Sora` し、
 Swift 6 language mode と warnings-as-errors で compile できるかを検証する consumer package です。
+SDK は root package の `swiftLanguageModes` で Swift 6 言語モードになるため、Swift 5 言語モードの
+consumer から SDK を利用できることも別の target で検証します。
 外部のアプリが Sora を使う形を再現する検証用の package であり、テストデータでもサンプルアプリでもありません。
 
 - 内部 API へ依存しない。test 用の import 属性や診断抑止の属性を一切使わない
@@ -17,6 +19,7 @@ Swift 6 language mode と warnings-as-errors で compile できるかを検証�
 | `ConsumerCore` | `nonisolated` | 接続設定の組み立てと接続、handler への closure 代入、RPC と統計取得、RPC のサーバーエラー詳細 (`JSONValue`) の読み取り、`VideoRenderer` の非隔離実装 |
 | `ConsumerUI` | `MainActor` | `@MainActor` を書かずに `VideoView` を生成して操作できること (既定隔離が MainActor であることの担保) |
 | `ConsumerLegacy` | `nonisolated` | 非推奨 API が warning に留まり、warnings-as-errors でも build できること |
+| `ConsumerSwift5` | `nonisolated` | Swift 5 言語モードの consumer が Swift 6 言語モードの SDK を `import Sora` して公開 API を利用できること (nonisolated な global shared mutable state が診断されないこと) |
 
 | ディレクトリ | 役割 |
 | --- | --- |
@@ -120,6 +123,7 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型を含む)、統計取得、RPC のサーバーエラー詳細 (`JSONValue` の case 分岐) の読み取り、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加する作業が、新しい RPC の scenario を追加する |
 | `Sources/ConsumerUI/VideoViewScenario.swift` | 既定隔離が MainActor であること | `VideoRenderer` の隔離を見直す作業が更新する |
 | `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること (CI は期待する非推奨 API 名の一覧で検査する) | 非推奨 API を削除する作業が、対象の参照と `consumer-test.yml` の期待する非推奨 API 名の一覧を同時に更新する |
+| `Sources/ConsumerSwift5/Swift5Compatibility.swift` | Swift 5 言語モードの consumer が SDK を利用できること (CI は compile 行の `-swift-version` で検査する) | 公開 API を Swift 5 言語モードから呼べなくする作業が更新する |
 | `NegativeChecks/core-sendable-capture.swift` | `MediaChannel` が Sendable でないこと | `MediaChannel` の Sendable 準拠を検討する作業が更新する |
 | `NegativeChecks/ui-isolated-conformance.swift` | 隔離された conformance は非隔離文脈で使えないこと | `VideoRenderer` の隔離を見直す作業が更新する |
 | `ApiBaseline/` | 公開 API の削除・変更と、現在の module との不一致 (追加を含む) の検出 | 公開 API を変更するすべての作業が、同じ変更で再生成する |

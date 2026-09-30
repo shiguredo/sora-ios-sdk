@@ -14,6 +14,7 @@
 - [CHANGE] `swift-tools-version` を 6.3 に上げ、Swift 6 言語モードを manifest で宣言する
   - SwiftPM 6.3 未満 (Xcode 26.6 未満) では package を解決できなくなる
   - `swiftLanguageModes: [.v6]` により、SwiftPM で取り込んだ consumer も SDK を Swift 6 言語モードで compile する。公開 API と SDK の挙動は変わらない
+  - アプリ側が Swift 5 言語モードの場合はそのまま利用できる
   - @t-miya
 - [CHANGE] システム要件の Xcode バージョンを 26.6+ に更新する
   - @t-miya
@@ -120,6 +121,9 @@
 ### misc
 
 - [CHANGE] E2E テストの workflow を `ci.yml` から `e2e-test.yml` にリネームする
+  - @t-miya
+- [ADD] Swift 5 言語モードの consumer が `Sora` を import して build できることを検証する CI を追加する
+  - `TestConsumers/Swift6Consumer` に `ConsumerSwift5` target を追加し、SDK が Swift 6 言語モードで compile される一方で consumer の言語モードは consumer 側の設定で独立に決まることを、`consumer-test.yml` の compile 行 (`-swift-version`) の検査で固定する
   - @t-miya
 - [ADD] Sora iOS SDK を利用したアプリ実装と同じ形で `Sora` を import する consumer package と公開 API の baseline を追加する
   - `TestConsumers/Swift6Consumer/` に Sora を import する独立した SwiftPM package を追加し、`import Sora` する compile (Swift 6 language mode と warnings-as-errors) と、公開 API の baseline 比較を CI (`consumer-test.yml`) で検証する
