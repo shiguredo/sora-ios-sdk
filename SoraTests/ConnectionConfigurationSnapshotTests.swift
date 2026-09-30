@@ -664,4 +664,69 @@ final class ConnectionConfigurationSnapshotTests: XCTestCase {
     XCTAssertFalse(insecure.usesVerifiedTURNTLS)
     XCTAssertEqual(insecure.nativeValue(insecure: false).tlsCertPolicy, .insecureNoCheck)
   }
+
+  /// 非推奨の `tlsSecurityPolicy` が内部の真値へ委譲することを確認する
+  ///
+  /// 公開 API の後方互換を固定するため、非推奨の get / set と非推奨イニシャライザを
+  /// 意図的に参照する。get は真値の読み出し、set は真値への書き込み、イニシャライザは
+  /// 引数の写し取りであり、どれも `ICEServerSnapshot` の写し取り先になる。
+  func testICEServerInfoDelegatesTLSecurityPolicyToInternalValue() {
+    // 非推奨でないイニシャライザは .secure 相当の真値になり、getter も .secure を返す。
+    let info = ICEServerInfo(
+      urls: ["turns:example.com"], userName: "user", credential: "credential")
+    XCTAssertFalse(info.isTLSInsecure)
+    XCTAssertEqual(info.tlsSecurityPolicy, .secure)
+
+    // setter で .insecure を代入すると真値が true になり、getter と snapshot の
+    // TURN-TLS 検証の判定にも伝わる。
+    info.tlsSecurityPolicy = .insecure
+    XCTAssertTrue(info.isTLSInsecure)
+    XCTAssertEqual(info.tlsSecurityPolicy, .insecure)
+    XCTAssertFalse(ICEServerSnapshot(info).usesVerifiedTURNTLS)
+
+    // setter で .secure へ戻す写像も固定する。片方向にしか真値を書かない実装を検出する。
+    info.tlsSecurityPolicy = .secure
+    XCTAssertFalse(info.isTLSInsecure)
+    XCTAssertEqual(info.tlsSecurityPolicy, .secure)
+    XCTAssertTrue(ICEServerSnapshot(info).usesVerifiedTURNTLS)
+
+    // 非推奨イニシャライザの引数が真値へ写り、getter も同じ値を返す。
+    let insecure = ICEServerInfo(
+      urls: ["turns:example.com"],
+      userName: "user",
+      credential: "credential",
+      tlsSecurityPolicy: .insecure)
+    XCTAssertTrue(insecure.isTLSInsecure)
+    XCTAssertEqual(insecure.tlsSecurityPolicy, .insecure)
+  }
+
+  /// `ICEServerInfo` の JSON のキーが内部の真値で変わらないことを確認する
+  ///
+  /// decode できるキーと encode するキーが `urls` / `username` / `credential` の
+  /// 3 つだけであることを固定する。内部の真値が `CodingKeys` に混入すると失敗する。
+  func testICEServerInfoJSONKeysAreUnchanged() throws {
+    // decode した値を encode し直してもキー集合は変わらない。
+    let json = Data(
+      #"{"urls":["turns:example.com"],"username":"user","credential":"credential"}"#.utf8)
+    let decoded = try JSONDecoder().decode(ICEServerInfo.self, from: json)
+    let object = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: try JSONEncoder().encode(decoded)) as? [String: Any],
+      "ICEServerInfo を JSON object として読めること")
+    XCTAssertEqual(
+      Set(object.keys), ["urls", "username", "credential"],
+      "ICEServerInfo の JSON のキーが urls / username / credential だけであること")
+
+    // 真値が insecure でも内部の真値は JSON に現れない。
+    let insecure = ICEServerInfo(
+      urls: ["turns:example.com"],
+      userName: "user",
+      credential: "credential",
+      tlsSecurityPolicy: .insecure)
+    let insecureObject = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: try JSONEncoder().encode(insecure)) as? [String: Any],
+      "insecure な ICEServerInfo を JSON object として読めること")
+    XCTAssertEqual(
+      Set(insecureObject.keys), ["urls", "username", "credential"],
+      "真値が insecure でも ICEServerInfo の JSON のキーが変わらないこと")
+  }
 }

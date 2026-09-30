@@ -11802,12 +11802,9 @@
             "moduleName": "Sora",
             "deprecated": true,
             "declAttributes": [
-              "HasInitialValue",
               "Final",
-              "Available",
-              "HasStorage"
+              "Available"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -11825,10 +11822,8 @@
                 "usr": "s:4Sora13ICEServerInfoC17tlsSecurityPolicyAA011TLSSecurityF0Ovg",
                 "mangledName": "$s4Sora13ICEServerInfoC17tlsSecurityPolicyAA011TLSSecurityF0Ovg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -11853,10 +11848,8 @@
                 "usr": "s:4Sora13ICEServerInfoC17tlsSecurityPolicyAA011TLSSecurityF0Ovs",
                 "mangledName": "$s4Sora13ICEServerInfoC17tlsSecurityPolicyAA011TLSSecurityF0Ovs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
