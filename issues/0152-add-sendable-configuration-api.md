@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/add-sendable-configuration-api
-- Polished: 2026-09-16
+- Polished: 2026-09-30
 
 ## 目的
 
@@ -60,6 +60,7 @@ Swift 6 言語モードの利用者が、接続設定を actor / Task 境界へ�
 - 設定型が handler を含まず、deep Sendable であること。
 - `Configuration` から公開設定型への変換で、metadata / `dataChannels` / codec 別 params / `ForwardingFilter` / WebRTC 設定の値が失われておらず、公開設定型から `Configuration` への復元で同じ接続設定になること。
 - `0107` の consumer package へ公開設定型の compile scenario を追加し、`SWIFT_STRICT_CONCURRENCY=complete` と warnings-as-errors により compile できること。
+- 公開設定型・公開 ICE サーバー値型・`Sora.connect` の新 overload の追加に伴い、同じ変更で `make api-baseline` を実行して `TestConsumers/Swift6Consumer/ApiBaseline/` を再生成し、`make api-check-fresh` が成功すること (API の追加は `make api-check` では検出できず、`api-check-fresh` が検出する。`CODEBASE.md` の規約)。
 - 既存の `Configuration` と `Sora.connect` の公開 API が維持されていること。
 - `CHANGES.md` に `[ADD]` として追記していること。
 - 追加したテストと既存テストがすべて成功すること。
