@@ -23,7 +23,7 @@ public protocol RPCMethodProtocol {
 
 /// actor / Task 境界へ安全に渡せる RPC メソッドを定義するためのプロトコル
 ///
-/// `RPCMethodProtocol` を refine し、`Params` / `Result` に `Sendable` を要求します。
+/// `RPCMethodProtocol` を継承し、`Params` / `Result` に `Sendable` を要求します。
 /// パラメータと結果を actor 境界や `Task` の `@Sendable` closure を越えて受け渡す場合は
 /// このプロトコルへ準拠し、`MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)`
 /// を利用してください。
