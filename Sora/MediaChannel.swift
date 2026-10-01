@@ -1688,6 +1688,11 @@ public final class MediaChannel {
 
   /// MediaChannel の接続中にマイクをソフトミュート有効化 / 無効化します
   ///
+  /// この呼び出し 1 回を 1 operation とし、`MediaStream.audioEnabled` への直接代入とは
+  /// operation の世代 (operation の開始時に取得した順) で調停されます。後から開始した operation の
+  /// 値が最新になり、より大きい世代が先に確定している場合、この呼び出しの書き込みは破棄されます
+  /// (呼び出しは成功を返します)。
+  ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setAudioSoftMute(_ mute: Bool) -> Error? {
@@ -1726,6 +1731,11 @@ public final class MediaChannel {
   /// MediaChannel の接続中に映像をソフトミュート有効化 / 無効化します
   /// 黒塗りフレームが送信される状態になります
   ///
+  /// この呼び出し 1 回を 1 operation とし、`setVideoHardMute` と `MediaStream.videoEnabled` への
+  /// 直接代入とは operation の世代 (operation の開始時に取得した順) で調停されます。後から開始した
+  /// operation の値が最新になり、より大きい世代が先に確定している場合、この呼び出しの書き込みは
+  /// 破棄されます (呼び出しは成功を返します)。
+  ///
   /// - Parameter mute: `true` で有効化、`false` で無効化
   /// - Returns: 成功した場合は `nil`、失敗した場合は `SoraError.mediaChannelError` を返します
   public func setVideoSoftMute(_ mute: Bool) -> Error? {
@@ -1755,16 +1765,28 @@ public final class MediaChannel {
   /// 事前に映像ソフトミュートを利用していた場合は状態が上書きされます
   /// ハードミュート解除時に直前のソフトミュートの状態を復元するようなことはしません
   ///
-  /// ハードミュート有効化に失敗した場合は、呼び出し前の `senderStream.videoEnabled` を復元します。
-  /// ただし操作が取り消された場合は復元せず、黒塗り (ソフトミュート) のまま終了します。
+  /// ハードミュート有効化に失敗した場合は、`VideoHardMuteActor` の直列化区間へ入った時点の
+  /// `senderStream.videoEnabled` を復元します。ただし操作が取り消された場合は復元せず、
+  /// 黒塗り (ソフトミュート) のまま終了します。
   /// 切断の開始と同時に失敗した場合は復元されることがあります。
-  /// 復元する値はこの操作が実行を開始した時点の値であり、並行する `setVideoSoftMute` や
-  /// `MediaStream.videoEnabled` への直接代入とは排他されません。
+  /// ただしこの基準値は呼び出し直前の値と厳密に一致する保証はありません。
+  ///
+  /// この呼び出し 1 回を 1 operation とし、`videoEnabled` の設定・復元・ハードミュート解除後の
+  /// 有効化はすべてこの呼び出しが公開 API の入口で取得した世代で確定します。`setVideoSoftMute` や
+  /// `MediaStream.videoEnabled` への直接代入など、後から開始した operation が先に値を確定している
+  /// 場合は、この操作の書き込み (解除後の有効化を含む) が破棄されます (この操作の失敗時の復元も
+  /// 破棄されます)。
   /// 操作の実行中や設定前の取消により拒否された場合は `videoEnabled` を変更しません。
   ///
-  /// `senderStream.videoEnabled` の setter は値が変化したときだけ利用者 handler と
-  /// `VideoRenderer` を呼びます。呼び出し前が有効な場合は、成功時に `onSwitchVideo(false)` が 1 回、
-  /// 復元する失敗時に `onSwitchVideo(false)` と `onSwitchVideo(true)` がこの順に 1 回ずつ発火します。
+  /// この操作の書き込みが破棄された場合でも、ハードミュートのカメラ停止・再開は実行されます。
+  /// その場合 `videoEnabled` の確定値と実カメラ状態が食い違うことがあり、その場合は復旧に
+  /// `setVideoHardMute(false)` が必要です (`setVideoSoftMute(false)` では復旧しません)。
+  ///
+  /// `senderStream.videoEnabled` の確定処理は値が変化したときだけ利用者 handler と
+  /// `VideoRenderer` を呼びます (`BasicMediaStream` の経路は setter ではなくこの確定処理を直接呼びます)。
+  /// この書き込みが後続の operation により破棄されない場合に限り、呼び出し前が有効なときは成功時に
+  /// `onSwitchVideo(false)` が 1 回、復元する失敗時に `onSwitchVideo(false)` と `onSwitchVideo(true)` が
+  /// この順に 1 回ずつ発火します。
   /// 有効化の経路ではこれらの handler は `VideoHardMuteActor` の executor で発火します。
   /// これに対し `VideoRenderer.onSwitch(video:)` の配送 executor は main queue であり、
   /// handler と renderer の相対順序は保証されません。
@@ -1786,11 +1808,19 @@ public final class MediaChannel {
       throw SoraError.mediaChannelError(reason: "cameraSettings.isEnabled is false")
     }
 
+    // operation の世代は公開 API の入口 (最初の await より前) で取得します。設定と復元を
+    // await をまたいで同じ世代で確定するためです。SDK が生成する送信ストリームは
+    // BasicMediaStream だけなので通常は世代を取得でき、他の実装では nil を渡して
+    // VideoHardMuteActor 側が public な setter へフォールバックします。
+    let basicStream = senderStream as? BasicMediaStream
+    let generation = basicStream?.beginVideoOperation()
+
     if mute {
       // 黒塗りの設定は VideoHardMuteActor.setMute 内で行います
       // (所有権を取得できなかった呼び出しが videoEnabled を変更しないようにするため)
       try await Self.videoHardMuteActor.setMute(
         mute: true,
+        generation: generation,
         lease: videoHardMuteLease,
         senderStream: SenderStreamBox(stream: senderStream),
         cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings)
@@ -1807,6 +1837,7 @@ public final class MediaChannel {
       do {
         try await Self.videoHardMuteActor.setMute(
           mute: false,
+          generation: generation,
           lease: videoHardMuteLease,
           senderStream: SenderStreamBox(stream: senderStream),
           cameraSettings: CameraSettingsSnapshot(configuration.cameraSettings),
@@ -1824,7 +1855,13 @@ public final class MediaChannel {
         throw SoraError.mediaChannelError(
           reason: "video hard mute operation was cancelled")
       }
-      senderStream.videoEnabled = true
+      // 有効化も設定・復元と同じ世代で確定します。後から開始した operation が先に確定している
+      // 場合は破棄されます。
+      if let basicStream, let generation {
+        basicStream.commitVideoEnabled(true, generation: generation)
+      } else {
+        senderStream.videoEnabled = true
+      }
     }
     Logger.debug(type: .mediaChannel, message: "setVideoHardMute mute=\(mute)")
   }

@@ -14,18 +14,36 @@ public enum MediaStreamAudioVolume {
 public final class MediaStreamHandlers {
   /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
   ///
+  /// 値が実際に変化したときに 1 回だけ呼ばれます。複数の公開 API から同じストリームの
+  /// `videoEnabled` が並行に変更された場合は operation の世代で確定が調停され、後から開始した
+  /// operation が先に確定していると古い世代の書き込み (失敗時の復元を含む) は破棄されるため、
+  /// 破棄された書き込みでは呼ばれません。
+  ///
+  /// 通知は確定の後に lock を解放して行うため、最後に配送された値が getter の最終値と一致する
+  /// 保証はありません。
+  ///
   /// `MediaChannel.setVideoHardMute(true)` の経路では `VideoHardMuteActor` の executor で、
   /// `MediaChannel.setVideoSoftMute`、`MediaChannel.setVideoHardMute(false)` の成功時、
   /// `MediaStream.videoEnabled` への直接代入では呼び出し側の executor で呼ばれます。
   ///
   /// `VideoRenderer.onSwitch(video:)` の配送 executor は main queue のため、このクロージャーと
-  /// renderer の相対順序は保証されません。
+  /// renderer の相対順序は保証されません。並行する operation が確定した場合、このクロージャーの
+  /// 呼び出し順序は確定順と一致しないことがあります (通知順序の入れ替わりは発火回数を変えません)。
   public var onSwitchVideo: ((_ isEnabled: Bool) -> Void)?
 
   /// 音声トラックが有効または無効にセットされたときに呼ばれるクロージャー
   ///
+  /// 値が実際に変化したときに 1 回だけ呼ばれます。複数の公開 API から同じストリームの
+  /// `audioEnabled` が並行に変更された場合は operation の世代で確定が調停され、後から開始した
+  /// operation が先に確定していると古い世代の書き込みは破棄されるため、破棄された書き込みでは
+  /// 呼ばれません。
+  ///
+  /// 通知は確定の後に lock を解放して行うため、最後に配送された値が getter の最終値と一致する
+  /// 保証はありません。
+  ///
   /// `VideoRenderer.onSwitch(audio:)` の配送 executor は main queue のため、このクロージャーと
-  /// renderer の相対順序は保証されません。
+  /// renderer の相対順序は保証されません。並行する operation が確定した場合、このクロージャーの
+  /// 呼び出し順序は確定順と一致しないことがあります (通知順序の入れ替わりは発火回数を変えません)。
   public var onSwitchAudio: ((_ isEnabled: Bool) -> Void)?
 
   /// 初期化します。
@@ -61,8 +79,11 @@ public protocol MediaStream: AnyObject {
   /// `false` をセットすると、サーバーへの映像の送受信を停止します。
   /// `true` をセットすると送受信を再開します。
   ///
-  /// setter は映像レンダラーの `onSwitch(video:)` の配送完了を待ちません。getter は即時に
-  /// 現在のトラックの状態を返します。
+  /// setter は映像レンダラーの `onSwitch(video:)` の配送完了を待ちません。getter は SDK が
+  /// 保持する確定値を即時に返し、native track の `isEnabled` への反映は確定時に行います。
+  ///
+  /// 複数の公開 API から並行に変更した場合は operation の世代で確定が調停され、後から開始した
+  /// operation が先に値を確定すると自分の書き込みが破棄され得ます (呼び出しは成功を返します)。
   var videoEnabled: Bool { get set }
 
   /// 音声の可否。
@@ -71,20 +92,24 @@ public protocol MediaStream: AnyObject {
   ///
   /// サーバーへの送受信を停止しても、マイクはミュートされませんので注意してください。
   ///
-  /// setter は映像レンダラーの `onSwitch(audio:)` の配送完了を待ちません。
+  /// setter は映像レンダラーの `onSwitch(audio:)` の配送完了を待ちません。getter は SDK が
+  /// 保持する確定値を即時に返し、native track の `isEnabled` への反映は確定時に行います。
+  ///
+  /// 複数の公開 API から並行に変更した場合は operation の世代で確定が調停され、後から開始した
+  /// operation が先に値を確定すると自分の書き込みが破棄され得ます (呼び出しは成功を返します)。
   var audioEnabled: Bool { get set }
 
   /// 映像トラックを保持している場合は `true` を返します。
   ///
   /// 映像ミュート時に映像トラックが存在するかチェックするために使用されます。
-  /// ミュート時に実行する videoEnabled setter は返り値やエラーを返さないため、
+  /// ミュート時の確定処理は返り値やエラーを返さないため、
   /// 呼び出し側へエラーを通知するために必要となります。
   var hasVideoTrack: Bool { get }
 
   /// 音声トラックを保持している場合は `true` を返します。
   ///
   /// 音声ミュート時に音声トラックが存在するかチェックするために使用されます。
-  /// ミュート時に実行する audioEnabled setter は返り値やエラーを返さないため、
+  /// ミュート時の確定処理は返り値やエラーを返さないため、
   /// 呼び出し側へエラーを通知するために必要となります。
   var hasAudioTrack: Bool { get }
 
@@ -295,36 +320,153 @@ class BasicMediaStream: MediaStream {
     nativeStream.audioTracks.first
   }
 
+  /// `videoEnabled` / `audioEnabled` の確定値と operation の世代を保持する storage です。
+  ///
+  /// 確定値と native track への反映を同じ lock 区間で更新し、getter が返す値と native track の
+  /// `isEnabled` が食い違わないようにします。利用者 callback はこの lock を解放してから呼びます
+  /// (保持したまま呼ぶと、callback から `videoEnabled` を読む利用者のコードが非再帰 lock で
+  /// deadlock するためです)。
+  ///
+  /// `CameraState.operationGeneration` と同じく世代で古い書き込みを破棄しますが、別の概念です。
+  /// あちらはカメラ状態機械の世代で、こちらは stream ごとの有効フラグの operation の世代です。
+  private let enabledLock = NSLock()
+
+  /// 映像の確定値です。初期値は native track の `isEnabled` に合わせ、native track を持たない
+  /// stream では以後も値を確定しないため `false` のままです。
+  private var storedVideoEnabled = false
+
+  /// 音声の確定値です。初期値は native track の `isEnabled` に合わせ、native track を持たない
+  /// stream では以後も値を確定しないため `false` のままです。
+  private var storedAudioEnabled = false
+
+  /// 映像 operation の世代の採番に使う値です。operation の開始ごとに進めます。
+  private var videoOperationGeneration: UInt64 = 0
+
+  /// 音声 operation の世代の採番に使う値です。operation の開始ごとに進めます。
+  private var audioOperationGeneration: UInt64 = 0
+
+  /// 最後に映像の値を確定した operation の世代です。
+  ///
+  /// 採番 (`videoOperationGeneration`) と確定の判定で別の値を持つのは、値を確定しない operation
+  /// (拒否された `setVideoHardMute` など) が後続として開始しても、先行 operation の復元を破棄
+  /// しないためです。破棄するのは「後続の operation が実際に値を確定した場合」に限ります。
+  private var committedVideoGeneration: UInt64 = 0
+
+  /// 最後に音声の値を確定した operation の世代です。
+  private var committedAudioGeneration: UInt64 = 0
+
   var videoEnabled: Bool {
     get {
-      nativeVideoTrack?.isEnabled ?? false
+      enabledLock.lock()
+      defer { enabledLock.unlock() }
+      return storedVideoEnabled
     }
     set {
-      guard videoEnabled != newValue else {
-        return
-      }
-      if let track = nativeVideoTrack {
-        track.isEnabled = newValue
-        handlers.onSwitchVideo?(newValue)
-        streamOwner.submitSwitch(video: newValue)
-      }
+      // 直接代入 1 回を 1 operation とし、入口で世代を取得して確定します。
+      let generation = beginVideoOperation()
+      commitVideoEnabled(newValue, generation: generation)
     }
   }
 
   var audioEnabled: Bool {
     get {
-      nativeAudioTrack?.isEnabled ?? false
+      enabledLock.lock()
+      defer { enabledLock.unlock() }
+      return storedAudioEnabled
     }
     set {
-      guard audioEnabled != newValue else {
-        return
-      }
-      if let track = nativeAudioTrack {
-        track.isEnabled = newValue
-        handlers.onSwitchAudio?(newValue)
-        streamOwner.submitSwitch(audio: newValue)
-      }
+      // 直接代入 1 回を 1 operation とし、入口で世代を取得して確定します。
+      let generation = beginAudioOperation()
+      commitAudioEnabled(newValue, generation: generation)
     }
+  }
+
+  // MARK: - videoEnabled / audioEnabled の operation の直列化
+
+  /// 映像の operation を開始し、この operation の世代を返します。
+  ///
+  /// 公開 API の入口で呼びます。`MediaChannel.setVideoHardMute` は `await` をまたいで設定と復元を
+  /// 行うため、取得した世代を `VideoHardMuteActor.setMute` へ渡し、すべての書き込みを同じ世代で
+  /// 確定します。
+  func beginVideoOperation() -> UInt64 {
+    enabledLock.lock()
+    defer { enabledLock.unlock() }
+    videoOperationGeneration &+= 1
+    return videoOperationGeneration
+  }
+
+  /// 音声の operation を開始し、この operation の世代を返します。
+  func beginAudioOperation() -> UInt64 {
+    enabledLock.lock()
+    defer { enabledLock.unlock() }
+    audioOperationGeneration &+= 1
+    return audioOperationGeneration
+  }
+
+  /// 映像の有効値を operation の世代付きで確定します。
+  ///
+  /// 最後に確定した operation より古い世代の書き込みは破棄します (後続の operation が確定した
+  /// 値を先行の operation の書き込みや復元で上書きしないため)。値が変化したときだけ native track
+  /// の `isEnabled` を書き換え、利用者 handler と `VideoRenderer` へ通知します。
+  /// native track を持たない stream では値を確定せず、storage も handler も変更しません。
+  ///
+  /// - Returns: この書き込みを確定した場合は `true`、破棄した場合と native track を持たない場合は
+  ///   `false`。ストレージの値と書き込む値が同じ場合も確定しているため `true` を返し、通知だけを
+  ///   行いません。戻り値は「値が変化したか」ではなく「書き込みが確定したか」を表します。
+  @discardableResult
+  func commitVideoEnabled(_ value: Bool, generation: UInt64) -> Bool {
+    enabledLock.lock()
+    guard generation >= committedVideoGeneration, let track = nativeVideoTrack else {
+      enabledLock.unlock()
+      return false
+    }
+    let changed = storedVideoEnabled != value
+    storedVideoEnabled = value
+    committedVideoGeneration = generation
+    if changed {
+      track.isEnabled = value
+    }
+    enabledLock.unlock()
+
+    if changed {
+      // 通知は確定の後に lock を解放してから行います。並行する operation がこの間に確定した場合、
+      // 通知の順序は確定順と一致しないことがありますが、通知順序の入れ替わりは発火回数を変えず、
+      // 1 つの operation 内の順序は保たれます。
+      handlers.onSwitchVideo?(value)
+      streamOwner.submitSwitch(video: value)
+    }
+    return true
+  }
+
+  /// 音声の有効値を operation の世代付きで確定します。
+  ///
+  /// 判定と通知は `commitVideoEnabled` と同じです。native track を持たない stream では値を
+  /// 確定せず、storage も handler も変更しません。
+  ///
+  /// - Returns: この書き込みを確定した場合は `true`、破棄した場合と native track を持たない場合は
+  ///   `false`。ストレージの値と書き込む値が同じ場合も確定しているため `true` を返し、通知だけを
+  ///   行いません。戻り値は「値が変化したか」ではなく「書き込みが確定したか」を表します。
+  @discardableResult
+  func commitAudioEnabled(_ value: Bool, generation: UInt64) -> Bool {
+    enabledLock.lock()
+    guard generation >= committedAudioGeneration, let track = nativeAudioTrack else {
+      enabledLock.unlock()
+      return false
+    }
+    let changed = storedAudioEnabled != value
+    storedAudioEnabled = value
+    committedAudioGeneration = generation
+    if changed {
+      track.isEnabled = value
+    }
+    enabledLock.unlock()
+
+    if changed {
+      // 通知は確定の後に lock を解放してから行います (`commitVideoEnabled` と同じ理由)。
+      handlers.onSwitchAudio?(value)
+      streamOwner.submitSwitch(audio: value)
+    }
+    return true
   }
 
   var hasAudioTrack: Bool {
@@ -373,6 +515,9 @@ class BasicMediaStream: MediaStream {
   init(peerChannel: PeerChannel, nativeStream: RTCMediaStream) {
     self.peerChannel = peerChannel
     self.nativeStream = nativeStream
+    // 確定値を native track の状態で初期化します。
+    storedVideoEnabled = nativeStream.videoTracks.first?.isEnabled ?? false
+    storedAudioEnabled = nativeStream.audioTracks.first?.isEnabled ?? false
     streamId = nativeStream.streamId
     creationTime = Date()
   }

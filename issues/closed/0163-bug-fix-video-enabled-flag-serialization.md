@@ -1,7 +1,7 @@
 # videoEnabled / audioEnabled の変更を operation 単位で直列化する
 
 - Created: 2026-09-17
-- Completed:
+- Completed: 2026-10-01
 - Priority: Medium
 - Branch: feature/fix-video-enabled-flag-serialization
 - Polished: 2026-10-01
@@ -60,3 +60,27 @@
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+1. `BasicMediaStream` に stream ごとの lock (`enabledLock`) と確定値 (`storedVideoEnabled` / `storedAudioEnabled`)、operation の採番 (`videoOperationGeneration` / `audioOperationGeneration`) と最後に値を確定した世代 (`committedVideoGeneration` / `committedAudioGeneration`) を持たせ、`videoEnabled` / `audioEnabled` の getter は確定値を返すようにした。native track への `isEnabled` の反映は確定時に行い、確定値の更新と同一の lock 区間で行う。利用者 handler と `videoRenderer.onSwitch` への通知は lock を解放してから行う。
+2. 書き込みを「公開 API の呼び出し 1 回 = 1 operation」とし、入口で取得した世代による compare-and-set で確定するようにした。**破棄するのは「後続の operation が実際に値を確定した場合」に限る**。`setVideoHardMute` が `operationTracker.begin` で拒否されるなど、後続が開始しても値を確定しない場合は先行 operation の復元を破棄しないため、採番 (`*OperationGeneration`) と確定 (`committed*Generation`) の世代を分けている。
+3. `MediaChannel.setVideoHardMute` は公開 API の入口 (最初の `await` より前) で世代を取得して `VideoHardMuteActor.setMute` へ渡し、`mute = true` の設定・失敗時の復元・`mute = false` の成功後の有効化をすべて同じ世代で確定するようにした。復元の基準値は `VideoHardMuteActor` の直列化区間へ入った時点で読む (呼び出し直前の値と厳密に一致する保証はない)。
+4. `nativeVideoTrack` / `nativeAudioTrack` を持たない stream では operation が値を確定しない (storage も handler も変更せず、getter は `false` を返し続ける)。
+5. `onSwitchVideo` / `onSwitchAudio` は値が変化したときだけ 1 回呼ぶ。`setVideoHardMute(true)` が失敗して復元する operation は値が 2 回変化するため false → true の順に 1 回ずつ合計 2 回呼ばれる。並行する operation の通知順序は確定順と一致しない場合があるが、通知順序の入れ替わりは発火回数を変えない。
+6. `MediaChannel.setVideoSoftMute` / `setAudioSoftMute` / `setVideoHardMute` の doc を、開始順の世代で調停されること、書き込みが破棄されても呼び出しは成功を返すこと、書き込みが破棄されてもハードミュートのカメラ停止・再開は実行され確定値と実カメラ状態が食い違う場合があること、を含めて更新した。`MediaStream` の公開 protocol と `videoEnabled` / `audioEnabled` の同期 setter は変更していない。
+7. `MediaStreamEnabledOperationTests` を追加し (最後に確定した operation の値が getter と native track の最終値になること、後続が確定していない場合は復元が破棄されないこと、後続が確定していれば復元が破棄されること、基準値への復元と発火回数、track を持たない stream の扱い、並行確定後の一致)、`VideoHardMuteActorLeaseTests` を世代引数へ追従させた。
+8. `CHANGES.md` の `## develop` に `[FIX]` を追記した。
+
+検証:
+
+- `make build` (Sora target の warnings-as-errors ゲート) 成功 (error 0 / 非推奨警告 13 件)
+- `xcodebuild test` 469 件すべて成功 (skip 36 件は E2E テストの環境変数未設定によるもの)
+- `xcodebuild test -enableThreadSanitizer YES` で `WARNING: ThreadSanitizer` 0 件
+- `make api-check-fresh` 成功 (公開 API は無変更のため baseline の再生成は不要)
+- `make fmt-lint` / `swiftlint --strict` の指摘 0
+
+残った懸念:
+
+- `MediaChannel.setVideoSoftMute` / `setAudioSoftMute` / `setVideoHardMute(false)` の公開 API からの結線は接続を伴うため単体テストで再現できず、`setVideoSoftMute` / `setAudioSoftMute` は `BasicMediaStream` の setter と等価な経路である。hard mute の解除は `await` をまたぐため、接続を伴うテストの追加を別途検討する。
+- 受信 stream では、`init` 後に native stream の先頭 track が追加・差し替わる場合に getter が追随しない (SDK 内にその経路は無く、同梱 WebRTC がバイナリのため `didAdd stream` 時点の track 有無は確認できていない)。
+- hard mute のカメラ停止・再開は世代で調停されないため、後続の operation が先に値を確定した場合は確定値と実カメラ状態が食い違う (doc に明記し、復旧には `setVideoHardMute(false)` が必要)。
+- `MediaStreamHandlers` の closure の読み書き排他は本 issue の範囲外 (`0154` で扱う)。
