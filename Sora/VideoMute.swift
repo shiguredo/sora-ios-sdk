@@ -21,10 +21,17 @@ struct CameraSettingsSnapshot: Sendable {
 
 // 公開 API の MediaStream に Sendable を要求せず、
 // actor 境界で参照を受け渡すための内部ラッパーです。
-// 注意: MediaStream 自体は Sendable ではないため、
-// ここでの `@unchecked Sendable` は同時アクセスが起きない前提に依存します。
+// 注意: MediaStream 自体は Sendable ではないため、`@unchecked Sendable` を付けています。
+// その安全性の根拠は、SDK が生成する `BasicMediaStream` が可変状態を内部 lock で保護し、
+// actor からはその lock 付きの経路だけを呼ぶことにあります。
 struct SenderStreamBox: @unchecked Sendable {
   let stream: MediaStream
+
+  // `videoEnabled` / `audioEnabled` の operation の世代を扱えるのは SDK が生成する
+  // `BasicMediaStream` だけです。他の実装では public な setter へフォールバックします。
+  var basicStream: BasicMediaStream? {
+    stream as? BasicMediaStream
+  }
 }
 
 // ハードミュート解除時に利用するカメラ開始予約と、その管理元を一体で扱います。
@@ -197,10 +204,16 @@ actor VideoHardMuteActor {
   ///
   /// - Parameters:
   ///  - mute: `true` で有効化、`false` で無効化
+  ///  - generation: この operation の世代。`MediaChannel` が公開 API の入口で取得した値です。
+  ///    `mute = true` の経路でのみ使い、`videoEnabled` の設定と失敗時の復元をこの世代で確定します
+  ///    (最後に値を確定した operation より古い世代の書き込みは破棄されます)。`mute = false` の
+  ///    経路では使わず、ハードミュート解除後の有効化は `MediaChannel` が同じ世代で確定します。
+  ///    SDK が生成する `BasicMediaStream` 以外の stream では世代を取得できないため `nil` になり、
+  ///    その場合は public な setter で確定します
   ///  - lease: カメラ操作の所有者を示す lease
   ///  - senderStream: 送信ストリーム。`mute = true` の場合は `videoEnabled` を false にし、
-  ///    失敗時は `lease` が有効なときだけ操作開始時点の値へ復元します。判定と書き込みは原子的では
-  ///    ないため、切断の開始と同時に失敗した場合は復元が実行され得ます
+  ///    失敗時は `lease` が有効なときだけ直列化区間へ入った時点の値へ復元します。判定と書き込みは
+  ///    原子的ではないため、切断の開始と同時に失敗した場合は復元が実行され得ます
   ///  - cameraSettings: カメラ設定
   ///  - cameraStartAuthorization: MediaChannel が取得したカメラ開始予約と管理元
   /// - Throws:
@@ -208,6 +221,7 @@ actor VideoHardMuteActor {
   ///   - カメラ操作の失敗時は `SoraError.cameraError`
   func setMute(
     mute: Bool,
+    generation: UInt64?,
     lease: VideoHardMuteLease,
     senderStream: SenderStreamBox,
     cameraSettings: CameraSettingsSnapshot,
@@ -223,8 +237,10 @@ actor VideoHardMuteActor {
     if mute {
       // 黒塗りフレームの送出はカメラ停止より前に行う必要があります。
       // この設定は operationTracker.begin の後に置くため、拒否された呼び出しはここへ到達しません。
+      // 復元の基準値はこの直列化区間へ入った時点で読みます。利用者が
+      // setVideoHardMute を呼ぶ直前の値と厳密に一致する保証はありません。
       let previousVideoEnabled = senderStream.stream.videoEnabled
-      senderStream.stream.videoEnabled = false
+      commitVideoEnabledForActor(false, generation: generation, senderStream: senderStream)
       do {
         guard let currentCapturer = await currentCameraVideoCapturer() else {
           // キャプチャ未起動の場合は停止対象がないため、冪等として成功扱いにします
@@ -256,11 +272,13 @@ actor VideoHardMuteActor {
         // カメラが停止済みか quarantine 中かによらず、切断中に映像有効の callback を
         // 発火させても回復できないためです。
         // それ以外の失敗では呼び出し前の値へ戻します (defer の finish より先に完了します)。
-        // isValid の判定と videoEnabled の書き込みは原子的ではないため、判定直後に
+        // 復元は自分と同じ世代で確定するため、後続の operation が値を確定していた場合は
+        // 破棄され、後続の値を上書きしません。
+        // isValid の判定と復元の書き込みは原子的ではないため、判定直後に
         // 別スレッドの prepareForDisconnect が revoke した場合は復元が実行され得ます。
-        // 厳密な排他は有効フラグの変更を直列化する設計で扱います。
         if lease.isValid {
-          senderStream.stream.videoEnabled = previousVideoEnabled
+          commitVideoEnabledForActor(
+            previousVideoEnabled, generation: generation, senderStream: senderStream)
         }
         throw error
       }
@@ -319,6 +337,25 @@ actor VideoHardMuteActor {
       capturer: startedCapturer,
       senderStream: senderStream,
       lease: lease)
+  }
+
+  // 映像の有効値を operation の世代付きで確定します。
+  //
+  // メソッド名の `ForActor` は actor 内のヘルパーであることを示す接尾辞で、`BasicMediaStream` が
+  // 公開する `commitVideoEnabled` と取り違えないためのものです。SDK が生成する stream は
+  // `BasicMediaStream` だけなので、通常は operation の世代で compare-and-set して確定します。
+  // 別の実装では世代を扱えないため、public な setter (呼び出し 1 回を 1 operation とする) へ
+  // フォールバックします。
+  private func commitVideoEnabledForActor(
+    _ value: Bool,
+    generation: UInt64?,
+    senderStream: SenderStreamBox
+  ) {
+    if let basicStream = senderStream.basicStream, let generation {
+      basicStream.commitVideoEnabled(value, generation: generation)
+    } else {
+      senderStream.stream.videoEnabled = value
+    }
   }
 
   // 接続切断時に、その接続が所有する保存状態を破棄します。

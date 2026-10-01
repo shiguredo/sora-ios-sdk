@@ -132,6 +132,10 @@
   - @t-miya
 - [FIX] `PeerChannel.onConnect` が複数スレッドから排他制御なしで読み書きされるデータ競合を解消する
   - @t-miya
+- [FIX] `videoEnabled` / `audioEnabled` を複数の公開 API から並行に変更したときに、失敗時の復元が後続の変更を上書きすることがある問題を修正する
+  - `MediaStream.videoEnabled` / `audioEnabled` の getter は SDK の保持する確定値を返し、`onSwitchVideo` / `onSwitchAudio` は値の変化ごとに 1 回だけ呼ばれる
+  - 並行して変更した場合、書き込みは世代で比較され、より大きい世代が先に確定していると破棄される
+  - @t-miya
 
 ### misc
 

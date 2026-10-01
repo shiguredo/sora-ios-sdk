@@ -80,9 +80,11 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   // videoTrackId を指定すると video track 付きの sender stream を作る。
   // videoEnabled を検証するテストでは video track が必要になる (video track が無いと
   // videoEnabled が常に false になり「変更されない」検証が空虚になる)。
+  // mediaStream は operation の世代をテストから取得するために返す。
   private func makeDependencies(videoTrackId: String? = nil) throws -> (
     mediaChannel: MediaChannel,
     senderStreamBox: SenderStreamBox,
+    mediaStream: BasicMediaStream,
     cameraSettings: CameraSettingsSnapshot
   ) {
     let mediaChannel = try MediaChannel(configuration: makeConfiguration())
@@ -101,6 +103,7 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     return (
       mediaChannel,
       SenderStreamBox(stream: mediaStream),
+      mediaStream,
       CameraSettingsSnapshot(mediaChannel.configuration.cameraSettings)
     )
   }
@@ -155,9 +158,11 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     // leaseA を release しても leaseB は影響を受けない (カメラ未起動なら冪等 return)
     await actor.release(lease: leaseA)
 
+    let generation = dependencies.mediaStream.beginVideoOperation()
     do {
       try await actor.setMute(
         mute: true,
+        generation: generation,
         lease: leaseB,
         senderStream: dependencies.senderStreamBox,
         cameraSettings: dependencies.cameraSettings)
@@ -175,9 +180,11 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
 
     await actor.release(lease: lease)
 
+    let generation = dependencies.mediaStream.beginVideoOperation()
     do {
       try await actor.setMute(
         mute: true,
+        generation: generation,
         lease: lease,
         senderStream: dependencies.senderStreamBox,
         cameraSettings: dependencies.cameraSettings)
@@ -212,6 +219,7 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     do {
       try await actor.setMute(
         mute: true,
+        generation: dependencies.mediaStream.beginVideoOperation(),
         lease: lease,
         senderStream: dependencies.senderStreamBox,
         cameraSettings: dependencies.cameraSettings)
@@ -242,6 +250,7 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     do {
       try await actor.setMute(
         mute: true,
+        generation: dependencies.mediaStream.beginVideoOperation(),
         lease: lease,
         senderStream: dependencies.senderStreamBox,
         cameraSettings: dependencies.cameraSettings)
