@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-video-enabled-flag-serialization
-- Polished: 2026-09-23
+- Polished: 2026-10-01
 
 ## 目的
 
@@ -41,18 +41,20 @@
 ## 設計方針
 
 - 直列化の単位は「公開 API の呼び出し 1 回」を 1 operation とし、operation の順序は stream ごとの単一の線形順で確定する。書き込み 1 回ではなく operation を単位とするのは、`setVideoHardMute(true)` の設定と失敗時の復元を同じ operation に含めるためである。
-- operation の識別に世代 (`operationGeneration`) を使う。stream ごとの lock 付き storage が世代と確定値を保持し、operation は開始時に世代を取得する。書き込みと復元は「自分の世代が最新である場合だけ」確定する (compare-and-set)。後続の operation が開始していた場合は、前の operation の復元を破棄して後続の値を保つ。
+- operation の識別に世代 (`operationGeneration`) を使う。stream ごとの lock 付き storage が世代と確定値を保持し、operation は公開 API の呼び出しの入口で世代を取得する。`setVideoHardMute` は取得した世代を `VideoHardMuteActor.setMute` へ渡し、`setVideoHardMute(true)` の設定、同失敗時の復元、`setVideoHardMute(false)` の成功後の有効化をすべて同じ世代で確定する。復元の基準値は `0136` どおり `VideoHardMuteActor.setMute` が直列化区間へ入った時点で読む。書き込みと復元は「自分の世代が最新である場合だけ」確定する (compare-and-set)。後続の operation が開始していた場合は、前の operation の復元を破棄して後続の値を保つ。
 - `videoEnabled` / `audioEnabled` の実体値を SDK 側の lock 付き storage に持つ。getter は storage の値を返し、native track への `isEnabled` の反映は operation の確定時に行う。同期 API は現在どおり「呼び出しが戻った時点で値が確定している」契約を維持する。
+- `nativeVideoTrack` / `nativeAudioTrack` を持たない stream では、現行どおり operation が値を確定しない (storage も handler も変更せず、getter は `false` を返す)。`setVideoSoftMute` / `setAudioSoftMute` / `setVideoHardMute` は `hasVideoTrack` / `hasAudioTrack` を要求するため、この扱いが必要になるのは利用者による直接代入だけである。
 - `await` をまたぐ `setVideoHardMute(true)` は、カメラ停止の待機中に他の operation が確定しても、復元の書き込みを自分の世代で判定して破棄する。operation の実行中に他の operation を拒否するのではなく、確定値を世代で調停する方式とし、同期 API の呼び出しを待たせない。
-- `MediaStreamHandlers.onSwitchVideo` / `onSwitchAudio` は、値が実際に変化した operation の executor で 1 回だけ呼ぶ。`0136` が確定した「`setVideoHardMute(true)` の経路では `VideoHardMuteActor` の executor で発火する」という契約と、復元時の発火回数・順序を維持する。`videoRenderer` の `onSwitch` は `0105` が main queue へ配送するため、値が変化した operation ごとに 1 回配送されるが実行 executor は handler と異なり、両者の相対順序は保証しない。
+- `MediaStreamHandlers.onSwitchVideo` / `onSwitchAudio` は、値が実際に変化するたびに 1 回だけ呼ぶ。`0136` が確定した「`setVideoHardMute(true)` の経路では `VideoHardMuteActor` の executor で発火する」という契約と、復元時の発火回数・順序を維持する。`videoRenderer` の `onSwitch` は `0105` が main queue へ配送するため、値が変化するたびに 1 回配送されるが実行 executor は handler と異なり、両者の相対順序は保証しない。
 - frame の ingress executor は `0105` が扱う。本 issue は frame の順序や `VideoFilter` の実行を変更しない。
 - `MediaStream` の公開 protocol と `videoEnabled` / `audioEnabled` の同期 setter は変更しない。
 
 ## 完了条件
 
 - 同一 stream の `videoEnabled` を `setVideoSoftMute` / `setVideoHardMute` / 直接代入から並行に変更しても、線形順で最後に確定した operation の値が `videoEnabled` の getter と native track の `isEnabled` の両方で最終値になること。
-- `setVideoHardMute(true)` の失敗時に、後続の operation が既に確定している場合は復元の書き込みが後続の値を上書きせず、後続の operation が無い場合は呼び出し前の値へ復元されること。
-- 値が変化しない operation では `onSwitchVideo` / `onSwitchAudio` / `videoRenderer.onSwitch` が呼ばれず、変化した operation では operation ごとに 1 回だけ呼ばれること。`videoRenderer.onSwitch` の配送 executor は main queue であり、handler と相対順序を持たないこと。
+- `setVideoHardMute(true)` の失敗時に、後続の operation が既に確定している場合は復元の書き込みが後続の値を上書きせず、後続の operation が無い場合は `0136` が定めた基準値 (`VideoHardMuteActor.setMute` が直列化区間へ入った時点の値) へ復元されること (利用者が `setVideoHardMute` を呼ぶ直前の値と厳密に一致する保証はない)。
+- 値が変化しない operation では `onSwitchVideo` / `onSwitchAudio` / `videoRenderer.onSwitch` が呼ばれず、値が変化するたびに 1 回だけ呼ばれること。`setVideoHardMute(true)` が失敗して復元する operation は `0136` どおり値が 2 回変化するため、`onSwitchVideo` は false → true の順に 1 回ずつ合計 2 回呼ばれる。`videoRenderer.onSwitch` の配送 executor は main queue であり、handler と相対順序を持たないこと。
+- `nativeVideoTrack` / `nativeAudioTrack` を持たない stream では、`videoEnabled` / `audioEnabled` への直接代入が storage の値も handler の発火も変更せず、getter が `false` を返し続けること。
 - `MediaChannel.setVideoHardMute` の doc の「並行する `setVideoSoftMute` や `MediaStream.videoEnabled` への直接代入とは排他されません」という記述が、保証内容に合わせて更新されていること。
 - `CHANGES.md` の `## develop` に `[FIX]` の追記があること。
 - 追加したテストと既存テストがすべて成功すること。
