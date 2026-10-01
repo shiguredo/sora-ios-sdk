@@ -48,6 +48,42 @@ private func assertCrossesBoundaries<Value: Sendable>(
   XCTAssertNotNil(loaded, message)
 }
 
+/// `Sendable` な RPC の params / result をコンパイル時に表明するための型。
+///
+/// `PutSignalingNotifyMetadataParams` の conditional `Sendable` を確認する用途にだけ使う。
+private struct SendableProbeMetadata: Codable, Sendable {
+  let appName: String
+}
+
+/// `SendableRPCMethodProtocol` の associated type が `Sendable` であることをコンパイル時に表明する。
+///
+/// `Params` / `Result` が `Sendable` でなければこの関数を呼び出せない。
+private func requireSendableRPCParams<M: SendableRPCMethodProtocol>(_: M.Type) {}
+
+/// `RPCMethodProtocol` へ準拠していることをコンパイル時に表明する。
+private func requireRPCMethod<M: RPCMethodProtocol>(_: M.Type) {}
+
+/// 新旧両方の RPC method protocol へ準拠した利用者定義メソッド。
+///
+/// 既存 `RPCMethodProtocol` と新 `SendableRPCMethodProtocol` の両方へ準拠した型でも
+/// どちらの API からも呼べることを、テストのコンパイルで確認する。
+private enum DualConformingRPCMethod: RPCMethodProtocol, SendableRPCMethodProtocol {
+  typealias Params = DualConformingRPCMethodParams
+  typealias Result = DualConformingRPCMethodResult
+
+  static var name: String { "jp.shiguredo.sora-ios-sdk-test/DualConforming" }
+}
+
+/// `DualConformingRPCMethod` のパラメータ。
+private struct DualConformingRPCMethodParams: Encodable, Sendable {
+  let message: String
+}
+
+/// `DualConformingRPCMethod` の戻り値。
+private struct DualConformingRPCMethodResult: Decodable, Sendable {
+  let message: String
+}
+
 final class SendableConformanceTests: XCTestCase {
   /// 公開型 (`CameraVideoCapturer` / `Logger` は class) が `Sendable` に準拠していることをコンパイル時に表明する。
   ///
@@ -114,6 +150,26 @@ final class SendableConformanceTests: XCTestCase {
 
     // RPC のエラー応答
     requireSendable(RPCErrorDetail.self)
+
+    // RPC の params / result と成功応答
+    // `PutSignalingNotifyMetadataParams` / `PutSignalingNotifyMetadataItemParams` は
+    // conditional `Sendable` のため、ここでは `Sendable` な型パラメータの場合だけを表明する。
+    // 非 `Sendable` な型パラメータの場合に準拠しないことは、正の表明では表せない。
+    // 実際、`SendableProbeMetadata` の `Sendable` を外しても下の `requireSendable` は
+    // コンパイルできる (値型の `Sendable` は型パラメータ経由で推論されるため)。
+    // 境界は `TestConsumers/Swift6Consumer/NegativeChecks/core-conditional-sendable-metadata-capture.swift`
+    // が、`Metadata` が `Sendable` と分からないジェネリック関数の文脈で
+    // `PutSignalingNotifyMetadataParams<Metadata>` を `@Sendable` closure へキャプチャすると
+    // 診断 (`SendableClosureCaptures`) になることで担保する。
+    requireSendable(RequestSimulcastRidParams.self)
+    requireSendable(RequestSpotlightRidParams.self)
+    requireSendable(ResetSpotlightRidParams.self)
+    requireSendable(RequestSimulcastRidResult.self)
+    requireSendable(RequestSpotlightRidResult.self)
+    requireSendable(ResetSpotlightRidResult.self)
+    requireSendable(PutSignalingNotifyMetadataParams<SendableProbeMetadata>.self)
+    requireSendable(PutSignalingNotifyMetadataItemParams<String>.self)
+    requireSendable(SendableRPCResponse<RequestSimulcastRidResult>.self)
   }
 
   /// 対象の型の値が actor 境界と Task の境界を越えて受け渡せることを確認する。
@@ -198,6 +254,41 @@ final class SendableConformanceTests: XCTestCase {
         code: -32601, message: "method not found",
         data: .object(["key": .string("value")])),
       message: "RPCErrorDetail が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      RequestSimulcastRidParams(rid: .r0),
+      message: "RequestSimulcastRidParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      RequestSpotlightRidParams(spotlightFocusRid: .r0, spotlightUnfocusRid: .r1),
+      message: "RequestSpotlightRidParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ResetSpotlightRidParams(sendConnectionId: "connection"),
+      message: "ResetSpotlightRidParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      RequestSimulcastRidResult(
+        channelId: "sora", receiverConnectionId: "receiver", rid: .r0, senderConnectionId: nil),
+      message: "RequestSimulcastRidResult が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      RequestSpotlightRidResult(
+        channelId: "sora", recvConnectionId: "receiver", spotlightFocusRid: .r0,
+        spotlightUnfocusRid: .r1),
+      message: "RequestSpotlightRidResult が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ResetSpotlightRidResult(channelId: "sora", recvConnectionId: "receiver"),
+      message: "ResetSpotlightRidResult が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      PutSignalingNotifyMetadataParams(metadata: SendableProbeMetadata(appName: "sora")),
+      message: "PutSignalingNotifyMetadataParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      PutSignalingNotifyMetadataItemParams(key: "key", value: "value"),
+      message: "PutSignalingNotifyMetadataItemParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SendableRPCResponse<RequestSimulcastRidResult>(
+        id: 1,
+        result: RequestSimulcastRidResult(
+          channelId: "sora", receiverConnectionId: "receiver", rid: .r0,
+          senderConnectionId: nil)),
+      message: "SendableRPCResponse が actor 境界を越えられない")
   }
 
   /// internal なカメラ状態型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。
@@ -264,5 +355,21 @@ final class SendableConformanceTests: XCTestCase {
   /// `@unchecked Sendable` を付与した根拠の妥当性は、型 doc のレビューで確認する。
   func testStreamOwnedFrameConformsToSendable() {
     requireSendable(StreamOwnedFrame.self)
+  }
+
+  /// `SendableRPCMethodProtocol` の associated type が `Sendable` を要求することをコンパイル時に表明する。
+  ///
+  /// `Params` / `Result` が `Sendable` でない場合はこの関数を呼び出せない。
+  /// 非ジェネリックな組み込み 3 メソッドは新 protocol へも準拠している。
+  func testSendableRPCMethodProtocolRequiresSendableAssociatedTypes() {
+    requireSendableRPCParams(RequestSimulcastRid.self)
+    requireSendableRPCParams(RequestSpotlightRid.self)
+    requireSendableRPCParams(ResetSpotlightRid.self)
+    requireSendableRPCParams(SendablePutSignalingNotifyMetadata<SendableProbeMetadata>.self)
+    requireSendableRPCParams(SendablePutSignalingNotifyMetadataItem<String, String>.self)
+    requireSendableRPCParams(DualConformingRPCMethod.self)
+
+    // 新旧両方の protocol へ準拠した型は、どちらの制約でも受け取れる
+    requireRPCMethod(DualConformingRPCMethod.self)
   }
 }

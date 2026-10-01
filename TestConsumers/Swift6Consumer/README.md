@@ -120,10 +120,12 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | `Sources/ConsumerCore/ConnectSignaling.swift` | 接続設定の組み立て、接続、`ConnectionTask` | `Sora.connect` の handler 型を変更する作業が更新する |
 | `Sources/ConsumerCore/HandlerCompatibility.swift` | 非推奨でない handler の closure 型 (非 Sendable な値の capture で @Sendable 化を検出する)、`VideoRenderer` の非隔離実装、`import WebRTC` で WebRTC product を参照できること | 公開 handler の closure 型を変更する作業が更新する |
 | `Sources/ConsumerCore/CallbackCompatibility.swift` | handler 型に属さない公開 closure の受け渡し | 公開 closure を追加・変更する作業が更新する |
-| `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型を含む)、統計取得、RPC のサーバーエラー詳細 (`JSONValue` の case 分岐) の読み取り、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加する作業が、新しい RPC の scenario を追加する |
+| `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型と非 Sendable な型パラメータを含む)、Sendable な RPC (利用者定義の `SendableRPCMethodProtocol` 準拠型、新旧両方の protocol へ準拠した型での戻り値の型の維持)、統計取得、RPC のサーバーエラー詳細 (`JSONValue` の case 分岐) の読み取り、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加・変更する作業が、新しい RPC の scenario を追加・更新する |
 | `Sources/ConsumerUI/VideoViewScenario.swift` | 既定隔離が MainActor であること | `VideoRenderer` の隔離を見直す作業が更新する |
 | `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること (CI は期待する非推奨 API 名の一覧で検査する) | 非推奨 API を削除する作業が、対象の参照と `consumer-test.yml` の期待する非推奨 API 名の一覧を同時に更新する |
 | `Sources/ConsumerSwift5/Swift5Compatibility.swift` | Swift 5 言語モードの consumer が SDK を利用できること (CI は compile 行の `-swift-version` で検査する) | 公開 API を Swift 5 言語モードから呼べなくする作業が更新する |
 | `NegativeChecks/core-sendable-capture.swift` | `MediaChannel` が Sendable でないこと | `MediaChannel` の Sendable 準拠を検討する作業が更新する |
+| `NegativeChecks/core-legacy-rpc-associated-type-capture.swift` | 既存 `RPCMethodProtocol` の `Params` / `Result` が Sendable でないこと | 既存 `RPCMethodProtocol` の associated type に `Sendable` を要求する作業が更新する |
+| `NegativeChecks/core-conditional-sendable-metadata-capture.swift` | `PutSignalingNotifyMetadataParams` の Sendable が conditional で、型パラメータが Sendable と分からない文脈では準拠しないこと | conditional `Sendable` の条件 (型パラメータの制約) を変更する作業が更新する |
 | `NegativeChecks/ui-isolated-conformance.swift` | 隔離された conformance は非隔離文脈で使えないこと | `VideoRenderer` の隔離を見直す作業が更新する |
 | `ApiBaseline/` | 公開 API の削除・変更と、現在の module との不一致 (追加を含む) の検出 | 公開 API を変更するすべての作業が、同じ変更で再生成する |

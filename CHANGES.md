@@ -37,6 +37,11 @@
   - @t-miya
 - [ADD] JSON の値を表す公開型 `JSONValue` を追加する
   - @t-miya
+- [ADD] Sendable な RPC API を追加する
+  - `SendableRPCMethodProtocol` (`Params: Encodable & Sendable` / `Result: Decodable & Sendable` を要求) と、応答型 `SendableRPCResponse<Result: Sendable>`、呼び出しメソッド `MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)` を追加する。既存 `MediaChannel.rpc` とは別名のため、新旧両方の protocol へ準拠した型でも既存 `rpc` の戻り値 `RPCResponse<M.Result>?` は変わらない
+  - ジェネリックな組み込みメソッド用に `SendablePutSignalingNotifyMetadata` と `SendablePutSignalingNotifyMetadataItem` を追加する
+  - params と result を actor / Task 境界で安全に扱えるようにする
+  - @t-miya
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する
   - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
   - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
@@ -56,6 +61,12 @@
   - 利用者が actor / Task 境界へ SDK の値をそのまま渡せるようにする
   - `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない (標準ライブラリの `Error: Sendable` に依存する)
   - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
+  - @t-miya
+- [UPDATE] RPC の params / result 型を `Sendable` に対応させる
+  - `RequestSimulcastRidParams` / `RequestSpotlightRidParams` / `ResetSpotlightRidParams` / `RequestSimulcastRidResult` / `RequestSpotlightRidResult` / `ResetSpotlightRidResult` へ `Sendable` 準拠を追加する
+  - `PutSignalingNotifyMetadataParams` は `Metadata` が `Sendable` の場合、`PutSignalingNotifyMetadataItemParams` は `Value` が `Sendable` の場合に `Sendable` へ準拠する (conditional conformance)
+  - 非ジェネリックな組み込みメソッド `RequestSimulcastRid` / `RequestSpotlightRid` / `ResetSpotlightRid` は `SendableRPCMethodProtocol` へも準拠する
+  - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要 (重複適合は warnings-as-errors の build を壊す)
   - @t-miya
 - [UPDATE] 接続設定を immutable な Sendable snapshot へ変換する
   - 数値の表記が変わる場合がある (`Float` / `Double` の指数表記の展開、`-0.0` の符号)

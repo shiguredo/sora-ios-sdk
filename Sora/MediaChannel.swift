@@ -761,6 +761,9 @@ public final class MediaChannel {
   ///
   /// - Returns: メソッドの実行結果。isNotificationRequest が true の場合は nil を返します
   ///
+  /// actor 境界や `Task` の `@Sendable` closure へ結果を渡す場合は、
+  /// `sendableRPC(method:params:isNotificationRequest:timeout:)` を使用してください。
+  ///
   /// - Throws: 以下のエラーが発生することがあります
   ///   - `SoraError.rpcUnavailable`: RPC チャネルが利用不可
   ///   - `SoraError.rpcEncodingError`: パラメータのエンコーディングに失敗した
@@ -768,6 +771,7 @@ public final class MediaChannel {
   ///   - `SoraError.rpcDataChannelClosed`: RPC の送受信に利用する DataChannel が切断された
   ///   - `SoraError.rpcTimeout`: レスポンスがタイムアウト時間内に返されなかった
   ///   - `SoraError.rpcServerError`: Sora からエラーレスポンスがあった (詳細は `RPCErrorDetail`、追加情報は `JSONValue?` の `data`)
+  ///   - `CancellationError`: タスクがキャンセルされた
   ///
   /// # 使用例
   /// ```swift
@@ -790,12 +794,77 @@ public final class MediaChannel {
     isNotificationRequest: Bool = false,
     timeout: TimeInterval = 5.0
   ) async throws -> RPCResponse<M.Result>? {
+    let response = try await performRPC(
+      methodName: method.name,
+      params: params,
+      isNotificationRequest: isNotificationRequest,
+      timeout: timeout)
+    guard let response else {
+      return nil
+    }
+    return try decodeRPCResponse(response, as: M.Result.self)
+  }
+
+  /// `rpc(method:params:isNotificationRequest:timeout:)` と同じ挙動で、Swift 6 言語モードの検査に対応した RPC メソッドを型安全に呼び出します
+  ///
+  /// 引数の意味、戻り値の意味 (notification では `nil` が返ること)、返るエラー、タスクキャンセルと
+  /// response / timeout / DataChannel 切断が競合した場合の pending の終端は `rpc` と共通です
+  /// (引数とエラーの詳細は `rpc(method:params:isNotificationRequest:timeout:)` を参照してください)。
+  /// 違うのは、`SendableRPCMethodProtocol` に準拠したメソッドだけを呼べる点と、戻り値が
+  /// `SendableRPCResponse<M.Result>?` になる点です。params と result が `Sendable` であるため、
+  /// 戻り値は actor 境界や `Task` の `@Sendable` closure を越えて受け渡せます。
+  ///
+  /// 新旧両方の protocol へ準拠した型でも、`rpc` の戻り値は `RPCResponse<M.Result>?` のままです
+  /// (別名の API のため overload の解決先が変わりません)。
+  ///
+  /// # 使用例
+  /// ```swift
+  /// do {
+  ///   let response = try await mediaChannel.sendableRPC(
+  ///     method: RequestSimulcastRid.self,
+  ///     params: RequestSimulcastRidParams(rid: "r0")
+  ///   )
+  ///
+  ///   if let result = response?.result {
+  ///     print("Channel ID: \(result.channelId)")
+  ///   }
+  /// } catch {
+  ///   print("RPC call failed: \(error)")
+  /// }
+  /// ```
+  public func sendableRPC<M: SendableRPCMethodProtocol>(
+    method: M.Type,
+    params: M.Params,
+    isNotificationRequest: Bool = false,
+    timeout: TimeInterval = 5.0
+  ) async throws -> SendableRPCResponse<M.Result>? {
+    let response = try await performRPC(
+      methodName: method.name,
+      params: params,
+      isNotificationRequest: isNotificationRequest,
+      timeout: timeout)
+    guard let response else {
+      return nil
+    }
+    return try decodeSendableRPCResponse(response, as: M.Result.self)
+  }
+
+  /// `rpc` と `sendableRPC` で共通の RPC 送受信を行う。
+  ///
+  /// pending の終端は `RPCChannel` に委ね、タスクキャンセルは `CancelledRPCIDStore` へ登録した
+  /// RPC ID を `RPCChannel.cancel(identifier:)` へ渡して行う。新しい終端機構は追加しない。
+  private func performRPC(
+    methodName: String,
+    params: Encodable,
+    isNotificationRequest: Bool,
+    timeout: TimeInterval
+  ) async throws -> RPCRawResponse? {
     // タスクキャンセル時に rpcChannel へ通知するための RPC ID を保持する。
     // (withTaskCancellationHandler の onCancel は別スレッドから呼ばれるため、
     // ロックで保護して共有する)
     let cancelledRPCID = CancelledRPCIDStore()
     let rpcChannel = self.peerChannel.rpcChannel
-    let response = try await withTaskCancellationHandler(
+    return try await withTaskCancellationHandler(
       operation: {
         try await withCheckedThrowingContinuation {
           (continuation: CheckedContinuation<RPCRawResponse?, Error>) in
@@ -805,7 +874,7 @@ public final class MediaChannel {
             return
           }
           let id = rpcChannel.call(
-            methodName: method.name,
+            methodName: methodName,
             params: params,
             isNotificationRequest: isNotificationRequest,
             timeout: timeout
@@ -836,31 +905,40 @@ public final class MediaChannel {
           rpcChannel?.cancel(identifier: id)
         }
       })
-    guard let response else {
-      return nil
-    }
-    return try decodeRPCResponse(response, method: method)
   }
 
-  private func decodeRPCResponse<M: RPCMethodProtocol>(
+  /// `Data` として受け取った result を decode して `RPCResponse` を組み立てる。
+  private func decodeRPCResponse<T: Decodable>(
     _ response: RPCRawResponse,
-    method: M.Type
-  ) throws -> RPCResponse<M.Result> {
-    let decoded: M.Result
+    as type: T.Type
+  ) throws -> RPCResponse<T> {
+    RPCResponse<T>(id: response.id, result: try decodeRPCResult(response.result, as: T.self))
+  }
+
+  /// `Data` として受け取った result を decode して `SendableRPCResponse` を組み立てる。
+  ///
+  /// response が運ぶ JSON の result は `RPCChannel.handleMessage` の同期区間で
+  /// immutable な `Data` へ変換済みである。ここでは executor 境界を越えた先で decode する。
+  /// `SendableRPCResponse` 自身は `Result: Sendable` だけを要求するが、decode には
+  /// `M.Result: Decodable` (`RPCMethodProtocol` の制約) が必要になる。
+  private func decodeSendableRPCResponse<T: Decodable & Sendable>(
+    _ response: RPCRawResponse,
+    as type: T.Type
+  ) throws -> SendableRPCResponse<T> {
+    SendableRPCResponse<T>(
+      id: response.id, result: try decodeRPCResult(response.result, as: T.self))
+  }
+
+  /// `Data` の JSON を `Decodable` な型へ decode する。
+  ///
+  /// 失敗は decode 層の error をそのまま返さず、`SoraError.rpcDecodingError` へ写して
+  /// 呼び出し元へ返す (decode 層の error 型を公開 API の契約に含めないため)。
+  private func decodeRPCResult<T: Decodable>(_ result: Data, as type: T.Type) throws -> T {
     do {
-      decoded = try decodeRPCResult(response.result, as: M.Result.self)
+      return try JSONDecoder().decode(T.self, from: result)
     } catch {
       throw SoraError.rpcDecodingError(reason: error.localizedDescription)
     }
-    return RPCResponse<M.Result>(id: response.id, result: decoded)
-  }
-
-  private func decodeRPCResult<T: Decodable>(_ result: Any, as type: T.Type) throws -> T {
-    let data = try JSONSerialization.data(
-      withJSONObject: result,
-      options: [.fragmentsAllowed])
-    let decoder = JSONDecoder()
-    return try decoder.decode(T.self, from: data)
   }
 
   // MARK: - 接続

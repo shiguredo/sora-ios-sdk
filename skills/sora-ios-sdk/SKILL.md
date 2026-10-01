@@ -480,6 +480,8 @@ config.dataChannels = [[
 | `PutSignalingNotifyMetadata` | シグナリング通知メタデータを設定する |
 | `PutSignalingNotifyMetadataItem` | メタデータの特定キーに値を設定する |
 
+ジェネリックなメソッド (`PutSignalingNotifyMetadata` / `PutSignalingNotifyMetadataItem`) は、actor / Task 境界へ渡す場合に限り Sendable 版の型が別に存在する (`SendablePutSignalingNotifyMetadata` / `SendablePutSignalingNotifyMetadataItem`)。メソッド名は同じで、型パラメータに `Sendable` を要求する。
+
 サーバーがエラー応答を返した場合は `SoraError.rpcServerError(detail:)` が throw される。`detail.data` は JSON-RPC 2.0 の `error.data` を表す `JSONValue?` で、サーバーが返したときだけ入る (省略された場合は `nil`、`null` の場合は `.null`)。
 
 ```swift
@@ -496,6 +498,39 @@ do {
   }
 }
 ```
+
+### Sendable な RPC
+
+`MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)` は、params と result を actor 境界や `Task` の `@Sendable` closure へ渡したい場合に使う。`MediaChannel.rpc` とは別名で、引数と戻り値の形は同じだが、`SendableRPCMethodProtocol` に準拠したメソッドだけを呼べ、戻り値は `SendableRPCResponse<M.Result>?` になる。notification は `nil` を返す。
+
+| Sendable なメソッド型 | 内容 |
+| --- | --- |
+| `RequestSimulcastRid` / `RequestSpotlightRid` / `ResetSpotlightRid` | 組み込みメソッド。新旧両方の protocol へ準拠している |
+| `SendablePutSignalingNotifyMetadata<Metadata>` | `Metadata` が `Codable & Sendable` の場合に使う |
+| `SendablePutSignalingNotifyMetadataItem<Metadata, Value>` | `Metadata` が `Decodable & Sendable`、`Value` が `Encodable & Sendable` の場合に使う |
+
+```swift
+// 利用者定義の RPC メソッドは SendableRPCMethodProtocol へ準拠させる
+struct MyParams: Encodable, Sendable { let message: String }
+struct MyResult: Decodable, Sendable { let message: String }
+
+enum MyRPCMethod: SendableRPCMethodProtocol {
+  typealias Params = MyParams
+  typealias Result = MyResult
+  static let name = "2025.2.0/MyRPCMethod"
+}
+
+let response = try await mediaChannel.sendableRPC(
+  method: MyRPCMethod.self,
+  params: MyParams(message: "ping")
+)
+// response は Sendable のため Task や actor 境界を越えて受け渡せる
+if let result = response?.result {
+  print(result.message)
+}
+```
+
+既存の `RPCMethodProtocol` の制約は変えていない。非 Sendable な params / result を使う既存の利用者定義メソッドは、そのまま `MediaChannel.rpc` を使う。
 
 ## 統計
 
@@ -545,7 +580,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
   - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group` / `Logger`
   - 映像表示: `VideoViewConnectionMode`
   - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
-  - RPC と JSON: `RPCErrorDetail` / `JSONValue`
+  - RPC と JSON: `RPCErrorDetail` / `JSONValue` / `SendableRPCResponse` / `RequestSimulcastRidParams` / `RequestSpotlightRidParams` / `ResetSpotlightRidParams` / `RequestSimulcastRidResult` / `RequestSpotlightRidResult` / `ResetSpotlightRidResult` / `PutSignalingNotifyMetadataParams` (`Metadata` が `Sendable` の場合) / `PutSignalingNotifyMetadataItemParams` (`Value` が `Sendable` の場合)
   - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
 - `@unchecked Sendable`: `Sora`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
@@ -585,7 +620,7 @@ _ = Sora.shared.connect(configuration: config) { @Sendable [weak self] mediaChan
 }
 ```
 
-`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、SDK が Sendable な event / RPC / statistics API を提供するまでの間、サンプル集とクイックスタートでも使われている。将来 SDK 側の対応が進んだら不要になる。
+`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、SDK が Sendable な event / statistics API を提供するまでの間、サンプル集とクイックスタートでも使われている。将来 SDK 側の対応が進んだら不要になる。
 
 `MediaChannelHandlers` のコールバックも同じ考え方で扱う。
 
@@ -610,7 +645,7 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 
 ### 非同期 API
 
-`async` / `await` に対応するのは `MediaChannel.rpc` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。
+`async` / `await` に対応するのは `MediaChannel.rpc` / `sendableRPC` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。
 
 ### スレッド安全でない共有状態
 
@@ -622,7 +657,7 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 
 ### 現状の制約
 
-- Sendable な event / RPC / statistics API はまだ提供されていない。`MediaChannel` / `MediaStream` を境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要
+- Sendable な event / statistics API はまだ提供されていない。`MediaChannel` / `MediaStream` を境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要
 - サンプル集とクイックスタートは Swift 6 言語モードだが、`@preconcurrency import Sora` と `nonisolated(unsafe)` の暫定対応を含む。Swift 6 の模範例ではなく、暫定対応を含む参考実装として扱う
 
 ## 非推奨 API
@@ -656,6 +691,7 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 | メッセージ送信 | `MediaChannel.sendMessage(label:data:)` |
 | メッセージ受信 | `MediaChannelHandlers.onDataChannelMessage` |
 | RPC | `try await MediaChannel.rpc(method:params:)` |
+| Sendable な RPC | `try await MediaChannel.sendableRPC(method:params:)` |
 | 統計取得 | `MediaChannel.getStats(handler:)` |
 | 受信音量 | `MediaStream.remoteAudioVolume` |
 | 受信 PCM | `MediaStream.addAudioTrackSink(_:)` |
