@@ -8,7 +8,7 @@ import XCTest
 // Thread Sanitizer (TSan) はデータ競合を確率的にしか検出しないため、対象の API を
 // 同一 instance に対して複数スレッドから交差させ、その交差を反復します。
 // モックやスタブは使用せず、実 `ConnectionStateOwner` / 実 `ConnectionTimer` / 実ハンドラクラス /
-// 実 `MediaChannel` / 実 `MediaStream` だけを使います。
+// 実 `MediaChannel` / 実 `MediaStream` / 実 `WrapperVideoEncoderFactory` だけを使います。
 //
 // 反復回数と並行度の選定理由:
 // - 並行度 64 は `PeerChannelConnectCompletionTests` / `StreamFrameOwnerTests` / `LoggerTests` と
@@ -23,6 +23,9 @@ import XCTest
 // `CameraVideoCapturerHandlers` / `MediaStreamHandlers`) のイベントハンドラのプロパティの排他と、
 // `MediaChannel.handlers` の参照の排他も本ファイルで交差させます
 // (`testHandlerBagReadWriteRaceWithDelivery`)。
+//
+// `WrapperVideoEncoderFactory.simulcastEnabled` の読み書きの交差も本ファイルで行います
+// (`testVideoEncoderFactorySimulcastEnabledReadWriteRace`)。
 
 /// 並行実行した受理 / 棄却と、スレッドをまたいで数える残高を集約する accumulator です。
 ///
@@ -191,12 +194,12 @@ private final class ConcurrencyStressHandlerBagBox: @unchecked Sendable {
 
 /// 排他が必要な共有状態の API を複数スレッドから交差させる concurrency runtime stress test です。
 ///
-/// `ConnectionStateOwner` / `ConnectionTimer` の接続ライフサイクルと、ハンドラクラスの closure
-/// property および `MediaChannel.handlers` の参照を対象にします。
+/// 対象とする共有状態の一覧と、並行度・反復回数の選定理由はファイル先頭のコメントを参照してください。
 ///
 /// TSan を有効にした実行でのデータ競合の検出を主目的とし、通常の実行でも論理的な不変条件
 /// (受理 / 棄却の排他、非同期処理数の 1 対 1 対応、最終状態の整合、handler の配送が実際に
-/// 呼ばれること) を検証します。TSan を無効にしないと通らない test は追加しません。
+/// 呼ばれること、`simulcastEnabled` の設定に対応する factory が選ばれること) を検証します。
+/// TSan を無効にしないと通らない test は追加しません。
 final class ConcurrencyStressTests: XCTestCase {
   /// 1 ラウンドあたりの交差の数 (既存 test と同じ並行度)
   private let iterationsPerRound = 64
@@ -567,5 +570,43 @@ final class ConcurrencyStressTests: XCTestCase {
     XCTAssertEqual(recorder.deliveredCount, 1, "差し替え後の配送で旧 closure は呼ばれないこと")
 
     stream.terminate()
+  }
+
+  /// `WrapperVideoEncoderFactory.simulcastEnabled` の書き込みと `currentEncoderFactory` の読み取りを
+  /// 複数スレッドから交差させます。
+  ///
+  /// `simulcastEnabled` は接続開始時 (`PeerChannel.connect`) と `type: offer` の受信時に書き換えられ、
+  /// libwebrtc が `supportedCodecs()` / `createEncoder(_:)` から読む。`type: offer` の受信は実 Sora
+  /// 接続でしか起きないため、この読み書きの対は setter と `supportedCodecs()` を直接呼んで交差させる。
+  ///
+  /// 通常の実行ではデータ競合の発生 (TSan の報告) を観測できないため、検出は TSan を有効にした実行に
+  /// 依存します。通常の実行では、並行区間の後に設定値に対応する factory が選ばれることを検証します。
+  func testVideoEncoderFactorySimulcastEnabledReadWriteRace() {
+    let factory = WrapperVideoEncoderFactory.shared
+    // プロセス全体で共有される singleton のため、元の値へ戻す。
+    let original = factory.simulcastEnabled
+    defer { factory.simulcastEnabled = original }
+
+    for _ in 0..<rounds {
+      DispatchQueue.concurrentPerform(iterations: iterationsPerRound) { index in
+        if index % 2 == 0 {
+          // 接続開始時と `type: offer` 受信時の書き換えを模す。
+          factory.simulcastEnabled = index % 4 == 0
+        } else {
+          // libwebrtc が `supportedCodecs()` を呼ぶ読み取りを模す (TSan が報告した経路)。
+          _ = factory.supportedCodecs()
+        }
+      }
+    }
+
+    // 並行区間の後に、設定値に対応する factory が選ばれること。
+    factory.simulcastEnabled = true
+    XCTAssertTrue(
+      factory.currentEncoderFactory === factory.simulcastEncoderFactory,
+      "simulcastEnabled が true のとき simulcastEncoderFactory が選ばれること")
+    factory.simulcastEnabled = false
+    XCTAssertTrue(
+      factory.currentEncoderFactory === factory.defaultEncoderFactory,
+      "simulcastEnabled が false のとき defaultEncoderFactory が選ばれること")
   }
 }

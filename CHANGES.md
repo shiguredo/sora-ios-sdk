@@ -140,6 +140,9 @@
   - `MediaStream.videoEnabled` / `audioEnabled` の getter は SDK の保持する確定値を返し、`onSwitchVideo` / `onSwitchAudio` は値の変化ごとに 1 回だけ呼ばれる
   - 並行して変更した場合、書き込みは世代で比較され、より大きい世代が先に確定していると破棄される
   - @t-miya
+- [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` が無同期で読み書きされるデータ競合を解消する
+  - `simulcastEnabled` の get / set を `NSLock` で排他する。接続開始時と `type: offer` の受信時に書き換え、libwebrtc が `supportedCodecs()` / `createEncoder(_:)` から読む
+  - @t-miya
 
 ### misc
 

@@ -1,19 +1,47 @@
 import Foundation
 import WebRTC
 
-// WebRTC のエンコーダーファクトリーを共有して扱うため、 @unchecked Sendable を付与します。
+// WebRTC の非 Sendable なエンコーダーファクトリーを保持して共有するため、@unchecked Sendable を付与します。
+// この型自身の可変状態は simulcastEnabled だけで、その読み書きは lock が排他します (保持する factory の
+// 内部状態の thread safety は主張しません)。
 final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoEncoderFactory {
   static let shared = WrapperVideoEncoderFactory()
 
-  var defaultEncoderFactory: RTCDefaultVideoEncoderFactory
+  let defaultEncoderFactory: RTCDefaultVideoEncoderFactory
 
-  var simulcastEncoderFactory: RTCVideoEncoderFactorySimulcast
+  let simulcastEncoderFactory: RTCVideoEncoderFactorySimulcast
+
+  /// `simulcastEnabled` の読み書きを排他する lock です。
+  ///
+  /// lock を取得した区間の中では lock 付きの getter / setter を呼ばず、確定値を直接読みます
+  /// (非再帰の `NSLock` を再取得して self-deadlock するため)。
+  private let lock = NSLock()
+
+  /// `simulcastEnabled` の確定値です。
+  private var storedSimulcastEnabled = false
 
   var currentEncoderFactory: RTCVideoEncoderFactory {
+    // lock は `simulcastEnabled` の getter が取って解放します。返した factory への呼び出しも
+    // lock の外です。
     simulcastEnabled ? simulcastEncoderFactory : defaultEncoderFactory
   }
 
-  var simulcastEnabled = false
+  /// サイマルキャストが有効かどうかです。
+  ///
+  /// 接続開始時 (`PeerChannel.connect`) と `type: offer` の受信時に書き換えられ、libwebrtc が
+  /// `supportedCodecs()` / `createEncoder(_:)` から読むため、get / set を lock で排他します。
+  var simulcastEnabled: Bool {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return storedSimulcastEnabled
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      storedSimulcastEnabled = newValue
+    }
+  }
 
   override init() {
     // Sora iOS SDK では VP8, VP9, H.264 が有効
