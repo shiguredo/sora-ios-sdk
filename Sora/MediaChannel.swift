@@ -17,9 +17,19 @@ public enum SoraCloseEvent: Sendable {
 }
 
 /// メディアチャネルのイベントハンドラです。
+///
+/// イベントハンドラのプロパティの get / set は、プロパティごとの `HandlerStorage` が持つ `NSLock` で
+/// 排他します。
+/// 利用する任意の executor からの設定と、配送する executor からの読み取りが並行しても
+/// データ競合しません。配送側は lock を解放してから取得済みの closure を呼ぶため、closure の
+/// 中から別の handler を設定しても deadlock しません。設定と配送が競合した場合にどちらの closure が
+/// 呼ばれるかは、lock の取得順で決まります (設定が次の配送から反映されるという契約は変わりません)。
 public final class MediaChannelHandlers {
   /// 接続成功時に呼ばれるクロージャー
-  public var onConnect: ((Error?) -> Void)?
+  public var onConnect: ((Error?) -> Void)? {
+    get { onConnectStorage.current }
+    set { onConnectStorage.current = newValue }
+  }
 
   /// 接続解除時に呼ばれるクロージャー
   @available(
@@ -27,45 +37,89 @@ public final class MediaChannelHandlers {
     message:
       "onDisconnect: ((SoraCloseEvent) -> Void)? に移行してください。onDisconnectLegacy: ((Error?) -> Void)? は、2027 年中に削除予定です。"
   )
-  public var onDisconnectLegacy: ((Error?) -> Void)?
+  public var onDisconnectLegacy: ((Error?) -> Void)? {
+    get { onDisconnectLegacyStorage.current }
+    set { onDisconnectLegacyStorage.current = newValue }
+  }
 
   /// 接続解除時に呼ばれるクロージャー
-  public var onDisconnect: ((SoraCloseEvent) -> Void)?
+  public var onDisconnect: ((SoraCloseEvent) -> Void)? {
+    get { onDisconnectStorage.current }
+    set { onDisconnectStorage.current = newValue }
+  }
 
   /// ストリームが追加されたときに呼ばれるクロージャー
-  public var onAddStream: ((MediaStream) -> Void)?
+  public var onAddStream: ((MediaStream) -> Void)? {
+    get { onAddStreamStorage.current }
+    set { onAddStreamStorage.current = newValue }
+  }
 
   /// ストリームが除去されたときに呼ばれるクロージャー
-  public var onRemoveStream: ((MediaStream) -> Void)?
+  public var onRemoveStream: ((MediaStream) -> Void)? {
+    get { onRemoveStreamStorage.current }
+    set { onRemoveStreamStorage.current = newValue }
+  }
 
   /// シグナリング受信時に呼ばれるクロージャー。
   /// 引数の `String` には、受信したシグナリングメッセージの JSON 文字列が渡されます。
-  public var onReceiveSignalingJSON: ((String) -> Void)?
+  public var onReceiveSignalingJSON: ((String) -> Void)? {
+    get { onReceiveSignalingJSONStorage.current }
+    set { onReceiveSignalingJSONStorage.current = newValue }
+  }
 
   /// シグナリング受信時に呼ばれるクロージャー
   @available(
     *, deprecated,
     message: "JSON 文字列を受け取る onReceiveSignalingJSON へ移行してください。"
   )
-  public var onReceiveSignaling: ((Signaling) -> Void)?
+  public var onReceiveSignaling: ((Signaling) -> Void)? {
+    get { onReceiveSignalingStorage.current }
+    set { onReceiveSignalingStorage.current = newValue }
+  }
 
   /// メッセージング用 DataChannel がすべてクライアント側で OPEN になったタイミングで呼ばれるクロージャー。
   /// メッセージング用ラベル（offer の `data_channels` の `#` 始まり）が存在しない場合は発火しない。
   /// この時点ではまだ `type: switched` を受信していない場合があり、
   /// その場合 `sendMessage` は "DataChannel is not open yet" エラーを返す。
   /// 呼び出し元のスレッドは保証されないため、必要に応じて main キューに束ねること。
-  public var onDataChannel: ((MediaChannel) -> Void)?
+  public var onDataChannel: ((MediaChannel) -> Void)? {
+    get { onDataChannelStorage.current }
+    set { onDataChannelStorage.current = newValue }
+  }
 
   /// DataChannel がクライアント側で OPEN になったタイミングで、ラベルごとに 1 回呼ばれるクロージャー。
   /// クライアント側で OPEN になったすべての DataChannel（`#` 始まりのラベルに限定しない）が対象。
   /// 呼び出し元のスレッドは保証されないため、必要に応じて main キューに束ねること。
-  public var onDataChannelOpened: ((MediaChannel, String) -> Void)?
+  public var onDataChannelOpened: ((MediaChannel, String) -> Void)? {
+    get { onDataChannelOpenedStorage.current }
+    set { onDataChannelOpenedStorage.current = newValue }
+  }
 
   /// DataChannel のメッセージ受信時に呼ばれるクロージャー
-  public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?
+  public var onDataChannelMessage: ((MediaChannel, String, Data) -> Void)? {
+    get { onDataChannelMessageStorage.current }
+    set { onDataChannelMessageStorage.current = newValue }
+  }
 
   /// 初期化します。
   public init() {}
+
+  // MARK: - closure を保持する lock 付き storage
+
+  /// 各イベントハンドラのプロパティを `NSLock` で排他して保持する storage です。
+  /// get / set の排他と、lock の外での closure 呼び出し・旧 closure の解放の根拠は
+  /// `HandlerStorage` の doc を参照してください。
+  private let onConnectStorage = HandlerStorage<((Error?) -> Void)?>(nil)
+  private let onDisconnectLegacyStorage = HandlerStorage<((Error?) -> Void)?>(nil)
+  private let onDisconnectStorage = HandlerStorage<((SoraCloseEvent) -> Void)?>(nil)
+  private let onAddStreamStorage = HandlerStorage<((MediaStream) -> Void)?>(nil)
+  private let onRemoveStreamStorage = HandlerStorage<((MediaStream) -> Void)?>(nil)
+  private let onReceiveSignalingJSONStorage = HandlerStorage<((String) -> Void)?>(nil)
+  private let onReceiveSignalingStorage = HandlerStorage<((Signaling) -> Void)?>(nil)
+  private let onDataChannelStorage = HandlerStorage<((MediaChannel) -> Void)?>(nil)
+  private let onDataChannelOpenedStorage = HandlerStorage<((MediaChannel, String) -> Void)?>(nil)
+  private let onDataChannelMessageStorage = HandlerStorage<((MediaChannel, String, Data) -> Void)?>(
+    nil)
 }
 
 // MARK: -
@@ -361,9 +415,26 @@ public final class MediaChannel {
   // MARK: - イベントハンドラ
 
   /// イベントハンドラ
-  public var handlers = MediaChannelHandlers()
+  ///
+  /// get / set は lock 付き storage で排他します。配送は毎回この storage から読むため、接続を
+  /// 開始した後に代入しても次の配送から反映されます。配送側は lock を解放してから取得済みの
+  /// closure を呼びます。この storage が排他するのは参照の差し替えだけで、各イベントハンドラの
+  /// プロパティは
+  /// `MediaChannelHandlers` の `HandlerStorage` が排他します。
+  public var handlers: MediaChannelHandlers {
+    get { handlersStorage.current }
+    set { handlersStorage.current = newValue }
+  }
+
+  /// `handlers` を保持する lock 付き storage です。参照の差し替えを排他します (各イベントハンドラの
+  /// プロパティは
+  /// `MediaChannelHandlers` の `HandlerStorage` が排他します)。
+  private let handlersStorage = HandlerStorage<MediaChannelHandlers>(MediaChannelHandlers())
 
   /// 内部処理で使われるイベントハンドラ
+  ///
+  /// 接続開始前にだけ設定し、接続開始後に並行して書き換える経路が無いため、参照自体は lock 付き
+  /// アクセサにしない。イベントハンドラのプロパティの読み書きは `MediaChannelHandlers` が排他する。
   var internalHandlers = MediaChannelHandlers()
 
   // MARK: - 接続情報
@@ -373,7 +444,7 @@ public final class MediaChannel {
   /// 公開互換のために利用者が渡した値を返し続けます。接続開始後の非同期区間
   /// (非同期 hop の後、WebRTC callback、`ConnectionTimer`) はこの値の参照型フィールド
   /// (metadata / notify metadata / codec 別 params / `dataChannels` / `forwardingFilter` /
-  /// `forwardingFilters` / `webRTCConfiguration`、および snapshot に含めない handler bag と
+  /// `forwardingFilters` / `webRTCConfiguration`、および snapshot に含めないハンドラクラスと
   /// `audioDevice`) を読みません。値型フィールドは接続開始時の値のままなので、公開 getter、
   /// `description`、公開 mute API、`senderStream` / `receiverStreams` はこの値を読みます。
   public let configuration: Configuration

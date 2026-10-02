@@ -11,6 +11,12 @@ public enum MediaStreamAudioVolume {
 }
 
 /// ストリームのイベントハンドラです。
+///
+/// イベントハンドラのプロパティの get / set は、プロパティごとの `HandlerStorage` が持つ `NSLock` で
+/// 排他します。
+/// 利用する任意の executor からの設定と、`videoEnabled` / `audioEnabled` の確定を配送する
+/// executor からの読み取りが並行してもデータ競合しません。配送側は lock を解放してから取得済みの
+/// closure を呼びます (`HandlerStorage` の doc 参照)。
 public final class MediaStreamHandlers {
   /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
   ///
@@ -29,7 +35,10 @@ public final class MediaStreamHandlers {
   /// `VideoRenderer.onSwitch(video:)` の配送 executor は main queue のため、このクロージャーと
   /// renderer の相対順序は保証されません。並行する operation が確定した場合、このクロージャーの
   /// 呼び出し順序は確定順と一致しないことがあります (通知順序の入れ替わりは発火回数を変えません)。
-  public var onSwitchVideo: ((_ isEnabled: Bool) -> Void)?
+  public var onSwitchVideo: ((_ isEnabled: Bool) -> Void)? {
+    get { onSwitchVideoStorage.current }
+    set { onSwitchVideoStorage.current = newValue }
+  }
 
   /// 音声トラックが有効または無効にセットされたときに呼ばれるクロージャー
   ///
@@ -44,10 +53,19 @@ public final class MediaStreamHandlers {
   /// `VideoRenderer.onSwitch(audio:)` の配送 executor は main queue のため、このクロージャーと
   /// renderer の相対順序は保証されません。並行する operation が確定した場合、このクロージャーの
   /// 呼び出し順序は確定順と一致しないことがあります (通知順序の入れ替わりは発火回数を変えません)。
-  public var onSwitchAudio: ((_ isEnabled: Bool) -> Void)?
+  public var onSwitchAudio: ((_ isEnabled: Bool) -> Void)? {
+    get { onSwitchAudioStorage.current }
+    set { onSwitchAudioStorage.current = newValue }
+  }
 
   /// 初期化します。
   public init() {}
+
+  // MARK: - closure を保持する lock 付き storage
+
+  /// 各イベントハンドラのプロパティを `NSLock` で排他して保持する storage です。
+  private let onSwitchVideoStorage = HandlerStorage<((_ isEnabled: Bool) -> Void)?>(nil)
+  private let onSwitchAudioStorage = HandlerStorage<((_ isEnabled: Bool) -> Void)?>(nil)
 }
 
 /// メディアストリームの機能を定義したプロトコルです。

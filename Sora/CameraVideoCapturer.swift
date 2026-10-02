@@ -596,31 +596,27 @@ final class CameraVideoCaptureCoordinator: @unchecked Sendable {
   }
 }
 
-/// `CameraVideoCapturerHandlers` を lock 付きで保持する storage です。
+/// `CameraVideoCapturer.handlers` が参照する `CameraVideoCapturerHandlers` を保持する storage です。
 ///
-/// `handlers` の get / set を保護します。利用者の
-/// `CameraVideoCapturer.handlers.onCapture = ...` という in-place 変更は
-/// 同じインスタンスを返すことで維持します。
+/// 参照の get / set を `HandlerStorage` に委譲します。利用者の
+/// `CameraVideoCapturer.handlers.onCapture = ...` という in-place 変更は、差し替えない限り同じ
+/// instance を返すことで維持します。イベントハンドラのプロパティ自体の読み書きは、
+/// `CameraVideoCapturerHandlers` が property ごとに持つ `HandlerStorage` が排他します。
 ///
-/// `@unchecked Sendable` としているのは、可変状態が `handlers` だけで、その読み書きを
-/// すべて `lock` で排他しているためです。返した `CameraVideoCapturerHandlers` が持つ
-/// closure property 自体の読み書きは、この lock では排他しません。
+/// `@unchecked Sendable` としているのは、`CameraVideoCapturer` (`Sendable`) の `static let` として
+/// 保持するためです。可変状態 (`handlers` の参照) の読み書きは `HandlerStorage` の lock が
+/// 排他しており、この型自身は可変の stored property を持ちません。
 private final class CameraHandlersStorage: @unchecked Sendable {
-  private let lock = NSLock()
-  private var handlers = CameraVideoCapturerHandlers()
+  private let storage = HandlerStorage<CameraVideoCapturerHandlers>(CameraVideoCapturerHandlers())
 
   /// 現在の handlers を返します。
   func current() -> CameraVideoCapturerHandlers {
-    lock.lock()
-    defer { lock.unlock() }
-    return handlers
+    storage.current
   }
 
   /// handlers を差し替えます。
   func publish(_ handlers: CameraVideoCapturerHandlers) {
-    lock.lock()
-    defer { lock.unlock() }
-    self.handlers = handlers
+    storage.current = handlers
   }
 }
 
@@ -719,13 +715,15 @@ enum CameraQueueExecutor {
 ///
 /// 一方で `current` / `isRunning` / `format` / `frameRate` は owner の snapshot と
 /// resource テーブルから、`stream` は owner の resource テーブルから (弱参照のため
-/// capturer は `MediaStream` を保持しません)、`device` / `handlers` / `position` は
-/// instance の lock 付き storage から、`captureSession` は init で確定して以後
-/// 差し替えない storage から読むため、任意のスレッドから呼べます。`device` の setter も
-/// 任意のスレッドから呼べるため、command の実行中に device を差し替えると、その command が
-/// 読む device は差し替え前後で変わり得ます。
-/// `handlers` の get / set が排他するのは bag の参照だけであり、closure property 自体の
-/// 同時アクセスは排他していません。
+/// capturer は `MediaStream` を保持しません)、`device` / `position` は instance の lock 付き
+/// storage から、`handlers` は型全体で共有する lock 付き storage から、`captureSession` は
+/// init で確定して以後差し替えない storage から読むため、任意のスレッドから呼べます。
+/// `device` の setter も任意のスレッドから呼べるため、command の実行中に device を差し替えると、
+/// その command が読む device は差し替え前後で変わり得ます。
+/// `handlers` の get / set が排他するのは参照だけであり、返した `CameraVideoCapturerHandlers` が
+/// 持つイベントハンドラのプロパティは、その instance がプロパティごとに持つ `HandlerStorage` が
+/// 排他します。
+/// どちらも任意のスレッドから読み書きできます。
 ///
 /// `Sendable` に準拠するのは、共有状態を owner が、non-Sendable な実資源を
 /// lock 付き storage が保持しているためです。
@@ -1671,6 +1669,17 @@ extension CameraSettings.Resolution: Codable {
 }
 
 /// CameraVideoCapturer のイベントハンドラです。
+///
+/// イベントハンドラのプロパティの get / set は、プロパティごとの `HandlerStorage` が持つ `NSLock` で
+/// 排他します。
+/// 利用する任意の executor からの設定と、配送する executor (`onCapture` は camera の capture
+/// session queue の frame callback、`onStart` / `onStop` は start / stop / restart / change / flip の
+/// 完了通知) からの読み取りが並行してもデータ競合しません。配送側は lock を解放してから取得済みの
+/// closure を呼びます (`HandlerStorage` の doc 参照)。
+///
+/// `CameraVideoCapturer.handlers` は型全体で共有する storage が、差し替えない限り同じ instance を
+/// 返すため、`CameraVideoCapturer.handlers.onCapture = ...` のような in-place 変更もその instance の
+/// `HandlerStorage` が排他します (`CameraHandlersStorage` が排他するのは参照の get / set だけです)。
 public class CameraVideoCapturerHandlers {
   /// 生成された映像フレームを受け取ります。
   /// 返した映像フレームがストリームに渡されます。
@@ -1681,7 +1690,10 @@ public class CameraVideoCapturerHandlers {
   ///
   /// 返した frame の所有権は SDK へ移ります。`MediaStream.send(videoFrame:)` は配送の完了を
   /// 待たないため、返した後にその frame と保持する画素データを参照・変更しないでください。
-  public var onCapture: ((CameraVideoCapturer, VideoFrame) -> VideoFrame)?
+  public var onCapture: ((CameraVideoCapturer, VideoFrame) -> VideoFrame)? {
+    get { onCaptureStorage.current }
+    set { onCaptureStorage.current = newValue }
+  }
 
   /// CameraVideoCapturer.start(format:frameRate:completionHandler) の completionHandler の後に実行されます。
   /// また CameraVideoCapturer.restart(completionHandler) /
@@ -1689,15 +1701,29 @@ public class CameraVideoCapturerHandlers {
   /// CameraVideoCapturer.flip(_:completionHandler) でも、内部の start が成功した場合に呼び出されます。
   /// 内部の start は非同期に開始され、その完了通知は stop の完了通知より後に届くため、
   /// restart / change / flip では onStop の後に onStart が呼ばれます。
-  public var onStart: ((CameraVideoCapturer) -> Void)?
+  public var onStart: ((CameraVideoCapturer) -> Void)? {
+    get { onStartStorage.current }
+    set { onStartStorage.current = newValue }
+  }
 
   /// CameraVideoCapturer.stop(completionHandler) 内で completionHandler の後に実行されます。
   /// また CameraVideoCapturer.restart(completionHandler) /
   /// CameraVideoCapturer.change(format:frameRate:completionHandler) /
   /// CameraVideoCapturer.flip(_:completionHandler) でも、内部の stop が完了した場合に呼び出されます。
   /// 注意点については、 onStart のコメントを参照してください。
-  public var onStop: ((CameraVideoCapturer) -> Void)?
+  public var onStop: ((CameraVideoCapturer) -> Void)? {
+    get { onStopStorage.current }
+    set { onStopStorage.current = newValue }
+  }
 
   /// CameraVideoCapturer のイベントハンドラを初期化します。
   public init() {}
+
+  // MARK: - closure を保持する lock 付き storage
+
+  /// 各イベントハンドラのプロパティを `NSLock` で排他して保持する storage です。
+  private let onCaptureStorage = HandlerStorage<((CameraVideoCapturer, VideoFrame) -> VideoFrame)?>(
+    nil)
+  private let onStartStorage = HandlerStorage<((CameraVideoCapturer) -> Void)?>(nil)
+  private let onStopStorage = HandlerStorage<((CameraVideoCapturer) -> Void)?>(nil)
 }

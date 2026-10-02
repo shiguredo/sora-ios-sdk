@@ -130,12 +130,26 @@ public enum WebSocketMessage: Sendable {
 }
 
 /// WebSocket チャネルのイベントハンドラです。
+///
+/// イベントハンドラのプロパティの get / set は、プロパティごとの `HandlerStorage` が持つ `NSLock` で
+/// 排他します。
+/// 利用する任意の executor からの設定と、URLSession の delegate callback からの読み取りが並行しても
+/// データ競合しません。配送側は lock を解放してから取得済みの closure を呼びます
+/// (`HandlerStorage` の doc 参照)。
 public final class WebSocketChannelHandlers {
   /// 初期化します。
   public init() {}
 
   /// メッセージ受信時に呼ばれるクロージャー
-  public var onReceive: ((WebSocketMessage) -> Void)?
+  public var onReceive: ((WebSocketMessage) -> Void)? {
+    get { onReceiveStorage.current }
+    set { onReceiveStorage.current = newValue }
+  }
+
+  // MARK: - closure を保持する lock 付き storage
+
+  /// `onReceive` を `NSLock` で排他して保持する storage です。
+  private let onReceiveStorage = HandlerStorage<((WebSocketMessage) -> Void)?>(nil)
 }
 
 final class WebSocketChannelInternalHandlers {

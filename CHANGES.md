@@ -103,6 +103,10 @@
   - 非推奨化した TLSSecurityPolicy を SDK 内部で使わないようにする
   - 宣言・型・非推奨の扱いと読み書きの挙動は変わらない
   - @t-miya
+- [UPDATE] イベントハンドラのプロパティの読み書きを排他する
+  - `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` が持つイベントハンドラのプロパティ (`onDisconnect` などのクロージャ) の get / set を `NSLock` で排他し、`MediaChannel.handlers` の差し替えも lock 付きアクセサにする。利用するスレッドでハンドラを設定しながら配送が並行したときにデータ競合 (未定義動作) にならないようにする
+  - 配送側は lock を解放してからハンドラを呼ぶため、ハンドラの中から別のハンドラを設定しても deadlock しない。公開 API のソース互換と配送セマンティクス (接続途中の設定が次の配送から反映される) は変わらない
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya
