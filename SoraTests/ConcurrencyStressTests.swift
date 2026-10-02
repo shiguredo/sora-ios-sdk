@@ -7,7 +7,8 @@ import XCTest
 //
 // Thread Sanitizer (TSan) はデータ競合を確率的にしか検出しないため、対象の API を
 // 同一 instance に対して複数スレッドから交差させ、その交差を反復します。
-// モックやスタブは使用せず、実 `ConnectionStateOwner` と実 `ConnectionTimer` だけを使います。
+// モックやスタブは使用せず、実 `ConnectionStateOwner` / 実 `ConnectionTimer` / 実ハンドラクラス /
+// 実 `MediaChannel` / 実 `MediaStream` だけを使います。
 //
 // 反復回数と並行度の選定理由:
 // - 並行度 64 は `PeerChannelConnectCompletionTests` / `StreamFrameOwnerTests` / `LoggerTests` と
@@ -18,9 +19,10 @@ import XCTest
 //   実行順序に依存し、また XCTest の内部状態を別スレッドから触ることになるためです
 //   (`PeerChannelConnectCompletionTests` / `LoggerTests` / `StreamFrameOwnerTests` と同じ方針)。
 //
-// handler bag (`MediaChannelHandlers` / `WebSocketChannelHandlers` /
-// `CameraVideoCapturerHandlers` / `MediaStreamHandlers`) の排他は未完了のため、その読み書きを
-// 並行させる stress は本ファイルの対象に含めません。
+// ハンドラクラス (`MediaChannelHandlers` / `WebSocketChannelHandlers` /
+// `CameraVideoCapturerHandlers` / `MediaStreamHandlers`) のイベントハンドラのプロパティの排他と、
+// `MediaChannel.handlers` の参照の排他も本ファイルで交差させます
+// (`testHandlerBagReadWriteRaceWithDelivery`)。
 
 /// 並行実行した受理 / 棄却と、スレッドをまたいで数える残高を集約する accumulator です。
 ///
@@ -128,12 +130,73 @@ private final class ConcurrencyStressHandlerBox: @unchecked Sendable {
   }
 }
 
-/// `ConnectionStateOwner` の接続ライフサイクルの排他 API を複数スレッドから交差させる
-/// concurrency runtime stress test です。
+/// 実配送経路が closure を呼んだ回数を集約する accumulator です。
 ///
-/// TSan を有効にした実行でのデータ競合の検出を主目的とし、通常の実行でも論理的な
-/// 不変条件 (受理 / 棄却の排他、非同期処理数の 1 対 1 対応、最終状態の整合) を検証します。
-/// TSan を無効にしないと通らない test は追加しません。
+/// 並行区間の中から `XCTAssert*` を呼ばずに済むよう、結果は lock 付きでこの型へ集めます。
+/// `ConcurrencyStressRecorder` とは数える対象が違う (あちらは timeout handler の呼び出し、
+/// こちらはハンドラの配送) ため、recorder を分けています。
+///
+/// TSan を無効にした通常の実行でも、配送経路が実際に呼ばれたこと (交差が空振りしていないこと)
+/// を検証するために使います。
+private final class ConcurrencyStressHandlerBagRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var deliveryCount = 0
+
+  /// 実配送経路から closure が呼ばれた回数を 1 増やします。
+  func recordDelivery() {
+    lock.lock()
+    defer { lock.unlock() }
+    deliveryCount += 1
+  }
+
+  /// 実配送経路から closure が呼ばれた回数。
+  var deliveredCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return deliveryCount
+  }
+}
+
+/// 交差させる実ハンドラクラスと、その配送経路を持つ実 object をまとめた、テストローカルの
+/// 用途限定 box です。
+///
+/// `DispatchQueue.concurrentPerform` の closure は `@Sendable` のため、非 `Sendable` な
+/// ハンドラクラスを直接 capture できません。`@unchecked Sendable` を認める根拠は、この型が
+/// 可変状態を持たず、保持する参照がすべて `let` であることです。保持する object の可変状態
+/// (ハンドラクラスのイベントハンドラのプロパティ、`MediaChannel.handlers` の参照、`MediaStream` の有効
+/// フラグ) の排他は SDK 側の責務であり、この box は交差の入口を渡すだけで、排他を
+/// 肩代わりしません。`MediaChannel` と `MediaStream` は接続を開始しないため、ここで交差する
+/// のは handler の読み書きと `videoEnabled` の確定経路だけです。
+private final class ConcurrencyStressHandlerBagBox: @unchecked Sendable {
+  let mediaChannelHandlers: MediaChannelHandlers
+  let webSocketChannelHandlers: WebSocketChannelHandlers
+  let cameraHandlers: CameraVideoCapturerHandlers
+  let mediaChannel: MediaChannel
+  let stream: MediaStream
+
+  init(
+    mediaChannelHandlers: MediaChannelHandlers,
+    webSocketChannelHandlers: WebSocketChannelHandlers,
+    cameraHandlers: CameraVideoCapturerHandlers,
+    mediaChannel: MediaChannel,
+    stream: MediaStream
+  ) {
+    self.mediaChannelHandlers = mediaChannelHandlers
+    self.webSocketChannelHandlers = webSocketChannelHandlers
+    self.cameraHandlers = cameraHandlers
+    self.mediaChannel = mediaChannel
+    self.stream = stream
+  }
+}
+
+/// 排他が必要な共有状態の API を複数スレッドから交差させる concurrency runtime stress test です。
+///
+/// `ConnectionStateOwner` / `ConnectionTimer` の接続ライフサイクルと、ハンドラクラスの closure
+/// property および `MediaChannel.handlers` の参照を対象にします。
+///
+/// TSan を有効にした実行でのデータ競合の検出を主目的とし、通常の実行でも論理的な不変条件
+/// (受理 / 棄却の排他、非同期処理数の 1 対 1 対応、最終状態の整合、handler の配送が実際に
+/// 呼ばれること) を検証します。TSan を無効にしないと通らない test は追加しません。
 final class ConcurrencyStressTests: XCTestCase {
   /// 1 ラウンドあたりの交差の数 (既存 test と同じ並行度)
   private let iterationsPerRound = 64
@@ -327,5 +390,182 @@ final class ConcurrencyStressTests: XCTestCase {
     XCTAssertFalse(
       connectionTimer.isRunning,
       "timeout の配送後は Timer が停止していること")
+  }
+
+  /// 4 つのハンドラクラスのイベントハンドラのプロパティ 16 個と `MediaChannel.handlers` の参照の get / set を
+  /// 複数スレッドから交差させ、`MediaStreamHandlers.onSwitchVideo` は実配送経路の読み取りとも
+  /// 同じ並行区間で交差させます。
+  ///
+  /// ハンドラクラスのイベントハンドラのプロパティは、利用者が任意の executor から設定し、SDK が配送 executor
+  /// から読む。この test は 1 つの並行区間の中で設定と配送の読み取りを重ねられる状態を作り、
+  /// その交差を 8 ラウンド反復して TSan の検出窓を広げます (`concurrentPerform` は全 iteration の
+  /// 完了まで戻るため、区間の外の処理とは重なりません)。
+  ///
+  /// 実配送経路は `MediaStream.videoEnabled` の確定を使います。この setter は世代を採番して
+  /// `commitVideoEnabled` を呼び、値が変化したときに `MediaStreamHandlers.onSwitchVideo` を読んで
+  /// 呼ぶため、handler を配送側から読む経路です。実 Sora 接続を必要としないため、
+  /// `SORA_SIGNALING_URL` が無い環境でも実行されます。`CameraVideoCapturerHandlers` の
+  /// `onCapture` / `onStart` / `onStop` の配送は実カメラが必要で Simulator では駆動できないため、
+  /// これらは get / set の交差だけを行います。
+  ///
+  /// 配送を駆動するのは 1 スレッドだけにします。`videoEnabled` の setter は native track の
+  /// `isEnabled` も書くため、複数スレッドから駆動すると handler ではなく libwebrtc 側で競合し、
+  /// handler の排他の検証にならないからです。
+  ///
+  /// 通常の実行では、round ごとに配送経路が実際に呼ばれたこと (交差が空振りしていないこと) を
+  /// 検証します。
+  func testHandlerBagReadWriteRaceWithDelivery() throws {
+    let mediaChannel = try makeTestMediaChannel()
+    let stream = makeSenderStreamWithVideoTrack(mediaChannel: mediaChannel)
+    let recorder = ConcurrencyStressHandlerBagRecorder()
+    let box = ConcurrencyStressHandlerBagBox(
+      mediaChannelHandlers: MediaChannelHandlers(),
+      webSocketChannelHandlers: WebSocketChannelHandlers(),
+      cameraHandlers: CameraVideoCapturerHandlers(),
+      mediaChannel: mediaChannel,
+      stream: stream)
+
+    for round in 0..<rounds {
+      let deliveriesBeforeRound = recorder.deliveredCount
+
+      // 配送を駆動する並行区間の間、`onSwitchVideo` が non-nil であることを保証する。nil を読むと
+      // 配送が起きず、「交差が空振りしていないこと」を配送の呼び出し回数から判定できなくなる。
+      box.stream.handlers.onSwitchVideo = { _ in
+        recorder.recordDelivery()
+      }
+
+      // 16 個のイベントハンドラのプロパティと `MediaChannel.handlers` の参照を 64 スレッドで交差させる。
+      // `onSwitchVideo` はここで設定し、同じ区間で配送 (index 0 の `videoEnabled` の確定) が
+      // 読むため、読み書きが交差する。
+      DispatchQueue.concurrentPerform(iterations: iterationsPerRound) { index in
+        switch index % 16 {
+        case 0:
+          box.mediaChannelHandlers.onConnect = { _ in }
+          _ = box.mediaChannelHandlers.onConnect
+        case 1:
+          box.mediaChannelHandlers.onDisconnectLegacy = { _ in }
+          _ = box.mediaChannelHandlers.onDisconnectLegacy
+        case 2:
+          box.mediaChannelHandlers.onDisconnect = { _ in }
+          _ = box.mediaChannelHandlers.onDisconnect
+        case 3:
+          box.mediaChannelHandlers.onAddStream = { _ in }
+          _ = box.mediaChannelHandlers.onAddStream
+        case 4:
+          box.mediaChannelHandlers.onRemoveStream = { _ in }
+          _ = box.mediaChannelHandlers.onRemoveStream
+        case 5:
+          box.mediaChannelHandlers.onReceiveSignalingJSON = { _ in }
+          _ = box.mediaChannelHandlers.onReceiveSignalingJSON
+        case 6:
+          box.mediaChannelHandlers.onReceiveSignaling = { _ in }
+          _ = box.mediaChannelHandlers.onReceiveSignaling
+        case 7:
+          box.mediaChannelHandlers.onDataChannel = { _ in }
+          _ = box.mediaChannelHandlers.onDataChannel
+        case 8:
+          box.mediaChannelHandlers.onDataChannelOpened = { _, _ in }
+          _ = box.mediaChannelHandlers.onDataChannelOpened
+        case 9:
+          box.mediaChannelHandlers.onDataChannelMessage = { _, _, _ in }
+          _ = box.mediaChannelHandlers.onDataChannelMessage
+        case 10:
+          box.webSocketChannelHandlers.onReceive = { _ in }
+          _ = box.webSocketChannelHandlers.onReceive
+        case 11:
+          box.cameraHandlers.onCapture = { _, frame in frame }
+          _ = box.cameraHandlers.onCapture
+        case 12:
+          box.cameraHandlers.onStart = { _ in }
+          _ = box.cameraHandlers.onStart
+        case 13:
+          box.cameraHandlers.onStop = { _ in }
+          _ = box.cameraHandlers.onStop
+        case 14:
+          // `MediaChannel.handlers` の参照の差し替えと読み取り
+          box.mediaChannel.handlers = MediaChannelHandlers()
+          _ = box.mediaChannel.handlers.onDisconnect
+        default:
+          // 配送経路が読む `onSwitchVideo` の設定と読み取り。同じ区間の index 0 が配送を駆動する。
+          box.stream.handlers.onSwitchVideo = { _ in
+            recorder.recordDelivery()
+          }
+          _ = box.stream.handlers.onSwitchVideo
+          box.stream.handlers.onSwitchAudio = { _ in }
+          _ = box.stream.handlers.onSwitchAudio
+        }
+
+        // index 0 のスレッドだけが実配送を駆動する。値を交互に進め、値が変化するたびに
+        // `onSwitchVideo` の読み取りと配送が起きるようにする。
+        if index == 0 {
+          for valueIndex in 0..<8 {
+            box.stream.videoEnabled = (round + valueIndex) % 2 == 0
+          }
+        }
+      }
+
+      // round の区切りで nil の代入も write-vs-write として交差させる。次の round の先頭で
+      // non-nil に戻すため、配送の判定には影響しない。
+      DispatchQueue.concurrentPerform(iterations: iterationsPerRound) { index in
+        if index % 2 == 0 {
+          box.stream.handlers.onSwitchVideo = nil
+        } else {
+          box.stream.handlers.onSwitchVideo = { _ in
+            recorder.recordDelivery()
+          }
+        }
+      }
+
+      // 各 round で配送が起きたことを、round の前後差で確認する。累積回数と比べると、空振りした
+      // round を後続 round の回数で埋め合わせてしまう。
+      XCTAssertGreaterThan(
+        recorder.deliveredCount, deliveriesBeforeRound,
+        "round \(round) で実配送経路 (`videoEnabled` の確定) が `onSwitchVideo` を呼んでいること")
+    }
+
+    // getter が最後に設定した closure を返すこと (並行区間の外での確認)。
+    box.stream.handlers.onSwitchVideo = nil
+    XCTAssertNil(box.stream.handlers.onSwitchVideo, "最後に設定した nil が getter から読めること")
+
+    // stream owner を無効化し、以降の frame 配送を止める。
+    stream.terminate()
+  }
+
+  /// 配送された closure から同じ handler を設定し直しても deadlock しないことを確認します。
+  ///
+  /// ハンドラクラスの getter は lock を解放してから closure を返し、配送側は lock を保持せずに
+  /// closure を呼びます。この契約が壊れて「lock を保持したまま closure を呼ぶ」実装になると、
+  /// この test は失敗ではなく deadlock (CI のタイムアウト) になります。
+  func testHandlerReentrancyDoesNotDeadlock() throws {
+    let mediaChannel = try makeTestMediaChannel()
+    let stream = makeSenderStreamWithVideoTrack(mediaChannel: mediaChannel)
+    let recorder = ConcurrencyStressHandlerBagRecorder()
+    let replacementCallCount = ConcurrencyStressHandlerBagRecorder()
+
+    // 配送された closure から、同じ property と別の property を設定し直す。差し替え後は別の
+    // counter を増やし、差し替えが握り潰された場合 (旧 closure が呼ばれ続けた場合) を区別できる
+    // ようにする。
+    stream.handlers.onSwitchVideo = { _ in
+      recorder.recordDelivery()
+      stream.handlers.onSwitchVideo = { _ in
+        replacementCallCount.recordDelivery()
+      }
+      stream.handlers.onSwitchAudio = { _ in }
+    }
+
+    // `videoEnabled` の確定経路で closure を配送する。video track を持つ stream の `videoEnabled`
+    // は既定で true のため、現在値の反転で必ず値が変化するようにする。初回は設定した closure が
+    // 呼ばれる。
+    let initialVideoEnabled = stream.videoEnabled
+    stream.videoEnabled = !initialVideoEnabled
+    XCTAssertEqual(recorder.deliveredCount, 1, "配送された closure が呼ばれていること")
+    XCTAssertEqual(replacementCallCount.deliveredCount, 0, "差し替え後の closure はまだ呼ばれないこと")
+
+    // 2 回目は closure の中で差し替えた closure が呼ばれる。deadlock する実装ではここに到達しない。
+    stream.videoEnabled = initialVideoEnabled
+    XCTAssertEqual(replacementCallCount.deliveredCount, 1, "差し替え後の closure が配送されること")
+    XCTAssertEqual(recorder.deliveredCount, 1, "差し替え後の配送で旧 closure は呼ばれないこと")
+
+    stream.terminate()
   }
 }
