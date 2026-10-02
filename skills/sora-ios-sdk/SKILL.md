@@ -600,6 +600,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 - `VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) はすべて SDK が main queue へ配送する
 - `Logger.onOutputHandler` はログを出力した executor で同期的に呼ばれる (queue への hop は行わない)。複数の executor から並行に呼ばれ得るため、handler 側の排他は利用者の責任になる。handler の中から Logger の設定変更と再出力ができるが、同じログを再出力すると無限再帰になるため、再入の制御は利用者の責任になる
 - `Logger` の設定 (`level` / `groups` / `onOutputHandler`) と `Sora.logLevel` は SDK 内部の lock で保護され、任意の executor から読み書きできる。`@MainActor` のクラスの中で `onOutputHandler` を設定する場合は、closure が MainActor 隔離を継承するため隔離を外す必要がある (下の「コールバックを Swift 6 で扱う」を参照)
+- ハンドラの設定 (`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` のイベントハンドラのプロパティと `MediaChannel.handlers` の参照) は SDK 内部の lock で排他され、任意の executor から行える (`SoraHandlers` のプロパティは含まない)。callback が呼ばれるスレッドの保証は変わらない
 
 ### コールバックを Swift 6 で扱う
 

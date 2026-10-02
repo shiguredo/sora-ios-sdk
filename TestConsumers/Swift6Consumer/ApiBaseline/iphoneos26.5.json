@@ -3605,11 +3605,6 @@
             "usr": "s:4Sora27CameraVideoCapturerHandlersC9onCaptureAA0C5FrameOAA0bcD0C_AFtcSgvp",
             "mangledName": "$s4Sora27CameraVideoCapturerHandlersC9onCaptureAA0C5FrameOAA0bcD0C_AFtcSgvp",
             "moduleName": "Sora",
-            "declAttributes": [
-              "HasInitialValue",
-              "HasStorage"
-            ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -3661,10 +3656,6 @@
                 "usr": "s:4Sora27CameraVideoCapturerHandlersC9onCaptureAA0C5FrameOAA0bcD0C_AFtcSgvg",
                 "mangledName": "$s4Sora27CameraVideoCapturerHandlersC9onCaptureAA0C5FrameOAA0bcD0C_AFtcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "get"
               },
               {
@@ -3722,10 +3713,6 @@
                 "usr": "s:4Sora27CameraVideoCapturerHandlersC9onCaptureAA0C5FrameOAA0bcD0C_AFtcSgvs",
                 "mangledName": "$s4Sora27CameraVideoCapturerHandlersC9onCaptureAA0C5FrameOAA0bcD0C_AFtcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "set"
               }
             ]
@@ -3773,11 +3760,6 @@
             "usr": "s:4Sora27CameraVideoCapturerHandlersC7onStartyAA0bcD0CcSgvp",
             "mangledName": "$s4Sora27CameraVideoCapturerHandlersC7onStartyAA0bcD0CcSgvp",
             "moduleName": "Sora",
-            "declAttributes": [
-              "HasInitialValue",
-              "HasStorage"
-            ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -3822,10 +3804,6 @@
                 "usr": "s:4Sora27CameraVideoCapturerHandlersC7onStartyAA0bcD0CcSgvg",
                 "mangledName": "$s4Sora27CameraVideoCapturerHandlersC7onStartyAA0bcD0CcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "get"
               },
               {
@@ -3876,10 +3854,6 @@
                 "usr": "s:4Sora27CameraVideoCapturerHandlersC7onStartyAA0bcD0CcSgvs",
                 "mangledName": "$s4Sora27CameraVideoCapturerHandlersC7onStartyAA0bcD0CcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "set"
               }
             ]
@@ -3927,11 +3901,6 @@
             "usr": "s:4Sora27CameraVideoCapturerHandlersC6onStopyAA0bcD0CcSgvp",
             "mangledName": "$s4Sora27CameraVideoCapturerHandlersC6onStopyAA0bcD0CcSgvp",
             "moduleName": "Sora",
-            "declAttributes": [
-              "HasInitialValue",
-              "HasStorage"
-            ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -3976,10 +3945,6 @@
                 "usr": "s:4Sora27CameraVideoCapturerHandlersC6onStopyAA0bcD0CcSgvg",
                 "mangledName": "$s4Sora27CameraVideoCapturerHandlersC6onStopyAA0bcD0CcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "get"
               },
               {
@@ -4030,10 +3995,6 @@
                 "usr": "s:4Sora27CameraVideoCapturerHandlersC6onStopyAA0bcD0CcSgvs",
                 "mangledName": "$s4Sora27CameraVideoCapturerHandlersC6onStopyAA0bcD0CcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "set"
               }
             ]
@@ -15622,11 +15583,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC9onConnectys5Error_pSgcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -15679,10 +15637,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC9onConnectys5Error_pSgcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC9onConnectys5Error_pSgcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -15742,10 +15698,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC9onConnectys5Error_pSgcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC9onConnectys5Error_pSgcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -15804,12 +15758,9 @@
             "moduleName": "Sora",
             "deprecated": true,
             "declAttributes": [
-              "HasInitialValue",
               "Final",
-              "Available",
-              "HasStorage"
+              "Available"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -15862,10 +15813,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC18onDisconnectLegacyys5Error_pSgcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC18onDisconnectLegacyys5Error_pSgcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -15925,10 +15874,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC18onDisconnectLegacyys5Error_pSgcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC18onDisconnectLegacyys5Error_pSgcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -15978,11 +15925,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC12onDisconnectyAA0A10CloseEventOcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -16027,10 +15971,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC12onDisconnectyAA0A10CloseEventOcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC12onDisconnectyAA0A10CloseEventOcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -16082,10 +16024,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC12onDisconnectyAA0A10CloseEventOcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC12onDisconnectyAA0A10CloseEventOcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -16135,11 +16075,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC11onAddStreamyAA0bG0_pcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -16184,10 +16121,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC11onAddStreamyAA0bG0_pcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC11onAddStreamyAA0bG0_pcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -16239,10 +16174,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC11onAddStreamyAA0bG0_pcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC11onAddStreamyAA0bG0_pcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -16292,11 +16225,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC14onRemoveStreamyAA0bG0_pcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -16341,10 +16271,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC14onRemoveStreamyAA0bG0_pcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC14onRemoveStreamyAA0bG0_pcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -16396,10 +16324,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC14onRemoveStreamyAA0bG0_pcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC14onRemoveStreamyAA0bG0_pcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -16449,11 +16375,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC22onReceiveSignalingJSONySScSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -16498,10 +16421,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC22onReceiveSignalingJSONySScSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC22onReceiveSignalingJSONySScSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -16553,10 +16474,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC22onReceiveSignalingJSONySScSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC22onReceiveSignalingJSONySScSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -16607,12 +16526,9 @@
             "moduleName": "Sora",
             "deprecated": true,
             "declAttributes": [
-              "HasInitialValue",
               "Final",
-              "Available",
-              "HasStorage"
+              "Available"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -16657,10 +16573,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC18onReceiveSignalingyAA0G0OcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC18onReceiveSignalingyAA0G0OcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -16712,10 +16626,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC18onReceiveSignalingyAA0G0OcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC18onReceiveSignalingyAA0G0OcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -16765,11 +16677,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC0yAA0bC0CcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -16814,10 +16723,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC06onDataC0yAA0bC0CcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC0yAA0bC0CcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -16869,10 +16776,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC06onDataC0yAA0bC0CcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC0yAA0bC0CcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -16935,11 +16840,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC6OpenedyAA0bC0C_SStcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -16997,10 +16899,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC06onDataC6OpenedyAA0bC0C_SStcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC6OpenedyAA0bC0C_SStcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -17065,10 +16965,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC06onDataC6OpenedyAA0bC0C_SStcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC6OpenedyAA0bC0C_SStcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -17137,11 +17035,8 @@
             "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC7MessageyAA0bC0C_SS10Foundation0F0VtcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -17205,10 +17100,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC06onDataC7MessageyAA0bC0C_SS10Foundation0F0VtcSgvg",
                 "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC7MessageyAA0bC0C_SS10Foundation0F0VtcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -17279,10 +17172,8 @@
                 "usr": "s:4Sora20MediaChannelHandlersC06onDataC7MessageyAA0bC0C_SS10Foundation0F0VtcSgvs",
                 "mangledName": "$s4Sora20MediaChannelHandlersC06onDataC7MessageyAA0bC0C_SS10Foundation0F0VtcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -17353,11 +17244,8 @@
             "mangledName": "$s4Sora12MediaChannelC8handlersAA0bC8HandlersCvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -17375,10 +17263,8 @@
                 "usr": "s:4Sora12MediaChannelC8handlersAA0bC8HandlersCvg",
                 "mangledName": "$s4Sora12MediaChannelC8handlersAA0bC8HandlersCvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -17403,10 +17289,8 @@
                 "usr": "s:4Sora12MediaChannelC8handlersAA0bC8HandlersCvs",
                 "mangledName": "$s4Sora12MediaChannelC8handlersAA0bC8HandlersCvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -19243,11 +19127,8 @@
             "mangledName": "$s4Sora19MediaStreamHandlersC13onSwitchVideoySbcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -19292,10 +19173,8 @@
                 "usr": "s:4Sora19MediaStreamHandlersC13onSwitchVideoySbcSgvg",
                 "mangledName": "$s4Sora19MediaStreamHandlersC13onSwitchVideoySbcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -19347,10 +19226,8 @@
                 "usr": "s:4Sora19MediaStreamHandlersC13onSwitchVideoySbcSgvs",
                 "mangledName": "$s4Sora19MediaStreamHandlersC13onSwitchVideoySbcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -19400,11 +19277,8 @@
             "mangledName": "$s4Sora19MediaStreamHandlersC13onSwitchAudioySbcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -19449,10 +19323,8 @@
                 "usr": "s:4Sora19MediaStreamHandlersC13onSwitchAudioySbcSgvg",
                 "mangledName": "$s4Sora19MediaStreamHandlersC13onSwitchAudioySbcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -19504,10 +19376,8 @@
                 "usr": "s:4Sora19MediaStreamHandlersC13onSwitchAudioySbcSgvs",
                 "mangledName": "$s4Sora19MediaStreamHandlersC13onSwitchAudioySbcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -48862,11 +48732,8 @@
             "mangledName": "$s4Sora24WebSocketChannelHandlersC9onReceiveyAA0bC7MessageOcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -48911,10 +48778,8 @@
                 "usr": "s:4Sora24WebSocketChannelHandlersC9onReceiveyAA0bC7MessageOcSgvg",
                 "mangledName": "$s4Sora24WebSocketChannelHandlersC9onReceiveyAA0bC7MessageOcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -48966,10 +48831,8 @@
                 "usr": "s:4Sora24WebSocketChannelHandlersC9onReceiveyAA0bC7MessageOcSgvs",
                 "mangledName": "$s4Sora24WebSocketChannelHandlersC9onReceiveyAA0bC7MessageOcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
