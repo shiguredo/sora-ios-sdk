@@ -90,12 +90,14 @@
   - @t-miya
 - [UPDATE] `Sora.connect` の設定エラー通知経路の closure capture を解消する
   - @t-miya
-- [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告 14 件を解消する
+- [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告を解消する
+  - 非 `@Sendable` な closure (`handler` / `completionHandler`)
+  - WebRTC / AVFoundation の型 (`RTCSessionDescription` / `RTCMediaConstraints` / `RTCPeerConnection` / `AVCaptureDevice.Format`)
   - @t-miya
 - [UPDATE] `PeerChannel` の接続ライフサイクルの排他を接続状態の所有者へ統合する
   - @t-miya
 - [UPDATE] `Sora` target の SDK 内部インスタンスを捕捉する `#SendableClosureCaptures` 警告 10 件を解消する
-  - 通常の接続経路で利用者の挙動は変わらないが、 `MediaChannel` の解放中に `getStats` の完了 closure が走る場合に限り、解放済みチャンネルの統計が成功として返る可能性がある
+  - `self` (`PeerChannel` / `MediaChannel`) の 8 件と、 `ConnectionTask` / `DataChannel` の 2 件を解消する
   - @t-miya
 - [UPDATE] `Utilities.Stopwatch` の `Timer` closure が `self` を捕捉する `#SendableClosureCaptures` 警告を解消する
   - @t-miya
