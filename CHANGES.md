@@ -164,6 +164,7 @@
   - @t-miya
 - [ADD] 参照保持 box が担う `getStats` の判定、`createClientOfferSDP` の一時 `RTCPeerConnection` の `close()`、`MediaChannel.state` の回帰テストを追加する
   - `getStats` の完了 block が、統計要求時と同じ `RTCPeerConnection` なら成功を 1 回返し、完了 block の内側で `nativeChannel` が差し替わった場合と接続状態が `.disconnected` になった場合は失敗を 1 回返すことを固定する
+  - `MediaChannel` の解放開始後に完了 block が走った場合も、解放前に接続状態が変わっていても `MediaChannel is unavailable` の失敗を 1 回返すことを固定する
   - `getStats` の入口の guard (未接続 / `nativeChannel` が nil) が失敗を 1 回返すことと、テスト用の seam で作った接続状態が `state` と `isAvailable` から同じ値として読めることも固定する
   - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
   - @t-miya

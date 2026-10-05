@@ -171,13 +171,14 @@ private final class GetStatsObservation: @unchecked Sendable {
 ///
 /// テスト用フックの closure は `@Sendable` のため、非 Sendable な `PeerChannel` /
 /// `RTCPeerConnection` / `MediaChannel` をそのまま capture できません。実行する操作だけを保持し、
-/// 保持し、テスト用フックの closure にはこの箱だけを capture させます。
+/// テスト用フックの closure にはこの箱だけを capture させます。
 ///
 /// `@unchecked Sendable` としているのは、操作が `PeerChannel.nativeChannel` の差し替え
-/// (`transportStorage` の `NSLock` に閉じた代入) と
-/// `MediaChannel.setConnectionStateForTesting(_:)` (`connectionLifecycleLock` に閉じた書き込み)
-/// だけで、箱自身は操作の実行以外に状態を読み書きしないためです。
-/// この 2 種類に閉じた操作だけを渡すことを使用契約とします (別種の操作を渡す場合は根拠を書き換えます)。
+/// (`transportStorage` の `NSLock` に閉じた代入)、`MediaChannel.setConnectionStateForTesting(_:)`
+/// (`connectionLifecycleLock` に閉じた書き込み)、`MediaChannelOwner.release()` (最後の強参照の解放。
+/// `MediaChannel.deinit` の本体をこの thread 上で走らせるため、lock に閉じない唯一の例外) の
+/// 3 種類で、箱自身は操作の実行以外に状態を読み書きしないためです。
+/// この 3 種類の操作だけを渡すことを使用契約とします (別種の操作を渡す場合は根拠を書き換えます)。
 private final class GetStatsHookAction: @unchecked Sendable {
   private let action: () -> Void
 
@@ -188,6 +189,40 @@ private final class GetStatsHookAction: @unchecked Sendable {
   /// テスト用フックから呼ばれる操作を実行します。
   func perform() {
     action()
+  }
+}
+
+/// `MediaChannel` の唯一の強参照を保持し、`getStats` の完了 block の内側で解放するための箱です。
+///
+/// テスト側が `MediaChannel` を直接保持していると、完了 block の内側で最後の参照を解放できません。
+/// この箱だけが強参照を持ち、テスト用フックから ``release()`` を呼んで解放します。
+/// `@unchecked Sendable` としているのは、強参照の読み書きをすべて `lock` で排他しており、
+/// 非 Sendable な `MediaChannel` を解放するためだけに保持するためです (`release()` は
+/// WebRTC のスレッドから呼ばれます)。
+private final class MediaChannelOwner: @unchecked Sendable {
+  private let lock = NSLock()
+  private var mediaChannel: MediaChannel?
+
+  init(_ mediaChannel: MediaChannel) {
+    self.mediaChannel = mediaChannel
+  }
+
+  /// 保持している `MediaChannel`。解放済みであれば `nil`。
+  var current: MediaChannel? {
+    lock.lock()
+    defer { lock.unlock() }
+    return mediaChannel
+  }
+
+  /// 最後の強参照を解放し、`MediaChannel` の解放を開始させます。
+  ///
+  /// 解放 (`deinit` の一式) は外部コードを呼ぶため、`lock` を解放してから行います。
+  func release() {
+    lock.lock()
+    let released = mediaChannel
+    mediaChannel = nil
+    lock.unlock()
+    withExtendedLifetime(released) {}
   }
 }
 
@@ -547,5 +582,133 @@ final class SendableBoxRegressionTests: XCTestCase {
     XCTAssertTrue(
       reason.contains("MediaChannel is not connected"),
       "切断後の失敗理由が接続状態を示すこと (reason: \(reason))")
+  }
+
+  /// `MediaChannel` の解放開始後に `getStats` の完了 block が走った場合に失敗を 1 回返すことを確認する
+  ///
+  /// 解放は完了 block の判定の先頭で呼ばれる `getStatsWillEvaluateForTesting` の中で行います。
+  /// 解放の確認を削ると完了 block が成功を返すため、このテストが失敗します。`PeerChannel` は
+  /// テストが強参照で保持して生存させます (`PeerChannel` も解放されると、終端フラグの確認を削っても
+  /// `transportStorage` の nil ガードが同じ失敗を返すため、終端フラグの退行を検出できません)。
+  /// `MediaChannel` を保持するのは `MediaChannelOwner` だけで、テスト側は `owner.current` 経由で
+  /// 一時的に参照します。
+  func testGetStatsFailsWhenMediaChannelIsDeinitializedInCompletionBlock() throws {
+    let owner = MediaChannelOwner(try MediaChannel(configuration: makeConfiguration()))
+    let peerChannel = try XCTUnwrap(
+      owner.current?.peerChannel, "PeerChannel を取得できること")
+    guard
+      let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
+        webRTCConfiguration: WebRTCConfigurationSnapshot(WebRTCConfiguration()),
+        delegate: peerChannel)
+    else {
+      XCTFail("RTCPeerConnection を生成できること")
+      return
+    }
+
+    // 後始末: テストが失敗しても PC を戻します (解放経路では deinit が既に閉じています)。
+    defer {
+      peerChannel.nativeChannel = nil
+      owner.current?.setConnectionStateForTesting(.disconnected)
+      if nativeChannel.connectionState != .closed {
+        nativeChannel.close()
+      }
+    }
+
+    peerChannel.nativeChannel = nativeChannel
+    owner.current?.setConnectionStateForTesting(.connected)
+    // 解放が起きない場合に MediaChannel を延命しないよう、箱は弱参照で捕捉します。
+    let release = GetStatsHookAction { [weak owner] in owner?.release() }
+    owner.current?.getStatsWillEvaluateForTesting = { release.perform() }
+
+    let statsExpectation = expectation(
+      description: "解放開始後に完了 block が走った場合は handler が失敗で 1 回呼ばれること")
+    let observation = GetStatsObservation()
+    owner.current?.getStats { result in
+      // handler は WebRTC のスレッドから呼ばれるため、assertion はテスト側で行います。
+      observation.record(result)
+      statsExpectation.fulfill()
+    }
+    wait(for: [statsExpectation], timeout: 5)
+
+    XCTAssertEqual(
+      observation.recordedCallCount, 1,
+      "getStats の handler が 1 回だけ呼ばれること")
+    guard case .failure(let error) = observation.recordedResult,
+      let soraError = error as? SoraError,
+      case .peerChannelError(let reason) = soraError
+    else {
+      XCTFail(
+        "解放開始後に完了 block が走った場合は失敗すること (result: \(String(describing: observation.recordedResult)))"
+      )
+      return
+    }
+    XCTAssertEqual(
+      reason, "MediaChannel is unavailable",
+      "変更前の [weak self] と同じ失敗理由であること (reason: \(reason))")
+  }
+
+  /// 解放と接続状態の変更が同じ完了 block の内側で起きた場合に、解放の確認が優先されることを確認する
+  ///
+  /// 解放の確認が `state == .connected` の確認より前にあることを、失敗理由で固定します
+  /// (`.disconnected` へ遷移させてから解放するため、順序が逆だと `MediaChannel is not connected`
+  /// が返ります)。解放の手順と前提は `testGetStatsFailsWhenMediaChannelIsDeinitializedInCompletionBlock`
+  /// と同じです。
+  func testGetStatsReportsUnavailableWhenStateChangesBeforeDeinitialization() throws {
+    let owner = MediaChannelOwner(try MediaChannel(configuration: makeConfiguration()))
+    let peerChannel = try XCTUnwrap(
+      owner.current?.peerChannel, "PeerChannel を取得できること")
+    guard
+      let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
+        webRTCConfiguration: WebRTCConfigurationSnapshot(WebRTCConfiguration()),
+        delegate: peerChannel)
+    else {
+      XCTFail("RTCPeerConnection を生成できること")
+      return
+    }
+
+    // 後始末: テストが失敗しても PC を戻します (解放経路では deinit が既に閉じています)。
+    defer {
+      peerChannel.nativeChannel = nil
+      owner.current?.setConnectionStateForTesting(.disconnected)
+      if nativeChannel.connectionState != .closed {
+        nativeChannel.close()
+      }
+    }
+
+    peerChannel.nativeChannel = nativeChannel
+    owner.current?.setConnectionStateForTesting(.connected)
+    // テスト用フックの内側では、先に接続状態を `.disconnected` にしてから最後の強参照を
+    // 解放します (フックが戻る前に解放が起きるため、次に進む前に `MediaChannel` はいません)。
+    let releaseAndDisconnect = GetStatsHookAction { [weak owner] in
+      owner?.current?.setConnectionStateForTesting(.disconnected)
+      owner?.release()
+    }
+    owner.current?.getStatsWillEvaluateForTesting = { releaseAndDisconnect.perform() }
+
+    let statsExpectation = expectation(
+      description: "接続状態の変更後に解放された場合は handler が失敗で 1 回呼ばれること")
+    let observation = GetStatsObservation()
+    owner.current?.getStats { result in
+      // handler は WebRTC のスレッドから呼ばれるため、assertion はテスト側で行います。
+      observation.record(result)
+      statsExpectation.fulfill()
+    }
+    wait(for: [statsExpectation], timeout: 5)
+
+    XCTAssertEqual(
+      observation.recordedCallCount, 1,
+      "getStats の handler が 1 回だけ呼ばれること")
+    guard case .failure(let error) = observation.recordedResult,
+      let soraError = error as? SoraError,
+      case .peerChannelError(let reason) = soraError
+    else {
+      XCTFail(
+        "接続状態の変更後に解放された場合は失敗すること (result: \(String(describing: observation.recordedResult)))"
+      )
+      return
+    }
+    XCTAssertEqual(
+      reason, "MediaChannel is unavailable",
+      "解放の確認が state の確認より前に行われること (reason: \(reason))")
   }
 }
