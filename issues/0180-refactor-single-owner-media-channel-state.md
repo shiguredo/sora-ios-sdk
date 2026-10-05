@@ -1,7 +1,7 @@
 # `MediaChannel.state` を単一の lock 付き storage へ移して単一所有にする
 
 - Created: 2026-09-29
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-05
 - Priority: Low
 - Branch: feature/refactor-single-owner-media-channel-state
 - Polished: 2026-10-05
@@ -76,3 +76,22 @@
 - `0108` の Sora target warnings-as-errors ゲートと `0115` の `Utilities.Stopwatch` の削除。
 
 ## 解決方法
+
+`MediaChannel.state` の保持と読み出しを `MediaChannelStateStorage` の 1 つへ集約した。
+
+- `Sora/MediaChannel.swift`: `state` を `MediaChannelStateStorage` を読む computed property に変更した。getter だけの宣言には `private(set)` を付けられないため `get` / `set` を明示し、`set` は `setState(_:)` を呼ぶ。`setState(_:)` は storage だけを書き、接続状態を保持する stored property は `MediaChannelStateStorage` だけになった。`state` の読み書きの排他は storage の `NSLock` に揃い、storage の `lock` は保持したまま他の lock を取らない葉 lock とした (`Sora/ScreenCapture.swift` が自身の lock を保持したまま `MediaChannel.state` を読む経路を含め、どの経路から入れ子で取っても循環しない)。`0177` の「`state` の写し」という doc と `didSet` を採らない理由を、正本が storage だけである記述へ更新した
+- `Sora/MediaChannel.swift`: `0176` から引き継いだ `#if DEBUG` の seam 2 つを追加した。`setConnectionStateForTesting(_:)` は `connectionLifecycleLock` 配下で `setState(_:)` を通して接続状態を作る。`getStatsWillEvaluateForTesting` は `getStats` の完了 block の判定の先頭で呼ばれる closure で、テストが完了 block の評価時点の状態を確定的に作れるようにする。どちらも Release では宣言も呼び出しも存在しない
+- `SoraTests/SendableBoxRegressionTests.swift`: 回帰テスト 5 件を追加した (`getStats` の完了 block と入口 guard で 4 件、接続状態の読み出しで 1 件)。完了 block の 3 経路 (統計要求時と同じ `RTCPeerConnection` なら成功を 1 回 / 完了 block の内側で `nativeChannel` が差し替わったら失敗を 1 回 / 完了 block の内側で接続状態が `.disconnected` になったら失敗を 1 回)、入口の 2 つの guard (未接続 / `nativeChannel` が nil) が失敗を 1 回返すこと、seam で作った接続状態が `state` と `isAvailable` から同じ値として読めること (`.connecting` / `.connected` / `.disconnecting` / `.disconnected` の 4 状態)。いずれも実 `NativePeerChannelFactory` と実 `RTCPeerConnection` だけで書き、モックやスタブは使っていない。完了 block の `transportStorage` が nil になる経路の回帰テストは `0179` が担当する
+- `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json`: `make api-baseline` で再生成した。差分は `MediaChannel.state` ノード内に限られ (`declAttributes` の `HasStorage` / `HasInitialValue` と `hasStorage`、getter の `implicit` / `Transparent` の消失。`SetterAccess` と `Final`、USR、`mangledName` は不変)、`iphoneos26.5.info.txt` に差分は無い
+  - **ABI が変わるため、更新した利用者は再コンパイルが必要になる** (公開 API のシグネチャと利用者の挙動は変わらない)
+- `CHANGES.md`: `## develop` の主リストへ `[UPDATE]` を担当者行付きで追記し、`0176` の `[ADD]` エントリを `getStats` の同一性判定・入口 guard・接続状態の観測を含む記述へ更新した
+
+検証 (Xcode 26.6 / `iphoneos26.5`。ソースとテストを凍結した最終リビジョンで取得):
+
+- `SoraTests` 全体: 478 件実行 / 36 skip / 失敗 0 (`build/0180t-tests.log`)。`SendableBoxRegressionTests` (6 件) は 10 回連続実行でも失敗 0 (`build/0180t-repeat.log`)
+- 退行検出 2 件: `getStats` の完了 block から同一性判定を削った作業ツリーで不一致側のテストが成功を観測して失敗すること (`build/0180t-regression-identity.log`)、完了 block が取得時の接続状態を読む変更を入れた作業ツリーで接続状態のテストが失敗すること (`build/0180t-regression-state.log`) を確認した。確認用の変更は commit していない
+- `make build` / `make consumer-build SCHEME=ConsumerCore` / `make consumer-check-negative` / `make api-check-fresh` / `make fmt-lint` / `make lint` が成功した (`build/0180t-gates.log` / `build/0180t-fmtlint.log`)
+- `Sora` target の Swift 6 型検査 (Release / Debug) で error 0、`#SendableClosureCaptures` は 0 件のまま (`build/0180t-typecheck.log` / `build/0180t-typecheck-debug.log`)
+- Release の `MediaChannel.o` に `ForTesting` のシンボルが無く、Debug の `MediaChannel.o` には seam が存在することを `nm` で確認した (Release は `make build` の成果物)
+
+`build/` は `.gitignore` の対象で fresh な checkout には無いため、上記の log は作業時の記録である。
