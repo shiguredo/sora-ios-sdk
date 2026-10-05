@@ -4,7 +4,7 @@
 - Completed: {YYYY-MM-DD}
 - Priority: Low
 - Branch: feature/fix-getstats-after-media-channel-deinit
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-10-05
 
 ## 目的
 
@@ -24,44 +24,46 @@
 
 - 解放の開始を、完了 block が読む storage へ明示的に記録する。`MediaChannel.deinit` の先頭で `stateStorage` の終端フラグを立て、完了 block が `state == .connected` を確認する前にこのフラグを確認して失敗を返す。
 - 判定の追加は `getStats` の完了 block の配送先・呼び出し回数・順序を変えない。失敗は変更前と同じ `SoraError.peerChannelError(reason: "MediaChannel is unavailable")` とし、1 回だけ返す。
-- 終端フラグは `MediaChannelStateStorage` の `lock` 配下で読み書きする。`deinit` からの書き込みは `connectionLifecycleLock` を取らない (`deinit` 中に他の lock を取ると、切断経路が保持している lock と競合し得る)。lock 順序に新しい辺を増やさない。
+- 終端フラグは `MediaChannelStateStorage` の `lock` 配下で読み書きする。`deinit` からの書き込みは `connectionLifecycleLock` を取らず、storage の `lock` だけを使う。取る lock を storage の 1 つに限定することで、lock 順序 (`connectionLifecycleLock` → この storage の一方向) に新しい辺を増やさない。
 - `MediaChannel` の解放中に走る別の完了 block (`nativeChannel` を閉じる経路など) の挙動は変えない。本 issue が直すのは `getStats` の完了 block だけである。
 - 完了 block から `MediaChannel` 本体を捕捉する形には戻さない (`0177` が消した捕捉を再導入しない)。解放の開始は storage のフラグで伝える。
 
 ## 前提となる issue
 
 - `0177` (2026-09-29 完了): `MediaChannelGetStatsContext` の `stateStorage` / `transportStorage` の追加元。本 issue はこの形を保ったまま解放の検出を戻す。
-- `0176` (open): `MediaChannel.getStats` の同一性判定の回帰テストと `#if DEBUG` の seam。本 issue のテストも同じ harness (`setConnectionStateForTesting(_:)` と `statistics` の完了 block を観測する seam) を使える可能性がある。実装時に `0176` の seam と重複しない形を決める。
-- `0165` (完了): lock を保持したまま libwebrtc や利用者 handler を呼ばない方針。本 issue もこれに従う。
+- `0176` (完了 2026-09-29): `getStats` 側の同一性判定の回帰テストと `#if DEBUG` の seam は未実施のまま `0180` へ引き継いだ。本 issue は `0176` の seam を前提にしない。
+- `0180` (open): `MediaChannel.state` の単一所有化と、`0176` から引き継いだ `getStats` 側の `#if DEBUG` の seam (`setConnectionStateForTesting(_:)` と `statistics` の完了 block を観測する seam) の追加。本 issue は `0180` の完了後に着手し、`0180` の seam を使ってテストする。seam は `0180` の `state` の書き込み経路に従うため、本 issue では追加しない。完了 block 側の seam は、本 issue のテストで使うため完了 block の判定の先頭 (終端フラグの確認より前) に呼ぶ位置にする (`0180` の同一性判定の回帰テストは、失敗が同一性判定の分岐から返るため、この位置でも成立する)。
+- `0120` (open): `MediaChannel` の解放開始後に完了 block が成功を返さないことを snapshot API でも満たすため、本 issue が `MediaChannelStateStorage` に追加する終端フラグを新経路で読む (実装順序は `0179` → `0120`)。フラグの読み出しは `MediaChannelGetStatsContext` が保持する `stateStorage` から行える形にし、`private` に閉じない。
+- `0165` (完了 2026-09-28): lock を保持したまま Logger や利用者 handler を呼ばない方針。本 issue もこれに従う。
 
 ## 変更対象
 
-- `Sora/MediaChannel.swift`: `MediaChannelStateStorage` への終端フラグの追加、`MediaChannel.deinit` での設定、`getStats` の完了 block での確認
+- `Sora/MediaChannel.swift`: `MediaChannelStateStorage` への終端フラグの追加、`MediaChannel.deinit` での設定、`getStats` の完了 block での確認、`MediaChannelStateStorage` / `MediaChannelGetStatsContext` / `MediaChannel.stateStorage` の doc (状態の書き込みが `connectionLifecycleLock` 配下に限られるという不変条件と `@unchecked Sendable` の根拠) の更新。`#if DEBUG` の seam は `0180` が追加するものを使い、完了 block 側の seam が判定の先頭 (終端フラグの確認より前) で呼ばれていない場合は本 issue で呼び出し位置を判定の先頭へ移す (`0180` が完了 block 側の seam を追加していない場合は本 issue で追加する。どちらの場合も `0180` の同一性判定の回帰テストが成立することを確認する)。`setConnectionStateForTesting(_:)` は本 issue で追加しない
 - `SoraTests/`: `MediaChannel` の解放開始後に完了 block が失敗を返すことの回帰テスト
-- `CHANGES.md`: `## develop` の `[FIX]` 群への追記 (担当者行 `@t-miya` を含める)
+- `CHANGES.md`: `0177` の `[UPDATE]` エントリから「解放済みチャンネルの統計が成功として返る可能性がある」の記述を削除し、最終状態 (通常の接続経路で利用者の挙動が変わらない) の記述にする。`0177` と本 issue は同じ未リリースの `## develop` にあり、`shiguredo-changelog` の「派生元ブランチとの最終的な差分のみを記載する」「開発ブランチ内の中間状態の修正は記載しない」に従うため、`[FIX]` は追加しない
 
 ## テスト方針
 
 モックやスタブは使用しない。検証は Xcode 26.6 と `iphoneos26.5` の環境で行い、版数は着手時点の `Makefile` の `API_XCODE` / `XCODE_SDK` に読み替える。
 
-- `MediaChannel` の解放開始後に `statistics` の完了 block を走らせ、handler が失敗を 1 回だけ受け取ることを固定する。実装時に、`0176` が設計した `#if DEBUG` の seam と同じ方式 (完了 block が判定の直前で呼ぶ internal な seam) で順序を確定的に作れるかを確認する。`DispatchSemaphore` で完了 block を停止させる方式は、`statistics` が signaling thread の完了を待つ場合に呼び出し元が停止するため使わない (`0176` の判断と同じ)。
-- seam を追加できない場合は、その理由と代替の検証内容 (実装の読み合わせと `SoraTests` 全体を回帰の正本にすること) を `## 解決方法` に記録する。
+- `MediaChannel` の解放開始後に `statistics` の完了 block を走らせ、handler が失敗を 1 回だけ受け取ることを固定する。順序は `0180` が追加する `#if DEBUG` の seam (`setConnectionStateForTesting(_:)` と、完了 block の判定の先頭で呼ぶ internal な seam) で確定的に作る (完了 block 側の seam の位置は変更対象のとおり本 issue で揃える)。seam の中で `MediaChannel` の最後の参照を解放して `deinit` で終端フラグを立て、その直後の終端フラグの確認で失敗を返させる (seam が終端フラグの確認より後にあると、確認を通過した後に解放することになり、このテストは成立しない)。`DispatchSemaphore` で完了 block を停止させる方式は、`statistics` が signaling thread の完了を待つ場合に呼び出し元が停止するため使わない (`0176` の判断と同じ)。
+- テストは `MediaChannel` の解放後も `PeerChannel` を生存させる。`PeerChannel` も解放されると、終端フラグの確認を削っても既存の `transportStorage` の nil ガードが同じ失敗を返すため、終端フラグの退行を検出できない。
 - `SoraTests` 全体を実行し失敗 0 件であること。
 - `make build` / `make consumer-build SCHEME=ConsumerCore` / `make api-check-fresh` / `make consumer-check-negative` / `make fmt-lint` / `make lint` が成功すること。
 - 退行検出の確認: 終端フラグの確認を削った作業ツリーで追加したテストが失敗することを確認する。確認用の変更は commit しない。
 
 ## 完了条件
 
-- `MediaChannel` の解放開始後に `getStats` の完了 block が走った場合、handler が `MediaChannel is unavailable` の失敗を 1 回だけ受け取ること。変更前の `[weak self]` と同じ配送であること。
+- `MediaChannel` の解放開始後に `getStats` の完了 block が走った場合、handler が `MediaChannel is unavailable` の失敗を 1 回だけ受け取ること。失敗のメッセージと回数は変更前の `[weak self]` と同じであること (検出点は `deinit` の実行中であり、弱参照が nil 化してから `deinit` 本体が終端フラグを立てるまでの僅かな区間は覆わない)。
 - 追加したテストが現行の実装で成功し、終端フラグの確認を削ると失敗すること。
 - `getStats` の完了 block が `MediaChannel` を捕捉していないこと (`#SendableClosureCaptures` が増えていないこと)。
 - `SoraTests` 全体が失敗 0 件で、`make build` / `make consumer-build SCHEME=ConsumerCore` / `make api-check-fresh` / `make consumer-check-negative` / `make fmt-lint` / `make lint` が成功すること。
 - 公開 API のシグネチャと利用者に見える通常の接続経路の挙動が変わっていないこと。`git diff --exit-code -- TestConsumers/Swift6Consumer/ApiBaseline/` が空であること。
-- `CHANGES.md` の `## develop` の `[FIX]` にエントリが担当者行付きで追加されていること。
+- `CHANGES.md` の `## develop` が最終状態だけを記述していること (`0177` の `[UPDATE]` エントリから「解放済みチャンネルの統計が成功として返る可能性がある」の記述が削除され、通常の接続経路で利用者の挙動が変わらない旨だけが残っていること)。
 
 ## スコープ外
 
-- `MediaChannel.state` の computed property 化と単一所有への整理。別 issue で扱う。
+- `MediaChannel.state` の computed property 化と単一所有への整理。`0180` (open) で扱う。
 - `MediaChannel` の解放中に走る `getStats` 以外の完了 block の配送。
 - `MediaChannel` への `Sendable` 準拠の追加。
 - `0108` の Sora target warnings-as-errors ゲートと `0115` の `Utilities.Stopwatch` の削除。
