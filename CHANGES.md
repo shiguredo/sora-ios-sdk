@@ -108,7 +108,6 @@
   - 配送側は lock を解放してからハンドラを呼ぶため、ハンドラの中から別のハンドラを設定しても deadlock しない。公開 API のソース互換と配送セマンティクス (接続途中の設定が次の配送から反映される) は変わらない
   - @t-miya
 - [UPDATE] `MediaChannel.state` の保持と読み出しを単一の lock 付き storage へ移す
-  - 公開 API のシグネチャと利用者の挙動は変わらない
   - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
