@@ -17715,12 +17715,9 @@
             "mangledName": "$s4Sora12MediaChannelC5stateAA15ConnectionStateOvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
               "Final",
-              "SetterAccess",
-              "HasStorage"
+              "SetterAccess"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -17738,10 +17735,8 @@
                 "usr": "s:4Sora12MediaChannelC5stateAA15ConnectionStateOvg",
                 "mangledName": "$s4Sora12MediaChannelC5stateAA15ConnectionStateOvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               }

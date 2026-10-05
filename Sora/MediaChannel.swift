@@ -287,14 +287,20 @@ private final class MediaChannelConnectionTaskBox: @unchecked Sendable {
 
 // MARK: -
 
-/// `MediaChannel.state` の写しを `NSLock` で保護して保持する storage です。
+/// `MediaChannel` の接続状態の正本を `NSLock` で保護して保持する storage です。
 ///
-/// `MediaChannel.state` は公開 API の表現 (`public private(set) var` の stored property) を
-/// 変えられないため stored property のまま維持します。この storage は、`getStats` の完了
-/// closure が `MediaChannel` 自身を捕捉せずに現在の接続状態を読むための経路です。
-/// 状態の書き込みは `MediaChannel` の `connectionLifecycleLock` 配下でだけ行い、
-/// この storage への写しも同じ区間で更新します。したがって lock 順序は
-/// `connectionLifecycleLock` → この storage の一方向だけです。
+/// `MediaChannel.state` はこの storage を読む computed property です。`getStats` の完了 closure は
+/// `MediaChannel` 自身を捕捉できないため、同じ storage を `MediaChannelGetStatsContext` 経由で
+/// 読みます。接続状態の保持先はこの storage だけです。
+///
+/// 状態の書き込みは `MediaChannel.setState(_:)` だけが行い、その呼び出しは
+/// `MediaChannel` の `connectionLifecycleLock` を保持した区間からだけ行います。したがって
+/// lock 順序は `connectionLifecycleLock` → この storage の一方向だけです。
+///
+/// 読み出しは `getStats` の完了 closure と `MediaChannel.state` の getter から行います。
+/// `MediaChannel.state` は `connectionLifecycleLock` を保持していない箇所 (`Sora/ScreenCapture.swift`
+/// が自身の lock を保持したまま読む箇所を含む) からも読むため、この storage の `lock` は
+/// 保持したまま他の lock を取らない葉 lock とし、どの経路から入れ子で取っても循環しません。
 ///
 /// `@unchecked Sendable` を認める根拠は、可変状態 (`state`) の読み書きをすべて
 /// この `lock` 配下で行うことです。保持する `ConnectionState` は値型であり、
@@ -304,7 +310,7 @@ private final class MediaChannelStateStorage: @unchecked Sendable {
   private let lock = NSLock()
   private var storedState: ConnectionState = .disconnected
 
-  /// 現在の接続状態の写し。読み出しと書き込みの両方を `lock` で排他する。
+  /// 現在の接続状態。読み出しと書き込みの両方を `lock` で排他する。
   var state: ConnectionState {
     get {
       lock.lock()
@@ -328,16 +334,20 @@ private final class MediaChannelStateStorage: @unchecked Sendable {
 /// - 可変状態を持たず、保持する handler / `RTCPeerConnection` / `MediaChannelStateStorage` の
 ///   参照は `init` で確定した `let`、`PeerChannelTransportStorage` は `init` でのみ代入する
 ///   `weak var` であること (`weak` は runtime が参照の load / store を原子的に扱い、
-///   代入後に値を書き換えない)。`RTCPeerConnection` は class であるため、ここで主張するのは
-///   参照が再代入されないことだけで、オブジェクトの状態の不変性ではない。box は参照を保持して
-///   callback へ渡すだけで、状態を読み書きしないこと
+///   代入後に値を書き換えない)。Debug では `@Sendable` な `let` の
+///   `willEvaluateForTesting` も保持するが、不変の closure であり box 自身は状態を持たない。
+///   `RTCPeerConnection` は class であるため、ここで主張するのは参照が再代入されないことだけで、
+///   オブジェクトの状態の不変性ではない。box は参照を保持して callback へ渡し、Debug では
+///   テスト用フックを呼ぶだけで、状態を読み書きしないこと
 /// - 変更前から handler と `RTCPeerConnection` を渡していた `RTCPeerConnection.statistics` の
 ///   完了 block をそのまま包み直すだけで、配送先・通知順序・呼び出し回数を変えず、
-///   別系統の境界へ新たに渡さないこと
+///   別系統の境界へ新たに渡さないこと。Debug では完了 block の先頭でテスト用フックを 1 回
+///   呼ぶだけで、
+///   呼び出しは `nil` なら何もしないこと
 /// - 保持する参照型に対する closure の状態アクセスが、既存または本変更で確立した排他に
 ///   閉じること。`MediaChannelStateStorage` は自身の `NSLock` が `state` の読み書きを保護し、
-///   storage への書き込みは `MediaChannel` の `connectionLifecycleLock` 配下でだけ行う
-///   (`connectionLifecycleLock` → storage の一方向)。`PeerChannelTransportStorage` も
+///   storage への書き込みは `MediaChannel.setState(_:)` が `connectionLifecycleLock` 配下で
+///   だけ行う (`connectionLifecycleLock` → storage の一方向)。`PeerChannelTransportStorage` も
 ///   自身の `NSLock` が `nativeChannel` / `streams` / `offerEncodings` の読み書きを保護する。
 ///   どちらの lock も保持したまま libwebrtc や利用者 handler を呼ばないこと
 ///
@@ -370,9 +380,8 @@ private final class MediaChannelGetStatsContext: @unchecked Sendable {
 
   /// 現在の接続状態を読む storage。
   ///
-  /// `MediaChannel.state` の写しを `MediaChannel` の `connectionLifecycleLock` 配下で更新し、
-  /// この storage 自身の `NSLock` で保護して読む。closure は `MediaChannel` を捕捉せず、
-  /// この storage 経由で読む。
+  /// 接続状態の正本である。closure は `MediaChannel` を捕捉せず、この storage 自身の `NSLock` で
+  /// 保護して読む。
   let stateStorage: MediaChannelStateStorage
 
   /// 現在の `nativeChannel` を読む `PeerChannel` の storage。
@@ -382,17 +391,40 @@ private final class MediaChannelGetStatsContext: @unchecked Sendable {
   /// この参照が nil であることは `MediaChannel` が解放済みであることと同じである。
   weak var transportStorage: PeerChannelTransportStorage?
 
-  init(
-    handler: @escaping (Result<Statistics, any Error>) -> Void,
-    peerConnection: RTCPeerConnection,
-    stateStorage: MediaChannelStateStorage,
-    transportStorage: PeerChannelTransportStorage
-  ) {
-    self.handler = handler
-    self.peerConnection = peerConnection
-    self.stateStorage = stateStorage
-    self.transportStorage = transportStorage
-  }
+  #if DEBUG
+    /// `MediaChannel.getStatsWillEvaluateForTesting` を Debug で受け取るための
+    /// テスト用フックです。
+    ///
+    /// 役割と使用契約は `MediaChannel.getStatsWillEvaluateForTesting` の doc に書きます。
+    /// `willEvaluateForTesting` 以外の引数の構成は `#else` 側の init と揃えます。Release には存在しません。
+    let willEvaluateForTesting: (@Sendable () -> Void)?
+
+    init(
+      handler: @escaping (Result<Statistics, any Error>) -> Void,
+      peerConnection: RTCPeerConnection,
+      stateStorage: MediaChannelStateStorage,
+      transportStorage: PeerChannelTransportStorage,
+      willEvaluateForTesting: (@Sendable () -> Void)?
+    ) {
+      self.handler = handler
+      self.peerConnection = peerConnection
+      self.stateStorage = stateStorage
+      self.transportStorage = transportStorage
+      self.willEvaluateForTesting = willEvaluateForTesting
+    }
+  #else
+    init(
+      handler: @escaping (Result<Statistics, any Error>) -> Void,
+      peerConnection: RTCPeerConnection,
+      stateStorage: MediaChannelStateStorage,
+      transportStorage: PeerChannelTransportStorage
+    ) {
+      self.handler = handler
+      self.peerConnection = peerConnection
+      self.stateStorage = stateStorage
+      self.transportStorage = transportStorage
+    }
+  #endif
 }
 
 // MARK: -
@@ -484,40 +516,77 @@ public final class MediaChannel {
 
   /// 接続状態
   ///
-  /// 遷移ログは排他区間の外で出すため (`didSet` では lock を保持したまま Logger を呼び得る)、
+  /// 接続状態の正本は `stateStorage` だけであり、この property はそこを読む computed property です。
+  /// getter だけの宣言には `private(set)` を付けられないため `get` / `set` を明示し、`set` は
+  /// `setState(_:)` を呼びます (storage を直接書きません)。読み書きの排他は storage の `NSLock` に
+  /// 揃います。
+  ///
+  /// 遷移ログは排他区間の外で出す。`didSet` では lock を保持したまま Logger を呼び得るため、
   /// `connectionLifecycleLock` を保持して遷移させる箇所では、遷移の直後 (lock の解放後) に
-  /// 呼び出し元が `logStateChange(from:)` を呼ぶ。
+  /// 呼び出し元が `logStateChange(from:)` を呼ぶ (この property は computed property のため
+  /// `didSet` を持たない)。
   ///
-  /// 公開 API の表現を変えられないため stored property のまま維持する。非同期の完了 closure が
-  /// `MediaChannel` を捕捉せずに現在の接続状態を読む経路は `stateStorage` であり、遷移は
-  /// `setState(_:)` に集約して両者を同じ区間で更新する。
-  ///
-  /// `state` に `didSet` を付けて `stateStorage` の写しを追随させる方式は採らない。
-  /// 観測器を持つ stored property は、暗黙の getter から `Transparent` が外れて
-  /// `swift-api-digester` の dump が変わり、commit 済みの公開 API baseline と一致しなくなる
-  /// (`VideoView.backgroundView` が同じ形である)。`state` を直接代入する経路を足す場合は
-  /// `setState(_:)` を経由すること。
-  public private(set) var state: ConnectionState = .disconnected
+  /// 接続状態の遷移は `setState(_:)` を呼ぶこと。`private(set)` の setter は
+  /// `connectionLifecycleLock` を取らずに `setState(_:)` へ入るため、SDK 内部から `state` へ
+  /// 代入してよいのは `connectionLifecycleLock` を保持した区間だけです。
+  public private(set) var state: ConnectionState {
+    get {
+      stateStorage.state
+    }
+    set {
+      setState(newValue)
+    }
+  }
 
-  /// ``state`` の写しを lock 付きで保持する storage
+  /// 接続状態の正本を lock 付きで保持する storage
   ///
-  /// `getStats` の完了 closure は `MediaChannel` を捕捉できないため、現在の接続状態を
-  /// この storage 経由で読む。書き込みは `setState(_:)` にだけ置き、`connectionLifecycleLock` を
-  /// 保持した区間で `state` と同じ値へ更新する。これにより lock 順序は
-  /// `connectionLifecycleLock` → この storage の一方向に揃う。
+  /// `state` はこの storage を読む computed property であり、`getStats` の完了 closure も
+  /// `MediaChannel` を捕捉できないためこの storage 経由で読む。書き込みは `setState(_:)` にだけ
+  /// 置き、`connectionLifecycleLock` を保持した区間で行う。
   private let stateStorage = MediaChannelStateStorage()
 
-  /// 接続状態を遷移させ、完了 closure が読む storage へ写しを残します。
+  /// 接続状態を遷移させ、接続状態の正本である storage を更新します。
   ///
-  /// 呼び出し側は `connectionLifecycleLock` を保持した状態で呼びます。`state` への直接代入を
-  /// 残すと storage の写しが古くなるため、接続状態の遷移はこの 1 箇所に集約します。
+  /// 呼び出し側は `connectionLifecycleLock` を保持した状態で呼びます。`state` は storage を読む
+  /// computed property であり、`state` への代入は必ずこのメソッドへ入るため、ここから `state` へ
+  /// 代入すると無限再帰します。書き込む先は storage だけです。
   private func setState(_ next: ConnectionState) {
-    state = next
     stateStorage.state = next
   }
 
   /// 接続中 (`state == .connected`) であれば ``true``
   public var isAvailable: Bool { state == .connected }
+
+  #if DEBUG
+    /// 実接続を伴わずに接続状態を作るテスト用フックです。
+    ///
+    /// `connectionLifecycleLock` を保持して `setState(_:)` を通すため、接続状態の正本である
+    /// storage だけが変わり、他の接続ライフサイクル (`currentConnectionTask` /
+    /// `connectionTimerAuthorization` / `hasStartedConnection`) は変わりません。
+    /// テストは `getStats` 以外の接続ライフサイクル API を呼ばず、後始末で `.disconnected` に
+    /// 戻してから `MediaChannel` を解放します。Release には存在せず、本番からは呼びません。
+    func setConnectionStateForTesting(_ next: ConnectionState) {
+      connectionLifecycleLock.lock()
+      defer { connectionLifecycleLock.unlock() }
+      setState(next)
+    }
+
+    /// `getStats` の完了 block が判定の先頭で呼ぶ closure を保持する
+    /// テスト用フックです。
+    ///
+    /// テストはこの closure で `peerChannel.nativeChannel` の差し替えや接続状態の変更など、
+    /// 完了 block が評価する時点の状態を確定的に作ります。`getStats` は呼び出し時点のこの
+    /// closure を box へ不変の値として渡し、完了 closure は box 経由で呼びます (完了 closure が
+    /// `MediaChannel` を捕捉しない形を保つため)。
+    ///
+    /// closure は `RTCPeerConnection.statistics` の完了 thread から呼ばれるため、触ってよいのは
+    /// 既存の lock (`PeerChannelTransportStorage` / `MediaChannelStateStorage` /
+    /// `connectionLifecycleLock`) に閉じた状態だけです。利用者 handler や公開 API を呼びません。
+    /// この property の読み書きは `getStats` を呼ぶスレッドだけが行い、完了 block は property を
+    /// 触りません (`getStats` を呼ぶ前に設定し、後始末で `nil` に戻してから `MediaChannel` を
+    /// 解放します)。本番では常に `nil` です。Release には存在しません。
+    var getStatsWillEvaluateForTesting: (@Sendable () -> Void)?
+  #endif
 
   // 排他区間の外で状態遷移ログを出す。
   //
@@ -1543,16 +1612,18 @@ public final class MediaChannel {
   ///
   /// - parameter handler: 統計情報取得後に呼ばれるクロージャー
   public func getStats(handler: @escaping (Result<Statistics, Error>) -> Void) {
-    guard state == .connected else {
-      let message = "MediaChannel is not connected (state: \(state))"
+    // state の読みは lock を取るため、判定とメッセージで同じ値を使うよう 1 回だけ読む。
+    let currentState = state
+    guard currentState == .connected else {
+      let message = "MediaChannel is not connected (state: \(currentState))"
       Logger.debug(type: .mediaChannel, message: message)
       handler(.failure(SoraError.peerChannelError(reason: message)))
       return
     }
 
     guard let peerConnection = peerChannel.nativeChannel else {
-      let message =
-        "RTCPeerConnection is unavailable (state: \(state), nativeChannel: nil)"
+      // 直前の guard を通過しているため state は必ず .connected であり、メッセージには出さない。
+      let message = "RTCPeerConnection is unavailable (nativeChannel: nil)"
       Logger.debug(type: .mediaChannel, message: message)
       handler(.failure(SoraError.peerChannelError(reason: message)))
       return
@@ -1570,12 +1641,27 @@ public final class MediaChannel {
     // state は MediaChannelStateStorage (NSLock) 経由で読み、nativeChannel の同一性判定は
     // PeerChannelTransportStorage (NSLock) の参照で行う。transportStorage を弱参照で持つことで、
     // 変更前の [weak self] と同じく解放済みのチャンネルへは 1 回だけ失敗を返して終端する。
-    let context = MediaChannelGetStatsContext(
-      handler: handler,
-      peerConnection: peerConnection,
-      stateStorage: stateStorage,
-      transportStorage: peerChannel.transportStorage)
+    #if DEBUG
+      let context = MediaChannelGetStatsContext(
+        handler: handler,
+        peerConnection: peerConnection,
+        stateStorage: stateStorage,
+        transportStorage: peerChannel.transportStorage,
+        willEvaluateForTesting: getStatsWillEvaluateForTesting)
+    #else
+      let context = MediaChannelGetStatsContext(
+        handler: handler,
+        peerConnection: peerConnection,
+        stateStorage: stateStorage,
+        transportStorage: peerChannel.transportStorage)
+    #endif
     peerConnection.statistics { [context] report in
+      #if DEBUG
+        // テスト用フックは他の判定より前に呼ぶ。テストが完了 block の評価時点の
+        // 状態を確定的に作れるようにするため、状態と nativeChannel の判定が確定する前に呼ぶ。
+        context.willEvaluateForTesting?()
+      #endif
+
       // PeerChannel (と MediaChannel) が解放済みである。変更前の [weak self] と同じ経路で、
       // 統計を返さず 1 回だけ失敗を返す。
       guard let transportStorage = context.transportStorage else {
@@ -1594,11 +1680,11 @@ public final class MediaChannel {
       }
 
       // 参照の取り出しは storage の lock 配下で行い、同一性判定 (`===`) は lock の外で行う。
+      // 直前の guard を通過しているため state は必ず .connected であり、メッセージには出さない。
       guard let currentPeerConnection = transportStorage.native,
         currentPeerConnection === context.peerConnection
       else {
-        let message =
-          "RTCPeerConnection is unavailable (state: \(state), nativeChannel changed)"
+        let message = "RTCPeerConnection is unavailable (nativeChannel changed)"
         Logger.debug(type: .mediaChannel, message: message)
         context.handler(.failure(SoraError.peerChannelError(reason: message)))
         return
