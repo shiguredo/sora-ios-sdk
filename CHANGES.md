@@ -107,6 +107,8 @@
   - `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` が持つイベントハンドラのプロパティ (`onDisconnect` などのクロージャ) の get / set を `NSLock` で排他し、`MediaChannel.handlers` の差し替えも lock 付きアクセサにする。利用するスレッドでハンドラを設定しながら配送が並行したときにデータ競合 (未定義動作) にならないようにする
   - 配送側は lock を解放してからハンドラを呼ぶため、ハンドラの中から別のハンドラを設定しても deadlock しない。公開 API のソース互換と配送セマンティクス (接続途中の設定が次の配送から反映される) は変わらない
   - @t-miya
+- [UPDATE] `MediaChannel.state` の保持と読み出しを単一の lock 付き storage へ移す
+  - @t-miya
 - [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
   - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
   - @t-miya
@@ -158,7 +160,9 @@
 - [ADD] 公開 API baseline が現在の `Sora` module と一致していることを CI で検証する
   - `make api-check-fresh` を追加し、公開 API を追加したまま baseline を再生成漏れ状態を検出する
   - @t-miya
-- [ADD] 参照保持 box が担う `createClientOfferSDP` の一時 `RTCPeerConnection` の `close()` の回帰テストを追加する
+- [ADD] 参照保持 box が担う `getStats` の判定、`createClientOfferSDP` の一時 `RTCPeerConnection` の `close()`、`MediaChannel.state` の回帰テストを追加する
+  - `getStats` の完了 block が、統計要求時と同じ `RTCPeerConnection` なら成功を 1 回返し、完了 block の内側で `nativeChannel` が差し替わった場合と接続状態が `.disconnected` になった場合は失敗を 1 回返すことを固定する
+  - `getStats` の入口の guard (未接続 / `nativeChannel` が nil) が失敗を 1 回返すことと、テスト用の seam で作った接続状態が `state` と `isAvailable` から同じ値として読めることも固定する
   - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
   - @t-miya
 - [ADD] Thread Sanitizer を有効にした concurrency runtime stress CI を追加する

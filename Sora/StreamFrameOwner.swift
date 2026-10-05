@@ -596,7 +596,7 @@ final class StreamFrameOwner: @unchecked Sendable {
 
   // MARK: - テスト用
 
-  /// owner queue へ投入済みの event の処理完了を待ちます。テスト専用の seam です。
+  /// owner queue へ投入済みの event の処理完了を待ちます。テスト用フックです。
   ///
   /// main queue への配送は待ちません (main queue の配送は `XCTestExpectation` で待ちます)。
   /// owner queue 自身の executor から呼ぶと自己デッドロックするため、テストの executor からのみ

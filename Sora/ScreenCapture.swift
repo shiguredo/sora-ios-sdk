@@ -758,7 +758,7 @@ final class ScreenCaptureController: @unchecked Sendable {
     }
   }
 
-  /// flight を取得してから `processOwnedFrame` を実行します。テスト専用の seam です。
+  /// flight を取得してから `processOwnedFrame` を実行します。テスト用フックです。
   ///
   /// 本番の送信キューは `enqueueOwnedFrame` が取得した flight を `processOwnedFrame` へ
   /// 引き継ぐため、このメソッドは呼びません。テストから送信経路を直接駆動するために internal とします。
@@ -776,7 +776,7 @@ final class ScreenCaptureController: @unchecked Sendable {
     return true
   }
 
-  /// 送信キューへ投入した frame の処理完了を待ちます。テスト専用の seam です。
+  /// 送信キューへ投入した frame の処理完了を待ちます。テスト用フックです。
   ///
   /// 送信キューは serial なので、`sync {}` は先行して enqueue された frame の処理と
   /// `processOwnedFrame` の `defer` signal の完了を待ちます。したがって permit の会計は

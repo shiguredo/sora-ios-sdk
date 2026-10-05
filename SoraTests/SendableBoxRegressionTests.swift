@@ -136,13 +136,68 @@ private final class ClientOfferCloseObserver: NSObject, RTCPeerConnectionDelegat
   }
 }
 
+/// `getStats` の handler が返した結果を、WebRTC のスレッドからテスト側へ排他して受け渡します。
+///
+/// `@unchecked Sendable` としているのは、可変状態 (結果と呼び出し回数) の読み書きをすべて
+/// `lock` で排他しており、非 Sendable な `Statistics` を handler の内側からテスト側へ渡すためだけに
+/// 保持するためです (handler は WebRTC のスレッドから呼ばれます)。
+private final class GetStatsObservation: @unchecked Sendable {
+  private let lock = NSLock()
+  private var result: Result<Statistics, any Error>?
+  private var callCount = 0
+
+  /// handler の結果と呼び出し回数を記録します。
+  func record(_ result: Result<Statistics, any Error>) {
+    lock.lock()
+    defer { lock.unlock() }
+    self.result = result
+    callCount += 1
+  }
+
+  var recordedResult: Result<Statistics, any Error>? {
+    lock.lock()
+    defer { lock.unlock() }
+    return result
+  }
+
+  var recordedCallCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return callCount
+  }
+}
+
+/// `getStatsWillEvaluateForTesting` (`@Sendable`) から非 Sendable な参照を操作するための箱です。
+///
+/// テスト用フックの closure は `@Sendable` のため、非 Sendable な `PeerChannel` /
+/// `RTCPeerConnection` / `MediaChannel` をそのまま capture できません。実行する操作だけを保持し、
+/// 保持し、テスト用フックの closure にはこの箱だけを capture させます。
+///
+/// `@unchecked Sendable` としているのは、操作が `PeerChannel.nativeChannel` の差し替え
+/// (`transportStorage` の `NSLock` に閉じた代入) と
+/// `MediaChannel.setConnectionStateForTesting(_:)` (`connectionLifecycleLock` に閉じた書き込み)
+/// だけで、箱自身は操作の実行以外に状態を読み書きしないためです。
+/// この 2 種類に閉じた操作だけを渡すことを使用契約とします (別種の操作を渡す場合は根拠を書き換えます)。
+private final class GetStatsHookAction: @unchecked Sendable {
+  private let action: () -> Void
+
+  init(_ action: @escaping () -> Void) {
+    self.action = action
+  }
+
+  /// テスト用フックから呼ばれる操作を実行します。
+  func perform() {
+    action()
+  }
+}
+
 /// 参照保持 box (`@unchecked Sendable`) が担う振る舞いを、実 `RTCPeerConnection` で固定する回帰テストです。
 ///
-/// この file は `createClientOfferSDP` が完了 block の末尾で一時 `RTCPeerConnection` を
-/// `close()` する経路を対象にします。box が保持する参照を同じ型のまま別のオブジェクトへ
-/// 差し替える変更と、`close()` の呼び出しを削る変更は型検査では検出できないため、
-/// 実際に `.closed` へ遷移することを観測して固定します。
-/// この file には、残る `getStats` 側の同一性判定のテストも追加する前提です。
+/// このファイルは `createClientOfferSDP` が完了 block の末尾で一時 `RTCPeerConnection` を
+/// `close()` する経路と、`getStats` の完了 block の判定の経路、`MediaChannel.state` の読み書きが
+/// `MediaChannelStateStorage` 経由であることを対象にします。
+/// box が保持する参照を同じ型のまま別のオブジェクトへ差し替える変更と、`close()` の呼び出しを
+/// 削る変更は型検査では検出できないため、実際の配送結果を観測して固定します。
 /// モックやスタブは使用しません。
 final class SendableBoxRegressionTests: XCTestCase {
   /// テストで利用する factory です。
@@ -155,6 +210,52 @@ final class SendableBoxRegressionTests: XCTestCase {
   override func tearDown() {
     peerConnectionFactory = nil
     super.tearDown()
+  }
+
+  /// テスト用の最小の接続設定を作ります。
+  private func makeConfiguration() throws -> Configuration {
+    let url = try XCTUnwrap(URL(string: "wss://example.com"), "テスト URL を生成できること")
+    return Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+  }
+
+  /// テスト用フックで作った接続状態が `state` と `isAvailable` から同じ値として
+  /// 読めることを確認する
+  ///
+  /// `state` は `MediaChannelStateStorage` を読む computed property、書き込みは `setState(_:)` を
+  /// 通るため、このテスト用フックで作った状態が両方の読み出しに反映されることを固定します。
+  /// `state` が stored property でなくなったことは公開 API baseline で、正本が `stateStorage`
+  /// だけであることは宣言で確認します (テストでは検出できません)。
+  /// `isAvailable` を観測するテストは現行の `SoraTests` に他にありません。
+  func testConnectionStateForTestingIsObservedThroughStateStorage() throws {
+    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+
+    XCTAssertEqual(mediaChannel.state, .disconnected, "初期状態は .disconnected であること")
+    XCTAssertFalse(mediaChannel.isAvailable, "初期状態は isAvailable が false であること")
+
+    mediaChannel.setConnectionStateForTesting(.connecting)
+    XCTAssertEqual(
+      mediaChannel.state, .connecting,
+      "テスト用フックで作った状態が state に反映されること")
+    XCTAssertFalse(mediaChannel.isAvailable, ".connecting では isAvailable が false であること")
+
+    mediaChannel.setConnectionStateForTesting(.connected)
+    XCTAssertEqual(mediaChannel.state, .connected, ".connected が state に反映されること")
+    XCTAssertTrue(
+      mediaChannel.isAvailable,
+      "state が .connected のとき isAvailable が true であること")
+
+    mediaChannel.setConnectionStateForTesting(.disconnecting)
+    XCTAssertEqual(mediaChannel.state, .disconnecting, ".disconnecting が state に反映されること")
+    XCTAssertFalse(mediaChannel.isAvailable, ".disconnecting では isAvailable が false であること")
+
+    mediaChannel.setConnectionStateForTesting(.disconnected)
+    XCTAssertEqual(
+      mediaChannel.state, .disconnected,
+      "後始末で .disconnected に戻せること")
+    XCTAssertFalse(mediaChannel.isAvailable, ".disconnected では isAvailable が false であること")
   }
 
   /// `createClientOfferSDP` が一時 `RTCPeerConnection` を `close()` することを確認する
@@ -205,5 +306,246 @@ final class SendableBoxRegressionTests: XCTestCase {
     XCTAssertEqual(
       tempPeer.connectionState, .closed,
       "一時 RTCPeerConnection が .closed へ遷移すること")
+  }
+
+  /// `getStats` が統計要求時と同じ `RTCPeerConnection` から統計を取得して成功を 1 回返すことを確認する
+  ///
+  /// `getStats` は `state == .connected` と `peerChannel.nativeChannel != nil` を前提にするため、
+  /// テスト用フックで状態を作り、実 `NativePeerChannelFactory` が生成した実
+  /// `RTCPeerConnection` を設定します。handler は WebRTC のスレッドから呼ばれるため、handler の
+  /// 内側では assertion を記録せず、値だけを排他してテスト側へ渡します。
+  func testGetStatsSucceedsWhenPeerConnectionIsUnchanged() throws {
+    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let peerChannel = mediaChannel.peerChannel
+    guard
+      let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
+        webRTCConfiguration: WebRTCConfigurationSnapshot(WebRTCConfiguration()),
+        delegate: peerChannel)
+    else {
+      XCTFail("RTCPeerConnection を生成できること")
+      return
+    }
+
+    // 後始末: テストが失敗しても接続状態と PC を戻します。
+    defer {
+      peerChannel.nativeChannel = nil
+      mediaChannel.setConnectionStateForTesting(.disconnected)
+      nativeChannel.close()
+    }
+
+    peerChannel.nativeChannel = nativeChannel
+    mediaChannel.setConnectionStateForTesting(.connected)
+
+    let statsExpectation = expectation(
+      description: "統計要求時と同じ RTCPeerConnection では handler が成功で 1 回呼ばれること")
+    let observation = GetStatsObservation()
+    mediaChannel.getStats { result in
+      // handler は WebRTC のスレッドから呼ばれるため、assertion はテスト側で行います。
+      observation.record(result)
+      statsExpectation.fulfill()
+    }
+    wait(for: [statsExpectation], timeout: 5)
+
+    XCTAssertEqual(
+      observation.recordedCallCount, 1,
+      "getStats の handler が 1 回だけ呼ばれること")
+    guard case .success = observation.recordedResult else {
+      XCTFail(
+        "統計要求時と同じ RTCPeerConnection では成功すること (result: \(String(describing: observation.recordedResult)))"
+      )
+      return
+    }
+  }
+
+  /// `getStats` の入口の 2 つの guard が、それぞれの理由で失敗を 1 回返すことを確認する
+  ///
+  /// この 2 経路は完了 block を経由せず同期で終端するため、`getStats` の完了 block の
+  /// テスト用フックを使わずに確定的に確認できます。
+  func testGetStatsFailsAtEntryGuards() throws {
+    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let peerChannel = mediaChannel.peerChannel
+
+    // 接続状態が .connected でない場合は、nativeChannel が nil でも state の guard で終端する。
+    let notConnectedExpectation = expectation(
+      description: "接続状態が .connected でない場合は handler が失敗で 1 回呼ばれること")
+    let notConnectedObservation = GetStatsObservation()
+    mediaChannel.getStats { result in
+      notConnectedObservation.record(result)
+      notConnectedExpectation.fulfill()
+    }
+    wait(for: [notConnectedExpectation], timeout: 5)
+
+    XCTAssertEqual(
+      notConnectedObservation.recordedCallCount, 1,
+      "接続状態が .connected でない場合も handler が 1 回だけ呼ばれること")
+    guard
+      case .failure(let notConnectedError) = notConnectedObservation.recordedResult,
+      let notConnectedSoraError = notConnectedError as? SoraError,
+      case .peerChannelError(let notConnectedReason) = notConnectedSoraError
+    else {
+      XCTFail(
+        "接続状態が .connected でない場合は失敗すること (result: \(String(describing: notConnectedObservation.recordedResult)))"
+      )
+      return
+    }
+    XCTAssertTrue(
+      notConnectedReason.contains("MediaChannel is not connected"),
+      "接続状態による失敗理由が state を示すこと (reason: \(notConnectedReason))")
+
+    // 接続状態が .connected でも nativeChannel が nil の場合は、nativeChannel の guard で終端する。
+    mediaChannel.setConnectionStateForTesting(.connected)
+    defer { mediaChannel.setConnectionStateForTesting(.disconnected) }
+
+    XCTAssertNil(peerChannel.nativeChannel, "nativeChannel が未設定であること")
+    let unavailableExpectation = expectation(
+      description: "nativeChannel が nil の場合は handler が失敗で 1 回呼ばれること")
+    let unavailableObservation = GetStatsObservation()
+    mediaChannel.getStats { result in
+      unavailableObservation.record(result)
+      unavailableExpectation.fulfill()
+    }
+    wait(for: [unavailableExpectation], timeout: 5)
+
+    XCTAssertEqual(
+      unavailableObservation.recordedCallCount, 1,
+      "nativeChannel が nil の場合も handler が 1 回だけ呼ばれること")
+    guard
+      case .failure(let unavailableError) = unavailableObservation.recordedResult,
+      let unavailableSoraError = unavailableError as? SoraError,
+      case .peerChannelError(let unavailableReason) = unavailableSoraError
+    else {
+      XCTFail(
+        "nativeChannel が nil の場合は失敗すること (result: \(String(describing: unavailableObservation.recordedResult)))"
+      )
+      return
+    }
+    XCTAssertTrue(
+      unavailableReason.contains("RTCPeerConnection is unavailable"),
+      "nativeChannel による失敗理由が nativeChannel を示すこと (reason: \(unavailableReason))")
+  }
+
+  /// `getStats` の完了 block の内側で `nativeChannel` が差し替わった場合に失敗を 1 回返すことを確認する
+  ///
+  /// 差し替えは完了 block の判定の先頭で呼ばれる `getStatsWillEvaluateForTesting` で行います。
+  /// 実時間の非同期な差し替えではなく、完了 block が評価する時点の状態を確定的に作ります。
+  /// 同一性判定 (`currentPeerConnection === context.peerConnection`) を削ると handler が成功を
+  /// 返すため、このテストが失敗します。
+  func testGetStatsFailsWhenPeerConnectionIsReplacedInCompletionBlock() throws {
+    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let peerChannel = mediaChannel.peerChannel
+    guard
+      let requestedChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
+        webRTCConfiguration: WebRTCConfigurationSnapshot(WebRTCConfiguration()),
+        delegate: peerChannel),
+      let replacementChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
+        webRTCConfiguration: WebRTCConfigurationSnapshot(WebRTCConfiguration()),
+        delegate: peerChannel)
+    else {
+      XCTFail("RTCPeerConnection を 2 つ生成できること")
+      return
+    }
+
+    // 統計を要求した時点の PC と、完了 block が評価する時点の PC を別にします。
+    let replacement = GetStatsHookAction { peerChannel.nativeChannel = replacementChannel }
+    // 後始末: 失敗してもテスト用フック・接続状態・PC を戻します。
+    defer {
+      mediaChannel.getStatsWillEvaluateForTesting = nil
+      peerChannel.nativeChannel = nil
+      mediaChannel.setConnectionStateForTesting(.disconnected)
+      requestedChannel.close()
+      replacementChannel.close()
+    }
+
+    peerChannel.nativeChannel = requestedChannel
+    mediaChannel.setConnectionStateForTesting(.connected)
+    mediaChannel.getStatsWillEvaluateForTesting = { replacement.perform() }
+
+    let statsExpectation = expectation(
+      description: "nativeChannel が差し替わった場合は handler が失敗で 1 回呼ばれること")
+    let observation = GetStatsObservation()
+    mediaChannel.getStats { result in
+      // handler は WebRTC のスレッドから呼ばれるため、assertion はテスト側で行います。
+      observation.record(result)
+      statsExpectation.fulfill()
+    }
+    wait(for: [statsExpectation], timeout: 5)
+
+    XCTAssertEqual(
+      observation.recordedCallCount, 1,
+      "getStats の handler が 1 回だけ呼ばれること")
+    guard case .failure(let error) = observation.recordedResult,
+      let soraError = error as? SoraError,
+      case .peerChannelError(let reason) = soraError
+    else {
+      XCTFail(
+        "同一性判定が不一致の場合は SoraError.peerChannelError で失敗すること (result: \(String(describing: observation.recordedResult)))"
+      )
+      return
+    }
+    XCTAssertTrue(
+      reason.contains("nativeChannel changed"),
+      "差し替え後の失敗理由が nativeChannel の変化を示すこと (reason: \(reason))")
+  }
+
+  /// `getStats` の完了 block の内側で接続状態が `.disconnected` になった場合に失敗を 1 回返すことを確認する
+  ///
+  /// 状態の変更は完了 block の判定の先頭で呼ばれる `getStatsWillEvaluateForTesting` で行います。
+  /// 完了 block が storage ではなく統計要求時の接続状態を読む変更を入れると、このテストは成功を
+  /// 観測して失敗します。
+  func testGetStatsFailsWhenConnectionStateChangesInCompletionBlock() throws {
+    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let peerChannel = mediaChannel.peerChannel
+    guard
+      let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
+        webRTCConfiguration: WebRTCConfigurationSnapshot(WebRTCConfiguration()),
+        delegate: peerChannel)
+    else {
+      XCTFail("RTCPeerConnection を生成できること")
+      return
+    }
+
+    // 統計を要求した後に切断された状態を、完了 block が評価する時点で作ります。
+    // テスト用フックの closure を `nil` に戻し忘れても `MediaChannel` を延命しないよう
+    // 弱参照で捕捉します。
+    let disconnect = GetStatsHookAction { [weak mediaChannel] in
+      mediaChannel?.setConnectionStateForTesting(.disconnected)
+    }
+    // 後始末: 失敗してもテスト用フック・接続状態・PC を戻します。
+    defer {
+      mediaChannel.getStatsWillEvaluateForTesting = nil
+      peerChannel.nativeChannel = nil
+      mediaChannel.setConnectionStateForTesting(.disconnected)
+      nativeChannel.close()
+    }
+
+    peerChannel.nativeChannel = nativeChannel
+    mediaChannel.setConnectionStateForTesting(.connected)
+    mediaChannel.getStatsWillEvaluateForTesting = { disconnect.perform() }
+
+    let statsExpectation = expectation(
+      description: "完了 block の評価時に接続状態が変わった場合は handler が失敗で 1 回呼ばれること")
+    let observation = GetStatsObservation()
+    mediaChannel.getStats { result in
+      // handler は WebRTC のスレッドから呼ばれるため、assertion はテスト側で行います。
+      observation.record(result)
+      statsExpectation.fulfill()
+    }
+    wait(for: [statsExpectation], timeout: 5)
+
+    XCTAssertEqual(
+      observation.recordedCallCount, 1,
+      "getStats の handler が 1 回だけ呼ばれること")
+    guard case .failure(let error) = observation.recordedResult,
+      let soraError = error as? SoraError,
+      case .peerChannelError(let reason) = soraError
+    else {
+      XCTFail(
+        "完了 block の評価時に接続状態が変わった場合は失敗すること (result: \(String(describing: observation.recordedResult)))"
+      )
+      return
+    }
+    XCTAssertTrue(
+      reason.contains("MediaChannel is not connected"),
+      "切断後の失敗理由が接続状態を示すこと (reason: \(reason))")
   }
 }
