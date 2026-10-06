@@ -69,8 +69,8 @@ private final class LockedValue<Value>: @unchecked Sendable {
 final class DataChannelStatsSendTests: XCTestCase {
   /// 実 PeerChannel を保持する
   ///
-  /// `dataChannels` に登録した `DataChannel` が delegate 経由で参照するため、テストの間は
-  /// 解放しないよう instance で保持する。
+  /// `PeerChannel` の排他単位に登録した `DataChannel` が delegate 経由で参照するため、
+  /// テストの間は解放しないよう instance で保持する。
   private var peerChannel: PeerChannel?
 
   override func tearDown() {
@@ -104,15 +104,17 @@ final class DataChannelStatsSendTests: XCTestCase {
     senderDataChannel.delegate = recorder
 
     // 統計要求を受信する側の DataChannel を実 PeerChannel へ登録する
+    // (`didOpen` と同じ登録経路を使う。登録は PeerChannel の排他単位の中で行われる)
     let peerChannel = try makePeerChannel(factory: factory)
     self.peerChannel = peerChannel
     peerChannel.nativeChannel = receiver
-    peerChannel.dataChannels["stats"] = DataChannel(
-      dataChannel: receiverDataChannel,
-      compress: false,
-      mediaChannel: nil,
-      peerChannel: peerChannel,
-      generation: peerChannel.dataChannelGeneration)
+    peerChannel.register(
+      dataChannel: DataChannel(
+        dataChannel: receiverDataChannel,
+        compress: false,
+        mediaChannel: nil,
+        peerChannel: peerChannel,
+        generation: peerChannel.dataChannelGeneration))
 
     defer {
       // 解放時の状態通知から統計送信経路の delegate が呼ばれないようにしてから閉じる

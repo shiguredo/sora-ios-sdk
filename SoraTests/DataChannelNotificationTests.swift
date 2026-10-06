@@ -142,12 +142,14 @@ final class DataChannelNotificationTests: XCTestCase {
     let nativeDataChannel = try makeTestDataChannel(peerConnection: peerConnection, label: "#spam")
     // generation を一致させないことで、close() 後に届く非同期の状態通知から
     // PeerChannel.disconnect が呼ばれないようにする (sendMessage は generation を参照しない)
-    peerChannel.dataChannels["#spam"] = DataChannel(
-      dataChannel: nativeDataChannel,
-      compress: false,
-      mediaChannel: mediaChannel,
-      peerChannel: peerChannel,
-      generation: peerChannel.dataChannelGeneration + 1)
+    // 登録は `didOpen` と同じ経路を使う (登録は PeerChannel の排他単位の中で行われる)
+    peerChannel.register(
+      dataChannel: DataChannel(
+        dataChannel: nativeDataChannel,
+        compress: false,
+        mediaChannel: mediaChannel,
+        peerChannel: peerChannel,
+        generation: peerChannel.dataChannelGeneration + 1))
 
     // 交渉前は connecting
     XCTAssertEqual(

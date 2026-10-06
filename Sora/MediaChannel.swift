@@ -1061,6 +1061,10 @@ public final class MediaChannel {
     // (withTaskCancellationHandler の onCancel は別スレッドから呼ばれるため、
     // ロックで保護して共有する)
     let cancelledRPCID = CancelledRPCIDStore()
+    // rpcChannel の参照は送信経路と同じ排他単位で読む。redirect による無効化 (nil 代入) と
+    // 並行しても参照の読み書きにデータ競合が生じない。参照の取り出しだけを排他し、
+    // pending の登録と送信は区間の外で行う (その終端は RPCChannel の barrier と invalidate が
+    // 保証する)。
     let rpcChannel = self.peerChannel.rpcChannel
     return try await withTaskCancellationHandler(
       operation: {
@@ -1760,37 +1764,59 @@ public final class MediaChannel {
 
   /// DataChannel を利用してメッセージを送信します
   public func sendMessage(label: String, data: Data) -> Error? {
-    guard peerChannel.switchedToDataChannel else {
-      // redirect 中は旧 DataChannel への送信を防ぐため false にしている。
-      // 利用者には「まだ指定した DataChannel に接続されていない」として通知する。
-      if peerChannel.isRedirecting {
-        Logger.debug(
-          type: .mediaChannel,
-          message: "sendMessage: rejected (redirecting): label => \(label)")
+    // 送信の可否判定 (`switchedToDataChannel` と登録済みの `DataChannel`) から送信
+    // (`dc.sendWithoutLogging(_:)`) までを 1 つの排他区間で行う。redirect による無効化は
+    // 同じ排他単位で行われるため、無効化が完了した後に開始した送信は旧 DataChannel へ届かない。
+    let messagingStorage = peerChannel.messagingStorage
+    // 送信を試みた DataChannel とその結果。判定で拒否した場合は nil。
+    var send: (dataChannel: DataChannel, result: DataChannelSendResult)?
+    var rejectedWithoutSwitching = false
+    let error: Error? = messagingStorage.withLock { () -> Error? in
+      guard messagingStorage.switchedToDataChannelLocked else {
+        // redirect 中は旧 DataChannel への送信を防ぐため false にしている。
+        // 利用者には「まだ指定した DataChannel に接続されていない」として通知する。
+        rejectedWithoutSwitching = true
+        return SoraError.messagingError(reason: "DataChannel is not open yet")
       }
-      return SoraError.messagingError(reason: "DataChannel is not open yet")
+
+      guard label.starts(with: "#") else {
+        return SoraError.messagingError(reason: "label should start with #")
+      }
+
+      guard let dc = messagingStorage.dataChannelLocked(label: label) else {
+        return SoraError.messagingError(reason: "no DataChannel found: label => \(label)")
+      }
+
+      let readyState = dc.readyState
+      guard readyState == .open else {
+        return SoraError.messagingError(
+          reason:
+            "readyState of the DataChannel is not open: label => \(label), readyState => \(WebRTCEnumDescription.dataChannelState(readyState))"
+        )
+      }
+
+      let sendResult = dc.sendWithoutLogging(data)
+      send = (dc, sendResult)
+
+      return sendResult == .sent
+        ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
     }
 
-    guard label.starts(with: "#") else {
-      return SoraError.messagingError(reason: "label should start with #")
+    // ログは排他区間の外で出す。区間の中で `Logger` を呼ぶと、利用者の出力 handler が
+    // 同じ排他単位を取る送信経路を再入したときにデッドロックする。
+    // (そのため送信ログは送信の後になる)
+    if let send {
+      send.dataChannel.logSendAttempt(data)
+      send.dataChannel.logCompressionFailureIfNeeded(send.result)
+    } else if rejectedWithoutSwitching, peerChannel.isRedirecting {
+      // redirect 中かどうかは排他区間の外で読むため、判定時点とは前後し得る
+      // (debug ログの条件のみで、戻り値と reason は変わらない)
+      Logger.debug(
+        type: .mediaChannel,
+        message: "sendMessage: rejected (redirecting): label => \(label)")
     }
 
-    guard let dc = peerChannel.dataChannels[label] else {
-      return SoraError.messagingError(reason: "no DataChannel found: label => \(label)")
-    }
-
-    let readyState = dc.readyState
-    guard readyState == .open else {
-      return SoraError.messagingError(
-        reason:
-          "readyState of the DataChannel is not open: label => \(label), readyState => \(WebRTCEnumDescription.dataChannelState(readyState))"
-      )
-    }
-
-    let result = dc.send(data)
-
-    return result
-      ? nil : SoraError.messagingError(reason: "failed to send message: label => \(label)")
+    return error
   }
 
   /// メッセージング用ラベル（offer の `data_channels` から抽出した `#` 始まりのラベル）が

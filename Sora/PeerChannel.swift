@@ -197,6 +197,125 @@ final class PeerChannelTransportStorage: @unchecked Sendable {
   }
 }
 
+/// `PeerChannel` の messaging 経路の状態 (登録済みの `DataChannel` の辞書 /
+/// `switchedToDataChannel` / `rpcChannel`) を単一の NSLock で保護する storage。
+///
+/// これら 3 つは変更前は lock 保護のない `var` であり、利用者の送信スレッドと、WebRTC /
+/// WebSocket の delegate スレッド、切断を開始したスレッドから読み書きされていた。
+///
+/// 読み書きを 1 つの排他へ移すことで、redirect による無効化の完了後に区間へ入る送信が
+/// 旧 DataChannel を参照しないことと、参照の読み書きにデータ競合が生じないことを保証する。
+/// 世代照合 (`dataChannelGeneration`) は非同期処理の完了時に旧接続の結果を破棄するための
+/// 補助であり、この排他単位の代わりにはならない。
+///
+/// `@unchecked Sendable` を認める根拠は、可変状態 (登録済みの `DataChannel` の辞書 /
+/// `switchedToDataChannel` / `rpcChannel`) の読み書きをすべてこの `lock` 配下でだけ行うことである。
+/// 保持する `DataChannel` / `RPCChannel` のオブジェクト状態の不変性は主張しない。参照の
+/// 取り出しと、取り出した参照に対する `sendWithoutLogging(_:)` / `invalidate(reason:)` /
+/// `handleMessage(_:)` の呼び出しを区間の中と外のどちらで行うかは、`withLock(_:)` の
+/// 説明に従う。
+///
+/// lock 順序は、この storage の `lock` を葉として一方向だけを許す。この `lock` を保持したまま
+/// 他の lock (`ConnectionStateOwner` の直列 queue / `connectHandlerLock` /
+/// `PeerChannelTransportStorage` / `MediaChannel` の `dataChannelOpenLock` と
+/// `connectionLifecycleLock` / `RPCChannel` の queue) を取らないこと。
+/// この `lock` から他へ出る辺が無いため、他の lock を保持した状態からこの `lock` を取る経路を
+/// 足しても循環しない。
+final class PeerChannelMessagingStorage: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedDataChannels: [String: DataChannel] = [:]
+  private var storedSwitchedToDataChannel = false
+  private var storedRPCChannel: RPCChannel?
+
+  /// この storage の可変状態を排他した区間で `body` を実行する。
+  ///
+  /// `body` は `lock` を保持したまま実行されるため、次を守ること。
+  /// - この storage の `withLock(_:)` を再取得しない (非再帰ロックのためデッドロックする)
+  /// - 利用者の handler / completion を呼ばない (`RPCChannel.invalidate(reason:)` は
+  ///   pending の completion を同期的に呼ぶため、`lock` の外で行う)
+  /// - `Logger` を呼ばない (利用者の出力 handler が送信経路を再入しても
+  ///   デッドロックしないよう、ログは区間の外で出す)
+  /// - 同じスレッドで `BasicDataChannelDelegate` の delegate メソッドを同期呼び出ししない
+  ///   (delegate メソッドはこの storage を読むため、再入すると上の 2 つと同じデッドロックになる)
+  /// - `DataChannel` の解放と libwebrtc の完了 block は区間の外へ出す
+  ///   (`PeerChannelTransportStorage` と同じく、`lock` 区間の中で外部コードを走らせない)
+  ///
+  /// 例外は送信経路である。`MediaChannel.sendMessage` は「照合から送信まで」を 1 区間で行う
+  /// ために、区間の中で `DataChannel.readyState` と `DataChannel.sendWithoutLogging(_:)` を
+  /// 呼ぶ。どちらも libwebrtc を同期呼び出しする (前者は network thread への `BlockingCall`、
+  /// 後者は proxy 経由の `PostTask` と完了待ち) ため、その間は signaling thread の delegate
+  /// 経路と他の送信者がこの `lock` を待つ。`compress` が true のときは区間の中で zlib 圧縮も
+  /// 行う。現行の libwebrtc (Package.swift が指定する m154.8037.1.2) は `DataChannel` の
+  /// delegate 通知を signaling thread へ post するため、この呼び出しが同じスレッドで delegate を
+  /// 再入することはない。この前提は SDK 外の libwebrtc の実装に依存するため、libwebrtc を
+  /// 更新するときは再確認し、送信元のスレッドで delegate が同期的に呼ばれる実装に変わった場合は、
+  /// delegate 側のログと参照読みが区間の中で走ることを踏まえてこの区間の持ち方を見直すこと。
+  func withLock<T>(_ body: () -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return body()
+  }
+
+  /// `switchedToDataChannel`。`lock` を保持したまま読む。書き込みは `PeerChannel` だけが行う。
+  fileprivate(set) var switchedToDataChannelLocked: Bool {
+    get { storedSwitchedToDataChannel }
+    set { storedSwitchedToDataChannel = newValue }
+  }
+
+  /// ラベルに対応する `DataChannel`。`lock` を保持したまま読む。
+  func dataChannelLocked(label: String) -> DataChannel? {
+    storedDataChannels[label]
+  }
+
+  /// `DataChannel` を登録する。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 同じラベルで登録済みだった `DataChannel`。呼び出し側は `lock` を解放してから
+  ///   解放すること (旧 DataChannel の解放に伴う libwebrtc の deinit を `lock` 区間の外で
+  ///   走らせるため)。
+  @discardableResult
+  fileprivate func setDataChannelLocked(_ dataChannel: DataChannel, label: String) -> DataChannel? {
+    let previous = storedDataChannels[label]
+    storedDataChannels[label] = dataChannel
+    return previous
+  }
+
+  /// 登録済みの `DataChannel` をすべて取り出して空にする。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 取り出した辞書。呼び出し側は `lock` を解放してから解放すること
+  ///   (旧 DataChannel の解放に伴う libwebrtc の deinit を `lock` 区間の外で走らせるため)。
+  fileprivate func takeAllDataChannelsLocked() -> [String: DataChannel] {
+    let removed = storedDataChannels
+    storedDataChannels.removeAll()
+    return removed
+  }
+
+  /// `rpcChannel` の参照。`lock` を保持したまま読む。
+  fileprivate var rpcChannelLocked: RPCChannel? {
+    storedRPCChannel
+  }
+
+  /// `rpcChannel` を設定する。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 設定前に保持していた `RPCChannel`。呼び出し側は `lock` を解放してから
+  ///   解放すること (旧参照の解放を `lock` 区間の外で行うため)。
+  @discardableResult
+  fileprivate func setRPCChannelLocked(_ rpcChannel: RPCChannel) -> RPCChannel? {
+    let previous = storedRPCChannel
+    storedRPCChannel = rpcChannel
+    return previous
+  }
+
+  /// `rpcChannel` を取り出して nil にする。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 取り出した参照。呼び出し側が保持するため `lock` 区間の中で解放されない。
+  @discardableResult
+  fileprivate func takeRPCChannelLocked() -> RPCChannel? {
+    let rpcChannel = storedRPCChannel
+    storedRPCChannel = nil
+    return rpcChannel
+  }
+}
+
 /// `PeerChannel` の完了 closure が `PeerChannel` のメソッドを呼ぶための、
 /// 用途限定の参照保持 box。
 ///
@@ -277,12 +396,100 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
   private(set) var iceCandidates: [ICECandidate] = []
 
-  var dataChannels: [String: DataChannel] = [:]
-  var switchedToDataChannel: Bool = false
+  /// 登録済みの `DataChannel` の辞書 / `switchedToDataChannel` / `rpcChannel` を保護する storage
+  ///
+  /// internal にしているのは、`MediaChannel.sendMessage` が「照合 (`switchedToDataChannel` と
+  /// 登録済みの `DataChannel`) から `sendWithoutLogging(_:)` まで」を 1 つの排他区間で行うために、
+  /// この storage の `withLock(_:)` を使うためである (`transportStorage` と同じ理由)。
+  let messagingStorage = PeerChannelMessagingStorage()
+
+  /// DataChannel 経路が有効か (`switched` 受信後に true、redirect 受理で false)
+  ///
+  /// 単独の読み書きは `messagingStorage` の 1 区間で行う。複数の参照をまとめて扱う経路
+  /// (redirect の無効化と `MediaChannel.sendMessage`) は `messagingStorage.withLock(_:)` を使い、
+  /// 判定と更新の間に他のスレッドの更新が入らないようにする。
+  var switchedToDataChannel: Bool {
+    get { messagingStorage.withLock { messagingStorage.switchedToDataChannelLocked } }
+    set { messagingStorage.withLock { messagingStorage.switchedToDataChannelLocked = newValue } }
+  }
+
+  /// 現在の `RPCChannel` の参照を返す。参照の読み出しだけを排他し、返した参照に対する
+  /// 呼び出しは呼び出し側が排他区間の外で行う。
+  var rpcChannel: RPCChannel? {
+    messagingStorage.withLock { messagingStorage.rpcChannelLocked }
+  }
+
   var signalingOfferMessageDataChannels: [[String: Any]] = []
-  var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
+
+  // MARK: - DataChannel 経路の排他
+
+  /// ラベルに対応する `DataChannel` の参照を返す。参照の読み出しだけを排他し、
+  /// 返した参照に対する呼び出しは呼び出し側が排他区間の外で行う。
+  func dataChannel(label: String) -> DataChannel? {
+    messagingStorage.withLock { messagingStorage.dataChannelLocked(label: label) }
+  }
+
+  /// `DataChannel` を登録する。`rpcChannel` を渡した場合は同じ排他区間で設定し、
+  /// 「登録済みだが RPC が未設定」の窓を作らない。
+  ///
+  /// `rpcChannel` を置き換えた場合、旧 `RPCChannel` の pending は終端せずに解放する (変更前と
+  /// 同じ挙動)。同じ `PeerChannel` で `rpc` ラベルが 2 回 `didOpen` される経路は、切断と
+  /// redirect が `rpcChannel` を nil にするため実際には到達しない。
+  ///
+  /// 呼び出し側は、登録の後に `onOpenDataChannel` を排他区間の外で通知すること。
+  func register(dataChannel: DataChannel, rpcChannel: RPCChannel? = nil) {
+    // libwebrtc の property 読み (`dataChannel.label`) は区間の外で行う
+    // (lock 区間の中で外部コードを走らせない)。
+    let label = dataChannel.label
+    var replacedDataChannel: DataChannel?
+    var replacedRPCChannel: RPCChannel?
+    messagingStorage.withLock {
+      replacedDataChannel = messagingStorage.setDataChannelLocked(dataChannel, label: label)
+      if let rpcChannel {
+        replacedRPCChannel = messagingStorage.setRPCChannelLocked(rpcChannel)
+      }
+    }
+    // 同じラベルで置き換えた旧 DataChannel と、置き換えた旧 RPCChannel の解放を lock 区間の
+    // 外で行う (旧参照の解放に伴う libwebrtc の deinit を区間の中で走らせない)。
+    withExtendedLifetime(replacedDataChannel) {}
+    withExtendedLifetime(replacedRPCChannel) {}
+  }
+
+  /// `rpcChannel` を取り出して nil にする。
+  ///
+  /// - Returns: 取り出した参照。`invalidate(reason:)` は pending の completion を同期的に
+  ///   呼ぶため、呼び出し側が排他区間の外で呼ぶこと。
+  @discardableResult
+  func takeRPCChannel() -> RPCChannel? {
+    messagingStorage.withLock { messagingStorage.takeRPCChannelLocked() }
+  }
+
+  /// redirect 受理時に旧接続の messaging 経路 (DataChannel への送信と RPC) を無効化する。
+  ///
+  /// `switchedToDataChannel` を false にし、旧 DataChannel の参照を解放して `rpcChannel` を
+  /// 取り出すところまでを 1 つの排他区間で行う。無効化と並行した `sendMessage` は、この区間の
+  /// 前後どちらかで排他されるため、無効化の完了後に開始した送信が旧 DataChannel へ届かない。
+  /// 本番の呼び出し元は `handleSignalingOverWebSocket` の `.redirect` ケース (WebSocket の
+  /// delegate スレッド) である。
+  ///
+  /// - Returns: 取り出した `RPCChannel`。`invalidate(reason:)` は pending の completion を
+  ///   同期的に呼ぶため、呼び出し側が排他区間の外で呼ぶこと。
+  @discardableResult
+  func invalidateMessagingAfterRedirect() -> RPCChannel? {
+    // 旧 DataChannel の辞書は、lock を解放してから解放する (libwebrtc の deinit を
+    // lock 区間の中で走らせないため)。そのため取り出した辞書は `withExtendedLifetime` まで
+    // 保持する。
+    var removedDataChannels: [String: DataChannel] = [:]
+    let rpcChannel = messagingStorage.withLock { () -> RPCChannel? in
+      messagingStorage.switchedToDataChannelLocked = false
+      removedDataChannels = messagingStorage.takeAllDataChannelsLocked()
+      return messagingStorage.takeRPCChannelLocked()
+    }
+    withExtendedLifetime(removedDataChannels) {}
+    return rpcChannel
+  }
 
   // MARK: - 接続状態フラグ
 
@@ -1651,16 +1858,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   private func createAndSendReAnswerOverDataChannel(forReOffer reOffer: String) {
     Logger.debug(type: .peerChannel, message: "create and send re-answer over DataChannel")
 
-    guard let dataChannel = dataChannels["signaling"] else {
-      Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
-      return
-    }
-
     // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
     // (リダイレクトで接続が切り替わった場合に、旧接続の re-answer が新接続に
     // 適用されたり、旧 signaling DataChannel への送信失敗でリダイレクトを中断したり
     // するのを防ぐ)
+    // 参照の取得より前に読む。参照を取得した直後に redirect が完了すると、新しい世代を
+    // 記録して無効化済み DataChannel へ送信する窓ができるため。
     let generation = dataChannelGeneration
+
+    // 参照の読み出しは排他単位で行い、参照に対する送信は区間の外で行う。
+    // (この関数は createAnswer の完了をまたぐため、区間を非同期境界まで保持できない)
+    guard let dataChannel = dataChannel(label: "signaling") else {
+      Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+      return
+    }
 
     createAnswer(
       isSender: false,
@@ -1842,20 +2053,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 新接続を誤切断するのを防ぐ。また、disconnectTimerScheduled が true のまま
       // 残留すると新接続のタイマー開始が抑止される)
       handleConnectionEvent(.redirectReceived)
-      // 旧 transport の論理的な無効化。redirect 受理済みのため、
-      // 以後 sendMessage / RPC / stats が旧 DataChannel / 旧 PeerConnection を参照しない。
-      // 送信経路と RPC は dataChannelGeneration と rpcChannel の nil で旧接続を判別する。
+      // 旧 transport の論理的な無効化。redirect 受理済みのため、以後 sendMessage / RPC が
+      // 旧 DataChannel / 旧 PeerConnection を参照しない。
+      // (受信時に参照を取得済みの stats の完了 block はこの無効化の対象外である)
+      // 送信経路の無効化 (switchedToDataChannel / 登録済みの DataChannel / rpcChannel) は 1 つの
+      // 排他区間で行い、無効化の完了後に区間へ入る sendMessage が旧 DataChannel を
+      // 参照しないようにする。
       Logger.debug(
         type: .peerChannel,
         message: "redirect: invalidating old transport (generation => \(dataChannelGeneration))")
-      switchedToDataChannel = false
-      // 旧 DataChannel の参照を解放し、旧 DataChannel への送信を防ぐ。
-      // (take-and-clear 相当。dataChannels は新しい offer 受信時に再構築される)
-      dataChannels.removeAll()
-      if let rpcChannel {
-        rpcChannel.invalidate(
+      let invalidatedRPCChannel = invalidateMessagingAfterRedirect()
+      // 利用者の completion を同期的に呼ぶため、invalidate は排他区間の外で行う。
+      if let invalidatedRPCChannel {
+        invalidatedRPCChannel.invalidate(
           reason: SoraError.rpcDataChannelClosed(reason: "redirect"))
-        self.rpcChannel = nil
         Logger.debug(type: .peerChannel, message: "redirect: invalidated rpcChannel")
       }
       // 旧 MediaStream を終端して解放する。
@@ -1949,6 +2160,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   /// DataChannel の RPC で受信したメッセージを処理する。
+  ///
+  /// `rpcChannel` の参照は排他単位で読み、参照に対する `handleMessage(_:)` は区間の外で呼ぶ。
+  /// (pending の終端が利用者の completion を同期的に呼ぶため、区間を保持したまま呼ばない)
   func handleRPCMessage(_ data: Data) {
     guard let rpcChannel else {
       Logger.warn(type: .peerChannel, message: "rpcChannel is unavailable")
@@ -1998,10 +2212,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         message: "error: \(error.localizedDescription)")
     }
 
-    if let rpcChannel {
-      rpcChannel.invalidate(
+    // rpcChannel の取り出しは 1 つの排他区間で行い、DataChannel の delegate スレッドが
+    // 並行して参照を読んでもデータ競合が生じないようにする。
+    // 取り出した参照の invalidate は、pending の completion を同期的に呼ぶため区間の外で行う。
+    if let invalidatedRPCChannel = takeRPCChannel() {
+      invalidatedRPCChannel.invalidate(
         reason: SoraError.rpcDataChannelClosed(reason: reason.description))
-      self.rpcChannel = nil
     }
 
     sendDisconnectMessageIfNeeded(reason: reason, error: error)
@@ -2168,7 +2384,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func sendMessageOverDataChannel(message: Signaling) {
-    guard let dataChannel = dataChannels["signaling"] else {
+    // 参照の読み出しは排他単位で行い、参照に対する送信は区間の外で行う。
+    // (この関数は切断経路から呼ばれ、利用者の handler を呼び得る区間へ入らないため)
+    guard let dataChannel = dataChannel(label: "signaling") else {
       Logger.debug(
         type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
       return
@@ -2460,12 +2678,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let dc = DataChannel(
       dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel,
       peerChannel: self, generation: dataChannelGeneration)
-    dataChannels[dataChannel.label] = dc
 
     // rpc ラベルは防御的通知より先に rpcChannel を設定する。
     // (onDataChannelOpened の発火時点で rpc 呼び出しが可能であることを保証するため)
+    // DataChannel の登録と rpcChannel の設定は同じ排他区間で行い、
+    // 「登録済みだが RPC が未設定」の窓を作らない。
+    let createdRPCChannel = label == "rpc" ? RPCChannel(dataChannel: dc) : nil
+    register(dataChannel: dc, rpcChannel: createdRPCChannel)
     if label == "rpc" {
-      rpcChannel = RPCChannel(dataChannel: dc)
+      // ログは排他区間の外で出す。
       Logger.debug(
         type: .peerChannel,
         message: "didOpen: created rpcChannel (generation => \(dataChannelGeneration))")
@@ -2473,7 +2694,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // libwebrtc の RTCDataChannelDelegate は登録時に現在の state を即時通知しないため、
     // 登録時点で既に OPEN の場合に通知が失われる。そのため防御的に通知する。
-    // dataChannels への登録後に通知することで、通知を受けた側が sendMessage を利用できる。
+    // DataChannel の登録後に通知することで、通知を受けた側が sendMessage を利用できる。
     // MediaChannel 側の openedDataChannelLabels で重複通知は防止される。
     if dataChannel.readyState == .open {
       internalHandlers.onOpenDataChannel?(dataChannel.label)
