@@ -167,7 +167,8 @@ private final class GetStatsObservation: @unchecked Sendable {
   }
 }
 
-/// `getStatsWillEvaluateForTesting` (`@Sendable`) から非 Sendable な参照を操作するための箱です。
+/// `getStatsWillEvaluateForTesting` / `getStatsSnapshotWillEvaluateForTesting` (`@Sendable`) から
+/// 非 Sendable な参照を操作するための箱です。
 ///
 /// テスト用フックの closure は `@Sendable` のため、非 Sendable な `PeerChannel` /
 /// `RTCPeerConnection` / `MediaChannel` をそのまま capture できません。実行する操作だけを保持し、
@@ -179,7 +180,8 @@ private final class GetStatsObservation: @unchecked Sendable {
 /// `MediaChannel.deinit` の本体をこの thread 上で走らせるため、lock に閉じない唯一の例外) の
 /// 3 種類で、箱自身は操作の実行以外に状態を読み書きしないためです。
 /// この 3 種類の操作だけを渡すことを使用契約とします (別種の操作を渡す場合は根拠を書き換えます)。
-private final class GetStatsHookAction: @unchecked Sendable {
+/// 同じテストターゲットの他のテストファイルからも使うため internal とします。
+final class GetStatsHookAction: @unchecked Sendable {
   private let action: () -> Void
 
   init(_ action: @escaping () -> Void) {
@@ -192,14 +194,16 @@ private final class GetStatsHookAction: @unchecked Sendable {
   }
 }
 
-/// `MediaChannel` の唯一の強参照を保持し、`getStats` の完了 block の内側で解放するための箱です。
+/// `MediaChannel` の唯一の強参照を保持し、`getStats` / `getStatsSnapshot` の完了 block の内側で
+/// 解放するための箱です。
 ///
 /// テスト側が `MediaChannel` を直接保持していると、完了 block の内側で最後の参照を解放できません。
 /// この箱だけが強参照を持ち、テスト用フックから ``release()`` を呼んで解放します。
 /// `@unchecked Sendable` としているのは、強参照の読み書きをすべて `lock` で排他しており、
 /// 非 Sendable な `MediaChannel` を解放するためだけに保持するためです (`release()` は
 /// WebRTC のスレッドから呼ばれます)。
-private final class MediaChannelOwner: @unchecked Sendable {
+/// 同じテストターゲットの他のテストファイルからも使うため internal とします。
+final class MediaChannelOwner: @unchecked Sendable {
   private let lock = NSLock()
   private var mediaChannel: MediaChannel?
 

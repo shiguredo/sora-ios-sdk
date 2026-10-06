@@ -18587,6 +18587,87 @@
           },
           {
             "kind": "Function",
+            "name": "getStatsSnapshot",
+            "printedName": "getStatsSnapshot(handler:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Swift.Result<Sora.StatisticsSnapshot, any Swift.Error>) -> Swift.Void",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "Void",
+                    "printedName": "Swift.Void",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Void",
+                        "printedName": "()"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Result",
+                    "printedName": "Swift.Result<Sora.StatisticsSnapshot, any Swift.Error>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "StatisticsSnapshot",
+                        "printedName": "Sora.StatisticsSnapshot",
+                        "usr": "s:4Sora18StatisticsSnapshotV"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Error",
+                        "printedName": "any Swift.Error",
+                        "usr": "s:s5ErrorP"
+                      }
+                    ],
+                    "usr": "s:s6ResultO"
+                  }
+                ]
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora12MediaChannelC16getStatsSnapshot7handleryys6ResultOyAA010StatisticsF0Vs5Error_pGc_tF",
+            "mangledName": "$s4Sora12MediaChannelC16getStatsSnapshot7handleryys6ResultOyAA010StatisticsF0Vs5Error_pGc_tF",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "Final"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "getStatsSnapshot",
+            "printedName": "getStatsSnapshot()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "StatisticsSnapshot",
+                "printedName": "Sora.StatisticsSnapshot",
+                "usr": "s:4Sora18StatisticsSnapshotV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora12MediaChannelC16getStatsSnapshotAA010StatisticsF0VyYaKF",
+            "mangledName": "$s4Sora12MediaChannelC16getStatsSnapshotAA010StatisticsF0VyYaKF",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "Final"
+            ],
+            "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
             "name": "sendMessage",
             "printedName": "sendMessage(label:data:)",
             "children": [
@@ -43468,6 +43549,436 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "StatisticsSnapshot",
+        "printedName": "StatisticsSnapshot",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "timestamp",
+            "printedName": "timestamp",
+            "children": [
+              {
+                "kind": "TypeNameAlias",
+                "name": "CFTimeInterval",
+                "printedName": "CoreFoundation.CFTimeInterval",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ]
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora18StatisticsSnapshotV9timestampSdvp",
+            "mangledName": "$s4Sora18StatisticsSnapshotV9timestampSdvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "CFTimeInterval",
+                    "printedName": "CoreFoundation.CFTimeInterval",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora18StatisticsSnapshotV9timestampSdvg",
+                "mangledName": "$s4Sora18StatisticsSnapshotV9timestampSdvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "entries",
+            "printedName": "entries",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[Sora.StatisticsEntrySnapshot]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "StatisticsEntrySnapshot",
+                    "printedName": "Sora.StatisticsEntrySnapshot",
+                    "usr": "s:4Sora23StatisticsEntrySnapshotV"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora18StatisticsSnapshotV7entriesSayAA0b5EntryC0VGvp",
+            "mangledName": "$s4Sora18StatisticsSnapshotV7entriesSayAA0b5EntryC0VGvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[Sora.StatisticsEntrySnapshot]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "StatisticsEntrySnapshot",
+                        "printedName": "Sora.StatisticsEntrySnapshot",
+                        "usr": "s:4Sora23StatisticsEntrySnapshotV"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora18StatisticsSnapshotV7entriesSayAA0b5EntryC0VGvg",
+                "mangledName": "$s4Sora18StatisticsSnapshotV7entriesSayAA0b5EntryC0VGvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora18StatisticsSnapshotV",
+        "mangledName": "$s4Sora18StatisticsSnapshotV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "StatisticsEntrySnapshot",
+        "printedName": "StatisticsEntrySnapshot",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "id",
+            "printedName": "id",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora23StatisticsEntrySnapshotV2idSSvp",
+            "mangledName": "$s4Sora23StatisticsEntrySnapshotV2idSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora23StatisticsEntrySnapshotV2idSSvg",
+                "mangledName": "$s4Sora23StatisticsEntrySnapshotV2idSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "type",
+            "printedName": "type",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora23StatisticsEntrySnapshotV4typeSSvp",
+            "mangledName": "$s4Sora23StatisticsEntrySnapshotV4typeSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora23StatisticsEntrySnapshotV4typeSSvg",
+                "mangledName": "$s4Sora23StatisticsEntrySnapshotV4typeSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "timestamp",
+            "printedName": "timestamp",
+            "children": [
+              {
+                "kind": "TypeNameAlias",
+                "name": "CFTimeInterval",
+                "printedName": "CoreFoundation.CFTimeInterval",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Double",
+                    "printedName": "Swift.Double",
+                    "usr": "s:Sd"
+                  }
+                ]
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora23StatisticsEntrySnapshotV9timestampSdvp",
+            "mangledName": "$s4Sora23StatisticsEntrySnapshotV9timestampSdvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNameAlias",
+                    "name": "CFTimeInterval",
+                    "printedName": "CoreFoundation.CFTimeInterval",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Double",
+                        "printedName": "Swift.Double",
+                        "usr": "s:Sd"
+                      }
+                    ]
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora23StatisticsEntrySnapshotV9timestampSdvg",
+                "mangledName": "$s4Sora23StatisticsEntrySnapshotV9timestampSdvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "values",
+            "printedName": "values",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.String : Sora.JSONValue]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "JSONValue",
+                    "printedName": "Sora.JSONValue",
+                    "usr": "s:4Sora9JSONValueO"
+                  }
+                ],
+                "usr": "s:SD"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora23StatisticsEntrySnapshotV6valuesSDySSAA9JSONValueOGvp",
+            "mangledName": "$s4Sora23StatisticsEntrySnapshotV6valuesSDySSAA9JSONValueOGvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.String : Sora.JSONValue]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "JSONValue",
+                        "printedName": "Sora.JSONValue",
+                        "usr": "s:4Sora9JSONValueO"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora23StatisticsEntrySnapshotV6valuesSDySSAA9JSONValueOGvg",
+                "mangledName": "$s4Sora23StatisticsEntrySnapshotV6valuesSDySSAA9JSONValueOGvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora23StatisticsEntrySnapshotV",
+        "mangledName": "$s4Sora23StatisticsEntrySnapshotV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },

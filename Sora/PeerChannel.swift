@@ -303,9 +303,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   /// `nativeChannel` / `streams` / `offerEncodings` を保護する storage
   ///
-  /// internal にしているのは、`MediaChannel.getStats` の完了 closure が `MediaChannel` を
-  /// 捕捉せずに現在の `nativeChannel` の同一性を判定するため、この storage の参照を
-  /// `MediaChannelGetStatsContext` へ渡す必要があるためである。
+  /// internal にしているのは、`MediaChannel.getStats(handler:)` / `getStatsSnapshot(handler:)` の完了 closure が
+  /// `MediaChannel` を捕捉せずに現在の `nativeChannel` の同一性を判定するため、この storage の
+  /// 参照を `MediaChannelGetStatsContext` / `MediaChannelGetStatsSnapshotContext` へ渡す必要が
+  /// あるためである。
   let transportStorage = PeerChannelTransportStorage()
 
   /// 接続状態のイベントを投げる
