@@ -171,10 +171,71 @@ final class DataChannelNotificationTests: XCTestCase {
       "reason が formatter の文字列になること")
   }
 
+  // label の検証で拒否される sendMessage(label:data:) が返す error reason の文字列を
+  // 実経路で確認する
+  //
+  // 固定できるのは switched の検証が label の検証より先であること、label の検証が
+  // DataChannel の有無と readyState の検証より先であること。OPEN でない DataChannel でも
+  // 順序まで含めて確認できる。
+  func testSendMessageReasonForInvalidAndUnknownLabels() throws {
+    let mediaChannel = try makeTestMediaChannel()
+    self.mediaChannel = mediaChannel
+
+    let peerChannel = mediaChannel.peerChannel
+    peerChannel.switchedToDataChannel = true
+
+    // RTCPeerConnectionFactory は MediaChannel が保持するものを利用する
+    let peerConnection = try makeTestPeerConnection(
+      factory: peerChannel.nativePeerChannelFactory)
+    let nativeDataChannel = try makeTestDataChannel(peerConnection: peerConnection, label: "#spam")
+    peerChannel.register(
+      dataChannel: DataChannel(
+        dataChannel: nativeDataChannel,
+        compress: false,
+        mediaChannel: mediaChannel,
+        peerChannel: peerChannel,
+        generation: peerChannel.dataChannelGeneration + 1))
+    defer {
+      // close() 後に届く非同期の状態通知から PeerChannel.disconnect が呼ばれないようにする
+      nativeDataChannel.delegate = nil
+    }
+
+    // `#` で始まらない label (空文字を含む) は label の検証で拒否される
+    for label in ["spam", ""] {
+      XCTAssertEqual(
+        try messagingErrorReason(mediaChannel: mediaChannel, label: label),
+        "label should start with #",
+        "label の検証で拒否されること: label => \(label)")
+    }
+
+    // `#` で始まる未登録の label (`#` のみを含む) は DataChannel が見つからない
+    for label in ["#egg", "#"] {
+      XCTAssertEqual(
+        try messagingErrorReason(mediaChannel: mediaChannel, label: label),
+        "no DataChannel found: label => \(label)",
+        "未登録の label が拒否されること: label => \(label)")
+    }
+
+    // 登録済みの label は readyState の検証まで進む (label の検証が先に行われることの対照)
+    XCTAssertEqual(
+      try messagingErrorReason(mediaChannel: mediaChannel, label: "#spam"),
+      "readyState of the DataChannel is not open: label => #spam, readyState => connecting",
+      "登録済みの label は label の検証を通過すること")
+
+    // switched が false の場合は label の検証より先に拒否される
+    peerChannel.switchedToDataChannel = false
+    XCTAssertEqual(
+      try messagingErrorReason(mediaChannel: mediaChannel, label: "spam"),
+      "DataChannel is not open yet",
+      "switched の検証が label の検証より先であること")
+  }
+
   // sendMessage(label:data:) が返す `SoraError.messagingError` の reason を取り出す
-  private func messagingErrorReason(mediaChannel: MediaChannel) throws -> String {
-    guard let error = mediaChannel.sendMessage(label: "#spam", data: Data([0x01])) else {
-      XCTFail("readyState が OPEN でない sendMessage はエラーを返すこと")
+  private func messagingErrorReason(
+    mediaChannel: MediaChannel, label: String = "#spam"
+  ) throws -> String {
+    guard let error = mediaChannel.sendMessage(label: label, data: Data([0x01])) else {
+      XCTFail("sendMessage が messagingError を返すこと")
       throw UnexpectedState()
     }
     guard case SoraError.messagingError(let reason) = error else {
