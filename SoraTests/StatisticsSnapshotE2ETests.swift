@@ -47,17 +47,23 @@ final class StatisticsSnapshotE2ETests: E2ETestBase {
 
   /// E2E 用の設定で接続し、接続できたチャンネルを返します。
   ///
-  /// 接続に失敗した場合はチャンネルを採用せず、残っているチャンネルを切断してから `nil` を
-  /// 返します。接続 callback は libwebrtc の delegate スレッドから呼ばれるため、`state` の
-  /// 更新は main queue へ束ねます。
+  /// 接続 callback は libwebrtc の delegate スレッドから呼ばれるため、`state` の更新は
+  /// main queue へ束ねます。接続に失敗した場合は `nil` を返し、残ったチャンネルの切断は
+  /// `E2ETestBase.tearDown()` に任せます (`disconnectAll(channels:)` は `wait` を使うため
+  /// async テストからは呼びません)。
+  ///
+  /// 待ち合わせに `wait(for:timeout:)` は使いません。async テストから同期ヘルパー経由で
+  /// 呼んだ `wait` は main queue を処理しないため、main queue へ束ねた callback が走らずに
+  /// タイムアウトします (`VideoHardMuteRollbackE2ETests` と同じく `fulfillment(of:timeout:)`
+  /// を使います)。
   /// - Returns: 接続できたチャンネル。接続に失敗した場合は `nil`
-  private func connectAndWait() throws -> MediaChannel? {
+  private func connectAndWait() async throws -> MediaChannel? {
     var config = try buildConfiguration()
     config.connectionTimeout = connectionTimeout
 
     let connectExpectation = expectation(description: "接続が完了すること")
     var connectedChannel: MediaChannel?
-    // wait の終了後に発火した callback で assertion を記録しないためのフラグ。
+    // 待ち合わせの終了後に発火した callback で assertion を記録しないためのフラグ。
     var waitFinished = false
     _ = sora?.connect(configuration: config) { mediaChannel, error in
       DispatchQueue.main.async {
@@ -71,13 +77,9 @@ final class StatisticsSnapshotE2ETests: E2ETestBase {
         connectExpectation.fulfill()
       }
     }
-    wait(for: [connectExpectation], timeout: connectWaitTimeout)
+    await fulfillment(of: [connectExpectation], timeout: connectWaitTimeout)
     waitFinished = true
 
-    guard let connectedChannel else {
-      disconnectAll(channels: sora?.mediaChannels ?? [])
-      return nil
-    }
     return connectedChannel
   }
 
@@ -90,11 +92,8 @@ final class StatisticsSnapshotE2ETests: E2ETestBase {
   /// 2 回の取得は別時刻の report になるため値の一致は比較しません (同一 report での値の比較は
   /// `StatisticsSnapshotTests` が行います)。
   func testGetStatsSnapshotReturnsReadableValues() async throws {
-    guard let channel = try connectAndWait() else {
+    guard let channel = try await connectAndWait() else {
       return
-    }
-    defer {
-      disconnectAndVerify(channel: channel)
     }
 
     let box = StatisticsChannelBox(channel)
@@ -123,6 +122,50 @@ final class StatisticsSnapshotE2ETests: E2ETestBase {
     // async 版
     let asyncSnapshot = try await box.getStatsSnapshot()
     assertReadableSnapshot(asyncSnapshot, api: "async 版")
+
+    await disconnectAndVerify(channel: channel)
+  }
+
+  /// チャンネルを切断し、`onDisconnect` が正常切断コードで呼ばれることを確認します。
+  ///
+  /// 基底クラスの `disconnectAndVerify(channel:timeout:)` は `wait(for:timeout:)` を使うため、
+  /// async テストから呼ぶと main queue が処理されずにタイムアウトします (接続と同じ理由)。
+  /// `VideoHardMuteRollbackE2ETests` と同じく `fulfillment(of:timeout:)` を使います。
+  /// - Parameters:
+  ///   - channel: 切断するチャンネル
+  ///   - timeout: 切断完了を待つ秒数
+  private func disconnectAndVerify(channel: MediaChannel, timeout: TimeInterval = 10) async {
+    guard channel.state != .disconnected else {
+      return
+    }
+    let disconnectExpectation = expectation(description: "切断が完了すること")
+    // onDisconnect のイベントは main queue に束ねて保持し、検証は待ち合わせの後に行います。
+    var disconnectEvent: SoraCloseEvent?
+    channel.handlers.onDisconnect = { event in
+      DispatchQueue.main.async {
+        disconnectEvent = event
+        disconnectExpectation.fulfill()
+      }
+    }
+    // シグナリング受信による切断完了が state の確認とハンドラ設定の間に入った場合は、
+    // onDisconnect が発火済みのため待ちません。
+    guard channel.state != .disconnected else {
+      _ = await fulfillment(of: [disconnectExpectation], timeout: 0)
+      return
+    }
+    if channel.state != .disconnecting {
+      channel.disconnect(error: nil)
+    }
+    await fulfillment(of: [disconnectExpectation], timeout: timeout)
+
+    guard let disconnectEvent else {
+      return
+    }
+    if case .ok(let code, _) = disconnectEvent {
+      XCTAssertEqual(code, 1000, "正常切断コードであること")
+    } else {
+      XCTFail("予期しない切断: \(disconnectEvent)")
+    }
   }
 
   /// snapshot が実接続の統計として読めることを確認します。
