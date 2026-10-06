@@ -1,7 +1,7 @@
 # Sendable な statistics snapshot API を追加する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-10-06
 - Branch: feature/add-sendable-statistics-api
 - Polished: 2026-10-06
 
@@ -81,3 +81,25 @@ WebRTC statistics を actor / Task 境界で安全に受け渡せる、immutable
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+immutable で deep Sendable な `StatisticsSnapshot` / `StatisticsEntrySnapshot` と、`getStatsSnapshot(handler:)` / `getStatsSnapshot()` を追加した。`getStats(handler:)` のシグネチャと挙動、`Statistics` / `StatisticsEntry` は変更していない。
+
+- `Sora/Statistics.swift`: `StatisticsSnapshot` は `timestamp` と `entries`、`StatisticsEntrySnapshot` は `id` / `type` / `timestamp` / `values: [String: JSONValue]` を持ち、どちらも `let` の stored property だけの値型にした (`Sendable` 準拠は checked で、`Equatable` は持たない)。`init(contentsOf report:)` / `init(contentsOf statistics:)` は `RTCStatisticsReport` / `RTCStatistics` から直接変換し、`Statistics` を経由しない。型 doc には `Statistics` と値の型が異なること、`jsonObject` 相当を持たないこと、値を組み立てる public な init を持たないことを記した
+- `Sora/Statistics.swift`: `StatisticsEntrySnapshot.jsonValues(from values:)` を internal で追加し、変換を `JSONValue.fromJSONSerializationValue(_:)` へ委譲した。`JSONSerialization.isValidJSONObject` の事前検証を通るため、`Date` や `-inf` の `NSNumber` を渡しても捕捉できない NSException でプロセスを終了させず、`SoraError.mediaChannelError(reason:)` として返す (`SoraError` に case は追加していない)。該当値を silent drop せず呼び出し全体を失敗させる
+- `Sora/MediaChannel.swift`: `getStatsSnapshot(handler:)` を追加した。完了 block は `MediaChannel` を捕捉せず、`MediaChannelGetStatsSnapshotContext` 経由で `MediaChannelStateStorage` (終端フラグと接続状態) と `PeerChannelTransportStorage` (`nativeChannel` の同一性) を読む。判定の順序・ログ・失敗理由は `getStats(handler:)` と共通の private ヘルパー (`validatedPeerConnectionForStatistics()` / `statisticsCompletionFailure(stateStorage:transportStorage:peerConnection:)`) に集約し、両 API で同じ挙動にした (変更前の `getStats` と同一であることを 1 行ずつ突き合わせて確認済み)
+- `Sora/MediaChannel.swift`: `getStatsSnapshot()` を `withTaskCancellationHandler` と、終端を 1 回だけ確定する箱 (`MediaChannelGetStatsSnapshotTerminalBox`) で実装した。`onCancel` は箱へ終端済みを記録して `CancellationError` で 1 回だけ resume する。libwebrtc に統計取得をキャンセルする API が無いため、キャンセル済みでも `RTCPeerConnection.statistics` は開始し、後から届いた結果は箱が捨てる (開始の有無で終端の挙動を分けない)。完了 block が先に終端した後にキャンセルが来た場合は continuation を持ち出せないため何も起きない
+- `Sora/MediaChannel.swift`: `getStats(handler:)` と `getStatsSnapshot(handler:)` の doc に handler の実行スレッド (完了 block から呼ばれる経路は libwebrtc 側のスレッド、入口の前段判定で失敗する経路は呼び出し元のスレッドから同期) と Swift 6 言語モードでの書き方を追記した。async 版の doc には、呼び出し中 `MediaChannel` を保持するため `deinit` による切断が完了かキャンセルまで遅延すること、`await` を終わらせる手段がタスクキャンセルだけであること (timeout は無い)、解放開始による失敗は callback 版だけが返すことを記した。`#if DEBUG` のテスト用フックは既存を流用せず `getStatsSnapshotWillEvaluateForTesting` を追加した (既存フックの位置・doc・挙動は変えていない)
+- `SoraTests/StatisticsSnapshotTests.swift` (新規): 値の変換 (number / string / bool / null / sequence / map / `UInt64.max` / 空辞書 / `id`・`type`・`timestamp` と同名の値)、変換できない値で `SoraError.mediaChannelError` になること (`Date` / `-inf` / `NaN` / 入れ子 / 非 `NSString` キー)、実 `RTCPeerConnection` が返した同一の report を `Statistics` と `StatisticsSnapshot` の両方へ変換して件数と値を `JSONValue` として比較すること (数値を `Double` へ落とさず、entry を落とす退行を件数で検出する)、入口の前段判定と `nativeChannel` 差し替えの同一性判定、解放開始後・接続状態遷移後・キャンセルの終端を固定した。モックやスタブは使っていない
+- `SoraTests/StatisticsSnapshotE2ETests.swift` (新規): 実 Sora サーバーへ接続し、callback 版と async 版の両方で snapshot を取得して値が読めること (`entries` が空でないこと、統計値が 1 つ以上読めること) を確認する。環境変数未設定時は `E2ETestBase` の契約で skip する
+- `SoraTests/SendableConformanceTests.swift`: `requireSendable` と actor / Task 境界への受け渡しに加え、同じ snapshot を複数の Task から actor へ渡せることを確認する assert を追加した。`SoraTests/SendableBoxRegressionTests.swift` の共有ヘルパー (`GetStatsHookAction` / `MediaChannelOwner`) は doc に共有理由を明記して internal にした
+- `TestConsumers/Swift6Consumer/`: `ConsumerCore` の `fetchStatisticsSnapshot` に callback 版 / async 版の compile scenario を追加し、`README.md` の closure 表・`@Sendable` の説明・担当表を更新、`make api-baseline` で `ApiBaseline/iphoneos26.5.json` を再生成した (追加 511 行 / 削除 0)
+- `skills/sora-ios-sdk/SKILL.md`: `Sendable` 一覧へ 2 型を追加し、統計の節 (取得例と `JSONValue` の読み方、async 版の保持と timeout 不在)、非同期 API の一覧、`## Swift 6 と並行性` の「現状の制約」、`@preconcurrency import Sora` の説明から statistics を外し、クイックリファレンスを更新した
+- `CHANGES.md`: `## develop` の `[ADD]` に追加した
+
+検証 (Xcode 26.6 / `iphoneos26.5`、コミット `7b08265c` と同じ作業ツリーで取得):
+
+- `SoraTests` 全体: 492 件実行 / 37 skip / 失敗 0。新規 `StatisticsSnapshotTests` は 11 件すべて成功、新規 E2E は環境変数未設定のため skip
+- `make build` / `make fmt-lint` / `make lint` (0 violations) / `make api-check-fresh` / `make consumer-build` (ConsumerCore / ConsumerUI / ConsumerLegacy / ConsumerSwift5) / `make consumer-check-negative` が成功した
+- `make api-check-fresh` の成功は、公開 API の追加が committed baseline に反映されていることの確認になる (`make api-check` では公開 API の追加を検出できない)
+
+残った区間: 新規 E2E はローカルでは skip され、実サーバーでの `entries` 非空と値の読み出しは CI の E2E job で初めて実行される。`StatisticsSnapshot(contentsOf:)` の entry 単位の drop と、変換に失敗した場合の完了 block の経路は、`RTCStatisticsReport` / `RTCStatistics` がテストから生成できない (`init NS_UNAVAILABLE`) ため到達できず、値の変換は internal な `jsonValues(from:)` へ直接与えて固定している。async 版は呼び出し中 `MediaChannel` を保持するため、`MediaChannel` の解放開始による失敗 (`MediaChannel is unavailable`) は callback 版だけが返し、async 版では `MediaChannelStateStorage.isTerminated` が真にならない。完了 block が届かない場合に `await` を終わらせる手段はタスクキャンセルだけである (timeout は持たない)。`MediaChannel` の参照を `@MainActor` 隔離の文脈から境界へ渡す際の `sending` 診断の出方はビルド構成に依存し、SDK のテストターゲットでは実際に診断が出たため `StatisticsChannelBox` を置いた (consumer package の gate では再現しなかった)。
