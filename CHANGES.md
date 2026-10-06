@@ -90,12 +90,14 @@
   - @t-miya
 - [UPDATE] `Sora.connect` の設定エラー通知経路の closure capture を解消する
   - @t-miya
-- [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告 14 件を解消する
+- [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告を解消する
+  - 非 `@Sendable` な closure (`handler` / `completionHandler`)
+  - WebRTC / AVFoundation の型 (`RTCSessionDescription` / `RTCMediaConstraints` / `RTCPeerConnection` / `AVCaptureDevice.Format`)
   - @t-miya
 - [UPDATE] `PeerChannel` の接続ライフサイクルの排他を接続状態の所有者へ統合する
   - @t-miya
 - [UPDATE] `Sora` target の SDK 内部インスタンスを捕捉する `#SendableClosureCaptures` 警告 10 件を解消する
-  - 通常の接続経路で利用者の挙動は変わらないが、 `MediaChannel` の解放中に `getStats` の完了 closure が走る場合に限り、解放済みチャンネルの統計が成功として返る可能性がある
+  - `self` (`PeerChannel` / `MediaChannel`) の 8 件と、 `ConnectionTask` / `DataChannel` の 2 件を解消する
   - @t-miya
 - [UPDATE] `Utilities.Stopwatch` の `Timer` closure が `self` を捕捉する `#SendableClosureCaptures` 警告を解消する
   - @t-miya
@@ -162,6 +164,7 @@
   - @t-miya
 - [ADD] 参照保持 box が担う `getStats` の判定、`createClientOfferSDP` の一時 `RTCPeerConnection` の `close()`、`MediaChannel.state` の回帰テストを追加する
   - `getStats` の完了 block が、統計要求時と同じ `RTCPeerConnection` なら成功を 1 回返し、完了 block の内側で `nativeChannel` が差し替わった場合と接続状態が `.disconnected` になった場合は失敗を 1 回返すことを固定する
+  - `MediaChannel` の解放開始後に完了 block が走った場合も、解放前に接続状態が変わっていても `MediaChannel is unavailable` の失敗を 1 回返すことを固定する
   - `getStats` の入口の guard (未接続 / `nativeChannel` が nil) が失敗を 1 回返すことと、テスト用の seam で作った接続状態が `state` と `isAvailable` から同じ値として読めることも固定する
   - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
   - @t-miya
