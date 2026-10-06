@@ -301,13 +301,16 @@ private final class MediaChannelConnectionTaskBox: @unchecked Sendable {
 /// `lock` だけで書きます (`connectionLifecycleLock` は取りません)。`connectionLifecycleLock` を
 /// 取らないため、この経路を足しても lock 順序の辺は増えません。
 ///
-/// 読み出しは `getStats` の完了 closure と `MediaChannel.state` の getter から行います。
-/// `MediaChannel.state` は `connectionLifecycleLock` を保持していない箇所 (`Sora/ScreenCapture.swift`
-/// が自身の lock を保持したまま読む箇所を含む) からも読むため、この storage の `lock` は
-/// 保持したまま他の lock を取らない葉 lock とし、どの経路から入れ子で取っても循環しません。
+/// 読み出しは `getStats` の完了 closure (`state` と `isTerminated`) と `MediaChannel.state` の
+/// getter から行います。`MediaChannel.state` は `connectionLifecycleLock` を保持していない箇所
+/// (`Sora/ScreenCapture.swift` が自身の lock を保持したまま読む箇所を含む) からも読むため、
+/// この storage の `lock` は保持したまま他の lock を取らない葉 lock とし、
+/// どの経路から入れ子で取っても循環しません。
 ///
 /// `@unchecked Sendable` を認める根拠は、可変状態 (`storedState` / `terminated`) の読み書きを
 /// すべてこの `lock` 配下で行うことです。可変状態として保持する値はどちらも値型です。
+/// `lock` 自身は `NSLock` (参照型) ですが、`let` で不変に保持し、排他はその内部状態が担うため
+/// この storage が `Sendable` を主張する妨げにはなりません。
 /// `getStats` の完了 closure へは `MediaChannelGetStatsContext` が
 /// 強参照で渡し、この storage 自身の生存はその box の生存にも従います。
 /// 終端フラグを別の storage へ分けると、解放の検出機構が 2 つになるため分けません。
@@ -399,10 +402,11 @@ private final class MediaChannelStateStorage: @unchecked Sendable {
 /// `transportStorage` を弱参照で保持するのは、変更前の `[weak self]` と同じく
 /// `MediaChannel` (と `PeerChannel`) が解放済みなら `MediaChannel is unavailable` を返して
 /// 1 回で終端するためです。`PeerChannel` は `MediaChannel` が生成して所有し、`MediaChannel` への
-/// 参照は弱参照だけを持ちますが、`MediaChannel.streams` や `ConnectionTimer` も `PeerChannel` を
-/// 強参照するため、この弱参照が nil になるのは `MediaChannel` が解放され、かつ他に `PeerChannel` を
-/// 保持する相手がいない場合だけです (この binding だけが判定を決める経路は現時点ではありませんが、
-/// 将来 `_peerChannel` を手放す経路を足したときのフォールバックとして残します)。
+/// 参照は弱参照だけを持ちますが、`MediaChannel.streams` が返す `MediaStream` も `PeerChannel` を
+/// 強参照するため、この弱参照が nil になるのは `MediaChannel` が解放され、かつ利用者が
+/// その `MediaStream` を保持していない場合だけです (この binding だけが判定を決める経路は
+/// 現時点ではありませんが、将来 `_peerChannel` を手放す経路を足したときのフォールバックとして
+/// 残します)。
 /// 強参照にすると、完了 block が `PeerChannelTransportStorage` を介して
 /// `RTCPeerConnection` の参照を解放後も保持し、統計 callback の完了まで
 /// `RTCPeerConnection` の解放が遅れます。
@@ -1661,6 +1665,7 @@ public final class MediaChannel {
 
   /// libwebrtc の統計情報を取得します。
   /// 非同期取得中に切断された場合でも安全になるよう、コールバック内で
+  /// チャンネルの解放が始まっていないこと (`MediaChannelStateStorage` の終端フラグ)、
   /// チャンネルの生存確認、state == .connected の再確認、peerChannel.nativeChannel が
   /// 同一インスタンスかどうか、をチェックしています。
   ///
