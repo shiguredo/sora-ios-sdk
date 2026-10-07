@@ -170,6 +170,10 @@ final class SendableConformanceTests: XCTestCase {
     requireSendable(PutSignalingNotifyMetadataParams<SendableProbeMetadata>.self)
     requireSendable(PutSignalingNotifyMetadataItemParams<String>.self)
     requireSendable(SendableRPCResponse<RequestSimulcastRidResult>.self)
+
+    // 統計の snapshot (`getStatsSnapshot(handler:)` / `getStatsSnapshot()` が返す値型)
+    requireSendable(StatisticsSnapshot.self)
+    requireSendable(StatisticsEntrySnapshot.self)
   }
 
   /// 対象の型の値が actor 境界と Task の境界を越えて受け渡せることを確認する。
@@ -289,6 +293,28 @@ final class SendableConformanceTests: XCTestCase {
           channelId: "sora", receiverConnectionId: "receiver", rid: .r0,
           senderConnectionId: nil)),
       message: "SendableRPCResponse が actor 境界を越えられない")
+
+    let entry = StatisticsEntrySnapshot(
+      id: "outbound-rtp", type: "outbound-rtp", timestamp: 1,
+      values: ["bytesSent": .decimal(Decimal(1)), "kind": .string("video")])
+    await assertCrossesBoundaries(
+      entry, message: "StatisticsEntrySnapshot が actor 境界を越えられない")
+    let snapshot = StatisticsSnapshot(timestamp: 1, entries: [entry])
+    await assertCrossesBoundaries(
+      snapshot, message: "StatisticsSnapshot が actor 境界を越えられない")
+
+    // 同じ snapshot を複数の Task から同時に actor へ渡せること (「複数 Task と actor 間」の確認)。
+    let probe = SendableBoundaryProbe<StatisticsSnapshot>()
+    let tasks = (0..<2).map { _ in
+      Task { () -> StatisticsSnapshot? in
+        await probe.store(snapshot)
+        return await probe.load()
+      }
+    }
+    for task in tasks {
+      let loaded = await task.value
+      XCTAssertNotNil(loaded, "StatisticsSnapshot を複数の Task から actor へ渡せない")
+    }
   }
 
   /// internal なカメラ状態型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。

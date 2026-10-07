@@ -90,6 +90,7 @@ consumer package が受け渡しを検証する公開 closure は、次の手順
 | `CameraVideoCapturer.stop` / `restart` / `change` / `flip` の完了 handler | `Sources/ConsumerCore/CallbackCompatibility.swift` |
 | `CameraVideoCapturer.start` の完了 handler | 対象外。実機の `AVCaptureDevice.Format` が必要で、compile だけの consumer package では作れない |
 | `MediaChannel.getStats(handler:)` | `Sources/ConsumerCore/MediaChannelRPC.swift` |
+| `MediaChannel.getStatsSnapshot(handler:)` | `Sources/ConsumerCore/MediaChannelRPC.swift` |
 | `Sora.connect(configuration:webRTCConfiguration:handler:)` | `Sources/ConsumerCore/ConnectSignaling.swift` |
 | `Sora.configureAudioSession(block:)` | `Sources/ConsumerCore/CallbackCompatibility.swift` |
 | `Optional.unwrap(ifNone:)` / `Array.remove(_:where:)` (Sora が追加している標準型の extension) | `Sources/ConsumerCore/CallbackCompatibility.swift` |
@@ -99,8 +100,9 @@ handler 型の closure と `Sora.connect` と `Optional.unwrap(ifNone:)` / `Arra
 非 Sendable な値を capture した closure を渡すため、closure 型に `@Sendable` が付いた場合は
 compile で検出できる。`Logger.onOutputHandler` / `ScreenCaptureSettings` /
 `CameraVideoCapturer` の完了 handler / `MediaChannel.getStats(handler:)` /
-`Sora.configureAudioSession(block:)` は外側の値を capture しないため、`@Sendable` が付いても
-compile は通る。これらは closure の型と引数が存在することを検証する。
+`MediaChannel.getStatsSnapshot(handler:)` / `Sora.configureAudioSession(block:)` は外側の値を
+capture しないため、`@Sendable` が付いても compile は通る。これらは closure の型と引数が
+存在することを検証する。
 
 ## 公開 API baseline
 
@@ -120,7 +122,7 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | `Sources/ConsumerCore/ConnectSignaling.swift` | 接続設定の組み立て、接続、`ConnectionTask` | `Sora.connect` の handler 型を変更する作業が更新する |
 | `Sources/ConsumerCore/HandlerCompatibility.swift` | 非推奨でない handler の closure 型 (非 Sendable な値の capture で @Sendable 化を検出する)、`VideoRenderer` の非隔離実装、`import WebRTC` で WebRTC product を参照できること | 公開 handler の closure 型を変更する作業が更新する |
 | `Sources/ConsumerCore/CallbackCompatibility.swift` | handler 型に属さない公開 closure の受け渡し | 公開 closure を追加・変更する作業が更新する |
-| `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型と非 Sendable な型パラメータを含む)、Sendable な RPC (利用者定義の `SendableRPCMethodProtocol` 準拠型、新旧両方の protocol へ準拠した型での戻り値の型の維持)、統計取得、RPC のサーバーエラー詳細 (`JSONValue` の case 分岐) の読み取り、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加・変更する作業が、新しい RPC の scenario を追加・更新する |
+| `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型と非 Sendable な型パラメータを含む)、Sendable な RPC (利用者定義の `SendableRPCMethodProtocol` 準拠型、新旧両方の protocol へ準拠した型での戻り値の型の維持)、統計取得 (`getStats` と、actor / Task 境界へ渡せる `getStatsSnapshot`)、RPC のサーバーエラー詳細 (`JSONValue` の case 分岐) の読み取り、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加・変更する作業が、新しい RPC の scenario を追加・更新する。統計取得 API を追加・変更する作業が、統計の scenario を追加・更新する |
 | `Sources/ConsumerUI/VideoViewScenario.swift` | 既定隔離が MainActor であること | `VideoRenderer` の隔離を見直す作業が更新する |
 | `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること (CI は期待する非推奨 API 名の一覧で検査する) | 非推奨 API を削除する作業が、対象の参照と `consumer-test.yml` の期待する非推奨 API 名の一覧を同時に更新する |
 | `Sources/ConsumerSwift5/Swift5Compatibility.swift` | Swift 5 言語モードの consumer が SDK を利用できること (CI は compile 行の `-swift-version` で検査する) | 公開 API を Swift 5 言語モードから呼べなくする作業が更新する |

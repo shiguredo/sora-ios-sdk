@@ -35,6 +35,10 @@
   - 経過時間の計測だけが目的の場合は、`ContinuousClock` / `SuspendingClock` の `now` の差分 (`Duration`) へ移行する
   - 用途によって移行先が異なるため、SDK 固有の代替 timer は提供しない。単一の万能な代替があるわけではないため、用途に合う仕組みを選ぶ
   - @t-miya
+- [ADD] Sendable な statistics snapshot API を追加する
+  - immutable で Sendable な公開値型 `StatisticsSnapshot` / `StatisticsEntrySnapshot` と、`MediaChannel.getStatsSnapshot(handler:)` / `MediaChannel.getStatsSnapshot() async throws -> StatisticsSnapshot` を追加する
+  - 統計値を `JSONValue` で保持するため、結果を actor / Task 境界へそのまま渡せる。`Statistics` (mutable class) と `getStats(handler:)` のシグネチャと挙動は変わらない
+  - @t-miya
 - [ADD] JSON の値を表す公開型 `JSONValue` を追加する
   - @t-miya
 - [ADD] Sendable な RPC API を追加する

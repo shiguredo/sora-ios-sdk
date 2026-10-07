@@ -5,6 +5,8 @@
 //   - RPC のサーバーエラーが運ぶ `data` を公開 JSONValue の case 分岐で読めること
 //   - 戻り値 Error? の API (sendMessage / setAudioSoftMute) を nonisolated な文脈から呼べること
 //   - getStats(handler:) に非 Sendable な closure を渡せること
+//   - getStatsSnapshot(handler:) に非 Sendable な closure を渡せること
+//   - getStatsSnapshot() の戻り値 (StatisticsSnapshot) を actor / Task 境界へ渡せること
 //   - SendableRPCMethodProtocol 準拠型で sendableRPC を呼べること
 //   - sendableRPC の params / result と SendableRPCResponse を @Sendable closure へ渡せること
 //   - 新旧両方の protocol へ準拠した同じ型で、既存 rpc の戻り値が RPCResponse<M.Result>? の
@@ -209,6 +211,34 @@ func fetchStatistics(_ mediaChannel: MediaChannel) {
       _ = error
     }
   }
+}
+
+/// 統計情報を snapshot として取得する。戻り値は immutable で deep Sendable なため、
+/// actor / Task 境界を越えて受け渡せる。
+func fetchStatisticsSnapshot(_ mediaChannel: MediaChannel) async throws {
+  // callback 版: handler は非 Sendable な closure 型のため、nonisolated な文脈からそのまま渡せる。
+  mediaChannel.getStatsSnapshot { result in
+    switch result {
+    case .success(let snapshot):
+      _ = snapshot.timestamp
+      for entry in snapshot.entries {
+        _ = entry.id
+        _ = entry.type
+        _ = entry.values
+      }
+    case .failure(let error):
+      _ = error
+    }
+  }
+
+  // async 版: snapshot は `Sendable` のため `@Sendable` closure へ渡せる。
+  let snapshot = try await mediaChannel.getStatsSnapshot()
+  let values: [String: JSONValue] = snapshot.entries.first?.values ?? [:]
+  let closure: @Sendable () -> Void = {
+    _ = snapshot
+    _ = values
+  }
+  _ = closure
 }
 
 /// DataChannel でメッセージを送る。失敗時は Error が返る。

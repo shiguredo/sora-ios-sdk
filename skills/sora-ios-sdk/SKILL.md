@@ -547,6 +547,32 @@ mediaChannel.getStats { result in
 }
 ```
 
+actor / Task 境界へ統計を渡す場合は `getStatsSnapshot(handler:)` / `getStatsSnapshot()` を使う。
+`getStatsSnapshot(handler:)` が handler へ渡す値と `getStatsSnapshot()` が返す値は immutable で
+deep Sendable な `StatisticsSnapshot` で、値は `[String: JSONValue]` として保持される
+(`Statistics` は mutable class のため、そのまま境界を越えて渡せない)。
+
+```swift
+let snapshot = try await mediaChannel.getStatsSnapshot()
+for entry in snapshot.entries {
+  print(entry.type, entry.id, entry.values)
+}
+
+// 数値は `JSONValue.decimal` として入る (Double 由来の小数は `JSONSerialization` を経由するため、
+// `NSDecimalNumber` 経由の値と表記が変わることがある)。`NSNumber` のキャストは使えない。
+let outbound = snapshot.entries.first { $0.type == "outbound-rtp" }
+if case .decimal(let bytesSent)? = outbound?.values["bytesSent"] {
+  print("bytesSent: \(bytesSent)")
+}
+```
+
+`getStatsSnapshot()` を呼び出している間は `MediaChannel` が保持される。そのため `deinit` による
+切断は完了まで遅延し、`await` を終わらせる手段はタスクのキャンセルだけになる (`rpc` のような
+timeout はない)。snapshot API では、`MediaChannel` の解放開始後に成功を返さない保証
+(`MediaChannel is unavailable`) を `getStatsSnapshot(handler:)` が返す (async 版は呼び出し中
+`MediaChannel` を保持するためこの失敗を返さない。legacy の `getStats(handler:)` も同じ失敗を
+返す)。
+
 ## 切断イベント
 
 `MediaChannelHandlers.onDisconnect` で `SoraCloseEvent` を受け取る。
@@ -581,6 +607,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
   - 映像表示: `VideoViewConnectionMode`
   - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
   - RPC と JSON: `RPCErrorDetail` / `JSONValue` / `SendableRPCResponse` / `RequestSimulcastRidParams` / `RequestSpotlightRidParams` / `ResetSpotlightRidParams` / `RequestSimulcastRidResult` / `RequestSpotlightRidResult` / `ResetSpotlightRidResult` / `PutSignalingNotifyMetadataParams` (`Metadata` が `Sendable` の場合) / `PutSignalingNotifyMetadataItemParams` (`Value` が `Sendable` の場合)
+  - 統計: `StatisticsSnapshot` / `StatisticsEntrySnapshot`
   - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
 - `@unchecked Sendable`: `Sora`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
@@ -621,7 +648,7 @@ _ = Sora.shared.connect(configuration: config) { @Sendable [weak self] mediaChan
 }
 ```
 
-`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、SDK が Sendable な event / statistics API を提供するまでの間、サンプル集とクイックスタートでも使われている。将来 SDK 側の対応が進んだら不要になる。
+`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、SDK が Sendable な event API を提供するまでの間、サンプル集とクイックスタートでも使われている。将来 SDK 側の対応が進んだら不要になる。
 
 `MediaChannelHandlers` のコールバックも同じ考え方で扱う。
 
@@ -646,7 +673,7 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 
 ### 非同期 API
 
-`async` / `await` に対応するのは `MediaChannel.rpc` / `sendableRPC` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。
+`async` / `await` に対応するのは `MediaChannel.rpc` / `sendableRPC` / `getStatsSnapshot` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。
 
 ### スレッド安全でない共有状態
 
@@ -658,7 +685,7 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 
 ### 現状の制約
 
-- Sendable な event / statistics API はまだ提供されていない。`MediaChannel` / `MediaStream` を境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要
+- Sendable な event API はまだ提供されていない。`MediaChannel` / `MediaStream` を境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要。統計の値は `getStatsSnapshot(handler:)` / `getStatsSnapshot()` が Sendable な `StatisticsSnapshot` を返すため actor 境界へ渡せるが、`MediaChannel` の参照は非 Sendable のままで、`@MainActor` 隔離の文脈から `getStatsSnapshot()` を呼ぶ場合や `MediaChannel` の参照を `@Sendable` closure / `Task` へ渡す場合は `nonisolated(unsafe)` か nonisolated な Sendable な箱が必要 (同期 API の `getStats(handler:)` / `getStatsSnapshot(handler:)` の呼び出しはそのまま可能)
 - サンプル集とクイックスタートは Swift 6 言語モードだが、`@preconcurrency import Sora` と `nonisolated(unsafe)` の暫定対応を含む。Swift 6 の模範例ではなく、暫定対応を含む参考実装として扱う
 
 ## 非推奨 API
@@ -694,5 +721,6 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 | RPC | `try await MediaChannel.rpc(method:params:)` |
 | Sendable な RPC | `try await MediaChannel.sendableRPC(method:params:)` |
 | 統計取得 | `MediaChannel.getStats(handler:)` |
+| Sendable な統計取得 | `try await MediaChannel.getStatsSnapshot()` |
 | 受信音量 | `MediaStream.remoteAudioVolume` |
 | 受信 PCM | `MediaStream.addAudioTrackSink(_:)` |
