@@ -1,7 +1,7 @@
 # executor 契約を持つ Sendable event API を追加する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-10-07
 - Branch: feature/add-sendable-event-api
 - Polished: 2026-10-07
 - Updated: 2026-10-07
@@ -141,3 +141,52 @@ payload には `MediaChannel`、`MediaStream`、`RTCAudioSession`、Signaling ob
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+### 実装
+
+- `Sora/SoraEvent.swift` (新規) に公開型を追加した。イベント値 `SoraEvent` (`Sendable`)、種別 `SoraEventKind` (`RawRepresentable` な struct)、エラー snapshot `SoraEventError`、音声入出力ルートの `SoraAudioRouteEvent` / `SoraAudioRouteSnapshot` / `SoraAudioPortSnapshot` で、payload から `MediaChannel` / `MediaStream` / raw WebRTC object を排除した。種別を enum の case 列挙にしないため、後続 issue が種別を追加しても利用者の既存コードは compile でき続ける (`switch` に `default` が必要であることは API doc と `SKILL.md` に記載)。
+- `Sora/SoraEventPublisher.swift` (新規、internal) に購読者の管理を追加した。購読者ごとに continuation を保持して独立した `AsyncStream` を返し、`publish` は lock 内で通し番号を採番して購読者を取り出したあと lock を解放して `yield` する。`finish` も lock を解放してから continuation を終端し、購読の解除は `onTermination` から `removeSubscription` を呼ぶ (`[weak self]` のため storage を延命しない)。
+- `Sora/Sora.swift` に `Sora.subscribeEvents(bufferingPolicy:)` を、`Sora/MediaChannel.swift` に `MediaChannel.subscribeEvents(bufferingPolicy:)` を追加した。既定は `.bufferingNewest(SoraEvent.defaultBufferSize)` (256 件) で、buffer の件数と drop 方針は購読者ごとに指定できる。
+- 配送点は既存 handler の呼び出しの直後に追加した。`Sora` 側は `mediaChannelAdded` / `mediaChannelRemoved` / `audioRouteChanged` と接続の `connected` / `connectFailed` / `disconnected`、`MediaChannel` 側は `connected` / `connectFailed` / `streamAdded` / `streamRemoved` / `videoEnabledChanged` / `audioEnabledChanged` / `signalingReceivedJSON` / `dataChannelOpened` / `dataChannelAvailable` / `disconnected` で、`DataChannel` のメッセージ受信と `MediaStream` の有効フラグ確定も含む。すべて owner の排他区間外で呼び、`connected` / `connectFailed` は接続の完了と同じ配送点とした。
+- `Sora` 側の接続イベントには `connectionId` と `transportEpoch` を載せ、redirect で世代が進んだことをイベントから識別できるようにした。`transportEpoch` は `PeerChannel.dataChannelGeneration` の lock 付き snapshot を読む。
+- 既存 handler API の型、配送 executor、配送順序、発火回数は変更していない。既存 callback の呼び出しの後ろにイベント配送を追加しただけで、配送のたびに bag を読む既存セマンティクスも維持している。
+
+### 契約の明文化
+
+- 購読 API の doc に、配送 executor (イベントの発生元により異なり、購読者のコードは購読している `Task` の executor 上で動く)、配送順序 (同時に配送されたイベントは `sequence` の順序と一致しない場合がある)、payload lifetime (値として確定し配送後も保持できる)、buffer と drop、購読解除の 4 経路 (`Task` の cancel / `AsyncStream` の解放 / 接続の終了 / `Sora` インスタンスの解放)、購読者ごとの独立性、購読開始前のイベントは届かないこと、購読 loop から同期 API を呼べることを記載した。
+- 5 つの handler bag (`SoraHandlers` / `MediaChannelHandlers` / `WebSocketChannelHandlers` / `MediaStreamHandlers` / `CameraVideoCapturerHandlers`) の doc を「呼び出し元のスレッドは保証されない」「配送のたびにプロパティを読むため接続途中の設定が次の配送から反映される」「Swift 6 言語モードで `@MainActor` の文脈から設定する場合の書き方」の 3 段落で揃え、payload に合わせて非 `Sendable` な型を書き分けた (`CameraVideoCapturerHandlers.onCapture` は返した `VideoFrame` の所有権が SDK へ移るため、frame を `Task` へ運ばず返却前に処理を終えることを明記)。
+- `skills/sora-ios-sdk/SKILL.md` に「イベントの購読」節、legacy handler とイベントの対応表、`Sora.connect(configuration:webRTCConfiguration:handler:)` の引数 handler の executor 契約を追加し、`### Sendable 準拠` の一覧・「現状の制約」・`@preconcurrency import Sora` の説明を event API の追加に合わせて更新した。
+- `CHANGES.md` の `## develop` に `[ADD]` を追記した (executor と配送セマンティクスを変更していないため `[CHANGE]` は無し)。
+
+### 追加した test
+
+- `SoraTests/SoraEventTests.swift` (新規): 複数の購読者が同じイベントをそれぞれ受け取ること、購読者がいない間も通し番号が進むこと、buffer の drop と `sequence` による欠落検出、購読者ごとの buffer 方針の独立、`Task` の cancel と `AsyncStream` の解放で購読者数が減ること、`.disconnected` の配送後に終端すること、payload と接続 ID / 世代、`Sora` 側の配送点 (`add` / `remove`) とインスタンス単位のイベント、`MediaChannel` の解放で終端すること、設定エラー経路の `connectFailed`、購読 loop からの同期 API 呼び出し、redirect による世代更新、`SoraEventKind` の拡張性、`DataChannel` のメッセージ配送点を検証する。buffer の drop は `publishEvent` を連続して呼んで再現し、redirect は実サーバーから起こせないため signaling の受信ハンドラーへ直接渡して検証した。モックやスタブは使用していない。
+- `SoraTests/SoraEventE2ETests.swift` (新規): 実 Sora 接続で、接続ライフサイクル・シグナリング・切断と購読の終端を legacy handler と対応付けて検証する test と、2 接続の stream / DataChannel イベントが混線しないことを検証する test を追加した。購読は接続の開始前 (`SoraHandlers.onAddMediaChannel`) に開始し、`connected` や DataChannel の open を取り逃さないようにしている。
+- `SoraTests/MediaStreamEnabledOperationTests.swift`: 有効フラグの確定がイベントとして配送され、同値の再代入では配送されないことを検証する test を追加した。
+- `SoraTests/SendableConformanceTests.swift`: 追加した公開型 6 種の `Sendable` 準拠表明と、actor 境界を越える assertion を追加した。
+- `TestConsumers/Swift6Consumer/Sources/ConsumerCore/SoraEventScenario.swift` (新規): nonisolated な文脈、`@MainActor`、nonisolated な actor からの購読と `Task` 境界への受け渡しの compile scenario を追加した。`AsyncStream` を返して closure を取らない API のため `NegativeChecks` の負例は追加せず、その理由を `README.md` の公開 closure の表に記載した。
+
+### 公開 API baseline の再生成
+
+公開型 6 種と `subscribeEvents(bufferingPolicy:)` の追加に伴い `make api-baseline` で `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` を再生成した。追加のみ (+2641 / -0) で、internal な `SoraEventPublisher` とテスト用アクセサは baseline に現れない。`make api-check-fresh` が成功することを確認した。
+
+### 検証結果
+
+検証環境は sandbox のため `~/Library/Caches/org.swift.swiftpm` などへの書き込みが拒否される。`CFFIXED_USER_HOME="$PWD/build/home" HOME="$PWD/build/home"` を付けて実行した。
+
+- `make build` (`-warnings-as-errors`): `** BUILD SUCCEEDED **`
+- `make fmt-lint`: 成功。`make lint` は検証環境の sandbox が `sandbox-exec` を拒否するため実行できない。`swiftlint` の実体を直接実行して `Found 0 violations, 0 serious in 71 files`
+- `make consumer-build SCHEME=ConsumerCore` / `ConsumerUI` / `ConsumerLegacy` / `ConsumerSwift5`: すべて `** BUILD SUCCEEDED **`
+- `make consumer-check-negative`: 4 件が期待どおり compile に失敗
+- `make api-check-fresh`: `The committed API baseline matches the current Sora module.`
+- `xcodebuild test` (iPhone 17 Pro / iOS 26.5): **521 件 / skip 39 / 失敗 0 / exit 0** (`build/0110-polish-r6-tests.log`)。E2E 2 件は `SORA_SIGNALING_URL` 未設定のためローカルでは skip される
+- GitHub Actions の `E2E Test` (run 95、`0e62ddf5`): `e2e` job の `Run E2E Tests` が成功し、実サーバー接続で E2E 2 件 (接続ライフサイクルと legacy handler の対応、2 接続の stream / DataChannel の非混線) が成功した。`tsan` job も `Run Thread Sanitizer Tests` と `Check Thread Sanitizer Report` が成功し、TSan レポートは 0 件だった (https://github.com/shiguredo/sora-ios-sdk/actions/runs/37608166419)
+- pre-commit フック (`prek`) は全項目 Passed で、`swift format` / SwiftLint による修正は発生しなかった
+
+### 残っている事項
+
+- `.streamRemoved` は libwebrtc の `didRemove stream` からのみ配送され、SDK 自身の解放経路では配送されない。配送の実測ができていないため配送点の test は追加していない
+- `.audioRouteChanged` の結線は private な adapter 型を経由するため、test のための公開追加を行っていない
+- 購読 loop から `sendMessage` / `disconnect` を呼ぶ test は追加していない (配送が owner の排他区間外であることが deadlock しない根拠)
+- `MediaChannel.publishEvent` が読む `PeerChannel.connectionId` は従来どおり lock 非保護であり、本 issue では変更していない (`tsan` job では検出されていない。別 issue 候補)
+- 利用者向けドキュメント (`sora-ios-sdk-doc` の `callback.rst`) への追記は別リポジトリで行った
