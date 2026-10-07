@@ -226,6 +226,69 @@ final class PeerChannelRedirectInvalidationTests: XCTestCase {
       "旧 DataChannel への送信が拒否されること: \(reason)")
   }
 
+  /// redirect 受理時に登録済みの DataChannel と `rpcChannel` の参照が解放されることを確認する
+  ///
+  /// 旧 DataChannel の参照が `dataChannels` に残っていると、`switchedToDataChannel` を
+  /// false にするだけでは、参照を読む経路 (デリゲートや送信経路) が旧 DataChannel を
+  /// 取得し得る。redirect の実経路 (`handleSignalingOverWebSocket` の `.redirect` ケース) で
+  /// 辞書が空になり `rpcChannel` も取り出されることを、`PeerChannel` の内部状態の
+  /// 読み出しで固定する。
+  func testRedirectReleasesRegisteredDataChannels() throws {
+    let config = makeConfiguration()
+    let mediaChannel = try MediaChannel(configuration: config)
+    let peerChannel = mediaChannel.peerChannel
+
+    // 実 RTCPeerConnection から DataChannel を作り、登録済みの状態を再現する
+    let webRTCConfiguration = WebRTCConfigurationSnapshot(WebRTCConfiguration())
+    guard
+      let peerConnection = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
+        webRTCConfiguration: webRTCConfiguration,
+        delegate: nil)
+    else {
+      XCTFail("DataChannel 生成用の RTCPeerConnection を生成できること")
+      return
+    }
+    peerChannel.nativeChannel = peerConnection
+    defer {
+      peerChannel.nativeChannel = nil
+      peerConnection.close()
+    }
+    let nativeDataChannel = try XCTUnwrap(
+      peerConnection.dataChannel(
+        forLabel: "#spam", configuration: RTCDataChannelConfiguration()),
+      "DataChannel を生成できること")
+    // generation を一致させないことで、redirect の clear で解放されるまでの間に届く
+    // 非同期の状態通知から PeerChannel.disconnect が呼ばれないようにする
+    // (登録は generation を参照しない)
+    let dataChannel = DataChannel(
+      dataChannel: nativeDataChannel,
+      compress: false,
+      mediaChannel: mediaChannel,
+      peerChannel: peerChannel,
+      generation: peerChannel.dataChannelGeneration + 1)
+    peerChannel.register(
+      dataChannel: dataChannel,
+      rpcChannel: RPCChannel(dataChannel: dataChannel))
+    peerChannel.switchedToDataChannel = true
+    XCTAssertNotNil(
+      peerChannel.dataChannel(label: "#spam"), "登録済みの DataChannel が取得できること")
+    XCTAssertNotNil(peerChannel.rpcChannel, "登録済みの rpcChannel が取得できること")
+
+    // redirect シグナリングを実経路で受信する
+    peerChannel.signalingChannel.internalHandlers.onReceive?(
+      .redirect(SignalingRedirect(location: "wss://example2.com/signaling")))
+
+    XCTAssertNil(
+      peerChannel.dataChannel(label: "#spam"),
+      "redirect 受理後に旧 DataChannel の参照が解放されること")
+    XCTAssertNil(
+      peerChannel.rpcChannel,
+      "redirect 受理後に旧 rpcChannel の参照が解放されること")
+    XCTAssertFalse(
+      peerChannel.switchedToDataChannel,
+      "redirect 受理後に switchedToDataChannel が false になること")
+  }
+
   /// `.reOffer` 受信時の re-answer 生成経路で、`createAnswer` の handler が 1 回だけ呼ばれ、
   /// `onUpdate` に空でない SDP が渡り、answer の `m=` 行の種別の並びが offer と一致することを確認する
   ///

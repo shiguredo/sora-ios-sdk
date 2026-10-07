@@ -200,7 +200,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
       return
     }
 
-    guard let dc = peerChannel.dataChannels[dataChannel.label] else {
+    // 登録済みの `DataChannel` の参照は `PeerChannel` の排他単位で読む。
+    // (redirect の無効化と並行しても辞書の読み書きにデータ競合が生じない)
+    guard let dc = peerChannel.dataChannel(label: dataChannel.label) else {
       Logger.error(
         type: .dataChannel,
         message: "DataChannel for label: \(dataChannel.label) is unavailable")
@@ -286,6 +288,18 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
   }
 }
 
+/// `DataChannel.sendWithoutLogging(_:)` の結果です。
+///
+/// 送信ログは排他区間の外で出す必要があるため、送信の失敗を種類ごとに呼び出し側へ返します。
+enum DataChannelSendResult {
+  /// 送信できた
+  case sent
+  /// 圧縮に失敗した
+  case compressionFailed
+  /// 送信要求が失敗した
+  case sendFailed
+}
+
 class DataChannel {
   let native: RTCDataChannel
   let delegate: BasicDataChannelDelegate
@@ -317,17 +331,54 @@ class DataChannel {
     native.readyState
   }
 
+  /// メッセージを送信します。送信ログも本メソッドで出します。
+  ///
+  /// 排他区間の中で送信する経路 (`MediaChannel.sendMessage`) は
+  /// `sendWithoutLogging(_:)` を使い、ログは区間の外で出します。
   func send(_ data: Data) -> Bool {
+    logSendAttempt(data)
+    let result = sendWithoutLogging(data)
+    logCompressionFailureIfNeeded(result)
+    return result == .sent
+  }
+
+  /// メッセージを送信します。ログは出しません。
+  ///
+  /// `MediaChannel.sendMessage` が排他区間の中で呼びます。区間の中で `Logger` を呼ぶと、
+  /// 利用者の出力 handler が同じ排他単位を取る送信経路を再入したときにデッドロックするため、
+  /// ログは呼び出し側が区間の外で `logSendAttempt(_:)` と `logCompressionFailureIfNeeded(_:)` を
+  /// 呼んで出します。
+  func sendWithoutLogging(_ data: Data) -> DataChannelSendResult {
+    guard let data = compress ? ZLibUtil.zip(data) : data else {
+      return .compressionFailed
+    }
+    return native.sendData(RTCDataBuffer(data: data, isBinary: true)) ? .sent : .sendFailed
+  }
+
+  /// 送信を試みたデータのログを出します。排他区間の外から呼びます。
+  ///
+  /// `send(_:)` は送信の前に、`MediaChannel.sendMessage` は区間の外で送信の後に呼びます。
+  /// メッセージの関数名は変更前の `DataChannel.send(_:)` の `#function` と同じ `"send(_:)"` を
+  /// 使います。呼び出し経路 (`send(_:)` / `MediaChannel.sendMessage`) によって文言を
+  /// 変えないためです。
+  func logSendAttempt(_ data: Data) {
     Logger.debug(
       type: .dataChannel,
       message:
-        "\(String(describing: type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())"
+        "\(String(describing: type(of: self))):send(_:): label => \(label), data => \(data.base64EncodedString())"
     )
+  }
 
-    guard let data = compress ? ZLibUtil.zip(data) : data else {
-      Logger.error(type: .dataChannel, message: "failed to compress message")
-      return false
+  /// 圧縮に失敗した場合のログを出します。排他区間の外から呼びます。
+  ///
+  /// `MediaChannel.sendMessage` は送信の失敗を一律に `SoraError.messagingError` として返すため、
+  /// 利用者へ返る reason からは圧縮の失敗を区別できません。その原因を残すために
+  /// `.compressionFailed` だけを error ログにします (`.sendFailed` は変更前と同じく追加の
+  /// ログを出しません)。`logSendAttempt(_:)` と対で呼びます。
+  func logCompressionFailureIfNeeded(_ result: DataChannelSendResult) {
+    guard result == .compressionFailed else {
+      return
     }
-    return native.sendData(RTCDataBuffer(data: data, isBinary: true))
+    Logger.error(type: .dataChannel, message: "failed to compress message")
   }
 }

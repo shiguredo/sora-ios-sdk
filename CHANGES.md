@@ -151,6 +151,11 @@
 - [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` が無同期で読み書きされるデータ競合を解消する
   - `simulcastEnabled` の get / set を `NSLock` で排他する。接続開始時と `type: offer` の受信時に書き換え、libwebrtc が `supportedCodecs()` / `createEncoder(_:)` から読む
   - @t-miya
+- [FIX] redirect の無効化と並行した `sendMessage` が旧 DataChannel へ送信されるデータ競合を解消する
+  - `PeerChannel` の `dataChannels` / `switchedToDataChannel` / `rpcChannel` の読み書きを単一の `NSLock` 付き storage へ移し、`MediaChannel.sendMessage` は送信の可否判定から送信までを 1 つの排他区間で行う
+  - redirect の無効化が完了した後に開始した `sendMessage` は `SoraError.messagingError` を返し、旧 DataChannel へ送信しない
+  - `MediaChannel.performRPC` の `rpcChannel` の参照取得も同じ排他単位へ移す
+  - @t-miya
 
 ### misc
 
