@@ -3,6 +3,23 @@ import Foundation
 import WebRTC
 
 /// `Sora` オブジェクトのイベントハンドラです。
+///
+/// 呼び出し元のスレッドは保証されない。UI 更新や共有状態の変更は main queue / main actor へ
+/// 束ねること。
+///
+/// 配送のたびにプロパティを読むため、接続の途中で設定を変更しても次の配送から反映される
+/// (プロパティの読み書きを排他する lock は無く、並行する設定変更はデータ競合になる)。
+///
+/// Swift 6 言語モードで `@MainActor` の文脈からハンドラーを設定する場合は、クロージャに
+/// `@Sendable` を付けるか `nonisolated` な関数へ処理を分離して隔離を外す。`MediaChannel` と
+/// `RTCAudioSession` は `Sendable` ではないため、main actor へ渡す場合は
+/// `nonisolated(unsafe) let` で運び、`Task { @MainActor in ... }` で main actor 上へ移す
+/// (`AVAudioSession.RouteChangeReason` と `AVAudioSessionRouteDescription` は `Sendable` のため
+/// そのまま渡せる)。
+///
+/// イベントを actor / Task から購読する場合は `Sora.subscribeEvents(bufferingPolicy:)` を使う
+/// (接続ごとのイベントは `MediaChannel.subscribeEvents(bufferingPolicy:)`)。新しい購読 API は、
+/// この handler と同じ配送点から対応するイベントを配送する。
 public final class SoraHandlers {
   /// 接続成功時に呼ばれるクロージャー
   public var onConnect: ((MediaChannel?, Error?) -> Void)?
@@ -87,9 +104,71 @@ public final class Sora: @unchecked Sendable {
   /// イベントハンドラ
   public let handlers = SoraHandlers()
 
+  // MARK: - イベントの購読
+
+  /// `Sora` インスタンスのイベントを購読します。
+  ///
+  /// 購読者ごとに独立した `AsyncStream` を返します。購読ごとに buffer / drop 方針 / 終端が
+  /// 独立しており、1 つの購読を解除しても他の購読者へ影響しません。接続ごとのイベントは
+  /// `MediaChannel.subscribeEvents(bufferingPolicy:)` で購読します。
+  ///
+  /// - 配送されるのは `mediaChannelAdded` / `mediaChannelRemoved` / `audioRouteChanged` と、
+  ///   このインスタンスが開始した接続の `connected` / `connectFailed` / `disconnected` です。
+  /// - イベントは配送順に届きます。通し番号の順序と一致しない場合はあります (同時に配送された
+  ///   イベントのみ)。
+  /// - buffer は既定で `SoraEvent.defaultBufferSize` 件です。あふれた場合は最も古いイベントが
+  ///   破棄されます。`sequence` で欠落を検出できます。
+  /// - 購読を開始する前に配送されたイベントは届きません (buffer は購読ごとに作られます)。
+  ///   接続前に開始しておけば、`mediaChannelAdded` と接続結果を取り逃しません。
+  /// - payload はすべて値として確定しており、配送後も購読者が保持できます。
+  /// - 購読の解除は、購読している `Task` の cancel、購読に使った `AsyncStream` への参照の解放、
+  ///   または `Sora` インスタンスの解放です。
+  /// - 購読している `Task` の loop の中から同期 API (`mediaChannels` などの getter、`connect`、
+  ///   `disconnect` を含む) を呼べます。配送は排他区間の外で行うため deadlock しません。
+  /// - 配送 executor はイベントの発生元によって異なります (libwebrtc の callback スレッド、
+  ///   signaling の受信スレッド、`DispatchQueue.global()`、呼び出し元の executor など)。`AsyncStream`
+  ///   の再開後に実行される購読者のコードは、購読している `Task` の executor 上で動きます。
+  ///   UI 更新は main actor / main queue へ束ねてください。
+  /// - この API の追加によって、既存の `handlers` の callback 型・配送 executor・配送順序・
+  ///   発火回数は変わりません。
+  ///
+  /// - parameter bufferingPolicy: 購読者ごとの buffer と drop 方針
+  /// - returns: このインスタンスのイベントを配送する stream
+  public func subscribeEvents(
+    bufferingPolicy: AsyncStream<SoraEvent>.Continuation.BufferingPolicy = .bufferingNewest(
+      SoraEvent.defaultBufferSize)
+  ) -> AsyncStream<SoraEvent> {
+    eventPublisher.subscribe(bufferingPolicy: bufferingPolicy)
+  }
+
+  /// このインスタンスの購読者を管理する storage です。
+  private let eventPublisher = SoraEventPublisher()
+
+  /// このインスタンスに紐づくイベントを配送します。
+  ///
+  /// 呼び出し側は `mediaChannelLock` などの排他区間を保持せずに呼びます。
+  func publishEvent(
+    kind: SoraEventKind,
+    connectionId: String? = nil,
+    transportEpoch: Int? = nil,
+    error: Error? = nil,
+    audioRoute: SoraAudioRouteEvent? = nil
+  ) {
+    eventPublisher.publish(
+      SoraEvent(
+        kind: kind,
+        connectionId: connectionId,
+        transportEpoch: transportEpoch,
+        error: error.map(SoraEventError.init),
+        audioRoute: audioRoute))
+  }
+
   private lazy var audioSessionDelegateAdapter = SoraRTCAudioSessionDelegateAdapter {
     [weak self] session, reason, previousRoute in
     self?.handlers.onChangeAudioRoute?(session, reason, previousRoute)
+    self?.publishEvent(
+      kind: .audioRouteChanged,
+      audioRoute: SoraAudioRouteEvent(reason: reason, previousRoute: previousRoute))
   }
 
   // MARK: - インスタンスの生成と取得
@@ -120,6 +199,8 @@ public final class Sora: @unchecked Sendable {
 
   deinit {
     RTCAudioSession.sharedInstance().remove(audioSessionDelegateAdapter)
+    // Sora インスタンスの解放で購読を終端する。
+    eventPublisher.finish()
   }
 
   // MARK: - メディアチャネルの管理
@@ -141,6 +222,10 @@ public final class Sora: @unchecked Sendable {
       // onOutputHandler が同じロックを取る経路で deadlock する。
       Logger.debug(type: .sora, message: "add media channel")
       handlers.onAddMediaChannel?(mediaChannel)
+      publishEvent(
+        kind: .mediaChannelAdded,
+        connectionId: mediaChannel.connectionId,
+        transportEpoch: mediaChannel.transportEpoch)
     }
   }
 
@@ -158,6 +243,10 @@ public final class Sora: @unchecked Sendable {
       // ログは排他区間の外で出す (add と同じ理由)。
       Logger.debug(type: .sora, message: "remove media channel")
       handlers.onRemoveMediaChannel?(mediaChannel)
+      publishEvent(
+        kind: .mediaChannelRemoved,
+        connectionId: mediaChannel.connectionId,
+        transportEpoch: mediaChannel.transportEpoch)
     }
   }
 
@@ -168,6 +257,15 @@ public final class Sora: @unchecked Sendable {
   /// - parameter configuration: クライアントの設定
   /// - parameter webRTCConfiguration: WebRTC の設定
   /// - parameter handler: 接続試行後に呼ばれるクロージャー。
+  ///
+  ///   呼び出し元のスレッドは保証されない (接続に成功した場合、設定エラーで終端した場合、接続に
+  ///   失敗した場合のいずれも、接続を開始したスレッドとは異なるスレッドから呼ばれ得る)。
+  ///   UI 更新や共有状態の変更は main queue / main actor へ束ねること。
+  ///
+  ///   Swift 6 言語モードで `@MainActor` の文脈から接続する場合は、クロージャに `@Sendable` を
+  ///   付けるか `nonisolated` な関数へ処理を分離して隔離を外す。`MediaChannel` は `Sendable` では
+  ///   ないため、main actor へ渡す場合は `nonisolated(unsafe) let` で運び、
+  ///   `Task { @MainActor in ... }` で main actor 上へ移す。
   /// - parameter mediaChannel: (接続成功時のみ) メディアチャネル
   /// - parameter error: (接続失敗時のみ) エラー
   /// - returns: 接続試行中の状態
@@ -204,6 +302,7 @@ public final class Sora: @unchecked Sendable {
       DispatchQueue.global().async { [weak self] in
         handlerBox(nil, error)
         self?.handlers.onConnect?(nil, error)
+        self?.publishEvent(kind: .connectFailed, error: error)
       }
       return connectionTask
     }
@@ -216,6 +315,11 @@ public final class Sora: @unchecked Sendable {
       }
       weakSelf.remove(mediaChannel: mediaChan)
       weakSelf.handlers.onDisconnect?(mediaChan, error)
+      weakSelf.publishEvent(
+        kind: .disconnected,
+        connectionId: mediaChan.connectionId,
+        transportEpoch: mediaChan.transportEpoch,
+        error: error)
     }
 
     // MediaChannel が接続試行を予約して `.connecting` へ遷移した後に管理対象へ追加する。
@@ -229,11 +333,20 @@ public final class Sora: @unchecked Sendable {
         if let error {
           handler(nil, error)
           self?.handlers.onConnect?(nil, error)
+          self?.publishEvent(
+            kind: .connectFailed,
+            connectionId: mediaChan.connectionId,
+            transportEpoch: mediaChan.transportEpoch,
+            error: error)
           return
         }
 
         handler(mediaChan, nil)
         self?.handlers.onConnect?(mediaChan, nil)
+        self?.publishEvent(
+          kind: .connected,
+          connectionId: mediaChan.connectionId,
+          transportEpoch: mediaChan.transportEpoch)
       })
   }
 

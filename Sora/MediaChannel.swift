@@ -24,6 +24,22 @@ public enum SoraCloseEvent: Sendable {
 /// データ競合しません。配送側は lock を解放してから取得済みの closure を呼ぶため、closure の
 /// 中から別の handler を設定しても deadlock しません。設定と配送が競合した場合にどちらの closure が
 /// 呼ばれるかは、lock の取得順で決まります (設定が次の配送から反映されるという契約は変わりません)。
+///
+/// 呼び出し元のスレッドは保証されない。UI 更新や共有状態の変更は main queue / main actor へ
+/// 束ねること。
+///
+/// 配送のたびにプロパティを読むため、接続の途中で設定を変更しても次の配送から反映される
+/// (プロパティごとの storage が排他するのは読み書きだけであり、配送側は lock を解放してから
+/// 取得済みの closure を呼ぶ)。
+///
+/// Swift 6 言語モードで `@MainActor` の文脈からハンドラーを設定する場合は、クロージャに
+/// `@Sendable` を付けるか `nonisolated` な関数へ処理を分離して隔離を外す。`MediaChannel` /
+/// `MediaStream` / `Signaling` は `Sendable` ではないため、main actor へ渡す場合は
+/// `nonisolated(unsafe) let` で運び、`Task { @MainActor in ... }` で main actor 上へ移す。
+///
+/// イベントを actor / Task から購読する場合は
+/// `MediaChannel.subscribeEvents(bufferingPolicy:)` を使う。新しい購読 API は、この handler と
+/// 同じ配送点から対応するイベントを配送する。
 public final class MediaChannelHandlers {
   /// 接続成功時に呼ばれるクロージャー
   public var onConnect: ((Error?) -> Void)? {
@@ -667,6 +683,101 @@ public final class MediaChannel {
   /// アクセサにしない。イベントハンドラのプロパティの読み書きは `MediaChannelHandlers` が排他する。
   var internalHandlers = MediaChannelHandlers()
 
+  // MARK: - イベントの購読
+
+  /// 接続イベントを購読します。
+  ///
+  /// 購読者ごとに独立した `AsyncStream` を返します。同じ `MediaChannel` に対して複数回呼ぶと、
+  /// それぞれが独立した buffer / drop 方針 / 終端を持ちます (1 つの `AsyncStream` を複数の
+  /// `Iterator` で消費するとイベントが購読者間で分かれるため、購読者ごとに stream を作ります)。
+  ///
+  /// - イベントは接続単位の順序付きの列です。同じ接続のイベントは配送順に届きます。通し番号の
+  ///   順序と一致しない場合はあります (同時に配送されたイベントのみ)。
+  /// - buffer は既定で `SoraEvent.defaultBufferSize` 件です。あふれた場合は最も古いイベントが
+  ///   破棄されます。`sequence` で欠落を検出できます。
+  /// - 購読を開始する前に配送されたイベントは届きません (buffer は購読ごとに作られます)。
+  ///   接続の完了前に開始するには、`SoraHandlers.onAddMediaChannel` または `Sora.mediaChannels` で
+  ///   参照を取得してから購読するか、`Sora.subscribeEvents(bufferingPolicy:)` を使います。
+  /// - `connected` と `connectFailed` は接続の完了と同じ配送点で発行されます。接続の完了を
+  ///   待ってから購読すると取り逃すため、接続の結果を購読する場合は `Sora` の購読を使ってください。
+  /// - payload はすべて値として確定しており、配送後も購読者が保持できます。mutable な
+  ///   `MediaChannel` / `MediaStream` / raw WebRTC object は含まれません。`SoraEvent` は
+  ///   `Sendable` のため、actor / Task 境界へそのまま渡せます。
+  /// - 購読の解除は、購読している `Task` の cancel、購読に使った `AsyncStream` への参照の解放、
+  ///   または接続の終了です。購読を解除しても他の購読者の buffer と終端は影響を受けません。
+  /// - 接続が終了すると `.disconnected` を配送した後に stream が終端します。終端後の購読には
+  ///   終端済みの stream を返します。`.disconnected` を配送せずに終端するのは、明示切断を経由せず
+  ///   `MediaChannel` が解放された場合だけです。
+  /// - 購読している `Task` の loop の中から同期 API (`connectionId` / `state` などの getter、
+  ///   `sendMessage`、`disconnect`) を呼べます。配送は排他区間の外で行うため deadlock しません。
+  ///   `disconnect` を呼ぶと `.disconnected` の配送後に購読が終端し、以降のイベントは届きません。
+  /// - 配送 executor はイベントの発生元によって異なります (libwebrtc の callback スレッド、
+  ///   signaling の受信スレッド、呼び出し元の executor など)。`AsyncStream` の再開後に実行される
+  ///   購読者のコードは、購読している `Task` の executor 上で動きます。UI 更新は main actor /
+  ///   main queue へ束ねてください。
+  /// - `videoEnabledChanged` / `audioEnabledChanged` は、並行する変更の確定順と配送順が一致しない
+  ///   ことがあります (`MediaStreamHandlers.onSwitchVideo` と同じ契約です)。
+  /// - この API の追加によって、既存の `handlers` の callback 型・配送 executor・配送順序・
+  ///   発火回数は変わりません。
+  ///
+  /// - parameter bufferingPolicy: 購読者ごとの buffer と drop 方針
+  /// - returns: この接続のイベントを配送する stream
+  public func subscribeEvents(
+    bufferingPolicy: AsyncStream<SoraEvent>.Continuation.BufferingPolicy = .bufferingNewest(
+      SoraEvent.defaultBufferSize)
+  ) -> AsyncStream<SoraEvent> {
+    eventPublisher.subscribe(bufferingPolicy: bufferingPolicy)
+  }
+
+  #if DEBUG
+    /// 現在の購読者の数です (`SoraEventPublisher` のテスト用アクセサを返します)。
+    var eventSubscriptionCountForTesting: Int {
+      eventPublisher.subscriptionCountForTesting
+    }
+  #endif
+
+  /// 接続イベントの購読者を管理する storage です。
+  private let eventPublisher = SoraEventPublisher()
+
+  /// 現在の transport epoch です。redirect のたびに進み、古い世代のイベントの識別に使います。
+  var transportEpoch: Int {
+    peerChannel.dataChannelGeneration
+  }
+
+  /// この接続に紐づくイベントを配送します。
+  ///
+  /// 呼び出し側は owner の排他区間を保持せずに呼びます。配送のたびに通し番号を採番します。
+  func publishEvent(
+    kind: SoraEventKind,
+    streamId: String? = nil,
+    isEnabled: Bool? = nil,
+    signalingJSON: String? = nil,
+    dataChannelLabel: String? = nil,
+    dataChannelMessage: Data? = nil,
+    error: Error? = nil,
+    closeEvent: SoraCloseEvent? = nil
+  ) {
+    eventPublisher.publish(
+      SoraEvent(
+        kind: kind,
+        connectionId: connectionId,
+        transportEpoch: transportEpoch,
+        error: error.map(SoraEventError.init),
+        closeEvent: closeEvent,
+        streamId: streamId,
+        isEnabled: isEnabled,
+        signalingJSON: signalingJSON,
+        dataChannelLabel: dataChannelLabel,
+        dataChannelMessage: dataChannelMessage))
+  }
+
+  /// 購読をすべて終端します。
+  ///
+  /// 接続の終了と `deinit` から呼びます。冪等なため重複して呼んでも安全です。
+  func finishEvents() {
+    eventPublisher.finish()
+  }
+
   // MARK: - 接続情報
 
   /// クライアントの設定
@@ -1090,6 +1201,9 @@ public final class MediaChannel {
     // Sora と利用者の双方が参照を解放した場合も、接続中の PeerChannel を明示的に閉じる。
     // 実処理が進行中なら PeerChannel の接続ライフサイクルの排他が安全な時点まで切断を遅延する。
     _peerChannel?.disconnect(error: nil, reason: .user)
+
+    // 明示切断を経由せずに解放された場合も購読を終端する。
+    finishEvents()
   }
 
   /// ADM を生成する前に、ステレオ音声出力の組み合わせ制約を検証します。
@@ -1422,6 +1536,7 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "call onAddStream")
       weakSelf.internalHandlers.onAddStream?(stream)
       weakSelf.handlers.onAddStream?(stream)
+      weakSelf.publishEvent(kind: .streamAdded, streamId: stream.streamId)
     }
 
     peerChannel.internalHandlers.onRemoveStream = { [weak self] stream in
@@ -1432,6 +1547,7 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "call onRemoveStream")
       weakSelf.internalHandlers.onRemoveStream?(stream)
       weakSelf.handlers.onRemoveStream?(stream)
+      weakSelf.publishEvent(kind: .streamRemoved, streamId: stream.streamId)
     }
 
     peerChannel.internalHandlers.onOpenDataChannel = { [weak self] label in
@@ -1455,10 +1571,12 @@ public final class MediaChannel {
       if isFirstOpen {
         Logger.debug(type: .mediaChannel, message: "call onDataChannelOpened")
         weakSelf.handlers.onDataChannelOpened?(weakSelf, label)
+        weakSelf.publishEvent(kind: .dataChannelOpened, dataChannelLabel: label)
       }
       if shouldNotifyBatch {
         Logger.debug(type: .mediaChannel, message: "call onDataChannel")
         weakSelf.handlers.onDataChannel?(weakSelf)
+        weakSelf.publishEvent(kind: .dataChannelAvailable)
       }
     }
 
@@ -1470,6 +1588,7 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "call onReceiveSignalingJSON")
       weakSelf.internalHandlers.onReceiveSignalingJSON?(json)
       weakSelf.handlers.onReceiveSignalingJSON?(json)
+      weakSelf.publishEvent(kind: .signalingReceivedJSON, signalingJSON: json)
     }
 
     peerChannel.internalHandlers.onReceiveSignaling = { [weak self] message in
@@ -1589,6 +1708,7 @@ public final class MediaChannel {
     Logger.debug(type: .mediaChannel, message: "call onConnect")
     internalHandlers.onConnect?(nil)
     handlers.onConnect?(nil)
+    publishEvent(kind: .connected)
   }
 
   /// 接続を解除します。
@@ -1734,13 +1854,18 @@ public final class MediaChannel {
       Logger.debug(type: .mediaChannel, message: "call onConnect")
       internalHandlers.onConnect?(connectionError)
       handlers.onConnect?(connectionError)
+      publishEvent(kind: .connectFailed, error: connectionError)
     }
 
     Logger.debug(type: .mediaChannel, message: "did disconnect")
     Logger.debug(type: .mediaChannel, message: "call onDisconnect")
     internalHandlers.onDisconnectLegacy?(error)
     handlers.onDisconnectLegacy?(error)
-    handlers.onDisconnect?(makeDisconnectEvent(error: error))
+    let closeEvent = makeDisconnectEvent(error: error)
+    handlers.onDisconnect?(closeEvent)
+    publishEvent(kind: .disconnected, closeEvent: closeEvent)
+    // 接続の終了で購読を終端する。buffer に残っているイベントは配送してから終端する。
+    finishEvents()
   }
 
   /// 切断準備を完了状態へ進め、準備中に保留された PeerChannel の完了通知を処理します。

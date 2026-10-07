@@ -16,7 +16,7 @@ consumer から SDK を利用できることも別の target で検証します�
 
 | target | 既定隔離 | 検証する契約 |
 | --- | --- | --- |
-| `ConsumerCore` | `nonisolated` | 接続設定の組み立てと接続、handler への closure 代入、RPC と統計取得、RPC のサーバーエラー詳細 (`JSONValue`) の読み取り、`VideoRenderer` の非隔離実装 |
+| `ConsumerCore` | `nonisolated` | 接続設定の組み立てと接続、handler への closure 代入、RPC と統計取得、RPC のサーバーエラー詳細 (`JSONValue`) の読み取り、`VideoRenderer` の非隔離実装、イベント購読 (`subscribeEvents`) |
 | `ConsumerUI` | `MainActor` | `@MainActor` を書かずに `VideoView` を生成して操作できること (既定隔離が MainActor であることの担保) |
 | `ConsumerLegacy` | `nonisolated` | 非推奨 API が warning に留まり、warnings-as-errors でも build できること |
 | `ConsumerSwift5` | `nonisolated` | Swift 5 言語モードの consumer が Swift 6 言語モードの SDK を `import Sora` して公開 API を利用できること (nonisolated な global shared mutable state が診断されないこと) |
@@ -95,6 +95,7 @@ consumer package が受け渡しを検証する公開 closure は、次の手順
 | `Sora.configureAudioSession(block:)` | `Sources/ConsumerCore/CallbackCompatibility.swift` |
 | `Optional.unwrap(ifNone:)` / `Array.remove(_:where:)` (Sora が追加している標準型の extension) | `Sources/ConsumerCore/CallbackCompatibility.swift` |
 | `SoraDispatcher.async(on:block:)` / `Utilities.Stopwatch(handler:)` | 対象外。非推奨化する作業が扱う |
+| イベント購読 API (`Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)`) | 対象外。closure を取らず `AsyncStream<SoraEvent>` を返すため、closure の負例を作らない。購読の契約は `Sources/ConsumerCore/SoraEventScenario.swift` で検証する |
 
 handler 型の closure と `Sora.connect` と `Optional.unwrap(ifNone:)` / `Array.remove(_:where:)` には
 非 Sendable な値を capture した closure を渡すため、closure 型に `@Sendable` が付いた場合は
@@ -123,6 +124,7 @@ issue 番号を書かず、検証したい契約と未対応である理由を�
 | `Sources/ConsumerCore/HandlerCompatibility.swift` | 非推奨でない handler の closure 型 (非 Sendable な値の capture で @Sendable 化を検出する)、`VideoRenderer` の非隔離実装、`import WebRTC` で WebRTC product を参照できること | 公開 handler の closure 型を変更する作業が更新する |
 | `Sources/ConsumerCore/CallbackCompatibility.swift` | handler 型に属さない公開 closure の受け渡し | 公開 closure を追加・変更する作業が更新する |
 | `Sources/ConsumerCore/MediaChannelRPC.swift` | RPC (利用者定義の `RPCMethodProtocol` 準拠型と非 Sendable な型パラメータを含む)、Sendable な RPC (利用者定義の `SendableRPCMethodProtocol` 準拠型、新旧両方の protocol へ準拠した型での戻り値の型の維持)、統計取得 (`getStats` と、actor / Task 境界へ渡せる `getStatsSnapshot`)、RPC のサーバーエラー詳細 (`JSONValue` の case 分岐) の読み取り、戻り値 `Error?` の API、公開プロパティの参照 | Sendable な RPC API を追加・変更する作業が、新しい RPC の scenario を追加・更新する。統計取得 API を追加・変更する作業が、統計の scenario を追加・更新する |
+| `Sources/ConsumerCore/SoraEventScenario.swift` | イベント購読 API (`Sora.subscribeEvents` / `MediaChannel.subscribeEvents`) を nonisolated と `@MainActor` の両方から呼べること、`SoraEvent` が actor / Task 境界を越えられること、`SoraEventKind` を `default` を伴う switch と等価比較で判定できること | イベント購読 API を追加・変更する作業が、新しい event の scenario を追加・更新する |
 | `Sources/ConsumerUI/VideoViewScenario.swift` | 既定隔離が MainActor であること | `VideoRenderer` の隔離を見直す作業が更新する |
 | `Sources/ConsumerLegacy/DeprecatedAPI.swift` | 非推奨 API が warning に留まること (CI は期待する非推奨 API 名の一覧で検査する) | 非推奨 API を削除する作業が、対象の参照と `consumer-test.yml` の期待する非推奨 API 名の一覧を同時に更新する |
 | `Sources/ConsumerSwift5/Swift5Compatibility.swift` | Swift 5 言語モードの consumer が SDK を利用できること (CI は compile 行の `-swift-version` で検査する) | 公開 API を Swift 5 言語モードから呼べなくする作業が更新する |

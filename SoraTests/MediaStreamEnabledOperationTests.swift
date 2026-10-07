@@ -383,4 +383,36 @@ final class MediaStreamEnabledOperationTests: XCTestCase {
     XCTAssertEqual(
       stream.nativeVideoTrack?.isEnabled, false, "native track も新しい operation の値になること")
   }
+
+  /// 有効フラグの確定が購読 API のイベントとして配送されることを確認する
+  ///
+  /// イベントの配送点 (`MediaStream.commitVideoEnabled` / `commitAudioEnabled`) の結線を確認します。
+  /// 実接続を伴わないため、イベントの `connectionId` は `nil` になります。
+  func testEnabledChangesAreDeliveredAsEvents() async throws {
+    let mediaChannel = try makeTestMediaChannel()
+    let stream = makeSenderStream(
+      mediaChannel: mediaChannel, videoTrackId: "video", audioTrackId: "audio")
+    let events = mediaChannel.subscribeEvents()
+
+    // 値が変化したときだけ配送される
+    stream.videoEnabled = false
+    stream.audioEnabled = false
+    // 同値の再代入では配送されない
+    stream.videoEnabled = false
+    stream.audioEnabled = false
+    // 配送点が退行した場合に await が返らなくなるのを防ぐため、終端させてから読み切る
+    // (終端後も buffer に残っているイベントは配送される)。
+    mediaChannel.finishEvents()
+
+    var received: [SoraEvent] = []
+    for await event in events {
+      received.append(event)
+    }
+
+    XCTAssertEqual(
+      received.map(\.kind), [.videoEnabledChanged, .audioEnabledChanged],
+      "値が変化したときだけ、配送順にイベントとして配送されること")
+    XCTAssertEqual(received.map(\.streamId), ["test-stream", "test-stream"])
+    XCTAssertEqual(received.map(\.isEnabled), [false, false])
+  }
 }

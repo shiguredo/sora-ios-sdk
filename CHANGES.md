@@ -35,6 +35,11 @@
   - 経過時間の計測だけが目的の場合は、`ContinuousClock` / `SuspendingClock` の `now` の差分 (`Duration`) へ移行する
   - 用途によって移行先が異なるため、SDK 固有の代替 timer は提供しない。単一の万能な代替があるわけではないため、用途に合う仕組みを選ぶ
   - @t-miya
+- [ADD] Sendable なイベント購読 API を追加する
+  - `Sora.subscribeEvents(bufferingPolicy:)` と `MediaChannel.subscribeEvents(bufferingPolicy:)` を追加する。Sendable な `SoraEvent` を `AsyncStream` で配送し、購読者ごとに独立した buffer / drop 方針 / 終端を持ち、購読の解除は他の購読者へ影響しない
+  - 公開型 `SoraEvent` / `SoraEventKind` / `SoraEventError` / `SoraAudioPortSnapshot` / `SoraAudioRouteSnapshot` / `SoraAudioRouteEvent` を追加する。イベントの payload に `MediaChannel` / `MediaStream` / raw WebRTC object を含めない
+  - 既存の handler API と callback の型・配送 executor・配送順序・発火回数は変わらない
+  - @t-miya
 - [ADD] Sendable な statistics snapshot API を追加する
   - immutable で Sendable な公開値型 `StatisticsSnapshot` / `StatisticsEntrySnapshot` と、`MediaChannel.getStatsSnapshot(handler:)` / `MediaChannel.getStatsSnapshot() async throws -> StatisticsSnapshot` を追加する
   - 統計値を `JSONValue` で保持するため、結果を actor / Task 境界へそのまま渡せる。`Statistics` (mutable class) と `getStats(handler:)` のシグネチャと挙動は変わらない

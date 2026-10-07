@@ -17,6 +17,21 @@ public enum MediaStreamAudioVolume {
 /// 利用する任意の executor からの設定と、`videoEnabled` / `audioEnabled` の確定を配送する
 /// executor からの読み取りが並行してもデータ競合しません。配送側は lock を解放してから取得済みの
 /// closure を呼びます (`HandlerStorage` の doc 参照)。
+///
+/// 呼び出し元のスレッドは保証されない。UI 更新や共有状態の変更は main queue / main actor へ
+/// 束ねること。
+///
+/// 配送のたびにプロパティを読むため、接続の途中で設定を変更しても次の配送から反映される
+/// (プロパティごとの storage が排他するのは読み書きだけであり、配送側は lock を解放してから
+/// 取得済みの closure を呼ぶ)。
+///
+/// Swift 6 言語モードで `@MainActor` の文脈からハンドラーを設定する場合は、クロージャに
+/// `@Sendable` を付けるか `nonisolated` な関数へ処理を分離して隔離を外す。payload は `Bool` の
+/// ため、main actor へそのまま渡せる。
+///
+/// イベントを actor / Task から購読する場合は
+/// `MediaChannel.subscribeEvents(bufferingPolicy:)` を使う。新しい購読 API は、この handler と
+/// 同じ配送点から対応するイベントを配送する。
 public final class MediaStreamHandlers {
   /// 映像トラックが有効または無効にセットされたときに呼ばれるクロージャー
   ///
@@ -451,6 +466,7 @@ class BasicMediaStream: MediaStream {
       // 通知の順序は確定順と一致しないことがありますが、通知順序の入れ替わりは発火回数を変えず、
       // 1 つの operation 内の順序は保たれます。
       handlers.onSwitchVideo?(value)
+      mediaChannel?.publishEvent(kind: .videoEnabledChanged, streamId: streamId, isEnabled: value)
       streamOwner.submitSwitch(video: value)
     }
     return true
@@ -482,6 +498,7 @@ class BasicMediaStream: MediaStream {
     if changed {
       // 通知は確定の後に lock を解放してから行います (`commitVideoEnabled` と同じ理由)。
       handlers.onSwitchAudio?(value)
+      mediaChannel?.publishEvent(kind: .audioEnabledChanged, streamId: streamId, isEnabled: value)
       streamOwner.submitSwitch(audio: value)
     }
     return true

@@ -17297,6 +17297,42 @@
             ]
           },
           {
+            "kind": "Function",
+            "name": "subscribeEvents",
+            "printedName": "subscribeEvents(bufferingPolicy:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "AsyncStream",
+                "printedName": "_Concurrency.AsyncStream<Sora.SoraEvent>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEvent",
+                    "printedName": "Sora.SoraEvent",
+                    "usr": "s:4Sora0A5EventV"
+                  }
+                ],
+                "usr": "s:ScS"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "BufferingPolicy",
+                "printedName": "_Concurrency.AsyncStream<Sora.SoraEvent>.Continuation.BufferingPolicy",
+                "hasDefaultArg": true,
+                "usr": "s:ScS12ContinuationV15BufferingPolicyO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora12MediaChannelC15subscribeEvents15bufferingPolicyScSyAA0A5EventVGScS12ContinuationV09BufferingG0OyAG__G_tF",
+            "mangledName": "$s4Sora12MediaChannelC15subscribeEvents15bufferingPolicyScSyAA0A5EventVGScS12ContinuationV09BufferingG0OyAG__G_tF",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "Final"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
             "kind": "Var",
             "name": "configuration",
             "printedName": "configuration",
@@ -40650,6 +40686,42 @@
             ]
           },
           {
+            "kind": "Function",
+            "name": "subscribeEvents",
+            "printedName": "subscribeEvents(bufferingPolicy:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "AsyncStream",
+                "printedName": "_Concurrency.AsyncStream<Sora.SoraEvent>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEvent",
+                    "printedName": "Sora.SoraEvent",
+                    "usr": "s:4Sora0A5EventV"
+                  }
+                ],
+                "usr": "s:ScS"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "BufferingPolicy",
+                "printedName": "_Concurrency.AsyncStream<Sora.SoraEvent>.Continuation.BufferingPolicy",
+                "hasDefaultArg": true,
+                "usr": "s:ScS12ContinuationV15BufferingPolicyO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4SoraAAC15subscribeEvents15bufferingPolicyScSyAA0A5EventVGScS12ContinuationV09BufferingE0OyAF__G_tF",
+            "mangledName": "$s4SoraAAC15subscribeEvents15bufferingPolicyScSyAA0A5EventVGScS12ContinuationV09BufferingE0OyAF__G_tF",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "Final"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
             "kind": "Var",
             "name": "shared",
             "printedName": "shared",
@@ -42896,6 +42968,2575 @@
             "printedName": "Error",
             "usr": "s:s5ErrorP",
             "mangledName": "$ss5ErrorP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SoraEventKind",
+        "printedName": "SoraEventKind",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "rawValue",
+            "printedName": "rawValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV8rawValueSSvp",
+            "mangledName": "$s4Sora0A9EventKindV8rawValueSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV8rawValueSSvg",
+                "mangledName": "$s4Sora0A9EventKindV8rawValueSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(rawValue:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:4Sora0A9EventKindV8rawValueACSS_tcfc",
+            "mangledName": "$s4Sora0A9EventKindV8rawValueACSS_tcfc",
+            "moduleName": "Sora",
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Var",
+            "name": "connected",
+            "printedName": "connected",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV9connectedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV9connectedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV9connectedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV9connectedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "connectFailed",
+            "printedName": "connectFailed",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV13connectFailedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV13connectFailedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV13connectFailedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV13connectFailedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "disconnected",
+            "printedName": "disconnected",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV12disconnectedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV12disconnectedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV12disconnectedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV12disconnectedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "mediaChannelAdded",
+            "printedName": "mediaChannelAdded",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV17mediaChannelAddedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV17mediaChannelAddedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV17mediaChannelAddedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV17mediaChannelAddedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "mediaChannelRemoved",
+            "printedName": "mediaChannelRemoved",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV19mediaChannelRemovedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV19mediaChannelRemovedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV19mediaChannelRemovedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV19mediaChannelRemovedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "audioRouteChanged",
+            "printedName": "audioRouteChanged",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV17audioRouteChangedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV17audioRouteChangedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV17audioRouteChangedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV17audioRouteChangedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "streamAdded",
+            "printedName": "streamAdded",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV11streamAddedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV11streamAddedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV11streamAddedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV11streamAddedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "streamRemoved",
+            "printedName": "streamRemoved",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV13streamRemovedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV13streamRemovedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV13streamRemovedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV13streamRemovedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "videoEnabledChanged",
+            "printedName": "videoEnabledChanged",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV19videoEnabledChangedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV19videoEnabledChangedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV19videoEnabledChangedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV19videoEnabledChangedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "audioEnabledChanged",
+            "printedName": "audioEnabledChanged",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV19audioEnabledChangedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV19audioEnabledChangedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV19audioEnabledChangedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV19audioEnabledChangedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "signalingReceivedJSON",
+            "printedName": "signalingReceivedJSON",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV21signalingReceivedJSONACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV21signalingReceivedJSONACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV21signalingReceivedJSONACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV21signalingReceivedJSONACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "dataChannelOpened",
+            "printedName": "dataChannelOpened",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV17dataChannelOpenedACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV17dataChannelOpenedACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV17dataChannelOpenedACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV17dataChannelOpenedACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "dataChannelAvailable",
+            "printedName": "dataChannelAvailable",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV20dataChannelAvailableACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV20dataChannelAvailableACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV20dataChannelAvailableACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV20dataChannelAvailableACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "dataChannelMessage",
+            "printedName": "dataChannelMessage",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A9EventKindV18dataChannelMessageACvpZ",
+            "mangledName": "$s4Sora0A9EventKindV18dataChannelMessageACvpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A9EventKindV18dataChannelMessageACvgZ",
+                "mangledName": "$s4Sora0A9EventKindV18dataChannelMessageACvgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "TypeAlias",
+            "name": "RawValue",
+            "printedName": "RawValue",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "TypeAlias",
+            "usr": "s:4Sora0A9EventKindV8RawValuea",
+            "mangledName": "$s4Sora0A9EventKindV8RawValuea",
+            "moduleName": "Sora",
+            "implicit": true
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora0A9EventKindV",
+        "mangledName": "$s4Sora0A9EventKindV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Hashable",
+            "printedName": "Hashable",
+            "usr": "s:SH",
+            "mangledName": "$sSH"
+          },
+          {
+            "kind": "Conformance",
+            "name": "RawRepresentable",
+            "printedName": "RawRepresentable",
+            "children": [
+              {
+                "kind": "TypeWitness",
+                "name": "RawValue",
+                "printedName": "RawValue",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ]
+              }
+            ],
+            "usr": "s:SY",
+            "mangledName": "$sSY"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SoraEventError",
+        "printedName": "SoraEventError",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "domain",
+            "printedName": "domain",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A10EventErrorV6domainSSvp",
+            "mangledName": "$s4Sora0A10EventErrorV6domainSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A10EventErrorV6domainSSvg",
+                "mangledName": "$s4Sora0A10EventErrorV6domainSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "code",
+            "printedName": "code",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A10EventErrorV4codeSivp",
+            "mangledName": "$s4Sora0A10EventErrorV4codeSivp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A10EventErrorV4codeSivg",
+                "mangledName": "$s4Sora0A10EventErrorV4codeSivg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "message",
+            "printedName": "message",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A10EventErrorV7messageSSvp",
+            "mangledName": "$s4Sora0A10EventErrorV7messageSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A10EventErrorV7messageSSvg",
+                "mangledName": "$s4Sora0A10EventErrorV7messageSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventError",
+                "printedName": "Sora.SoraEventError",
+                "usr": "s:4Sora0A10EventErrorV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventError",
+                "printedName": "Sora.SoraEventError",
+                "usr": "s:4Sora0A10EventErrorV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora0A10EventErrorV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s4Sora0A10EventErrorV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "Sora",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora0A10EventErrorV",
+        "mangledName": "$s4Sora0A10EventErrorV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SoraAudioPortSnapshot",
+        "printedName": "SoraAudioPortSnapshot",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "name",
+            "printedName": "name",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A17AudioPortSnapshotV4nameSSvp",
+            "mangledName": "$s4Sora0A17AudioPortSnapshotV4nameSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A17AudioPortSnapshotV4nameSSvg",
+                "mangledName": "$s4Sora0A17AudioPortSnapshotV4nameSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "portType",
+            "printedName": "portType",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A17AudioPortSnapshotV8portTypeSSvp",
+            "mangledName": "$s4Sora0A17AudioPortSnapshotV8portTypeSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A17AudioPortSnapshotV8portTypeSSvg",
+                "mangledName": "$s4Sora0A17AudioPortSnapshotV8portTypeSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "uid",
+            "printedName": "uid",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A17AudioPortSnapshotV3uidSSvp",
+            "mangledName": "$s4Sora0A17AudioPortSnapshotV3uidSSvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A17AudioPortSnapshotV3uidSSvg",
+                "mangledName": "$s4Sora0A17AudioPortSnapshotV3uidSSvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "channelCount",
+            "printedName": "channelCount",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A17AudioPortSnapshotV12channelCountSivp",
+            "mangledName": "$s4Sora0A17AudioPortSnapshotV12channelCountSivp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A17AudioPortSnapshotV12channelCountSivg",
+                "mangledName": "$s4Sora0A17AudioPortSnapshotV12channelCountSivg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "hasDataSource",
+            "printedName": "hasDataSource",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A17AudioPortSnapshotV13hasDataSourceSbvp",
+            "mangledName": "$s4Sora0A17AudioPortSnapshotV13hasDataSourceSbvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A17AudioPortSnapshotV13hasDataSourceSbvg",
+                "mangledName": "$s4Sora0A17AudioPortSnapshotV13hasDataSourceSbvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraAudioPortSnapshot",
+                "printedName": "Sora.SoraAudioPortSnapshot",
+                "usr": "s:4Sora0A17AudioPortSnapshotV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraAudioPortSnapshot",
+                "printedName": "Sora.SoraAudioPortSnapshot",
+                "usr": "s:4Sora0A17AudioPortSnapshotV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora0A17AudioPortSnapshotV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s4Sora0A17AudioPortSnapshotV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "Sora",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora0A17AudioPortSnapshotV",
+        "mangledName": "$s4Sora0A17AudioPortSnapshotV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SoraAudioRouteSnapshot",
+        "printedName": "SoraAudioRouteSnapshot",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "inputs",
+            "printedName": "inputs",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[Sora.SoraAudioPortSnapshot]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraAudioPortSnapshot",
+                    "printedName": "Sora.SoraAudioPortSnapshot",
+                    "usr": "s:4Sora0A17AudioPortSnapshotV"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A18AudioRouteSnapshotV6inputsSayAA0ab4PortD0VGvp",
+            "mangledName": "$s4Sora0A18AudioRouteSnapshotV6inputsSayAA0ab4PortD0VGvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[Sora.SoraAudioPortSnapshot]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SoraAudioPortSnapshot",
+                        "printedName": "Sora.SoraAudioPortSnapshot",
+                        "usr": "s:4Sora0A17AudioPortSnapshotV"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A18AudioRouteSnapshotV6inputsSayAA0ab4PortD0VGvg",
+                "mangledName": "$s4Sora0A18AudioRouteSnapshotV6inputsSayAA0ab4PortD0VGvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "outputs",
+            "printedName": "outputs",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Array",
+                "printedName": "[Sora.SoraAudioPortSnapshot]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraAudioPortSnapshot",
+                    "printedName": "Sora.SoraAudioPortSnapshot",
+                    "usr": "s:4Sora0A17AudioPortSnapshotV"
+                  }
+                ],
+                "usr": "s:Sa"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A18AudioRouteSnapshotV7outputsSayAA0ab4PortD0VGvp",
+            "mangledName": "$s4Sora0A18AudioRouteSnapshotV7outputsSayAA0ab4PortD0VGvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Array",
+                    "printedName": "[Sora.SoraAudioPortSnapshot]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SoraAudioPortSnapshot",
+                        "printedName": "Sora.SoraAudioPortSnapshot",
+                        "usr": "s:4Sora0A17AudioPortSnapshotV"
+                      }
+                    ],
+                    "usr": "s:Sa"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A18AudioRouteSnapshotV7outputsSayAA0ab4PortD0VGvg",
+                "mangledName": "$s4Sora0A18AudioRouteSnapshotV7outputsSayAA0ab4PortD0VGvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraAudioRouteSnapshot",
+                "printedName": "Sora.SoraAudioRouteSnapshot",
+                "usr": "s:4Sora0A18AudioRouteSnapshotV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraAudioRouteSnapshot",
+                "printedName": "Sora.SoraAudioRouteSnapshot",
+                "usr": "s:4Sora0A18AudioRouteSnapshotV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora0A18AudioRouteSnapshotV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s4Sora0A18AudioRouteSnapshotV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "Sora",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora0A18AudioRouteSnapshotV",
+        "mangledName": "$s4Sora0A18AudioRouteSnapshotV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SoraAudioRouteEvent",
+        "printedName": "SoraAudioRouteEvent",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "reason",
+            "printedName": "reason",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "RouteChangeReason",
+                "printedName": "AVFAudio.AVAudioSession.RouteChangeReason",
+                "usr": "c:@E@AVAudioSessionRouteChangeReason"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A15AudioRouteEventV6reasonSo014AVAudioSessionC12ChangeReasonVvp",
+            "mangledName": "$s4Sora0A15AudioRouteEventV6reasonSo014AVAudioSessionC12ChangeReasonVvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "RouteChangeReason",
+                    "printedName": "AVFAudio.AVAudioSession.RouteChangeReason",
+                    "usr": "c:@E@AVAudioSessionRouteChangeReason"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A15AudioRouteEventV6reasonSo014AVAudioSessionC12ChangeReasonVvg",
+                "mangledName": "$s4Sora0A15AudioRouteEventV6reasonSo014AVAudioSessionC12ChangeReasonVvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "previousRoute",
+            "printedName": "previousRoute",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraAudioRouteSnapshot",
+                "printedName": "Sora.SoraAudioRouteSnapshot",
+                "usr": "s:4Sora0A18AudioRouteSnapshotV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A15AudioRouteEventV08previousC0AA0abC8SnapshotVvp",
+            "mangledName": "$s4Sora0A15AudioRouteEventV08previousC0AA0abC8SnapshotVvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraAudioRouteSnapshot",
+                    "printedName": "Sora.SoraAudioRouteSnapshot",
+                    "usr": "s:4Sora0A18AudioRouteSnapshotV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A15AudioRouteEventV08previousC0AA0abC8SnapshotVvg",
+                "mangledName": "$s4Sora0A15AudioRouteEventV08previousC0AA0abC8SnapshotVvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "__derived_struct_equals",
+            "printedName": "__derived_struct_equals(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraAudioRouteEvent",
+                "printedName": "Sora.SoraAudioRouteEvent",
+                "usr": "s:4Sora0A15AudioRouteEventV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SoraAudioRouteEvent",
+                "printedName": "Sora.SoraAudioRouteEvent",
+                "usr": "s:4Sora0A15AudioRouteEventV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:4Sora0A15AudioRouteEventV23__derived_struct_equalsySbAC_ACtFZ",
+            "mangledName": "$s4Sora0A15AudioRouteEventV23__derived_struct_equalsySbAC_ACtFZ",
+            "moduleName": "Sora",
+            "static": true,
+            "implicit": true,
+            "declAttributes": [
+              "Implements"
+            ],
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora0A15AudioRouteEventV",
+        "mangledName": "$s4Sora0A15AudioRouteEventV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Equatable",
+            "printedName": "Equatable",
+            "usr": "s:SQ",
+            "mangledName": "$sSQ"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "SoraEvent",
+        "printedName": "SoraEvent",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "kind",
+            "printedName": "kind",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SoraEventKind",
+                "printedName": "Sora.SoraEventKind",
+                "usr": "s:4Sora0A9EventKindV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV4kindAA0aB4KindVvp",
+            "mangledName": "$s4Sora0A5EventV4kindAA0aB4KindVvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventKind",
+                    "printedName": "Sora.SoraEventKind",
+                    "usr": "s:4Sora0A9EventKindV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV4kindAA0aB4KindVvg",
+                "mangledName": "$s4Sora0A5EventV4kindAA0aB4KindVvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "connectionId",
+            "printedName": "connectionId",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.String?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV12connectionIdSSSgvp",
+            "mangledName": "$s4Sora0A5EventV12connectionIdSSSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.String?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV12connectionIdSSSgvg",
+                "mangledName": "$s4Sora0A5EventV12connectionIdSSSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "transportEpoch",
+            "printedName": "transportEpoch",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.Int?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV14transportEpochSiSgvp",
+            "mangledName": "$s4Sora0A5EventV14transportEpochSiSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.Int?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Int",
+                        "printedName": "Swift.Int",
+                        "usr": "s:Si"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV14transportEpochSiSgvg",
+                "mangledName": "$s4Sora0A5EventV14transportEpochSiSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "sequence",
+            "printedName": "sequence",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV8sequences6UInt64Vvp",
+            "mangledName": "$s4Sora0A5EventV8sequences6UInt64Vvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "SetterAccess",
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV8sequences6UInt64Vvg",
+                "mangledName": "$s4Sora0A5EventV8sequences6UInt64Vvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "error",
+            "printedName": "error",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Sora.SoraEventError?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraEventError",
+                    "printedName": "Sora.SoraEventError",
+                    "usr": "s:4Sora0A10EventErrorV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV5errorAA0aB5ErrorVSgvp",
+            "mangledName": "$s4Sora0A5EventV5errorAA0aB5ErrorVSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Sora.SoraEventError?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SoraEventError",
+                        "printedName": "Sora.SoraEventError",
+                        "usr": "s:4Sora0A10EventErrorV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV5errorAA0aB5ErrorVSgvg",
+                "mangledName": "$s4Sora0A5EventV5errorAA0aB5ErrorVSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "closeEvent",
+            "printedName": "closeEvent",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Sora.SoraCloseEvent?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraCloseEvent",
+                    "printedName": "Sora.SoraCloseEvent",
+                    "usr": "s:4Sora0A10CloseEventO"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV05closeB0AA0a5CloseB0OSgvp",
+            "mangledName": "$s4Sora0A5EventV05closeB0AA0a5CloseB0OSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Sora.SoraCloseEvent?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SoraCloseEvent",
+                        "printedName": "Sora.SoraCloseEvent",
+                        "usr": "s:4Sora0A10CloseEventO"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV05closeB0AA0a5CloseB0OSgvg",
+                "mangledName": "$s4Sora0A5EventV05closeB0AA0a5CloseB0OSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "streamId",
+            "printedName": "streamId",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.String?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV8streamIdSSSgvp",
+            "mangledName": "$s4Sora0A5EventV8streamIdSSSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.String?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV8streamIdSSSgvg",
+                "mangledName": "$s4Sora0A5EventV8streamIdSSSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "isEnabled",
+            "printedName": "isEnabled",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.Bool?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV9isEnabledSbSgvp",
+            "mangledName": "$s4Sora0A5EventV9isEnabledSbSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.Bool?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Bool",
+                        "printedName": "Swift.Bool",
+                        "usr": "s:Sb"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV9isEnabledSbSgvg",
+                "mangledName": "$s4Sora0A5EventV9isEnabledSbSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "signalingJSON",
+            "printedName": "signalingJSON",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.String?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV13signalingJSONSSSgvp",
+            "mangledName": "$s4Sora0A5EventV13signalingJSONSSSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.String?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV13signalingJSONSSSgvg",
+                "mangledName": "$s4Sora0A5EventV13signalingJSONSSSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "dataChannelLabel",
+            "printedName": "dataChannelLabel",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.String?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV16dataChannelLabelSSSgvp",
+            "mangledName": "$s4Sora0A5EventV16dataChannelLabelSSSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.String?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV16dataChannelLabelSSSgvg",
+                "mangledName": "$s4Sora0A5EventV16dataChannelLabelSSSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "dataChannelMessage",
+            "printedName": "dataChannelMessage",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Foundation.Data?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Data",
+                    "printedName": "Foundation.Data",
+                    "usr": "s:10Foundation4DataV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV18dataChannelMessage10Foundation4DataVSgvp",
+            "mangledName": "$s4Sora0A5EventV18dataChannelMessage10Foundation4DataVSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Foundation.Data?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Data",
+                        "printedName": "Foundation.Data",
+                        "usr": "s:10Foundation4DataV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV18dataChannelMessage10Foundation4DataVSgvg",
+                "mangledName": "$s4Sora0A5EventV18dataChannelMessage10Foundation4DataVSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "audioRoute",
+            "printedName": "audioRoute",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Sora.SoraAudioRouteEvent?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SoraAudioRouteEvent",
+                    "printedName": "Sora.SoraAudioRouteEvent",
+                    "usr": "s:4Sora0A15AudioRouteEventV"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV10audioRouteAA0a5AudiodB0VSgvp",
+            "mangledName": "$s4Sora0A5EventV10audioRouteAA0a5AudiodB0VSgvp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Sora.SoraAudioRouteEvent?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SoraAudioRouteEvent",
+                        "printedName": "Sora.SoraAudioRouteEvent",
+                        "usr": "s:4Sora0A15AudioRouteEventV"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV10audioRouteAA0a5AudiodB0VSgvg",
+                "mangledName": "$s4Sora0A5EventV10audioRouteAA0a5AudiodB0VSgvg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "defaultBufferSize",
+            "printedName": "defaultBufferSize",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora0A5EventV17defaultBufferSizeSivpZ",
+            "mangledName": "$s4Sora0A5EventV17defaultBufferSizeSivpZ",
+            "moduleName": "Sora",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora0A5EventV17defaultBufferSizeSivgZ",
+                "mangledName": "$s4Sora0A5EventV17defaultBufferSizeSivgZ",
+                "moduleName": "Sora",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:4Sora0A5EventV",
+        "mangledName": "$s4Sora0A5EventV",
+        "moduleName": "Sora",
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
           },
           {
             "kind": "Conformance",

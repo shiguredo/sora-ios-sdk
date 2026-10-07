@@ -285,6 +285,11 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     if let mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
       handler(mediaChannel, dataChannel.label, data)
     }
+    // 既存 handler の有無にかかわらず、購読者へは同じ配送点から配送する。
+    mediaChannel?.publishEvent(
+      kind: .dataChannelMessage,
+      dataChannelLabel: dataChannel.label,
+      dataChannelMessage: data)
   }
 }
 
