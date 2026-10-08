@@ -246,7 +246,10 @@ public struct SoraEvent: Sendable {
 
   /// redirect を跨いだ接続の世代
   ///
-  /// redirect のたびに増えます。古い世代のイベント (stale event) を識別するために使います。
+  /// 接続 (`MediaChannel`) ごとの値で、接続の開始時は 0 です。redirect を受信するたびに増えるため、
+  /// 通常は 0 (redirect なし) か 1 (redirect あり) になります (増加の上限は保証しないため、判定は
+  /// 「0 か、1 以上か」で行ってください)。同じ接続のイベント列で古い世代のイベント (stale event) を
+  /// 識別するために使います (別の接続の世代とは比較できません)。
   /// 接続に紐づかないイベント (`.audioRouteChanged` と、設定エラーの `.connectFailed`) では `nil` です。
   public let transportEpoch: Int?
 
