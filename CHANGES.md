@@ -11,6 +11,9 @@
 
 ## develop
 
+- [UPDATE] libwebrtc を m155.8059.4.1 に更新する
+  - m155 の iOS 用 ADM で録音の pause / resume を WebRTC の worker スレッド上で実行する契約になったため、`RTCPeerConnectionFactory.runOnWorker(_:)` 経由で呼ぶようにする
+  - @zztkm
 - [CHANGE] `swift-tools-version` を 6.3 に上げ、Swift 6 言語モードを manifest で宣言する
   - SwiftPM 6.3 未満 (Xcode 26.6 未満) では package を解決できなくなる
   - `swiftLanguageModes: [.v6]` により、SwiftPM で取り込んだ consumer も SDK を Swift 6 言語モードで compile する。公開 API と SDK の挙動は変わらない
