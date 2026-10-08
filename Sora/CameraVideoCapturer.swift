@@ -1680,6 +1680,24 @@ extension CameraSettings.Resolution: Codable {
 /// `CameraVideoCapturer.handlers` は型全体で共有する storage が、差し替えない限り同じ instance を
 /// 返すため、`CameraVideoCapturer.handlers.onCapture = ...` のような in-place 変更もその instance の
 /// `HandlerStorage` が排他します (`CameraHandlersStorage` が排他するのは参照の get / set だけです)。
+///
+/// 呼び出し元のスレッドは保証されない。UI 更新や共有状態の変更は main queue / main actor へ
+/// 束ねること。
+///
+/// 配送のたびにプロパティを読むため、接続の途中で設定を変更しても次の配送から反映される
+/// (プロパティごとの storage が排他するのは読み書きだけであり、配送側は lock を解放してから
+/// 取得済みの closure を呼ぶ)。
+///
+/// Swift 6 言語モードで `@MainActor` の文脈からハンドラーを設定する場合は、クロージャに
+/// `@Sendable` を付けるか `nonisolated` な関数へ処理を分離して隔離を外す。`CameraVideoCapturer` は
+/// `Sendable` のためそのまま main actor へ渡せる。`VideoFrame` は `Sendable` ではなく、`onCapture`
+/// は返した frame の所有権を SDK へ移すため、frame を `Task` へ運ばずに返却前に処理を終えること
+/// (`nonisolated(unsafe) let` で frame を main actor へ運ぶと、返却の後に frame を参照・変更する
+/// 経路が生まれる)。
+///
+/// カメラのイベントは新しい購読 API (`Sora.subscribeEvents(bufferingPolicy:)` /
+/// `MediaChannel.subscribeEvents(bufferingPolicy:)`) の対象外であり、従来どおりこの handler で
+/// 受け取る。
 public class CameraVideoCapturerHandlers {
   /// 生成された映像フレームを受け取ります。
   /// 返した映像フレームがストリームに渡されます。

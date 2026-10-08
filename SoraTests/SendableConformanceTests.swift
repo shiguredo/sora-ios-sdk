@@ -117,6 +117,14 @@ final class SendableConformanceTests: XCTestCase {
     // WebSocket メッセージ
     requireSendable(WebSocketMessage.self)
 
+    // イベント購読
+    requireSendable(SoraEvent.self)
+    requireSendable(SoraEventKind.self)
+    requireSendable(SoraEventError.self)
+    requireSendable(SoraAudioPortSnapshot.self)
+    requireSendable(SoraAudioRouteSnapshot.self)
+    requireSendable(SoraAudioRouteEvent.self)
+
     // 接続タスクの状態
     requireSendable(ConnectionTask.State.self)
 
@@ -204,6 +212,32 @@ final class SendableConformanceTests: XCTestCase {
 
     await assertCrossesBoundaries(
       WebSocketMessage.text("sendable"), message: "WebSocketMessage が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      SoraEvent(kind: .connected), message: "SoraEvent が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraEvent(kind: .streamAdded, connectionId: "connection-1", transportEpoch: 1, streamId: "s"),
+      message: "SoraEvent の payload が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraEventKind.connected, message: "SoraEventKind が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraEventError(domain: "Sora", code: 1, message: "sendable check"),
+      message: "SoraEventError が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraAudioPortSnapshot(
+        name: "speaker", portType: "Speaker", uid: "uid", channelCount: 2, hasDataSource: false),
+      message: "SoraAudioPortSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraAudioRouteEvent(
+        reason: .newDeviceAvailable,
+        previousRoute: SoraAudioRouteSnapshot(
+          inputs: [],
+          outputs: [
+            SoraAudioPortSnapshot(
+              name: "speaker", portType: "Speaker", uid: "uid", channelCount: 2,
+              hasDataSource: false)
+          ])),
+      message: "SoraAudioRouteEvent が actor 境界を越えられない")
 
     await assertCrossesBoundaries(
       ConnectionTask.State.connecting, message: "ConnectionTask.State が actor 境界を越えられない")

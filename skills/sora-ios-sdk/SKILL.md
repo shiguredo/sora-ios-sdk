@@ -608,6 +608,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
   - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
   - RPC と JSON: `RPCErrorDetail` / `JSONValue` / `SendableRPCResponse` / `RequestSimulcastRidParams` / `RequestSpotlightRidParams` / `ResetSpotlightRidParams` / `RequestSimulcastRidResult` / `RequestSpotlightRidResult` / `ResetSpotlightRidResult` / `PutSignalingNotifyMetadataParams` (`Metadata` が `Sendable` の場合) / `PutSignalingNotifyMetadataItemParams` (`Value` が `Sendable` の場合)
   - 統計: `StatisticsSnapshot` / `StatisticsEntrySnapshot`
+  - イベント購読: `SoraEvent` / `SoraEventKind` / `SoraEventError` / `SoraAudioPortSnapshot` / `SoraAudioRouteSnapshot` / `SoraAudioRouteEvent`
   - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
 - `@unchecked Sendable`: `Sora`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
@@ -621,6 +622,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 コールバックの呼び出し元スレッドは保証されない。UI 更新や共有状態の変更は main queue / main actor へ束ねる。
 
 - `SoraHandlers` / `MediaChannelHandlers` の各コールバック (`onConnect` / `onDisconnect` / `onAddStream` / `onDataChannel` など)
+- `Sora.connect(configuration:webRTCConfiguration:handler:)` の引数 handler も、接続を開始したスレッドとは異なるスレッドから呼ばれ得る (接続成功・設定エラー・接続失敗のいずれの経路でも)
 - `MediaStreamHandlers` の `onSwitchVideo` / `onSwitchAudio`
 - `RTCAudioTrackSink.onData` は libwebrtc の音声処理スレッド (10 ms ごと)
 - `CameraVideoCapturer.handlers.onCapture` はカメラキャプチャスレッド
@@ -648,7 +650,7 @@ _ = Sora.shared.connect(configuration: config) { @Sendable [weak self] mediaChan
 }
 ```
 
-`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、SDK が Sendable な event API を提供するまでの間、サンプル集とクイックスタートでも使われている。将来 SDK 側の対応が進んだら不要になる。
+`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、サンプル集とクイックスタートでも使われている。`MediaChannel` / `MediaStream` の参照は非 Sendable のため、legacy の handler API を使う間はこの暫定対応が必要になる。イベントは `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` が Sendable な `SoraEvent` として配送するため、購読側では暫定対応が不要になる。
 
 `MediaChannelHandlers` のコールバックも同じ考え方で扱う。
 
@@ -671,9 +673,87 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 }
 ```
 
+### イベントの購読
+
+接続と `Sora` インスタンスのイベントを `AsyncStream` で購読できる。legacy の handler API は互換のために維持され、新しい購読 API は同じ配送点から対応するイベントを配送する。
+
+| 購読 | 配送されるイベント |
+| --- | --- |
+| `Sora.subscribeEvents(bufferingPolicy:)` | `mediaChannelAdded` / `mediaChannelRemoved` / `audioRouteChanged` と、このインスタンスが開始した接続の `connected` / `connectFailed` / `disconnected` |
+| `MediaChannel.subscribeEvents(bufferingPolicy:)` | `connected` / `connectFailed` / `streamAdded` / `streamRemoved` / `videoEnabledChanged` / `audioEnabledChanged` / `signalingReceivedJSON` / `dataChannelOpened` / `dataChannelAvailable` / `dataChannelMessage` / `disconnected` |
+
+- 購読者ごとに独立した `AsyncStream` を返す。buffer / drop 方針 / 終端は購読者ごとに独立し、1 つの購読を解除しても他の購読者へ影響しない
+- buffer は既定で `SoraEvent.defaultBufferSize` 件で、あふれた場合は最も古いイベントが破棄される。`SoraEvent.sequence` で欠落を検出できる
+- 購読を開始する前に配送されたイベントは届かない (buffer は購読ごとに作られる)。接続前に購読を開始すれば `mediaChannelAdded` と接続結果を取り逃さない
+- 購読の解除は、購読している `Task` の cancel、購読に使った `AsyncStream` への参照の解放、接続の終了 (`MediaChannel`)、または `Sora` インスタンスの解放
+- `MediaChannel` の購読は、接続の終了で `disconnected` を配送してから終端する。終端後の購読には終端済みの stream を返す
+- `SoraEvent` は `Sendable` のため actor / Task 境界へ渡せる。payload はすべて値として確定し、配送後も保持できる (`MediaChannel` / `MediaStream` / raw WebRTC object は含まれない)
+- 購読している `Task` の loop の中から getter や `disconnect` などの同期 API を呼べる (配送は排他区間の外で行うため deadlock しない)
+- イベントの配送 executor は発生元によって異なる (libwebrtc の callback スレッド、signaling の受信スレッド、呼び出し元の executor など)。AsyncStream の再開後に動く購読者のコードは購読している `Task` の executor 上で実行されるため、UI 更新は main actor / main queue へ束ねる。同時に配送されたイベントは、配送順と `sequence` の順序が一致しない場合がある
+- `MediaChannel` の `connected` / `connectFailed` は接続の完了と同じ配送点で発行される。接続の結果を購読する場合は `Sora` の購読を接続前に開始する
+- `SoraEventKind` は `RawRepresentable` な struct のため、種別の `switch` には `default` を書く。SDK が種別を追加しても利用側の既存コードが build できなくならない
+
+```swift
+// 接続前に購読する (mediaChannelAdded / connected を取り逃さないため)
+let soraEvents = Sora.shared.subscribeEvents()
+Task {
+  for await event in soraEvents {
+    switch event.kind {
+    case .connected:
+      print("connected: \(event.connectionId ?? "-")")
+    default:
+      break
+    }
+  }
+}
+
+_ = Sora.shared.connect(configuration: config) { mediaChannel, error in
+  guard let mediaChannel, error == nil else { return }
+  // 購読を開始してから Task へ渡す (購読を開始する前のイベントは届かない)
+  let events = mediaChannel.subscribeEvents()
+  Task {
+    for await event in events {
+      switch event.kind {
+      case .streamAdded:
+        print("stream added: \(event.streamId ?? "-")")
+      case .disconnected:
+        print("disconnected")
+      default:
+        break
+      }
+    }
+  }
+}
+```
+
+購読を解除する場合は、購読している `Task` を cancel するか、`AsyncStream` への参照を解放する。
+
+legacy handler と新しいイベントの対応は次のとおり。対応は「同じ配送点から配送される」ことを示す。legacy handler の配送 executor / 順序 / 発火回数は、新しい購読 API の追加では変わらない。
+
+| legacy handler | 新しいイベント |
+| --- | --- |
+| `SoraHandlers.onConnect` / `Sora.connect(...)` の引数 handler | `Sora` の `connected` / `connectFailed` |
+| `SoraHandlers.onDisconnect` | `Sora` の `disconnected` |
+| `SoraHandlers.onAddMediaChannel` | `mediaChannelAdded` |
+| `SoraHandlers.onRemoveMediaChannel` | `mediaChannelRemoved` |
+| `SoraHandlers.onChangeAudioRoute` | `audioRouteChanged` |
+| `MediaChannelHandlers.onConnect` | `MediaChannel` の `connected` / `connectFailed` |
+| `MediaChannelHandlers.onDisconnect` | `MediaChannel` の `disconnected` |
+| `MediaChannelHandlers.onAddStream` | `streamAdded` |
+| `MediaChannelHandlers.onRemoveStream` | `streamRemoved` |
+| `MediaChannelHandlers.onReceiveSignalingJSON` | `signalingReceivedJSON` |
+| `MediaChannelHandlers.onDataChannel` | `dataChannelAvailable` |
+| `MediaChannelHandlers.onDataChannelOpened` | `dataChannelOpened` |
+| `MediaChannelHandlers.onDataChannelMessage` | `dataChannelMessage` |
+| `MediaStreamHandlers.onSwitchVideo` | `videoEnabledChanged` |
+| `MediaStreamHandlers.onSwitchAudio` | `audioEnabledChanged` |
+| `WebSocketChannelHandlers.onReceive` | 対象外。生の `WebSocketMessage` を受け取る経路は legacy handler だけ。シグナリングの JSON 文字列は `signalingReceivedJSON` が配送する |
+| `CameraVideoCapturerHandlers.onCapture` / `onStart` / `onStop` | 対象外。カメラ状態の所有と frame の lifetime は別の owner が扱う |
+| `VideoRenderer` の callback | 対象外。main queue へ配送される UI 専用経路 |
+
 ### 非同期 API
 
-`async` / `await` に対応するのは `MediaChannel.rpc` / `sendableRPC` / `getStatsSnapshot` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。
+`async` / `await` に対応するのは `MediaChannel.rpc` / `sendableRPC` / `getStatsSnapshot` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。イベントは `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` が返す `AsyncStream` を `for await` で消費する。
 
 ### スレッド安全でない共有状態
 
@@ -685,7 +765,7 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 
 ### 現状の制約
 
-- Sendable な event API はまだ提供されていない。`MediaChannel` / `MediaStream` を境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要。統計の値は `getStatsSnapshot(handler:)` / `getStatsSnapshot()` が Sendable な `StatisticsSnapshot` を返すため actor 境界へ渡せるが、`MediaChannel` の参照は非 Sendable のままで、`@MainActor` 隔離の文脈から `getStatsSnapshot()` を呼ぶ場合や `MediaChannel` の参照を `@Sendable` closure / `Task` へ渡す場合は `nonisolated(unsafe)` か nonisolated な Sendable な箱が必要 (同期 API の `getStats(handler:)` / `getStatsSnapshot(handler:)` の呼び出しはそのまま可能)
+- イベントは `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` が Sendable な `SoraEvent` として配送する。統計の値は `getStatsSnapshot(handler:)` / `getStatsSnapshot()` が Sendable な `StatisticsSnapshot` を返す。一方 `MediaChannel` / `MediaStream` の参照は非 Sendable のままで、境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要 (`@MainActor` 隔離の文脈から `getStatsSnapshot()` を呼ぶ場合や `MediaChannel` の参照を `@Sendable` closure / `Task` へ渡す場合も同様。同期 API の `getStats(handler:)` / `getStatsSnapshot(handler:)` の呼び出しはそのまま可能)
 - サンプル集とクイックスタートは Swift 6 言語モードだが、`@preconcurrency import Sora` と `nonisolated(unsafe)` の暫定対応を含む。Swift 6 の模範例ではなく、暫定対応を含む参考実装として扱う
 
 ## 非推奨 API
@@ -722,5 +802,6 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 | Sendable な RPC | `try await MediaChannel.sendableRPC(method:params:)` |
 | 統計取得 | `MediaChannel.getStats(handler:)` |
 | Sendable な統計取得 | `try await MediaChannel.getStatsSnapshot()` |
+| イベント購読 | `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` |
 | 受信音量 | `MediaStream.remoteAudioVolume` |
 | 受信 PCM | `MediaStream.addAudioTrackSink(_:)` |
