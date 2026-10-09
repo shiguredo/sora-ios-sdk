@@ -1,7 +1,7 @@
 # 画面キャプチャの ReplayKit コールバックが MainActor 隔離を継承し、配信開始時に実行時隔離チェックでクラッシュする問題を修正する
 
 - Created: 2026-10-09
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-09
 - Branch: feature/fix-screen-capture-replaykit-callback-isolation
 - Polished: 2026-10-09
 - Reporter: @t-miya
@@ -41,3 +41,25 @@ MainActor 上で行う必要がある処理は、既存どおりクロージャ�
 - `Sora/` に同種の隔離漏れが残っていないことを確認できる。
 
 ## 解決方法
+
+### 修正内容
+
+- `Sora/ScreenCapture.swift` の `ScreenCaptureController.startRecorderCaptureIfIdle()` で、`RPScreenRecorder.startCapture` の `handler:` と `completionHandler:` に `@Sendable` を付けた。`stopRecorderCapture()` の `RPScreenRecorder.stopCapture` の完了クロージャにも同じく `@Sendable` を付けた。3 つのコールバックが MainActor 隔離を継承しなくなり、ReplayKit が自身のキューから呼んでも実行時隔離チェックに掛からない
+- MainActor 上で行う処理は従来どおりクロージャの中の `Task { @MainActor in ... }` で行い、`recorder.isRecording` の読み出しと ReplayKit のプロパティ設定の位置は変えていない
+- `ScreenCaptureController` の `@unchecked Sendable` 根拠コメントの最終項を、コールバックが `@Sendable` を付けた非隔離のクロージャとして ReplayKit のキューから呼ばれる旨へ更新した (状態の読み書きが `lock` の区間内である点は変わらない)
+- `CHANGES.md` の `## develop` の [FIX] の末尾にエントリを追加した
+
+### 検証結果
+
+- 型検査 (`-swift-version 6`、Sora target 全体): warning 13 件 (すべて非推奨 API) / error 0 件。修正前後で診断は変わらない
+- `-emit-silgen` と `-emit-sil -O` の比較: 修正前は `handler:` と `stopCapture` の完了クロージャに `_checkExpectedExecutor` (実行時隔離チェック) が生成されていた。修正後は両方から消え、`// Isolation: nonisolated` になる。ObjC block への変換・捕捉 (`[weak self]`)・`continuation.resume` の回数と executor は不変
+- `make build` (Release / iOS device、`-warnings-as-errors -Wwarning DeprecatedDeclaration`): BUILD SUCCEEDED、warning 13 / error 0
+- `SoraTests` 全件 (Simulator): 521 件 / 39 skip / 失敗 0
+- `make fmt-lint` と `swiftlint lint --strict`: 成功 (0 violations / 0 serious)
+- 実機: sora-ios-sdk-samples の ScreenCast で確認した。`project.pbxproj` の依存をローカル package 参照へ差し替えてこの作業ツリーの SDK を使い、配信を開始してもクラッシュしない
+- CI (PR #427): Build / Swift 6 Consumer / E2E Test / TSan がすべて success。E2E の初回失敗は同じ run の `e2e` job と `tsan` job が同じチャンネル ID へ並行接続したことによる `TIMEOUT` で、本修正とは無関係 (`0187` で扱う)
+
+### 残った懸念
+
+- コードレビュー (`/review-diff-code`) で挙がった改善提案 (doc コメントの記述精度、`CHANGES.md` の文言、`completionHandler:` への `@Sendable` 明示が import 時点の型と同じで no-op である点の扱い) は本 issue では反映していない
+- `ScreenCaptureSettings.onRuntimeError` の配送 executor が公開 doc と `skills/sora-ios-sdk/SKILL.md` に未記載である。本修正で Swift 6 言語モードでも画面キャプチャが動作するようになり、エラー経路で利用者側の closure が trap し得る経路が到達可能になった (別 issue として起票するのが妥当)
