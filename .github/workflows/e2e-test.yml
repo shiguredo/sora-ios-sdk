@@ -21,7 +21,9 @@ jobs:
       SORA_SIGNALING_URL: ${{ secrets.TEST_SIGNALING_URL }}
       TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
       TEST_CHANNEL_ID_PREFIX: ${{ secrets.TEST_CHANNEL_ID_PREFIX }}
-      TEST_CHANNEL_ID_SUFFIX: _${{ github.run_id }}
+      # 同じ run の e2e job と tsan job が同じチャンネル ID へ接続すると、片方の接続が
+      # TIMEOUT で close されてテストが失敗することがあるため、job ごとに分ける
+      TEST_CHANNEL_ID_SUFFIX: _${{ github.run_id }}_e2e
       TEST_API_URL: ${{ secrets.TEST_API_URL }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -131,7 +133,9 @@ jobs:
       SORA_SIGNALING_URL: ${{ secrets.TEST_SIGNALING_URL }}
       TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
       TEST_CHANNEL_ID_PREFIX: ${{ secrets.TEST_CHANNEL_ID_PREFIX }}
-      TEST_CHANNEL_ID_SUFFIX: _${{ github.run_id }}
+      # 同じ run の e2e job と tsan job が同じチャンネル ID へ接続すると、片方の接続が
+      # TIMEOUT で close されてテストが失敗することがあるため、job ごとに分ける
+      TEST_CHANNEL_ID_SUFFIX: _${{ github.run_id }}_tsan
       TEST_API_URL: ${{ secrets.TEST_API_URL }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
