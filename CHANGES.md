@@ -161,6 +161,11 @@
   - redirect の無効化が完了した後に開始した `sendMessage` は `SoraError.messagingError` を返し、旧 DataChannel へ送信しない
   - `MediaChannel.performRPC` の `rpcChannel` の参照取得も同じ排他単位へ移す
   - @t-miya
+- [FIX] 画面キャプチャの ReplayKit コールバックが MainActor 隔離を継承し、配信開始時に実行時隔離チェックでプロセスが終了する問題を修正する
+  - `RPScreenRecorder.startCapture` の `handler:` と `RPScreenRecorder.stopCapture` の完了クロージャに `@Sendable` を付け、ReplayKit が自身のキューから呼んでも実行時隔離チェックに掛からないようにする
+  - `startCapture` の `completionHandler:` にも `@Sendable` を明示し、3 つのコールバックの隔離の契約をコード上で揃える (import 時点で非隔離のため診断は変わらない)
+  - MainActor 上の処理はクロージャの中の `Task { @MainActor in ... }` で行い、公開 API と SDK の挙動は変えない
+  - @t-miya
 
 ### misc
 
