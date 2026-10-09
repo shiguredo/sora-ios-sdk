@@ -210,6 +210,9 @@
   - `RTCAudioDevice` の lifecycle state を 1 つの lock へ統一し、録音・再生の timer に世代を持たせて停止・終了後に届いた callback を破棄する。停止と開始が交差した場合に timer や AudioUnit が停止後に残らないよう、ライフサイクルの世代で開始処理を検証する
   - `pcmGenerator` を `@Sendable` にし、テストの波形生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の可変状態を lock で保護する
   - @t-miya
+- [FIX] E2E テストの CI で `e2e` job と `tsan` job が同じチャンネル ID を使い、片方の接続がタイムアウトしてテストが失敗する問題を修正する
+  - 両 job の `TEST_CHANNEL_ID_SUFFIX` に job 名を足し、同じ run の job 間でチャンネル ID が重複しないようにする
+  - @t-miya
 
 ## 2026.3.0
 
