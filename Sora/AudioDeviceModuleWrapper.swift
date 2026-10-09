@@ -6,9 +6,23 @@ internal final class AudioDeviceModuleWrapper {
   private let audioDeviceModule: RTCAudioDeviceModule
   // ハードミュート処理を直列化するためのキュー
   private let queue = DispatchQueue(label: "jp.shiguredo.sora.audio.device.wrapper")
+  // 録音操作の実行先となる factory。m155 以降の ADM は録音の pause/resume を
+  // WebRTC の worker スレッド上で実行する契約のため、factory 経由で実行する。
+  private let lock = NSLock()
+  private var factory: RTCPeerConnectionFactory?
 
   init(audioDeviceModule: RTCAudioDeviceModule) {
     self.audioDeviceModule = audioDeviceModule
+  }
+
+  /// 録音操作の実行先となる factory を設定します。
+  ///
+  /// ADM の生成直後は factory がまだ存在しないため、factory の生成後に呼び出します。
+  /// - Parameter factory: `audioDeviceModule` を受け取った factory
+  func bindToFactory(_ factory: RTCPeerConnectionFactory) {
+    lock.lock()
+    defer { lock.unlock() }
+    self.factory = factory
   }
 
   /// 音声のハードミュート有効化/無効化します
@@ -33,11 +47,25 @@ internal final class AudioDeviceModuleWrapper {
     return result
   }
 
+  /// 録音操作を WebRTC の worker スレッドで実行し、その戻り値を返します。
+  ///
+  /// factory が未設定の場合は worker を特定できないため、失敗として扱います。
+  private func runOnWorker(_ body: @escaping () -> Int) -> Int32 {
+    lock.lock()
+    let factory = self.factory
+    lock.unlock()
+    guard let factory else {
+      return Int32(-1)
+    }
+    // Objective-C の `runOnWorker:` は Swift からは `run(onWorker:)` として見える。
+    return Int32(factory.run(onWorker: body))
+  }
+
   private func pauseRecordingInternal() -> Int32 {
-    Int32(audioDeviceModule.pauseRecording())
+    runOnWorker { [audioDeviceModule] in Int(audioDeviceModule.pauseRecording()) }
   }
 
   private func resumeRecordingInternal() -> Int32 {
-    Int32(audioDeviceModule.resumeRecording())
+    runOnWorker { [audioDeviceModule] in Int(audioDeviceModule.resumeRecording()) }
   }
 }
