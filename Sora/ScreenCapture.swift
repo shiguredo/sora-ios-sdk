@@ -151,7 +151,9 @@ final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
 ///   読み書きはすべて `withLock` の区間内で行います。
 /// - 送信対象の capture ID と sender stream は `activeCaptureAndStream()` が同じ `lock` 区間で
 ///   取得します (不変条件は同関数の doc を参照)。
-/// - ReplayKit callback と recorder の完了 callback は `Task { @MainActor in ... }` から呼ばれ、
+/// - ReplayKit callback と recorder の完了 callback は `@Sendable` を付けた非隔離のクロージャとして
+///   ReplayKit のキューから呼ばれます。sample buffer の処理はそのキュー上で行い、MainActor 上の処理
+///   (`recorder.isRecording` の読み出し) は完了 callback の中の `Task { @MainActor in ... }` で行います。
 ///   controller の状態の読み書きはすべて `lock` の区間内で行います。
 final class ScreenCaptureController: @unchecked Sendable {
   // キャプチャー状況の列挙型
@@ -504,15 +506,19 @@ final class ScreenCaptureController: @unchecked Sendable {
         // 本 API は画面映像のみを送信対象としており、ReplayKit 経路でのマイク / カメラ入力は使用しません。
         self.recorder.isMicrophoneEnabled = false
         self.recorder.isCameraEnabled = false
+        // クロージャは `Task { @MainActor in ... }` の中で作るため、`@Sendable` を付けないと MainActor
+        // 隔離を継承します。ReplayKit は handler を自身のキューから呼ぶので、そのままでは実行時隔離
+        // チェックでプロセスが終了します。`completionHandler:` は ReplayKit 側で `@Sendable` として
+        // import されますが、隔離の契約をコード上で揃えるためこちらにも明示します。
         self.recorder.startCapture(
-          handler: { [weak self] sampleBuffer, sampleBufferType, error in
+          handler: { @Sendable [weak self] sampleBuffer, sampleBufferType, error in
             self?.handleSampleBuffer(
               sampleBuffer: sampleBuffer,
               sampleBufferType: sampleBufferType,
               error: error
             )
           },
-          completionHandler: { error in
+          completionHandler: { @Sendable error in
             Task { @MainActor in
               continuation.resume(
                 returning: .completed(
@@ -529,7 +535,9 @@ final class ScreenCaptureController: @unchecked Sendable {
   private func stopRecorderCapture() async -> RecorderOperationResult {
     await withCheckedContinuation { continuation in
       Task { @MainActor in
-        self.recorder.stopCapture { error in
+        // この完了クロージャも `@Sendable` を付けないと MainActor 隔離を継承します
+        // (startRecorderCaptureIfIdle の handler と同じ理由)。
+        self.recorder.stopCapture { @Sendable error in
           Task { @MainActor in
             continuation.resume(
               returning: RecorderOperationResult(
