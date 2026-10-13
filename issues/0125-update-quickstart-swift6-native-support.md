@@ -1,7 +1,7 @@
 # sora-ios-sdk-quickstart の Swift 6 暫定対応を SDK の本対応へ置き換える
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-10-13
 - Branch: feature/update-quickstart-swift6-native-support
 - Polished: 2026-10-08
 
@@ -105,3 +105,29 @@ quickstart は SDK の最小利用例として提供されている。SDK 側の
 
 - 購読 API の使い方は `skills/sora-ios-sdk/SKILL.md` の「コールバックを Swift 6 で扱う」と「イベントの購読」に記載がある
 - SDK 側の Swift 6 関連 issue: 0107 / 0108 / 0109 / 0110 / 0120 / 0122 / 0123
+
+## 解決方法
+
+sora-ios-sdk-quickstart 側で対応し、[PR #60](https://github.com/shiguredo/sora-ios-sdk-quickstart/pull/60) (base `feature/2026.4`、マージコミット `19d7e0a`、2026-10-13) として完了した。sora-ios-sdk 本体のコード変更は無い。
+
+主な変更は次のとおり。
+
+- SDK 依存を 2026.4.0-canary.3 へ上げた (`SoraQuickStart.xcodeproj/project.pbxproj` の `exactVersion` と `Package.resolved`)。canary.2 の後に canary.3 が公開されていたため、公開済みの最新 canary を利用している
+- イベントの受け取りを購読 API へ置き換えた (`SoraQuickStart/ViewController.swift`)
+  - 接続結果は `Sora.subscribeEvents(bufferingPolicy:)` の `.connected` / `.connectFailed` で受ける。購読は `viewDidLoad` で接続開始前に開始する
+  - `MediaChannel` は `Sora.shared.mediaChannels` から取得し、`.mediaChannelAdded` の時点で `MediaChannel.subscribeEvents(bufferingPolicy:)` の購読を開始する
+  - 受信ストリームは `.streamAdded` / `.streamRemoved` で受け、`MediaChannel.streams` から `streamId` で解決して `videoRenderer` を設定する
+  - シグナリングは `.signalingReceivedJSON`、切断は `.disconnected` で受ける
+- `@preconcurrency import Sora` を撤去し、通常の `import Sora` に戻した
+- ファイルスコープの `nonisolated(unsafe)` 宣言 (`soraConnectHandler` クロージャーと `_currentViewController` 変数) を撤去した。残る `nonisolated(unsafe) let` は `attachVideoRenderers(_:)` の関数ローカルで、`MediaChannel` / `MediaStream` を `Task { @MainActor in ... }` へ渡すためのものであり、SDK のドキュメントコメントが示す形に沿っている
+- `Sora.shared.connect(configuration:handler:)` の `handler` は API 上必須のため、空の `@Sendable` クロージャを渡し、接続結果は購読 API で受ける形にした
+- `nonisolated` を付けた関数は `connection.queue` 上で実行する接続・切断処理に必要なものだけを残し、その理由をコメントに記載した。`connectionQueue` による直列化と接続・切断のタイムアウト処理は維持している
+- README のシステム条件と `.github/workflows/build.yml` の `XCODE` / `XCODE_SDK` を Xcode 26.6 と iphoneos26.5 (SwiftPM 6.3 以上) に更新した
+- CHANGES.md に SDK バージョン更新と暫定対応の撤去を記載した
+
+検証は次のとおり。
+
+- Xcode 26.6 でビルドでき、CI (`.github/workflows/build.yml`) の run [38333143473](https://github.com/shiguredo/sora-ios-sdk-quickstart/actions/runs/38333143473) も成功している
+- 実機で接続と切断ができることを確認した
+
+なお、0122 (legacy `VideoRenderer` API の削除) と 0148 (quickstart の複数クライアント映像) は未完了である。0122 が先行した場合は `MediaStream.videoRenderer` の利用の置き換えが、0148 が先行した場合は受信ストリームの描画部分の変更が必要になる。0160 (Xcode プロジェクト設定ファイル形式の更新) も未実施のため、SDK 依存の更新は `project.pbxproj` に対して行った。
