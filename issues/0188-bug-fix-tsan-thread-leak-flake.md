@@ -1,7 +1,7 @@
 # tsan job が WebRTC の thread leak で不安定に失敗する問題を修正する
 
 - Created: 2026-10-14
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-14
 - Priority: Medium
 - Branch: feature/fix-tsan-thread-leak
 - Polished: 2026-10-14
@@ -55,7 +55,7 @@ tsan job は develop と PR のブランチへの push で走る (`on` は `push
 - `0119` (完了): tsan job を追加した。本件はその job の失敗条件の調整である。
 - `0187` (完了): e2e job と tsan job のチャンネル ID 衝突を修正した。本件の失敗とは別である。
 - `0135` (open): messaging 経路のデータ競合を扱う。本件はデータ競合ではなく thread leak であり、混同しない。
-- `0189` (open): 同じ run 38511195252 で report 抽出が不正なバイト列により失敗し、`Run Thread Sanitizer Tests` step の失敗理由を上書きしていた。本件の完了条件 (thread leak が出た run と同じ条件で tsan job が成功すること) の確認は `0189` の修正を前提にする。両 issue は同じ `Run Thread Sanitizer Tests` step を変更する。
+- `0189` (完了): 同じ run 38511195252 で report 抽出が不正なバイト列により失敗し、`Run Thread Sanitizer Tests` step の失敗理由を上書きしていた。本件の完了条件 (thread leak が出た run と同じ条件で tsan job が成功すること) の確認は `0189` の修正を前提にする。両 issue は同じ `Run Thread Sanitizer Tests` step を変更する。
 
 ## スコープ外
 
@@ -64,3 +64,23 @@ tsan job は develop と PR のブランチへの push で走る (`on` は `push
 - データ競合の検出条件そのものの見直しは行わない。
 
 ## 解決方法
+
+`.github/workflows/e2e-test.yml` の tsan job の `SIMCTL_CHILD_TSAN_OPTIONS` に `report_thread_leaks=0` を足し、WebRTC の xcframework が作る未 join スレッドの thread leak 報告を job の失敗条件から外した。`Check Thread Sanitizer Report` step の判定と `Upload TSan Report` step の設定は変更していない。
+
+- WebRTC の prebuilt モジュールが `RTCPeerConnectionFactory` の生成時に作るスレッドは SDK 側から join できない (SDK と `SoraTests` は生スレッドを生成していない)。プロセス終了時に thread leak として報告されると、`Check Thread Sanitizer Report` step が `^WARNING: ThreadSanitizer` の行数を 1 と数えて job を失敗させ、TSan も abort して `tsan_exit_code` は 134 になる
+- `report_thread_leaks` は TSan の公式ランタイムフラグ (既定 true) で、止まるのは thread leak の報告だけである。失敗条件の 4 つ (`^WARNING: ThreadSanitizer` の行数、banner、test 数、`tsan_exit_code`) は変更していない
+- `SIMCTL_CHILD_TSAN_OPTIONS` を `verbosity=1` から `verbosity=1:report_thread_leaks=0` にし、SDK 側から join できないスレッドを失敗条件に含めない理由を日本語のコメントとして残した
+
+検証:
+
+- `TSAN_OPTIONS=help=1` の出力に `report_thread_leaks` が含まれること (`Report thread leaks at exit? (Current Value: true)`) と、iOS simulator 用の TSan runtime (`libclang_rt.tsan_iossim_dynamic.dylib`) に flag の文字列があることを確認した
+- 未 join のスレッドを作る probe で、既定では `WARNING: ThreadSanitizer: thread leak` と exit 134 になり、`verbosity=1:report_thread_leaks=0` では報告なしで exit 0 になることを確認した (`***** Running under ThreadSanitizer` の banner は出る)
+- データ競合を作る probe では、同じ option でも `WARNING: ThreadSanitizer: data race` と exit 134 のままで、検出が維持されることを確認した
+- 実 CI の log を使い、無変更の `Check Thread Sanitizer Report` step が thread leak 報告を含む log で失敗し、報告 0 件の log で成功することを確認した
+- 実 CI (2026-10-14、run 38536378641、`0189` の修正が develop に入った後): `tsan` job が success になった。`SIMCTL_CHILD_TSAN_OPTIONS=verbosity=1:report_thread_leaks=0` が渡り、`***** Running under ThreadSanitizer v3` があり、`Executed 521 tests, with 7 tests skipped and 0 failures`、`WARNING: ThreadSanitizer` は 0 行、`Upload TSan Report` は skipped で artifact は作られていない
+- `prek` の pre-commit フックが通ることを確認した
+
+残った懸念:
+
+- thread leak は確率的にしか発生しないため、実 CI で報告が抑止されたことの直接観測はできていない。flag の効果 (未 join スレッドの報告を止めて abort しないこと) と data race 検出の維持は手元の probe で確認している
+- `help=1` による flag の確認は手元の TSan runtime (clang 21) で行っており、CI が使う Xcode 26.6 の runtime では未確認である
