@@ -1,7 +1,7 @@
 # `Utilities.randomString` を非推奨にする
 
 - Created: 2026-09-29
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-14
 - Priority: Low
 - Branch: feature/change-deprecate-utilities-random-string
 - Polished: 2026-10-14
@@ -88,3 +88,43 @@
 - `Utilities` 名前空間の削除は `0183` で扱う。
 
 ## 解決方法
+
+`Sora/Utilities.swift` の `Utilities.randomString(length:)` に `@available(*, deprecated, message: ...)` を付け、削除予定時期と移行方針を利用者へ示した。実装、シグネチャ、観測可能な挙動は変更しておらず、同じ file の `Utilities.Stopwatch` / `PairTable` と `Optional.unwrap(ifNone:)` の挙動も変えていない。
+
+### 付けた annotation と message
+
+`Utilities.randomString(length:)` の宣言の直前に付けた。message の全文は次のとおり。
+
+```
+次期 major version で削除予定です。
+Sora SDK 固有の機能ではなく、SDK 内でも利用していない汎用の文字列生成である。
+この API は紛らわしい文字 (l / I / O) を除く 59 文字の英数字を length の長さで返す。同じ出力が必要な場合は文字集合を自前で定義してください。
+ランダムな文字列が必要な場合は、UUID や標準の乱数 API (randomElement() や UInt32.random(in:) など) を利用してください。
+用途によって移行先が異なるため、SDK 固有の代替ユーティリティは提供しません。
+```
+
+削除予定時期は `0183` が許容する形式のうち「次期 major version」とした。移行先は用途によって異なるため `UUID` と標準の乱数 API を挙げ、同じ出力 (長さ指定と `l` / `I` / `O` を除く 59 文字の英数字) が必要な場合の注意も書いた。SDK 固有の代替ユーティリティは追加していない。
+
+### consumer と workflow の更新
+
+- `TestConsumers/Swift6Consumer/Sources/ConsumerLegacy/DeprecatedAPI.swift`: `makeLegacyRandomString()` を追加し、`_ = Utilities.randomString()` が deprecation warning だけで compile できることを検証する。`ConsumerLegacy` は warnings-as-errors が有効なため、`_ =` を付けない裸の呼び出しは戻り値の未使用 (`#NoUsage`) で error になる。非推奨期間を設ける理由は日本語コメントで明記した。
+- `.github/workflows/consumer-test.yml`: `Check Deprecation Warning` が検査する `symbols` の一覧に `randomString(length:)` を追加した (同 step のコメントが、`DeprecatedAPI.swift` の参照を増減する作業では一覧も同時に更新することを定めている)。
+- `CHANGES.md`: `## develop` の種別順の主リストに `[CHANGE]` エントリを追加し、削除予定時期・移行方針・出力仕様の差・SDK 固有の代替を提供しないこと・シグネチャと挙動が変わらないことを書き、エントリの最後に担当者行 `- @t-miya` を付けた。
+
+### 公開 API baseline の差分
+
+`make api-baseline` (Xcode 26.6 / `iphoneos26.5`) で `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` を再生成した。差分は 4 insertions で、`Utilities` の子 `randomString(length:)` の node に対する `"deprecated": true` と `"declAttributes": ["Available"]` の追加だけである。宣言単位の集計は Removed 0 / Added 0 で、型の変更・準拠の削除・`printedName` / `declKind` の変化・他の symbol の消滅は無い。`iphoneos26.5.info.txt` は変化しなかった。
+
+### 実行した検証
+
+- `make fmt-lint`: 成功。`swiftlint lint --strict`: 0 violations / 0 serious (71 file)
+- `Sora` の型検査 (`swiftc -typecheck -swift-version 6`): error 0 件。SDK 内に `randomString` の参照が無いため、非推奨化で新しい warning は出ない
+- consumer の 4 scheme build: `** BUILD SUCCEEDED **`。`ConsumerLegacy` の log に `'randomString(length:)' is deprecated` が出て、`Check Deprecation Warning` の 12 symbol がすべて検出される
+- `SoraTests`: iOS 26.5 の simulator で 521 件実行 / 39 skip (実サーバーが要る E2E) / 失敗 0 件 (`** TEST SUCCEEDED **`)
+- 再生成した baseline と module の dump の比較: `randomString(length:)` の node が一致し、宣言単位の差分は 0 件
+
+### 残った懸念
+
+- consumer と `SoraTests` の検証は、作業環境が Xcode 27.0 / `iphoneos27.0` のみで baseline を生成した Xcode 26.6 / `iphoneos26.5` と異なるため近似である。pinned 環境での `make build` / `make api-check-fresh` / `make consumer-check-negative` は CI で確認する。ローカルの `make build` 相当は、本 issue が変更していない `Sora/ScreenCapture.swift` の Xcode 27 の診断 (`#ImplicitStrongCapture`) が warnings-as-errors で error になり失敗する (同じ source は Xcode 26.6 の過去 log で `** BUILD SUCCEEDED **`)
+- `0183` が削除するのは `DeprecatedAPI.swift` の `makeLegacyRandomString()` と `consumer-test.yml` の symbol 1 件で、本 issue が追加した参照と一致する。`SoraTests` には `Utilities.randomString` の参照を追加していない
+- `Sora/Utilities.swift` の `import WebRTC` は本 issue では触れていない (`0183` / `0070` の範囲)
