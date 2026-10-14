@@ -163,6 +163,8 @@ jobs:
         # grep だけに依存しない失敗条件として使う。
         # 接続情報を含む通常のログは artifact へ持ち出さず、report の抽出はこの step で行う。
         REPORT_PATH: build/tsan-report.txt
+        # report は一度 EXTRACT_PATH へ抽出し、report が 0 件のときは REPORT_PATH を作らない
+        EXTRACT_PATH: build/tsan-report.extract.txt
       run: |
         # build と bundle の検査など、途中の失敗で step を終了させる
         set -eo pipefail
@@ -241,12 +243,30 @@ jobs:
         # artifact には log 全体ではなく TSan の report ブロックだけを入れる。
         # report は「WARNING: ThreadSanitizer」の行から「==================」の行までで、
         # 接続情報や環境変数を含む通常のログ行は持ち出さない。
-        awk '
-          /^WARNING: ThreadSanitizer/ { report++; in_report = 1; print; next }
+        # simulator と xctest の出力が交錯すると、log に UTF-8 として解釈できない
+        # バイト列が残る。macOS の awk は UTF-8 locale でそれを変換しようとして towc に
+        # 失敗するため、locale を C に固定して log をバイト列として扱う。
+        # 抽出の失敗で step を終了させない (失敗条件の判定は Check Thread Sanitizer Report
+        # step が持つため、ここで終了させると report の判定が失われる)。
+        EXTRACT_STATUS=0
+        LC_ALL=C awk '
+          /^WARNING: ThreadSanitizer/ { in_report = 1; print; next }
           in_report { print }
           in_report && /^==================$/ { in_report = 0 }
-        ' build/tsan.log > "$REPORT_PATH"
-        TSAN_REPORT_COUNT=$(grep -c '^WARNING: ThreadSanitizer' "$REPORT_PATH" || true)
+        ' build/tsan.log > "$EXTRACT_PATH" || EXTRACT_STATUS=$?
+        if [ "$EXTRACT_STATUS" -ne 0 ]; then
+          echo "警告: TSan report の抽出に失敗しました (awk exit $EXTRACT_STATUS)。report は artifact に含まれないことがあります。"
+        fi
+
+        TSAN_REPORT_COUNT=$(LC_ALL=C grep -c '^WARNING: ThreadSanitizer' "$EXTRACT_PATH" || true)
+        TSAN_REPORT_COUNT=${TSAN_REPORT_COUNT:-0}
+        if [ "$TSAN_REPORT_COUNT" -gt 0 ]; then
+          mv "$EXTRACT_PATH" "$REPORT_PATH"
+        else
+          # report が 0 件のときは file を作らない (Upload TSan Report step の
+          # if-no-files-found: ignore により、file が無ければ artifact も作られない)
+          rm -f "$EXTRACT_PATH" "$REPORT_PATH"
+        fi
         echo "tsan_report_count=$TSAN_REPORT_COUNT" >> "$GITHUB_ENV"
         echo "TSan report count: $TSAN_REPORT_COUNT (log: build/tsan.log)"
     - name: Check Thread Sanitizer Report
