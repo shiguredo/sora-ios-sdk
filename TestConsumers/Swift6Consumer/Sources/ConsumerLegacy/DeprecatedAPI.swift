@@ -66,7 +66,7 @@ func makeLegacyStopwatch() {
 /// そのため非推奨期間の間は、SDK が代替ユーティリティを提供しなくても既存の利用コードが
 /// そのまま compile できることをここで確認する。生成した文字列は使わない。
 func makeLegacyRandomString() {
-  // 戻り値を使わないため `_ =` で消費する。`_ =` を付けないと未使用の戻り値が
-  // warnings-as-errors で error になり、deprecation warning を確認できない。
+  // `_ =` を付けないと未使用の戻り値 (`#NoUsage`) が warnings-as-errors で error になり、
+  // deprecation warning を確認できない。
   _ = Utilities.randomString()
 }
