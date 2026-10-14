@@ -214,13 +214,17 @@ jobs:
 
         # simctl spawn は親の環境変数を渡さないため、TSan の DYLD_* と E2E の環境変数は
         # どちらも SIMCTL_CHILD_ 接頭辞で渡す
+        # WebRTC の prebuilt モジュールが RTCPeerConnectionFactory の生成時に作るスレッドは
+        # SDK 側から join できない。プロセス終了時に thread leak として報告されると
+        # Check Thread Sanitizer Report step が job を失敗させるため、その報告だけを止める
+        # (report_thread_leaks=0)。データ競合の検出条件は変えない。
         # set -e は pipeline が非 0 を返した時点で shell を終了させるため、exit code を
         # 取り出す間だけ無効化する (race を検出した TSan はプロセスを BUS で終了させ、
         # pipeline の exit code は非 0 になる)。
         set +e
         SIMCTL_CHILD_DYLD_FRAMEWORK_PATH="$PWD/build/Build/Products/Debug-iphonesimulator" \
         SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$BUNDLE/Frameworks/libclang_rt.tsan_iossim_dynamic.dylib" \
-        SIMCTL_CHILD_TSAN_OPTIONS=verbosity=1 \
+        SIMCTL_CHILD_TSAN_OPTIONS=verbosity=1:report_thread_leaks=0 \
         SIMCTL_CHILD_SORA_SIGNALING_URL="$SORA_SIGNALING_URL" \
         SIMCTL_CHILD_TEST_SECRET_KEY="$TEST_SECRET_KEY" \
         SIMCTL_CHILD_TEST_CHANNEL_ID_PREFIX="$TEST_CHANNEL_ID_PREFIX" \
