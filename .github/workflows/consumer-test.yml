@@ -125,6 +125,7 @@ jobs:
           'multistreamEnabled'
           'onDisconnectLegacy'
           'onReceiveSignaling'
+          'randomString(length:)'
           'secure'
           'simulcastRid'
           'spotlightEnabled'

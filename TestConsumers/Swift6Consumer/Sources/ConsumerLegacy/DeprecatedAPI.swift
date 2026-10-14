@@ -59,3 +59,14 @@ func makeLegacyStopwatch() {
   stopwatch.run()
   stopwatch.stop()
 }
+
+/// 非推奨の Utilities.randomString を従来どおり呼び出す。
+///
+/// 公開 API を非推奨期間を設けずに削除すると、利用側の source compatibility が壊れる。
+/// そのため非推奨期間の間は、SDK が代替ユーティリティを提供しなくても既存の利用コードが
+/// そのまま compile できることをここで確認する。生成した文字列は使わない。
+func makeLegacyRandomString() {
+  // `_ =` を付けないと未使用の戻り値 (`#NoUsage`) が warnings-as-errors で error になり、
+  // deprecation warning を確認できない。
+  _ = Utilities.randomString()
+}

@@ -35,6 +35,12 @@
   - 経過時間の計測だけが目的の場合は、`ContinuousClock` / `SuspendingClock` の `now` の差分 (`Duration`) へ移行する
   - 用途によって移行先が異なるため、SDK 固有の代替 timer は提供しない。単一の万能な代替があるわけではないため、用途に合う仕組みを選ぶ
   - @t-miya
+- [CHANGE] 公開 API `Utilities.randomString` を非推奨にする
+  - Sora SDK 固有の機能ではなく SDK 内でも利用していない汎用ユーティリティであり、次期 major version で削除予定である。削除までに移行する
+  - ランダムな文字列が必要な場合は、`UUID` や標準の乱数 API (`randomElement()` / `UInt32.random(in:)` など) を利用する。出力の長さ指定と文字集合 (紛らわしい `l` / `I` / `O` を除く英数字 59 文字) は変わるため、同じ出力が必要な場合は文字集合を自前で定義する
+  - 用途によって移行先が異なるため、SDK 固有の代替ユーティリティは提供しない
+  - シグネチャと挙動は変わらない
+  - @t-miya
 - [ADD] Sendable なイベント購読 API を追加する
   - `Sora.subscribeEvents(bufferingPolicy:)` と `MediaChannel.subscribeEvents(bufferingPolicy:)` を追加する。Sendable な `SoraEvent` を `AsyncStream` で配送し、購読者ごとに独立した buffer / drop 方針 / 終端を持ち、購読の解除は他の購読者へ影響しない
   - 公開型 `SoraEvent` / `SoraEventKind` / `SoraEventError` / `SoraAudioPortSnapshot` / `SoraAudioRouteSnapshot` / `SoraAudioRouteEvent` を追加する。イベントの payload に `MediaChannel` / `MediaStream` / raw WebRTC object を含めない

@@ -47263,6 +47263,10 @@
             "mangledName": "$s4Sora9UtilitiesO12randomString6lengthSSSi_tFZ",
             "moduleName": "Sora",
             "static": true,
+            "deprecated": true,
+            "declAttributes": [
+              "Available"
+            ],
             "funcSelfKind": "NonMutating"
           },
           {
