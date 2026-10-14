@@ -8,6 +8,15 @@ public enum Utilities {
   fileprivate static let randomBaseChars =
     randomBaseString.map { c in String(c) }
 
+  @available(
+    *, deprecated,
+    message: """
+      次期 major version で削除予定です。
+      Sora SDK 固有の機能ではなく、SDK 内でも利用していない汎用の文字列生成であるため、用途に合う仕組みを選んでください。
+      ランダムな文字列が必要な場合は、UUID や標準の乱数 API (randomElement() や UInt32.random(in:) など) を利用してください。
+      用途によって移行先が異なるため、SDK 固有の代替ユーティリティは提供しません。
+      """
+  )
   public static func randomString(length: Int = 8) -> String {
     var chars: [String] = []
     chars.reserveCapacity(length)
