@@ -1,7 +1,7 @@
 # tsan job の TSan report 抽出が不正なバイト列で失敗し artifact が空になる問題を修正する
 
 - Created: 2026-10-14
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-14
 - Priority: Medium
 - Branch: feature/fix-tsan-report-extraction
 - Polished: 2026-10-14
@@ -59,3 +59,24 @@ report の artifact が空だと、失敗した run の triage が job log 全�
 - tsan job 内で走る E2E テストのフレーキーは別問題とする。
 
 ## 解決方法
+
+`.github/workflows/e2e-test.yml` の `Run Thread Sanitizer Tests` step の report 抽出を、log をバイト列として扱う形に直した。`Check Thread Sanitizer Report` step の判定と `Upload TSan Report` step の設定は変更していない。
+
+- step の `env` に `EXTRACT_PATH` (`build/tsan-report.extract.txt`) を追加し、report は一度この file へ抽出する
+- 抽出の `awk` を `LC_ALL=C awk` にした。simulator と xctest の出力が交錯した log に残る不正なバイト列を、UTF-8 locale の `awk` が `towc` で変換しようとして exit 2 になっていたためである
+- 抽出の失敗で step を終了させないようにした (`|| EXTRACT_STATUS=$?` で受けて理由を出力する)。Run step を TSan の exit code で終了させると `Check Thread Sanitizer Report` step が skip され banner と test 数の判定が失われるため、失敗条件の判定は Check step に残している
+- report の件数を `LC_ALL=C grep -c` で数え、0 件のときは `REPORT_PATH` も `EXTRACT_PATH` も作らない。`Upload TSan Report` step の `if-no-files-found: ignore` は変更せず、file が無ければ artifact を作らない
+
+検証:
+
+- 修正前後の step script (修正後は実 YAML から、修正前は `git show HEAD:.github/workflows/e2e-test.yml` から取り出した) を、実 CI の job log から復元した `build/tsan.log` (job log では不正なバイト列が U+FFFD に置換されているため、同じ位置に生のバイト列を戻したもの) に対して実行した。TSan の実行は手元で再現できないため、記録した exit code を返す 1 行に置き換えている
+- 不正なバイト列を含む log で抽出が exit 0 で完了し、抽出した report が元の report と一致した (report あり / 0 件の両方)
+- report が 0 件の log で `build/tsan-report.txt` を作らないことを確認した
+- 抽出の書き込み先を使えない状態にした場合も Run step は exit 0 のままで、`Check Thread Sanitizer Report` step が「TSan 実行の exit code が 134 です」で失敗した (抽出の失敗が TSan の exit code を上書きしない)
+- negative control: 修正前の script では report の有無にかかわらず Run step が `awk: towc: multibyte conversion failure` で exit 2、`Check Thread Sanitizer Report` step は skip、`build/tsan-report.txt` は 0 bytes になり、CI で観測した失敗が再現した。修正後は再現しない
+- 実 CI (2026-10-14、run 38531719370): `tsan` job が success になった (`Run Thread Sanitizer Tests` success / `Check Thread Sanitizer Report` success / `Upload TSan Report` skipped)。artifact `tsan-report` は作られず、log は `TSan report count: 0`、`Executed tests: 521`、`Thread Sanitizer: no data race detected (521 tests)` である
+- `prek` の pre-commit フックが通り、`bash -n` で抽出 script の構文が通ることを確認した
+
+残った懸念:
+
+- TSan が実際に report を出した run で artifact に report が入ることは、検出が確率的なため実 CI では未確認である。抽出した内容が元の report と一致することと、report 0 件で file を作らないことはローカルで確認している
