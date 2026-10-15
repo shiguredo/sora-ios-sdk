@@ -1,7 +1,7 @@
 # sora-ios-sdk-samples の Swift 6 暫定対応を SDK の本対応へ置き換える
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-10-15
 - Branch: feature/update-samples-swift6-native-support
 - Polished: 2026-10-08
 
@@ -134,3 +134,31 @@ samples は SDK の利用例として提供されている。SDK 側の本対応
 
 - 購読 API と `@Sendable` の扱いは `skills/sora-ios-sdk/SKILL.md` の「コールバックを Swift 6 で扱う」「イベントの購読」「現状の制約」に記載がある
 - SDK 側の Swift 6 関連 issue: 0107 / 0108 / 0109 / 0110 / 0120 / 0122 / 0123
+
+## 解決方法
+
+sora-ios-sdk-samples 側で対応し、[PR #94](https://github.com/shiguredo/sora-ios-sdk-samples/pull/94) (base `feature/2026.4`、マージコミット `8dd38c7`、2026-10-15) として完了した。sora-ios-sdk 本体のコード変更は無い。
+
+主な変更は次のとおり。
+
+- SDK 依存を 2026.4.0-canary.3 へ上げた (`SamplesApp/SamplesApp.xcodeproj/project.pbxproj` の `exactVersion` と README のバージョン表記)。canary.2 の後に canary.3 が公開されていたため、公開済みの最新 canary を利用している
+- `@preconcurrency import Sora` を 8 ファイルから撤去し、通常の `import Sora` に戻した
+- SDK のコールバックを購読 API へ置き換えた
+  - 接続結果は `Sora.subscribeEvents(bufferingPolicy:)` の `.connected` / `.connectFailed` で受け、`MediaChannel` は `Sora.mediaChannels` から `connectionId` で解決する (`SoraSDKManager.swift`)。購読は接続の開始前に開始する
+  - 受信ストリームは `.streamAdded` / `.streamRemoved`、切断は `.disconnected`、DataChannel は `.dataChannelMessage`、映像と音声の有効フラグは `.videoEnabledChanged` / `.audioEnabledChanged` で受ける。`MediaChannel` の購読は `.mediaChannelAdded` の時点で開始する (`RPCConfigViewController.swift` と各サンプル)
+  - `MediaChannel.handlers` と `MediaStream.handlers` の利用を撤去し、`configuration.mediaChannelHandlers.onReceiveSignalingJSON` は `.signalingReceivedJSON` の購読へ置き換えた
+  - 切断理由のログ出力は `SamplesApp/SamplesApp/Shared/SoraEventLogging.swift` の `logMediaChannelDisconnected(_:logger:label:)` に共通化した
+- RPC は `MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)` へ移行し、動的メタデータの型 `AnyCodable` を `nonisolated struct AnyCodable: Codable, @unchecked Sendable` にした
+- 購読 API に置き換えられない `CameraVideoCapturer.flip` の完了コールバックと `ScreenCaptureSettings.onRuntimeError` は `@Sendable` クロージャのまま維持した
+- `nonisolated(unsafe)` は、非 Sendable な `MediaChannel` / `ScreenCaptureSettings` を SDK の非同期メソッド (`setVideoHardMute` / `startScreenCapture` / `sendableRPC`) へ渡す 8 箇所だけを残し、根拠をコメントに記載した。暫定対応として使っていた `params` と `MediaStream` の転送は撤去した
+- ScreenCast サンプルは接続結果の帰属を分けるため、専用の `Sora` インスタンス (`Sora()`) を使うようにした
+- README のシステム条件を Xcode 26.6 以降 / macOS 26.2 以降 / SwiftPM 6.3 以降 / SDK 2026.4.0-canary.3 に更新した
+- `.github/workflows/build.yml` の `XCODE` を Xcode 26.6 に、`XCODE_SDK` を iphoneos26.5 に更新した
+- CHANGES.md に SDK バージョン更新、システム条件の変更、暫定対応の撤去を記載した
+
+検証は次のとおり。
+
+- Xcode 26.6 でビルドでき、CI (`.github/workflows/build.yml`) の run [38383111689](https://github.com/shiguredo/sora-ios-sdk-samples/actions/runs/38383111689) が成功している
+- 実機で接続と切断ができることを確認した (2026-10-15)
+
+なお、0122 (legacy `VideoRenderer` API の削除) は未完了である。0122 が先行した場合は `MediaStream.videoRenderer` の利用の置き換えが必要になる。0160 (Xcode プロジェクト設定ファイル形式の更新) も未実施のため、SDK 依存の更新は `project.pbxproj` に対して行った。`RPCConfigViewController.swift` の `startSignalingEventSubscription()` は `.mediaChannelAdded` の後に `Sora.shared.mediaChannels.last` から接続対象を取っており、接続が直列化されている前提に依存している。
