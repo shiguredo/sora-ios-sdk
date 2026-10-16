@@ -222,6 +222,11 @@
 - [FIX] E2E テストの CI で `e2e` job と `tsan` job が同じチャンネル ID を使い、片方の接続がタイムアウトしてテストが失敗する問題を修正する
   - 両 job の `TEST_CHANNEL_ID_SUFFIX` に job 名を足し、同じ run の job 間でチャンネル ID が重複しないようにする
   - @t-miya
+- [FIX] E2E テストの RPC 切断競合テストが、前の接続の切断完了を待たずに同じチャンネル ID へ再接続して断続的に失敗する問題を修正する
+  - `RpcE2ETests.testRPCRaceWithDisconnectTerminatesAll` の 2 回目以降の試行で、再接続の前に前試行の `onDisconnect` を待つ。切断の完了を待たないと、Sora 側で前のセッションが解放される前に接続シグナリングが届き、SDK の `connectionTimeout` で接続が失敗することがある
+  - 切断完了の待ちは `E2ETestBase.disconnectAll(channels:)` と同じ 10 秒を上限とし、待ち切れなかった場合は失敗を記録して後始末する
+  - 再接続の待ち時間を `connectionTimeout` 60 秒 + 余裕 30 秒の 90 秒にして、SDK の `connectionTimeout` の発火を wait の内側で処理する
+  - @t-miya
 
 ## 2026.3.0
 
