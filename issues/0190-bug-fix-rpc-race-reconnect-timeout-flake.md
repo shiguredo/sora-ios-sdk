@@ -1,7 +1,7 @@
 # E2E テストの RPC 切断競合テストが、切断完了を待たずに同一 channelId へ再接続するため断続的に失敗する問題を修正する
 
 - Created: 2026-10-16
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-16
 - Branch: feature/fix-rpc-race-reconnect-timeout-flake
 - Polished: 2026-10-16
 
@@ -89,4 +89,26 @@ DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
 
 ## 解決方法
 
-{YYYY-MM-DD} に対応する。(未対応)
+2026-10-16 に対応する。原因はテスト側の再接続手順にあり、SDK の実装・公開 API は変更していない。`SoraTests/RpcE2ETests.swift` の `testRPCRaceWithDisconnectTerminatesAll` を次のとおり修正した。
+
+- 2 回目以降の各試行で、再接続の前に前試行の切断完了 (`onDisconnect`) を待つようにした (`waitForDisconnectCompletion(channel:timeout:)` を追加)。切断完了を待たずに同じ `channelId` へ接続シグナリングを送ると、Sora 側で前のセッションが解放される前に新しい接続が届き、接続が成立しないまま SDK の `connectionTimeout` で終端し得る
+  - 待ち方は `E2ETestBase.disconnectAll(channels:)` と同じにし、`state` の確認とハンドラ設定の間で切断が完了して `onDisconnect` を発火済みの場合を取りこぼさない。上限は同メソッドと同じ 10 秒とし、待ち切れなかった場合は失敗を記録したうえで後始末する
+- 再接続の待ち時間を SDK の `connectionTimeout` の内包値にした。`sendonlyConfig` / `recvonlyConfig` に `connectionTimeout` 60 秒を明示し (SDK の既定値 30 秒に依存しない)、接続と再接続の待ちを `connectionTimeout + 30` の 90 秒にした。これにより `ConnectionTimer` による `connectionTimeout` の発火 (接続失敗の通知) は wait の内側で処理され、テスト終了後に遅延コールバックが残らない
+- `MediaChannelHandlers` は同じ `Configuration` から作ったチャンネル間で共有されるため、待ちで設定する `onDisconnect` / `onDataChannelOpened` を待ち終了時に外し、fulfill を 1 回だけにした。残したままにすると、次の試行のチャンネルの切断・OPEN 通知で同じ closure が呼ばれ、fulfill 済みの expectation を再度 fulfill して XCTest の API violation (over-fulfill) になる
+- 接続 callback が wait の終了後に発火した場合に assertion を記録しないフラグを足した (テスト終了後の失敗が次のテストへ誤帰属するのを防ぐ)
+- `CHANGES.md` の `## develop` の `### misc` に `[FIX]` を追記した
+
+検証:
+
+- Simulator (iPhone 17 Pro / iOS 26.5) で `SoraTests` を実行し、522 tests / 39 skipped / 0 failures になった (修正の反映ごとに 3 回実行)
+- `make fmt-lint`、SwiftLint `--strict` (0 violations)、`prek` の pre-commit フックが通ることを確認した
+- 独立レビューを 2 回 (差分の批判レビューと修正の検証レビュー) 実施し、検出した致命的 1 件 (共有ハンドラの二重 fulfill) と重要 1 件 (wait 終了後の遅延 callback) を修正した
+- 実 CI (2026-10-16、run 38866197947、sha `f59b6bb8`) で `e2e` job が 5 回すべて success になった (attempt 1 は push による初回、attempt 2〜5 は job の再実行)。各 attempt で当該テストが passed している (4.837 秒 / 5.251 秒 / 4.727 秒 / 4.856 秒 / 5.703 秒)
+- 同じ run の `tsan` job も success で、当該テストは passed (4.999 秒)。`connectionTimeout` の失敗は再現していない
+- テストの検証内容 (12 回の試行で RPC と disconnect を競合させ、すべての RPC が timeout 以内に終端すること) と試行回数は変えていない
+
+残った懸念:
+
+- クライアント側の `onDisconnect` は SDK が切断処理を終えた時点の通知であり、Sora 側のセッション解放完了を保証するものではない (`SignalingChannel.disconnect` は WebSocket の close を投げた直後に内部の `onDisconnect` を呼ぶ)。`SendonlyE2ETests.testSendonlyReconnect` のような固定時間の待機は、切断完了の検知で足りない場合に限り検討するとして今回は入れていない
+- E2E テストは `SORA_SIGNALING_URL` が未設定のローカルではスキップされるため、修正した経路の実行検証は実 CI のみである (ローカルの Simulator 実行ではコンパイルと他のテストの非回帰だけを確認している)
+- `E2ETestBase.disconnectAll(channels:)` は共有ハンドラに `onDisconnect` を残す。テスト末尾でのみ使われるため現状は顕在化しないが、同じ `Configuration` で再接続するテストを追加すると同じ over-fulfill を起こし得る
