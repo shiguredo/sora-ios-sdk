@@ -57,6 +57,9 @@
   - ジェネリックな組み込みメソッド用に `SendablePutSignalingNotifyMetadata` と `SendablePutSignalingNotifyMetadataItem` を追加する
   - params と result を actor / Task 境界で安全に扱えるようにする
   - @t-miya
+- [UPDATE] libwebrtc を m155.8059.4.1 に更新する
+  - m155 の iOS 用 ADM で録音の pause / resume を WebRTC の worker スレッド上で実行する契約になったため、`RTCPeerConnectionFactory.run(onWorker:)` 経由で呼ぶようにする
+  - @zztkm
 - [UPDATE] libwebrtc を m154.8037.1.2 に更新する
   - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
   - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する

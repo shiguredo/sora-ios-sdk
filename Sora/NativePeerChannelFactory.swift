@@ -157,7 +157,8 @@ final class NativePeerChannelFactory: @unchecked Sendable {
         stereoPlayoutEnabled: stereoPlayoutEnabled)
       self.audioDevice = nil
       self.audioDeviceModule = adm
-      self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
+      let wrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
+      self.audioDeviceModuleWrapper = wrapper
       // ステレオ化に失敗した場合にカテゴリを変更しないよう、API の成功確認後に登録する。
       if stereoPlayoutEnabled, audioSessionUsage.requiresPlayAndRecord {
         audioSessionRequirement?.requirePlayAndRecord()
@@ -171,6 +172,9 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       guard let factory else {
         throw SoraError.mediaChannelError(reason: "failed to create native peer connection factory")
       }
+      // m155 以降の ADM は録音の pause/resume を worker スレッド上で実行する契約のため、
+      // ハードミュートの実行先として factory を渡す。
+      wrapper.bindToFactory(factory)
       nativeFactory = factory
     }
 
