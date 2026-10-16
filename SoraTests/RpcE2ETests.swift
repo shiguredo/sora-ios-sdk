@@ -593,6 +593,14 @@ final class RpcE2ETests: E2ETestBase {
   /// このテストでは、実 DataChannel で複数回 RPC を呼び、その直後に disconnect することで
   /// 旧実装の再現を試みる。すべての RPC が終端する (completion が呼ばれる) ことを確認する。
   func testRPCRaceWithDisconnectTerminatesAll() throws {
+    // このテスト専用の接続タイムアウト (秒)。サーバーの応答が遅い場合があるため、
+    // SDK の既定値 (30 秒) より長くする。SDK の既定値は変更せず、このテストの構成にだけ設定する
+    let connectionTimeout = 60
+    // 接続・再接続の待ちタイムアウト (秒)。ConnectionTimer による connectionTimeout の発火を
+    // wait の内側で処理し、テスト終了後に遅延コールバックが残らないよう、connectionTimeout
+    // (60 秒) に余裕 (30 秒) を足した 90 秒とする
+    let connectWaitTimeout = TimeInterval(connectionTimeout + 30)
+
     // RPC 用に rpc_methods を許可した recvonly 接続を確立するために、
     // RequestSimulcastRid 用と同じように sendonly + recvonly を接続する。
     // (連続して RPC を呼ぶには Sora の RPC DataChannel が必要で、
@@ -606,18 +614,23 @@ final class RpcE2ETests: E2ETestBase {
 
     var sendonlyChannel: MediaChannel?
     var recvonlyChannel: MediaChannel?
-    var reconnectChannel: MediaChannel?
+    // 直近の試行で使用した recvonly の接続。再接続の前にこの接続の切断完了を待ち、
+    // 後始末の対象にもする
+    var latestRecvonlyChannel: MediaChannel?
 
     // expectation の二重 fulfill を防ぐためのフラグ
     var switchedExpectationFulfilled = false
     var rpcOpenedExpectationFulfilled = false
 
     let cleanupChannels: () -> Void = {
-      self.disconnectAll(channels: [sendonlyChannel, recvonlyChannel, reconnectChannel])
+      self.disconnectAll(channels: [sendonlyChannel, recvonlyChannel, latestRecvonlyChannel])
     }
 
+    // 接続と再接続の待ち時間を connectionTimeout の内包値にするため、
+    // このテストで使う Configuration には接続タイムアウトを明示する
     var sendonlyConfig = try buildConfiguration(role: .sendonly)
     sendonlyConfig.channelId = channelId
+    sendonlyConfig.connectionTimeout = connectionTimeout
     sendonlyConfig.simulcastEnabled = true
     sendonlyConfig.audioEnabled = false
     sendonlyConfig.videoCodec = .vp8
@@ -626,6 +639,7 @@ final class RpcE2ETests: E2ETestBase {
 
     var recvonlyConfig = try buildConfiguration(role: .recvonly)
     recvonlyConfig.channelId = channelId
+    recvonlyConfig.connectionTimeout = connectionTimeout
     recvonlyConfig.simulcastEnabled = true
     recvonlyConfig.simulcastRequestRid = .r2
     recvonlyConfig.dataChannelSignaling = true
@@ -704,14 +718,14 @@ final class RpcE2ETests: E2ETestBase {
       }
     }
 
-    wait(for: [sendonlyExpectation], timeout: 35)
+    wait(for: [sendonlyExpectation], timeout: connectWaitTimeout)
     // sendonly の接続が成立したことを確認してから recvonly の完了を待つ
     guard sendonlyChannel != nil else {
       XCTFail("sendonly のメディアチャネルが nil")
       cleanupChannels()
       return
     }
-    wait(for: [recvonlyExpectation], timeout: 35)
+    wait(for: [recvonlyExpectation], timeout: connectWaitTimeout)
     guard let firstRecvonlyChannel = recvonlyChannel else {
       cleanupChannels()
       return
@@ -744,8 +758,20 @@ final class RpcE2ETests: E2ETestBase {
       // (1 回目は上で接続済みの recvonlyChannel を使う)
       let currentChannel: MediaChannel
       if attempt > 1 {
-        reconnectChannel = nil
+        // 前試行の切断完了 (onDisconnect) を待ってから、同じ channelId へ再接続する。
+        // 切断完了を待たずに接続シグナリングを送ると、Sora 側で前のセッションが
+        // 解放される前に新しい接続が届き、接続が成立しないまま connectionTimeout で
+        // 終端することがある
+        if let latestRecvonlyChannel,
+          !waitForDisconnectCompletion(channel: latestRecvonlyChannel)
+        {
+          cleanupChannels()
+          return
+        }
         let reconnectExpectation = self.expectation(description: "再接続が完了すること")
+        // 接続結果はローカルに受ける。失敗時に前試行のチャンネルを再接続結果として
+        // 採用してしまわないようにする
+        var reconnectedChannel: MediaChannel?
         _ = sora?.connect(configuration: recvonlyConfig) { mediaChannel, error in
           DispatchQueue.main.async {
             if let error {
@@ -758,12 +784,12 @@ final class RpcE2ETests: E2ETestBase {
               reconnectExpectation.fulfill()
               return
             }
-            reconnectChannel = channel
+            reconnectedChannel = channel
             reconnectExpectation.fulfill()
           }
         }
-        wait(for: [reconnectExpectation], timeout: 35)
-        guard let reconnected = reconnectChannel else {
+        wait(for: [reconnectExpectation], timeout: connectWaitTimeout)
+        guard let reconnected = reconnectedChannel else {
           XCTFail("再接続後にメディアチャネルが nil")
           cleanupChannels()
           return
@@ -772,6 +798,8 @@ final class RpcE2ETests: E2ETestBase {
       } else {
         currentChannel = firstRecvonlyChannel
       }
+      // 次の試行では、この接続の切断完了を待ってから再接続する
+      latestRecvonlyChannel = currentChannel
 
       // 再接続では RPC ラベルが open になるまで待つ。接続直後は DataChannel が
       // まだ open でないため rpcUnavailable になり、RPC が送信されず pending が
@@ -823,6 +851,45 @@ final class RpcE2ETests: E2ETestBase {
 
     // 後始末
     cleanupChannels()
+  }
+
+  /// チャンネルの切断完了 (onDisconnect) を待つ
+  ///
+  /// 切断完了を待たずに同じ channelId へ再接続すると、Sora 側で前のセッションが解放される前に
+  /// 接続シグナリングが届き、接続が成立しないことがある。待ち方と取りこぼしの防ぎ方は
+  /// `E2ETestBase.disconnectAll(channels:)` と同じにし、切断が state の確認とハンドラ設定の
+  /// 間に入って onDisconnect が発火済みの場合は、待たずに完了として扱う。
+  ///
+  /// 上限は `E2ETestBase.disconnectAll(channels:)` と同じ 10 秒とする。待ち切れなかった場合は
+  /// 失敗を記録したうえで false を返す (呼び出し側が後始末する)。
+  private func waitForDisconnectCompletion(
+    channel: MediaChannel,
+    timeout: TimeInterval = 10
+  ) -> Bool {
+    // 切断済みのチャンネルでは onDisconnect が発火しないため、待たずに完了とする
+    guard channel.state != .disconnected else {
+      return true
+    }
+    let disconnectExpectation = self.expectation(description: "切断が完了すること")
+    channel.handlers.onDisconnect = { _ in
+      disconnectExpectation.fulfill()
+    }
+    // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
+    // onDisconnect が発火済みのため、待たずに完了とする。生成した expectation は
+    // fulfill の有無にかかわらず未 wait のため、timeout 0 で消費する
+    guard channel.state != .disconnected else {
+      _ = XCTWaiter.wait(for: [disconnectExpectation], timeout: 0)
+      return true
+    }
+    // まだ切断が始まっていない場合は、切断を開始してから完了を待つ
+    if channel.state != .disconnecting {
+      channel.disconnect(error: nil)
+    }
+    guard XCTWaiter.wait(for: [disconnectExpectation], timeout: timeout) == .completed else {
+      XCTFail("チャンネルの切断が \(timeout) 秒以内に完了しなかった")
+      return false
+    }
+    return true
   }
 
   /// RPC 呼び出しを開始し、即座に disconnect する。
