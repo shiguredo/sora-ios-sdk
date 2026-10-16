@@ -684,8 +684,13 @@ final class RpcE2ETests: E2ETestBase {
       }
     }
 
+    // wait の終了後に発火した callback で assertion を記録しないためのフラグ。
+    // 記録すると、テスト終了後の失敗が次のテストへ誤帰属される
+    var sendonlyWaitFinished = false
+    var recvonlyWaitFinished = false
     _ = sora?.connect(configuration: sendonlyConfig) { [self] mediaChannel, error in
       DispatchQueue.main.async {
+        guard !sendonlyWaitFinished else { return }
         if let error {
           XCTFail("sendonly の接続に失敗した : \(error)")
           sendonlyExpectation.fulfill()
@@ -701,6 +706,7 @@ final class RpcE2ETests: E2ETestBase {
 
         _ = self.sora?.connect(configuration: recvonlyConfig) { mediaChannel2, error2 in
           DispatchQueue.main.async {
+            guard !recvonlyWaitFinished else { return }
             if let error2 {
               XCTFail("recvonly の接続に失敗した : \(error2)")
               recvonlyExpectation.fulfill()
@@ -719,6 +725,7 @@ final class RpcE2ETests: E2ETestBase {
     }
 
     wait(for: [sendonlyExpectation], timeout: connectWaitTimeout)
+    sendonlyWaitFinished = true
     // sendonly の接続が成立したことを確認してから recvonly の完了を待つ
     guard sendonlyChannel != nil else {
       XCTFail("sendonly のメディアチャネルが nil")
@@ -726,6 +733,7 @@ final class RpcE2ETests: E2ETestBase {
       return
     }
     wait(for: [recvonlyExpectation], timeout: connectWaitTimeout)
+    recvonlyWaitFinished = true
     guard let firstRecvonlyChannel = recvonlyChannel else {
       cleanupChannels()
       return
@@ -772,8 +780,12 @@ final class RpcE2ETests: E2ETestBase {
         // 接続結果はローカルに受ける。失敗時に前試行のチャンネルを再接続結果として
         // 採用してしまわないようにする
         var reconnectedChannel: MediaChannel?
+        // wait の終了後に発火した callback で assertion を記録しないためのフラグ。
+        // 記録すると、テスト終了後の失敗が次のテストへ誤帰属される
+        var reconnectWaitFinished = false
         _ = sora?.connect(configuration: recvonlyConfig) { mediaChannel, error in
           DispatchQueue.main.async {
+            guard !reconnectWaitFinished else { return }
             if let error {
               XCTFail("再接続に失敗した : \(error)")
               reconnectExpectation.fulfill()
@@ -789,6 +801,7 @@ final class RpcE2ETests: E2ETestBase {
           }
         }
         wait(for: [reconnectExpectation], timeout: connectWaitTimeout)
+        reconnectWaitFinished = true
         guard let reconnected = reconnectedChannel else {
           XCTFail("再接続後にメディアチャネルが nil")
           cleanupChannels()
@@ -860,6 +873,11 @@ final class RpcE2ETests: E2ETestBase {
   /// `E2ETestBase.disconnectAll(channels:)` と同じにし、切断が state の確認とハンドラ設定の
   /// 間に入って onDisconnect が発火済みの場合は、待たずに完了として扱う。
   ///
+  /// `MediaChannelHandlers` は同じ `Configuration` から作ったチャンネル間で共有されるため、
+  /// 設定したハンドラは待ち終了時に必ず外す。外さないと、次の試行で作ったチャンネルの切断でも
+  /// 同じ closure が呼ばれ、fulfill 済みの expectation を再度 fulfill して XCTest の
+  /// API violation (over-fulfill) になる。
+  ///
   /// 上限は `E2ETestBase.disconnectAll(channels:)` と同じ 10 秒とする。待ち切れなかった場合は
   /// 失敗を記録したうえで false を返す (呼び出し側が後始末する)。
   private func waitForDisconnectCompletion(
@@ -871,9 +889,18 @@ final class RpcE2ETests: E2ETestBase {
       return true
     }
     let disconnectExpectation = self.expectation(description: "切断が完了すること")
+    // 切断の通知が重複しても fulfill は 1 回だけにする (over-fulfill を防ぐ)
+    var disconnectFulfilled = false
     channel.handlers.onDisconnect = { _ in
-      disconnectExpectation.fulfill()
+      DispatchQueue.main.async {
+        guard !disconnectFulfilled else { return }
+        disconnectFulfilled = true
+        disconnectExpectation.fulfill()
+      }
     }
+    // ハンドラは共有されるため、次のチャンネルの切断で発火しないよう待ち終了時に外す
+    defer { channel.handlers.onDisconnect = nil }
+
     // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
     // onDisconnect が発火済みのため、待たずに完了とする。生成した expectation は
     // fulfill の有無にかかわらず未 wait のため、timeout 0 で消費する
@@ -886,7 +913,7 @@ final class RpcE2ETests: E2ETestBase {
       channel.disconnect(error: nil)
     }
     guard XCTWaiter.wait(for: [disconnectExpectation], timeout: timeout) == .completed else {
-      XCTFail("チャンネルの切断が \(timeout) 秒以内に完了しなかった")
+      XCTFail("チャンネルの切断が \(Int(timeout)) 秒以内に完了しなかった")
       return false
     }
     return true
