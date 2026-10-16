@@ -821,15 +821,23 @@ final class RpcE2ETests: E2ETestBase {
       if currentChannel.peerChannel.rpcChannel == nil {
         let reconnectRpcOpenedExpectation = self.expectation(
           description: "再接続後の rpc ラベルが OPEN すること")
+        // onDataChannelOpened も同じ Configuration から作ったチャンネル間で共有されるため、
+        // 1 回だけ fulfill し、待ち終了時に外す。外さないと、rpcChannel が確認時点で
+        // 既に OPEN になっている次の試行で、その OPEN の通知が前試行の closure を呼び、
+        // fulfill 済みの expectation を再度 fulfill して API violation になる
+        var rpcOpenedFulfilled = false
         currentChannel.handlers.onDataChannelOpened = { _, label in
           DispatchQueue.main.async {
-            guard label == "rpc" else { return }
+            guard label == "rpc", !rpcOpenedFulfilled else { return }
+            rpcOpenedFulfilled = true
             reconnectRpcOpenedExpectation.fulfill()
           }
         }
+        defer { currentChannel.handlers.onDataChannelOpened = nil }
         // onDataChannelOpened が設定される前に OPEN 済みの場合は、
         // rpcChannel が nil でないことを確認して待ち終える
-        if currentChannel.peerChannel.rpcChannel != nil {
+        if currentChannel.peerChannel.rpcChannel != nil, !rpcOpenedFulfilled {
+          rpcOpenedFulfilled = true
           reconnectRpcOpenedExpectation.fulfill()
         }
         let reconnectRpcOpenedResult = XCTWaiter.wait(
