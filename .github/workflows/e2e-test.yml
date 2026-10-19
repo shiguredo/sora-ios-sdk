@@ -45,6 +45,9 @@ jobs:
         xcrun simctl bootstatus "$SIMULATOR_NAME" -b
     - name: Run E2E Tests
       id: e2e_tests
+      # ハングした場合は job 全体の timeout で cancelled になり診断 step が実行されないため、
+      # step 単位で打ち切って failure にし、Show E2E Crash Diagnostics を実行させる
+      timeout-minutes: 30
       run: |
         rm -rf build
 
@@ -98,27 +101,129 @@ jobs:
           exit 0
         fi
 
-        # 接続情報や環境変数を含み得る診断全体は公開せず、終了理由とシンボルだけを抽出する。
-        xcrun xcresulttool export diagnostics \
+        # 接続情報や環境変数を含み得る診断全体は公開せず、終了理由・スレッド情報・シンボルだけを
+        # 抽出する。export の失敗でこの step を終了させない (job の合否は Run E2E Tests step が持つ)
+        if ! xcrun xcresulttool export diagnostics \
           --path build/e2e.xcresult \
-          --output-path build/e2e-diagnostics
-        find build/e2e-diagnostics -type f -name '*.ips' -print0 |
-          while IFS= read -r -d '' report; do
-            jq '
-              select(.threads? != null) |
-              select(.procName == "xctest" or (.procName | startswith("Sora"))) |
-              . as $crash |
-              {
-                process: .procName,
-                exception: (.exception | {type, signal, codes}),
-                termination: (.termination | {namespace, code, indicator}),
-                frames: [
-                  .threads[.faultingThread].frames[]? |
-                  {image: $crash.usedImages[.imageIndex].name, symbol, symbolLocation}
-                ]
-              }
-            ' "$report"
-          done
+          --output-path build/e2e-diagnostics; then
+          echo "Warning: failed to export diagnostics"
+          exit 0
+        fi
+        if [ ! -d build/e2e-diagnostics ]; then
+          echo "Warning: diagnostics output directory was not created"
+          exit 0
+        fi
+
+        # report には共有 runner の Simulator に残った過去の実行の crash report も含まれるため、
+        # テスト実行 (xcodebuild の test action) を開始した時刻以降に採取された report だけを
+        # 表示する。result bundle の作成時刻をテスト実行の開始時刻として使い、取得できない場合は
+        # 比較を行わず全件を対象にする (fail-open)
+        START_EPOCH=$(stat -f %B build/e2e.xcresult 2>/dev/null || echo 0)
+        case "$START_EPOCH" in
+          '' | *[!0-9]*) START_EPOCH=0 ;;
+        esac
+
+        # .ips は 1 行目がヘッダ (timestamp / app_name)、2 行目以降が本体 (procName /
+        # captureTime / threads など) の 2 値構成である。採取時刻にはクラッシュ時刻に近い本体の
+        # captureTime を使い、無ければヘッダの timestamp (レポート生成時刻) を使う
+        TOTAL=0
+        STALE=0
+        UNKNOWN=0
+        OTHER=0
+        TARGET=0
+        FAILED=0
+        while IFS= read -r -d '' report; do
+          TOTAL=$((TOTAL + 1))
+          REPORT=$(basename "$report")
+          CAPTURED_AT=$(tail -n +2 "$report" | jq -r '.captureTime // empty' 2>/dev/null || true)
+          if [ -z "$CAPTURED_AT" ]; then
+            CAPTURED_AT=$(head -1 "$report" | jq -r '.timestamp // empty' 2>/dev/null || true)
+          fi
+          CAPTURED=unknown
+          if [ "$START_EPOCH" -gt 0 ] && [ -n "$CAPTURED_AT" ]; then
+            # "2026-10-16 20:03:48.9163 +0900" 形式の小数秒を落として epoch 秒へ変換する
+            NORMALIZED=$(printf '%s' "$CAPTURED_AT" | sed -E 's/\.[0-9]+ / /')
+            if EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S %z" "$NORMALIZED" +%s 2>/dev/null); then
+              if [ "$EPOCH" -lt "$START_EPOCH" ]; then
+                CAPTURED=stale
+              else
+                CAPTURED=current
+              fi
+            fi
+          fi
+          if [ "$CAPTURED" = "stale" ]; then
+            # 除外した report も、report が無かったのか古い report だったのかを追えるよう残す
+            STALE=$((STALE + 1))
+            echo "Excluded stale report: $REPORT (captured at $CAPTURED_AT)"
+            continue
+          fi
+          if [ "$CAPTURED" = "unknown" ]; then
+            UNKNOWN=$((UNKNOWN + 1))
+          fi
+          # xctest / Sora の report だけを抽出する。report とプロセス起動を対応づけられるよう
+          # procLaunch / pid を、crash と hang を区別できるよう bugType も出力する。
+          # 出力の有無で「対象の report か」「表示できたか」を分けて数える
+          if ! OUTPUT=$(jq --arg report "$REPORT" --arg capturedAt "${CAPTURED_AT:-unknown}" '
+            select(.threads? != null) |
+            select(.procName == "xctest" or ((.procName // "") | startswith("Sora"))) |
+            . as $crash |
+            {
+              report: $report,
+              process: .procName,
+              capturedAt: $capturedAt,
+              pid: .pid,
+              procLaunch: .procLaunch,
+              bugType: .bug_type,
+              exception: (.exception | {type, signal, codes}),
+              termination: (.termination | {namespace, code, indicator}),
+              faultingThread: .faultingThread,
+              faultingThreadQueue: (
+                if .faultingThread != null and .faultingThread < (.threads | length)
+                then .threads[.faultingThread].queue
+                else null
+                end
+              ),
+              # faultingThread を持たない report (ハングなど) でも report 全体を捨てない
+              frames: [
+                (.threads[.faultingThread]?.frames // [])[]? |
+                {image: $crash.usedImages[.imageIndex].name, symbol, symbolLocation}
+              ],
+              # クラッシュがテスト本体か tearDown かを判定できるよう、main thread の先頭
+              # フレームを出す。run loop のフレームの後ろにテストのフレームが現れることがある
+              # ため 15 frame まで出す。faulting thread が main thread の場合は frames と
+              # 重複するので出さない
+              mainThreadFrames: (
+                if .faultingThread != null
+                  and (.threads[.faultingThread]?.queue == "com.apple.main-thread")
+                then []
+                else
+                  [
+                    .threads[] |
+                    select(.queue == "com.apple.main-thread" or .name == "main") |
+                    .frames[0:15][]? |
+                    {image: $crash.usedImages[.imageIndex].name, symbol}
+                  ] | .[0:15]
+                end
+              )
+            }
+          ' "$report"); then
+            echo "Warning: failed to print $REPORT"
+            FAILED=$((FAILED + 1))
+            continue
+          fi
+          if [ -z "$OUTPUT" ]; then
+            # 対象外の process (Simulator など) の report。job 中の crash として参考になるため数える
+            OTHER=$((OTHER + 1))
+            continue
+          fi
+          printf '%s\n' "$OUTPUT"
+          TARGET=$((TARGET + 1))
+        done < <(find build/e2e-diagnostics -type f -name '*.ips' -print0)
+
+        echo "crash diagnostics: $TOTAL report(s), $STALE stale, $UNKNOWN unknown time, $TARGET xctest / Sora, $OTHER other process, $FAILED failed"
+        if [ "$TARGET" -eq 0 ]; then
+          echo "note: no xctest / Sora crash report was printed"
+        fi
     - name: Shutdown Simulator
       if: always()
       run: xcrun simctl shutdown 'iPhone 17 Pro' || true
