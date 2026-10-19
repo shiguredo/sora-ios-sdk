@@ -227,6 +227,13 @@
   - 切断完了の待ちは `E2ETestBase.disconnectAll(channels:)` と同じ 10 秒を上限とし、待ち切れなかった場合は失敗を記録して後始末する
   - 再接続の待ち時間を `connectionTimeout` 60 秒 + 余裕 30 秒の 90 秒にして、SDK の `connectionTimeout` の発火を wait の内側で処理する
   - @t-miya
+- [FIX] `PeerChannelMessagingRaceTests` の後始末で WebRTC オブジェクトを明示的に `close()` する
+  - `tearDown` が native の `RTCPeerConnection` / `RTCDataChannel` を閉じずに解放していたため、参照を落とす前に閉じる (クラッシュの原因は未確定であり、後始末の不備を解消する対応)
+  - @t-miya
+- [FIX] E2E テストの crash 診断から、過去の実行で採取された report を除外する
+  - `Show E2E Crash Diagnostics` step は共有 runner の Simulator に残った過去の実行の crash report も出力し得たため、テスト実行の開始時刻以降に採取された report だけを表示する。report 名・採取時刻・スレッド情報も出力する
+  - ハング時に診断 step を実行できるよう、`Run E2E Tests` に step 単位の timeout を設ける
+  - @t-miya
 
 ## 2026.3.0
 

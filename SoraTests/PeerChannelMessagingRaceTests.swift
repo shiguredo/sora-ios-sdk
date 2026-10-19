@@ -234,26 +234,38 @@ final class PeerChannelMessagingRaceTests: XCTestCase {
   /// テストメソッドのローカル変数より後に解放されるようにします。
   private var mediaChannel: MediaChannel?
 
-  /// テストの間、ローカル接続に使う実 `RTCPeerConnection` を保持します。
+  /// テストの後始末で `close()` する、ローカル接続に使う実 `RTCPeerConnection` を保持します
+  /// (`hasStuckPath` が true のときは close しません)。
   private var peerConnections: [RTCPeerConnection] = []
 
-  /// テストの間、delegate を外す対象の実 `RTCDataChannel` を保持します。
+  /// テストの後始末で delegate を外して `close()` する対象の実 `RTCDataChannel` を保持します
+  /// (`hasStuckPath` が true のときは close しません)。
   private var nativeDataChannels: [RTCDataChannel] = []
 
-  /// deadlock で停止した経路がある場合は true になり、後始末で SDK の状態を触りません
-  /// (停止した排他単位を待たないため。`LoggerCallUnderLockTests` と同じ方針)。
+  /// wait がタイムアウトして排他区間で停止した疑いがある場合は true になり、後始末では native
+  /// オブジェクトの close も含めて SDK の状態を一切触りません (停止した排他単位を待たないため。
+  /// `LoggerCallUnderLockTests` と同じ方針)。
   private var hasStuckPath = false
 
   override func tearDown() {
     if !hasStuckPath {
-      // PeerConnection を閉じる前に delegate を外し、テスト終了後に SDK の切断経路が
-      // 走らないようにする。その後に PeerConnection、最後に factory を保持する
-      // MediaChannel の参照を落とす。
+      // 参照を落とす前に native の DataChannel と PeerConnection を閉じる。WebRTC の
+      // オブジェクトは close してから解放する (SDK の切断経路も `nativeChannel` を close して
+      // から解放する)。閉じずに解放すると、WebRTC のスレッドが破棄済みのオブジェクトに
+      // 触れてクラッシュし得るため、テストでも同じ順序にする。
+      // delegate は DataChannel を閉じる前に外し、テスト終了後に SDK の切断経路が
+      // 走らないようにする。
       for dataChannel in nativeDataChannels {
         dataChannel.delegate = nil
+        dataChannel.close()
       }
       nativeDataChannels = []
+      for peerConnection in peerConnections {
+        peerConnection.close()
+      }
       peerConnections = []
+      // factory を保持する MediaChannel は最後に落とす (factory が PeerConnection より
+      // 長生きするようにする)
       mediaChannel = nil
     }
     hasStuckPath = false
