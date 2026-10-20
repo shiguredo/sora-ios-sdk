@@ -9,7 +9,9 @@
 - FIX
   - バグ修正
 
-## develop
+## 2026.4.0
+
+**リリース日**: 2026-10-20
 
 - [CHANGE] `swift-tools-version` を 6.3 に上げ、Swift 6 言語モードを manifest で宣言する
   - SwiftPM 6.3 未満 (Xcode 26.6 未満) では package を解決できなくなる

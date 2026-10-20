@@ -245,7 +245,7 @@ final class PeerChannelMessagingStorage: @unchecked Sendable {
   /// 呼ぶ。どちらも libwebrtc を同期呼び出しする (前者は network thread への `BlockingCall`、
   /// 後者は proxy 経由の `PostTask` と完了待ち) ため、その間は signaling thread の delegate
   /// 経路と他の送信者がこの `lock` を待つ。`compress` が true のときは区間の中で zlib 圧縮も
-  /// 行う。現行の libwebrtc (Package.swift が指定する m154.8037.1.2) は `DataChannel` の
+  /// 行う。 libwebrtc m154.8037.1.2 時点では `DataChannel` の
   /// delegate 通知を signaling thread へ post するため、この呼び出しが同じスレッドで delegate を
   /// 再入することはない。この前提は SDK 外の libwebrtc の実装に依存するため、libwebrtc を
   /// 更新するときは再確認し、送信元のスレッドで delegate が同期的に呼ばれる実装に変わった場合は、
