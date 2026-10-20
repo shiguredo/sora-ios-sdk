@@ -99,20 +99,34 @@ private enum ZLibUtil {
   }
 }
 
-extension RTCDataChannelState: CustomStringConvertible {
-  public var description: String {
-    switch self {
-    case .connecting:
-      return "connecting"
-    case .open:
-      return "open"
-    case .closing:
-      return "closing"
-    case .closed:
-      return "closed"
-    @unknown default:
-      return "unknown"
-    }
+/// `BasicDataChannelDelegate.dataChannel(_:didReceiveMessageWith:)` の `statistics` 完了 block が
+/// `DataChannel` を参照するための、用途限定の参照保持 box です。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する `DataChannel` の参照は `init` で確定した `let` であること。
+///   box は参照を保持して block へ渡すだけで、状態を読み書きしないこと
+/// - 変更前から `DataChannel` を捕捉していた `RTCPeerConnection.statistics` の完了 block を
+///   包み直すだけで、配送先・通知順序・呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持する `DataChannel` に対して closure が行う状態アクセスが、`init` で確定した不変値に
+///   閉じること。`DataChannel` の格納プロパティは `let native` と `let delegate` の 2 つだけで
+///   可変状態を持たない。`compress` は `delegate.compress` (`let`) を返す computed property で、
+///   `send(_:)` は `delegate.compress` を読んで `native.sendData(_:)` を呼ぶ。
+///   `BasicDataChannelDelegate` の `weak var peerChannel` / `weak var mediaChannel` への代入は
+///   `init` の 2 箇所だけで、代入後に値を書き換えない
+///
+/// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
+/// 安全である」という限定した主張であり、`DataChannel` 全体が thread-safe であることも、
+/// `DataChannel` に `Sendable` 準拠を追加することも主張しません。
+/// 参照の同一性は変更前の capture と同じで、`DataChannel` の生存期間は box が保持する間だけ
+/// 延びます。
+///
+/// 生成は `didReceiveMessageWith` の `stats` ラベルの 1 箇所だけで、1 つの block へ
+/// 1 回だけ渡して 1 回だけ実行する使用契約です (型では強制されません)。
+private final class DataChannelSendBox: @unchecked Sendable {
+  let value: DataChannel
+
+  init(_ value: DataChannel) {
+    self.value = value
   }
 }
 
@@ -139,7 +153,8 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     Logger.debug(
       type: .dataChannel,
       message:
-        "\(#function): label => \(dataChannel.label), state => \(dataChannel.readyState)")
+        "\(#function): label => \(dataChannel.label), state => \(WebRTCEnumDescription.dataChannelState(dataChannel.readyState))"
+    )
 
     // リダイレクト前に生成された DataChannel からの通知は無視する。
     // これにより、旧 RTCPeerConnection の close() に伴う .closed 通知が
@@ -185,7 +200,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
       return
     }
 
-    guard let dc = peerChannel.dataChannels[dataChannel.label] else {
+    // 登録済みの `DataChannel` の参照は `PeerChannel` の排他単位で読む。
+    // (redirect の無効化と並行しても辞書の読み書きにデータ競合が生じない)
+    guard let dc = peerChannel.dataChannel(label: dataChannel.label) else {
       Logger.error(
         type: .dataChannel,
         message: "DataChannel for label: \(dataChannel.label) is unavailable")
@@ -208,6 +225,9 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     if !dataChannel.label.starts(with: "#") {
       switch dataChannel.label {
       case "stats":
+        // statistics の完了 block は @Sendable として取り込まれるため、DataChannel を
+        // 直接捕捉せず、用途限定の参照保持 box 経由で参照する。
+        let sendBox = DataChannelSendBox(dc)
         peerChannel.nativeChannel?.statistics {
           // NOTE: stats の型を Signaling.swift に定義していない
           let reports = Statistics(contentsOf: $0).jsonObject
@@ -226,7 +246,7 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
           }
 
           if let data {
-            let ok = dc.send(data)
+            let ok = sendBox.value.send(data)
             if !ok {
               Logger.error(
                 type: .dataChannel,
@@ -265,7 +285,24 @@ class BasicDataChannelDelegate: NSObject, RTCDataChannelDelegate {
     if let mediaChannel, let handler = mediaChannel.handlers.onDataChannelMessage {
       handler(mediaChannel, dataChannel.label, data)
     }
+    // 既存 handler の有無にかかわらず、購読者へは同じ配送点から配送する。
+    mediaChannel?.publishEvent(
+      kind: .dataChannelMessage,
+      dataChannelLabel: dataChannel.label,
+      dataChannelMessage: data)
   }
+}
+
+/// `DataChannel.sendWithoutLogging(_:)` の結果です。
+///
+/// 送信ログは排他区間の外で出す必要があるため、送信の失敗を種類ごとに呼び出し側へ返します。
+enum DataChannelSendResult {
+  /// 送信できた
+  case sent
+  /// 圧縮に失敗した
+  case compressionFailed
+  /// 送信要求が失敗した
+  case sendFailed
 }
 
 class DataChannel {
@@ -299,17 +336,54 @@ class DataChannel {
     native.readyState
   }
 
+  /// メッセージを送信します。送信ログも本メソッドで出します。
+  ///
+  /// 排他区間の中で送信する経路 (`MediaChannel.sendMessage`) は
+  /// `sendWithoutLogging(_:)` を使い、ログは区間の外で出します。
   func send(_ data: Data) -> Bool {
+    logSendAttempt(data)
+    let result = sendWithoutLogging(data)
+    logCompressionFailureIfNeeded(result)
+    return result == .sent
+  }
+
+  /// メッセージを送信します。ログは出しません。
+  ///
+  /// `MediaChannel.sendMessage` が排他区間の中で呼びます。区間の中で `Logger` を呼ぶと、
+  /// 利用者の出力 handler が同じ排他単位を取る送信経路を再入したときにデッドロックするため、
+  /// ログは呼び出し側が区間の外で `logSendAttempt(_:)` と `logCompressionFailureIfNeeded(_:)` を
+  /// 呼んで出します。
+  func sendWithoutLogging(_ data: Data) -> DataChannelSendResult {
+    guard let data = compress ? ZLibUtil.zip(data) : data else {
+      return .compressionFailed
+    }
+    return native.sendData(RTCDataBuffer(data: data, isBinary: true)) ? .sent : .sendFailed
+  }
+
+  /// 送信を試みたデータのログを出します。排他区間の外から呼びます。
+  ///
+  /// `send(_:)` は送信の前に、`MediaChannel.sendMessage` は区間の外で送信の後に呼びます。
+  /// メッセージの関数名は変更前の `DataChannel.send(_:)` の `#function` と同じ `"send(_:)"` を
+  /// 使います。呼び出し経路 (`send(_:)` / `MediaChannel.sendMessage`) によって文言を
+  /// 変えないためです。
+  func logSendAttempt(_ data: Data) {
     Logger.debug(
       type: .dataChannel,
       message:
-        "\(String(describing: type(of: self))):\(#function): label => \(label), data => \(data.base64EncodedString())"
+        "\(String(describing: type(of: self))):send(_:): label => \(label), data => \(data.base64EncodedString())"
     )
+  }
 
-    guard let data = compress ? ZLibUtil.zip(data) : data else {
-      Logger.error(type: .dataChannel, message: "failed to compress message")
-      return false
+  /// 圧縮に失敗した場合のログを出します。排他区間の外から呼びます。
+  ///
+  /// `MediaChannel.sendMessage` は送信の失敗を一律に `SoraError.messagingError` として返すため、
+  /// 利用者へ返る reason からは圧縮の失敗を区別できません。その原因を残すために
+  /// `.compressionFailed` だけを error ログにします (`.sendFailed` は変更前と同じく追加の
+  /// ログを出しません)。`logSendAttempt(_:)` と対で呼びます。
+  func logCompressionFailureIfNeeded(_ result: DataChannelSendResult) {
+    guard result == .compressionFailed else {
+      return
     }
-    return native.sendData(RTCDataBuffer(data: data, isBinary: true))
+    Logger.error(type: .dataChannel, message: "failed to compress message")
   }
 }

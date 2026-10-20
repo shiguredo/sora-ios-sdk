@@ -1,8 +1,8 @@
 import AVFoundation
 import Foundation
 
-// 公開 API の CameraSettings に Sendable を要求せず、
-// actor 境界を越えるために必要な値だけを内部でスナップショット化します。
+// ミュート解除時のカメラ再起動に必要な値だけを内部で保持します。
+// 公開 API の CameraSettings は Sendable のため、このスナップショットによる値の受け渡しは必須ではない。
 struct CameraSettingsSnapshot: Sendable {
   let resolution: CameraSettings.Resolution
   let frameRate: Int
@@ -21,10 +21,17 @@ struct CameraSettingsSnapshot: Sendable {
 
 // 公開 API の MediaStream に Sendable を要求せず、
 // actor 境界で参照を受け渡すための内部ラッパーです。
-// 注意: MediaStream 自体は Sendable ではないため、
-// ここでの `@unchecked Sendable` は同時アクセスが起きない前提に依存します。
+// 注意: MediaStream 自体は Sendable ではないため、`@unchecked Sendable` を付けています。
+// その安全性の根拠は、SDK が生成する `BasicMediaStream` が可変状態を内部 lock で保護し、
+// actor からはその lock 付きの経路だけを呼ぶことにあります。
 struct SenderStreamBox: @unchecked Sendable {
   let stream: MediaStream
+
+  // `videoEnabled` / `audioEnabled` の operation の世代を扱えるのは SDK が生成する
+  // `BasicMediaStream` だけです。他の実装では public な setter へフォールバックします。
+  var basicStream: BasicMediaStream? {
+    stream as? BasicMediaStream
+  }
 }
 
 // ハードミュート解除時に利用するカメラ開始予約と、その管理元を一体で扱います。
@@ -174,17 +181,16 @@ final class VideoHardMuteOperationTracker: @unchecked Sendable {
 // 映像ハードミュートの同時呼び出しによるレースコンディション防止を目的とした Actor です
 // MediaChannel.setVideoHardMute(_:) での使用を想定しています
 actor VideoHardMuteActor {
-  // ハードミュートで停止したキャプチャを取消時に restart するための保持キャプチャラー
+  // ハードミュートで停止したキャプチャを取消時に restart するための保持キャプチャラー ID
   // 保存状態は所有者 (lease) に紐付き、別接続からは取得できない
-  private struct StoredCapturer {
-    let capturer: CameraVideoCapturer
-  }
+  // instance を直接保持せず ID で保持し、owner の instance テーブルから解決します。
+  // instance の生存は owner の pin が保証します。
 
   // await をまたぐ操作完了と lease 解放を同期する tracker
   private let operationTracker: VideoHardMuteOperationTracker
   // 通常のカメラ操作を含め、実デバイスの操作完了まで process-wide で直列化する coordinator
   private let cameraCaptureCoordinator: CameraVideoCaptureCoordinator
-  private var storedCapturers: [VideoHardMuteLease: StoredCapturer] = [:]
+  private var storedCapturers: [VideoHardMuteLease: CameraCapturerID] = [:]
 
   init(
     operationTracker: VideoHardMuteOperationTracker = VideoHardMuteOperationTracker(),
@@ -198,8 +204,16 @@ actor VideoHardMuteActor {
   ///
   /// - Parameters:
   ///  - mute: `true` で有効化、`false` で無効化
+  ///  - generation: この operation の世代。`MediaChannel` が公開 API の入口で取得した値です。
+  ///    `mute = true` の経路でのみ使い、`videoEnabled` の設定と失敗時の復元をこの世代で確定します
+  ///    (最後に値を確定した operation より古い世代の書き込みは破棄されます)。`mute = false` の
+  ///    経路では使わず、ハードミュート解除後の有効化は `MediaChannel` が同じ世代で確定します。
+  ///    SDK が生成する `BasicMediaStream` 以外の stream では世代を取得できないため `nil` になり、
+  ///    その場合は public な setter で確定します
   ///  - lease: カメラ操作の所有者を示す lease
-  ///  - senderStream: 送信ストリーム
+  ///  - senderStream: 送信ストリーム。`mute = true` の場合は `videoEnabled` を false にし、
+  ///    失敗時は `lease` が有効なときだけ直列化区間へ入った時点の値へ復元します。判定と書き込みは
+  ///    原子的ではないため、切断の開始と同時に失敗した場合は復元が実行され得ます
   ///  - cameraSettings: カメラ設定
   ///  - cameraStartAuthorization: MediaChannel が取得したカメラ開始予約と管理元
   /// - Throws:
@@ -207,6 +221,7 @@ actor VideoHardMuteActor {
   ///   - カメラ操作の失敗時は `SoraError.cameraError`
   func setMute(
     mute: Bool,
+    generation: UInt64?,
     lease: VideoHardMuteLease,
     senderStream: SenderStreamBox,
     cameraSettings: CameraSettingsSnapshot,
@@ -218,33 +233,55 @@ actor VideoHardMuteActor {
     // 破棄予約済みの lease では操作を開始しない。
     try checkNotRevoked(lease: lease)
 
-    let storedCapturer = storedCapturers[lease]
-
     // ミュートを有効化します
     if mute {
-      guard let currentCapturer = await currentCameraVideoCapturer() else {
-        // キャプチャ未起動の場合は停止対象がないため、冪等として成功扱いにします
+      // 黒塗りフレームの送出はカメラ停止より前に行う必要があります。
+      // この設定は operationTracker.begin の後に置くため、拒否された呼び出しはここへ到達しません。
+      // 復元の基準値はこの直列化区間へ入った時点で読みます。利用者が
+      // setVideoHardMute を呼ぶ直前の値と厳密に一致する保証はありません。
+      let previousVideoEnabled = senderStream.stream.videoEnabled
+      commitVideoEnabledForActor(false, generation: generation, senderStream: senderStream)
+      do {
+        guard let currentCapturer = await currentCameraVideoCapturer() else {
+          // キャプチャ未起動の場合は停止対象がないため、冪等として成功扱いにします
+          return
+        }
+        // 動作中のカメラがこの接続の senderStream に紐付いていることを確認する。
+        // (別接続が使用中のカメラを停止しないため。CameraVideoCapturer.current は
+        // 全接続で共有される static のため、stream の一致が必要)
+        guard currentCapturer.stream === senderStream.stream else {
+          throw SoraError.mediaChannelError(
+            reason: "camera is owned by another connection")
+        }
+        // stop の前に再確認する (await 中に release された場合)
+        try checkNotRevoked(lease: lease)
+        try await stopCameraVideoCapture(
+          currentCapturer,
+          senderStream: senderStream)
+        // stop 完了後に再確認する (保存を中止する)
+        try checkNotRevoked(lease: lease)
+        // ミュート無効化する際にキャプチャラーを使用するため保持しておきます。
+        // instance は ID のみで保持するため、 owner に pin して生存を保証します。
+        // 同じ lease の保存状態が残っている場合は先に破棄して pin を解放します。
+        discardStoredCapturer(lease: lease)
+        storedCapturers[lease] = currentCapturer.id
+        CameraStateOwner.shared.pin(id: currentCapturer.id, instance: currentCapturer)
         return
+      } catch {
+        // 取消 (lease が無効) の失敗では復元しません。
+        // カメラが停止済みか quarantine 中かによらず、切断中に映像有効の callback を
+        // 発火させても回復できないためです。
+        // それ以外の失敗では呼び出し前の値へ戻します (defer の finish より先に完了します)。
+        // 復元は自分と同じ世代で確定するため、後続の operation が値を確定していた場合は
+        // 破棄され、後続の値を上書きしません。
+        // isValid の判定と復元の書き込みは原子的ではないため、判定直後に
+        // 別スレッドの prepareForDisconnect が revoke した場合は復元が実行され得ます。
+        if lease.isValid {
+          commitVideoEnabledForActor(
+            previousVideoEnabled, generation: generation, senderStream: senderStream)
+        }
+        throw error
       }
-      // 動作中のカメラがこの接続の senderStream に紐付いていることを確認する。
-      // (別接続が使用中のカメラを停止しないため。CameraVideoCapturer.current は
-      // 全接続で共有される static のため、stream の一致が必要)
-      guard currentCapturer.stream === senderStream.stream else {
-        throw SoraError.mediaChannelError(
-          reason: "camera is owned by another connection")
-      }
-      // stop の前に再確認する (await 中に release された場合)
-      try checkNotRevoked(lease: lease)
-      try await stopCameraVideoCapture(
-        currentCapturer,
-        senderStream: senderStream)
-      // stop 完了後に再確認する (保存を中止する)
-      try checkNotRevoked(lease: lease)
-      // ミュート無効化する際にキャプチャラーを使用するため保持しておきます
-      storedCapturers[lease] = StoredCapturer(
-        capturer: currentCapturer
-      )
-      return
     }
 
     // ミュートを無効化します
@@ -259,7 +296,7 @@ actor VideoHardMuteActor {
     if let currentCapturer {
       // 同じ送信ストリームのカメラが動作中なら、別経路ですでに再開済みとして扱う。
       if currentCapturer.stream === senderStream.stream {
-        storedCapturers.removeValue(forKey: lease)
+        discardStoredCapturer(lease: lease)
         return
       }
       // 別接続のカメラが動作中なら、そのカメラを停止または付け替えない。
@@ -270,18 +307,24 @@ actor VideoHardMuteActor {
     try checkNotRevoked(lease: lease)
 
     // 前回停止時のキャプチャラーが保持できていれば restart、なければ start します
-    if let storedCapturer {
+    if let storedCapturerID = storedCapturers[lease] {
+      guard let capturer = CameraStateOwner.shared.capturer(id: storedCapturerID) else {
+        // instance が解放済みの場合は restart できないため保存状態を破棄する。
+        // (pin している間は解放されないため、通常は到達しない)
+        discardStoredCapturer(lease: lease)
+        throw SoraError.mediaChannelError(reason: "stored capturer is no longer available")
+      }
       try await restartCameraVideoCapture(
-        storedCapturer.capturer,
+        capturer,
         senderStream: senderStream,
         lease: lease,
         cameraStartAuthorization: cameraStartAuthorization)
       // restart 完了後に再確認する。revoke 済みだった場合はカメラを停止する
       try await checkNotRevokedAfterRestart(
-        capturer: storedCapturer.capturer,
+        capturer: capturer,
         senderStream: senderStream,
         lease: lease)
-      storedCapturers.removeValue(forKey: lease)
+      discardStoredCapturer(lease: lease)
       return
     }
     let startedCapturer = try await startCameraVideoCapture(
@@ -296,13 +339,47 @@ actor VideoHardMuteActor {
       lease: lease)
   }
 
+  // 映像の有効値を operation の世代付きで確定します。
+  //
+  // メソッド名の `ForActor` は actor 内のヘルパーであることを示す接尾辞で、`BasicMediaStream` が
+  // 公開する `commitVideoEnabled` と取り違えないためのものです。SDK が生成する stream は
+  // `BasicMediaStream` だけなので、通常は operation の世代で compare-and-set して確定します。
+  // 別の実装では世代を扱えないため、public な setter (呼び出し 1 回を 1 operation とする) へ
+  // フォールバックします。
+  private func commitVideoEnabledForActor(
+    _ value: Bool,
+    generation: UInt64?,
+    senderStream: SenderStreamBox
+  ) {
+    if let basicStream = senderStream.basicStream, let generation {
+      basicStream.commitVideoEnabled(value, generation: generation)
+    } else {
+      senderStream.stream.videoEnabled = value
+    }
+  }
+
   // 接続切断時に、その接続が所有する保存状態を破棄します。
   // 別接続がこの接続の capturer を取得できないようにするために使用します。
   // 破棄予約も行い、await 中の setMute が復帰後に保存や再開を行わないようにする。
   // 進行中操作がある場合は、その操作が rollback / stop を終えるまで戻らない。
   func release(lease: VideoHardMuteLease) async {
-    storedCapturers.removeValue(forKey: lease)
+    // 先に lease を無効化する。`revokeAndWaitForCompletion` は nonisolated async のため
+    // await でこの actor を離れ、その間に同じ lease の setMute が再入して保存と pin を
+    // 行う余地がある。revoke を同期で先に行い、再入した setMute を拒否させる。
+    lease.revoke()
+    // 進行中の操作が終わるまで待ってから保存状態を破棄する。
+    // (待つ前に破棄すると、進行中の setMute が行った保存と pin が残る)
     await operationTracker.revokeAndWaitForCompletion(lease: lease)
+    discardStoredCapturer(lease: lease)
+  }
+
+  // 保存状態を破棄し、 owner の pin を解除します。
+  // pin を解除しないと instance をプロセス終了まで保持してしまいます。
+  private func discardStoredCapturer(lease: VideoHardMuteLease) {
+    guard let capturerID = storedCapturers.removeValue(forKey: lease) else {
+      return
+    }
+    CameraStateOwner.shared.unpin(id: capturerID)
   }
 
   /// 指定した lease に破棄予約が記録済みかをテストから確認します。
@@ -360,7 +437,7 @@ actor VideoHardMuteActor {
   // 現在のカメラキャプチャラーを取得します
   private func currentCameraVideoCapturer() async -> CameraVideoCapturer? {
     await cameraCaptureCoordinator.perform {
-      await CameraVideoCapturer.currentForSDK()
+      CameraVideoCapturer.current
     }
   }
 
@@ -374,7 +451,7 @@ actor VideoHardMuteActor {
   ) async throws -> CameraVideoCapturer? {
     let cameraCaptureCoordinator = cameraCaptureCoordinator
     return try await cameraCaptureCoordinator.perform {
-      guard let currentCapturer = await CameraVideoCapturer.currentForSDK() else {
+      guard let currentCapturer = CameraVideoCapturer.current else {
         return nil
       }
       guard currentCapturer.stream === senderStream.stream else {
@@ -397,7 +474,7 @@ actor VideoHardMuteActor {
   ) async throws {
     let cameraCaptureCoordinator = cameraCaptureCoordinator
     try await cameraCaptureCoordinator.perform {
-      let current = await CameraVideoCapturer.currentForSDK()
+      let current = CameraVideoCapturer.current
       guard current === capturer, current?.stream === senderStream.stream else {
         // すでに停止済みなら cleanup は完了している。別の current が存在する場合も
         // その接続のカメラには作用しない。
@@ -410,13 +487,13 @@ actor VideoHardMuteActor {
       if let error = await capturer.stopForSDK() {
         // callback 時点で停止済みなら cleanup 成功として扱う。
         guard capturer.isRunning else {
-          cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+          cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: capturer.id)
           return
         }
-        cameraCaptureCoordinator.quarantine(capturer: capturer)
+        cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         throw error
       }
-      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: capturer.id)
     }
   }
 
@@ -433,7 +510,7 @@ actor VideoHardMuteActor {
         throw SoraError.mediaChannelError(
           reason: "camera capture is quarantined after a cleanup failure")
       }
-      let current = await CameraVideoCapturer.currentForSDK()
+      let current = CameraVideoCapturer.current
       if let current {
         guard current === capturer, current.stream === senderStream.stream else {
           throw SoraError.mediaChannelError(
@@ -442,7 +519,7 @@ actor VideoHardMuteActor {
       }
       if let error = await capturer.restartForSDK(senderStream: senderStream) {
         if capturer.isRunning {
-          cameraCaptureCoordinator.quarantine(capturer: capturer)
+          cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         }
         throw error
       }
@@ -468,7 +545,7 @@ actor VideoHardMuteActor {
         throw SoraError.mediaChannelError(
           reason: "camera capture is quarantined after a cleanup failure")
       }
-      guard await CameraVideoCapturer.currentForSDK() == nil else {
+      guard CameraVideoCapturer.current == nil else {
         throw SoraError.mediaChannelError(
           reason: "camera is owned by another connection")
       }
@@ -549,12 +626,12 @@ actor VideoHardMuteActor {
       cameraStartAuthorization.videoSourceCoordinator.cancelCamera(
         cameraStartAuthorization.reservation)
 
-      let currentCapturer = await CameraVideoCapturer.currentForSDK()
+      let currentCapturer = CameraVideoCapturer.current
       guard currentCapturer === capturer,
         currentCapturer?.stream === senderStream.stream
       else {
         if capturer.isRunning {
-          cameraCaptureCoordinator.quarantine(capturer: capturer)
+          cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         } else {
           cameraStartAuthorization.cameraCaptureOwnership.clear(ifOwnedBy: senderStream.stream)
         }
@@ -564,11 +641,11 @@ actor VideoHardMuteActor {
 
       let stopError = await capturer.stopForSDK()
       guard !capturer.isRunning else {
-        cameraCaptureCoordinator.quarantine(capturer: capturer)
+        cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         throw stopError
           ?? SoraError.cameraError(reason: "failed to stop camera after cancelled start")
       }
-      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: capturer.id)
       cameraStartAuthorization.cameraCaptureOwnership.clear(ifOwnedBy: senderStream.stream)
       throw SoraError.mediaChannelError(
         reason: "video hard mute operation was cancelled")

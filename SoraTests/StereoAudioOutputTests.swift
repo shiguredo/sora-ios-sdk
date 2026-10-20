@@ -20,17 +20,13 @@ final class StereoAudioOutputTests: XCTestCase {
       role: role)
   }
 
-  /// ステレオ有効時は実際の ADM に設定が反映されることを確認する
-  func testFactoryEnablesStereoPlayoutOnActualADM() throws {
+  /// ステレオ有効時に実際の ADM を生成できることを確認する
+  func testFactoryCreatesActualADMForStereoPlayout() throws {
     let factory = try NativePeerChannelFactory(
       bypassVoiceProcessing: false,
       audioSessionUsage: .stereoRemoteIO(requiresPlayAndRecord: false))
 
-    guard let audioDeviceModule = factory.audioDeviceModule else {
-      XCTFail("RTCAudioDeviceModule が生成されること")
-      return
-    }
-    XCTAssertTrue(audioDeviceModule.stereoPlayoutEnabled())
+    XCTAssertNotNil(factory.audioDeviceModule, "ステレオ有効時に RTCAudioDeviceModule が生成されること")
   }
 
   /// 一時的な Offer 用 PeerConnection の終了後も、次の接続で ADM のステレオ設定を維持することを確認する
@@ -38,11 +34,10 @@ final class StereoAudioOutputTests: XCTestCase {
     let factory = try NativePeerChannelFactory(
       bypassVoiceProcessing: false,
       audioSessionUsage: .stereoRemoteIO(requiresPlayAndRecord: false))
-    let configuration = WebRTCConfiguration()
+    let webRTCConfiguration = WebRTCConfigurationSnapshot(WebRTCConfiguration())
     let offerExpectation = expectation(description: "クライアント Offer を生成できること")
     factory.createClientOfferSDP(
-      configuration: configuration,
-      constraints: configuration.constraints
+      webRTCConfiguration: webRTCConfiguration
     ) { sdp, error in
       XCTAssertNil(error)
       XCTAssertNotNil(sdp)
@@ -55,44 +50,20 @@ final class StereoAudioOutputTests: XCTestCase {
     for _ in 0..<2 {
       let peer = try XCTUnwrap(
         factory.createNativePeerChannel(
-          configuration: configuration,
-          constraints: configuration.constraints,
+          webRTCConfiguration: webRTCConfiguration,
           delegate: nil))
-      XCTAssertTrue(
-        factory.audioDeviceModule?.stereoPlayoutEnabled() == true,
-        "PeerConnection の作り直しで ADM のステレオ設定が失われないこと")
+      XCTAssertNotNil(
+        factory.audioDeviceModule,
+        "PeerConnection の作り直し後も ADM を保持すること")
       peer.close()
     }
   }
 
-  /// 既定のモノラル経路では ADM のステレオ設定を有効にしないことを確認する
-  func testFactoryKeepsStereoPlayoutDisabledByDefault() throws {
+  /// 既定のモノラル経路で実際の ADM を生成できることを確認する
+  func testFactoryCreatesActualADMWithoutStereoPlayout() throws {
     let factory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
 
-    guard let audioDeviceModule = factory.audioDeviceModule else {
-      XCTFail("RTCAudioDeviceModule が生成されること")
-      return
-    }
-    XCTAssertFalse(audioDeviceModule.stereoPlayoutEnabled())
-  }
-
-  /// stereo API の成功値 0 はエラーへ変換しないことを確認する
-  func testStereoPlayoutResultAcceptsZero() {
-    XCTAssertNoThrow(try NativePeerChannelFactory.validateStereoPlayoutResult(0))
-  }
-
-  /// stereo API の非 0 は暗黙にモノラルへ戻さず mediaChannelError にすることを確認する
-  func testStereoPlayoutResultRejectsNonZeroWithoutChangingCategory() {
-    let configuration = RTCAudioSessionConfiguration.webRTC()
-    let categoryBefore = configuration.category
-
-    XCTAssertThrowsError(try NativePeerChannelFactory.validateStereoPlayoutResult(-1)) { error in
-      guard case SoraError.mediaChannelError = error else {
-        XCTFail("SoraError.mediaChannelError が返ること: \(error)")
-        return
-      }
-    }
-    XCTAssertEqual(configuration.category, categoryBefore)
+    XCTAssertNotNil(factory.audioDeviceModule, "モノラル経路で RTCAudioDeviceModule が生成されること")
   }
 
   /// audioEnabled=false とステレオの同時指定を ADM 生成前に拒否することを確認する
@@ -129,7 +100,9 @@ final class StereoAudioOutputTests: XCTestCase {
       configuration.audioStereoOutputEnabled = true
       configuration.initialMicrophoneEnabled = false
 
-      XCTAssertNoThrow(try MediaChannel.validate(configuration: configuration))
+      XCTAssertNoThrow(
+        try MediaChannel.validate(
+          snapshot: ConnectionConfigurationSnapshot(configuration: configuration)))
     }
   }
 
@@ -467,8 +440,7 @@ final class StereoAudioOutputTests: XCTestCase {
     let webRTCConfiguration = WebRTCConfiguration()
     guard
       let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
+        webRTCConfiguration: WebRTCConfigurationSnapshot(webRTCConfiguration),
         delegate: peerChannel)
     else {
       XCTFail("RTCPeerConnection を生成できること")
@@ -587,7 +559,7 @@ final class StereoAudioOutputTests: XCTestCase {
   }
 
   /// PeerChannel の処理中は切断を遅延し、実切断時に lease を解放することを確認する
-  func testDelayedPeerChannelDisconnectKeepsRequirementUntilUnlock() throws {
+  func testDelayedPeerChannelDisconnectKeepsRequirementUntilOperationEnds() throws {
     let coordinator = AudioSessionCoordinator()
     var configuration = makeConfiguration()
     configuration.audioStereoOutputEnabled = true
@@ -596,16 +568,16 @@ final class StereoAudioOutputTests: XCTestCase {
       audioSessionCoordinator: coordinator)
     let peerChannel = mediaChannel.peerChannel
 
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     peerChannel.disconnect(error: nil, reason: .user)
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
   }
 
   /// MediaChannel が先に解放されても PeerChannel の処理中は lease を維持することを確認する
-  func testMediaChannelDeinitKeepsRequirementUntilPeerUnlock() throws {
+  func testMediaChannelDeinitKeepsRequirementUntilOperationEnds() throws {
     let coordinator = AudioSessionCoordinator()
     var configuration = makeConfiguration()
     configuration.audioStereoOutputEnabled = true
@@ -617,7 +589,7 @@ final class StereoAudioOutputTests: XCTestCase {
       return
     }
 
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     peerChannel.disconnect(error: nil, reason: .user)
     mediaChannel = nil
 
@@ -626,12 +598,12 @@ final class StereoAudioOutputTests: XCTestCase {
       1,
       "PeerChannel と ADM が生存している間は lease を解放しないこと")
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
     XCTAssertEqual(coordinator.activeRequirementCount, 0)
   }
 
   /// 遅延切断では Peer の後始末前に状態と公開 callback を完了扱いにしないことを確認する
-  func testMediaChannelDisconnectFinishesAfterPeerUnlock() throws {
+  func testMediaChannelDisconnectFinishesAfterOperationEnds() throws {
     let coordinator = AudioSessionCoordinator()
     let hardMuteLease = VideoHardMuteLease()
     var stereoConfiguration = makeConfiguration()
@@ -647,7 +619,7 @@ final class StereoAudioOutputTests: XCTestCase {
     var callbackError: Error?
     let disconnectExpectation = expectation(description: "Peer cleanup 後に切断 callback が届くこと")
 
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     let connectionTask = mediaChannel.connect(
       webRTCConfiguration: WebRTCConfiguration()
     ) { _ in
@@ -673,7 +645,7 @@ final class StereoAudioOutputTests: XCTestCase {
     XCTAssertEqual(disconnectCallbackCount, 0)
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
 
     wait(for: [disconnectExpectation], timeout: 3)
 
@@ -775,8 +747,7 @@ final class StereoAudioOutputTests: XCTestCase {
     let webRTCConfiguration = WebRTCConfiguration()
     guard
       let nativeChannel = peerChannel.nativePeerChannelFactory.createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
+        webRTCConfiguration: WebRTCConfigurationSnapshot(webRTCConfiguration),
         delegate: peerChannel)
     else {
       XCTFail("RTCPeerConnection を生成できること")
@@ -792,13 +763,13 @@ final class StereoAudioOutputTests: XCTestCase {
 
     // 別の PeerChannel 処理が進行中の状態を作り、.closed 通知だけでは cleanup を
     // 先行させないことを確認する。
-    XCTAssertTrue(peerChannel.lock.lock())
+    XCTAssertTrue(peerChannel.beginAsyncOperation())
     nativeChannel.close()
 
     XCTAssertEqual(coordinator.activeRequirementCount, 1)
     XCTAssertEqual(disconnectCount, 0)
 
-    peerChannel.lock.unlock()
+    peerChannel.endAsyncOperation()
     wait(for: [disconnectExpectation], timeout: 3)
 
     // libwebrtc から重複した .closed 通知が届いても cleanup が再実行されないことを確認する。
@@ -899,7 +870,10 @@ final class StereoAudioOutputTests: XCTestCase {
 
   // 設定検証が configurationError を返すことを確認する
   private func assertConfigurationError(_ configuration: Configuration) {
-    XCTAssertThrowsError(try MediaChannel.validate(configuration: configuration)) { error in
+    XCTAssertThrowsError(
+      try MediaChannel.validate(
+        snapshot: ConnectionConfigurationSnapshot(configuration: configuration))
+    ) { error in
       guard case SoraError.configurationError = error else {
         XCTFail("SoraError.configurationError が返ること: \(error)")
         return

@@ -5,7 +5,7 @@
 - Completed:
 - Model: Sonnet 4.6
 - Branch: feature/add-app-extension-support
-- Polished: 2026-06-06
+- Polished: 2026-09-24
 
 ## 目的
 
@@ -21,9 +21,10 @@ App Extension 内で WebRTC 接続を行うユースケース（例: CallKit Ext
 
 ### 調査が必要な問題箇所（ビルドエラーになる可能性があるもの）
 
-- **`DeviceInfo.swift:29-38`**: `UIDevice.current.systemName` / `systemVersion` を参照している。`UIKit` API の一部は `APPLICATION_EXTENSION_API_ONLY = YES` 環境でエラーになる可能性があり、`UIDevice` もその対象となり得る
-- **`ScreenCapture.swift:62`**: `RPScreenRecorder.shared()` を使用している。`RPScreenRecorder` は Broadcast Upload Extension 内では `RPBroadcastSampleHandler` を使う別アーキテクチャが前提となり、現在の実装はそのまま Extension 内では動作しない
-- **`VideoView.swift`・`AspectRatio.swift`**: `import UIKit` および `UIView` サブクラスを使用しているため、Extension での UI 描画制約と合わせて確認が必要
+- **`Sora/DeviceInfo.swift` の `currentSystemInfo()`**: `UIDevice.current.systemName` / `systemVersion` を参照している。`UIKit` API の一部は `APPLICATION_EXTENSION_API_ONLY = YES` 環境でエラーになる可能性があり、`UIDevice` もその対象となり得る
+- **`Sora/ScreenCapture.swift` の `ScreenCaptureController` の `recorder` プロパティ**: `RPScreenRecorder.shared()` を使用している。`RPScreenRecorder` は Broadcast Upload Extension 内では `RPBroadcastSampleHandler` を使う別アーキテクチャが前提となり、現在の実装はそのまま Extension 内では動作しない
+- **`Sora/VideoView.swift` の `VideoView` クラス**: `UIView` サブクラスのため、Extension での UI 描画制約と合わせて確認が必要
+- **`Sora/AspectRatio.swift`**: `UIView` の継承はないが `import UIKit` で `CGSize` / `CGFloat` を利用しているため、Extension 向けのビルド制約に該当するかを確認が必要
 - 上記以外にも問題箇所が存在する可能性がある。`APPLICATION_EXTENSION_API_ONLY = YES` を設定してビルドし、全エラーを列挙してから対応方針を確定すること
 
 ### Swift PM での設定確認方法
@@ -38,7 +39,7 @@ App Extension 内で WebRTC 接続を行うユースケース（例: CallKit Ext
 
 ### `DeviceInfo.swift` の `UIDevice.current`
 
-現在の実装（`DeviceInfo.swift:29-38`）は `UIDevice.current.systemName` / `systemVersion` を `MainActor.assumeIsolated` 経由で参照している。`UIDevice` は `APPLICATION_EXTENSION_API_ONLY = YES` 環境で利用不可になる可能性があり、その場合は以下の方針で置き換えること。
+現在の実装（`Sora/DeviceInfo.swift` の `currentSystemInfo()`）は `UIDevice.current.systemName` / `systemVersion` を `MainActor.assumeIsolated` 経由で参照している。`UIDevice` は `APPLICATION_EXTENSION_API_ONLY = YES` 環境で利用不可になる可能性があり、その場合は以下の方針で置き換えること。
 
 - `systemName`: `#if os(iOS)` 等のコンパイル条件で `"iOS"` を静的に決定するか、`UIKit` なしで取得可能な代替方法を検討する
 - `systemVersion`: `ProcessInfo.processInfo.operatingSystemVersion`（`major`・`minor`・`patch` を持つ `OperatingSystemVersion` 型）で代替する
@@ -47,7 +48,7 @@ App Extension 内で WebRTC 接続を行うユースケース（例: CallKit Ext
 
 ### `ScreenCapture.swift` の `RPScreenRecorder`
 
-現状は `private let recorder = RPScreenRecorder.shared()`（`ScreenCapture.swift:62`）としてプロパティ初期化時に呼んでいる。`APPLICATION_EXTENSION_API_ONLY = YES` で実際にビルドエラーになるかを先に確認し、エラーになる場合は `private lazy var recorder = RPScreenRecorder.shared()` への変更や条件分岐での回避を検討する。Broadcast Upload Extension 向けの `RPBroadcastSampleHandler` ベースの本格対応は本 issue のスコープ外とする。
+現状は `Sora/ScreenCapture.swift` の `ScreenCaptureController` の `recorder` プロパティ初期化で `private let recorder = RPScreenRecorder.shared()` を呼んでいる。`APPLICATION_EXTENSION_API_ONLY = YES` で実際にビルドエラーになるかを先に確認し、エラーになる場合は `private lazy var recorder = RPScreenRecorder.shared()` への変更や条件分岐での回避を検討する。Broadcast Upload Extension 向けの `RPBroadcastSampleHandler` ベースの本格対応は本 issue のスコープ外とする。
 
 ## 完了条件
 

@@ -11,10 +11,29 @@ public struct ScreenCaptureSettings {
   /// 既定値は `15` です。
   ///
   /// フレーム送信間隔は PTS に依存して変動します。
+  ///
+  /// 間引きの判定は SDK 内部の送信キュー上で行います。間引かれなかった frame が SDK 内部の
+  /// 滞留上限で破棄された場合も、送信記録は内部の受理直前に行われるため、間引きの基準としては
+  /// 残ります。
   public var targetFPS: Int
 
   /// 映像フレーム送信前に `CMSampleBuffer` を加工するためのクロージャーです。
   /// `nil` を返すと該当フレームを破棄します。
+  ///
+  /// このクロージャーは SDK 内部の送信キュー (`sendVideoFrameQueue`) 上で呼ばれます。
+  /// `targetFPS` による間引きで破棄されるフレームと、送信処理中のために破棄されるフレーム、
+  /// キャプチャ停止中と切断中のフレームでは呼ばれません。送信キューへ投入された後でも、
+  /// capture ID の照合 (停止・再開始の競合) と `VideoFrame` への変換に失敗した場合は
+  /// 破棄されるため、呼ばれたフレームが必ず送信されるわけではありません。
+  ///
+  /// 引数の `CMSampleBuffer` と戻り値の `CMSampleBuffer` の所有権は SDK に委ねられます。
+  /// 戻り値の buffer が保持する pixel buffer は SDK が送信のために retain するため、
+  /// 利用側で解放や再利用の同期を行う必要はありません。戻り値を返した後にその buffer を
+  /// 書き換えないでください (送信中のフレームが変更されると映像が壊れます)。
+  ///
+  /// `MediaStream.send(videoFrame:)` の ingress はこのクロージャーの後に実行されます。
+  /// 以降の処理 (`VideoFilter` の実行と `RTCVideoSource` への配送) は frame ごとの直列
+  /// executor 上で行われます。
   public var videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
 
   /// 画面キャプチャ実行中に発生したエラー通知コールバックです。
@@ -46,6 +65,12 @@ public struct ScreenCaptureSettings {
 /// `RPScreenRecorder.shared()` は接続間で共有されるため、controller ごとのキューでは
 /// 別接続の start / stop が競合します。すべての操作を 1 本のキューへ集約し、
 /// owner ID が一致する controller だけが recorder を停止できるようにします。
+///
+/// `@unchecked Sendable` の根拠は次のとおりです。不変条件を破る公開経路はありません。
+///
+/// - `operationQueue` / `shared` / `lock` は不変値です。
+/// - `ownerID` / `quarantined` は `lock` で保護し、読み書きはすべて `lock` の区間内で行います。
+/// - `shared` は process-wide の単一 instance で、生成後の差し替えは行いません。
 final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
   static let shared = ScreenCaptureRecorderCoordinator()
 
@@ -113,8 +138,23 @@ final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
   }
 }
 
-// スクリーンキャプチャーのコントローラークラスです。
-// 内部でロックと共有キューにより排他制御を行うため、 @unchecked Sendable を付与します。
+/// 画面キャプチャのコントローラーです。
+///
+/// `@unchecked Sendable` の根拠は次のとおりです。不変条件を破る公開経路はありません。
+///
+/// - `recorder` / `recorderOwnerID` / `recorderCoordinator` / `sendVideoFrameQueue` /
+///   `sendVideoFrameSemaphore` / `lock` は不変値です。
+/// - `mediaChannel` は弱参照で、接続の所有権は `MediaChannel` 側にあります。
+/// - `captureState` / `settings` / `senderStream` / `lastSentVideoPresentationTimestamp` /
+///   `lastSentVideoUptime` / `captureID` / `activeCaptureID` / `recorderCaptureID` /
+///   `recorderStopTask` / `mediaChannelConnectionRequired` は `lock` で保護し、
+///   読み書きはすべて `withLock` の区間内で行います。
+/// - 送信対象の capture ID と sender stream は `activeCaptureAndStream()` が同じ `lock` 区間で
+///   取得します (不変条件は同関数の doc を参照)。
+/// - ReplayKit callback と recorder の完了 callback は `@Sendable` を付けた非隔離のクロージャとして
+///   ReplayKit のキューから呼ばれます。sample buffer の処理はそのキュー上で行い、MainActor 上の処理
+///   (`recorder.isRecording` の読み出し) は完了 callback の中の `Task { @MainActor in ... }` で行います。
+///   controller の状態の読み書きはすべて `lock` の区間内で行います。
 final class ScreenCaptureController: @unchecked Sendable {
   // キャプチャー状況の列挙型
   private enum CaptureState {
@@ -125,11 +165,66 @@ final class ScreenCaptureController: @unchecked Sendable {
     case cleanupFailed
   }
 
-  private struct CaptureContext {
-    // この context を取得した時点の capture ID。
-    // 停止・再開始の競合で旧 capture のフレームを送信しないために使用する。
+  /// ReplayKit が渡した `CMSampleBuffer` の所有権を保持する内部ラッパーです。
+  ///
+  /// `handleSampleBuffer` が受け取った buffer を `CMSampleBufferCreateCopy` で複製し、
+  /// 1 回だけ送信キューへ所有権ごと移動するために使用します。
+  ///
+  /// `@unchecked Sendable` の根拠は次の 2 点だけです。
+  ///
+  /// - Create ルールで得た `CMSampleBuffer` オブジェクトの所有権が単一の所有者に移り、
+  ///   その所有者だけがオブジェクトを読む (コピー元のオブジェクトは参照カウントの増減以外に触らない)。
+  ///   参照カウントの増減は Core Foundation が排他する。
+  /// - 値を保持する `ScreenCaptureOwnedFrame` は生成側 (ReplayKit callback の executor) から
+  ///   消費側 (`sendVideoFrameQueue`) へ所有権ごと移動し、移動後は生成側が値を参照しない。
+  ///   さらに `MediaStream.send(videoFrame:retaining:)` が owner queue へ所有権ごと渡し、
+  ///   `StreamOwnedFrame.retainedBacking` が配送完了まで保持する。各移動は単一の所有者が行い、
+  ///   複数の executor が同じ値を同時に読まない。
+  ///
+  /// `CMSampleBufferCreateCopy` は image buffer (画素データ) を共有するため、この型が保証するのは
+  /// `CMSampleBuffer` オブジェクトの所有権だけであり、画素データの不変性は保証しません。
+  struct ScreenCaptureOwnedSampleBuffer: @unchecked Sendable {
+    /// 所有権を持つ sample buffer です。
+    let sampleBuffer: CMSampleBuffer
+
+    /// 渡された sample buffer の浅いコピーを作ります。
+    ///
+    /// `CMSampleBufferCreateCopy` が失敗した場合は `nil` を返します。この失敗は通常の入力では
+    /// 発生せず、失敗させる入力も特定できないためユニットテストでは再現できません。
+    /// 呼び出し元は `nil` の場合に取得済みの permit を返却してフレームを破棄します。
+    init?(_ sampleBuffer: CMSampleBuffer) {
+      var copiedBuffer: CMSampleBuffer?
+      let status = CMSampleBufferCreateCopy(
+        allocator: kCFAllocatorDefault,
+        sampleBuffer: sampleBuffer,
+        sampleBufferOut: &copiedBuffer)
+      guard status == noErr, let copiedBuffer else {
+        return nil
+      }
+      self.sampleBuffer = copiedBuffer
+    }
+  }
+
+  /// 送信キューへ渡す payload です。
+  ///
+  /// 送信キューがキャプチャする値はこの型だけに限定し、OS が渡した `CMSampleBuffer` や
+  /// `CaptureContext` を escaping closure へ持ち込みません。
+  ///
+  /// `@unchecked Sendable` の根拠は `ScreenCaptureOwnedSampleBuffer` と同じ 2 点です。
+  /// この値は生成側から送信キューへ、さらに `StreamOwnedFrame.retainedBacking` として owner queue へ
+  /// 2 回移動し、各移動の移譲元は以後この値を参照しません。
+  struct ScreenCaptureOwnedFrame: @unchecked Sendable {
+    /// この frame を取得した時点の capture ID です。
+    /// 停止・再開始の競合で旧 capture のフレームを送信しないために使用します。
     let captureID: UInt64
-    let senderStream: MediaStream
+    /// frame の presentation timestamp です。間引き判定と送信記録に使用します。
+    let presentationTimestamp: CMTime
+    /// SDK が所有権を持つ sample buffer です。
+    let sampleBuffer: ScreenCaptureOwnedSampleBuffer
+    /// この frame を取得した時点の世代の transformer です。
+    ///
+    /// 停止・再開始をまたいだ旧世代の frame には、その frame の世代の transformer を適用します
+    /// (enqueue 時の snapshot)。`nil` の場合は元の sample buffer をそのまま送信します。
     let videoSampleBufferTransformer: ((CMSampleBuffer) -> CMSampleBuffer?)?
   }
 
@@ -401,7 +496,13 @@ final class ScreenCaptureController: @unchecked Sendable {
   /// 別用途の録画が動作していない場合だけ ReplayKit の開始 API を呼びます。
   private func startRecorderCaptureIfIdle() async -> RecorderStartResult {
     await withCheckedContinuation { continuation in
-      Task { @MainActor in
+      // この Task の closure は開始要求を出すまでの短命な処理です。外側の closure が self を
+      // 暗黙に強参照したまま内側の handler が `[weak self]` を取ると、Swift 6.4 で追加された
+      // ImplicitStrongCapture 警告になるため、外側の強参照を `[self]` で明示します。この強参照で
+      // controller が保持されるのは開始 API の完了までです。handler 側の `[weak self]` は、
+      // process-wide な recorder が録画中の handler を保持する間、controller が意図せず
+      // 生存し続けるのを避けるために必要です。
+      Task { @MainActor [self] in
         // 設定変更より前に確認し、ホストアプリが所有する録画へ干渉しない。
         guard !self.recorder.isRecording else {
           continuation.resume(returning: .alreadyRecording)
@@ -411,15 +512,19 @@ final class ScreenCaptureController: @unchecked Sendable {
         // 本 API は画面映像のみを送信対象としており、ReplayKit 経路でのマイク / カメラ入力は使用しません。
         self.recorder.isMicrophoneEnabled = false
         self.recorder.isCameraEnabled = false
+        // クロージャは `Task { @MainActor in ... }` の中で作るため、`@Sendable` を付けないと MainActor
+        // 隔離を継承します。ReplayKit は handler を自身のキューから呼ぶので、そのままでは実行時隔離
+        // チェックでプロセスが終了します。`completionHandler:` は ReplayKit 側で `@Sendable` として
+        // import されますが、隔離の契約をコード上で揃えるためこちらにも明示します。
         self.recorder.startCapture(
-          handler: { [weak self] sampleBuffer, sampleBufferType, error in
+          handler: { @Sendable [weak self] sampleBuffer, sampleBufferType, error in
             self?.handleSampleBuffer(
               sampleBuffer: sampleBuffer,
               sampleBufferType: sampleBufferType,
               error: error
             )
           },
-          completionHandler: { error in
+          completionHandler: { @Sendable error in
             Task { @MainActor in
               continuation.resume(
                 returning: .completed(
@@ -436,7 +541,9 @@ final class ScreenCaptureController: @unchecked Sendable {
   private func stopRecorderCapture() async -> RecorderOperationResult {
     await withCheckedContinuation { continuation in
       Task { @MainActor in
-        self.recorder.stopCapture { error in
+        // この完了クロージャも `@Sendable` を付けないと MainActor 隔離を継承します
+        // (startRecorderCaptureIfIdle の handler と同じ理由)。
+        self.recorder.stopCapture { @Sendable error in
           Task { @MainActor in
             continuation.resume(
               returning: RecorderOperationResult(
@@ -522,59 +629,196 @@ final class ScreenCaptureController: @unchecked Sendable {
       return
     }
 
-    guard let context = captureContext() else {
-      return
+    // OS が渡した sample buffer はここで複製し、queue へは所有権を持つ表現だけを渡します。
+    enqueueOwnedFrame(
+      sampleBuffer: sampleBuffer,
+      presentationTimestamp: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+  }
+
+  /// キャプチャしたフレームを送信キューへ投入します。
+  ///
+  /// 本番では `handleSampleBuffer` からのみ呼ばれる。テストから間引き・ semaphore の取得失敗・
+  /// 停止中の各経路を入力するため internal とする。
+  ///
+  /// permit の返却はこのメソッドの中で完結します。enqueue しなかった場合はこのメソッドが
+  /// signal し、enqueue した場合は送信キュー上の `processOwnedFrame` が signal します。
+  ///
+  /// - Returns: 送信キューへ enqueue した場合は `true`、フレームを破棄した場合は `false`。
+  @discardableResult
+  func enqueueOwnedFrame(
+    sampleBuffer: CMSampleBuffer,
+    presentationTimestamp: CMTime
+  ) -> Bool {
+    // capture ID は停止・再開始の競合で旧 capture のフレームを送信しないために、
+    // 間引き判定より前に固定します。activeCaptureIDForRunningCapture() は
+    // 「captureState == .running かつ activeCaptureID != nil」を 1 つの lock 区間で判定します。
+    // ここで nil になるのは停止がこの区間の直前で確定した場合だけであり、スレッドの
+    // タイミングに依存するためユニットテストでは再現できません。permit はまだ取得していないため
+    // 返却するものはありません。
+    guard let captureID = activeCaptureIDForRunningCapture() else {
+      return false
     }
 
-    // PTS を取得して、targetFPS との比較から、今回のフレームを送信するか判定します
-    let presentationTimestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+    // 引数の PTS と targetFPS との比較から、今回のフレームを送信するか判定します
     guard shouldSendVideoFrame(presentationTimestamp: presentationTimestamp) else {
-      return
+      return false
     }
 
     // 即取得できなければフレーム詰まりを回避するためにこのフレームは破棄します
-    guard sendVideoFrameSemaphore.wait(timeout: .now()) == .success else {
+    guard tryAcquireSendFlight() else {
+      return false
+    }
+
+    // ここから先でフレームを破棄する場合は、取得済みの permit を必ず返却します。
+    // 返却しないと sendVideoFrameSemaphore が 0 のままになり、以降のフレームが全て破棄されます。
+    // このコピー失敗は通常の入力では発生しないため、ユニットテストでは再現できません。
+    guard let ownedSampleBuffer = ScreenCaptureOwnedSampleBuffer(sampleBuffer) else {
+      Logger.debug(type: .mediaChannel, message: "failed to copy sampleBuffer for screen capture")
+      sendVideoFrameSemaphore.signal()
+      return false
+    }
+
+    // transformer もこの時点で snapshot します。停止・再開始をまたいだ旧世代の frame に
+    // 新世代の transformer を適用しないためです (改修前の CaptureContext と同じ粒度)。
+    let transformer = withLock { settings.videoSampleBufferTransformer }
+    // この時点から queue が処理する値は ScreenCaptureOwnedFrame だけになります。
+    // OS が渡した sample buffer はこの closure から参照しません。
+    // permit の返却は processOwnedFrame の defer が行うため、この closure では signal しません。
+    let ownedFrame = ScreenCaptureOwnedFrame(
+      captureID: captureID,
+      presentationTimestamp: presentationTimestamp,
+      sampleBuffer: ownedSampleBuffer,
+      videoSampleBufferTransformer: transformer)
+    sendVideoFrameQueue.async { [weak self] in
+      self?.processOwnedFrame(ownedFrame)
+    }
+    return true
+  }
+
+  /// 所有権を持つ frame を送信します。
+  ///
+  /// `sendVideoFrameSemaphore` は取得せず、呼び出し元 (本番の queue closure または
+  /// `performSend`) が取得済みであることを前提とします。signal はこのメソッドの `defer` で
+  /// 1 回だけ行います。
+  ///
+  /// このメソッドは frame を `MediaStream.send(videoFrame:)` の ingress へ投入して戻ります。
+  /// 画素データの所有権は ingress の payload が配送完了まで保持するため、このメソッドの
+  /// 戻り値の後で frame を参照・変更しません。したがって flight permit の返却 (このメソッドの
+  /// `defer`) は ingress への投入時点で行われ、後段の滞留は `StreamFrameOwner` の
+  /// `maxPendingFrameCount` で制限されます。
+  ///
+  /// 接続状態の確認は `mediaChannelConnectionRequired` で制御します。本番の queue closure は
+  /// この値が `true` のまま実行し、テストは `performSend` または
+  /// `setMediaChannelConnectionRequiredForTesting(_:)` で無効化します。
+  func processOwnedFrame(_ ownedFrame: ScreenCaptureOwnedFrame) {
+    // この frame の処理で消費した permit を返却します
+    defer { sendVideoFrameSemaphore.signal() }
+
+    // captureState を確認します。`.running` でなければ transformer を実行せずに破棄します。
+    guard isCaptureStateRunning() else {
       return
     }
-    sendVideoFrameQueue.async { [weak self] in
-      // sendVideoFrameSemaphore カウントを +1 して次のフレームを処理できるようにします
-      defer { self?.sendVideoFrameSemaphore.signal() }
 
-      // 非同期 stopCapture で captureState が変更される可能性があるためここでチェックします
-      guard let self, self.isReadyToSend() else {
-        return
-      }
-
-      var sampleBufferToSend = sampleBuffer
-      if let transformedBuffer = context.videoSampleBufferTransformer?(sampleBuffer) {
-        sampleBufferToSend = transformedBuffer
-      } else if context.videoSampleBufferTransformer != nil {
-        return
-      }
-
-      guard let videoFrame = VideoFrame(from: sampleBufferToSend) else {
-        Logger.debug(type: .mediaChannel, message: "failed to create VideoFrame from sampleBuffer")
-        return
-      }
-
-      // 送信直前に capture ID を照合する。送信準備中 (transformer 実行・VideoFrame 生成など)
-      // に stop / restart が完了した場合、旧 capture のフレームを送信しない
-      // (isReadyToSend は実行時点の captureState のみを確認するため、stop / restart 後の
-      // .running では旧 capture の frame を識別できない)
-      guard self.isActiveCaptureID(context.captureID) else {
-        return
-      }
-
-      // 送信直前のみ PTS / uptime を記録する (ID 照合を通過しなかった stale frame の破棄で
-      // throttle 状態を汚染しない)
-      self.markVideoFrameSent(presentationTimestamp: presentationTimestamp)
-      context.senderStream.send(videoFrame: videoFrame)
+    // 接続状態を確認します。切断処理と capture の停止は別々に進むため、切断済みなら
+    // transformer を実行せずに破棄します。改修前の isReadyToSend と同じ位置 (transformer の前) です。
+    // テストは接続を行わないため、接続状態の確認を無効化できるようにしています。
+    if requiresMediaChannelConnection, !isMediaChannelConnected() {
+      return
     }
+
+    // transformer は改修前と同じく送信キューの executor 上で実行します。
+    // 適用する transformer は payload が固定した世代のものです。
+    // transformer が未設定の場合は元の buffer をそのまま使い、nil を返した場合だけ破棄します。
+    var sampleBufferToSend = ownedFrame.sampleBuffer.sampleBuffer
+    if let transformer = ownedFrame.videoSampleBufferTransformer {
+      guard let transformedBuffer = transformer(sampleBufferToSend) else {
+        return
+      }
+      sampleBufferToSend = transformedBuffer
+    }
+
+    guard let videoFrame = VideoFrame(from: sampleBufferToSend) else {
+      Logger.debug(type: .mediaChannel, message: "failed to create VideoFrame from sampleBuffer")
+      return
+    }
+
+    // 送信直前に capture ID と送信先 stream を照合する。送信準備中 (transformer 実行・
+    // VideoFrame 生成など) に stop / restart が完了した場合、旧 capture のフレームを送信しない
+    // (captureState の確認だけでは、stop / restart 後の .running で旧 capture の frame を
+    // 識別できない)
+    guard let (activeCaptureID, senderStream) = activeCaptureAndStream(),
+      activeCaptureID == ownedFrame.captureID
+    else {
+      return
+    }
+
+    // 送信直前のみ PTS / uptime を記録する (ID 照合を通過しなかった stale frame の破棄で
+    // throttle 状態を汚染しない)
+    markVideoFrameSent(presentationTimestamp: ownedFrame.presentationTimestamp)
+    // ingress へ画素データの所有者ごと渡します。owner が配送完了まで保持するため、
+    // この frame を send の後で参照・変更しないという契約を満たせばよくなります。
+    if let basicStream = senderStream as? BasicMediaStream {
+      basicStream.send(videoFrame: videoFrame, retaining: ownedFrame)
+    } else {
+      // BasicMediaStream 以外の実装では所有者を渡せないため、public な send へ戻ります。
+      // この経路では frame ごとの所有者の保持 (retainedBacking) は行われません。SDK 内の送信
+      // stream は BasicMediaStream だけなので通常は到達せず、到達した場合は画素データの
+      // 所有者を配送完了まで保てないため不具合として扱います。
+      Logger.debug(
+        type: .mediaChannel,
+        message:
+          "screen capture sender stream is not BasicMediaStream; frame ownership is not retained")
+      senderStream.send(videoFrame: videoFrame)
+    }
+  }
+
+  /// flight を取得してから `processOwnedFrame` を実行します。テスト用フックです。
+  ///
+  /// 本番の送信キューは `enqueueOwnedFrame` が取得した flight を `processOwnedFrame` へ
+  /// 引き継ぐため、このメソッドは呼びません。テストから送信経路を直接駆動するために internal とします。
+  /// テストは `MediaChannel` を接続しないため、呼び出し前に
+  /// `setMediaChannelConnectionRequiredForTesting(false)` を設定しておく必要があります。
+  ///
+  /// - Returns: flight を取得して `processOwnedFrame` を実行した場合は `true`、
+  ///   取得できずにフレームを破棄した場合は `false`。
+  @discardableResult
+  func performSend(ownedFrame: ScreenCaptureOwnedFrame) -> Bool {
+    guard tryAcquireSendFlight() else {
+      return false
+    }
+    processOwnedFrame(ownedFrame)
+    return true
+  }
+
+  /// 送信キューへ投入した frame の処理完了を待ちます。テスト用フックです。
+  ///
+  /// 送信キューは serial なので、`sync {}` は先行して enqueue された frame の処理と
+  /// `processOwnedFrame` の `defer` signal の完了を待ちます。したがって permit の会計は
+  /// `sync {}` の前後で変わりません。このメソッドを送信キュー自身の executor から呼ぶと
+  /// 自己デッドロックするため、テストの executor からのみ呼びます。
+  func drainSendVideoFrameQueue() {
+    sendVideoFrameQueue.sync {}
+  }
+
+  /// `sendVideoFrameSemaphore` を即時取得します。取得できた場合だけ `true` を返します。
+  ///
+  /// 本番では `enqueueOwnedFrame` から、テストでは「送信中の flight を再現する」ために呼びます。
+  /// テストが `true` を受け取った場合は、`tryAcquireSendFlightRelease()` で返却してください。
+  @discardableResult
+  func tryAcquireSendFlight() -> Bool {
+    sendVideoFrameSemaphore.wait(timeout: .now()) == .success
+  }
+
+  /// テストが `tryAcquireSendFlight()` で保持した flight を返却します。
+  ///
+  /// 本番の送信キューは `processOwnedFrame` の `defer` で返却するため、このメソッドは呼びません。
+  func tryAcquireSendFlightRelease() {
+    sendVideoFrameSemaphore.signal()
   }
 
   // 前回送信したフレームの PTS と targetFPS から今回フレームを送信するかを判定します
   // PTS が利用できない場合は単調時刻でフォールバック判定します
-  private func shouldSendVideoFrame(presentationTimestamp: CMTime) -> Bool {
+  func shouldSendVideoFrame(presentationTimestamp: CMTime) -> Bool {
     withLock {
       // PTS が無効な場合は単調時刻で間引きます。
       guard presentationTimestamp.isValid, !presentationTimestamp.isIndefinite else {
@@ -621,46 +865,90 @@ final class ScreenCaptureController: @unchecked Sendable {
     }
   }
 
-  private func captureContext() -> CaptureContext? {
+  /// 最後に送信した frame の presentation timestamp を返します。
+  ///
+  /// 保持するのは payload が持つ transform 前の PTS であり、transformer が返した buffer の
+  /// PTS とは異なる場合があります。テストから timestamp の更新有無を確認するため internal とする。
+  var lastSentVideoPresentationTimestampForTesting: CMTime? {
+    withLock { lastSentVideoPresentationTimestamp }
+  }
+
+  /// 送信直前の接続状態の確認を要求するかどうかです。
+  ///
+  /// 本番では常に `true` とし、`MediaChannel` の接続状態を確認します。テストは
+  /// `setMediaChannelConnectionRequiredForTesting(_:)` または `performSend` で無効化します。
+  /// `NSLock` で保護し、送信キューとテストの両方から読めるようにします。
+  private var mediaChannelConnectionRequired = true
+
+  /// 接続状態の確認を要求するかどうかを設定します。
+  ///
+  /// 接続を行わずに送信経路を駆動するテストと、接続状態の確認が frame を破棄することを
+  /// 確認するテストのために internal とする。本番では常に `true` のままで、この setter は呼びません。
+  func setMediaChannelConnectionRequiredForTesting(_ required: Bool) {
     withLock {
-      // .running へ遷移するのは completeStartCapture 成功時のみで、その時点で
-      // activeCaptureID は必ず非 nil となる (不変条件)。.running 中に activeCaptureID が
-      // nil になる経路は存在しないため、1 つの guard に統合できる。
-      guard captureState == .running, let activeCaptureID else {
-        return nil
-      }
-      guard let senderStream else {
-        return nil
-      }
-      return CaptureContext(
-        captureID: activeCaptureID,
-        senderStream: senderStream,
-        videoSampleBufferTransformer: settings.videoSampleBufferTransformer
-      )
+      mediaChannelConnectionRequired = required
     }
   }
 
-  // 現在の capture (activeCaptureID) と context が保持する capture ID が一致するか
-  // 判定します。送信準備中 (transformer 実行・VideoFrame 生成など) に stop / restart が
-  // 完了した場合でも、送信直前の照合で旧 capture のフレームを送信しない。
-  // 本番では handleSampleBuffer() の送信処理からのみ呼ばれる。
-  // テストから直接呼び出してイベント列 (start / stop / restart) を入力できるよう internal とする。
+  /// 送信直前の接続状態の確認が必要かどうかを返します。
+  private var requiresMediaChannelConnection: Bool {
+    withLock { mediaChannelConnectionRequired }
+  }
+
+  /// 現在の capture (`activeCaptureID`) が指定した capture ID と一致するかを返します。
+  ///
+  /// 本番の送信経路は `processOwnedFrame` が `activeCaptureAndStream` で同じ判定を行う。
+  /// テストから世代の進み方を確認するため internal とする。
   func isActiveCaptureID(_ captureID: UInt64) -> Bool {
     withLock {
       return activeCaptureID == captureID
     }
   }
 
-  // ストリーム送出できる状態かチェックします
-  private func isReadyToSend() -> Bool {
+  /// 送信対象の capture ID と送信先 stream を同じ lock 区間で返します。
+  ///
+  /// `.running` へ遷移するのは completeStartCapture 成功時のみで、その時点で
+  /// `activeCaptureID` と `senderStream` は必ず非 nil となります (不変条件)。
+  /// また `scheduleStopCapture` は `activeCaptureID` と `senderStream` を同じ lock 区間で
+  /// nil にします。この 2 つを別々の区間で読むと、capture A の frame を capture B の
+  /// stream へ送る組み合わせが成立し得るため、必ず同じ区間で取得します。
+  private func activeCaptureAndStream() -> (UInt64, MediaStream)? {
     withLock {
-      guard captureState == .running else {
-        return false
+      guard captureState == .running, let activeCaptureID else {
+        return nil
       }
-      guard mediaChannel?.state == .connected else {
-        return false
+      guard let senderStream else {
+        return nil
       }
-      return true
+      return (activeCaptureID, senderStream)
     }
+  }
+
+  /// `.running` 中の capture ID を返します。停止中は `nil` を返します。
+  ///
+  /// `enqueueOwnedFrame` が frame を queue へ渡す前に、その時点の世代を payload へ固定するために使います。
+  private func activeCaptureIDForRunningCapture() -> UInt64? {
+    withLock {
+      guard captureState == .running, let activeCaptureID else {
+        return nil
+      }
+      return activeCaptureID
+    }
+  }
+
+  /// captureState が `.running` かどうかだけを判定します。
+  ///
+  /// 接続状態を見ないため、送信キューを持たないテストからも送信経路を駆動できます。
+  /// 送信経路はこの判定と `isMediaChannelConnected()` を別々に呼びます。
+  private func isCaptureStateRunning() -> Bool {
+    withLock { captureState == .running }
+  }
+
+  /// mediaChannel が接続中かどうかだけを判定します。
+  ///
+  /// 切断処理と capture の停止は別々に進むため、送信直前にも接続状態を確認します。
+  /// テストから接続状態の判定を確認するため internal とする。
+  func isMediaChannelConnected() -> Bool {
+    withLock { mediaChannel?.state == .connected }
   }
 }

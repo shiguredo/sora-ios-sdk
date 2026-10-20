@@ -49,7 +49,9 @@ private actor CameraCaptureTestGate {
 /// Simulator では mute / unmute の全体 (store / restart / stream 照合) を検証できない。
 /// 本テストでは、カメラ操作に到達する前の lease / revocation のロジック
 /// (release の冪等性と、storedCapturer との独立) を検証する。
-/// カメラが必要な検証 (別接続の capturer 混線など) は実機で確認する。
+/// `operationTracker.begin` が拒否する経路では `senderStream.videoEnabled` が
+/// 変更されないことも検証する。
+/// カメラが必要な検証 (別接続の capturer 混線や復元処理など) は実機で確認する。
 ///
 /// actor は await 中に再入できるため、lease 自身の破棄状態による再確認と、
 /// release が進行中操作の cleanup 完了を待つ barrier が必要になる。
@@ -74,20 +76,58 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   }
 
   // テスト用の MediaChannel / lease / SenderStreamBox / CameraSettingsSnapshot を構築する
-  private func makeDependencies() throws -> (
+  //
+  // videoTrackId を指定すると video track 付きの sender stream を作る。
+  // videoEnabled を検証するテストでは video track が必要になる (video track が無いと
+  // videoEnabled が常に false になり「変更されない」検証が空虚になる)。
+  // mediaStream は operation の世代をテストから取得するために返す。
+  private func makeDependencies(videoTrackId: String? = nil) throws -> (
     mediaChannel: MediaChannel,
     senderStreamBox: SenderStreamBox,
+    mediaStream: BasicMediaStream,
     cameraSettings: CameraSettingsSnapshot
   ) {
     let mediaChannel = try MediaChannel(configuration: makeConfiguration())
     let peerChannel = mediaChannel.peerChannel
-    let nativeStream = peerChannel.nativePeerChannelFactory.createNativeStream(streamId: "test")
+    let nativeStream =
+      if let videoTrackId {
+        peerChannel.nativePeerChannelFactory.createNativeSenderStream(
+          streamId: "test",
+          videoTrackId: videoTrackId,
+          audioTrackId: nil,
+          constraints: MediaConstraints())
+      } else {
+        peerChannel.nativePeerChannelFactory.createNativeStream(streamId: "test")
+      }
     let mediaStream = BasicMediaStream(peerChannel: peerChannel, nativeStream: nativeStream)
     return (
       mediaChannel,
       SenderStreamBox(stream: mediaStream),
+      mediaStream,
       CameraSettingsSnapshot(mediaChannel.configuration.cameraSettings)
     )
+  }
+
+  // setMute が返した SoraError.mediaChannelError の reason を検証する
+  //
+  // reason の文言は SoraError の構造化が導入されるまで唯一の判別材料であり、
+  // 実装側のメッセージ定義を変更するときはこのテストも合わせて更新する必要がある。
+  private func assertMediaChannelError(
+    _ error: Error,
+    contains expected: String,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) {
+    guard let soraError = error as? SoraError,
+      case .mediaChannelError(let reason) = soraError
+    else {
+      XCTFail("mediaChannelError が返ること: \(error)", file: file, line: line)
+      return
+    }
+    XCTAssertTrue(
+      reason.contains(expected),
+      "reason に \(expected) が含まれること: \(reason)",
+      file: file, line: line)
   }
 
   /// release は冪等であり、複数回呼んでも安全であることを確認する
@@ -118,9 +158,11 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     // leaseA を release しても leaseB は影響を受けない (カメラ未起動なら冪等 return)
     await actor.release(lease: leaseA)
 
+    let generation = dependencies.mediaStream.beginVideoOperation()
     do {
       try await actor.setMute(
         mute: true,
+        generation: generation,
         lease: leaseB,
         senderStream: dependencies.senderStreamBox,
         cameraSettings: dependencies.cameraSettings)
@@ -138,20 +180,88 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
 
     await actor.release(lease: lease)
 
+    let generation = dependencies.mediaStream.beginVideoOperation()
     do {
       try await actor.setMute(
         mute: true,
+        generation: generation,
         lease: lease,
         senderStream: dependencies.senderStreamBox,
         cameraSettings: dependencies.cameraSettings)
       XCTFail("破棄予約後の lease では操作を開始できないこと")
-    } catch let error as SoraError {
-      guard case .mediaChannelError(let reason) = error else {
-        XCTFail("mediaChannelError が返ること: \(error)")
-        return
-      }
-      XCTAssertTrue(reason.contains("cancelled"))
+    } catch {
+      assertMediaChannelError(error, contains: "cancelled")
     }
+  }
+
+  /// 実行中の操作がある間は、拒否された setMute が videoEnabled を変更しないことを確認する
+  ///
+  /// 別の lease で operationTracker.begin を先に呼び、進行中の操作がある状態を模擬する。
+  /// 2 つ目の呼び出しは operationTracker.begin で "in progress" になり、videoEnabled の
+  /// 設定より前に拒否されるため、拒否された呼び出しが値を変更しない。
+  /// videoEnabled の設定を operationTracker.begin より前に戻すと、このテストは失敗する。
+  func testInProgressRejectionDoesNotChangeVideoEnabled() async throws {
+    let tracker = VideoHardMuteOperationTracker()
+    let actor = VideoHardMuteActor(operationTracker: tracker)
+    let dependencies = try makeDependencies(videoTrackId: "video")
+    let occupyingLease = VideoHardMuteLease()
+    let lease = VideoHardMuteLease()
+
+    XCTAssertTrue(
+      dependencies.senderStreamBox.stream.videoEnabled,
+      "前提: video track は既定で有効であること")
+
+    // 進行中の操作を模擬して activeLease を占有する
+    try tracker.begin(lease: occupyingLease)
+    // 検証が途中で終わっても占有を解放する
+    defer { tracker.finish(lease: occupyingLease) }
+
+    do {
+      try await actor.setMute(
+        mute: true,
+        generation: dependencies.mediaStream.beginVideoOperation(),
+        lease: lease,
+        senderStream: dependencies.senderStreamBox,
+        cameraSettings: dependencies.cameraSettings)
+      XCTFail("実行中の操作がある間は拒否されること")
+    } catch {
+      assertMediaChannelError(error, contains: "in progress")
+    }
+
+    XCTAssertTrue(
+      dependencies.senderStreamBox.stream.videoEnabled,
+      "拒否された呼び出しが videoEnabled を変更しないこと")
+  }
+
+  /// 取消済み lease の setMute が videoEnabled を変更しないことを確認する
+  ///
+  /// videoEnabled の設定を operationTracker.begin より前に戻すと、このテストは失敗する。
+  func testCancelledRejectionDoesNotChangeVideoEnabled() async throws {
+    let actor = VideoHardMuteActor()
+    let dependencies = try makeDependencies(videoTrackId: "video")
+    let lease = VideoHardMuteLease()
+
+    XCTAssertTrue(
+      dependencies.senderStreamBox.stream.videoEnabled,
+      "前提: video track は既定で有効であること")
+
+    lease.revoke()
+
+    do {
+      try await actor.setMute(
+        mute: true,
+        generation: dependencies.mediaStream.beginVideoOperation(),
+        lease: lease,
+        senderStream: dependencies.senderStreamBox,
+        cameraSettings: dependencies.cameraSettings)
+      XCTFail("破棄予約後の lease では操作を開始できないこと")
+    } catch {
+      assertMediaChannelError(error, contains: "cancelled")
+    }
+
+    XCTAssertTrue(
+      dependencies.senderStreamBox.stream.videoEnabled,
+      "取消済み lease の拒否が videoEnabled を変更しないこと")
   }
 
   /// release が同じ lease の進行中操作を完了バリアとして待つことを確認する
@@ -221,7 +331,8 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   /// 開始取消後も、物理停止の成功を確認するまでは切断処理が所有ストリームを参照できることを確認する
   func testCancelledCameraStartRetainsOwnershipUntilStopped() async throws {
     let dependencies = try makeDependencies()
-    let cameraCoordinator = CameraVideoCaptureCoordinator()
+    // process-wide の shared を汚染しないよう、テストローカルの owner を注入する
+    let cameraCoordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
 
     // lease 破棄と送信元予約破棄の両経路で、開始成功後の停止対象を失わないことを確認する。
     for revokeLease in [true, false] {
@@ -257,16 +368,119 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
 
   /// カメラ cleanup 失敗後は隔離し、停止成功を確認するまで新しい操作を許可しないことを確認する
   func testCameraCoordinatorQuarantinesCleanupFailure() {
-    let coordinator = CameraVideoCaptureCoordinator()
+    // 隔離状態は process-wide の owner が保持するため、テストローカルの owner を注入して
+    // 他のテストへ状態を持ち越さないようにする。
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
 
     XCTAssertTrue(coordinator.isAvailable)
     coordinator.quarantine()
     XCTAssertTrue(coordinator.isQuarantined)
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "隔離状態が owner に記録されること")
     XCTAssertFalse(coordinator.isAvailable, "cleanup 失敗後は新しいカメラ操作を拒否すること")
 
     coordinator.clearQuarantineAfterSuccessfulStop()
     XCTAssertFalse(coordinator.isQuarantined)
+    XCTAssertEqual(owner.snapshot.phase, .idle, "解除が owner に記録されること")
     XCTAssertTrue(coordinator.isAvailable, "停止成功を確認した後はカメラ操作を再開できること")
+  }
+
+  /// 隔離した capturer と異なる capturer の停止完了では隔離を解除しないことを確認する
+  func testCameraCoordinatorKeepsQuarantineForOtherCapturer() {
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
+    let quarantined = CameraCapturerID()
+
+    coordinator.quarantine(capturerID: quarantined)
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "隔離状態が owner に記録されること")
+
+    coordinator.clearQuarantineAfterSuccessfulStop(capturerID: CameraCapturerID())
+
+    XCTAssertTrue(coordinator.isQuarantined, "別 capturer の停止完了では隔離を解除しないこと")
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "owner の隔離も維持されること")
+  }
+
+  /// 隔離した capturer と一致する ID の停止完了で隔離が解除されることを確認する
+  func testCameraCoordinatorClearsQuarantineForMatchingCapturer() {
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
+    let capturerID = CameraCapturerID()
+
+    coordinator.quarantine(capturerID: capturerID)
+    XCTAssertEqual(owner.snapshot.phase, .quarantined, "隔離状態が owner に記録されること")
+
+    coordinator.clearQuarantineAfterSuccessfulStop(capturerID: capturerID)
+
+    XCTAssertFalse(coordinator.isQuarantined, "一致する capturer の停止完了で隔離を解除すること")
+    XCTAssertEqual(owner.snapshot.phase, .idle, "owner の隔離も解除されること")
+  }
+
+  /// 隔離中はカメラ操作が拒否されることを coordinator 経由で確認する
+  ///
+  /// `cameraOperationRejectionError` は引数の coordinator が保持する owner を参照するため、
+  /// テストローカルの owner でも操作拒否の判定を検証できる。
+  func testCameraOperationRejectionErrorFollowsInjectedOwner() {
+    let owner = CameraStateOwner()
+    let coordinator = CameraVideoCaptureCoordinator(owner: owner)
+
+    XCTAssertNil(
+      CameraVideoCapturer.cameraOperationRejectionError(coordinator: coordinator, stream: nil),
+      "隔離していない場合は拒否しないこと")
+
+    coordinator.quarantine()
+
+    let error = CameraVideoCapturer.cameraOperationRejectionError(
+      coordinator: coordinator, stream: nil)
+    guard let soraError = error as? SoraError, case .cameraError(let reason) = soraError else {
+      XCTFail("cameraError が返ること: \(String(describing: error))")
+      return
+    }
+    XCTAssertEqual(reason, "camera capture is quarantined after a cleanup failure")
+
+    coordinator.clearQuarantineAfterSuccessfulStop()
+    XCTAssertNil(
+      CameraVideoCapturer.cameraOperationRejectionError(coordinator: coordinator, stream: nil),
+      "隔離解除後は拒否しないこと")
+  }
+
+  /// 画面共有の予約中はカメラ操作が拒否され、隔離がある場合は隔離が優先されることを確認する
+  func testCameraOperationRejectionErrorForScreenReservation() throws {
+    let dependencies = try makeDependencies()
+    let coordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
+    let sourceCoordinator = VideoSourceCoordinator()
+    let stream = dependencies.senderStreamBox.stream
+    let reservation = try XCTUnwrap(
+      sourceCoordinator.beginScreen(stream: stream), "画面共有を予約できること")
+    XCTAssertTrue(sourceCoordinator.completeScreenStart(reservation))
+    // 画面共有の予約はプロセス全体の registry が保持するため、テスト内で解放する
+    defer {
+      if let stopReservation = sourceCoordinator.beginScreenStop() {
+        sourceCoordinator.finishScreenStop(stopReservation, stopped: true)
+      }
+    }
+
+    let screenError = CameraVideoCapturer.cameraOperationRejectionError(
+      coordinator: coordinator, stream: stream)
+    guard let screenSoraError = screenError as? SoraError,
+      case .cameraError(let screenReason) = screenSoraError
+    else {
+      XCTFail("cameraError が返ること: \(String(describing: screenError))")
+      return
+    }
+    XCTAssertEqual(screenReason, "screen capture is active on the camera stream")
+
+    // 隔離中は画面共有の予約を確認せず、隔離の理由で拒否する
+    coordinator.quarantine()
+
+    let quarantinedError = CameraVideoCapturer.cameraOperationRejectionError(
+      coordinator: coordinator, stream: stream)
+    guard let quarantinedSoraError = quarantinedError as? SoraError,
+      case .cameraError(let quarantinedReason) = quarantinedSoraError
+    else {
+      XCTFail("cameraError が返ること: \(String(describing: quarantinedError))")
+      return
+    }
+    XCTAssertEqual(quarantinedReason, "camera capture is quarantined after a cleanup failure")
   }
 
   /// 同じ接続のカメラと画面共有を、非同期開始より前の予約で排他できることを確認する
@@ -515,7 +729,8 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
 
   /// 初期カメラ無効から開始した場合も、停止キュー完了まで切断 callback と所有情報を保持することを確認する
   func testMediaChannelDisconnectWaitsForCameraCleanup() async throws {
-    let coordinator = CameraVideoCaptureCoordinator()
+    // process-wide の shared を汚染しないよう、テストローカルの owner を注入する
+    let coordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
     let ownership = CameraCaptureOwnership()
     let videoSourceCoordinator = VideoSourceCoordinator()
     var configuration = makeConfiguration()

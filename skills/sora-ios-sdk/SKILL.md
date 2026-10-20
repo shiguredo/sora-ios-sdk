@@ -5,7 +5,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 
 # Sora iOS SDK (sora-ios-sdk)
 
-- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (2026.3.0)
+- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (2026.4.0)
 - **リポジトリ**: https://github.com/shiguredo/sora-ios-sdk
 - **ドキュメント**: https://sora-ios-sdk.shiguredo.jp/
 - **API リファレンス**: https://sora-ios-sdk.shiguredo.jp/_static/api/docs/
@@ -18,7 +18,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 
 - iOS 14 以降
 - アーキテクチャ arm64 (シミュレーターの動作は未保証)
-- Xcode 26.2
+- Xcode 26.6
 - WebRTC SFU Sora 2025.2.0 以降
 
 ## インストール
@@ -26,7 +26,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 Swift Package Manager を利用する。
 
 ```swift
-.package(url: "https://github.com/shiguredo/sora-ios-sdk.git", from: "2026.3.0")
+.package(url: "https://github.com/shiguredo/sora-ios-sdk.git", from: "2026.4.0")
 ```
 
 `import Sora` と `import WebRTC` で利用する。
@@ -359,7 +359,7 @@ configuration.audioStereoOutputEnabled = true
 - Bluetooth HFP はモノラル。A2DP はステレオ出力を利用できるが、SDK は route を自動で切り替えない
 - 接続後に `setAudioMode(.voiceChat(...))` を呼ぶとモノラルへ切り替わる場合がある
 
-`recvonly` のマイク権限不要化と、ステレオ送信側の入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要となる。`Package.swift` は m150.7871.3.5 を参照している。
+`recvonly` のマイク権限不要化と、ステレオ送信側の入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要となる。`Package.swift` は m155.8059.4.1 を参照している。
 
 ### ミュート
 
@@ -441,11 +441,17 @@ await mediaChannel.stopScreenCapture()
 
 同一送信ストリームでカメラと画面キャプチャは同時に使えない。`initialCameraEnabled = false` にするか、`setVideoHardMute(true)` でカメラを止めてから開始する。
 
+`videoSampleBufferTransformer` は SDK 内部の送信キュー上で呼ばれる。`targetFPS` による間引きで破棄されるフレームと、送信処理中のために破棄されるフレーム、キャプチャ停止中と切断中のフレームでは呼ばれない。引数と戻り値の `CMSampleBuffer` の所有権は SDK に委ねられ、戻り値の buffer が保持する pixel buffer は送信のために SDK が retain する。戻り値を返した後にその buffer を書き換えないこと。
+
 ### 描画
 
 `VideoView` (`UIView`) を `MediaStream.videoRenderer` に設定する。`VideoRenderer` プロトコルを実装した独自ビューも利用できる。`VideoView.connectionMode` で切断時の挙動 (`.auto` / `.autoClear` / `.manual`) を指定する。
 
-`VideoFilter` プロトコルを実装して `MediaStream.videoFilter` に設定すると、送信する映像フレームを加工できる。
+`VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) はすべて main queue で呼ばれる。`videoRenderer` の setter は callback の配送完了を待たない。同じ instance を再設定した場合と `nil` を `nil` へ代入した場合は何も配送せず、別の instance へ交換した場合は以前の renderer に `onRemoved` が 1 回配送される。`videoRenderer` の getter / setter は内部の lock で直列化されるため、どのスレッドから呼んでもよい。`terminate()` の後に新しい renderer を設定しても何も配送されず (`nil` の代入による取り外しは可能)、`onDisconnect` は `terminate()` を呼んだ時点の renderer に配送される。renderer へ配送するフレームは、配送待ちが上限に達すると破棄される。
+
+`VideoFilter` プロトコルを実装して `MediaStream.videoFilter` に設定すると、送信する映像フレームを加工できる。`filter(videoFrame:)` はストリームごとの直列 executor 上で呼ばれるため、同じストリームで同時に 2 つのフレームが filter へ入ることはない。同じ instance を複数のストリームへ設定した場合の排他は利用者の責任となる。
+
+`MediaStream.send(videoFrame:)` はフレームを内部の ingress へ投入して戻る。フィルターの実行と `RTCVideoSource` への配送は非同期に行われ、配送の完了は待たない。呼び出し側はフレームの所有権を SDK へ移し、`send` が戻った後にフレームとそれが保持する画素データを参照・変更してはならない。映像トラックを持たないストリーム (video source が `nil`) ではフレームは配送されず、フィルターも呼ばれない。処理が滞留している場合、上限を超えて到着したフレームは破棄される。`terminate()` の後に到着したフレームも配送されない (`terminate()` は冪等で、`onDisconnect` は 1 回だけ配送される)。
 
 ## DataChannel メッセージング
 
@@ -474,6 +480,58 @@ config.dataChannels = [[
 | `PutSignalingNotifyMetadata` | シグナリング通知メタデータを設定する |
 | `PutSignalingNotifyMetadataItem` | メタデータの特定キーに値を設定する |
 
+ジェネリックなメソッド (`PutSignalingNotifyMetadata` / `PutSignalingNotifyMetadataItem`) は、actor / Task 境界へ渡す場合に限り Sendable 版の型が別に存在する (`SendablePutSignalingNotifyMetadata` / `SendablePutSignalingNotifyMetadataItem`)。メソッド名は同じで、型パラメータに `Sendable` を要求する。
+
+サーバーがエラー応答を返した場合は `SoraError.rpcServerError(detail:)` が throw される。`detail.data` は JSON-RPC 2.0 の `error.data` を表す `JSONValue?` で、サーバーが返したときだけ入る (省略された場合は `nil`、`null` の場合は `.null`)。
+
+```swift
+do {
+  _ = try await mediaChannel.rpc(
+    method: RequestSimulcastRid.self,
+    params: RequestSimulcastRidParams(rid: .r0)
+  )
+} catch SoraError.rpcServerError(let detail) {
+  print(detail.code, detail.message)
+  // data は JSON-RPC 2.0 の任意フィールド。省略された場合は nil、null の場合は .null になる
+  if case .some(.object(let fields)) = detail.data {
+    print(fields)
+  }
+}
+```
+
+### Sendable な RPC
+
+`MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)` は、params と result を actor 境界や `Task` の `@Sendable` closure へ渡したい場合に使う。`MediaChannel.rpc` とは別名で、引数と戻り値の形は同じだが、`SendableRPCMethodProtocol` に準拠したメソッドだけを呼べ、戻り値は `SendableRPCResponse<M.Result>?` になる。notification は `nil` を返す。
+
+| Sendable なメソッド型 | 内容 |
+| --- | --- |
+| `RequestSimulcastRid` / `RequestSpotlightRid` / `ResetSpotlightRid` | 組み込みメソッド。新旧両方の protocol へ準拠している |
+| `SendablePutSignalingNotifyMetadata<Metadata>` | `Metadata` が `Codable & Sendable` の場合に使う |
+| `SendablePutSignalingNotifyMetadataItem<Metadata, Value>` | `Metadata` が `Decodable & Sendable`、`Value` が `Encodable & Sendable` の場合に使う |
+
+```swift
+// 利用者定義の RPC メソッドは SendableRPCMethodProtocol へ準拠させる
+struct MyParams: Encodable, Sendable { let message: String }
+struct MyResult: Decodable, Sendable { let message: String }
+
+enum MyRPCMethod: SendableRPCMethodProtocol {
+  typealias Params = MyParams
+  typealias Result = MyResult
+  static let name = "2025.2.0/MyRPCMethod"
+}
+
+let response = try await mediaChannel.sendableRPC(
+  method: MyRPCMethod.self,
+  params: MyParams(message: "ping")
+)
+// response は Sendable のため Task や actor 境界を越えて受け渡せる
+if let result = response?.result {
+  print(result.message)
+}
+```
+
+既存の `RPCMethodProtocol` の制約は変えていない。非 Sendable な params / result を使う既存の利用者定義メソッドは、そのまま `MediaChannel.rpc` を使う。
+
 ## 統計
 
 ```swift
@@ -488,6 +546,32 @@ mediaChannel.getStats { result in
   }
 }
 ```
+
+actor / Task 境界へ統計を渡す場合は `getStatsSnapshot(handler:)` / `getStatsSnapshot()` を使う。
+`getStatsSnapshot(handler:)` が handler へ渡す値と `getStatsSnapshot()` が返す値は immutable で
+deep Sendable な `StatisticsSnapshot` で、値は `[String: JSONValue]` として保持される
+(`Statistics` は mutable class のため、そのまま境界を越えて渡せない)。
+
+```swift
+let snapshot = try await mediaChannel.getStatsSnapshot()
+for entry in snapshot.entries {
+  print(entry.type, entry.id, entry.values)
+}
+
+// 数値は `JSONValue.decimal` として入る (Double 由来の小数は `JSONSerialization` を経由するため、
+// `NSDecimalNumber` 経由の値と表記が変わることがある)。`NSNumber` のキャストは使えない。
+let outbound = snapshot.entries.first { $0.type == "outbound-rtp" }
+if case .decimal(let bytesSent)? = outbound?.values["bytesSent"] {
+  print("bytesSent: \(bytesSent)")
+}
+```
+
+`getStatsSnapshot()` を呼び出している間は `MediaChannel` が保持される。そのため `deinit` による
+切断は完了まで遅延し、`await` を終わらせる手段はタスクのキャンセルだけになる (`rpc` のような
+timeout はない)。snapshot API では、`MediaChannel` の解放開始後に成功を返さない保証
+(`MediaChannel is unavailable`) を `getStatsSnapshot(handler:)` が返す (async 版は呼び出し中
+`MediaChannel` を保持するためこの失敗を返さない。legacy の `getStats(handler:)` も同じ失敗を
+返す)。
 
 ## 切断イベント
 
@@ -508,15 +592,28 @@ config.mediaChannelHandlers.onDisconnect = { event in
 
 ## Swift 6 と並行性
 
-SDK 本体は Swift 6 言語モードでビルド・ CI 検証している。ただし `Package.swift` の `swift-tools-version` は 5.3 のため、SwiftPM で取り込んだ場合にパッケージ側へ適用される言語モードは Swift 5 になる。CI の `SWIFT_VERSION=6` は通常の SwiftPM consumer へ伝播しない。利用側のアプリを Swift 6 言語モードでビルドする場合は、次の点に注意する。
+SDK 本体は Swift 6 言語モードでビルド・ CI 検証している。`Package.swift` の `swift-tools-version` は 6.3 で、package initializer の `swiftLanguageModes: [.v6]` により Swift 6 言語モードを宣言している。このため SwiftPM で取り込んだ場合もパッケージ側へ適用される言語モードは Swift 6 になり、利用側で言語モードを指定する必要はない。manifest を読むために SwiftPM 6.3 以降 (Xcode 26.6 以降に同梱) が必要になる。利用側のアプリを Swift 6 言語モードでビルドする場合は、次の点に注意する。
 
 ### Sendable 準拠
 
 SDK が公開型に `Sendable` 準拠を追加しているため、利用側で独自に `Sendable` 準拠を追加していた場合は削除が必要になる。
 
-- `Sendable`: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `ICETransportPolicy` / `SDPSemantics` / `AspectRatio` / `WebSocketStatusCode` / `DeviceInfo` / `Proxy` / `CameraSettings.Resolution`
-- `@unchecked Sendable`: `Sora` / `Logger` / `CameraVideoCapturer`
+- `Sendable`
+  - 設定: `MediaConstraints` / `DegradationPreference` / `SDPSemantics` / `ICETransportPolicy` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
+  - 接続と切断: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent`
+  - 音声: `AudioMode` / `AudioOutput`
+  - カメラ: `CameraSettings` / `CameraSettings.Resolution` / `CameraVideoCapturer`
+  - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group` / `Logger`
+  - 映像表示: `VideoViewConnectionMode`
+  - WebSocket とシグナリング: `WebSocketMessage` / `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
+  - RPC と JSON: `RPCErrorDetail` / `JSONValue` / `SendableRPCResponse` / `RequestSimulcastRidParams` / `RequestSpotlightRidParams` / `ResetSpotlightRidParams` / `RequestSimulcastRidResult` / `RequestSpotlightRidResult` / `ResetSpotlightRidResult` / `PutSignalingNotifyMetadataParams` (`Metadata` が `Sendable` の場合) / `PutSignalingNotifyMetadataItemParams` (`Value` が `Sendable` の場合)
+  - 統計: `StatisticsSnapshot` / `StatisticsEntrySnapshot`
+  - イベント購読: `SoraEvent` / `SoraEventKind` / `SoraEventError` / `SoraAudioPortSnapshot` / `SoraAudioRouteSnapshot` / `SoraAudioRouteEvent`
+  - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
+- `@unchecked Sendable`: `Sora`
 - `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
+
+`SoraCloseEvent` は `Sendable` だが、`SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない。標準ライブラリの `Error: Sendable` に依存するため、可変状態を持つ `Error` を載せた値を actor 境界へ渡す場合は利用側で注意する。
 
 `MediaChannel` や `MediaStream` を `Task` や別 actor へそのまま渡すことはできない。`@MainActor` の型や `Task { @MainActor in ... }` に閉じ込めるなど、利用側で隔離する。
 
@@ -525,10 +622,14 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 コールバックの呼び出し元スレッドは保証されない。UI 更新や共有状態の変更は main queue / main actor へ束ねる。
 
 - `SoraHandlers` / `MediaChannelHandlers` の各コールバック (`onConnect` / `onDisconnect` / `onAddStream` / `onDataChannel` など)
+- `Sora.connect(configuration:webRTCConfiguration:handler:)` の引数 handler も、接続を開始したスレッドとは異なるスレッドから呼ばれ得る (接続成功・設定エラー・接続失敗のいずれの経路でも)
 - `MediaStreamHandlers` の `onSwitchVideo` / `onSwitchAudio`
 - `RTCAudioTrackSink.onData` は libwebrtc の音声処理スレッド (10 ms ごと)
 - `CameraVideoCapturer.handlers.onCapture` はカメラキャプチャスレッド
-- `VideoRenderer` の `onChange` / `render` は SDK が main thread へ配送する
+- `VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) はすべて SDK が main queue へ配送する
+- `Logger.onOutputHandler` はログを出力した executor で同期的に呼ばれる (queue への hop は行わない)。複数の executor から並行に呼ばれ得るため、handler 側の排他は利用者の責任になる。handler の中から Logger の設定変更と再出力ができるが、同じログを再出力すると無限再帰になるため、再入の制御は利用者の責任になる
+- `Logger` の設定 (`level` / `groups` / `onOutputHandler`) と `Sora.logLevel` は SDK 内部の lock で保護され、任意の executor から読み書きできる。`@MainActor` のクラスの中で `onOutputHandler` を設定する場合は、closure が MainActor 隔離を継承するため隔離を外す必要がある (下の「コールバックを Swift 6 で扱う」を参照)
+- ハンドラの設定 (`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` のイベントハンドラのプロパティと `MediaChannel.handlers` の参照) は SDK 内部の lock で排他され、任意の executor から行える (`SoraHandlers` のプロパティは含まない)。callback が呼ばれるスレッドの保証は変わらない
 
 ### コールバックを Swift 6 で扱う
 
@@ -549,7 +650,7 @@ _ = Sora.shared.connect(configuration: config) { @Sendable [weak self] mediaChan
 }
 ```
 
-`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、SDK が Sendable な event / RPC / statistics API を提供するまでの間、サンプル集とクイックスタートでも使われている。将来 SDK 側の対応が進んだら不要になる。
+`@preconcurrency import Sora` は Sendable 関連の診断を抑止する暫定対応であり、サンプル集とクイックスタートでも使われている。`MediaChannel` / `MediaStream` の参照は非 Sendable のため、legacy の handler API を使う間はこの暫定対応が必要になる。イベントは `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` が Sendable な `SoraEvent` として配送するため、購読側では暫定対応が不要になる。
 
 `MediaChannelHandlers` のコールバックも同じ考え方で扱う。
 
@@ -572,24 +673,99 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 }
 ```
 
+### イベントの購読
+
+接続と `Sora` インスタンスのイベントを `AsyncStream` で購読できる。legacy の handler API は互換のために維持され、新しい購読 API は同じ配送点から対応するイベントを配送する。
+
+| 購読 | 配送されるイベント |
+| --- | --- |
+| `Sora.subscribeEvents(bufferingPolicy:)` | `mediaChannelAdded` / `mediaChannelRemoved` / `audioRouteChanged` と、このインスタンスが開始した接続の `connected` / `connectFailed` / `disconnected` |
+| `MediaChannel.subscribeEvents(bufferingPolicy:)` | `connected` / `connectFailed` / `streamAdded` / `streamRemoved` / `videoEnabledChanged` / `audioEnabledChanged` / `signalingReceivedJSON` / `dataChannelOpened` / `dataChannelAvailable` / `dataChannelMessage` / `disconnected` |
+
+- 購読者ごとに独立した `AsyncStream` を返す。buffer / drop 方針 / 終端は購読者ごとに独立し、1 つの購読を解除しても他の購読者へ影響しない
+- buffer は既定で `SoraEvent.defaultBufferSize` 件で、あふれた場合は最も古いイベントが破棄される。`SoraEvent.sequence` で欠落を検出できる
+- 購読を開始する前に配送されたイベントは届かない (buffer は購読ごとに作られる)。接続前に購読を開始すれば `mediaChannelAdded` と接続結果を取り逃さない
+- 購読の解除は、購読している `Task` の cancel、購読に使った `AsyncStream` への参照の解放、接続の終了 (`MediaChannel`)、または `Sora` インスタンスの解放
+- `MediaChannel` の購読は、接続の終了で `disconnected` を配送してから終端する。終端後の購読には終端済みの stream を返す
+- `SoraEvent` は `Sendable` のため actor / Task 境界へ渡せる。payload はすべて値として確定し、配送後も保持できる (`MediaChannel` / `MediaStream` / raw WebRTC object は含まれない)
+- 購読している `Task` の loop の中から getter や `disconnect` などの同期 API を呼べる (配送は排他区間の外で行うため deadlock しない)
+- イベントの配送 executor は発生元によって異なる (libwebrtc の callback スレッド、signaling の受信スレッド、呼び出し元の executor など)。AsyncStream の再開後に動く購読者のコードは購読している `Task` の executor 上で実行されるため、UI 更新は main actor / main queue へ束ねる。同時に配送されたイベントは、配送順と `sequence` の順序が一致しない場合がある
+- `MediaChannel` の `connected` / `connectFailed` は接続の完了と同じ配送点で発行される。接続の結果を購読する場合は `Sora` の購読を接続前に開始する
+- `SoraEventKind` は `RawRepresentable` な struct のため、種別の `switch` には `default` を書く。SDK が種別を追加しても利用側の既存コードが build できなくならない
+
+```swift
+// 接続前に購読する (mediaChannelAdded / connected を取り逃さないため)
+let soraEvents = Sora.shared.subscribeEvents()
+Task {
+  for await event in soraEvents {
+    switch event.kind {
+    case .connected:
+      print("connected: \(event.connectionId ?? "-")")
+    default:
+      break
+    }
+  }
+}
+
+_ = Sora.shared.connect(configuration: config) { mediaChannel, error in
+  guard let mediaChannel, error == nil else { return }
+  // 購読を開始してから Task へ渡す (購読を開始する前のイベントは届かない)
+  let events = mediaChannel.subscribeEvents()
+  Task {
+    for await event in events {
+      switch event.kind {
+      case .streamAdded:
+        print("stream added: \(event.streamId ?? "-")")
+      case .disconnected:
+        print("disconnected")
+      default:
+        break
+      }
+    }
+  }
+}
+```
+
+購読を解除する場合は、購読している `Task` を cancel するか、`AsyncStream` への参照を解放する。
+
+legacy handler と新しいイベントの対応は次のとおり。対応は「同じ配送点から配送される」ことを示す。legacy handler の配送 executor / 順序 / 発火回数は、新しい購読 API の追加では変わらない。
+
+| legacy handler | 新しいイベント |
+| --- | --- |
+| `SoraHandlers.onConnect` / `Sora.connect(...)` の引数 handler | `Sora` の `connected` / `connectFailed` |
+| `SoraHandlers.onDisconnect` | `Sora` の `disconnected` |
+| `SoraHandlers.onAddMediaChannel` | `mediaChannelAdded` |
+| `SoraHandlers.onRemoveMediaChannel` | `mediaChannelRemoved` |
+| `SoraHandlers.onChangeAudioRoute` | `audioRouteChanged` |
+| `MediaChannelHandlers.onConnect` | `MediaChannel` の `connected` / `connectFailed` |
+| `MediaChannelHandlers.onDisconnect` | `MediaChannel` の `disconnected` |
+| `MediaChannelHandlers.onAddStream` | `streamAdded` |
+| `MediaChannelHandlers.onRemoveStream` | `streamRemoved` |
+| `MediaChannelHandlers.onReceiveSignalingJSON` | `signalingReceivedJSON` |
+| `MediaChannelHandlers.onDataChannel` | `dataChannelAvailable` |
+| `MediaChannelHandlers.onDataChannelOpened` | `dataChannelOpened` |
+| `MediaChannelHandlers.onDataChannelMessage` | `dataChannelMessage` |
+| `MediaStreamHandlers.onSwitchVideo` | `videoEnabledChanged` |
+| `MediaStreamHandlers.onSwitchAudio` | `audioEnabledChanged` |
+| `WebSocketChannelHandlers.onReceive` | 対象外。生の `WebSocketMessage` を受け取る経路は legacy handler だけ。シグナリングの JSON 文字列は `signalingReceivedJSON` が配送する |
+| `CameraVideoCapturerHandlers.onCapture` / `onStart` / `onStop` | 対象外。カメラ状態の所有と frame の lifetime は別の owner が扱う |
+| `VideoRenderer` の callback | 対象外。main queue へ配送される UI 専用経路 |
+
 ### 非同期 API
 
-`async` / `await` に対応するのは `MediaChannel.rpc` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。
+`async` / `await` に対応するのは `MediaChannel.rpc` / `sendableRPC` / `getStatsSnapshot` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。イベントは `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` が返す `AsyncStream` を `for await` で消費する。
 
 ### スレッド安全でない共有状態
 
 次の静的プロパティは `nonisolated(unsafe)` であり、コンパイラによるスレッド安全の検証対象外となる。同時に読み書きしない前提で利用する。
 
 - `DeviceInfo.current`
-- `CameraVideoCapturer.current` / `CameraVideoCapturer.handlers`
-- `Logger.shared` / `Sora.logLevel`
 
-カメラ操作 (`start` / `stop` / `restart` / `change` / `flip`) は SDK 内部で直列化されるが、`CameraVideoCapturer.current` を利用側から書き換えないこと。
+カメラ操作 (`start` / `stop` / `restart` / `change` / `flip`) は SDK 内部で直列化される。`CameraVideoCapturer` の状態 (`current` / `isRunning` / `format` / `frameRate` / `stream`) は内部の owner が、`device` は instance の lock 付き storage が、`handlers` は型全体で共有する lock 付き storage が `NSLock` で保護して公開しており、`CameraVideoCapturer` は `Sendable` に準拠する。`CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しないため、利用者が `MediaStream` を保持する必要がある。
 
 ### 現状の制約
 
-- `Package.swift` の `swift-tools-version` は 5.3 のままで、manifest からの Swift 6 言語モード指定は未対応
-- Sendable な event / RPC / statistics API はまだ提供されていない。`MediaChannel` / `MediaStream` を境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要
+- イベントは `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` が Sendable な `SoraEvent` として配送する。統計の値は `getStatsSnapshot(handler:)` / `getStatsSnapshot()` が Sendable な `StatisticsSnapshot` を返す。一方 `MediaChannel` / `MediaStream` の参照は非 Sendable のままで、境界で扱うには `nonisolated(unsafe)` や actor 隔離が必要 (`@MainActor` 隔離の文脈から `getStatsSnapshot()` を呼ぶ場合や `MediaChannel` の参照を `@Sendable` closure / `Task` へ渡す場合も同様。同期 API の `getStats(handler:)` / `getStatsSnapshot(handler:)` の呼び出しはそのまま可能)
 - サンプル集とクイックスタートは Swift 6 言語モードだが、`@preconcurrency import Sora` と `nonisolated(unsafe)` の暫定対応を含む。Swift 6 の模範例ではなく、暫定対応を含む参考実装として扱う
 
 ## 非推奨 API
@@ -623,6 +799,9 @@ config.mediaChannelHandlers.onDisconnect = { @Sendable [weak self] event in
 | メッセージ送信 | `MediaChannel.sendMessage(label:data:)` |
 | メッセージ受信 | `MediaChannelHandlers.onDataChannelMessage` |
 | RPC | `try await MediaChannel.rpc(method:params:)` |
+| Sendable な RPC | `try await MediaChannel.sendableRPC(method:params:)` |
 | 統計取得 | `MediaChannel.getStats(handler:)` |
+| Sendable な統計取得 | `try await MediaChannel.getStatsSnapshot()` |
+| イベント購読 | `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` |
 | 受信音量 | `MediaStream.remoteAudioVolume` |
 | 受信 PCM | `MediaStream.addAudioTrackSink(_:)` |

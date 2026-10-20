@@ -9,7 +9,233 @@
 - FIX
   - バグ修正
 
-## develop
+## 2026.4.0
+
+**リリース日**: 2026-10-20
+
+- [CHANGE] `swift-tools-version` を 6.3 に上げ、Swift 6 言語モードを manifest で宣言する
+  - SwiftPM 6.3 未満 (Xcode 26.6 未満) では package を解決できなくなる
+  - `swiftLanguageModes: [.v6]` により、SwiftPM で取り込んだ consumer も SDK を Swift 6 言語モードで compile する。公開 API と SDK の挙動は変わらない
+  - アプリ側が Swift 5 言語モードの場合はそのまま利用できる
+  - @t-miya
+- [CHANGE] システム要件の Xcode バージョンを 26.6+ に更新する
+  - @t-miya
+- [CHANGE] `RPCErrorDetail.data` の型を `Any?` から `JSONValue?` に変更する
+  - `RPCErrorDetail` を `Sendable` な型とするため
+  - `data` の `as? [String: Any]` のようなキャストは `always fails` の警告が出て常に `nil` になる (warnings-as-errors では build できない)。`JSONValue` の case 分岐へ書き換える
+  - JSON-RPC 2.0 の `error.data` が省略された場合は `nil`、`null` の場合は `.null` になる。数値は `JSONSerialization` を経由するため `decimal` / `double` の case で復元され、小数の表記が変わる場合がある (例: `0.1` は `.decimal(0.10000000000000001)`)
+  - @t-miya
+- [CHANGE] WebRTC の enum 型への `CustomStringConvertible` 準拠を削除する
+  - 別 module の型へ protocol 準拠を追加していた retroactive conformance の警告 (SE-0364) を解消するため
+  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` / `RTCDataChannelState` / `RTCDegradationPreference` / `RTCPriority` の準拠を削除する。`RTCDegradationPreference` は raw value で判定するようになり、m154 で追加された `maintainFramerateAndResolution` (値 0、削除予定の `disabled` の別名) も `"disabled"` として扱う
+  - 利用者コードの `description` はコンパイルエラーになり、文字列補間と `String(describing:)` は `RTCSignalingState(rawValue: 0)` のような raw 表現に変わる (`debugPrint` や Optional / 配列を経由した場合は `__C.` 付きの表現)
+  - `RTCRtpParameters.description` から `Optional(...)` が消え、未知の値は `RTCDataChannelState` も `RTCDegradationPreference` も `"unknown(<rawValue>)"` になる (`messagingError` の reason と SDK のログにも現れる)
+  - @t-miya
+- [CHANGE] 公開 API `Utilities.Stopwatch` を非推奨にする
+  - `Stopwatch` は 1 秒ごとに経過時間を `"時:分:秒"` の文字列で handler へ通知するカウンタで、Sora SDK 固有の機能ではなく SDK 内でも利用していない。2027 年中に廃止予定であり、削除までに移行する
+  - 1 秒ごとの定期実行や表示の更新には、Foundation の `Timer` を MainActor 上のタイマーとして管理する方法か、Swift の `ContinuousClock` と `Task.sleep(for:)` を組み合わせる方法へ移行する
+  - 経過時間の計測だけが目的の場合は、`ContinuousClock` / `SuspendingClock` の `now` の差分 (`Duration`) へ移行する
+  - 用途によって移行先が異なるため、SDK 固有の代替 timer は提供しない。単一の万能な代替があるわけではないため、用途に合う仕組みを選ぶ
+  - @t-miya
+- [CHANGE] 公開 API `Utilities.randomString` を非推奨にする
+  - Sora SDK 固有の機能ではなく SDK 内でも利用していない汎用ユーティリティであり、次期 major version で削除予定である。削除までに移行する
+  - ランダムな文字列が必要な場合は、`UUID` や標準の乱数 API (`randomElement()` / `UInt32.random(in:)` など) を利用する。出力の長さ指定と文字集合 (紛らわしい `l` / `I` / `O` を除く英数字 59 文字) は変わるため、同じ出力が必要な場合は文字集合を自前で定義する
+  - 用途によって移行先が異なるため、SDK 固有の代替ユーティリティは提供しない
+  - シグネチャと挙動は変わらない
+  - @t-miya
+- [ADD] Sendable なイベント購読 API を追加する
+  - `Sora.subscribeEvents(bufferingPolicy:)` と `MediaChannel.subscribeEvents(bufferingPolicy:)` を追加する。Sendable な `SoraEvent` を `AsyncStream` で配送し、購読者ごとに独立した buffer / drop 方針 / 終端を持ち、購読の解除は他の購読者へ影響しない
+  - 公開型 `SoraEvent` / `SoraEventKind` / `SoraEventError` / `SoraAudioPortSnapshot` / `SoraAudioRouteSnapshot` / `SoraAudioRouteEvent` を追加する。イベントの payload に `MediaChannel` / `MediaStream` / raw WebRTC object を含めない
+  - 既存の handler API と callback の型・配送 executor・配送順序・発火回数は変わらない
+  - @t-miya
+- [ADD] Sendable な statistics snapshot API を追加する
+  - immutable で Sendable な公開値型 `StatisticsSnapshot` / `StatisticsEntrySnapshot` と、`MediaChannel.getStatsSnapshot(handler:)` / `MediaChannel.getStatsSnapshot() async throws -> StatisticsSnapshot` を追加する
+  - 統計値を `JSONValue` で保持するため、結果を actor / Task 境界へそのまま渡せる。`Statistics` (mutable class) と `getStats(handler:)` のシグネチャと挙動は変わらない
+  - @t-miya
+- [ADD] JSON の値を表す公開型 `JSONValue` を追加する
+  - @t-miya
+- [ADD] Sendable な RPC API を追加する
+  - `SendableRPCMethodProtocol` (`Params: Encodable & Sendable` / `Result: Decodable & Sendable` を要求) と、応答型 `SendableRPCResponse<Result: Sendable>`、呼び出しメソッド `MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)` を追加する。既存 `MediaChannel.rpc` とは別名のため、新旧両方の protocol へ準拠した型でも既存 `rpc` の戻り値 `RPCResponse<M.Result>?` は変わらない
+  - ジェネリックな組み込みメソッド用に `SendablePutSignalingNotifyMetadata` と `SendablePutSignalingNotifyMetadataItem` を追加する
+  - params と result を actor / Task 境界で安全に扱えるようにする
+  - @t-miya
+- [UPDATE] libwebrtc を m155.8059.4.1 に更新する
+  - m155 の iOS 用 ADM で録音の pause / resume を WebRTC の worker スレッド上で実行する契約になったため、`RTCPeerConnectionFactory.run(onWorker:)` 経由で呼ぶようにする
+  - @zztkm
+- [UPDATE] libwebrtc を m154.8037.1.2 に更新する
+  - m154 で `RTCAudioDeviceModule` のステレオ再生設定 API が、生成後に `setStereoPlayoutEnabled(_:)` で設定する方式から `init(bypassVoiceProcessing:stereoPlayoutEnabled:)` の生成時指定方式に変更されたため、ADM の生成時に `stereoPlayoutEnabled` を渡すようにする
+  - m154 で追加された `RTCDegradationPreference.maintainFramerateAndResolution` に対応する
+  - @zztkm
+- [UPDATE] CameraVideoCapturer のカメラ状態の所有者を単一化する
+  - `CameraVideoCapturer` から `@unchecked Sendable` と `nonisolated(unsafe)` を除去して `Sendable` に準拠させ、`front` / `back` / `current` / `isRunning` / `format` / `frameRate` を computed property にする (読み取り専用の利用はソース互換である)
+  - `CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しなくなり、利用者が capturer 以外に強参照を保たない場合は `nil` になる (SDK 内部の経路は接続側が `MediaStream` を保持するため影響しない)
+  - @t-miya
+- [UPDATE] SignalingChannel と URLSessionWebSocketChannel の状態所有者を統一する
+  - signaling の phase、接続 URL、`data_channel_signaling` / `ignore_disconnect_websocket` のフラグと `URLSessionWebSocketChannel` の可変状態を 1 つの owner が保持し、`connect` / `send` / `redirect` / `disconnect` と URLSession delegate callback を同じ直列 queue で順序付ける
+  - @t-miya
+- [UPDATE] 公開値型を `Sendable` に対応させる
+  - 接続と設定: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent` / `MediaConstraints` / `DegradationPreference` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
+  - メディア、ログ、表示: `AudioMode` / `AudioOutput` / `CameraSettings` / `LogType` / `LogLevel` / `Log` / `Logger.Group` / `VideoViewConnectionMode` / `WebSocketMessage`
+  - シグナリング: `SignalingAnswer` / `SignalingUpdate` / `SignalingReOffer` / `SignalingReAnswer` / `SignalingSwitched` / `SignalingRedirect` / `SignalingClose` / `SignalingPing` / `SignalingPong` / `SignalingDisconnect`
+  - RPC: `RPCErrorDetail`
+  - 利用者が actor / Task 境界へ SDK の値をそのまま渡せるようにする
+  - `SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない (標準ライブラリの `Error: Sendable` に依存する)
+  - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要
+  - @t-miya
+- [UPDATE] RPC の params / result 型を `Sendable` に対応させる
+  - `RequestSimulcastRidParams` / `RequestSpotlightRidParams` / `ResetSpotlightRidParams` / `RequestSimulcastRidResult` / `RequestSpotlightRidResult` / `ResetSpotlightRidResult` へ `Sendable` 準拠を追加する
+  - `PutSignalingNotifyMetadataParams` は `Metadata` が `Sendable` の場合、`PutSignalingNotifyMetadataItemParams` は `Value` が `Sendable` の場合に `Sendable` へ準拠する (conditional conformance)
+  - 非ジェネリックな組み込みメソッド `RequestSimulcastRid` / `RequestSpotlightRid` / `ResetSpotlightRid` は `SendableRPCMethodProtocol` へも準拠する
+  - SDK 側で公開型に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要 (重複適合は warnings-as-errors の build を壊す)
+  - @t-miya
+- [UPDATE] 接続設定を immutable な Sendable snapshot へ変換する
+  - 数値の表記が変わる場合がある (`Float` / `Double` の指数表記の展開、`-0.0` の符号)
+  - `dataChannels` を設定している場合は connect message の `Double` / `Float` の 17 桁表記が解消され、`JSONEncoder` の表記に揃う
+  - JSON オブジェクトのキー順は不定になる (`Dictionary` の順序のため。JSON として等価)
+  - @t-miya
+- [UPDATE] ScreenCapture の sample buffer の所有境界を明確にする
+  - `ScreenCaptureSettings.videoSampleBufferTransformer` が受け取る `CMSampleBuffer` は、ReplayKit が渡した buffer の浅いコピーになる。画素データは従来どおり共有され、`CMSampleBufferGetPresentationTimeStamp` などの読み取りも従来どおり動作する
+  - `ScreenCaptureSettings.videoSampleBufferTransformer` と `MediaChannel.startScreenCapture` のドキュメントに、呼び出し executor と返却した sample buffer の所有契約を明記する
+  - @t-miya
+- [UPDATE] MediaStream の映像フレーム処理 executor を単一化する
+  - `VideoRenderer` の callback の配送 executor を main queue に統一する (これまでと異なるスレッドから呼ばれる場合がある)。ストリームをまたぐ callback の順序は保証しない
+  - `MediaStream.videoRenderer` / `videoEnabled` / `audioEnabled` の setter と `VideoView.start()` は callback の配送完了を待たず、getter は即時に新値を返す (`VideoView.start()` は main queue 上で `isRendering` を同期で更新する)。`videoRenderer` を別の instance へ交換した場合は以前の renderer に `onRemoved` が 1 回配送され、同じ instance の再設定と `nil` から `nil` への代入では何も配送しない
+  - `MediaStream.send(videoFrame:)` は配送の完了を待たずに戻り、呼び出し側はフレームの所有権を SDK へ移す (`send` が戻った後にフレームとそれが保持する画素データを参照・変更してはならない)。映像トラックを持たないストリーム (video source が `nil`) では `VideoFilter` が呼ばれず、処理の滞留時は上限を超えて到着したフレームが破棄される
+  - `MediaStream.terminate()` は冪等になり、以降に到着したフレームと renderer の frame / size / switch を受理も配送もしない。`onDisconnect` は 1 回だけ配送し、`onRemoved` は配送しない。`terminate()` の後に `videoRenderer` へ新しい renderer を設定しても何も配送しない (`nil` の代入による取り外しは行える)
+  - @t-miya
+- [UPDATE] Logger の共有可変状態を同期する
+  - `Logger.shared` / `level` / `groups` / `onOutputHandler` の読み書きを lock で保護し、`Logger` の `@unchecked Sendable` を checked な `Sendable` へ置き換える
+  - 並行に設定を変更した場合に、1 回の出力が異なる時点の設定を混ぜて観測しなくなる
+  - `level` / `groups` / `onOutputHandler` は computed property になるが、読み書きの利用はソース互換である
+  - @t-miya
+- [UPDATE] `Sora.connect` の設定エラー通知経路の closure capture を解消する
+  - @t-miya
+- [UPDATE] `Sora` target の closure capture の `#SendableClosureCaptures` 警告を解消する
+  - 非 `@Sendable` な closure (`handler` / `completionHandler`)
+  - WebRTC / AVFoundation の型 (`RTCSessionDescription` / `RTCMediaConstraints` / `RTCPeerConnection` / `AVCaptureDevice.Format`)
+  - @t-miya
+- [UPDATE] `PeerChannel` の接続ライフサイクルの排他を接続状態の所有者へ統合する
+  - @t-miya
+- [UPDATE] `Sora` target の SDK 内部インスタンスを捕捉する `#SendableClosureCaptures` 警告 10 件を解消する
+  - `self` (`PeerChannel` / `MediaChannel`) の 8 件と、 `ConnectionTask` / `DataChannel` の 2 件を解消する
+  - @t-miya
+- [UPDATE] `Utilities.Stopwatch` の `Timer` closure が `self` を捕捉する `#SendableClosureCaptures` 警告を解消する
+  - @t-miya
+- [UPDATE] `ICEServerInfo.tlsSecurityPolicy` の実装を変更する
+  - 非推奨化した TLSSecurityPolicy を SDK 内部で使わないようにする
+  - 宣言・型・非推奨の扱いと読み書きの挙動は変わらない
+  - @t-miya
+- [UPDATE] イベントハンドラのプロパティの読み書きを排他する
+  - `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` が持つイベントハンドラのプロパティ (`onDisconnect` などのクロージャ) の get / set を `NSLock` で排他し、`MediaChannel.handlers` の差し替えも lock 付きアクセサにする。利用するスレッドでハンドラを設定しながら配送が並行したときにデータ競合 (未定義動作) にならないようにする
+  - 配送側は lock を解放してからハンドラを呼ぶため、ハンドラの中から別のハンドラを設定しても deadlock しない。公開 API のソース互換と配送セマンティクス (接続途中の設定が次の配送から反映される) は変わらない
+  - @t-miya
+- [UPDATE] `MediaChannel.state` の保持と読み出しを単一の lock 付き storage へ移す
+  - @t-miya
+- [FIX] 切断要求後に届いた受信メッセージで利用者 handler が呼ばれることがある問題を修正する
+  - `Configuration.webSocketChannelHandlers` の `onReceive` を、切断要求後に届いた受信結果では呼ばないようにする
+  - @t-miya
+- [FIX] `dataChannels` を設定していると connect message に載る `Decimal` が Double の精度に丸められて送信される問題を修正する
+  - `Configuration.dataChannels` を設定しているときに、`signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別パラメーター / `ForwardingFilter.metadata` の `Decimal` が Double の精度に丸められる問題を修正する
+  - @t-miya
+- [FIX] JSON 化できない `dataChannels` を設定すると接続時にプロセスが abort する問題を修正する
+  - `Configuration.dataChannels` に JSON 化できない値 (`Data` / `Date` / `Set` / `URL` / 非 String キーの辞書 / `NaN` / `Infinity` / `Decimal` の `NaN` / 入れ子の非有限値) を設定した場合に、接続開始前に `SoraError.configurationError` として返す
+  - @t-miya
+- [FIX] connect message に載る metadata の encode に失敗すると接続がタイムアウトする問題を修正する
+  - `Configuration.signalingConnectMetadata` / `signalingConnectNotifyMetadata` / codec 別パラメーター / `ForwardingFilter.metadata` の encode に失敗した場合に、接続開始前に `SoraError.configurationError` として返す
+  - `JSONEncoder` がエラーにしない `Decimal` の `NaN` も検出する
+  - @t-miya
+- [FIX] setVideoHardMute(true) の失敗時に映像が黒塗りのまま残る問題を修正する
+  - `VideoHardMuteActor` の所有権を取得できなかった呼び出しは `videoEnabled` を変更しない
+  - 接続終了中 (lease が無効) の失敗では復元せず、黒塗りのまま終了する
+  - `setVideoHardMute(true)` の経路では `onSwitchVideo` が `VideoHardMuteActor` の executor で発火する (これまでと異なるスレッドから呼ばれる場合がある)
+  - @t-miya
+- [FIX] 未知の WebRTC enum 値で `description` が `fatalError` によりプロセスを終了する問題を修正する
+  - `RTCSignalingState` / `RTCIceConnectionState` / `RTCIceGatheringState` の `description` の `@unknown default` が `fatalError("unknown state")` を呼んでいた (これらの `description` は WebRTC の enum 型への `CustomStringConvertible` 準拠の削除でなくなる)
+  - @t-miya
+- [FIX] SDK 内部の排他区間を保持したまま Logger を呼ぶと利用者の出力 handler が deadlock する問題を修正する
+  - 排他区間を保持したままログを出していた箇所のログ出力を排他区間の外へ移す
+  - ログの内容 (`level` / `type` / `message`) と同一スレッド・同一経路での出力順序は変わらない
+  - @t-miya
+- [FIX] `createAnswer` の `setRemoteDescription` 完了 closure で `self` が解放済みの場合も handler を呼ぶようにし、handler を呼ばずに return する経路をなくす
+  - @t-miya
+- [FIX] `PeerChannel.onConnect` が複数スレッドから排他制御なしで読み書きされるデータ競合を解消する
+  - @t-miya
+- [FIX] `videoEnabled` / `audioEnabled` を複数の公開 API から並行に変更したときに、失敗時の復元が後続の変更を上書きすることがある問題を修正する
+  - `MediaStream.videoEnabled` / `audioEnabled` の getter は SDK の保持する確定値を返し、`onSwitchVideo` / `onSwitchAudio` は値の変化ごとに 1 回だけ呼ばれる
+  - 並行して変更した場合、書き込みは世代で比較され、より大きい世代が先に確定していると破棄される
+  - @t-miya
+- [FIX] `WrapperVideoEncoderFactory.shared.simulcastEnabled` が無同期で読み書きされるデータ競合を解消する
+  - `simulcastEnabled` の get / set を `NSLock` で排他する。接続開始時と `type: offer` の受信時に書き換え、libwebrtc が `supportedCodecs()` / `createEncoder(_:)` から読む
+  - @t-miya
+- [FIX] redirect の無効化と並行した `sendMessage` が旧 DataChannel へ送信されるデータ競合を解消する
+  - `PeerChannel` の `dataChannels` / `switchedToDataChannel` / `rpcChannel` の読み書きを単一の `NSLock` 付き storage へ移し、`MediaChannel.sendMessage` は送信の可否判定から送信までを 1 つの排他区間で行う
+  - redirect の無効化が完了した後に開始した `sendMessage` は `SoraError.messagingError` を返し、旧 DataChannel へ送信しない
+  - `MediaChannel.performRPC` の `rpcChannel` の参照取得も同じ排他単位へ移す
+  - @t-miya
+- [FIX] 画面キャプチャの ReplayKit コールバックが MainActor 隔離を継承し、配信開始時に実行時隔離チェックでプロセスが終了する問題を修正する
+  - `RPScreenRecorder.startCapture` の `handler:` と `RPScreenRecorder.stopCapture` の完了クロージャに `@Sendable` を付け、ReplayKit が自身のキューから呼んでも実行時隔離チェックに掛からないようにする
+  - `startCapture` の `completionHandler:` にも `@Sendable` を明示し、3 つのコールバックの隔離の契約をコード上で揃える (import 時点で非隔離のため診断は変わらない)
+  - MainActor 上の処理はクロージャの中の `Task { @MainActor in ... }` で行い、公開 API と SDK の挙動は変えない
+  - @t-miya
+
+### misc
+
+- [CHANGE] E2E テストの workflow を `ci.yml` から `e2e-test.yml` にリネームする
+  - @t-miya
+- [ADD] Swift 5 言語モードの consumer が `Sora` を import して build できることを検証する CI を追加する
+  - `TestConsumers/Swift6Consumer` に `ConsumerSwift5` target を追加し、SDK が Swift 6 言語モードで compile される一方で consumer の言語モードは consumer 側の設定で独立に決まることを、`consumer-test.yml` の compile 行 (`-swift-version`) の検査で固定する
+  - @t-miya
+- [ADD] Sora iOS SDK を利用したアプリ実装と同じ形で `Sora` を import する consumer package と公開 API の baseline を追加する
+  - `TestConsumers/Swift6Consumer/` に Sora を import する独立した SwiftPM package を追加し、`import Sora` する compile (Swift 6 language mode と warnings-as-errors) と、公開 API の baseline 比較を CI (`consumer-test.yml`) で検証する
+  - 公開 API の削除・変更と `Sendable` 準拠の削除を baseline の比較で検出し、`MediaChannel` が `Sendable` でないことを負例で検出する
+  - @t-miya
+- [ADD] 公開 API baseline が現在の `Sora` module と一致していることを CI で検証する
+  - `make api-check-fresh` を追加し、公開 API を追加したまま baseline を再生成漏れ状態を検出する
+  - @t-miya
+- [ADD] 参照保持 box が担う `getStats` の判定、`createClientOfferSDP` の一時 `RTCPeerConnection` の `close()`、`MediaChannel.state` の回帰テストを追加する
+  - `getStats` の完了 block が、統計要求時と同じ `RTCPeerConnection` なら成功を 1 回返し、完了 block の内側で `nativeChannel` が差し替わった場合と接続状態が `.disconnected` になった場合は失敗を 1 回返すことを固定する
+  - `MediaChannel` の解放開始後に完了 block が走った場合も、解放前に接続状態が変わっていても `MediaChannel is unavailable` の失敗を 1 回返すことを固定する
+  - `getStats` の入口の guard (未接続 / `nativeChannel` が nil) が失敗を 1 回返すことと、テスト用の seam で作った接続状態が `state` と `isAvailable` から同じ値として読めることも固定する
+  - 完了 block の末尾で一時 `RTCPeerConnection` を `close()` していることを、実 `RTCPeerConnection` の `.closed` への遷移で固定する
+  - @t-miya
+- [ADD] Thread Sanitizer を有効にした concurrency runtime stress CI を追加する
+  - `e2e-test.yml` に `tsan` job を追加し、`-enableThreadSanitizer YES` の `build-for-testing` が作った `SoraTests.xctest` を `simctl spawn` で全件実行する。compile-time の Sendable / actor isolation 検査では検出できない実行時のデータ競合を検出し、race の report だけを artifact として保存する
+  - `ConnectionStateOwner` と `ConnectionTimer` の交差を反復する stress test と、実 Sora 接続を反復する E2E stress test を追加する
+  - @t-miya
+- [UPDATE] E2E テストの concurrency 診断抑止を除去する
+  - `@testable @preconcurrency import Sora` を `@testable import Sora` に戻し、`DummyVideoCapturer` の `@unchecked Sendable` を削除して `@MainActor` に隔離する。`SoraTests` が `@preconcurrency import Sora` を使っていないことを CI で検査する
+  - `E2ETestBase` の `setUp` / `tearDown` と `SendonlyE2ETests` の `setUp` を async 化し、connect callback と `Timer` の扱いを main queue に束ねる。`RpcE2ETests` の RPC 呼び出しは `MediaChannel` をまとめた `@unchecked Sendable` のボックス経由にする
+  - @t-miya
+- [UPDATE] GitHub Actions の Build ワークフローの XCode バージョン等を更新する
+  - Xcode の version を 26.6 に更新する
+  - SDK を iOS 26.5 に更新する
+  - @t-miya
+- [UPDATE] `SoraTests` target を warnings-as-errors にする
+  - `SoraTests` の警告を gate で error として検出する (非推奨 API の警告だけは残す)
+  - @t-miya
+- [FIX] reconnect E2E テストの API 失敗時の後始末を修正する
+  - エラーパスと共通ヘルパーの早期 return で未 wait の expectation を残さず、切断イベントの検証を wait 後に行って assertion の誤帰属を防ぐ
+  - API 呼び出しごとに使い捨ての `URLSession` を使い、keep-alive 接続の再利用による接続断を避ける。wait のタイムアウトをリクエストより長くし、コールバックの結果を保持して wait 後に検証する
+  - @t-miya
+- [FIX] `DummyAudioDevice` の共有状態競合を修正する
+  - `RTCAudioDevice` の lifecycle state を 1 つの lock へ統一し、録音・再生の timer に世代を持たせて停止・終了後に届いた callback を破棄する。停止と開始が交差した場合に timer や AudioUnit が停止後に残らないよう、ライフサイクルの世代で開始処理を検証する
+  - `pcmGenerator` を `@Sendable` にし、テストの波形生成器 (`SineWaveGenerator` / `StereoSineWaveGenerator`) の可変状態を lock で保護する
+  - @t-miya
+- [FIX] E2E テストの CI で `e2e` job と `tsan` job が同じチャンネル ID を使い、片方の接続がタイムアウトしてテストが失敗する問題を修正する
+  - 両 job の `TEST_CHANNEL_ID_SUFFIX` に job 名を足し、同じ run の job 間でチャンネル ID が重複しないようにする
+  - @t-miya
+- [FIX] E2E テストの RPC 切断競合テストが、前の接続の切断完了を待たずに同じチャンネル ID へ再接続して断続的に失敗する問題を修正する
+  - `RpcE2ETests.testRPCRaceWithDisconnectTerminatesAll` の 2 回目以降の試行で、再接続の前に前試行の `onDisconnect` を待つ。切断の完了を待たないと、Sora 側で前のセッションが解放される前に接続シグナリングが届き、SDK の `connectionTimeout` で接続が失敗することがある
+  - 切断完了の待ちは `E2ETestBase.disconnectAll(channels:)` と同じ 10 秒を上限とし、待ち切れなかった場合は失敗を記録して後始末する
+  - 再接続の待ち時間を `connectionTimeout` 60 秒 + 余裕 30 秒の 90 秒にして、SDK の `connectionTimeout` の発火を wait の内側で処理する
+  - @t-miya
+- [FIX] `PeerChannelMessagingRaceTests` の後始末で WebRTC オブジェクトを明示的に `close()` する
+  - `tearDown` が native の `RTCPeerConnection` / `RTCDataChannel` を閉じずに解放していたため、参照を落とす前に閉じる (クラッシュの原因は未確定であり、後始末の不備を解消する対応)
+  - @t-miya
+- [FIX] E2E テストの crash 診断から、過去の実行で採取された report を除外する
+  - `Show E2E Crash Diagnostics` step は共有 runner の Simulator に残った過去の実行の crash report も出力し得たため、テスト実行の開始時刻以降に採取された report だけを表示する。report 名・採取時刻・スレッド情報も出力する
+  - ハング時に診断 step を実行できるよう、`Run E2E Tests` に step 単位の timeout を設ける
+  - @t-miya
 
 ## 2026.3.0
 

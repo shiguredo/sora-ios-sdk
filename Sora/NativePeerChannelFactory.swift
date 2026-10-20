@@ -1,19 +1,47 @@
 import Foundation
 import WebRTC
 
-// WebRTC のエンコーダーファクトリーを共有して扱うため、 @unchecked Sendable を付与します。
+// WebRTC の非 Sendable なエンコーダーファクトリーを保持して共有するため、@unchecked Sendable を付与します。
+// この型自身の可変状態は simulcastEnabled だけで、その読み書きは lock が排他します (保持する factory の
+// 内部状態の thread safety は主張しません)。
 final class WrapperVideoEncoderFactory: NSObject, @unchecked Sendable, RTCVideoEncoderFactory {
   static let shared = WrapperVideoEncoderFactory()
 
-  var defaultEncoderFactory: RTCDefaultVideoEncoderFactory
+  let defaultEncoderFactory: RTCDefaultVideoEncoderFactory
 
-  var simulcastEncoderFactory: RTCVideoEncoderFactorySimulcast
+  let simulcastEncoderFactory: RTCVideoEncoderFactorySimulcast
+
+  /// `simulcastEnabled` の読み書きを排他する lock です。
+  ///
+  /// lock を取得した区間の中では lock 付きの getter / setter を呼ばず、確定値を直接読みます
+  /// (非再帰の `NSLock` を再取得して self-deadlock するため)。
+  private let lock = NSLock()
+
+  /// `simulcastEnabled` の確定値です。
+  private var storedSimulcastEnabled = false
 
   var currentEncoderFactory: RTCVideoEncoderFactory {
+    // lock は `simulcastEnabled` の getter が取って解放します。返した factory への呼び出しも
+    // lock の外です。
     simulcastEnabled ? simulcastEncoderFactory : defaultEncoderFactory
   }
 
-  var simulcastEnabled = false
+  /// サイマルキャストが有効かどうかです。
+  ///
+  /// 接続開始時 (`PeerChannel.connect`) と `type: offer` の受信時に書き換えられ、libwebrtc が
+  /// `supportedCodecs()` / `createEncoder(_:)` から読むため、get / set を lock で排他します。
+  var simulcastEnabled: Bool {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return storedSimulcastEnabled
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      storedSimulcastEnabled = newValue
+    }
+  }
 
   override init() {
     // Sora iOS SDK では VP8, VP9, H.264 が有効
@@ -45,6 +73,21 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   private let stereoMediaEngineAnchor: RTCPeerConnection?
 
   var nativeFactory: RTCPeerConnectionFactory
+
+  #if DEBUG
+    /// 直近の `createClientOfferSDP` が生成した一時 `RTCPeerConnection` です。テストの観測にだけ使います。
+    ///
+    /// 完了 block の末尾で一時 PC を `close()` していることを回帰テストから確認するために参照を
+    /// 保持します。`weak` にするのは、Debug 構成の利用者に対して、テスト用の保持が対象の寿命へ
+    /// 影響しないようにするためです。テスト側は handler の内側で一時 PC を強参照して保持する
+    /// 必要があります (保持しないと `close()` 後の `.closed` を観測できません)。
+    /// 直近の 1 個だけを保持するため、この accessor を使うテストは `createClientOfferSDP` を
+    /// 1 回だけ呼び、他の呼び出しと重ならないようにします。
+    /// 代入と保持は Debug 構成だけで行います。Debug 構成では `createClientOfferSDP` のたびに
+    /// weak 代入が 1 回入り、Release では宣言も代入も存在しないため、この accessor も Debug 構成
+    /// でのみ参照できます。
+    private(set) weak var lastClientOfferPeerConnectionForTesting: RTCPeerConnection?
+  #endif
 
   init(
     bypassVoiceProcessing: Bool,
@@ -108,16 +151,14 @@ final class NativePeerChannelFactory: @unchecked Sendable {
           type: .peerChannel,
           message: "bypassVoiceProcessing is ignored when stereo playout is enabled")
       }
+      // ステレオ設定は ADM の生成時に渡す。
       let adm: RTCAudioDeviceModule = RTCAudioDeviceModule(
-        bypassVoiceProcessing: stereoPlayoutEnabled ? false : bypassVoiceProcessing)
-      if stereoPlayoutEnabled {
-        // この API はファクトリー生成後や再生初期化後には呼べないため、ADM の生成直後に実行する。
-        let result = adm.setStereoPlayoutEnabled(true)
-        try Self.validateStereoPlayoutResult(result)
-      }
+        bypassVoiceProcessing: stereoPlayoutEnabled ? false : bypassVoiceProcessing,
+        stereoPlayoutEnabled: stereoPlayoutEnabled)
       self.audioDevice = nil
       self.audioDeviceModule = adm
-      self.audioDeviceModuleWrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
+      let wrapper = AudioDeviceModuleWrapper(audioDeviceModule: adm)
+      self.audioDeviceModuleWrapper = wrapper
       // ステレオ化に失敗した場合にカテゴリを変更しないよう、API の成功確認後に登録する。
       if stereoPlayoutEnabled, audioSessionUsage.requiresPlayAndRecord {
         audioSessionRequirement?.requirePlayAndRecord()
@@ -131,6 +172,9 @@ final class NativePeerChannelFactory: @unchecked Sendable {
       guard let factory else {
         throw SoraError.mediaChannelError(reason: "failed to create native peer connection factory")
       }
+      // m155 以降の ADM は録音の pause/resume を worker スレッド上で実行する契約のため、
+      // ハードミュートの実行先として factory を渡す。
+      wrapper.bindToFactory(factory)
       nativeFactory = factory
     }
 
@@ -167,14 +211,6 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     releaseAudioSessionRequirement()
   }
 
-  /// ADM のステレオ再生設定結果を SDK のエラーへ変換します。
-  static func validateStereoPlayoutResult(_ result: Int) throws {
-    guard result == 0 else {
-      throw SoraError.mediaChannelError(
-        reason: "RTCAudioDeviceModule::setStereoPlayoutEnabled failed (result: \(result))")
-    }
-  }
-
   /// 接続終了時に音声セッションの要求を明示的に解放します。
   func releaseAudioSessionRequirement() {
     // 共有カテゴリを復元する前に、保持用 PC も close します。
@@ -184,21 +220,20 @@ final class NativePeerChannelFactory: @unchecked Sendable {
   }
 
   func createNativePeerChannel(
-    configuration: WebRTCConfiguration,
-    constraints: MediaConstraints,
+    webRTCConfiguration: WebRTCConfigurationSnapshot,
     proxy: Proxy? = nil,
     caCertificates: [SecCertificate]? = nil,
     delegate: RTCPeerConnectionDelegate?
   ) -> RTCPeerConnection? {
     let certificateVerifier = createCertificateVerifier(
-      configuration: configuration,
+      webRTCConfiguration: webRTCConfiguration,
       caCertificates: caCertificates)
     if let proxy {
       // proxy ありの overload は certificateVerifier が nullable のため、
       // verifier が不要な場合は nil をそのまま渡せる。
       return nativeFactory.peerConnection(
-        with: configuration.nativeValue,
-        constraints: constraints.nativeValue,
+        with: webRTCConfiguration.nativeValue,
+        constraints: webRTCConfiguration.nativeConstraints,
         certificateVerifier: certificateVerifier,
         delegate: delegate,
         proxyType: RTCProxyType.https,
@@ -210,26 +245,26 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     } else {
       if let certificateVerifier {
         return nativeFactory.peerConnection(
-          with: configuration.nativeValue,
-          constraints: constraints.nativeValue,
+          with: webRTCConfiguration.nativeValue,
+          constraints: webRTCConfiguration.nativeConstraints,
           certificateVerifier: certificateVerifier,
           delegate: delegate)
       } else {
         // proxy なしの certificateVerifier 付き overload は nullable ではないため、
         // certificateVerifier が不要な場合は certificateVerifier なしの overload を使う。
         return nativeFactory.peerConnection(
-          with: configuration.nativeValue,
-          constraints: constraints.nativeValue,
+          with: webRTCConfiguration.nativeValue,
+          constraints: webRTCConfiguration.nativeConstraints,
           delegate: delegate)
       }
     }
   }
 
   private func createCertificateVerifier(
-    configuration: WebRTCConfiguration,
+    webRTCConfiguration: WebRTCConfigurationSnapshot,
     caCertificates: [SecCertificate]?
   ) -> RTCSSLCertificateVerifier? {
-    if configuration.usesVerifiedTURNTLS {
+    if webRTCConfiguration.usesVerifiedTURNTLS {
       return IOSCertificateVerifier(caCertificates: caCertificates)
     }
 
@@ -298,37 +333,85 @@ final class NativePeerChannelFactory: @unchecked Sendable {
     return nativeStream
   }
 
+  /// クライアント Offer SDP 生成の handler と、その生成に使う `RTCPeerConnection` を
+  /// 並行処理境界へ渡すための、用途限定の内部ラッパーです。
+  ///
+  /// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+  /// - 可変状態を持たず、保持する handler と `RTCPeerConnection` の参照は `init` で確定した
+  ///   `let` で、box の生存中に再代入されないこと。`RTCPeerConnection` は class であるため、
+  ///   ここで主張するのは参照が再代入されないことだけで、オブジェクトの状態の不変性ではない。
+  ///   box は参照を保持して callback へ渡すだけで、状態を読み書きしないこと
+  /// - 変更前から handler と `RTCPeerConnection` を渡していた `RTCPeerConnection.offer` の
+  ///   完了 block をそのまま包み直すだけで、配送先・通知順序・呼び出し回数を変えず、
+  ///   別系統の境界へ新たに渡さないこと
+  /// - 保持するのは handler の closure と、変更前に同じ block が参照していた `RTCPeerConnection`
+  ///   だけで、SDK 内部の参照型 (`NativePeerChannelFactory` 等) を新たに保持しないこと
+  ///
+  /// 保持する `RTCPeerConnection` は、変更前に完了 block が capture していた参照と同一です。
+  /// この参照を保持すると、Offer SDP 生成後の解放が callback の完了まで遅れます。変更前も
+  /// 完了 block が同じ参照を capture して `close()` を呼んでいたため callback の完了までは
+  /// 生存しており、その参照をそのまま使うため、この遅延を許容します。`RTCPeerConnection` の
+  /// `close()` は完了 block の内側で行う必要があり、`Sendable` な値へ写すことはできません。
+  /// この callback の実行スレッドと配送は変更前と同じです。
+  ///
+  /// 生成は `createClientOfferSDP` の 1 箇所だけで、1 つの block へ 1 回だけ渡して 1 回だけ
+  /// 実行する使用契約です (型では強制されません)。`Sendable` にするのはこの入れ物だけで、
+  /// handler とその捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出し
+  /// スレッドを保証しない既存の挙動の下で利用者の責務です。実行スレッドの同一性・直列性も
+  /// 契約にしません。
+  private final class ClientOfferSDPCreationContext: @unchecked Sendable {
+    let handler: (String?, (any Error)?) -> Void
+    let peerConnection: RTCPeerConnection
+
+    init(
+      handler: @escaping (String?, (any Error)?) -> Void,
+      peerConnection: RTCPeerConnection
+    ) {
+      self.handler = handler
+      self.peerConnection = peerConnection
+    }
+  }
+
   // クライアント情報としての Offer SDP を生成する
   func createClientOfferSDP(
-    configuration: WebRTCConfiguration,
-    constraints: MediaConstraints,
-    handler: @escaping (String?, Error?) -> Void
+    webRTCConfiguration: WebRTCConfigurationSnapshot,
+    handler: @escaping (String?, (any Error)?) -> Void
   ) {
     let peer = createNativePeerChannel(
-      configuration: configuration, constraints: constraints, delegate: nil)
+      webRTCConfiguration: webRTCConfiguration, delegate: nil)
 
     // `guard let peer = peer {` と書いた場合、 Xcode 12.5 でビルド・エラーになった
-    guard let peer2 = peer else {
+    guard let tempPeer = peer else {
       handler(nil, SoraError.peerChannelError(reason: "createNativePeerChannel failed"))
       return
     }
+
+    #if DEBUG
+      // 観測用に保持する
+      lastClientOfferPeerConnectionForTesting = tempPeer
+    #endif
 
     let stream = createNativeSenderStream(
       streamId: "offer",
       videoTrackId: "video",
       audioTrackId: "audio",
-      constraints: constraints)
-    peer2.add(stream.videoTracks[0], streamIds: [stream.streamId])
-    peer2.add(stream.audioTracks[0], streamIds: [stream.streamId])
-    peer2.offer(for: constraints.nativeValue) { sdp, error in
+      constraints: webRTCConfiguration.constraints)
+    tempPeer.add(stream.videoTracks[0], streamIds: [stream.streamId])
+    tempPeer.add(stream.audioTracks[0], streamIds: [stream.streamId])
+    // handler は公開 API のため `@Sendable` にできず、 tempPeer は完了 block の内側で `close()` を
+    // 呼ぶ必要があって値へ写せないため、両者を不変の参照保持 box へ移し、完了 block には
+    // box (Sendable) だけを capture させます。
+    let context = ClientOfferSDPCreationContext(
+      handler: handler, peerConnection: tempPeer)
+    tempPeer.offer(for: webRTCConfiguration.nativeConstraints) { sdp, error in
       if let error {
-        handler(nil, error)
+        context.handler(nil, error)
       } else if let sdp {
-        handler(sdp.sdp, nil)
+        context.handler(sdp.sdp, nil)
       } else {
-        handler(nil, SoraError.peerChannelError(reason: "offer creation failed"))
+        context.handler(nil, SoraError.peerChannelError(reason: "offer creation failed"))
       }
-      peer2.close()
+      context.peerConnection.close()
     }
   }
 }

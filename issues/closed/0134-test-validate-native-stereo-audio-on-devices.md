@@ -60,3 +60,40 @@
 - `DummyAudioDevice` は実機検証に代用せず、通常の CI にはマイク入力を必須とするテストを追加していない。
 
 検証に利用した端末種別、OS、出力経路、category、mode、観測方法は検証時の記録に基づく。
+
+### 2026-09-10 quickstart による追加検証
+
+quickstart の実機ビルドを iPhone 13（iOS 26.6.1）へインストールし、Sora JavaScript SDK の `fake_stereo_audio` から同じチャンネルへ音声を送信した。
+
+- 検証用の quickstart は `feature/zztkm-test` を `stereo-test` に rename したローカルブランチを使用した。検証時の基点コミットは `425b9ae017b15cb74cfacaf256361931c2d08716` である。このブランチは GitHub へは push していない。
+- 音声送信側は `sora-js-sdk` の `feature/test-zztkm-add-stereo-audio-test-pattern` ブランチを使用した。`fake_stereo_audio` による左右音声パターンの変更はコミット `249302586233d2db543f8c1951524e7d4875e6a7` で、[GitHub のブランチ](https://github.com/shiguredo/sora-js-sdk/tree/feature/test-zztkm-add-stereo-audio-test-pattern) として参照できる。
+- Sora iOS SDK `2026.3.0-canary.0` を含む Debug ビルドが成功し、アプリを USB 接続した iPhone 13 で起動できた。
+- JavaScript 側はステレオを有効にし、左 440 Hz、右 660 Hz の音声を `both → left only → right only`（各 5 秒）で生成した。ブラウザー側の送信音声は 2 ch、観測周波数は左 445.3 Hz、右 656.3 Hz、ステレオ判定は `Yes` だった。
+- iOS 側は `audioStereoOutputEnabled = true` の `sendrecv` 接続で、受信ストリームが追加され、画面に「ステレオ音声を受信中」と表示された。これは `RTCAudioTrackSink` で受信 PCM が 2 ch と判定されたことを示す。
+- AudioSession は `playAndRecord` category と `default` mode を使用し、画面に表示された出力経路は受話口だった。接続は Debug 起動引数による自動接続で開始した。
+- 接続中のアプリにクラッシュや接続エラーは発生しなかった。JavaScript 側の受信接続も維持され、送受信の接続が成立した。
+- 初回実行時の iPhone の出力経路は受話口であり、その時点では物理的な左右分離の聴取確認は実施していなかった。
+- その後、Bluetooth ヘッドホンへ出力を切り替え、実際のデバイスで左右で異なる音を聴取できることを確認した。Bluetooth 出力経路では物理的な左右分離を確認できた。
+
+### 2026-09-10 Sora 切断後の再接続検証
+
+ステレオ音声を受信している状態で、同じ iPhone 13 上の quickstart アプリを Sora から切断し、未接続状態を確認してから再接続した。
+
+- 切断前はアプリに「ステレオ音声を受信中」と表示され、`fake_stereo_audio` の送信側は 2 ch、左 445.3 Hz、右 656.3 Hz、ステレオ判定 `Yes` を維持していた。
+- アプリの接続操作で Sora から切断したところ、アプリは「未接続」、ストリームは「なし」と表示され、受信ストリームが破棄されたことを確認した。
+- 同じアプリプロセスで接続操作を再度行ったところ、接続が成立し、アプリは再び「ステレオ音声を受信中」と表示した。`RTCAudioTrackSink` でも再接続後の受信 PCM が 2 ch と判定された。
+- 再接続後もアプリにクラッシュや接続エラーは発生せず、`fake_stereo_audio` の送信側は 2 ch、左 445.3 Hz、右 656.3 Hz、ステレオ判定 `Yes` を維持した。
+- 再接続後のアプリの出力経路は受話口だった。この再接続サイクルでは Bluetooth ヘッドホンによる物理的な左右分離の聴取は再確認しておらず、前項の Bluetooth ヘッドホンでの確認とは分けて記録する。
+
+### 2026-09-10 再生経路切り替え検証
+
+Bluetooth ヘッドホンを接続した状態でステレオ音声を再生し、接続を維持したまま iPhone の内蔵スピーカーへ再生経路を切り替えた。
+
+- Bluetooth ヘッドホンでは左右で異なる音が聞こえることを実際に聴取し、アプリの左右波形と RMS にも左右の信号が表示されることを確認した。
+- Sora の接続を維持したまま再生先を内蔵スピーカーへ変更した後も、音声の再生を継続できた。
+- 内蔵スピーカーへの切り替え後もアプリの左右波形と RMS が継続して表示され、ステレオ音声の受信・再生経路が維持されていることを確認した。
+
+### 2026-09-10 Bluetooth HFP / A2DP 経路の追加確認
+
+- HFP ではステレオ出力を利用できず、モノラル出力になることを確認した。
+- A2DP ではステレオ出力を利用できることを確認した。

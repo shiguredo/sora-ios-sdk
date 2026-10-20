@@ -26,6 +26,32 @@ enum ConnectionMonitor {
   }
 }
 
+/// `ConnectionTimer.run` の timeout handler を `Timer` の block へ渡すための、
+/// 用途限定の内部ラッパーです。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する handler は `init` で確定した `let` であること
+/// - 変更前から handler を渡していた `Timer` の block を包み直すだけで、配送先・
+///   通知順序・呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持するのは handler の closure だけで、SDK 内部の参照型を新たに保持しないこと
+///
+/// 生成は `ConnectionTimer.run` の 1 箇所だけで、1 つの `Timer` の block へ 1 回だけ渡し、
+/// 世代照合を通過した timeout 経路から高々 1 回だけ呼ぶ使用契約です (型では強制されません)。
+/// `Sendable` にするのはこの入れ物だけで、handler とその捕捉状態を `Sendable` にはしません。
+/// 捕捉状態の所有と同期は、呼び出しスレッドを保証しない既存の挙動の下で利用者の責務です。
+/// 実行スレッドの同一性・直列性も契約にしません。
+private final class ConnectionTimerHandlerBox: @unchecked Sendable {
+  private let handler: () -> Void
+
+  init(_ handler: @escaping () -> Void) {
+    self.handler = handler
+  }
+
+  func callAsFunction() {
+    handler()
+  }
+}
+
 class ConnectionTimer: @unchecked Sendable {
   public var monitors: [ConnectionMonitor]
   public var timeout: Int
@@ -64,14 +90,23 @@ class ConnectionTimer: @unchecked Sendable {
     self.timeout = timeout
   }
 
-  public func run(timeout: Int? = nil, handler: @escaping () -> Void) {
+  /// Timer を開始します。
+  ///
+  /// - returns: この呼び出しで有効になった timeout (秒)。呼び出し元が排他区間の外で
+  ///   開始ログを出すために使います。
+  @discardableResult
+  public func run(timeout: Int? = nil, handler: @escaping () -> Void) -> Int {
+    // timeout handler は `@Sendable` ではないため、公開している引数の型を変えずに box へ包む。
+    // block の `[weak self]` と `self.monitors` の読み方は変えない。
+    let handlerBox = ConnectionTimerHandlerBox(handler)
+
     stateLock.lock()
     if let timeout {
       self.timeout = timeout
     }
-    Logger.debug(
-      type: .connectionTimer,
-      message: "run (timeout: \(self.timeout) seconds)")
+    // 有効な timeout はこの時点で確定する。Timer の interval と戻り値 (開始ログ) を
+    // 同じ値にするため、lock を保持している間に 1 回だけ取り出す。
+    let effectiveTimeout = self.timeout
 
     // run() の再実行時に残っている旧 Timer を必ず無効化する。
     // (invalidate しないと main RunLoop に残った旧 Timer が発火し、
@@ -81,7 +116,7 @@ class ConnectionTimer: @unchecked Sendable {
     generation += 1
     let currentGeneration = generation
 
-    let createdTimer = Timer(timeInterval: TimeInterval(self.timeout), repeats: false) {
+    let createdTimer = Timer(timeInterval: TimeInterval(effectiveTimeout), repeats: false) {
       [weak self] _ in
       guard let self else {
         return
@@ -109,7 +144,7 @@ class ConnectionTimer: @unchecked Sendable {
               monitor.disconnect()
             }
           }
-          handler()
+          handlerBox()
           self.stop()
           return
         }
@@ -117,18 +152,14 @@ class ConnectionTimer: @unchecked Sendable {
       Logger.debug(type: .connectionTimer, message: "all OK")
     }
     timer = createdTimer
-    guard let timer else {
-      stateLock.unlock()
-      return
-    }
-    RunLoop.main.add(timer, forMode: RunLoop.Mode.common)
+    RunLoop.main.add(createdTimer, forMode: RunLoop.Mode.common)
     _isRunning = true
     stateLock.unlock()
+    return effectiveTimeout
   }
 
   public func stop() {
     stateLock.lock()
-    Logger.debug(type: .connectionTimer, message: "stop")
     // invalidate 前に RunLoop へ配送されたものの、まだ世代照合を通過していない callback を
     // 拒否できるよう、稼働中の Timer を停止するときは世代を進める。
     if timer != nil {
@@ -140,5 +171,9 @@ class ConnectionTimer: @unchecked Sendable {
     timer = nil
     _isRunning = false
     stateLock.unlock()
+
+    // ログは排他区間の外で出す。ロックを保持したまま Logger を呼ぶと、利用者の
+    // onOutputHandler が同じ lock を取る経路で deadlock する。
+    Logger.debug(type: .connectionTimer, message: "stop")
   }
 }

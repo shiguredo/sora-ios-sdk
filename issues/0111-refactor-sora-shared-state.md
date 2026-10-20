@@ -2,8 +2,9 @@
 
 - Created: 2026-08-27
 - Completed:
+- Priority: Medium
 - Branch: feature/refactor-sora-shared-state
-- Polished:
+- Polished: 2026-09-18
 
 ## 目的
 
@@ -21,7 +22,8 @@
 - `audioSessionDelegateAdapter` からの handler 呼び出し
 - static な SDK initialize / finish lifecycle
 - `webRTCCallbackLogger`
-- `webRTCLoggingDateFormatter`
+
+`webRTCLoggingDateFormatter` は immutable な `static let` であり、mutable state ではない。`DateFormatter` は iOS 7 以降 thread-safe である Apple の仕様に基づき同期は不要だが、logger callback から任意のスレッドで同時に参照されるため、この扱いの根拠を設計方針に明記する。
 
 `SoraHandlers` は利用者が任意の executor から property を変更できる。add、remove、connect、disconnect、audio route callback は別 executor から handler を読み出すため、Optional closure 自体の読み書きが競合する。
 
@@ -55,26 +57,38 @@
 - severity 更新、stop、start を同じ排他領域で順序付ける。
 - logger callback は設定時の generation を持ち、古い callback を無視する。
 - callback 内の日時整形と `print` は state lock の外で行う。
+- callback で共有する `webRTCLoggingDateFormatter` は iOS 7 以降 thread-safe である Apple の仕様に基づき、専用 lock を追加せず共有を認め、その根拠を日本語コメントに残す。
 - `webRTCCallbackLogger` の `nonisolated(unsafe)` を除去する。
 
 ### Sendable
 
 - `Sora` 全体の `@unchecked Sendable` を除去できるよう、mutable state を owner / synchronized storage に閉じ込める。
+- `Sora` は final class を維持したまま stored property を `let` の owner / synchronized storage だけにし、checked な `Sendable` に準拠させる (`Sora.shared` を並行利用できる現行の公開面を維持するため。Swift 6 では `static let shared` の型が `Sendable` でないと concurrency-safe にならない)。
 - vendor object のために unchecked adapter が必要な場合は、小さい internal final class に限定し、thread affinity を日本語コメントで説明する。
 
 ## スコープ外
 
 - `Logger.shared` の state は `0106` で扱う。
-- `ConnectionTask` と接続状態は `0092` / `0100` で扱う。
+- `ConnectionTask` と接続状態は `0092` / `0100` で対応済みであり、本 issue の対象にはしない。
 - 新しい Sendable event API は `0110` で扱う。
 - raw `RTCAudioSession` を公開 event から除去する作業は `0110` と `0070` の方針に合わせる。
+- `Sora.setWebRTCLogLevel` のシグネチャと `RTCCallbackLogger` の将来の扱いは `0070` の互換性方針 (webrtc_c 移行での破壊的変更候補) と整合させる。logger owner の設計は移行後も適用できる形にする。
 - 音声 unit の機能仕様は変更しない。
+
+## 変更対象
+
+- `Sora/Sora.swift`: `SoraHandlers` と SDK lifecycle、`webRTCCallbackLogger` の owner 化
+- `skills/sora-ios-sdk/SKILL.md`: `@unchecked Sendable` の記載から `Sora` を除去する (`0106` の完了後に本 issue を実施し、先行した場合は rebase する)。internal adapter はこの一覧 (公開型の一覧) に載せないため、`Sora` を除去した結果として載せる公開型が無くなる場合は同記載の行を削除する (`Logger` の記載は `0106` が扱う)。あわせて、`Sora` が checked な `Sendable` になるため、`Sendable` の一覧 (接続と切断の並び) に `Sora` を追加し、`SoraHandlers` が checked な `Sendable` になる場合は「`Sendable` ではない」の一覧から外して `Sendable` の一覧へ追加する
+- `issues/0165-bug-fix-logger-call-under-lock.md`: 本 issue が owner 化する `Sora` の instance state (`mediaChannels` / `add(mediaChannel:)` / `remove(mediaChannel:)`) を 0165 も変更するため、どちらかを先行させもう一方を rebase する
+- `CHANGES.md`: `## develop` の主リストの `[UPDATE]` の並びへ `[UPDATE]` を追記する (同批次の refactor と同じ扱い)
+- `SoraTests`: 並行利用と lifecycle のテスト
+- `SoraTests/SendableConformanceTests.swift`: `requireSendable(Sora.self)` を追加する (`SoraHandlers` が checked な `Sendable` になる場合は `requireSendable(SoraHandlers.self)` も追加する)
 
 ## テスト方針
 
 モックやスタブは使用しない。
 
-- 複数の実 `Sora` instance と `Sora.shared` を並行して生成・破棄する。
+- 複数の実 `Sora` instance を並行して生成・破棄し、`Sora.shared` を含めた並行利用で handler と SDK lifecycle の競合がないことを確認する。
 - handler の設定変更と add、remove、connect、disconnect、audio route event を競合させる。
 - handler 内から handler を差し替え、connect / disconnect を呼んでも deadlock しないことを確認する。
 - `setWebRTCLogLevel` を複数 Task から反復し、logger callback が重複登録されないことを確認する。
@@ -86,12 +100,14 @@
 ## 完了条件
 
 - `SoraHandlers` の全 property の読み書きが同じ同期方針で保護されていること。
-- handler を state lock の外で呼び、再入しても deadlock しないこと。
+- handler を lock の外で呼び、再入しても deadlock しないこと。
 - SDK initialize / finish の process-wide lifecycle が明示的に管理されること。
 - active connection と finish の契約が API documentation に記載されていること。
 - WebRTC callback logger の severity、start、stop、generation が同じ owner で管理されること。
 - `webRTCCallbackLogger` から `nonisolated(unsafe)` が除去されていること。
-- `Sora: @unchecked Sendable` が不要になるか、安全性を説明できる小さい adapter だけに unchecked が限定されていること。
+- `Sora: @unchecked Sendable` から `Sora` が除去され、`Sora` が checked な `Sendable` に準拠しているか、安全性を説明できる小さい internal adapter だけに unchecked が限定されていること。
+- `skills/sora-ios-sdk/SKILL.md` の `@unchecked Sendable` の記載から `Sora` が除去され、載せる公開型が無くなる場合は同記載の行が削除されていること。あわせて、`Sendable` の一覧と「`Sendable` ではない」の一覧が実装後の状態と一致していること (`Sora` が `Sendable` の一覧に追加されていること)。
+- `SoraTests/SendableConformanceTests.swift` に `requireSendable(Sora.self)` が追加されていること (`SoraHandlers` が checked な `Sendable` になる場合は `requireSendable(SoraHandlers.self)` も追加されていること)。
 - 複数 `Sora` instance の既存挙動と public API の source compatibility が維持されること。
 - 追加したテストと既存テストがすべて成功すること。
 

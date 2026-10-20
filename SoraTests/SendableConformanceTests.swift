@@ -1,0 +1,435 @@
+import AVFoundation
+import XCTest
+
+@testable import Sora
+
+/// 型が `Sendable` に準拠していることをコンパイル時に表明する。
+///
+/// この関数は「`Sendable` への適合が存在すること」だけを確認する。
+/// `@unchecked Sendable` を付与した型でも通るため、checked であることの根拠にはしない。
+/// checked であることは、対象型へ `@unchecked Sendable` を付与していないことを
+/// 差分で確認して担保する。
+///
+/// 同じテストターゲットの他のテストファイルからも使うため internal とする。
+func requireSendable<T: Sendable>(_: T.Type) {}
+
+/// 値を actor 境界の向こう側へ預け、取り出せることを確認するための actor。
+///
+/// `Sendable` に準拠していない値は `store` へ渡せないため、準拠の欠落はコンパイルで検出される。
+private actor SendableBoundaryProbe<Value: Sendable> {
+  private var stored: Value?
+
+  func store(_ value: Value) {
+    stored = value
+  }
+
+  func load() -> Value? {
+    stored
+  }
+}
+
+/// 値を actor 境界と Task の境界へ渡せることを確認する。
+///
+/// `Value` が `Sendable` でなければこの関数を呼び出せない。
+private func assertCrossesBoundaries<Value: Sendable>(
+  _ value: Value,
+  message: String
+) async {
+  let probe = SendableBoundaryProbe<Value>()
+
+  // 値そのものを Task の closure へ渡し、actor を経由して取り出せることを確認する。
+  // Task の closure は @Sendable のため、ここで Value が Sendable であることが要求される。
+  let task = Task { () -> Value? in
+    await probe.store(value)
+    return await probe.load()
+  }
+  let loaded = await task.value
+
+  XCTAssertNotNil(loaded, message)
+}
+
+/// `Sendable` な RPC の params / result をコンパイル時に表明するための型。
+///
+/// `PutSignalingNotifyMetadataParams` の conditional `Sendable` を確認する用途にだけ使う。
+private struct SendableProbeMetadata: Codable, Sendable {
+  let appName: String
+}
+
+/// `SendableRPCMethodProtocol` の associated type が `Sendable` であることをコンパイル時に表明する。
+///
+/// `Params` / `Result` が `Sendable` でなければこの関数を呼び出せない。
+private func requireSendableRPCParams<M: SendableRPCMethodProtocol>(_: M.Type) {}
+
+/// `RPCMethodProtocol` へ準拠していることをコンパイル時に表明する。
+private func requireRPCMethod<M: RPCMethodProtocol>(_: M.Type) {}
+
+/// 新旧両方の RPC method protocol へ準拠した利用者定義メソッド。
+///
+/// 既存 `RPCMethodProtocol` と新 `SendableRPCMethodProtocol` の両方へ準拠した型でも
+/// どちらの API からも呼べることを、テストのコンパイルで確認する。
+private enum DualConformingRPCMethod: RPCMethodProtocol, SendableRPCMethodProtocol {
+  typealias Params = DualConformingRPCMethodParams
+  typealias Result = DualConformingRPCMethodResult
+
+  static var name: String { "jp.shiguredo.sora-ios-sdk-test/DualConforming" }
+}
+
+/// `DualConformingRPCMethod` のパラメータ。
+private struct DualConformingRPCMethodParams: Encodable, Sendable {
+  let message: String
+}
+
+/// `DualConformingRPCMethod` の戻り値。
+private struct DualConformingRPCMethodResult: Decodable, Sendable {
+  let message: String
+}
+
+final class SendableConformanceTests: XCTestCase {
+  /// 公開型 (`CameraVideoCapturer` / `Logger` は class) が `Sendable` に準拠していることをコンパイル時に表明する。
+  ///
+  /// 準拠が欠けた型を 1 つでも渡すとこのテストはコンパイルできない。
+  func testPublicTypesConformToSendable() {
+    // 接続状態
+    requireSendable(ConnectionState.self)
+
+    // WebRTC のメディア制約と劣化設定
+    requireSendable(MediaConstraints.self)
+    requireSendable(DegradationPreference.self)
+
+    // 音声モードと音声出力先
+    requireSendable(AudioMode.self)
+    requireSendable(AudioOutput.self)
+
+    // associated value に持つ imported type
+    requireSendable(AVAudioSession.Category.self)
+    requireSendable(AVCaptureDevice.Position.self)
+
+    // ログ
+    requireSendable(LogType.self)
+    requireSendable(LogLevel.self)
+    requireSendable(Log.self)
+    requireSendable(Logger.Group.self)
+    requireSendable(Logger.self)
+
+    // 映像表示
+    requireSendable(VideoViewConnectionMode.self)
+
+    // WebSocket メッセージ
+    requireSendable(WebSocketMessage.self)
+
+    // イベント購読
+    requireSendable(SoraEvent.self)
+    requireSendable(SoraEventKind.self)
+    requireSendable(SoraEventError.self)
+    requireSendable(SoraAudioPortSnapshot.self)
+    requireSendable(SoraAudioRouteSnapshot.self)
+    requireSendable(SoraAudioRouteEvent.self)
+
+    // 接続タスクの状態
+    requireSendable(ConnectionTask.State.self)
+
+    // 設定
+    requireSendable(Configuration.Spotlight.self)
+    requireSendable(ForwardingFilterRuleField.self)
+    requireSendable(ForwardingFilterRuleOperator.self)
+    requireSendable(ForwardingFilterAction.self)
+    requireSendable(ForwardingFilterRule.self)
+
+    // カメラ設定
+    requireSendable(CameraSettings.self)
+
+    // カメラの capturer
+    requireSendable(CameraVideoCapturer.self)
+
+    // 切断イベント
+    requireSendable(SoraCloseEvent.self)
+
+    // シグナリングメッセージ
+    requireSendable(SignalingAnswer.self)
+    requireSendable(SignalingUpdate.self)
+    requireSendable(SignalingReOffer.self)
+    requireSendable(SignalingReAnswer.self)
+    requireSendable(SignalingSwitched.self)
+    requireSendable(SignalingRedirect.self)
+    requireSendable(SignalingClose.self)
+    requireSendable(SignalingPing.self)
+    requireSendable(SignalingPong.self)
+    requireSendable(SignalingDisconnect.self)
+
+    // RPC のエラー応答
+    requireSendable(RPCErrorDetail.self)
+
+    // RPC の params / result と成功応答
+    // `PutSignalingNotifyMetadataParams` / `PutSignalingNotifyMetadataItemParams` は
+    // conditional `Sendable` のため、ここでは `Sendable` な型パラメータの場合だけを表明する。
+    // 非 `Sendable` な型パラメータの場合に準拠しないことは、正の表明では表せない。
+    // 実際、`SendableProbeMetadata` の `Sendable` を外しても下の `requireSendable` は
+    // コンパイルできる (値型の `Sendable` は型パラメータ経由で推論されるため)。
+    // 境界は `TestConsumers/Swift6Consumer/NegativeChecks/core-conditional-sendable-metadata-capture.swift`
+    // が、`Metadata` が `Sendable` と分からないジェネリック関数の文脈で
+    // `PutSignalingNotifyMetadataParams<Metadata>` を `@Sendable` closure へキャプチャすると
+    // 診断 (`SendableClosureCaptures`) になることで担保する。
+    requireSendable(RequestSimulcastRidParams.self)
+    requireSendable(RequestSpotlightRidParams.self)
+    requireSendable(ResetSpotlightRidParams.self)
+    requireSendable(RequestSimulcastRidResult.self)
+    requireSendable(RequestSpotlightRidResult.self)
+    requireSendable(ResetSpotlightRidResult.self)
+    requireSendable(PutSignalingNotifyMetadataParams<SendableProbeMetadata>.self)
+    requireSendable(PutSignalingNotifyMetadataItemParams<String>.self)
+    requireSendable(SendableRPCResponse<RequestSimulcastRidResult>.self)
+
+    // 統計の snapshot (`getStatsSnapshot(handler:)` / `getStatsSnapshot()` が返す値型)
+    requireSendable(StatisticsSnapshot.self)
+    requireSendable(StatisticsEntrySnapshot.self)
+  }
+
+  /// 対象の型の値が actor 境界と Task の境界を越えて受け渡せることを確認する。
+  func testValuesCrossActorAndTaskBoundaries() async {
+    await assertCrossesBoundaries(
+      ConnectionState.disconnected, message: "ConnectionState が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      MediaConstraints(), message: "MediaConstraints が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      DegradationPreference.balanced, message: "DegradationPreference が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(AudioMode.videoChat, message: "AudioMode が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      AudioMode.default(category: .playAndRecord, output: .speaker),
+      message: "AudioMode.default が actor 境界を越えられない")
+    await assertCrossesBoundaries(AudioOutput.speaker, message: "AudioOutput が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(LogType.sora, message: "LogType が actor 境界を越えられない")
+    await assertCrossesBoundaries(LogLevel.info, message: "LogLevel が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      Log(level: .info, type: .sora, message: "sendable check"), message: "Log が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      Logger.Group.channels, message: "Logger.Group が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      VideoViewConnectionMode.auto, message: "VideoViewConnectionMode が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      WebSocketMessage.text("sendable"), message: "WebSocketMessage が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      SoraEvent(kind: .connected), message: "SoraEvent が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraEvent(kind: .streamAdded, connectionId: "connection-1", transportEpoch: 1, streamId: "s"),
+      message: "SoraEvent の payload が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraEventKind.connected, message: "SoraEventKind が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraEventError(domain: "Sora", code: 1, message: "sendable check"),
+      message: "SoraEventError が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraAudioPortSnapshot(
+        name: "speaker", portType: "Speaker", uid: "uid", channelCount: 2, hasDataSource: false),
+      message: "SoraAudioPortSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraAudioRouteEvent(
+        reason: .newDeviceAvailable,
+        previousRoute: SoraAudioRouteSnapshot(
+          inputs: [],
+          outputs: [
+            SoraAudioPortSnapshot(
+              name: "speaker", portType: "Speaker", uid: "uid", channelCount: 2,
+              hasDataSource: false)
+          ])),
+      message: "SoraAudioRouteEvent が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      ConnectionTask.State.connecting, message: "ConnectionTask.State が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      Configuration.Spotlight.enabled, message: "Configuration.Spotlight が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ForwardingFilterRuleField.kind, message: "ForwardingFilterRuleField が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ForwardingFilterRuleOperator.isIn, message: "ForwardingFilterRuleOperator が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ForwardingFilterAction.block, message: "ForwardingFilterAction が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ForwardingFilterRule(field: .kind, operator: .isIn, values: ["connection_id"]),
+      message: "ForwardingFilterRule が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      CameraSettings.default, message: "CameraSettings が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      SoraCloseEvent.ok(code: 1000, reason: "正常終了"),
+      message: "SoraCloseEvent.ok が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SoraCloseEvent.error(SoraError.connectionTimeout),
+      message: "SoraCloseEvent.error が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      SignalingAnswer(sdp: "answer"), message: "SignalingAnswer が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingUpdate(sdp: "update"), message: "SignalingUpdate が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingReOffer(sdp: "re-offer"), message: "SignalingReOffer が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingReAnswer(sdp: "re-answer"), message: "SignalingReAnswer が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingSwitched(ignoreDisconnectWebSocket: true),
+      message: "SignalingSwitched が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingRedirect(location: "wss://example.com"),
+      message: "SignalingRedirect が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingClose(code: 1000, reason: "正常終了"), message: "SignalingClose が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingPing(statisticsEnabled: true), message: "SignalingPing が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingPong(), message: "SignalingPong が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SignalingDisconnect(reason: "切断"), message: "SignalingDisconnect が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      RPCErrorDetail(
+        code: -32601, message: "method not found",
+        data: .object(["key": .string("value")])),
+      message: "RPCErrorDetail が actor 境界を越えられない")
+
+    await assertCrossesBoundaries(
+      RequestSimulcastRidParams(rid: .r0),
+      message: "RequestSimulcastRidParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      RequestSpotlightRidParams(spotlightFocusRid: .r0, spotlightUnfocusRid: .r1),
+      message: "RequestSpotlightRidParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ResetSpotlightRidParams(sendConnectionId: "connection"),
+      message: "ResetSpotlightRidParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      RequestSimulcastRidResult(
+        channelId: "sora", receiverConnectionId: "receiver", rid: .r0, senderConnectionId: nil),
+      message: "RequestSimulcastRidResult が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      RequestSpotlightRidResult(
+        channelId: "sora", recvConnectionId: "receiver", spotlightFocusRid: .r0,
+        spotlightUnfocusRid: .r1),
+      message: "RequestSpotlightRidResult が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ResetSpotlightRidResult(channelId: "sora", recvConnectionId: "receiver"),
+      message: "ResetSpotlightRidResult が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      PutSignalingNotifyMetadataParams(metadata: SendableProbeMetadata(appName: "sora")),
+      message: "PutSignalingNotifyMetadataParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      PutSignalingNotifyMetadataItemParams(key: "key", value: "value"),
+      message: "PutSignalingNotifyMetadataItemParams が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      SendableRPCResponse<RequestSimulcastRidResult>(
+        id: 1,
+        result: RequestSimulcastRidResult(
+          channelId: "sora", receiverConnectionId: "receiver", rid: .r0,
+          senderConnectionId: nil)),
+      message: "SendableRPCResponse が actor 境界を越えられない")
+
+    let entry = StatisticsEntrySnapshot(
+      id: "outbound-rtp", type: "outbound-rtp", timestamp: 1,
+      values: ["bytesSent": .decimal(Decimal(1)), "kind": .string("video")])
+    await assertCrossesBoundaries(
+      entry, message: "StatisticsEntrySnapshot が actor 境界を越えられない")
+    let snapshot = StatisticsSnapshot(timestamp: 1, entries: [entry])
+    await assertCrossesBoundaries(
+      snapshot, message: "StatisticsSnapshot が actor 境界を越えられない")
+
+    // 同じ snapshot を複数の Task から同時に actor へ渡せること (「複数 Task と actor 間」の確認)。
+    let probe = SendableBoundaryProbe<StatisticsSnapshot>()
+    let tasks = (0..<2).map { _ in
+      Task { () -> StatisticsSnapshot? in
+        await probe.store(snapshot)
+        return await probe.load()
+      }
+    }
+    for task in tasks {
+      let loaded = await task.value
+      XCTAssertNotNil(loaded, "StatisticsSnapshot を複数の Task から actor へ渡せない")
+    }
+  }
+
+  /// internal なカメラ状態型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。
+  ///
+  /// owner の queue と reducer の間で受け渡す値のため、`Sendable` の欠落はコンパイルで検出する。
+  func testCameraStateTypesConformToSendable() async {
+    requireSendable(CameraCapturerID.self)
+    requireSendable(CameraPhase.self)
+    requireSendable(CameraState.self)
+    requireSendable(CameraEvent.self)
+    requireSendable(CameraEffect.self)
+
+    await assertCrossesBoundaries(
+      CameraCapturerID(), message: "CameraCapturerID が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraPhase.idle, message: "CameraPhase が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraState(), message: "CameraState が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraEvent.startRequested(id: CameraCapturerID(), generation: 1),
+      message: "CameraEvent が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      CameraEffect.publishSnapshot, message: "CameraEffect が actor 境界を越えられない")
+  }
+
+  /// internal な snapshot 型が `Sendable` に準拠していることをコンパイル時と actor 境界で表明する。
+  ///
+  /// 接続開始後の非同期区間へ渡す値のため、`Sendable` の欠落はコンパイルで検出する必要がある。
+  func testConnectionConfigurationSnapshotTypesConformToSendable() async throws {
+    let configuration = Configuration(
+      url: try XCTUnwrap(URL(string: "wss://example.invalid")),
+      channelId: "test",
+      role: .sendrecv)
+    let snapshot = try ConnectionConfigurationSnapshot(configuration: configuration)
+
+    requireSendable(ConnectionConfigurationSnapshot.self)
+    requireSendable(ICEServerSnapshot.self)
+    requireSendable(WebRTCConfigurationSnapshot.self)
+    requireSendable(ForwardingFilterSnapshot.self)
+    requireSendable(JSONValue.self)
+
+    await assertCrossesBoundaries(
+      snapshot, message: "ConnectionConfigurationSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      snapshot.webRTCConfiguration,
+      message: "WebRTCConfigurationSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ICEServerSnapshot(
+        urls: ["turns:example.com"], username: "user", credential: "credential",
+        isTLSInsecure: false),
+      message: "ICEServerSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      ForwardingFilterSnapshot(
+        name: nil, priority: nil, action: nil, rules: [], version: nil, metadata: .null),
+      message: "ForwardingFilterSnapshot が actor 境界を越えられない")
+    await assertCrossesBoundaries(
+      JSONValue.object(["key": .string("value")]),
+      message: "JSONValue が actor 境界を越えられない")
+  }
+
+  /// `StreamFrameOwner` へ渡す frame payload が `Sendable` に準拠していることをコンパイル時に表明する。
+  ///
+  /// `requireSendable<T: Sendable>(_: T.Type)` は型引数を取るため実 frame を生成しない。
+  /// `@unchecked Sendable` を付与した根拠の妥当性は、型 doc のレビューで確認する。
+  func testStreamOwnedFrameConformsToSendable() {
+    requireSendable(StreamOwnedFrame.self)
+  }
+
+  /// `SendableRPCMethodProtocol` の associated type が `Sendable` を要求することをコンパイル時に表明する。
+  ///
+  /// `Params` / `Result` が `Sendable` でない場合はこの関数を呼び出せない。
+  /// 非ジェネリックな組み込み 3 メソッドは新 protocol へも準拠している。
+  func testSendableRPCMethodProtocolRequiresSendableAssociatedTypes() {
+    requireSendableRPCParams(RequestSimulcastRid.self)
+    requireSendableRPCParams(RequestSpotlightRid.self)
+    requireSendableRPCParams(ResetSpotlightRid.self)
+    requireSendableRPCParams(SendablePutSignalingNotifyMetadata<SendableProbeMetadata>.self)
+    requireSendableRPCParams(SendablePutSignalingNotifyMetadataItem<String, String>.self)
+    requireSendableRPCParams(DualConformingRPCMethod.self)
+
+    // 新旧両方の protocol へ準拠した型は、どちらの制約でも受け取れる
+    requireRPCMethod(DualConformingRPCMethod.self)
+  }
+}

@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// simulcast ダミー映像テスト
 final class SimulcastE2ETests: E2ETestBase {
@@ -250,6 +250,10 @@ final class SimulcastE2ETests: E2ETestBase {
   /// このヘルパーは main queue 上で実行される。複数の getStats コールバックは実行キューが
   /// 固定されていないため、completedCount / sendonlyStats / recvonlyStats / statsFailures の
   /// 更新は main queue に束ねてデータ競合を防ぐ。
+  ///
+  /// getStats の handler は `@Sendable` ではないため MainActor 隔離を継承する。handler の中では
+  /// closure を呼ばず (`first(where:)` など)、main queue に束ねてから扱うこと (WebRTC スレッドから
+  /// closure を呼ぶと実行時違反になる)。
   private func verifySimulcastStats(
     sendonlyChannel: MediaChannel,
     recvonlyChannels: [MediaChannel],

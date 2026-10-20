@@ -125,10 +125,13 @@ final class SignalingConnectTests: XCTestCase {
 
   // PeerChannel を実際に構築する
   private func makePeerChannel(config: Configuration) throws -> PeerChannel {
-    let signalingChannel = SignalingChannel(configuration: config)
+    let snapshot = try ConnectionConfigurationSnapshot(configuration: config)
+    let signalingChannel = SignalingChannel(
+      snapshot: snapshot,
+      webSocketChannelHandlers: config.webSocketChannelHandlers)
     let nativeFactory = try NativePeerChannelFactory(bypassVoiceProcessing: false)
     return PeerChannel(
-      configuration: config,
+      snapshot: snapshot,
       signalingChannel: signalingChannel,
       nativePeerChannelFactory: nativeFactory,
       mediaChannel: nil)

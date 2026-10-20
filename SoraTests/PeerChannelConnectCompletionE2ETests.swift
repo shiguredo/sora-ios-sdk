@@ -1,6 +1,6 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// PeerChannel の接続完了ハンドラーの終端保証に関する E2E テスト
 ///
@@ -12,7 +12,8 @@ final class PeerChannelConnectCompletionE2ETests: E2ETestBase {
   /// 切断が完了することを確認する
   ///
   /// 接続成功 callback 内で同期的に disconnect() を呼ぶと、旧実装では
-  /// Lock.waitDisconnect が接続試行中と判断して basicDisconnect() を実行し、
+  /// `Lock.waitDisconnect` (現 `ConnectionStateOwner.requestDisconnect`) が接続試行中と判断して
+  /// basicDisconnect() を実行し、
   /// 同じ onConnect が残っているため接続 callback が 2 回呼ばれていた。
   /// take-and-clear により 1 回だけ呼ばれることを実経路で検証する。
   func testConnectCallbackDisconnectRunsOnceAndTerminates() throws {

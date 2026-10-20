@@ -121,7 +121,7 @@ public enum WebSocketStatusCode: Sendable {
 }
 
 /// WebSocket の通信で送受信されるメッセージを表します。
-public enum WebSocketMessage {
+public enum WebSocketMessage: Sendable {
   /// テキスト
   case text(String)
 
@@ -130,12 +130,41 @@ public enum WebSocketMessage {
 }
 
 /// WebSocket チャネルのイベントハンドラです。
+///
+/// イベントハンドラのプロパティの get / set は、プロパティごとの `HandlerStorage` が持つ `NSLock` で
+/// 排他します。
+/// 利用する任意の executor からの設定と、URLSession の delegate callback からの読み取りが並行しても
+/// データ競合しません。配送側は lock を解放してから取得済みの closure を呼びます
+/// (`HandlerStorage` の doc 参照)。
+///
+/// 呼び出し元のスレッドは保証されない。UI 更新や共有状態の変更は main queue / main actor へ
+/// 束ねること。
+///
+/// 配送のたびにプロパティを読むため、接続の途中で設定を変更しても次の配送から反映される
+/// (プロパティごとの storage が排他するのは読み書きだけであり、配送側は lock を解放してから
+/// 取得済みの closure を呼ぶ)。
+///
+/// Swift 6 言語モードで `@MainActor` の文脈からハンドラーを設定する場合は、クロージャに
+/// `@Sendable` を付けるか `nonisolated` な関数へ処理を分離して隔離を外す。payload は
+/// `WebSocketMessage` (`Sendable`) のため、main actor へそのまま渡せる。
+///
+/// 新しい購読 API では、受信したシグナリングの JSON 文字列が `MediaChannel` の
+/// `signalingReceivedJSON` として配送される。生の `WebSocketMessage` (binary を含む) を受け取る
+/// 経路はこの handler だけであり、新しい購読 API の対象外である。
 public final class WebSocketChannelHandlers {
   /// 初期化します。
   public init() {}
 
   /// メッセージ受信時に呼ばれるクロージャー
-  public var onReceive: ((WebSocketMessage) -> Void)?
+  public var onReceive: ((WebSocketMessage) -> Void)? {
+    get { onReceiveStorage.current }
+    set { onReceiveStorage.current = newValue }
+  }
+
+  // MARK: - closure を保持する lock 付き storage
+
+  /// `onReceive` を `NSLock` で排他して保持する storage です。
+  private let onReceiveStorage = HandlerStorage<((WebSocketMessage) -> Void)?>(nil)
 }
 
 final class WebSocketChannelInternalHandlers {

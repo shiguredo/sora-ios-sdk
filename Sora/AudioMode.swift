@@ -10,7 +10,7 @@ import Foundation
 ///  - ``allowBluetooth``
 ///  - ``allowBluetoothA2DP``
 ///  - ``allowAirPlay``
-public enum AudioMode {
+public enum AudioMode: Sendable {
   /**
      * デフォルト。
      * ``AVAudioSession`` の音声モードを ``default`` に変更します。
@@ -42,7 +42,7 @@ public enum AudioMode {
 }
 
 /// 音声出力先
-public enum AudioOutput {
+public enum AudioOutput: Sendable {
   /// デフォルト。端末の状態に依存します。
   case `default`
 

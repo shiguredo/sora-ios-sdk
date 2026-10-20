@@ -3,7 +3,7 @@
 - Created: 2026-09-07
 - Completed: {YYYY-MM-DD}
 - Branch: feature/add-stereo-audio-output
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -11,7 +11,7 @@
 
 ## 現状
 
-調査対象は PR #381 のコミット `16cba6346931d9d631e7061cb5632d193c1a2cb8` と libwebrtc `m150.7871.3.2` である。
+当初の調査対象は PR #381 のコミット `16cba6346931d9d631e7061cb5632d193c1a2cb8` と libwebrtc `m150.7871.3.2` だが、PR #381 は 2026-09-08 に develop へマージ済み (squash コミット `003bb73`、リリース 2026.3.0 に含まれる) であり、`16cba634` は develop に存在しない。現行 develop は libwebrtc `m150.7871.3.5` で、以下は現行コードで再確認した所見である。webrtc-build issue 0013 は 2026-09-16 現在も `feature/m150.7871` で未対応であり、`m150.7871.3.5` には含まれない。
 
 - `AudioSessionCoordinator` は Sora インスタンス間で AudioSession の利用プロファイルを管理する。
 - `.stereoRemoteIO` は他の stereo、VoiceProcessingIO、カスタム音声デバイスによる音声接続と排他になっている。
@@ -29,9 +29,9 @@
 
 ## 対応ブランチと依存関係
 
-ユーザー指定の例外として、PR #381 の `feature/add-stereo-audio-output` に含める。
-webrtc-build の `feature/m150.7871` で issue 0013 を先に対応する。
-受信専用プロファイルを追加する issue 0133 と、競合判定の分類を揃える。
+ユーザー指定の例外として PR #381 の `feature/add-stereo-audio-output` に含める予定だったが、PR #381 は 2026-09-08 に develop へマージ済みのため含められない。develop (2026.3.0) を基点とした新規ブランチで対応する。
+webrtc-build の `feature/m150.7871` で issue 0013 を先に対応し、その成果物を取り込んでから実装する。
+受信専用プロファイルは closed 済みの issue 0133 (Completed: 2026-09-09) で対応されており、`AudioSessionUsage.stereoRemoteIO` の `requiresPlayAndRecord` は `snapshot.isSender` に従って揃えられている。本 issue ではこの分類を維持したまま、組み合わせごとの許可・拒否を整理する。
 一般的な Sora 共有状態の整理を扱う既存 issue 0111 へ範囲を広げない。
 
 ## テスト方針

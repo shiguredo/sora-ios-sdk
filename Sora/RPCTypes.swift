@@ -21,8 +21,29 @@ public protocol RPCMethodProtocol {
   static var name: String { get }
 }
 
+/// actor / Task 境界へ安全に渡せる RPC メソッドを定義するためのプロトコル
+///
+/// `RPCMethodProtocol` を継承し、`Params` / `Result` に `Sendable` を要求します。
+/// パラメータと結果を actor 境界や `Task` の `@Sendable` closure を越えて受け渡す場合は
+/// このプロトコルへ準拠し、`MediaChannel.sendableRPC(method:params:isNotificationRequest:timeout:)`
+/// を利用してください。
+///
+/// 既存の `RPCMethodProtocol` の制約は変更していないため、`Sendable` でない params / result を
+/// 使う既存の利用者定義メソッドはそのまま `MediaChannel.rpc` を利用できます。
+///
+/// # 使用例
+/// ```swift
+/// struct MyRPCMethod: SendableRPCMethodProtocol {
+///   typealias Params = MyParams
+///   typealias Result = MyResult
+///   static let name = "2025.2.0/MyRPCMethod"
+/// }
+/// ```
+public protocol SendableRPCMethodProtocol: RPCMethodProtocol
+where Params: Sendable, Result: Sendable {}
+
 /// RequestSimulcastRid のパラメータ。
-public struct RequestSimulcastRidParams: Codable {
+public struct RequestSimulcastRidParams: Codable, Sendable {
   /// 要求する映像の rid。
   public let rid: Rid
   /// 送信者のコネクション ID。
@@ -41,7 +62,7 @@ public struct RequestSimulcastRidParams: Codable {
 }
 
 /// RequestSpotlightRid のパラメータ。
-public struct RequestSpotlightRidParams: Codable {
+public struct RequestSpotlightRidParams: Codable, Sendable {
   /// 送信者のコネクション ID。
   public let sendConnectionId: String?
   /// 要求するスポットライトフォーカス時 rid。
@@ -68,7 +89,7 @@ public struct RequestSpotlightRidParams: Codable {
 }
 
 /// ResetSpotlightRid のパラメータ。
-public struct ResetSpotlightRidParams: Encodable {
+public struct ResetSpotlightRidParams: Encodable, Sendable {
   /// 送信者のコネクション ID。
   public let sendConnectionId: String?
 
@@ -83,6 +104,11 @@ public struct ResetSpotlightRidParams: Encodable {
 }
 
 /// PutSignalingNotifyMetadata のパラメータ。
+///
+/// `Metadata` が `Sendable` の場合は `Sendable` へも準拠します。actor / Task 境界へ渡す場合は
+/// メソッド型に `SendablePutSignalingNotifyMetadata` を使ってください (既存の
+/// `PutSignalingNotifyMetadata` は `Metadata` に `Sendable` を要求しないため、
+/// `SendableRPCMethodProtocol` の要件を満たすメソッド型に `Metadata` を固定できません)。
 public struct PutSignalingNotifyMetadataParams<Metadata: Encodable>: Encodable {
   /// 設定するメタデータ。
   public let metadata: Metadata
@@ -96,7 +122,18 @@ public struct PutSignalingNotifyMetadataParams<Metadata: Encodable>: Encodable {
   }
 }
 
+/// `Metadata` が `Sendable` の場合に `PutSignalingNotifyMetadataParams` を actor / Task 境界へ渡せるようにする。
+///
+/// public で non-frozen な型は `Sendable` が推論されないため明示的に準拠させる。
+/// `Sendable` への conditional conformance は許可されているため、既存の宣言は変えずに済む。
+extension PutSignalingNotifyMetadataParams: Sendable where Metadata: Sendable {}
+
 /// PutSignalingNotifyMetadataItem のパラメータ。
+///
+/// `Value` が `Sendable` の場合は `Sendable` へも準拠します。actor / Task 境界へ渡す場合は
+/// メソッド型に `SendablePutSignalingNotifyMetadataItem` を使ってください (既存の
+/// `PutSignalingNotifyMetadataItem` は `Value` に `Sendable` を要求しないため、
+/// `SendableRPCMethodProtocol` の要件を満たすメソッド型に `Value` を固定できません)。
 public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable {
   /// 設定するメタデータのキー。
   public let key: String
@@ -113,8 +150,13 @@ public struct PutSignalingNotifyMetadataItemParams<Value: Encodable>: Encodable 
   }
 }
 
+/// `Value` が `Sendable` の場合に `PutSignalingNotifyMetadataItemParams` を actor / Task 境界へ渡せるようにする。
+///
+/// `Metadata` 側と同じ理由 (`PutSignalingNotifyMetadataParams` の extension を参照) で明示的に準拠させる。
+extension PutSignalingNotifyMetadataItemParams: Sendable where Value: Sendable {}
+
 /// RequestSimulcastRid の正常終了時の result。
-public struct RequestSimulcastRidResult: Decodable {
+public struct RequestSimulcastRidResult: Decodable, Sendable {
   /// チャンネル ID。
   public let channelId: String
   /// 受信者のコネクション ID。
@@ -146,7 +188,7 @@ public struct RequestSimulcastRidResult: Decodable {
 }
 
 /// RequestSpotlightRid の正常終了時の result。
-public struct RequestSpotlightRidResult: Decodable {
+public struct RequestSpotlightRidResult: Decodable, Sendable {
   /// チャンネル ID。
   public let channelId: String
   /// 受信者のコネクション ID。
@@ -178,7 +220,7 @@ public struct RequestSpotlightRidResult: Decodable {
 }
 
 /// ResetSpotlightRid の正常終了時の result。
-public struct ResetSpotlightRidResult: Decodable {
+public struct ResetSpotlightRidResult: Decodable, Sendable {
   /// チャンネル ID。
   public let channelId: String
   /// 受信者のコネクション ID。
@@ -229,7 +271,7 @@ public struct ResetSpotlightRidResult: Decodable {
 //
 // このアプローチにより、既存コードとの互換性を保ちながら、スムーズに移行できるようにしています。
 
-/// サイマルキャスト の rid をリクエストする RPC メソッド
+/// サイマルキャストの rid をリクエストする RPC メソッド
 ///
 /// 視聴するサイマルキャスト映像の解像度を指定する RPC メソッドです。
 public enum RequestSimulcastRid: RPCMethodProtocol {
@@ -237,6 +279,9 @@ public enum RequestSimulcastRid: RPCMethodProtocol {
   public typealias Result = RequestSimulcastRidResult
   public static let name = RPCMethodNames.requestSimulcastRid
 }
+
+// params / result が `Sendable` のため、同じ型を `MediaChannel.sendableRPC` からも呼べる
+extension RequestSimulcastRid: SendableRPCMethodProtocol {}
 
 /// スポットライト rid をリクエストする RPC メソッド
 ///
@@ -247,6 +292,9 @@ public enum RequestSpotlightRid: RPCMethodProtocol {
   public static let name = RPCMethodNames.requestSpotlightRid
 }
 
+// params / result が `Sendable` のため、同じ型を `MediaChannel.sendableRPC` からも呼べる
+extension RequestSpotlightRid: SendableRPCMethodProtocol {}
+
 /// スポットライト rid をリセットする RPC メソッド
 ///
 /// スポットライト機能の設定をリセットする RPC メソッドです。
@@ -255,6 +303,9 @@ public enum ResetSpotlightRid: RPCMethodProtocol {
   public typealias Result = ResetSpotlightRidResult
   public static let name = RPCMethodNames.resetSpotlightRid
 }
+
+// params / result が `Sendable` のため、同じ型を `MediaChannel.sendableRPC` からも呼べる
+extension ResetSpotlightRid: SendableRPCMethodProtocol {}
 
 /// シグナリング通知メタデータを設定する RPC メソッド
 ///
@@ -319,6 +370,87 @@ public enum PutSignalingNotifyMetadata<Metadata: Codable>: RPCMethodProtocol {
 public enum PutSignalingNotifyMetadataItem<Metadata: Decodable, Value: Encodable>:
   RPCMethodProtocol
 {
+  public typealias Params = PutSignalingNotifyMetadataItemParams<Value>
+  public typealias Result = Metadata
+  public static var name: String {
+    RPCMethodNames.putSignalingNotifyMetadataItem
+  }
+}
+
+// # ジェネリックな RPC メソッドを Sendable に対応させる方針
+//
+// 既存の `PutSignalingNotifyMetadata` / `PutSignalingNotifyMetadataItem` へ
+// conditional conformance を追加することはできません。Swift は「non-marker protocol への
+// conditional conformance が marker protocol (Sendable) の準拠に依存すること」を禁止しており、
+// `extension PutSignalingNotifyMetadata: SendableRPCMethodProtocol where Metadata: Sendable` は
+//
+//   conditional conformance to non-marker protocol 'SendableRPCMethodProtocol' cannot depend on
+//   conformance of 'Metadata' to marker protocol 'Sendable'
+//
+// で失敗します。このため新 protocol 用の型を別に用意し、既存の型の宣言は変更しません。
+// メソッド名は既存と同じ定数を参照するため、サーバーから見たメソッドは同一です。
+
+/// シグナリング通知メタデータを設定する Sendable な RPC メソッド
+///
+/// `Metadata` が `Sendable` な場合に `MediaChannel.sendableRPC` から呼び出せます。
+/// 既存 `PutSignalingNotifyMetadata` との使い分けは上のコメントを参照してください。
+///
+/// # 使用例
+/// ```swift
+/// struct MyMetadata: Codable, Sendable {
+///   let userId: String
+///   let sessionId: String
+/// }
+///
+/// do {
+///   let response = try await mediaChannel.sendableRPC(
+///     method: SendablePutSignalingNotifyMetadata<MyMetadata>.self,
+///     params: PutSignalingNotifyMetadataParams(metadata: metadata)
+///   )
+///   if let result = response?.result {
+///     print("Set metadata: \(result)")
+///   }
+/// } catch {
+///   print("Failed to set metadata: \(error)")
+/// }
+/// ```
+public enum SendablePutSignalingNotifyMetadata<Metadata: Codable & Sendable>:
+  SendableRPCMethodProtocol
+{
+  public typealias Params = PutSignalingNotifyMetadataParams<Metadata>
+  public typealias Result = Metadata
+  public static var name: String {
+    RPCMethodNames.putSignalingNotifyMetadata
+  }
+}
+
+/// シグナリング通知メタデータのアイテムを設定する Sendable な RPC メソッド
+///
+/// `Metadata` / `Value` が `Sendable` な場合に `MediaChannel.sendableRPC` から呼び出せます。
+/// 既存 `PutSignalingNotifyMetadataItem` との使い分けは上のコメントを参照してください。
+///
+/// # 使用例
+/// ```swift
+/// struct NotifyResponse: Decodable, Sendable {
+///   let key: String
+///   let value: String
+/// }
+///
+/// do {
+///   let response = try await mediaChannel.sendableRPC(
+///     method: SendablePutSignalingNotifyMetadataItem<NotifyResponse, String>.self,
+///     params: PutSignalingNotifyMetadataItemParams(key: "status", value: "ready")
+///   )
+///   if let result = response?.result {
+///     print("Set metadata item - key: \(result.key), value: \(result.value)")
+///   }
+/// } catch {
+///   print("Failed to set metadata item: \(error)")
+/// }
+/// ```
+public enum SendablePutSignalingNotifyMetadataItem<
+  Metadata: Decodable & Sendable, Value: Encodable & Sendable
+>: SendableRPCMethodProtocol {
   public typealias Params = PutSignalingNotifyMetadataItemParams<Value>
   public typealias Result = Metadata
   public static var name: String {

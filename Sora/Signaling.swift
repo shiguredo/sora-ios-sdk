@@ -373,6 +373,13 @@ public struct SignalingConnect {
 
   /// H265 向け映像コーデックパラメーター
   public var h265Params: Encodable?
+
+  /// `data_channels` に出力する設定
+  ///
+  /// `Configuration.dataChannels` は `Any?` のため `Encodable` として扱えません。
+  /// 接続開始時に `JSONValue` へ写し取った値を `PeerChannel.makeSignalingConnect` から
+  /// 渡し、`encode(to:)` で `data_channels` として出力します。
+  var dataChannelSettings: JSONValue?
 }
 
 /// "offer" シグナリングメッセージを表します。
@@ -509,7 +516,7 @@ public struct SignalingOffer {
 }
 
 /// "answer" シグナリングメッセージを表します。
-public struct SignalingAnswer {
+public struct SignalingAnswer: Sendable {
   /// SDP メッセージ
   public let sdp: String
 }
@@ -522,19 +529,19 @@ public struct SignalingCandidate {
 
 /// "update" シグナリングメッセージを表します。
 /// Sora 2022.1.0 で廃止されたため、現在は利用していません。
-public struct SignalingUpdate {
+public struct SignalingUpdate: Sendable {
   /// SDP メッセージ
   public let sdp: String
 }
 
 /// "re-offer" メッセージ
-public struct SignalingReOffer {
+public struct SignalingReOffer: Sendable {
   /// SDP メッセージ
   public let sdp: String
 }
 
 /// "re-answer" メッセージ
-public struct SignalingReAnswer {
+public struct SignalingReAnswer: Sendable {
   /// SDP メッセージ
   public let sdp: String
 }
@@ -547,20 +554,20 @@ public struct SignalingPush {
 }
 
 /// "switched" シグナリングメッセージを表します。
-public struct SignalingSwitched {
+public struct SignalingSwitched: Sendable {
   /// DataChannel 経由のシグナリングを有効にした際、 WebSocket の接続が切れても Sora との接続を切断しない
   public var ignoreDisconnectWebSocket: Bool?
 }
 
 /// "redirect" シグナリングメッセージを表します。
-public struct SignalingRedirect {
+public struct SignalingRedirect: Sendable {
   /// redirect する URL
   public var location: String
 }
 
 /// type: "close" シグナリングメッセージを表す
 /// Sora から受信するメッセージなのでエンコーダーは実装していない
-public struct SignalingClose {
+public struct SignalingClose: Sendable {
   /// ステータスコード
   public var code: Int
   /// 切断理由
@@ -676,7 +683,7 @@ public struct SignalingNotify {
 /// このメッセージはサーバーから送信されます。
 /// "ping" 受信後は一定時間内に "pong" を返さなければ、
 /// サーバーとの接続が解除されます。
-public struct SignalingPing {
+public struct SignalingPing: Sendable {
   /// :nodoc:
   public var statisticsEnabled: Bool?
 }
@@ -686,10 +693,10 @@ public struct SignalingPing {
 /// サーバーに送信されます。
 /// "ping" 受信後、一定時間内にこのメッセージを返さなければ、
 /// サーバーとの接続が解除されます。
-public struct SignalingPong {}
+public struct SignalingPong: Sendable {}
 
 /// "disconnect" シグナリングメッセージを表します。
-public struct SignalingDisconnect {
+public struct SignalingDisconnect: Sendable {
   /// Sora との接続を切断する理由
   public var reason: String?
 }
@@ -942,6 +949,12 @@ extension SignalingConnect: Codable {
     if let notifyMetadata {
       let notifyEnc = container.superEncoder(forKey: .signaling_notify_metadata)
       try notifyMetadata.encode(to: notifyEnc)
+    }
+    // data_channels は SignalingConnect の他のプロパティと異なり Any を扱うため、
+    // 接続開始時に JSONValue へ写し取った値をここで出力する。
+    if let dataChannelSettings {
+      let dataChannelEnc = container.superEncoder(forKey: .data_channels)
+      try dataChannelSettings.encode(to: dataChannelEnc)
     }
     try container.encodeIfPresent(
       multistreamEnabled,

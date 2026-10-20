@@ -1,168 +1,306 @@
 import XCTest
 
-@testable @preconcurrency import Sora
+@testable import Sora
 
 /// sendonly ダミー映像・音声テスト
 final class SendonlyE2ETests: E2ETestBase {
-  // Sora API (DisconnectConnection) の切断が成功したかどうか (testSendonlyReconnect 用。
-  // URLSession のコールバックから書き込むため、main queue に束ねた上でクラスプロパティに保持する)
+  // Sora API (DisconnectConnection) の切断が成功したかどうか。
+  // コールバックの結果を wait 後に検証してテストメソッド側で設定する
   private var apiDisconnectSucceeded = false
+  // Sora API コールバックの結果。コールバック内では XCTFail を呼ばず、
+  // wait の後にテストメソッド側で検証する (コールバックがテスト終了後に発火しても
+  // 次のテストへ失敗が誤帰属されないようにするため)
+  private var apiError: Error?
+  private var apiResponse: URLResponse?
+  // Sora API の wait が終了したかどうか。wait 終了後に発火したコールバックの
+  // 結果保持と fulfill を抑止する
+  private var apiWaitFinished = false
 
-  override func setUp() {
-    super.setUp()
+  // MARK: - このファイル専用の E2E 用定数
+
+  /// E2E テスト用の接続タイムアウト (秒)
+  ///
+  /// CI の E2E はサーバーの応答が遅い場合があるため、SDK の既定値 (30 秒) より長くする。
+  /// SDK の既定値は変更せず、このファイルの E2E 用 Configuration にだけ設定する
+  private let connectionTimeout = 60
+
+  /// E2E テストの接続待ちタイムアウト (秒)
+  ///
+  /// ConnectionTimer による connectionTimeout の発火を wait の内側で処理し、
+  /// テスト終了後に遅延コールバックが残らないよう、connectionTimeout (60 秒) に
+  /// 余裕 (30 秒) を足した 90 秒とする
+  private var connectWaitTimeout: TimeInterval {
+    TimeInterval(connectionTimeout + 30)
+  }
+
+  /// 接続失敗がタイムアウトで終端する実装の回帰を短時間で検出するための接続タイムアウト (秒)
+  ///
+  /// 接続失敗がタイムアウト以外のエラーで終端することを検証するテストが、
+  /// このファイルの接続タイムアウト (60 秒) の影響で長くならないよう、
+  /// そのテスト自身の Configuration にだけ設定する
+  private let connectionFailureTimeout = 3
+
+  /// このファイル専用の E2E 用 Configuration を構築する
+  ///
+  /// `E2ETestBase.buildConfiguration(role:)` が返す Configuration に、
+  /// このファイル専用の接続タイムアウトを設定して返す。SDK の既定値 (30 秒) は変更しない
+  private func makeConfiguration(role: Role) throws -> Configuration {
+    var config = try buildConfiguration(role: role)
+    config.connectionTimeout = connectionTimeout
+    return config
+  }
+
+  override func setUp() async throws {
+    try await super.setUp()
     apiDisconnectSucceeded = false
+    apiError = nil
+    apiResponse = nil
+    apiWaitFinished = false
+  }
+
+  /// sendonly の接続を待ち、接続できたチャンネルを返す
+  ///
+  /// connect callback は libwebrtc の delegate スレッドから呼ばれるため、state の更新は
+  /// main queue に束ねる。接続に失敗した場合は callback が失敗を報告済みのため、ここでは
+  /// 追加の失敗を記録せず、後始末だけを行って nil を返す。接続に失敗した場合も
+  /// `sora?.mediaChannels` にはチャンネルが残る (一覧から外れるのは切断完了の通知が
+  /// 届いたとき) ため、残っているチャンネルをすべて切断してから戻る
+  private func connectAndWait(configuration: Configuration) -> MediaChannel? {
+    let connectExpectation = self.expectation(description: "sendonly の接続が完了すること")
+    var connectedChannel: MediaChannel?
+    // wait の終了後に発火した callback で assertion を記録しないためのフラグ。
+    // 記録するとテスト終了後の失敗が次のテストへ誤帰属される
+    var waitFinished = false
+    _ = sora?.connect(configuration: configuration) { mediaChannel, error in
+      DispatchQueue.main.async {
+        guard !waitFinished else { return }
+        if let error {
+          // 接続失敗はここで 1 回だけ報告する (wait 後の guard では追加の失敗を記録しない)。
+          // 接続できていないため、channel は採用しない
+          XCTFail("接続に失敗した: \(error)")
+        } else {
+          // 接続成功時は mediaChannel が渡る契約を検証する
+          XCTAssertNotNil(mediaChannel, "接続成功時は mediaChannel が渡ること")
+          connectedChannel = mediaChannel
+        }
+        connectExpectation.fulfill()
+      }
+    }
+
+    // ConnectionTimer による connectionTimeout (60 秒) の発火を wait の内側で処理し、
+    // テスト終了後に遅延コールバックが残らないよう、wait のタイムアウトは
+    // connectionTimeout より長い connectWaitTimeout (90 秒) とする
+    wait(for: [connectExpectation], timeout: connectWaitTimeout)
+    waitFinished = true
+
+    guard let connectedChannel else {
+      disconnectAll(channels: sora?.mediaChannels ?? [])
+      return nil
+    }
+    return connectedChannel
+  }
+
+  /// main queue へ渡すために `Statistics` から Sendable な値だけを取り出した snapshot
+  ///
+  /// `Statistics` は Sendable ではないため、`getStats` の handler (WebRTC のスレッド) の中で
+  /// この型へ詰め替え、この値だけを main queue へ渡す
+  private struct StatsSnapshot: Sendable {
+    /// `kind` の outbound-rtp が存在するかどうか
+    let hasOutbound: Bool
+    /// `kind` の outbound-rtp が送信したバイト数
+    let bytesSent: Int
+    /// `kind` の outbound-rtp が送信したパケット数
+    let packetsSent: Int
+    /// 音声の場合に OPUS のコーデック統計が存在するかどうか
+    let hasAudioOpusCodec: Bool
+
+    /// `kind` ("video" / "audio") の outbound-rtp と、音声の場合は OPUS のコーデック統計を取り出す
+    init(stats: Statistics, kind: String) {
+      let outbound = stats.entries.first {
+        $0.type == "outbound-rtp" && (($0.values["kind"] as? NSString) as String?) == kind
+      }
+      self.hasOutbound = outbound != nil
+      self.bytesSent = (outbound?.values["bytesSent"] as? NSNumber)?.intValue ?? 0
+      self.packetsSent = (outbound?.values["packetsSent"] as? NSNumber)?.intValue ?? 0
+      self.hasAudioOpusCodec =
+        kind == "audio"
+        && stats.entries.contains {
+          $0.type == "codec" && (($0.values["mimeType"] as? NSString) as String?) == "audio/opus"
+        }
+    }
+  }
+
+  /// 接続済みチャンネルの統計を取得し、成功時に `verify` で検証する
+  ///
+  /// `getStats` の handler は WebRTC のスレッドから呼ばれるため、非 Sendable な `Statistics` を
+  /// そのまま扱わず、必要な値だけを Sendable な snapshot に詰め替えてから main queue へ 1 hop する。
+  /// handler を `@Sendable` にして隔離を継承させないのは、MainActor 隔離の closure を WebRTC
+  /// スレッドから呼ぶと実行時違反 (`dispatch_assert_queue`) になるためである
+  /// (`StereoAudioOutputE2ETests` の `audioCounts` と同じ方式)。`verify` も `@Sendable` にして、
+  /// 非 Sendable な closure を handler へ持ち込まない
+  private func waitForStats(
+    channel: MediaChannel,
+    kind: String,
+    delay: TimeInterval,
+    description: String,
+    verify: @escaping @Sendable (StatsSnapshot) -> Void
+  ) {
+    let statsExpectation = self.expectation(description: description)
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+      channel.getStats { @Sendable result in
+        // WebRTC スレッドでは数値だけを取り出し、非 Sendable な統計オブジェクトは渡さない
+        let snapshot = result.map { StatsSnapshot(stats: $0, kind: kind) }
+        DispatchQueue.main.async {
+          defer { statsExpectation.fulfill() }
+          switch snapshot {
+          case .failure(let error):
+            // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
+            // エラー詳細を含めて出力する
+            XCTFail("getStats に失敗した : \(error)")
+          case .success(let snapshot):
+            verify(snapshot)
+          }
+        }
+      }
+    }
+    // delay の待機を含めて 30 秒待つ
+    wait(for: [statsExpectation], timeout: 30)
   }
 
   /// sendonly で DummyVideoCapturer を使ってダミー映像を送信できることを確認する
   func testSendonlyDummyVideo() throws {
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     // 接続時の物理カメラ自動起動を抑止し、senderStream 生成後にダミー映像を流す
     config.initialCameraEnabled = false
     // この E2E はダミー映像送信の確認に限定し、音声初期化による不安定要因を避ける
     config.audioEnabled = false
-    let expectation = self.expectation(description: "sendonly でダミー映像を送信できること")
-    var capturer: DummyVideoCapturer?
 
-    _ = sora?.connect(configuration: config) { mediaChannel, error in
-      if let error {
-        XCTFail("接続に失敗した: \(error)")
-        expectation.fulfill()
-        return
-      }
-      guard let channel = mediaChannel, let stream = channel.senderStream else {
-        XCTFail("senderStream が nil")
-        expectation.fulfill()
-        return
-      }
-      let currentCapturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
-      currentCapturer.stream = stream
-      currentCapturer.start()
-      capturer = currentCapturer
-      // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
-      // ダミー映像送信の継続と WebRTC 統計情報を確認する
-      DispatchQueue.main.async {
-        [channel, currentCapturer, expectation] in
-        let timer = Timer(timeInterval: 2, repeats: false) { _ in
-          channel.getStats { result in
-            defer { expectation.fulfill() }
-            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
-            XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
-            XCTAssertTrue(currentCapturer.isRunning, "DummyVideoCapturer が動作中であること")
-            XCTAssertGreaterThan(currentCapturer.frameCount, 0, "ダミー映像フレームが送信されていること")
-
-            guard case .success(let stats) = result else {
-              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
-              // エラー詳細を含めて出力する
-              if case .failure(let error) = result {
-                XCTFail("getStats に失敗した : \(error)")
-              } else {
-                XCTFail("getStats に失敗した")
-              }
-              return
-            }
-
-            let videoOutbound = stats.entries.first {
-              $0.type == "outbound-rtp"
-                && ($0.values["kind"] as? NSString) == "video"
-            }
-            XCTAssertNotNil(videoOutbound, "outbound video stats が存在すること")
-            let bytesSent = videoOutbound?.values["bytesSent"] as? NSNumber
-            let packetsSent = videoOutbound?.values["packetsSent"] as? NSNumber
-            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
-            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
-            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
-          }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-      }
+    guard let channel = connectAndWait(configuration: config) else {
+      return
     }
-
-    wait(for: [expectation], timeout: 90)
-    capturer?.stop()
-    // 切断
-    if let channel = sora?.mediaChannels.first {
+    // DummyVideoCapturer は MainActor に隔離されているため、senderStream の取得と capturer の
+    // 生成・開始は MainActor 上で行う (callback 直下で生成すると MainActor 実行時違反になる)
+    guard let stream = channel.senderStream else {
+      XCTFail("senderStream が nil")
       disconnectAndVerify(channel: channel)
+      return
     }
+    let capturer = DummyVideoCapturer(width: 640, height: 480, frameRate: 30)
+    capturer.stream = stream
+    capturer.start()
+
+    // main RunLoop 上で 2 秒待機してから、ダミー映像送信の継続と WebRTC 統計情報を確認する
+    waitForStats(
+      channel: channel, kind: "video", delay: 2, description: "ダミー映像の統計を確認できること"
+    ) { snapshot in
+      XCTAssertTrue(snapshot.hasOutbound, "outbound video stats が存在すること")
+      XCTAssertGreaterThan(snapshot.bytesSent, 0, "bytesSent が 0 より大きいこと")
+      XCTAssertGreaterThan(snapshot.packetsSent, 0, "packetsSent が 0 より大きいこと")
+    }
+    XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+    XCTAssertNotNil(channel.senderStream, "senderStream が維持されていること")
+
+    // capturer がバッファ確保の連続失敗で自動停止していないかを直接確認する
+    XCTAssertTrue(capturer.isRunning, "DummyVideoCapturer が動作中であること")
+    XCTAssertGreaterThan(capturer.frameCount, 0, "ダミー映像フレームが送信されていること")
+
+    capturer.stop()
+    // 切断し、正常切断コード (1000) が通知されることまで確認する
+    disconnectAndVerify(channel: channel)
   }
 
   /// sendonly で DummyAudioDevice を使ってダミー音声を送信できることを確認する
+  ///
+  /// 共有 AudioSession と音声ハードウェアに触れない playoutHandler 経路で実行する。
+  /// `DummyAudioDevice.initialize(with:)` が AVAudioSession を有効化する経路は、ホストの
+  /// 音声サブシステムがハングした環境では setActive が戻らず connectionTimeout になる。
+  /// CI の成否をホストの音声サブシステムの状態に依存させないため、接続の検証はこの経路で行う。
+  /// AudioSession を有効化する経路の確認は実機専用の
+  /// `testSendonlyDummyAudioActivatesSharedAudioSession` が担う
   func testSendonlyDummyAudio() throws {
-    var config = try buildConfiguration(role: .sendonly)
+    try runSendonlyDummyAudioTest(activatesSharedAudioSession: false)
+  }
+
+  /// sendonly で共有 AudioSession を有効化する経路でもダミー音声を送信できることを確認する
+  ///
+  /// `DummyAudioDevice.initialize(with:)` は playoutHandler を渡さない場合に AVAudioSession を
+  /// 有効化する。Simulator の AudioSession は実機の代替にならず、CI ではホストの音声
+  /// サブシステムの状態に依存するため、この経路は実機でだけ確認する
+  func testSendonlyDummyAudioActivatesSharedAudioSession() throws {
+    #if targetEnvironment(simulator)
+      throw XCTSkip("Simulator では共有 AudioSession の有効化経路を確認しない (実機で実行する)")
+    #else
+      try runSendonlyDummyAudioTest(activatesSharedAudioSession: true)
+    #endif
+  }
+
+  /// sendonly で DummyAudioDevice を使ってダミー音声を送信する検証の本体
+  ///
+  /// - Parameter activatesSharedAudioSession: true のときは playoutHandler を渡さず、
+  ///   `DummyAudioDevice.initialize(with:)` が共有 AVAudioSession を有効化する経路を検証する。
+  ///   false のときは共有 AudioSession と音声ハードウェアに触れない経路を検証する
+  private func runSendonlyDummyAudioTest(activatesSharedAudioSession: Bool) throws {
+    var config = try makeConfiguration(role: .sendonly)
     // この E2E はダミー音声送信の確認に限定し、映像は無効にする
     config.videoEnabled = false
     config.audioEnabled = true
-    // 440Hz 正弦波を生成するダミー音声デバイスを注入する
+    // 440Hz 正弦波を生成する PCM 生成処理とダミー音声デバイスを用意する
     let sineWaveGenerator = SineWaveGenerator(frequency: 440)
-    config.audioDevice = DummyAudioDevice(
-      initialMicrophoneEnabled: true,
-      pcmGenerator: { data, frameCount, sampleRate in
-        sineWaveGenerator.generate(data: data, frameCount: frameCount, sampleRate: sampleRate)
-      })
-    // DummyAudioDevice.initialize(with:) が接続試行時に AVAudioSession を有効化するため、
-    // tearDown での復元対象とする
-    audioSessionActivatedByTest = true
-    let expectation = self.expectation(description: "sendonly でダミー音声を送信できること")
-
-    _ = sora?.connect(configuration: config) { mediaChannel, error in
-      if let error {
-        XCTFail("接続に失敗した: \(error)")
-        expectation.fulfill()
-        return
-      }
-      guard let channel = mediaChannel else {
-        XCTFail("メディアチャネルが nil")
-        expectation.fulfill()
-        return
-      }
-      // connect コールバックの実行スレッドに依存させず、main RunLoop 上で 2 秒待機してから
-      // ダミー音声送信の継続と WebRTC 統計情報を確認する
-      DispatchQueue.main.async { [channel, expectation] in
-        let timer = Timer(timeInterval: 2, repeats: false) { _ in
-          channel.getStats { result in
-            defer { expectation.fulfill() }
-            XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
-
-            guard case .success(let stats) = result else {
-              // getStats の failure は接続状態の遷移 (切断・チャンネル再生成等) が原因のため、
-              // エラー詳細を含めて出力する
-              if case .failure(let error) = result {
-                XCTFail("getStats に失敗した : \(error)")
-              } else {
-                XCTFail("getStats に失敗した")
-              }
-              return
-            }
-
-            // 音声コーデック (OPUS) が確定していることを確認する (sora-js-sdk の E2E と同様)
-            let audioCodec = stats.entries.first {
-              $0.type == "codec"
-                && ($0.values["mimeType"] as? NSString) == "audio/opus"
-            }
-            XCTAssertNotNil(audioCodec, "audio codec stats が存在すること")
-
-            let audioOutbound = stats.entries.first {
-              $0.type == "outbound-rtp"
-                && ($0.values["kind"] as? NSString) == "audio"
-            }
-            XCTAssertNotNil(audioOutbound, "outbound audio stats が存在すること")
-            let bytesSent = audioOutbound?.values["bytesSent"] as? NSNumber
-            let packetsSent = audioOutbound?.values["packetsSent"] as? NSNumber
-            XCTAssertNotNil(bytesSent, "bytesSent が存在すること")
-            XCTAssertNotNil(packetsSent, "packetsSent が存在すること")
-            XCTAssertGreaterThan(bytesSent?.intValue ?? 0, 0, "bytesSent が 0 より大きいこと")
-            XCTAssertGreaterThan(packetsSent?.intValue ?? 0, 0, "packetsSent が 0 より大きいこと")
-          }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-      }
+    let pcmGenerator: @Sendable (UnsafeMutableRawPointer, Int, Double) -> Void = {
+      data, frameCount, sampleRate in
+      sineWaveGenerator.generate(data: data, frameCount: frameCount, sampleRate: sampleRate)
+    }
+    // playoutHandler を渡さない場合だけ DummyAudioDevice.initialize(with:) が共有 AudioSession を
+    // 有効化する。渡した場合の再生 PCM は送信専用のこのテストでは使わないため破棄する
+    let audioDevice: DummyAudioDevice
+    if activatesSharedAudioSession {
+      audioDevice = DummyAudioDevice(
+        initialMicrophoneEnabled: true,
+        pcmGenerator: pcmGenerator)
+    } else {
+      audioDevice = DummyAudioDevice(
+        initialMicrophoneEnabled: true,
+        playoutHandler: { _, _ in },
+        pcmGenerator: pcmGenerator)
+    }
+    config.audioDevice = audioDevice
+    if activatesSharedAudioSession {
+      // DummyAudioDevice.initialize(with:) が接続試行時に AVAudioSession を有効化するため、
+      // tearDown での復元対象とする
+      audioSessionActivatedByTest = true
     }
 
-    wait(for: [expectation], timeout: 90)
-    // 切断
-    if let channel = sora?.mediaChannels.first {
-      disconnectAndVerify(channel: channel)
+    guard let channel = connectAndWait(configuration: config) else {
+      return
     }
+
+    // main RunLoop 上で 2 秒待機してから、ダミー音声送信の継続と WebRTC 統計情報を確認する
+    waitForStats(
+      channel: channel, kind: "audio", delay: 2, description: "ダミー音声の統計を確認できること"
+    ) { snapshot in
+      // 音声コーデック (OPUS) が確定していることを確認する (sora-js-sdk の E2E と同様)
+      XCTAssertTrue(snapshot.hasAudioOpusCodec, "audio codec stats が存在すること")
+      XCTAssertTrue(snapshot.hasOutbound, "outbound audio stats が存在すること")
+      XCTAssertGreaterThan(snapshot.bytesSent, 0, "bytesSent が 0 より大きいこと")
+      XCTAssertGreaterThan(snapshot.packetsSent, 0, "packetsSent が 0 より大きいこと")
+    }
+    XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
+
+    // 切断し、正常切断コード (1000) が通知されることまで確認する
+    disconnectAndVerify(channel: channel)
+
+    // 切断時の terminateDevice が state を終端へ戻すことを確認する。切断イベントはデバイスの停止より
+    // 先に配送され得るため、停止と同じ lock 区間で更新される isInitialized が false になるまで待つ。
+    // このテストは送信専用接続のため ADM は再生を初期化せず (initializePlayout は受信ストリームが
+    // ある場合にしか呼ばれない)、検証できるのは録音側と isInitialized の終端性である。
+    // AudioUnit 経路の実行時検証は受信ありの接続が必要で、Simulator では保証できない
+    let terminated = expectation(
+      for: NSPredicate { _, _ in !audioDevice.isInitialized }, evaluatedWith: nil)
+    wait(for: [terminated], timeout: 5)
+    XCTAssertFalse(audioDevice.isInitialized, "切断後に isInitialized が false であること")
+    XCTAssertFalse(audioDevice.isRecording, "切断後に isRecording が false であること")
+    XCTAssertFalse(audioDevice.isRecordingInitialized, "切断後に isRecordingInitialized が false であること")
+    XCTAssertFalse(audioDevice.isHardMuted, "切断後に isHardMuted が初期状態 (ミュートなし) であること")
   }
 
   /// サーバー側からの切断後に再接続できることを確認する
@@ -194,7 +332,7 @@ final class SendonlyE2ETests: E2ETestBase {
     var disconnectEvent: SoraCloseEvent?
 
     // sendonly 用の Configuration (channelId は一意な値に上書きする)
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     config.channelId = channelId
     config.videoEnabled = true
     config.audioEnabled = false
@@ -204,7 +342,7 @@ final class SendonlyE2ETests: E2ETestBase {
     // 初回接続
     // connect コールバックは実行キューが固定されていないため、共有状態の更新と
     // 後続処理は main queue に束ねる
-    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
           XCTFail("初回接続に失敗した : \(error)")
@@ -235,20 +373,19 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // 初回接続の完了を待つ
-    wait(for: [connect1Expectation], timeout: 35)
+    wait(for: [connect1Expectation], timeout: connectWaitTimeout)
     guard let channel1, let connectionId1 else {
       XCTFail("初回接続に失敗した")
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      // 未 fulfill の expectation を fulfill して、テスト終了時の unwaited expectation
-      // 報告を防ぐ
-      disconnectExpectation.fulfill()
-      connect2Expectation.fulfill()
+      // 未 wait の expectation を wait 済みにして、テスト終了時の unwaited expectation
+      // 報告を防ぐ (fulfill だけでは hasBeenWaitedOn が立たない)
+      _ = XCTWaiter.wait(for: [disconnectExpectation, connect2Expectation], timeout: 0)
       return
     }
 
     // Sora API (DisconnectConnection) でサーバー側から切断する
-    let apiExpectation = self.expectation(description: "Sora API の切断が成功すること")
+    let apiExpectation = self.expectation(description: "Sora API の呼び出しが完了すること")
     var request = URLRequest(url: apiUrl)
     request.httpMethod = "POST"
     request.setValue("Sora_20151104.DisconnectConnection", forHTTPHeaderField: "X-Sora-Target")
@@ -256,27 +393,46 @@ final class SendonlyE2ETests: E2ETestBase {
     request.httpBody = try JSONSerialization.data(
       withJSONObject: ["channel_id": channelId, "connection_id": connectionId1])
     request.timeoutInterval = 10
-    URLSession.shared.dataTask(with: request) { _, response, error in
+    // URLSession.shared は keep-alive 接続をプールするため、サーバー側で閉じられた
+    // 接続を再利用したときに NSURLErrorNetworkConnectionLost (-1005) で失敗し得る。
+    // API 呼び出しごとに使い捨ての URLSession を生成し、接続を再利用しないようにする。
+    // timeoutIntervalForResource でリクエストの総時間を制限し、タスクとセッションが
+    // 残り続けないようにする
+    let apiConfiguration = URLSessionConfiguration.ephemeral
+    apiConfiguration.timeoutIntervalForResource = 10
+    let apiSession = URLSession(configuration: apiConfiguration)
+    apiSession.dataTask(with: request) { _, response, error in
+      apiSession.invalidateAndCancel()
+      // コールバック内では XCTFail を呼ばず、結果の保持と fulfill のみを行う。
+      // コールバックがテスト終了後に発火しても次のテストへ失敗が誤帰属されない
       DispatchQueue.main.async {
-        if let error {
-          XCTFail("Sora API の呼び出しに失敗した : \(error)")
-        } else if let httpResponse = response as? HTTPURLResponse,
-          (200..<300).contains(httpResponse.statusCode)
-        {
-          self.apiDisconnectSucceeded = true
-        } else {
-          XCTFail("Sora API がエラーを返した : \(String(describing: response))")
-        }
+        guard !self.apiWaitFinished else { return }
+        self.apiError = error
+        self.apiResponse = response
         apiExpectation.fulfill()
       }
     }.resume()
-    wait(for: [apiExpectation], timeout: 10)
+    // wait のタイムアウトをリクエストのタイムアウトより長くし、通常はコールバックが
+    // wait の内側で発火するようにする
+    wait(for: [apiExpectation], timeout: 15)
+    apiWaitFinished = true
+    // コールバックの結果は wait 後にテストメソッド側で検証する
+    if let apiError {
+      XCTFail("Sora API の呼び出しに失敗した : \(apiError)")
+    } else if let httpResponse = apiResponse as? HTTPURLResponse,
+      (200..<300).contains(httpResponse.statusCode)
+    {
+      apiDisconnectSucceeded = true
+    } else if let apiResponse {
+      XCTFail("Sora API がエラーを返した : \(String(describing: apiResponse))")
+    }
+    // コールバックが wait 内に発火しなかった場合は wait がタイムアウトを報告済みのため、
+    // ここでは追加の XCTFail を記録しない
     guard apiDisconnectSucceeded else {
-      // 後始末 (サーバー切断は発生しないため、切断検知 expectation を fulfill する)
+      // 後始末 (サーバー切断は発生しないため、切断検知 expectation を wait 済みにする)
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      disconnectExpectation.fulfill()
-      connect2Expectation.fulfill()
+      _ = XCTWaiter.wait(for: [disconnectExpectation, connect2Expectation], timeout: 0)
       return
     }
 
@@ -286,7 +442,7 @@ final class SendonlyE2ETests: E2ETestBase {
       XCTFail("サーバー切断を検知できなかった")
       capturer?.stop()
       disconnectAll(channels: [channel1, channel2])
-      connect2Expectation.fulfill()
+      _ = XCTWaiter.wait(for: [connect2Expectation], timeout: 0)
       return
     }
     // 切断理由を確認する (Sora API 切断では code 1000 / reason "DISCONNECTED-API" が期待される。
@@ -325,7 +481,7 @@ final class SendonlyE2ETests: E2ETestBase {
       }
     }
     // 再接続の完了を待つ
-    wait(for: [connect2Expectation], timeout: 35)
+    wait(for: [connect2Expectation], timeout: connectWaitTimeout)
     guard let channel2 else {
       XCTFail("再接続に失敗した")
       capturer?.stop()
@@ -380,7 +536,7 @@ final class SendonlyE2ETests: E2ETestBase {
     var signalingOpenedExpectationFulfilled = false
 
     // sendonly 用の Configuration
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     config.channelId = channelId
     config.dataChannelSignaling = true
     config.ignoreDisconnectWebSocket = true
@@ -474,7 +630,7 @@ final class SendonlyE2ETests: E2ETestBase {
     // 接続する
     // connect コールバックは実行キューが固定されていないため、共有状態の更新と
     // 後続処理は main queue に束ねる
-    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
           XCTFail("接続に失敗した : \(error)")
@@ -498,7 +654,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // 接続完了を待つ
-    wait(for: [connectExpectation], timeout: 35)
+    wait(for: [connectExpectation], timeout: connectWaitTimeout)
     guard let channel, let capturer else {
       XCTFail("接続に失敗した")
       disconnectAll(channels: [channel])
@@ -599,6 +755,11 @@ final class SendonlyE2ETests: E2ETestBase {
       channelId: buildChannelId(unique: true),
       role: .sendonly)
     config.ignoreDisconnectWebSocket = true
+    // このテストは接続失敗がタイムアウト以外のエラーで終端することを検証する。
+    // 旧実装の回帰 (接続タイムアウトで終端する) をこのファイルの接続タイムアウト
+    // (60 秒) で待たずに検出できるよう、connectionTimeout を短く (3 秒に) しておく。
+    // これにより回帰時もテストが 3 秒で終端する
+    config.connectionTimeout = connectionFailureTimeout
 
     // connect がエラーで終端することを待つ expectation
     let connectExpectation = self.expectation(
@@ -609,7 +770,8 @@ final class SendonlyE2ETests: E2ETestBase {
         XCTAssertNotNil(error, "接続失敗時は error が渡ること")
         // 新実装では接続失敗が即時検出され、接続タイムアウトではないエラーで終端する。
         // 旧実装 (ignoreDisconnectWebSocket を接続確立前に適用) では接続失敗が検出されず、
-        // connectionTimeout (30 秒) で終端するため、error 種別で回帰を検出できる。
+        // このテストで設定した connectionTimeout (3 秒) で終端するため、
+        // error 種別で回帰を検出できる。
         if let error = error as? SoraError, case .connectionTimeout = error {
           XCTFail("接続失敗がタイムアウトで終端しないこと (旧実装の挙動)")
         }
@@ -617,6 +779,8 @@ final class SendonlyE2ETests: E2ETestBase {
       }
     }
 
+    // wait のタイムアウトは、このテスト自身の connectionTimeout (3 秒) より長くする。
+    // 新実装では接続失敗が即時に検出されるため、通常はこの待ち時間を使い切らない
     wait(for: [connectExpectation], timeout: 35)
   }
 
@@ -665,7 +829,7 @@ final class SendonlyE2ETests: E2ETestBase {
     var disconnectExpectationFulfilled = false
 
     // sendonly 用の Configuration (DataChannel シグナリング有効 + WebSocket 切断の無視)
-    var config = try buildConfiguration(role: .sendonly)
+    var config = try makeConfiguration(role: .sendonly)
     config.channelId = channelId
     config.dataChannelSignaling = true
     config.ignoreDisconnectWebSocket = true
@@ -724,7 +888,7 @@ final class SendonlyE2ETests: E2ETestBase {
     // 接続する
     // connect コールバックは実行キューが固定されていないため、共有状態の更新と
     // 後続処理は main queue に束ねる
-    _ = sora?.connect(configuration: config) { [self] mediaChannel, error in
+    _ = sora?.connect(configuration: config) { mediaChannel, error in
       DispatchQueue.main.async {
         if let error {
           XCTFail("接続に失敗した : \(error)")
@@ -746,7 +910,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // 接続完了を待つ
-    wait(for: [connectExpectation], timeout: 35)
+    wait(for: [connectExpectation], timeout: connectWaitTimeout)
     guard let channel, let capturer else {
       XCTFail("接続に失敗した")
       disconnectAll(channels: [channel])
@@ -790,7 +954,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
 
     // Sora API (DisconnectConnection) でサーバー側から切断する
-    let apiExpectation = self.expectation(description: "Sora API の切断が成功すること")
+    let apiExpectation = self.expectation(description: "Sora API の呼び出しが完了すること")
     var request = URLRequest(url: apiUrl)
     request.httpMethod = "POST"
     request.setValue("Sora_20151104.DisconnectConnection", forHTTPHeaderField: "X-Sora-Target")
@@ -798,21 +962,41 @@ final class SendonlyE2ETests: E2ETestBase {
     request.httpBody = try JSONSerialization.data(
       withJSONObject: ["channel_id": channelId, "connection_id": channel.connectionId])
     request.timeoutInterval = 10
-    URLSession.shared.dataTask(with: request) { _, response, error in
+    // URLSession.shared は keep-alive 接続をプールするため、サーバー側で閉じられた
+    // 接続を再利用したときに NSURLErrorNetworkConnectionLost (-1005) で失敗し得る。
+    // API 呼び出しごとに使い捨ての URLSession を生成し、接続を再利用しないようにする。
+    // timeoutIntervalForResource でリクエストの総時間を制限し、タスクとセッションが
+    // 残り続けないようにする
+    let apiConfiguration = URLSessionConfiguration.ephemeral
+    apiConfiguration.timeoutIntervalForResource = 10
+    let apiSession = URLSession(configuration: apiConfiguration)
+    apiSession.dataTask(with: request) { _, response, error in
+      apiSession.invalidateAndCancel()
+      // コールバック内では XCTFail を呼ばず、結果の保持と fulfill のみを行う。
+      // コールバックがテスト終了後に発火しても次のテストへ失敗が誤帰属されない
       DispatchQueue.main.async {
-        if let error {
-          XCTFail("Sora API の呼び出しに失敗した : \(error)")
-        } else if let httpResponse = response as? HTTPURLResponse,
-          (200..<300).contains(httpResponse.statusCode)
-        {
-          self.apiDisconnectSucceeded = true
-        } else {
-          XCTFail("Sora API がエラーを返した : \(String(describing: response))")
-        }
+        guard !self.apiWaitFinished else { return }
+        self.apiError = error
+        self.apiResponse = response
         apiExpectation.fulfill()
       }
     }.resume()
-    wait(for: [apiExpectation], timeout: 10)
+    // wait のタイムアウトをリクエストのタイムアウトより長くし、通常はコールバックが
+    // wait の内側で発火するようにする
+    wait(for: [apiExpectation], timeout: 15)
+    apiWaitFinished = true
+    // コールバックの結果は wait 後にテストメソッド側で検証する
+    if let apiError {
+      XCTFail("Sora API の呼び出しに失敗した : \(apiError)")
+    } else if let httpResponse = apiResponse as? HTTPURLResponse,
+      (200..<300).contains(httpResponse.statusCode)
+    {
+      apiDisconnectSucceeded = true
+    } else if let apiResponse {
+      XCTFail("Sora API がエラーを返した : \(String(describing: apiResponse))")
+    }
+    // コールバックが wait 内に発火しなかった場合は wait がタイムアウトを報告済みのため、
+    // ここでは追加の XCTFail を記録しない
     guard self.apiDisconnectSucceeded else {
       // 後始末 (サーバー切断は発生しないため、close / 切断待機の expectation を wait 済みにする)
       capturer.stop()

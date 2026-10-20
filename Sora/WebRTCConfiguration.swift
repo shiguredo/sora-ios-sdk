@@ -2,7 +2,7 @@ import Foundation
 import WebRTC
 
 /// メディア制約を表します。
-public struct MediaConstraints {
+public struct MediaConstraints: Sendable {
   /// 必須の制約
   public var mandatory: [String: String] = [:]
 
@@ -34,7 +34,7 @@ public enum SDPSemantics: Sendable {
 }
 
 /// (リソースの逼迫により) 送信する映像の品質が維持できない場合の挙動です。
-public enum DegradationPreference {
+public enum DegradationPreference: Sendable {
   /// 何もしない
   case disabled
 
@@ -91,42 +91,6 @@ public struct WebRTCConfiguration {
   /// 初期化します。
   public init() {
     iceServerInfos = []
-  }
-
-  // MARK: - ネイティブ
-
-  var nativeValue: RTCConfiguration {
-    let config = RTCConfiguration()
-    config.iceServers = iceServerInfos.map { info in
-      info.nativeValue(insecure: isInsecure)
-    }
-    config.iceTransportPolicy = iceTransportPolicy.nativeValue
-    config.sdpSemantics = sdpSemantics.nativeValue
-
-    // AES-GCM を有効にする
-    config.cryptoOptions = RTCCryptoOptions(
-      srtpEnableGcmCryptoSuites: true,
-      srtpPreferGcmCryptoSuites: true,
-      srtpEnableAes128Sha1_32CryptoCipher: false,
-      srtpEnableAes128Sha1_80CryptoCipher: false,
-      srtpEnableEncryptedRtpHeaderExtensions: false,
-      sframeRequireFrameEncryption: false)
-    return config
-  }
-
-  var nativeConstraints: RTCMediaConstraints { constraints.nativeValue }
-
-  /// `Configuration.insecure` に対応する内部フラグ。
-  /// `true` の場合は TURN-TLS の証明書検証をスキップする。
-  var isInsecure: Bool = false
-
-  var usesVerifiedTURNTLS: Bool {
-    if isInsecure {
-      return false
-    }
-    return iceServerInfos.contains { info in
-      info.usesVerifiedTURNTLS
-    }
   }
 }
 

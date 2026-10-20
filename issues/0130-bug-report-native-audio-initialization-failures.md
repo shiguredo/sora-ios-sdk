@@ -3,7 +3,7 @@
 - Created: 2026-09-07
 - Completed: {YYYY-MM-DD}
 - Branch: feature/add-stereo-audio-output
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-09-16
 
 ## 目的
 
@@ -11,7 +11,7 @@
 
 ## 現状
 
-調査対象は PR #381 のコミット `16cba6346931d9d631e7061cb5632d193c1a2cb8` と libwebrtc `m150.7871.3.2` である。
+当初の調査対象は PR #381 のコミット `16cba6346931d9d631e7061cb5632d193c1a2cb8` と libwebrtc `m150.7871.3.2` だが、PR #381 は 2026-09-08 に develop へマージ済み (squash コミット `003bb73`、リリース 2026.3.0 に含まれる) であり、`16cba634` は develop に存在しない。現行 develop は libwebrtc `m150.7871.3.5` で、以下は現行コードで再確認した所見である。webrtc-build issue 0011 の修正は 2026-09-16 現在も `feature/m150.7871` で未対応であり、`m150.7871.3.5` には含まれない。
 
 - `NativePeerChannelFactory` は `setStereoPlayoutEnabled` の戻り値を検査するが、この呼び出しは後で行う AudioUnit の初期化成功を保証しない。
 - webrtc-build の `AudioDeviceIOS::InitPlayOrRecord` は AudioUnit の初期化結果を確認せず、成功を返す経路がある。
@@ -31,7 +31,7 @@
 
 ## 対応ブランチと依存関係
 
-ユーザー指定の例外として、PR #381 の `feature/add-stereo-audio-output` に含める。
+ユーザー指定の例外として PR #381 の `feature/add-stereo-audio-output` に含める予定だったが、PR #381 は 2026-09-08 に develop へマージ済みのため含められない。develop (2026.3.0) を基点とした新規ブランチで対応する。
 webrtc-build の `feature/m150.7871` で issue 0011 を先に対応し、その成果物を取り込んでから実装する。
 取り込み時には `Package.swift` のバージョンと checksum、`WebRTCInfo` の情報を揃える。
 

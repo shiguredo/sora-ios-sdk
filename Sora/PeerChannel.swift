@@ -3,45 +3,16 @@ import Security
 import WebRTC
 
 /// :nodoc:
-extension RTCDegradationPreference: CustomStringConvertible {
-  public var description: String {
-    switch self {
-    case .balanced: "balanced"
-    case .disabled: "disabled"
-    case .maintainFramerate: "maintain-framerate"
-    case .maintainResolution: "maintain-resolution"
-    @unknown default: "-"
-    }
-  }
-}
-
-/// :nodoc:
-/// デバッグログ出力用に RTCPriority の文字列表現を提供する
-extension RTCPriority: CustomStringConvertible {
-  public var description: String {
-    switch self {
-    case .veryLow: "very-low"
-    case .low: "low"
-    case .medium: "medium"
-    case .high: "high"
-    @unknown default: "unknown(\(rawValue))"
-    }
-  }
-}
-
-/// :nodoc:
 extension RTCRtpParameters {
   override open var description: String {
-    let degradationPreference =
-      if let unwrapped = self.degradationPreference {
-        String(describing: RTCDegradationPreference(rawValue: unwrapped.intValue))
-      } else {
-        "-"
-      }
-
     // RTCRtpParameters は他にもプロパティーを持つが、ここでは SDK で利用している値のみ出力する
     // encodings もここに追加したい
-    return "\(transactionId) \(String(describing: degradationPreference))"
+    //
+    // degradationPreference が未設定 (nil) の場合の表現は formatter が持つため、ここでは
+    // optional のまま渡す
+    let degradationPreference = WebRTCEnumDescription.degradationPreference(
+      rawValue: self.degradationPreference?.intValue)
+    return "\(transactionId) \(degradationPreference)"
   }
 }
 
@@ -91,6 +62,299 @@ private final class PeerChannelDisconnectCompletionContext: @unchecked Sendable 
   }
 }
 
+/// `createAnswer` の完了 handler を複数の非同期境界から参照するための、用途限定の内部ラッパーです。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことです。
+/// - 可変状態を持たず、保持する handler は `init` で確定した `let` であること
+/// - 変更前から handler を渡していた WebRTC の callback を包み直すだけで、配送先・通知順序・
+///   呼び出し回数を変えず、別系統の境界へ新たに渡さないこと
+/// - 保持するのは handler の closure だけで、`PeerChannel` / `DataChannel` /
+///   `ConnectionTask` などの SDK 内部の参照型を新たに保持しないこと
+///
+/// 使用契約は「`createAnswer` の各 return 経路で高々 1 回呼ばれる」です。実行単位は `createAnswer`
+/// の呼び出し 1 回で、そこで作られる box は 1 つです。これを `createAnswer` 本体の同期経路と、
+/// `setRemoteDescription` / `answer(for:)` / `setLocalDescription` の 3 つの非同期完了 closure が
+/// 共有します。成功経路は return する時点では box を呼ばず、handler の呼び出しを native の完了
+/// block に委ねます。native の完了 block に委ねた経路を除き、return する経路では必ず 1 回呼びます。
+/// native の完了が返らない場合は呼ばれず 0 回のままです。
+/// `self` が解放済みの場合は `self` を参照できないため、`setRemoteDescription` 完了 closure の
+/// `guard let self else` の else 節で handler を 1 回呼びます。この節は `self` が nil のときだけ通り、
+/// `guard let self` を通過した後の呼び出しは `self` が non-nil のときだけ通るため、1 回の closure
+/// 実行で handler が 2 回呼ばれることはありません (型では強制されません)。
+/// `Sendable` にするのはこの入れ物だけで、handler と
+/// その捕捉状態を `Sendable` にはしません。捕捉状態の所有と同期は、呼び出しスレッドを
+/// 保証しない既存の挙動の下で利用者の責務です。実行スレッドの同一性・直列性も契約にしません。
+private final class CreateAnswerHandlerBox: @unchecked Sendable {
+  private let handler: (String?, (any Error)?) -> Void
+
+  init(_ handler: @escaping (String?, (any Error)?) -> Void) {
+    self.handler = handler
+  }
+
+  func callAsFunction(_ sdp: String?, _ error: (any Error)?) {
+    handler(sdp, error)
+  }
+}
+
+/// `PeerChannel` の transport 状態 (`nativeChannel` / `streams` / `offerEncodings`) を
+/// 単一の NSLock で保護する storage。
+///
+/// これら 3 つは変更前は lock 保護のない `var` であり、WebRTC の callback と
+/// `DispatchQueue` の block から読まれていた。読み書きを 1 つの排他へ移すことで、
+/// `PeerChannel` の完了 closure が参照する状態アクセスをこの storage に閉じる。
+///
+/// `@unchecked Sendable` を認める根拠は、可変状態をすべてこの `lock` 配下でだけ
+/// 読み書きすることである。保持する `RTCPeerConnection` / `MediaStream` /
+/// `SignalingOffer.Encoding` のオブジェクト状態の不変性は主張しない。参照の取り出しと、
+/// 取り出した参照に対する `connectionState` や `close()`、`terminate()` の呼び出しは
+/// 別の区間で行う (`lock` を保持したまま libwebrtc を呼ばない)。
+///
+/// lock 順序は、`ConnectionStateOwner` の排他 / `connectHandlerLock` →
+/// この storage の一方向だけを許す。この storage を保持したまま
+/// `ConnectionStateOwner` の排他や `connectHandlerLock`、`webRTCConfigurationLock` を
+/// 取らないこと (`connectHandlerLock` とこの storage は入れ子にしない)。
+final class PeerChannelTransportStorage: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedNativeChannel: RTCPeerConnection?
+  private var storedStreams: [MediaStream] = []
+  private var storedOfferEncodings: [SignalingOffer.Encoding]?
+
+  /// 現在の `RTCPeerConnection` の参照を返す。参照の読み出しだけを排他し、
+  /// 返した参照に対する呼び出しは呼び出し側が排他区間の外で行う。
+  var native: RTCPeerConnection? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return storedNativeChannel
+    }
+    set {
+      lock.lock()
+      // 旧参照の解放 (libwebrtc の deinit) を lock 区間の外で行う。
+      // lock 区間の中で解放すると、外部コードが区間内で走り得る。
+      let previous = storedNativeChannel
+      storedNativeChannel = newValue
+      lock.unlock()
+      withExtendedLifetime(previous) {}
+    }
+  }
+
+  /// 現在の `MediaStream` の配列の写しを返す。
+  var streams: [MediaStream] {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedStreams
+  }
+
+  /// 現在の offer encodings を返す。
+  var offerEncodings: [SignalingOffer.Encoding]? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return storedOfferEncodings
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      storedOfferEncodings = newValue
+    }
+  }
+
+  /// `MediaStream` を追加する。読み出しと書き戻しの間に他のスレッドの更新が
+  /// 入らないよう、1 回の `lock` 区間で行う。
+  func append(stream: MediaStream) {
+    lock.lock()
+    defer { lock.unlock() }
+    storedStreams.append(stream)
+  }
+
+  /// 指定した streamId の `MediaStream` をすべて取り除き、取り除いた要素を返す。
+  ///
+  /// 読み出しと削除を 1 回の `lock` 区間で行う。返した要素の解放は呼び出し側の
+  /// lock 区間の外で行う。
+  @discardableResult
+  func remove(streamId: String) -> [MediaStream] {
+    lock.lock()
+    defer { lock.unlock() }
+    var removed: [MediaStream] = []
+    storedStreams.removeAll { stream in
+      guard stream.streamId == streamId else {
+        return false
+      }
+      removed.append(stream)
+      return true
+    }
+    return removed
+  }
+
+  /// すべての `MediaStream` を取り除く。1 回の `lock` 区間で行い、
+  /// 取り除いた要素の解放は lock 区間の外で行う。
+  func removeAllStreams() {
+    lock.lock()
+    let removed = storedStreams
+    storedStreams.removeAll()
+    lock.unlock()
+    withExtendedLifetime(removed) {}
+  }
+}
+
+/// `PeerChannel` の messaging 経路の状態 (登録済みの `DataChannel` の辞書 /
+/// `switchedToDataChannel` / `rpcChannel`) を単一の NSLock で保護する storage。
+///
+/// これら 3 つは変更前は lock 保護のない `var` であり、利用者の送信スレッドと、WebRTC /
+/// WebSocket の delegate スレッド、切断を開始したスレッドから読み書きされていた。
+///
+/// 読み書きを 1 つの排他へ移すことで、redirect による無効化の完了後に区間へ入る送信が
+/// 旧 DataChannel を参照しないことと、参照の読み書きにデータ競合が生じないことを保証する。
+/// 世代照合 (`dataChannelGeneration`) は非同期処理の完了時に旧接続の結果を破棄するための
+/// 補助であり、この排他単位の代わりにはならない。
+///
+/// `@unchecked Sendable` を認める根拠は、可変状態 (登録済みの `DataChannel` の辞書 /
+/// `switchedToDataChannel` / `rpcChannel`) の読み書きをすべてこの `lock` 配下でだけ行うことである。
+/// 保持する `DataChannel` / `RPCChannel` のオブジェクト状態の不変性は主張しない。参照の
+/// 取り出しと、取り出した参照に対する `sendWithoutLogging(_:)` / `invalidate(reason:)` /
+/// `handleMessage(_:)` の呼び出しを区間の中と外のどちらで行うかは、`withLock(_:)` の
+/// 説明に従う。
+///
+/// lock 順序は、この storage の `lock` を葉として一方向だけを許す。この `lock` を保持したまま
+/// 他の lock (`ConnectionStateOwner` の直列 queue / `connectHandlerLock` /
+/// `PeerChannelTransportStorage` / `MediaChannel` の `dataChannelOpenLock` と
+/// `connectionLifecycleLock` / `RPCChannel` の queue) を取らないこと。
+/// この `lock` から他へ出る辺が無いため、他の lock を保持した状態からこの `lock` を取る経路を
+/// 足しても循環しない。
+final class PeerChannelMessagingStorage: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedDataChannels: [String: DataChannel] = [:]
+  private var storedSwitchedToDataChannel = false
+  private var storedRPCChannel: RPCChannel?
+
+  /// この storage の可変状態を排他した区間で `body` を実行する。
+  ///
+  /// `body` は `lock` を保持したまま実行されるため、次を守ること。
+  /// - この storage の `withLock(_:)` を再取得しない (非再帰ロックのためデッドロックする)
+  /// - 利用者の handler / completion を呼ばない (`RPCChannel.invalidate(reason:)` は
+  ///   pending の completion を同期的に呼ぶため、`lock` の外で行う)
+  /// - `Logger` を呼ばない (利用者の出力 handler が送信経路を再入しても
+  ///   デッドロックしないよう、ログは区間の外で出す)
+  /// - 同じスレッドで `BasicDataChannelDelegate` の delegate メソッドを同期呼び出ししない
+  ///   (delegate メソッドはこの storage を読むため、再入すると上の 2 つと同じデッドロックになる)
+  /// - `DataChannel` の解放と libwebrtc の完了 block は区間の外へ出す
+  ///   (`PeerChannelTransportStorage` と同じく、`lock` 区間の中で外部コードを走らせない)
+  ///
+  /// 例外は送信経路である。`MediaChannel.sendMessage` は「照合から送信まで」を 1 区間で行う
+  /// ために、区間の中で `DataChannel.readyState` と `DataChannel.sendWithoutLogging(_:)` を
+  /// 呼ぶ。どちらも libwebrtc を同期呼び出しする (前者は network thread への `BlockingCall`、
+  /// 後者は proxy 経由の `PostTask` と完了待ち) ため、その間は signaling thread の delegate
+  /// 経路と他の送信者がこの `lock` を待つ。`compress` が true のときは区間の中で zlib 圧縮も
+  /// 行う。 libwebrtc m154.8037.1.2 時点では `DataChannel` の
+  /// delegate 通知を signaling thread へ post するため、この呼び出しが同じスレッドで delegate を
+  /// 再入することはない。この前提は SDK 外の libwebrtc の実装に依存するため、libwebrtc を
+  /// 更新するときは再確認し、送信元のスレッドで delegate が同期的に呼ばれる実装に変わった場合は、
+  /// delegate 側のログと参照読みが区間の中で走ることを踏まえてこの区間の持ち方を見直すこと。
+  func withLock<T>(_ body: () -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return body()
+  }
+
+  /// `switchedToDataChannel`。`lock` を保持したまま読む。書き込みは `PeerChannel` だけが行う。
+  fileprivate(set) var switchedToDataChannelLocked: Bool {
+    get { storedSwitchedToDataChannel }
+    set { storedSwitchedToDataChannel = newValue }
+  }
+
+  /// ラベルに対応する `DataChannel`。`lock` を保持したまま読む。
+  func dataChannelLocked(label: String) -> DataChannel? {
+    storedDataChannels[label]
+  }
+
+  /// `DataChannel` を登録する。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 同じラベルで登録済みだった `DataChannel`。呼び出し側は `lock` を解放してから
+  ///   解放すること (旧 DataChannel の解放に伴う libwebrtc の deinit を `lock` 区間の外で
+  ///   走らせるため)。
+  @discardableResult
+  fileprivate func setDataChannelLocked(_ dataChannel: DataChannel, label: String) -> DataChannel? {
+    let previous = storedDataChannels[label]
+    storedDataChannels[label] = dataChannel
+    return previous
+  }
+
+  /// 登録済みの `DataChannel` をすべて取り出して空にする。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 取り出した辞書。呼び出し側は `lock` を解放してから解放すること
+  ///   (旧 DataChannel の解放に伴う libwebrtc の deinit を `lock` 区間の外で走らせるため)。
+  fileprivate func takeAllDataChannelsLocked() -> [String: DataChannel] {
+    let removed = storedDataChannels
+    storedDataChannels.removeAll()
+    return removed
+  }
+
+  /// `rpcChannel` の参照。`lock` を保持したまま読む。
+  fileprivate var rpcChannelLocked: RPCChannel? {
+    storedRPCChannel
+  }
+
+  /// `rpcChannel` を設定する。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 設定前に保持していた `RPCChannel`。呼び出し側は `lock` を解放してから
+  ///   解放すること (旧参照の解放を `lock` 区間の外で行うため)。
+  @discardableResult
+  fileprivate func setRPCChannelLocked(_ rpcChannel: RPCChannel) -> RPCChannel? {
+    let previous = storedRPCChannel
+    storedRPCChannel = rpcChannel
+    return previous
+  }
+
+  /// `rpcChannel` を取り出して nil にする。`lock` を保持したまま書く。
+  ///
+  /// - Returns: 取り出した参照。呼び出し側が保持するため `lock` 区間の中で解放されない。
+  @discardableResult
+  fileprivate func takeRPCChannelLocked() -> RPCChannel? {
+    let rpcChannel = storedRPCChannel
+    storedRPCChannel = nil
+    return rpcChannel
+  }
+}
+
+/// `PeerChannel` の完了 closure が `PeerChannel` のメソッドを呼ぶための、
+/// 用途限定の参照保持 box。
+///
+/// `@unchecked Sendable` を認める根拠は、次の 3 条件をすべて満たすことである。
+/// - 可変状態を持たず、保持する参照は `init` でのみ代入する `weak var value` だけであること
+///   (`weak` は runtime が参照の load / store を原子的に扱い、代入後に値を書き換えない)
+/// - 変更前から `PeerChannel` を捕捉していた WebRTC の callback と `DispatchQueue` の
+///   block を包み直すだけで、配送先・通知順序・呼び出し回数を変えず、別系統の境界へ
+///   新たに渡さないこと
+/// - 保持する `PeerChannel` に対して closure が行う状態アクセスが、既存または本変更で
+///   確立した排他 (`ConnectionStateOwner` の直列 queue、`connectHandlerLock`、
+///   `ConnectionSnapshotStorage` / `PeerChannelTransportStorage` の NSLock) と
+///   `init` で確定した不変値 (`signalingChannel` / `snapshot` などの `let`) に閉じること
+///
+/// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
+/// 安全である」という限定した主張であり、`PeerChannel` 全体が thread-safe であることも、
+/// `PeerChannel` に `Sendable` 準拠を追加することも主張しない。
+/// 参照する状態の所有と同期が `PeerChannel` 側の責務であることは変更前と同じである。
+///
+/// `value` を弱参照にするのは、変更前の `[weak self]` と同じく「`PeerChannel` が解放済みなら
+/// 何もしない」挙動を維持するためである。強参照にすると、WebRTC が完了 closure を保持し、
+/// その closure が box を、box が `PeerChannel` を保持する経路で `PeerChannel` が
+/// 解放されなくなる。
+///
+/// box は `PeerChannel` 以外の参照を保持しない。`transportStorage` を box に持たせると、
+/// `box → transportStorage → RTCPeerConnection → 保留中の完了 block → box` の循環ができ、
+/// この循環は完了 block が 1 回実行されるまで続く。完了 block は WebRTC 側が保持するため、
+/// `PeerChannel` を解放しても `RTCPeerConnection` の生存が完了まで延びる点が
+/// 変更前の `[weak self]` との差になる。closure からは `self.transportStorage` で読めるため、
+/// box には持たせない。
+private final class WeakPeerChannelBox: @unchecked Sendable {
+  /// 捕捉対象の `PeerChannel`。解放済みの場合は nil になる。
+  weak var value: PeerChannel?
+
+  init(value: PeerChannel) {
+    self.value = value
+  }
+}
+
 class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   // MARK: - Constants
 
@@ -106,221 +370,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// タイマーは `.connecting` への遷移でキャンセルされる。
   private static let disconnectedGracePeriod: TimeInterval = 5.0
 
-  final class Lock {
-    weak var context: PeerChannel?
-
-    // 進行中の非同期処理数。lock() でインクリメント、unlock() でデクリメントする
-    private var count: Int = 0
-
-    // 切断処理が開始されたことを示すフラグ。true の場合 lock() は false を返す。
-    // 不変条件: isDisconnecting == true ならば count == 0
-    private var isDisconnecting: Bool = false
-
-    // connect() が初期ロックを取得してから signalingChannel.connect() の開始を
-    // 確定するまでの区間を示す。区間中の切断要求は、開始処理側で受け取る。
-    private var isStartingConnection: Bool = false
-
-    // count > 0 の間に切断要求があった場合に遅延実行用パラメータを保持する
-    private var shouldDisconnect: (Bool, Error?, DisconnectReason) = (false, nil, .unknown)
-
-    // count, isDisconnecting, shouldDisconnect への全アクセスを保護する排他ロック
-    private let nsLock = NSLock()
-
-    /// 猶予タイマー由来の切断要求が、接続の回復により無効化されるかを返す。
-    ///
-    /// タイマー発火時点の確認から切断実行までの間に接続が回復している場合、
-    /// 切断すると一時的な切断の回復を阻害するためキャンセルする。
-    /// `.disconnected` のままなら切断を継続する。 `.failed` は終端状態であり
-    /// 回復し得ないためキャンセルしない。他の reason はユーザーの意図または
-    /// 確定した切断なので、この再確認の対象外とする。
-    private func shouldCancelDisconnectTimerBasedDisconnect(reason: DisconnectReason) -> Bool {
-      reason == .peerConnectionStateDisconnected
-        && context?.state != .disconnected
-        && context?.state != .failed
-    }
-
-    func waitDisconnect(error: Error?, reason: DisconnectReason) {
-      var shouldCallBasicDisconnect = false
-      nsLock.lock()
-      if isDisconnecting {
-        // 切断処理が既に開始されている場合、追加の切断要求は無視する
-      } else if isStartingConnection {
-        // signaling の開始可否を確定する前の切断要求は保存する。
-        // startConnection が開始前に検出した場合は signaling を開始せずに切断する。
-        shouldDisconnect = (true, error, reason)
-      } else if count == 0 {
-        // 猶予タイマー由来の切断は、タイマー発火時点の確認からここまでの間に
-        // 接続が回復している場合は切断しない
-        if !shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-          isDisconnecting = true
-          shouldCallBasicDisconnect = true
-        }
-      } else if count == 1, context?.onConnect != nil {
-        // 接続試行中 (connect() の初期ロックのみが残っている状態) の切断要求。
-        // 初期ロックは finishConnecting() か sendConnectMessage(error:) でのみ解放されるため、
-        // answer 送信後の接続失敗などではそのまま解放されず basicDisconnect が呼ばれない。
-        // その結果 RTCPeerConnection がクローズされずに残り続けるため、
-        // ここで初期ロックを解放して basicDisconnect を直接実行する。
-        count = 0
-        isDisconnecting = true
-        shouldCallBasicDisconnect = true
-      } else {
-        // 進行中の非同期処理が完了するまで切断要求を遅延保存する。
-        // 保存済みの切断要求は最後の切断要求で上書きされる。猶予タイマー由来の
-        // 切断要求がその後の .failed 遷移の切断要求で上書きされると NO-ERROR 送信が
-        // 失われるが (sendDisconnectMessageIfNeeded の state == .failed ガード)、
-        // .failed は ICE の完全失敗であり送信が届く可能性が低いため妥当とする
-        shouldDisconnect = (true, error, reason)
-      }
-      nsLock.unlock()
-
-      if shouldCallBasicDisconnect {
-        context?.basicDisconnect(error: error, reason: reason)
-      }
-    }
-
-    /// 接続開始用の初期ロックを取得し、signaling 開始前の区間へ入ります。
-    @discardableResult
-    func beginConnectionStart() -> Bool {
-      nsLock.lock()
-      guard !isDisconnecting, !isStartingConnection else {
-        nsLock.unlock()
-        return false
-      }
-      count += 1
-      isStartingConnection = true
-      nsLock.unlock()
-      return true
-    }
-
-    /// signaling 開始と、その直前に到着した切断要求を直列化します。
-    ///
-    /// beginConnectionStart() の後に呼び出します。開始前に切断要求があれば
-    /// operation を実行せず、開始中に切断要求があれば operation の復帰後に切断します。
-    func startConnection(_ operation: () -> Void) {
-      var shouldStart = false
-      var disconnectParams: (Error?, DisconnectReason)?
-
-      nsLock.lock()
-      if !isDisconnecting {
-        switch shouldDisconnect {
-        case (true, let error, let reason):
-          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-            shouldDisconnect = (false, nil, .unknown)
-            shouldStart = true
-          } else {
-            count = 0
-            isStartingConnection = false
-            isDisconnecting = true
-            shouldDisconnect = (false, nil, .unknown)
-            disconnectParams = (error, reason)
-          }
-        default:
-          shouldStart = true
-        }
-      }
-      nsLock.unlock()
-
-      if let (error, reason) = disconnectParams {
-        context?.basicDisconnect(error: error, reason: reason)
-        return
-      }
-      guard shouldStart else {
-        return
-      }
-
-      operation()
-
-      // operation の実行中にも切断要求が到着し得るため、開始区間を閉じる処理と
-      // 保存済み要求の取り出しを同じ排他領域で行う。
-      nsLock.lock()
-      isStartingConnection = false
-      if !isDisconnecting {
-        switch shouldDisconnect {
-        case (true, let error, let reason):
-          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-            shouldDisconnect = (false, nil, .unknown)
-          } else {
-            count = 0
-            isDisconnecting = true
-            shouldDisconnect = (false, nil, .unknown)
-            disconnectParams = (error, reason)
-          }
-        default:
-          break
-        }
-      }
-      nsLock.unlock()
-
-      if let (error, reason) = disconnectParams {
-        context?.basicDisconnect(error: error, reason: reason)
-      }
-    }
-
-    @discardableResult
-    func lock() -> Bool {
-      nsLock.lock()
-      if isDisconnecting {
-        nsLock.unlock()
-        return false
-      }
-      count += 1
-      nsLock.unlock()
-      return true
-    }
-
-    func unlock() {
-      var disconnectParams: (Error?, DisconnectReason)?
-      nsLock.lock()
-      if isDisconnecting {
-        // 切断処理の開始後に非同期処理が完了した場合の unlock は無視する。
-        // waitDisconnect が接続試行中の切断要求を basicDisconnect へ直接到達させるため、
-        // 後続の非同期処理が unlock を呼んでも count は 0 のままである。
-        nsLock.unlock()
-        return
-      }
-      if count <= 0 {
-        fatalError("count is already 0")
-      }
-      count -= 1
-      // count == 0 になった場合に加えて、接続試行中 (count == 1) に切断要求が
-      // あった場合も、進行中の非同期処理が完了したここで basicDisconnect へ到達させる。
-      // これがないと、 createAndSendAnswer 実行中の切断要求が保存されたまま
-      // 初期ロックが解放されず、 basicDisconnect が呼ばれない。
-      if count == 0 || (count == 1 && shouldDisconnect.0) {
-        switch shouldDisconnect {
-        case (true, let error, let reason):
-          if shouldCancelDisconnectTimerBasedDisconnect(reason: reason) {
-            // 接続が回復しているため切断をキャンセルする。
-            // isDisconnecting は設定しない (設定すると以後の切断・再ネゴシエーションが
-            // すべて不能になり、 Lock が恒久的に破壊されるため。キャンセル後は再び
-            // .disconnected になればタイマーが再開始される)
-            shouldDisconnect = (false, nil, .unknown)
-          } else {
-            count = 0
-            isDisconnecting = true
-            shouldDisconnect = (false, nil, .unknown)
-            disconnectParams = (error, reason)
-          }
-        default:
-          break
-        }
-      }
-      nsLock.unlock()
-
-      if let (error, reason) = disconnectParams {
-        // waitDisconnect で受理した切断要求は、nativeChannel が先に .closed へ
-        // 遷移していても後始末が必要である。二重実行は isDisconnecting が防ぐ。
-        context?.basicDisconnect(error: error, reason: reason)
-      }
-    }
-
-  }
-
   // MARK: - Properties
 
   var internalHandlers = PeerChannelInternalHandlers()
-  let configuration: Configuration
+
+  /// 接続開始時に写し取った利用者の設定
+  ///
+  /// 利用者所有の可変値を参照しないための値で、offer 受信でも更新されない。
+  /// 接続所有の WebRTC 設定は `webRTCConfiguration` (`currentWebRTCConfiguration()`) を使う。
+  let snapshot: ConnectionConfigurationSnapshot
   let signalingChannel: SignalingChannel
   let nativePeerChannelFactory: NativePeerChannelFactory
   /// SDK と公開 API のカメラ start / stop / restart をプロセス全体で直列化する coordinator
@@ -330,28 +388,133 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// この接続でカメラと画面共有のどちらを送信するかを、非同期開始より前に予約する coordinator
   private let videoSourceCoordinator: VideoSourceCoordinator
 
-  private(set) var streams: [MediaStream] = []
+  /// 現在の `MediaStream` の配列
+  ///
+  /// 追加・削除は `transportStorage` の操作経由で行うため、getter だけを公開する。
+  var streams: [MediaStream] {
+    transportStorage.streams
+  }
   private(set) var iceCandidates: [ICECandidate] = []
 
-  var dataChannels: [String: DataChannel] = [:]
-  var switchedToDataChannel: Bool = false
+  /// 登録済みの `DataChannel` の辞書 / `switchedToDataChannel` / `rpcChannel` を保護する storage
+  ///
+  /// internal にしているのは、`MediaChannel.sendMessage` が「照合 (`switchedToDataChannel` と
+  /// 登録済みの `DataChannel`) から `sendWithoutLogging(_:)` まで」を 1 つの排他区間で行うために、
+  /// この storage の `withLock(_:)` を使うためである (`transportStorage` と同じ理由)。
+  let messagingStorage = PeerChannelMessagingStorage()
+
+  /// DataChannel 経路が有効か (`switched` 受信後に true、redirect 受理で false)
+  ///
+  /// 単独の読み書きは `messagingStorage` の 1 区間で行う。複数の参照をまとめて扱う経路
+  /// (redirect の無効化と `MediaChannel.sendMessage`) は `messagingStorage.withLock(_:)` を使い、
+  /// 判定と更新の間に他のスレッドの更新が入らないようにする。
+  var switchedToDataChannel: Bool {
+    get { messagingStorage.withLock { messagingStorage.switchedToDataChannelLocked } }
+    set { messagingStorage.withLock { messagingStorage.switchedToDataChannelLocked = newValue } }
+  }
+
+  /// 現在の `RPCChannel` の参照を返す。参照の読み出しだけを排他し、返した参照に対する
+  /// 呼び出しは呼び出し側が排他区間の外で行う。
+  var rpcChannel: RPCChannel? {
+    messagingStorage.withLock { messagingStorage.rpcChannelLocked }
+  }
+
   var signalingOfferMessageDataChannels: [[String: Any]] = []
-  var rpcChannel: RPCChannel?
 
   weak var mediaChannel: MediaChannel?
 
+  // MARK: - DataChannel 経路の排他
+
+  /// ラベルに対応する `DataChannel` の参照を返す。参照の読み出しだけを排他し、
+  /// 返した参照に対する呼び出しは呼び出し側が排他区間の外で行う。
+  func dataChannel(label: String) -> DataChannel? {
+    messagingStorage.withLock { messagingStorage.dataChannelLocked(label: label) }
+  }
+
+  /// `DataChannel` を登録する。`rpcChannel` を渡した場合は同じ排他区間で設定し、
+  /// 「登録済みだが RPC が未設定」の窓を作らない。
+  ///
+  /// `rpcChannel` を置き換えた場合、旧 `RPCChannel` の pending は終端せずに解放する (変更前と
+  /// 同じ挙動)。同じ `PeerChannel` で `rpc` ラベルが 2 回 `didOpen` される経路は、切断と
+  /// redirect が `rpcChannel` を nil にするため実際には到達しない。
+  ///
+  /// 呼び出し側は、登録の後に `onOpenDataChannel` を排他区間の外で通知すること。
+  func register(dataChannel: DataChannel, rpcChannel: RPCChannel? = nil) {
+    // libwebrtc の property 読み (`dataChannel.label`) は区間の外で行う
+    // (lock 区間の中で外部コードを走らせない)。
+    let label = dataChannel.label
+    var replacedDataChannel: DataChannel?
+    var replacedRPCChannel: RPCChannel?
+    messagingStorage.withLock {
+      replacedDataChannel = messagingStorage.setDataChannelLocked(dataChannel, label: label)
+      if let rpcChannel {
+        replacedRPCChannel = messagingStorage.setRPCChannelLocked(rpcChannel)
+      }
+    }
+    // 同じラベルで置き換えた旧 DataChannel と、置き換えた旧 RPCChannel の解放を lock 区間の
+    // 外で行う (旧参照の解放に伴う libwebrtc の deinit を区間の中で走らせない)。
+    withExtendedLifetime(replacedDataChannel) {}
+    withExtendedLifetime(replacedRPCChannel) {}
+  }
+
+  /// `rpcChannel` を取り出して nil にする。
+  ///
+  /// - Returns: 取り出した参照。`invalidate(reason:)` は pending の completion を同期的に
+  ///   呼ぶため、呼び出し側が排他区間の外で呼ぶこと。
+  @discardableResult
+  func takeRPCChannel() -> RPCChannel? {
+    messagingStorage.withLock { messagingStorage.takeRPCChannelLocked() }
+  }
+
+  /// redirect 受理時に旧接続の messaging 経路 (DataChannel への送信と RPC) を無効化する。
+  ///
+  /// `switchedToDataChannel` を false にし、旧 DataChannel の参照を解放して `rpcChannel` を
+  /// 取り出すところまでを 1 つの排他区間で行う。無効化と並行した `sendMessage` は、この区間の
+  /// 前後どちらかで排他されるため、無効化の完了後に開始した送信が旧 DataChannel へ届かない。
+  /// 本番の呼び出し元は `handleSignalingOverWebSocket` の `.redirect` ケース (WebSocket の
+  /// delegate スレッド) である。
+  ///
+  /// - Returns: 取り出した `RPCChannel`。`invalidate(reason:)` は pending の completion を
+  ///   同期的に呼ぶため、呼び出し側が排他区間の外で呼ぶこと。
+  @discardableResult
+  func invalidateMessagingAfterRedirect() -> RPCChannel? {
+    // 旧 DataChannel の辞書は、lock を解放してから解放する (libwebrtc の deinit を
+    // lock 区間の中で走らせないため)。そのため取り出した辞書は `withExtendedLifetime` まで
+    // 保持する。
+    var removedDataChannels: [String: DataChannel] = [:]
+    let rpcChannel = messagingStorage.withLock { () -> RPCChannel? in
+      messagingStorage.switchedToDataChannelLocked = false
+      removedDataChannels = messagingStorage.takeAllDataChannelsLocked()
+      return messagingStorage.takeRPCChannelLocked()
+    }
+    withExtendedLifetime(removedDataChannels) {}
+    return rpcChannel
+  }
+
   // MARK: - 接続状態フラグ
 
-  // PeerChannel の接続状態フラグ 5 つは、単一所有者である ConnectionStateOwner が管理する。
-  // これにより nonisolated(unsafe) によるベストエフォートの同期を廃止する。
+  // PeerChannel の接続状態フラグ 5 つと接続ライフサイクルの排他が扱う接続試行状態
+  // (進行中の非同期処理数 / 切断開始フラグ / 接続開始区間フラグ / 遅延する切断要求)、
+  // および音声入力の初期化済みフラグは、
+  // 単一所有者である ConnectionStateOwner が同じ直列 queue で管理する。
+  // これにより nonisolated(unsafe) によるベストエフォートの同期と、
+  // 接続状態とは別に存在していた lock を廃止する。
   // (MediaChannel の接続ライフサイクルは connectionLifecycleLock (NSLock ベースの直列化)
-  // が担うため、ここで扱うのは PeerChannel 自身のフラグのみである)
+  // が担うため、ここで扱うのは PeerChannel 自身の状態のみである)
 
   /// 接続状態フラグの単一所有者
   private let connectionStateOwner: ConnectionStateOwner
 
   /// 接続状態フラグの snapshot を保持する storage
   private let connectionStateSnapshotStorage = ConnectionSnapshotStorage()
+
+  /// `nativeChannel` / `streams` / `offerEncodings` を保護する storage
+  ///
+  /// internal にしているのは、`MediaChannel.getStats(handler:)` / `getStatsSnapshot(handler:)` の完了 closure が
+  /// `MediaChannel` を捕捉せずに現在の `nativeChannel` の同一性を判定するため、この storage の
+  /// 参照を `MediaChannelGetStatsContext` / `MediaChannelGetStatsSnapshotContext` へ渡す必要が
+  /// あるためである。
+  let transportStorage = PeerChannelTransportStorage()
 
   /// 接続状態のイベントを投げる
   private func handleConnectionEvent(_ event: ConnectionEvent) {
@@ -384,18 +547,25 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   var state: PeerChannelConnectionState {
-    if let nativeChannel {
+    // 接続試行中の判定は、ここで 1 度だけ読んだ onConnect の有無で行う。
+    // 分岐ごとに読み直すと、読み出しの間に接続が終端した場合に判定がぶれる。
+    // (onConnect は connectHandlerLock、nativeChannel は transportStorage の排他で
+    //  読み、両者を入れ子にしない)
+    let hasConnectHandler = onConnect != nil
+    // nativeChannel の参照は storage から 1 度だけ取り出す。connectionState の読みは
+    // storage の lock を解放してから行う。
+    if let nativeChannel = transportStorage.native {
       let state = PeerChannelConnectionState(nativeChannel.connectionState)
       // connect() 開始後から finishConnecting() / basicDisconnect() までは onConnect が保持される。
       // そのため、 RTCPeerConnection を生成済みでも connectionState が .new の間は
       // 接続試行中として扱う。
-      if onConnect != nil, state == .new {
+      if hasConnectHandler, state == .new {
         return .connecting
       }
       return state
     }
 
-    if onConnect != nil {
+    if hasConnectHandler {
       // offer.configuration を受け取るまで RTCPeerConnection を生成しないため、
       // nativeChannel が未生成でも、onConnect が保持されていれば接続試行中として扱う。
       return .connecting
@@ -404,20 +574,93 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     return PeerChannelConnectionState(RTCPeerConnectionState.new)
   }
 
-  var nativeChannel: RTCPeerConnection?
+  /// 現在の `RTCPeerConnection`。
+  ///
+  /// 読み書きは `transportStorage` の `NSLock` で排他する。参照の取り出しと、
+  /// 取り出した参照に対する `connectionState` などの呼び出しは別の区間で行う。
+  var nativeChannel: RTCPeerConnection? {
+    get {
+      transportStorage.native
+    }
+    set {
+      transportStorage.native = newValue
+    }
+  }
 
-  var webRTCConfiguration: WebRTCConfiguration
+  /// 接続所有の WebRTC 設定
+  ///
+  /// 利用者由来 snapshot を初期値とし、offer 受信時にサーバー値で更新します。
+  /// `snapshot.webRTCConfiguration` (利用者由来で、offer 受信でも更新されない) と
+  /// 取り違えないこと。読み書きは webRTCConfigurationLock 配下で行います。
+  private var webRTCConfiguration: WebRTCConfigurationSnapshot
+
+  /// webRTCConfiguration の読み書きを保護する lock
+  ///
+  /// lock は値を読み書きする短い区間だけ保持し、libwebrtc の非同期 callback や
+  /// await、利用者 handler の呼び出しをまたいで保持しません。
+  private let webRTCConfigurationLock = NSLock()
+
+  /// 接続所有の WebRTC 設定の現在値を返します。
+  func currentWebRTCConfiguration() -> WebRTCConfigurationSnapshot {
+    webRTCConfigurationLock.lock()
+    defer { webRTCConfigurationLock.unlock() }
+    return webRTCConfiguration
+  }
+
+  /// 接続所有の WebRTC 設定を更新します。
+  func updateWebRTCConfiguration(_ configuration: WebRTCConfigurationSnapshot) {
+    webRTCConfigurationLock.lock()
+    defer { webRTCConfigurationLock.unlock() }
+    webRTCConfiguration = configuration
+  }
+
   var clientId: String?
   var bundleId: String?
   var connectionId: String?
 
-  var onConnect: ((Error?) -> Void)?
+  /// 接続完了 callback の読み書きを保護する lock
+  ///
+  /// `onConnect` の保護に接続状態 owner の排他を再利用しない。`state` は
+  /// 接続状態 owner の排他を保持したまま `ConnectionStateOwner` の判定 closure から
+  /// 呼ばれ、そこから `onConnect` を読む。この経路は `requestDisconnect` /
+  /// `prepareSignalingStart` / `finishSignalingStart` / `endAsyncOperation` から到達する。
+  /// 接続状態 owner の排他は同じ直列 queue へ再入できないため、これを再利用すると
+  /// deadlock する。
+  ///
+  /// lock 順序は「接続状態 owner の排他 → `connectHandlerLock`」の一方向とする。
+  /// `connectHandlerLock` を保持したまま接続状態 owner の排他を取る経路を作らないこと。
+  private let connectHandlerLock = NSLock()
 
-  var isAudioInputInitialized: Bool = false
+  /// 接続完了 callback の実体
+  ///
+  /// 読み書きはすべて `connectHandlerLock` で行う。外部からは `onConnect` を経由する。
+  private var storedOnConnect: ((Error?) -> Void)?
 
-  let lock: Lock
+  /// 接続完了 callback
+  ///
+  /// 接続の開始 (`connect`)、終端 (`invokeConnectHandler` の取り出しとクリア)、
+  /// 接続試行中の判定 (`state` / `ConnectionStateOwner.requestDisconnect`) のすべてが
+  /// `connectHandlerLock` を通る。利用者 callback 自身の呼び出しは排他区間の外で行う。
+  var onConnect: ((Error?) -> Void)? {
+    get {
+      connectHandlerLock.lock()
+      defer { connectHandlerLock.unlock() }
+      return storedOnConnect
+    }
+    set {
+      connectHandlerLock.lock()
+      // 旧値は lock を解放してから解放する。lock 区間の中で旧 closure を解放すると、
+      // closure が捕捉しているオブジェクトの deinit (= 外部コード) が区間内で走り得る。
+      let previous = storedOnConnect
+      storedOnConnect = newValue
+      connectHandlerLock.unlock()
+      withExtendedLifetime(previous) {}
+    }
+  }
 
-  private var offerEncodings: [SignalingOffer.Encoding]?
+  // `isAudioInputInitialized` は `ConnectionStateOwner` が単一所有する。読みは
+  // `connectionStateOwner.isAudioInputInitialized()`、書きは `.audioInputInitialized`
+  // イベントで行う。`offerEncodings` は `transportStorage` が保護する。
 
   private var connectedAtLeastOnce: Bool = false
 
@@ -430,8 +673,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   // MARK: - Public methods
 
-  required init(
-    configuration: Configuration, signalingChannel: SignalingChannel,
+  init(
+    snapshot: ConnectionConfigurationSnapshot, signalingChannel: SignalingChannel,
     nativePeerChannelFactory: NativePeerChannelFactory,
     mediaChannel: MediaChannel?,
     cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
@@ -440,18 +683,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     self.signalingChannel = signalingChannel
     self.mediaChannel = mediaChannel
-    self.configuration = configuration
+    self.snapshot = snapshot
     self.nativePeerChannelFactory = nativePeerChannelFactory
     self.cameraCaptureCoordinator = cameraCaptureCoordinator
     self.cameraCaptureOwnership = cameraCaptureOwnership
     self.videoSourceCoordinator = videoSourceCoordinator
-    webRTCConfiguration = configuration.webRTCConfiguration
+    webRTCConfiguration = snapshot.webRTCConfiguration
 
     connectionStateOwner = ConnectionStateOwner(
       snapshotStorage: connectionStateSnapshotStorage)
-    lock = Lock()
     super.init()
-    lock.context = self
 
     signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
       self?.disconnect(error: error, reason: reason)
@@ -476,20 +717,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     Logger.debug(type: .peerChannel, message: "try connecting")
-    // このロックは finishConnecting() で解除される
-    guard lock.beginConnectionStart() else {
+    // ここで取得する接続開始の初期ロックは、接続が終端するまで
+    // endAsyncOperation() (finishConnecting() または sendConnectMessage(error:)) で解放される。
+    // 解放されない限り切断要求は遅延されたままになる。
+    guard beginConnectionStart() else {
       handler(SoraError.connectionCancelled)
       return
     }
-    // 開始ロックの取得後に設定することで、切断処理との間で onConnect を競合させない。
+    // 開始ロックの取得後に設定することで、切断処理との間で onConnect の有無を確定させる。
     // この区間の切断要求は startConnection まで保存される。
+    // (この時点で接続状態 owner の排他は解放済みであり、代入自体は connectHandlerLock で保護される)
     onConnect = handler
 
     // TODO(zztkm): WrapperVideoEncoderFactory は type: offer メッセージを受け取ったときに設定されるので、ここでの設定は不要かもしれない
     // サイマルキャストを利用する場合は、 RTCPeerConnection の生成前に WrapperVideoEncoderFactory を設定する必要がある
-    WrapperVideoEncoderFactory.shared.simulcastEnabled = configuration.simulcastEnabled
+    WrapperVideoEncoderFactory.shared.simulcastEnabled = snapshot.simulcastEnabled
 
-    lock.startConnection {
+    startConnection {
       signalingChannel.connect { [weak self] error in
         guard let weakSelf = self else {
           return
@@ -513,20 +757,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   func add(stream: MediaStream) {
-    streams.append(stream)
+    transportStorage.append(stream: stream)
     Logger.debug(type: .peerChannel, message: "call onAddStream")
     internalHandlers.onAddStream?(stream)
   }
 
   func remove(streamId: String) {
-    let stream = streams.first { stream in stream.streamId == streamId }
-    if let stream {
-      remove(stream: stream)
+    // 読み出しと削除は storage の 1 回の lock 区間で行い、通知には取り除いた要素を使う。
+    let removed = transportStorage.remove(streamId: streamId)
+    guard let stream = removed.first else {
+      return
     }
-  }
-
-  func remove(stream: MediaStream) {
-    streams = streams.filter { each in each.streamId != stream.streamId }
     Logger.debug(type: .peerChannel, message: "call onRemoveStream")
     internalHandlers.onRemoveStream?(stream)
   }
@@ -541,7 +782,94 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   func disconnect(error: Error?, reason: DisconnectReason) {
     Logger.debug(type: .peerChannel, message: "wait to disconnect")
-    lock.waitDisconnect(error: error, reason: reason)
+    if let pending = connectionStateOwner.requestDisconnect(
+      error: error,
+      reason: reason,
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect,
+      isConnectHandlerHeld: { self.onConnect != nil }
+    ) {
+      basicDisconnect(error: pending.error, reason: pending.reason)
+    }
+  }
+
+  // MARK: - 接続ライフサイクルの排他
+
+  /// 接続開始の初期ロックを取得します。
+  ///
+  /// `connect()` が最初に取得し、`finishConnecting()` または
+  /// `sendConnectMessage(error:)` まで保持します。取得できた場合のみ
+  /// `startConnection(_:)` へ進めます。
+  ///
+  /// テストから呼び出すため internal としている。
+  @discardableResult
+  func beginConnectionStart() -> Bool {
+    connectionStateOwner.beginConnectionStart()
+  }
+
+  /// signaling の開始を、開始の前後に到着した切断要求と直列化します。
+  ///
+  /// 開始前に保存された切断要求がある場合は signaling を開始せずに切断します。
+  /// 開始中に到着した切断要求は `operation` の復帰後に実行します。
+  ///
+  /// テストから呼び出すため internal としている。
+  func startConnection(_ operation: () -> Void) {
+    switch connectionStateOwner.prepareSignalingStart(
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect)
+    {
+    case .ignored:
+      return
+    case .disconnect(let pending):
+      basicDisconnect(error: pending.error, reason: pending.reason)
+      return
+    case .start:
+      break
+    }
+
+    operation()
+
+    // operation の実行中にも切断要求が到着し得るため、開始区間を閉じる処理と
+    // 保存済み要求の取り出しを同じ排他領域で行う。
+    if let pending = connectionStateOwner.finishSignalingStart(
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect)
+    {
+      basicDisconnect(error: pending.error, reason: pending.reason)
+    }
+  }
+
+  /// 進行中の非同期処理の開始を登録します。
+  ///
+  /// 切断処理が開始済みの場合は false を返し、呼び出し側は処理を開始しません。
+  ///
+  /// テストから呼び出すため internal としている。
+  @discardableResult
+  func beginAsyncOperation() -> Bool {
+    connectionStateOwner.beginAsyncOperation()
+  }
+
+  /// 進行中の非同期処理の終了を登録し、保存された切断要求があれば実行します。
+  ///
+  /// テストから呼び出すため internal としている。
+  func endAsyncOperation() {
+    if let pending = connectionStateOwner.endAsyncOperation(
+      shouldCancelDisconnectTimerBasedDisconnect: shouldCancelDisconnectTimerBasedDisconnect)
+    {
+      // 切断要求は、 nativeChannel が先に .closed へ遷移していても後始末が必要である。
+      // 二重実行は接続状態 owner の isDisconnecting が防ぐ。
+      basicDisconnect(error: pending.error, reason: pending.reason)
+    }
+  }
+
+  /// 猶予タイマー由来の切断要求が、接続の回復により無効化されるかを返します。
+  ///
+  /// タイマー発火時点の確認から切断実行までの間に接続が回復している場合、
+  /// 切断すると一時的な切断の回復を阻害するためキャンセルします。
+  /// `.disconnected` のままなら切断を継続します。 `.failed` は終端状態であり
+  /// 回復し得ないためキャンセルしません。他の reason はユーザーの意図または
+  /// 確定した切断なので、この再確認の対象外とします。
+  private func shouldCancelDisconnectTimerBasedDisconnect(reason: DisconnectReason) -> Bool {
+    reason == .peerConnectionStateDisconnected
+      && state != .disconnected
+      && state != .failed
   }
 
   // MARK: - Private methods
@@ -554,19 +882,35 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// (callback 内から同期的に disconnect() された場合でも、二重実行を防ぐための
   /// take-and-clear である。onConnect は呼び出し前に必ず nil へクリアされる)
   ///
+  /// 利用者 callback は排他区間の外で呼ぶ。callback 内から同期的に disconnect() されると
+  /// `ConnectionStateOwner.requestDisconnect` が `state` 経由で `connectHandlerLock` を取るため、
+  /// 保持したまま呼ぶとデッドロックする。
+  ///
   /// テストから呼び出すため internal としている。
   func invokeConnectHandler(_ error: Error?) {
-    let connectHandler = onConnect
-    onConnect = nil
+    let connectHandler = takeConnectHandler()
     if let connectHandler {
       Logger.debug(type: .peerChannel, message: "call connect(handler:)")
       connectHandler(error)
     }
   }
 
+  /// 保持中の接続完了 callback を取り出し、同じ排他区間で nil へクリアします。
+  ///
+  /// 取り出しとクリアを分けると、並行する `invokeConnectHandler` が同じ callback を
+  /// 2 回取り出し得る。1 回の lock 区間で行うことで 1 回保証を成立させる。
+  /// 呼び出し元は取り出した callback を排他区間の外で実行すること。
+  private func takeConnectHandler() -> ((Error?) -> Void)? {
+    connectHandlerLock.lock()
+    defer { connectHandlerLock.unlock() }
+    let connectHandler = storedOnConnect
+    storedOnConnect = nil
+    return connectHandler
+  }
+
   private func sendConnectMessage(error: Error?) {
     if let error {
-      lock.unlock()
+      endAsyncOperation()
       Logger.error(
         type: .peerChannel,
         message: "failed connecting to signaling channel (\(error.localizedDescription))")
@@ -574,12 +918,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       return
     }
 
-    if configuration.isSender {
+    if snapshot.isSender {
       Logger.debug(type: .peerChannel, message: "try creating offer SDP")
+      let offerConfiguration = currentWebRTCConfiguration()
       nativePeerChannelFactory
         .createClientOfferSDP(
-          configuration: webRTCConfiguration,
-          constraints: webRTCConfiguration.constraints
+          webRTCConfiguration: offerConfiguration
         ) { [weak self] sdp, sdpError in
           guard let self else {
             return
@@ -632,7 +976,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// sendConnectMessage から呼び出す。テストから利用するため internal とする。
   func makeSignalingConnect(sdp: String?, redirect: Bool?) -> SignalingConnect {
     var role: SignalingRole
-    switch configuration.role {
+    switch snapshot.role {
     case .sendonly:
       role = .sendonly
     case .recvonly:
@@ -645,48 +989,51 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let webRTCVersion =
       "Shiguredo-build \(WebRTCInfo.version) (\(WebRTCInfo.version.dropFirst()).\(WebRTCInfo.branch).\(WebRTCInfo.commitPosition).\(WebRTCInfo.maintenanceVersion) \(WebRTCInfo.shortRevision))"
 
-    let simulcast = configuration.simulcastEnabled
+    let simulcast = snapshot.simulcastEnabled
     return SignalingConnect(
       role: role,
-      channelId: configuration.channelId,
-      clientId: configuration.clientId,
-      bundleId: configuration.bundleId,
-      metadata: configuration.signalingConnectMetadata,
-      notifyMetadata: configuration.signalingConnectNotifyMetadata,
+      channelId: snapshot.channelId,
+      clientId: snapshot.clientId,
+      bundleId: snapshot.bundleId,
+      metadata: snapshot.signalingConnectMetadata,
+      notifyMetadata: snapshot.signalingConnectNotifyMetadata,
       sdp: sdp,
-      multistreamEnabled: configuration.multistreamEnabled,
-      videoEnabled: configuration.videoEnabled,
-      videoCodec: configuration.videoCodec,
-      videoBitRate: configuration.videoBitRate,
-      audioEnabled: configuration.audioEnabled,
-      audioCodec: configuration.audioCodec,
-      audioBitRate: configuration.audioBitRate,
-      opusParams: configuration.audioCodec == .opus ? configuration.audioOpusParams : nil,
-      spotlightEnabled: configuration.spotlightEnabled,
-      spotlightNumber: configuration.spotlightNumber,
-      spotlightFocusRid: configuration.spotlightFocusRid,
-      spotlightUnfocusRid: configuration.spotlightUnfocusRid,
+      multistreamEnabled: snapshot.multistreamEnabled,
+      videoEnabled: snapshot.videoEnabled,
+      videoCodec: snapshot.videoCodec,
+      videoBitRate: snapshot.videoBitRate,
+      audioEnabled: snapshot.audioEnabled,
+      audioCodec: snapshot.audioCodec,
+      audioBitRate: snapshot.audioBitRate,
+      opusParams: snapshot.audioOpusParams,
+      spotlightEnabled: snapshot.isSpotlightEnabled ? .enabled : .disabled,
+      spotlightNumber: snapshot.spotlightNumber,
+      spotlightFocusRid: snapshot.spotlightFocusRid,
+      spotlightUnfocusRid: snapshot.spotlightUnfocusRid,
       simulcastEnabled: simulcast,
-      simulcastRid: configuration.simulcastRid,
-      simulcastRequestRid: configuration.simulcastRequestRid,
+      simulcastRid: snapshot.simulcastRid,
+      simulcastRequestRid: snapshot.simulcastRequestRid,
       soraClient: soraClient,
       webRTCVersion: webRTCVersion,
       environment: DeviceInfo.current.description,
-      dataChannelSignaling: configuration.dataChannelSignaling,
-      ignoreDisconnectWebSocket: configuration.ignoreDisconnectWebSocket,
-      audioStreamingLanguageCode: configuration.audioStreamingLanguageCode,
+      dataChannelSignaling: snapshot.dataChannelSignaling,
+      ignoreDisconnectWebSocket: snapshot.ignoreDisconnectWebSocket,
+      audioStreamingLanguageCode: snapshot.audioStreamingLanguageCode,
       redirect: redirect,
-      forwardingFilter: configuration.forwardingFilter,
-      forwardingFilters: configuration.forwardingFilters,
-      vp9Params: configuration.videoCodec == .vp9 ? configuration.videoVp9Params : nil,
-      av1Params: configuration.videoCodec == .av1 ? configuration.videoAv1Params : nil,
-      h264Params: configuration.videoCodec == .h264 ? configuration.videoH264Params : nil,
-      h265Params: configuration.videoCodec == .h265 ? configuration.videoH265Params : nil
+      forwardingFilter: snapshot.forwardingFilter?.forwardingFilter(),
+      forwardingFilters: snapshot.forwardingFilters?.map { $0.forwardingFilter() },
+      vp9Params: snapshot.videoVp9Params,
+      av1Params: snapshot.videoAv1Params,
+      h264Params: snapshot.videoH264Params,
+      h265Params: snapshot.videoH265Params,
+      dataChannelSettings: snapshot.dataChannelSettings
     )
   }
 
   private func initializeSenderStream(mid: [String: String]? = nil) {
-    guard let nativeChannel else {
+    // nativeChannel の参照は storage から 1 度だけ取り出し、以降はこのローカルを使う。
+    // (storage の lock を保持したまま transceivers などの libwebrtc を呼ばない)
+    guard let nativeChannel = transportStorage.native else {
       Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
       return
     }
@@ -695,15 +1042,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "initialize sender stream")
 
+    // constraints と degradationPreference は接続所有の設定から読む。
+    // 利用者由来の snapshot.webRTCConfiguration は offer 受信で更新されないため、
+    // 2 系統に分けると offer 由来の値が増えたときにずれる。
+    let connectionWebRTCConfiguration = currentWebRTCConfiguration()
+
     let nativeStream =
       nativePeerChannelFactory
       .createNativeSenderStream(
-        streamId: configuration.publisherStreamId,
+        streamId: snapshot.publisherStreamId,
         videoTrackId:
-          configuration.videoEnabled ? configuration.publisherVideoTrackId : nil,
+          snapshot.videoEnabled ? snapshot.publisherVideoTrackId : nil,
         audioTrackId:
-          configuration.audioEnabled ? configuration.publisherAudioTrackId : nil,
-        constraints: webRTCConfiguration.constraints)
+          snapshot.audioEnabled ? snapshot.publisherAudioTrackId : nil,
+        constraints: connectionWebRTCConfiguration.constraints)
     let stream = BasicMediaStream(
       peerChannel: self,
       nativeStream: nativeStream)
@@ -764,7 +1116,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           videoTransceiver.sender.track = videoTrack
         }
 
-        if let degradationPreference = configuration.webRTCConfiguration
+        if let degradationPreference = connectionWebRTCConfiguration
           .degradationPreference
         {
           let parameters = videoTransceiver.sender.parameters
@@ -789,8 +1141,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     // マイクの初期化
-    if configuration.audioEnabled {
-      if configuration.audioDevice == nil {
+    if snapshot.audioEnabled {
+      if !snapshot.usesCustomAudioDevice {
         initializeAudioInput()
       } else {
         // AVAudioSession の設定はカスタム音声デバイス (DummyAudioDevice.initialize(with:)) が行うためスキップする
@@ -798,7 +1150,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           type: .peerChannel,
           message: "custom audio device enabled, skip initialize audio input")
       }
-    } else if configuration.audioDevice != nil {
+    } else if snapshot.usesCustomAudioDevice {
       // 音声トラック自体が生成されないためダミー音声も無効となる
       Logger.warn(
         type: .peerChannel,
@@ -806,8 +1158,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
 
     // カメラの初期化
-    if configuration.videoEnabled, configuration.cameraSettings.isEnabled,
-      configuration.initialCameraEnabled
+    if snapshot.videoEnabled, snapshot.cameraSettings.isEnabled,
+      snapshot.initialCameraEnabled
     {
       initializeCameraVideoCapture(stream: stream)
     }
@@ -815,11 +1167,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     add(stream: stream)
     Logger.debug(
       type: .peerChannel,
-      message: "create publisher stream (id: \(configuration.publisherStreamId))")
+      message: "create publisher stream (id: \(snapshot.publisherStreamId))")
   }
 
   private func initializeAudioInput() {
-    if isAudioInputInitialized {
+    // 初期化済みフラグは ConnectionStateOwner が単一所有する。読みは owner の同期 API を
+    // 使う (この関数は owner の排他区間から呼ばれないため、同期 wait で再入しない)。
+    if connectionStateOwner.isAudioInputInitialized() {
       Logger.debug(
         type: .peerChannel,
         message: "audio input is already initialized")
@@ -835,12 +1189,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // の設定のため、initialMicrophoneEnabled の否定値を渡します。
       //
       // 入力初期化後は変更できないため、 initializeInput の前に設定します。
-      let initialMicrophoneMute = !configuration.initialMicrophoneEnabled
+      let initialMicrophoneMute = !snapshot.initialMicrophoneEnabled
       if !session.setInitialMicrophoneMute(initialMicrophoneMute) {
         Logger.warn(type: .peerChannel, message: "failed to setInitialMicrophoneMute")
       }
 
-      session.initializeInput { error in
+      // 完了 closure は WebRTC 側のスレッドから呼ばれる。捕捉するのは
+      // ConnectionStateOwner (@unchecked Sendable) だけで、PeerChannel 自身は捕捉しない。
+      //
+      // owner を弱参照で捕捉する。強参照にすると、RTCAudioSession が完了 closure を保持し、
+      // その closure が owner を、owner が PeerChannel を保持する経路で PeerChannel が
+      // 解放されなくなる。弱参照にすると、PeerChannel の解放後に完了 closure が走った場合は
+      // フラグを立てない。これは変更前の [weak self] と同じ挙動である。
+      let connectionStateOwner = self.connectionStateOwner
+      session.initializeInput { [weak connectionStateOwner] error in
         if let error {
           Logger.debug(
             type: .peerChannel,
@@ -848,7 +1210,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           )
           return
         }
-        self.isAudioInputInitialized = true
+        // 書きは owner の直列 queue 上の event で行う。完了 closure の実行スレッドに
+        // 関わらず、この同期 wait が直列 queue の実行を待つ。
+        connectionStateOwner?.handle(.audioInputInitialized)
         Logger.debug(
           type: .peerChannel,
           message:
@@ -859,7 +1223,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func initializeCameraVideoCapture(stream: MediaStream) {
-    let position = configuration.cameraSettings.position
+    let position = snapshot.cameraSettings.position
 
     // position に対応した CameraVideoCapturer を取得する
     let capturer: CameraVideoCapturer
@@ -891,10 +1255,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // デバイスに対応したフォーマットとフレームレートを取得する
     guard
       let format = CameraVideoCapturer.format(
-        width: configuration.cameraSettings.resolution.width,
-        height: configuration.cameraSettings.resolution.height,
+        width: snapshot.cameraSettings.resolution.width,
+        height: snapshot.cameraSettings.resolution.height,
         for: capturer.device,
-        frameRate: configuration.cameraSettings.frameRate)
+        frameRate: snapshot.cameraSettings.frameRate)
     else {
       Logger.error(
         type: .peerChannel,
@@ -905,7 +1269,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     guard
       let frameRate = CameraVideoCapturer.maxFrameRate(
-        configuration.cameraSettings.frameRate, for: format)
+        snapshot.cameraSettings.frameRate, for: format)
     else {
       Logger.error(
         type: .peerChannel,
@@ -940,13 +1304,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         return
       }
 
-      if let current = await CameraVideoCapturer.currentForSDK() {
+      if let current = CameraVideoCapturer.current {
         guard videoSourceCoordinator.isValid(reservation) else {
           return
         }
         guard current.isRunning else {
           _ = videoSourceCoordinator.completeCamera(reservation, active: false)
-          cameraCaptureCoordinator.quarantine(capturer: current)
+          cameraCaptureCoordinator.quarantine(capturerID: current.id)
           Logger.error(
             type: .peerChannel,
             message: "current CameraVideoCapturer is not running")
@@ -962,7 +1326,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         let stopError = await current.stopForSDK()
         if current.isRunning {
           _ = videoSourceCoordinator.completeCamera(reservation, active: false)
-          cameraCaptureCoordinator.quarantine(capturer: current)
+          cameraCaptureCoordinator.quarantine(capturerID: current.id)
           Logger.error(
             type: .peerChannel,
             message:
@@ -970,7 +1334,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           )
           return
         }
-        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: current.id)
         if let previousStream {
           cameraCaptureOwnership.clear(ifOwnedBy: previousStream)
           VideoSourceCoordinator.releaseCameraReservations(
@@ -984,7 +1348,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
       guard !capturer.isRunning else {
         _ = videoSourceCoordinator.completeCamera(reservation, active: false)
-        cameraCaptureCoordinator.quarantine(capturer: capturer)
+        cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         Logger.error(
           type: .peerChannel,
           message: "CameraVideoCapturer is running without being current")
@@ -998,7 +1362,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       {
         if capturer.isRunning {
           _ = videoSourceCoordinator.completeCamera(reservation, active: true)
-          cameraCaptureCoordinator.quarantine(capturer: capturer)
+          cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
         } else {
           _ = videoSourceCoordinator.completeCamera(reservation, active: false)
         }
@@ -1012,7 +1376,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard videoSourceCoordinator.completeCamera(reservation, active: true) else {
         let stopError = await capturer.stopForSDK()
         if capturer.isRunning {
-          cameraCaptureCoordinator.quarantine(capturer: capturer)
+          cameraCaptureCoordinator.quarantine(capturerID: capturer.id)
           Logger.error(
             type: .peerChannel,
             message:
@@ -1020,7 +1384,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           )
           return
         }
-        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: capturer)
+        cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: capturer.id)
         return
       }
       cameraCaptureOwnership.set(senderStream: senderStream.stream)
@@ -1032,7 +1396,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   /// `initializeSenderStream()` にて生成されたリソースを開放するための、対になるメソッドです。
   private func terminateSenderStream() -> Task<Void, Never>? {
-    guard configuration.videoEnabled, configuration.cameraSettings.isEnabled else {
+    guard snapshot.videoEnabled, snapshot.cameraSettings.isEnabled else {
       return nil
     }
 
@@ -1044,7 +1408,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         videoSourceCoordinator.releaseCamera()
         return
       }
-      guard let current = await CameraVideoCapturer.currentForSDK() else {
+      guard let current = CameraVideoCapturer.current else {
         cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
         videoSourceCoordinator.releaseCamera()
         return
@@ -1062,7 +1426,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
       let stopError = await current.stopForSDK()
       if current.isRunning {
-        cameraCaptureCoordinator.quarantine(capturer: current)
+        cameraCaptureCoordinator.quarantine(capturerID: current.id)
         Logger.error(
           type: .peerChannel,
           message:
@@ -1070,7 +1434,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         )
         return
       }
-      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturer: current)
+      cameraCaptureCoordinator.clearQuarantineAfterSuccessfulStop(capturerID: current.id)
       cameraCaptureOwnership.clear(ifOwnedBy: senderStream)
       videoSourceCoordinator.releaseCamera()
     }
@@ -1079,17 +1443,26 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   private func createAnswer(
     isSender: Bool,
     offer: String,
-    constraints: RTCMediaConstraints,
+    // `RTCMediaConstraints` は `Sendable` ではないため、値の写しができる
+    // `MediaConstraints` (`Sendable`) を引数に取り、非同期境界の内側で native 値へ変換する。
+    constraints: MediaConstraints,
     initialOffer: Bool = false,
     mid: [String: String]? = nil,
     generation: Int,
-    handler: @escaping (String?, Error?) -> Void
+    handler: @escaping (String?, (any Error)?) -> Void
   ) {
-    guard let nativeChannel else {
-      // handler を呼ばずに return すると、呼び出し元が lock を解放できない (ロック残留)。
+    let handlerBox = CreateAnswerHandlerBox(handler)
+    // 完了 closure が捕捉するのはこの box だけである。box は PeerChannel を弱参照で保持し、
+    // PeerChannel が解放された場合は value が nil になって handler の 1 回保証の経路へ入る
+    // (変更前の [weak self] と同じ挙動)。transportStorage は box を経由せず self から読む。
+    let box = WeakPeerChannelBox(value: self)
+
+    guard let nativeChannel = transportStorage.native else {
+      // handler を呼ばずに return すると、呼び出し元が接続ライフサイクルの排他を
+      // 解放できない (解放漏れ)。
       // 明示的な接続失敗として handler を必ず 1 回呼ぶ。
       Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-      handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
+      handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
       return
     }
 
@@ -1098,8 +1471,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     Logger.debug(type: .peerChannel, message: "try setting remote description")
     let offer = RTCSessionDescription(type: .offer, sdp: offer)
-    nativeChannel.setRemoteDescription(offer) { [weak self] error in
-      guard let self else {
+    // `RTCSessionDescription` は `Sendable` ではないが、この closure が使うのは
+    // `sdpDescription` だけである。 setRemoteDescription の closure に入る前に
+    // String へ写し、捕捉対象を `Sendable` な値に置き換える。
+    let offerDescription = offer.sdpDescription
+    nativeChannel.setRemoteDescription(offer) { [box] error in
+      guard let self = box.value else {
+        // `self` が解放済みでも handler を 1 回呼んで return する。handler の完了で
+        // 接続ライフサイクルの排他を解放する呼び出し元では、呼ばれないと解放漏れになる。
+        // 現状この節は到達しない (完了 block は handlerBox → handler → `self` の順に強参照し、
+        // `nativeChannel` も `PeerChannel` の transportStorage が保持するため、
+        // `PeerChannel` が解放されると `RTCPeerConnection` への強参照も失われて callback が
+        // 届かない) が、「到達状況に関わらず handler を必ず 1 回呼ぶ」不変条件を満たすために呼ぶ。
+        Logger.error(type: .peerChannel, message: "peerChannel is unavailable")
+        handlerBox(nil, SoraError.peerChannelError(reason: "PeerChannel is unavailable"))
         return
       }
       guard error == nil else {
@@ -1108,29 +1493,32 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           // guard の else 節で非 nil が保証されるため安全
           // swiftlint:disable:next force_unwrapping
           message: "failed setting remote description: (\(error!.localizedDescription)")
-        handler(nil, error)
+        handlerBox(nil, error)
         return
       }
 
       // リダイレクト等で接続が切り替わった場合は、以後の SDP パイプライン
       // (initializeSenderStream / updateSenderOfferEncodings / answer / setLocalDescription)
       // を実行せずに破棄する。
-      // (チェーンの各ステップは self.nativeChannel を再読取するため、世代照合が
+      // (チェーンの各ステップは transportStorage の nativeChannel を再読取するため、世代照合が
       // 最終クロージャのみだと、旧 offer の SDP・mid・encodings が新 PC に適用される)
       guard generation == self.dataChannelGeneration else {
-        handler(nil, nil)
+        handlerBox(nil, nil)
         return
       }
 
-      guard let nativeChannel = self.nativeChannel else {
-        // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
+      // 世代照合でリダイレクトが無いことを確認した後にだけ storage を再読するため、
+      // 「常に現在の RTCPeerConnection を使う」性質は変更前と同じである。
+      guard let nativeChannel = self.transportStorage.native else {
+        // handler を呼ばずに return すると呼び出し元が接続ライフサイクルの排他を
+        // 解放できないため、エラーを渡す
         Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-        handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
+        handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
         return
       }
 
       Logger.debug(type: .peerChannel, message: "did set remote description")
-      Logger.debug(type: .peerChannel, message: "\(offer.sdpDescription)")
+      Logger.debug(type: .peerChannel, message: "\(offerDescription)")
 
       if isSender {
         if initialOffer {
@@ -1140,14 +1528,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
 
       Logger.debug(type: .peerChannel, message: "try creating native answer")
-      nativeChannel.answer(for: constraints) { answer, error in
+      nativeChannel.answer(for: constraints.nativeValue) { [box] answer, error in
         guard error == nil else {
           Logger.debug(
             type: .peerChannel,
             // guard の else 節で非 nil が保証されるため安全
             // swiftlint:disable:next force_unwrapping
             message: "failed creating native answer (\(error!.localizedDescription)")
-          handler(nil, error)
+          handlerBox(nil, error)
+          return
+        }
+
+        guard let self = box.value else {
+          // 外側の closure と同じく、`self` が解放済みでも handler を 1 回呼んで return する。
+          // この節も現状は到達しない (handlerBox が handler を強参照し、handler が
+          // `PeerChannel` を強参照するため) が、1 回保証の不変条件を満たすために呼ぶ。
+          Logger.error(type: .peerChannel, message: "peerChannel is unavailable")
+          handlerBox(nil, SoraError.peerChannelError(reason: "PeerChannel is unavailable"))
           return
         }
 
@@ -1156,34 +1553,42 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         // (answer 作成中にリダイレクトが発生した場合、以下の再読取で新 PC を取得し、
         // 旧 offer の answer が新 PC に適用されるのを防ぐ)
         guard generation == self.dataChannelGeneration else {
-          handler(nil, nil)
+          handlerBox(nil, nil)
           return
         }
 
-        guard let nativeChannel = self.nativeChannel else {
-          // handler を呼ばずに return すると呼び出し元が lock を解放できないため、エラーを渡す
+        // 世代照合でリダイレクトが無いことを確認した後にだけ storage を再読する。
+        guard let nativeChannel = self.transportStorage.native else {
+          // handler を呼ばずに return すると呼び出し元が接続ライフサイクルの排他を
+          // 解放できないため、エラーを渡す
           Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
-          handler(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
+          handlerBox(nil, SoraError.peerChannelError(reason: "nativeChannel should not be nil"))
           return
         }
 
         Logger.debug(type: .peerChannel, message: "did create answer")
 
         guard let answer else {
-          handler(nil, SoraError.peerChannelError(reason: "answer should not be nil"))
+          handlerBox(nil, SoraError.peerChannelError(reason: "answer should not be nil"))
           return
         }
 
         let localAnswer: RTCSessionDescription
         do {
           let sdp =
-            self.configuration.requiresStereoAudioSDP
+            self.snapshot.requiresStereoAudioSDP
             ? try StereoAudioSDP.enableStereo(in: answer.sdp) : answer.sdp
           localAnswer = RTCSessionDescription(type: answer.type, sdp: sdp)
         } catch {
-          handler(nil, error)
+          handlerBox(nil, error)
           return
         }
+
+        // `RTCSessionDescription` は `Sendable` ではないため、 setLocalDescription の closure が
+        // 使う `sdp` と `sdpDescription` の両方を closure に入る前に String へ写す。
+        // 片方だけでは capture が残る。
+        let localAnswerSDP = localAnswer.sdp
+        let localAnswerSDPDescription = localAnswer.sdpDescription
 
         Logger.debug(type: .peerChannel, message: "try setting local description")
         nativeChannel.setLocalDescription(localAnswer) { error in
@@ -1191,7 +1596,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             Logger.debug(
               type: .peerChannel,
               message: "failed setting local description")
-            handler(nil, error)
+            handlerBox(nil, error)
             return
           }
           Logger.debug(
@@ -1199,23 +1604,25 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
             message: "did set local description")
           Logger.debug(
             type: .peerChannel,
-            message: "\(localAnswer.sdpDescription)")
+            message: "\(localAnswerSDPDescription)")
           Logger.debug(
             type: .peerChannel,
             message: "did create answer")
-          handler(localAnswer.sdp, nil)
+          handlerBox(localAnswerSDP, nil)
         }
       }
     }
   }
 
   private func updateSenderOfferEncodings() {
-    guard let nativeChannel else {
+    // nativeChannel と offerEncodings は transportStorage から 1 度ずつ取り出す。
+    // 取り出した後の libwebrtc 呼び出しは storage の lock を解放してから行う。
+    guard let nativeChannel = transportStorage.native else {
       Logger.debug(type: .peerChannel, message: "nativeChannel should not be nil")
       return
     }
 
-    guard let oldEncodings = offerEncodings else {
+    guard let oldEncodings = transportStorage.offerEncodings else {
       return
     }
 
@@ -1227,24 +1634,29 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
   private func createAndSendAnswer(offer: SignalingOffer) {
     Logger.debug(type: .peerChannel, message: "try sending answer")
-    offerEncodings = offer.encodings
+    transportStorage.offerEncodings = offer.encodings
 
     // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
     // (リダイレクトで接続が切り替わった場合に、旧接続の answer が新接続に送信されるのを防ぐ)
     let generation = dataChannelGeneration
 
+    var updatedConfiguration = currentWebRTCConfiguration()
     if let config = offer.configuration {
       Logger.debug(type: .peerChannel, message: "update configuration")
       Logger.debug(
         type: .peerChannel, message: "ICE server infos => \(config.iceServerInfos)")
       Logger.debug(
         type: .peerChannel, message: "ICE transport policy => \(config.iceTransportPolicy)")
-      webRTCConfiguration.iceServerInfos = config.iceServerInfos
-      webRTCConfiguration.iceTransportPolicy = config.iceTransportPolicy
+      updatedConfiguration = updatedConfiguration.replacing(
+        iceServerInfos: config.iceServerInfos.map(ICEServerSnapshot.init),
+        iceTransportPolicy: config.iceTransportPolicy)
     }
 
-    webRTCConfiguration.isInsecure = configuration.insecure
-    if configuration.insecure {
+    // isInsecure は offer.configuration の有無にかかわらず毎回 Configuration.insecure で
+    // 置き換える。
+    updatedConfiguration = updatedConfiguration.replacing(isInsecure: snapshot.insecure)
+    updateWebRTCConfiguration(updatedConfiguration)
+    if snapshot.insecure {
       Logger.warn(
         type: .peerChannel,
         message: "insecure mode is enabled: TURN-TLS certificate verification is skipped")
@@ -1258,27 +1670,28 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // この throw パスは実運用では到達しない防御的コードである
     let caCertificates: [SecCertificate]?
     do {
-      caCertificates = try configuration.parsedCACertificates()
+      caCertificates = try snapshot.parsedCACertificates()
     } catch {
-      lock.unlock()
+      endAsyncOperation()
       disconnect(
         error: error,
         reason: .signalingFailure)
       return
     }
 
-    nativeChannel =
+    // 上で更新した値をそのまま使う。lock は読み出しごとに解放されるため、
+    // currentWebRTCConfiguration() を再読すると同一の値を参照する保証がコード上に無い。
+    transportStorage.native =
       nativePeerChannelFactory
       .createNativePeerChannel(
-        configuration: webRTCConfiguration,
-        constraints: webRTCConfiguration.constraints,
-        proxy: configuration.proxy,
+        webRTCConfiguration: updatedConfiguration,
+        proxy: snapshot.proxy,
         caCertificates: caCertificates,
         delegate: self)
-    guard let nativeChannel else {
+    guard let nativeChannel = transportStorage.native else {
       // connect() で取得した初期ロックをここで解放しないと、
       // disconnect が defer されたままになってしまう。
-      lock.unlock()
+      endAsyncOperation()
       disconnect(
         error: SoraError.peerChannelError(reason: "createNativePeerChannel failed"),
         reason: .signalingFailure)
@@ -1290,12 +1703,12 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // (リセットしないと、新接続の signaling ラベル受信後に WebSocket が切断されず
     // サーバーセッションが残留する)
     handleConnectionEvent(.redirectConnectStarted)
-    nativeChannel.setConfiguration(webRTCConfiguration.nativeValue)
+    nativeChannel.setConfiguration(updatedConfiguration.nativeValue)
 
     createAnswer(
-      isSender: configuration.isSender,
+      isSender: snapshot.isSender,
       offer: offer.sdp,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: updatedConfiguration.constraints,
       initialOffer: true,
       mid: offer.mid,
       generation: generation
@@ -1305,19 +1718,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 旧 offer の answer が新接続に送信されるのを防ぐ)
       guard generation == self.dataChannelGeneration else {
         Logger.debug(type: .peerChannel, message: "generation changed, skip create answer")
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create answer (\(error.localizedDescription))")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let sdp else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1326,14 +1739,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
       let answer = SignalingAnswer(sdp: sdp)
       self.signalingChannel.send(message: Signaling.answer(answer))
-      self.lock.unlock()
+      self.endAsyncOperation()
       Logger.debug(type: .peerChannel, message: "did send answer")
     }
   }
 
   private func createAndSendUpdateAnswer(forOffer offer: String) {
     Logger.debug(type: .peerChannel, message: "create and send update-answer")
-    guard lock.lock() else {
+    guard beginAsyncOperation() else {
       Logger.debug(type: .peerChannel, message: "already disconnecting, skip create update-answer")
       return
     }
@@ -1345,24 +1758,24 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: offer,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: currentWebRTCConfiguration().constraints,
       generation: generation
     ) { answer, error in
       // リダイレクト等で接続が切り替わった場合は、旧接続の update-answer を破棄する。
       guard generation == self.dataChannelGeneration else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create update-answer (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let answer else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created update-answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1372,14 +1785,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       let message = Signaling.update(SignalingUpdate(sdp: answer))
       self.signalingChannel.send(message: message)
 
-      if self.configuration.isSender {
+      if self.snapshot.isSender {
         self.updateSenderOfferEncodings()
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
       self.internalHandlers.onUpdate?(answer)
 
-      self.lock.unlock()
+      self.endAsyncOperation()
     }
   }
 
@@ -1394,14 +1807,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: currentWebRTCConfiguration().constraints,
       generation: generation
     ) { answer, error in
-      // 2025.1.1 までは lock() 呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
+      // 2025.1.1 までは beginAsyncOperation() の呼び出しをこのクロージャーの外 = createAnswer の直前で行っていたが、
       // この場合、 SDP 再ハンドシェイク時に SDP を local description に設定する際に EXC_BAD_ACCESS (不正なメモリアクセス) が発生し、
-      // アプリがクラッシュしてしまうことがあったが、lock() の呼び出しをクロージャー内にすることで、不正なメモリアクセスを防ぐことができるように
-      // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で lock() の位置を移動)
-      guard self.lock.lock() else {
+      // アプリがクラッシュしてしまうことがあったが、beginAsyncOperation() の呼び出しをクロージャー内にすることで、不正なメモリアクセスを防ぐことができるように
+      // なったため、ここに移動させた (createAndSendReAnswerOverDataChannel も同様の理由で呼び出し位置を移動)
+      guard self.beginAsyncOperation() else {
         Logger.debug(type: .peerChannel, message: "already disconnecting, skip re-answer")
         return
       }
@@ -1410,19 +1823,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 旧 offer の answer が新接続に適用されるのを防ぐ)
       guard generation == self.dataChannelGeneration else {
         Logger.debug(type: .peerChannel, message: "generation changed, skip re-answer")
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create re-answer (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let answer else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created re-answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1432,39 +1845,43 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       let message = Signaling.reAnswer(SignalingReAnswer(sdp: answer))
       self.signalingChannel.send(message: message)
 
-      if self.configuration.isSender {
+      if self.snapshot.isSender {
         self.updateSenderOfferEncodings()
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
       self.internalHandlers.onUpdate?(answer)
 
-      self.lock.unlock()
+      self.endAsyncOperation()
     }
   }
 
   private func createAndSendReAnswerOverDataChannel(forReOffer reOffer: String) {
     Logger.debug(type: .peerChannel, message: "create and send re-answer over DataChannel")
 
-    guard let dataChannel = dataChannels["signaling"] else {
-      Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
-      return
-    }
-
     // 受信時点の世代を記録し、非同期処理の完了時に現在の世代と照合する。
     // (リダイレクトで接続が切り替わった場合に、旧接続の re-answer が新接続に
     // 適用されたり、旧 signaling DataChannel への送信失敗でリダイレクトを中断したり
     // するのを防ぐ)
+    // 参照の取得より前に読む。参照を取得した直後に redirect が完了すると、新しい世代を
+    // 記録して無効化済み DataChannel へ送信する窓ができるため。
     let generation = dataChannelGeneration
+
+    // 参照の読み出しは排他単位で行い、参照に対する送信は区間の外で行う。
+    // (この関数は createAnswer の完了をまたぐため、区間を非同期境界まで保持できない)
+    guard let dataChannel = dataChannel(label: "signaling") else {
+      Logger.debug(type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
+      return
+    }
 
     createAnswer(
       isSender: false,
       offer: reOffer,
-      constraints: webRTCConfiguration.nativeConstraints,
+      constraints: currentWebRTCConfiguration().constraints,
       generation: generation
     ) { answer, error in
       // NOTE: PeerChannel のインスタンスをキャプチャすることを明示的に指定する必要があるため、self が必要
-      guard self.lock.lock() else {
+      guard self.beginAsyncOperation() else {
         Logger.debug(
           type: .peerChannel, message: "already disconnecting, skip re-answer over DataChannel")
         return
@@ -1475,19 +1892,19 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       guard generation == self.dataChannelGeneration else {
         Logger.debug(
           type: .peerChannel, message: "generation changed, skip re-answer over DataChannel")
-        self.lock.unlock()
+        self.endAsyncOperation()
         return
       }
       if let error {
         Logger.error(
           type: .peerChannel,
           message: "failed to create re-answer: error => (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(error: error, reason: .signalingFailure)
         return
       }
       guard let answer else {
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(reason: "created re-answer SDP is unavailable"),
           reason: .signalingFailure)
@@ -1503,7 +1920,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         Logger.error(
           type: .peerChannel,
           message: "failed to encode re-answer: error => (\(error.localizedDescription)")
-        self.lock.unlock()
+        self.endAsyncOperation()
         self.disconnect(
           error: SoraError.peerChannelError(
             reason: "failed to encode re-answer message to json"),
@@ -1517,7 +1934,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
           Logger.error(
             type: .peerChannel,
             message: "failed to send re-answer message over DataChannel")
-          self.lock.unlock()
+          self.endAsyncOperation()
           self.disconnect(
             error: SoraError.peerChannelError(
               reason: "failed to send re-answer message over DataChannel"),
@@ -1526,14 +1943,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         }
       }
 
-      if self.configuration.isSender {
+      if self.snapshot.isSender {
         self.updateSenderOfferEncodings()
       }
 
       Logger.debug(type: .peerChannel, message: "call onUpdate")
       self.internalHandlers.onUpdate?(answer)
 
-      self.lock.unlock()
+      self.endAsyncOperation()
     }
   }
 
@@ -1545,7 +1962,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .offer(let offer):
       // 切断後にキューから遅れて配送された offer は、接続識別子の更新や
       // RTCPeerConnection の生成を行う前に破棄する。
-      guard lock.lock() else {
+      guard beginAsyncOperation() else {
         Logger.debug(type: .peerChannel, message: "already disconnecting, skip offer")
         return
       }
@@ -1575,7 +1992,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // NOTE: シグナリング type: update は Sora 2022.1.0 で廃止された
     // SDK では過去のバージョンとの互換性のために残しているが、いずれは削除する予定
     case .update(let update):
-      if configuration.isMultistream {
+      if snapshot.isMultistream {
         createAndSendUpdateAnswer(forOffer: update.sdp)
       }
     case .reOffer(let reOffer):
@@ -1584,8 +2001,16 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     case .ping(let ping):
       let pong = SignalingPong()
       if ping.statisticsEnabled == true {
-        nativeChannel?.statistics { [weak self] report in
-          guard let self else {
+        // 完了 closure は box だけを捕捉し、PeerChannel 自身は捕捉しない。
+        // `signalingChannel` は再代入されない `let` であり、その状態の読み書きは
+        // `SignalingChannel` の `SignalingStateOwner` の直列 queue が所有する。
+        // `signalingChannel.internalHandlers` は `PeerChannel.init` と
+        // `MediaChannel.connect` で接続開始前に設定され、この closure は読まない。
+        // 世代や state を読まないため、接続状態 owner の排他には依存しない。
+        let box = WeakPeerChannelBox(value: self)
+        let nativeChannel = transportStorage.native
+        nativeChannel?.statistics { [box] report in
+          guard let self = box.value else {
             return
           }
           var json: [String: Any] = ["type": "pong"]
@@ -1618,7 +2043,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       //   生成時点の世代と現在の世代の照合で無視
       // - PC delegate (didOpen / didChange): isCurrentPeerConnection
       //   (リダイレクト窓は isRedirecting、新 PC 生成後は PC アイデンティティ)
-      // - 切断 (disconnect / Lock.unlock): isRedirecting 中は切断処理を続行
+      // - 切断 (disconnect / endAsyncOperation): isRedirecting 中は切断処理を続行
       // - WS 接続 (SignalingChannel): 切断後は state == .disconnected で受け入れ拒否
       //
       // 旧 PC を明示的にクローズする (遅延 OPEN 通知による OPEN 追跡状態の汚染防止と
@@ -1629,34 +2054,39 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 新接続を誤切断するのを防ぐ。また、disconnectTimerScheduled が true のまま
       // 残留すると新接続のタイマー開始が抑止される)
       handleConnectionEvent(.redirectReceived)
-      // 旧 transport の論理的な無効化。redirect 受理済みのため、
-      // 以後 sendMessage / RPC / stats が旧 DataChannel / 旧 PeerConnection を参照しない。
-      // 送信経路と RPC は dataChannelGeneration と rpcChannel の nil で旧接続を判別する。
+      // 旧 transport の論理的な無効化。redirect 受理済みのため、以後 sendMessage / RPC が
+      // 旧 DataChannel / 旧 PeerConnection を参照しない。
+      // (受信時に参照を取得済みの stats の完了 block はこの無効化の対象外である)
+      // 送信経路の無効化 (switchedToDataChannel / 登録済みの DataChannel / rpcChannel) は 1 つの
+      // 排他区間で行い、無効化の完了後に区間へ入る sendMessage が旧 DataChannel を
+      // 参照しないようにする。
       Logger.debug(
         type: .peerChannel,
         message: "redirect: invalidating old transport (generation => \(dataChannelGeneration))")
-      switchedToDataChannel = false
-      // 旧 DataChannel の参照を解放し、旧 DataChannel への送信を防ぐ。
-      // (take-and-clear 相当。dataChannels は新しい offer 受信時に再構築される)
-      dataChannels.removeAll()
-      if let rpcChannel {
-        rpcChannel.invalidate(
+      let invalidatedRPCChannel = invalidateMessagingAfterRedirect()
+      // 利用者の completion を同期的に呼ぶため、invalidate は排他区間の外で行う。
+      if let invalidatedRPCChannel {
+        invalidatedRPCChannel.invalidate(
           reason: SoraError.rpcDataChannelClosed(reason: "redirect"))
-        self.rpcChannel = nil
         Logger.debug(type: .peerChannel, message: "redirect: invalidated rpcChannel")
       }
       // 旧 MediaStream を終端して解放する。
-      // (旧 PeerConnection が送出する映像・音声フレームが新しい接続へ混入するのを防ぐ)
-      for stream in streams {
+      // (旧 PeerConnection が送出する映像・音声フレームが新しい接続へ混入するのを防ぐ。
+      //  terminate() が何を止めるかは切断経路のコメントを参照)
+      // storage から配列を 1 度だけ取り出し、空判定・件数ログ・終端に同じ写しを使う。
+      let streamsToTerminate = transportStorage.streams
+      for stream in streamsToTerminate {
         stream.terminate()
       }
-      if !streams.isEmpty {
+      if !streamsToTerminate.isEmpty {
         Logger.debug(
           type: .peerChannel,
-          message: "redirect: terminated \(streams.count) streams")
+          message: "redirect: terminated \(streamsToTerminate.count) streams")
       }
-      streams.removeAll()
+      transportStorage.removeAllStreams()
       cancelDisconnectTimer()
+      // 参照の取り出しと close() を分ける (storage の lock を保持したまま close() しない)。
+      let nativeChannel = transportStorage.native
       nativeChannel?.close()
       signalingChannel.redirect(location: redirect.location)
     default:
@@ -1695,7 +2125,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     if webSocketDisconnectScheduled { return }
     guard switchedToDataChannel, signalingChannel.ignoreDisconnectWebSocket else { return }
     guard state != .closed else { return }
-    guard let webSocketChannel = signalingChannel.webSocketChannel else { return }
+    guard let webSocketChannelIdentifier = signalingChannel.webSocketChannelIdentifier else {
+      return
+    }
 
     handleConnectionEvent(.webSocketDisconnectScheduled)
 
@@ -1705,20 +2137,33 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // DataChannel 確立直後も WebSocket 経由の送信キューにメッセージが残っている可能性があるため、
     // 既存の遅延 (switchedDisconnectDelay) を維持する
+    //
+    // 完了 block は box だけを捕捉する。判定に使う `state` の代わりに storage の
+    // nativeChannel を使うが、`state != .closed` と `nativeChannel?.connectionState != .closed`
+    // は等価である。`state` は `nativeChannel?.connectionState` を
+    // PeerChannelConnectionState へ写した値で、唯一の上書き (`onConnect` を保持していて
+    // `.new` のとき `.connecting` を返す) は `.closed` を対象にしない。`nativeChannel == nil`
+    // のときも `state` は `.new` か `.connecting` で `.closed` にならず、
+    // `nil` は `.closed` ではないため一致する。
+    let box = WeakPeerChannelBox(value: self)
     DispatchQueue.global(qos: .background).asyncAfter(
       deadline: .now() + Self.switchedDisconnectDelay
-    ) { [weak self] in
-      guard let self else { return }
-      if self.state != .closed {
+    ) { [box] in
+      guard let self = box.value else { return }
+      let nativeChannel = self.transportStorage.native
+      if nativeChannel?.connectionState != .closed {
         Logger.info(
           type: .peerChannel,
           message: "disconnecting WebSocket after DataChannel signaling established")
-        webSocketChannel.disconnect(error: nil)
+        self.signalingChannel.disconnectWebSocket(identifier: webSocketChannelIdentifier)
       }
     }
   }
 
   /// DataChannel の RPC で受信したメッセージを処理する。
+  ///
+  /// `rpcChannel` の参照は排他単位で読み、参照に対する `handleMessage(_:)` は区間の外で呼ぶ。
+  /// (pending の終端が利用者の completion を同期的に呼ぶため、区間を保持したまま呼ばない)
   func handleRPCMessage(_ data: Data) {
     guard let rpcChannel else {
       Logger.warn(type: .peerChannel, message: "rpcChannel is unavailable")
@@ -1741,7 +2186,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // (callback 内から同期的に disconnect() されても二重実行されない)
     invokeConnectHandler(nil)
-    lock.unlock()
+    endAsyncOperation()
   }
 
   private func basicDisconnect(error: Error?, reason: DisconnectReason) {
@@ -1768,15 +2213,17 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         message: "error: \(error.localizedDescription)")
     }
 
-    if let rpcChannel {
-      rpcChannel.invalidate(
+    // rpcChannel の取り出しは 1 つの排他区間で行い、DataChannel の delegate スレッドが
+    // 並行して参照を読んでもデータ競合が生じないようにする。
+    // 取り出した参照の invalidate は、pending の completion を同期的に呼ぶため区間の外で行う。
+    if let invalidatedRPCChannel = takeRPCChannel() {
+      invalidatedRPCChannel.invalidate(
         reason: SoraError.rpcDataChannelClosed(reason: reason.description))
-      self.rpcChannel = nil
     }
 
     sendDisconnectMessageIfNeeded(reason: reason, error: error)
 
-    let cameraCleanupTask = configuration.isSender ? terminateSenderStream() : nil
+    let cameraCleanupTask = snapshot.isSender ? terminateSenderStream() : nil
 
     // カスタム音声デバイス (ダミー音声等) の停止。terminateSenderStream は送信側のカメラ停止のみを行い、
     // 音声デバイスの停止は行わないため、recvonly を含む全ロールで実行する。
@@ -1786,10 +2233,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       audioDevice.terminateDevice()
     }
 
-    for stream in streams {
+    // stream の owner を無効化する。以降に到着したフレームは VideoFilter と RTCVideoSource へ
+    // 渡らず、 renderer の frame / size / switch も配送されない。 renderer の onDisconnect は
+    // main queue へ非同期に配送される。
+    // storage から配列を 1 度だけ取り出し、同じ写しを終端とクリアに使う。
+    let streamsToTerminate = transportStorage.streams
+    for stream in streamsToTerminate {
       stream.terminate()
     }
-    streams.removeAll()
+    transportStorage.removeAllStreams()
 
     // 接続完了後の切断検出タイマーを破棄する。
     // close 後に遅延して届く .disconnected 通知でタイマーが再開始されても、
@@ -1803,11 +2255,14 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // 利用者が公開 native を先に close した場合も、残りの cleanup は必ず行う。
     // すでに closed の PeerConnection に対する二度目の close だけを省略する。
+    // 参照の取り出しと connectionState の読み、 close() は storage の lock を
+    // 解放してから行う。
+    let nativeChannel = transportStorage.native
     if nativeChannel?.connectionState != .closed {
       nativeChannel?.close()
     }
     // 実際の PeerConnection を閉じた後、利用者の切断 callback より前に要求を解放する。
-    // Lock が切断を遅延した場合も、AudioUnit の利用中に解放されない。
+    // 接続ライフサイクルの排他が切断を遅延した場合も、AudioUnit の利用中に解放されない。
     nativePeerChannelFactory.releaseAudioSessionRequirement()
 
     var error = error
@@ -1930,7 +2385,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func sendMessageOverDataChannel(message: Signaling) {
-    guard let dataChannel = dataChannels["signaling"] else {
+    // 参照の読み出しは排他単位で行い、参照に対する送信は区間の外で行う。
+    // (この関数は切断経路から呼ばれ、利用者の handler を呼び得る区間へ入らないため)
+    guard let dataChannel = dataChannel(label: "signaling") else {
       Logger.debug(
         type: .peerChannel, message: "DataChannel for label: signaling is unavailable")
       return
@@ -1965,7 +2422,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     Logger.debug(
       type: .peerChannel,
-      message: "signaling state: \(stateChanged)")
+      message: "signaling state: \(WebRTCEnumDescription.signalingState(stateChanged))")
   }
 
   func peerConnection(
@@ -1984,7 +2441,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       }
     }
 
-    if configuration.isMultistream,
+    if snapshot.isMultistream,
       stream.streamId == clientId
     {
       Logger.debug(
@@ -2021,7 +2478,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     Logger.debug(
       type: .peerChannel,
-      message: "ICE connection state: \(newState)")
+      message: "ICE connection state: \(WebRTCEnumDescription.iceConnectionState(newState))")
   }
 
   func peerConnection(
@@ -2030,7 +2487,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   ) {
     Logger.debug(
       type: .peerChannel,
-      message: "ICE gathering state: \(newState)")
+      message: "ICE gathering state: \(WebRTCEnumDescription.iceGatheringState(newState))")
   }
 
   /// 通知元の RTCPeerConnection が現在の接続のものであるかを判定する。
@@ -2041,7 +2498,9 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// DataChannel delegate は世代照合 (generation == dataChannelGeneration) で別途ガードするため、
   /// DataChannel 側の通知にこのヘルパーを使わないこと)
   private func isCurrentPeerConnection(_ nativePeerConnection: RTCPeerConnection) -> Bool {
-    !isRedirecting && nativePeerConnection === nativeChannel
+    // isRedirecting は snapshot storage、nativeChannel は transportStorage の排他で読み、
+    // 両者を入れ子にしない。
+    !isRedirecting && nativePeerConnection === transportStorage.native
   }
 
   func peerConnection(
@@ -2080,7 +2539,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       scheduleDisconnectTimerIfNeeded()
     case .closed:
       // 公開 native が SDK より先に close された場合も、stream、signaling、
-      // AudioSession lease を残さない。SDK 自身の close による再入は Lock が防ぐ。
+      // AudioSession lease を残さない。SDK 自身の close による再入は接続ライフサイクルの排他が防ぐ。
       disconnect(error: nil, reason: .noError)
     default:
       break
@@ -2091,7 +2550,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// 猶予時間の経過後に切断するためのタイマーを開始する。
   ///
   /// 発火時に `RTCPeerConnectionState` を再確認し、 `.disconnected` のままの場合のみ
-  /// 切断する。また、 `Lock.unlock` の遅延実行経路では接続が回復している場合は
+  /// 切断する。また、 `ConnectionStateOwner.endAsyncOperation` の遅延実行経路では接続が回復している場合は
   /// 切断をキャンセルする (いずれも発火・実行と `.connected` への回復の競合対策)。
   private func scheduleDisconnectTimerIfNeeded() {
     guard connectedAtLeastOnce else {
@@ -2105,10 +2564,21 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       type: .peerChannel,
       message: "scheduling disconnect timer after \(Self.disconnectedGracePeriod) seconds")
     let generation = disconnectTimerGeneration
+    // 完了 block は box だけを捕捉する。`disconnectTimerGeneration` は snapshot storage、
+    // `handleConnectionEvent` は ConnectionStateOwner、`disconnect(error:reason:)` は
+    // ConnectionStateOwner.requestDisconnect の経路であり、
+    // `nativeChannel` は transportStorage の排他で読む。
+    //
+    // `state == .disconnected` の代わりに storage の `nativeChannel?.connectionState` を使う。
+    // 両者は等価である。`state` は `onConnect` の有無で `.new` を `.connecting` へ
+    // 上書きするが、`.disconnected` はこの上書きの対象外である。また `nativeChannel == nil`
+    // のとき `state` は `.new` / `.connecting` のどちらかで `.disconnected` にならないため、
+    // `nativeChannel?.connectionState == nil` (`.disconnected` 以外) と一致する。
+    let box = WeakPeerChannelBox(value: self)
     DispatchQueue.global(qos: .background).asyncAfter(
       deadline: .now() + Self.disconnectedGracePeriod
-    ) { [weak self] in
-      guard let self else {
+    ) { [box] in
+      guard let self = box.value else {
         return
       }
       guard generation == self.disconnectTimerGeneration else {
@@ -2118,7 +2588,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
         type: .peerChannel,
         message: "disconnect timer fired (generation: \(generation))")
       self.handleConnectionEvent(.disconnectTimerFired)
-      guard self.state == .disconnected else {
+      let nativeChannel = self.transportStorage.native
+      guard nativeChannel?.connectionState == .disconnected else {
         return
       }
       self.disconnect(
@@ -2208,12 +2679,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     let dc = DataChannel(
       dataChannel: dataChannel, compress: compress, mediaChannel: mediaChannel,
       peerChannel: self, generation: dataChannelGeneration)
-    dataChannels[dataChannel.label] = dc
 
     // rpc ラベルは防御的通知より先に rpcChannel を設定する。
     // (onDataChannelOpened の発火時点で rpc 呼び出しが可能であることを保証するため)
+    // DataChannel の登録と rpcChannel の設定は同じ排他区間で行い、
+    // 「登録済みだが RPC が未設定」の窓を作らない。
+    let createdRPCChannel = label == "rpc" ? RPCChannel(dataChannel: dc) : nil
+    register(dataChannel: dc, rpcChannel: createdRPCChannel)
     if label == "rpc" {
-      rpcChannel = RPCChannel(dataChannel: dc)
+      // ログは排他区間の外で出す。
       Logger.debug(
         type: .peerChannel,
         message: "didOpen: created rpcChannel (generation => \(dataChannelGeneration))")
@@ -2221,7 +2695,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     // libwebrtc の RTCDataChannelDelegate は登録時に現在の state を即時通知しないため、
     // 登録時点で既に OPEN の場合に通知が失われる。そのため防御的に通知する。
-    // dataChannels への登録後に通知することで、通知を受けた側が sendMessage を利用できる。
+    // DataChannel の登録後に通知することで、通知を受けた側が sendMessage を利用できる。
     // MediaChannel 側の openedDataChannelLabels で重複通知は防止される。
     if dataChannel.readyState == .open {
       internalHandlers.onOpenDataChannel?(dataChannel.label)
@@ -2281,7 +2755,9 @@ extension RTCRtpSender {
         }
 
         if let value = encoding.networkPriority {
-          Logger.debug(type: .peerChannel, message: "networkPriority: \(value)")
+          Logger.debug(
+            type: .peerChannel,
+            message: "networkPriority: \(WebRTCEnumDescription.priority(value))")
           oldEncoding.networkPriority = value
         }
 

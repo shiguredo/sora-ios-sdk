@@ -1,7 +1,11 @@
 included:
   - Sora
+  - TestConsumers/Swift6Consumer/Sources
+  - TestConsumers/Swift6Consumer/NegativeChecks
 excluded:
   - Pods
+  # included を広げたときに SwiftPM の checkout を走査しないための保険
+  - TestConsumers/Swift6Consumer/.build
 disabled_rules:
   - identifier_name
   - force_cast
