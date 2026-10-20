@@ -496,7 +496,13 @@ final class ScreenCaptureController: @unchecked Sendable {
   /// 別用途の録画が動作していない場合だけ ReplayKit の開始 API を呼びます。
   private func startRecorderCaptureIfIdle() async -> RecorderStartResult {
     await withCheckedContinuation { continuation in
-      Task { @MainActor in
+      // この Task の closure は開始要求を出すまでの短命な処理です。外側の closure が self を
+      // 暗黙に強参照したまま内側の handler が `[weak self]` を取ると、Swift 6.4 で追加された
+      // ImplicitStrongCapture 警告になるため、外側の強参照を `[self]` で明示します。この強参照で
+      // controller が保持されるのは開始 API の完了までです。handler 側の `[weak self]` は、
+      // process-wide な recorder が録画中の handler を保持する間、controller が意図せず
+      // 生存し続けるのを避けるために必要です。
+      Task { @MainActor [self] in
         // 設定変更より前に確認し、ホストアプリが所有する録画へ干渉しない。
         guard !self.recorder.isRecording else {
           continuation.resume(returning: .alreadyRecording)
