@@ -5,6 +5,7 @@
 - Priority: Medium
 - Branch: feature/fix-ignored-webrtc-configuration
 - Polished: 2026-09-23
+- Updated: 2026-10-23
 
 ## 目的
 
@@ -39,9 +40,9 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 
 ## 前提となる issue
 
-- `0102`（完了 2026-09-16）: 接続設定の snapshot 化。本 issue の修正対象と同じ引数（の実体）を扱い、snapshot 生成が `Configuration.webRTCConfiguration` を写し取る。本 issue は `0102` の完了後に着手する（`0102` の完了条件「`0152` / `0153` / `0154` は本 issue の完了後に着手する」に従う）。
+- `0102`（完了 2026-09-16）: 接続設定の snapshot 化。本 issue の修正対象と同じ引数（の実体）を扱い、snapshot 生成が `Configuration.webRTCConfiguration` を写し取る。本 issue は `0102` の完了後に着手する（`0102` の「前提となる issue」の「順序調整」にある「`0152` / `0153` / `0154` は本 issue の完了後に着手する」に従う）。
 - `0152`（open）: 公開 Sendable 設定型と新 overload の追加。本 issue は既存 overload の引数だけを扱い、新 overload と公開設定型は変更しない（`0152` のスコープ外に同旨あり）。両 issue とも `Sora.swift` を変更するため、順序は問わないが実装時の共存に注意する。
-- `0107`（open）: 公開 API baseline。本 issue は公開シグネチャ（引数の型と既定値）を変えるため、`0107` の baseline が有効な場合は差分の更新が必要になる。
+- `0107`（完了 2026-09-24） / `0168`（完了 2026-09-24）: 公開 API baseline とその鮮度 gate。baseline は常時有効であり、本 issue は公開シグネチャ（引数の型と既定値）を変えるため、`TestConsumers/Swift6Consumer/ApiBaseline/` の再生成と `make api-check-fresh` の成功が同じ変更で必要になる（`CODEBASE.md` の規約）。
 
 ## スコープ外
 
@@ -56,7 +57,8 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 - `Sora/ConnectionConfigurationSnapshot.swift`（または `Sora.connect` 内の反映点）: 上書きした値を snapshot 生成へ渡す経路
 - `skills/sora-ios-sdk/SKILL.md`: `Sora.connect` の `webRTCConfiguration` 引数と `Configuration.webRTCConfiguration` の優先順位（引数が指定された場合に引数が優先）と、`Configuration.webRTCConfiguration` を使う推奨の記載
 - `SoraTests`: 引数指定時の反映と引数省略時の既存挙動を検証するテスト
-- `CHANGES.md`
+- `TestConsumers/Swift6Consumer/ApiBaseline/`: 公開シグネチャ変更に伴う `make api-baseline` による baseline の再生成（Xcode 26.6 と `iphoneos26.5` が必要）
+- `CHANGES.md`: `## develop` セクションの新設（現行の `CHANGES.md` は凡例の直後が `## 2026.4.0` で、`## develop` が存在しない）と修正内容の追記
 
 ## 完了条件
 
@@ -65,7 +67,8 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 - 引数と `Configuration.webRTCConfiguration` の両方を設定した場合に、引数が優先されること。
 - offer 受信時の ICE サーバー上書きと `Configuration.insecure` の反映（`isInsecure`）が維持されること。
 - `skills/sora-ios-sdk/SKILL.md` に、`webRTCConfiguration` 引数と `Configuration.webRTCConfiguration` の優先順位が記載されていること。
-- `CHANGES.md` に修正内容を追記していること。
+- `TestConsumers/Swift6Consumer/ApiBaseline/` を同じ変更で再生成し、`make api-check-fresh` が成功すること（Xcode 26.6 と `iphoneos26.5` が必要）。
+- `CHANGES.md` の凡例の直後（`## 2026.4.0` の前）に `## develop` を新設し、修正内容を追記していること（リリース済みの `## 2026.4.0` には追記しない）。
 - 追加したテストと既存テストがすべて成功すること。
 
 ## テスト方針
