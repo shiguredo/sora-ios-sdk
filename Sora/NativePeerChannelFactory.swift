@@ -173,7 +173,7 @@ final class NativePeerChannelFactory: @unchecked Sendable {
         throw SoraError.mediaChannelError(reason: "failed to create native peer connection factory")
       }
       // m155 以降の ADM は録音の pause/resume を worker スレッド上で実行する契約のため、
-      // ハードミュートの実行先として factory を渡す。
+      // ハードミュートの実行先として factory を渡す。m156 以降は network thread が worker を兼ねる。
       wrapper.bindToFactory(factory)
       nativeFactory = factory
     }

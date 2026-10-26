@@ -67,6 +67,45 @@ m156.8078.5.1 は `M156.8078@{#5}` (2026-10-21 ビルド) である。`WebRTC.xc
 - `AudioDeviceModuleWrapper`、`NativePeerChannelFactory`、`SoraTests/AudioDeviceModuleWrapperTests.swift` にある m155 を前提にしたコメントが m156 でも正しいかを確認し、必要なら worker thread が network thread を兼ねる旨を追記する。
 - 「検証内容」を実施し、結果を「解決方法」に記録する。コード変更が必要になった場合は、その内容も記録する。
 
+### 検証環境
+
+- 端末: iPhone 13 (iPhone14,5)
+- OS: iOS 26.7
+- Xcode: 27.1 (27A9275)、iPhoneOS 27.1 SDK
+- Sora iOS SDK: 2026.4.0
+- libwebrtc: m156.8078.5.1 (`Shiguredo-build M156 (156.8078.5.1 2a990ce)`)
+- 接続: samples の設定にあるシグナリングサーバーへ sendonly (音声のみ) で接続し、`initialMicrophoneEnabled` を `false`、映像を無効にした
+
+### 実機で確認した結果
+
+| 確認項目 | 結果 |
+| --- | --- |
+| `WebRTCInfo` の `M156` / `8078` / `5` / `1` / revision | 一致 |
+| `connect` 送信時の libwebrtc | `Shiguredo-build M156 (156.8078.5.1 2a990ce)` |
+| 接続 | 成功 (channel `sora`) |
+| 初期ハードミュート中の音声送信 | `bytesSent=0`、`packetsSent=0` |
+| `setAudioHardMute(false)` | 成功、`bytesSent` 0 -> 16020 |
+| `setAudioHardMute(true)` | 成功、`bytesSent` 16020 -> 16020 (増加なし) |
+| `setAudioHardMute(false)` による再解除 | 成功、`bytesSent` 16020 -> 33008 |
+| 切断 | 成功 |
+| ADM のログ | `AudioDeviceIOS::PauseRecording` / `ResumeRecording`、`ReinitAudioUnitForMicrophoneMute`、`SetMicrophoneMute` を確認 |
+
+### 自動テスト (CI)
+
+- Build: success (Xcode 26.6 / iphoneos26.5)
+- E2E Test: 522 件実行、7 件スキップ、失敗 0 (iOS Simulator)
+- TSAN: success
+- Consumer Test: success (`api-check-fresh` を含む)
+
+### 未確認の項目
+
+- 録音インジケーターの目視
+- ステレオ出力 / ステレオ入力の聴感
+- VP8 / VP9 / AV1 / H.264 / H.265 の実映像
+- re-offer / スポットライト
+- 音声品質 (AEC / AGC / 遅延)
+- Simulcast の帯域制限時の挙動
+
 ## 検証内容
 
 ### 1. ビルドとメタデータ

@@ -9,6 +9,13 @@
 - FIX
   - バグ修正
 
+## develop
+
+- [UPDATE] libwebrtc を m156.8078.5.1 に更新する
+  - 専用 worker thread が廃止され、録音の pause / resume は network thread 上で実行される (SDK の API と呼び出し経路は変わらない)
+  - 受信コーデック更新時のデコーダー再利用、VP8 の破損フレーム拒否、ICE restart を伴わない renegotiation での ICE role 保持などが入る
+  - @zztkm
+
 ## 2026.4.0
 
 **リリース日**: 2026-10-20
