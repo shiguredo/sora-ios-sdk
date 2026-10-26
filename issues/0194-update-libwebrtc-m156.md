@@ -3,7 +3,7 @@
 - Created: 2026-10-26
 - Completed: {YYYY-MM-DD}
 - Branch: feature/update-libwebrtc-m156
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-10-26
 
 ## 目的
 
@@ -41,14 +41,14 @@ m156.8078.5.1 は `M156.8078@{#5}` (2026-10-21 ビルド) である。`WebRTC.xc
 ## 設計方針
 
 - バージョン文字列、checksum、`WebRTCInfo`、README、CHANGES、SKILL.md を m156.8078.5.1 に揃える。
-- SDK のソースコード変更は行わない見込みとする。専用 worker thread の廃止には webrtc-build の `ios_audio_pause_resume.patch` が追随済みで、SDK は既に `AudioDeviceModuleWrapper.runOnWorker(_:)` から `RTCPeerConnectionFactory.run(onWorker:)` を呼んでいる。
+- SDK の振る舞いを変えるソースコード変更は行わない見込みとする (コメントの更新を除く)。専用 worker thread の廃止には webrtc-build の `ios_audio_pause_resume.patch` が追随済みで、SDK は既に `AudioDeviceModuleWrapper.runOnWorker(_:)` から `RTCPeerConnectionFactory.run(onWorker:)` を呼んでいる。
 - 検証でコード変更が必要と判明した場合だけ、本 issue で修正する。
 - m156 系の最新である m156.8078.5.1 を対象とし、m157.8103.0.0 は対象外とする。
 - 同梱 `LICENSE.md` の差分を確認し、`THIRD_PARTY_LICENSES.md` に反映する。
 
 ## 完了条件
 
-- `Package.swift`、`Sora/PackageInfo.swift`、`README.md`、`CHANGES.md`、`skills/sora-ios-sdk/SKILL.md` が m156.8078.5.1 を参照していること
+- `Package.swift`、`Sora/PackageInfo.swift`、`skills/sora-ios-sdk/SKILL.md` が m156.8078.5.1 を参照し、`README.md` の libwebrtc バッジが `156.8078` になっていること
 - `WebRTC.xcframework.zip` の checksum が `Package.swift` の `checksum` と一致すること
 - `make build` とユニットテストが成功すること
 - `make consumer-build SCHEME=ConsumerCore` と `make api-check-fresh` が成功し、公開 API に差分がないこと
@@ -62,9 +62,9 @@ m156.8078.5.1 は `M156.8078@{#5}` (2026-10-21 ビルド) である。`WebRTC.xc
 - `Sora/PackageInfo.swift` の `WebRTCInfo` を `M156` / `8078` / `5` / `1` / `2a990ce0ccd00a3ad449f2201a8e5c2dad53177d` に更新する。
 - `README.md` の libwebrtc バッジを `156.8078`、リンクを `branch-heads/8078` に更新する。
 - `skills/sora-ios-sdk/SKILL.md` の参照バージョンを `m156.8078.5.1` に更新する。
-- `CHANGES.md` の次期バージョンのセクションに `[UPDATE] libwebrtc を m156.8078.5.1 に更新する` を追加し、利用者に影響する変更を補足する。
-- 新しい `WebRTC.xcframework` の `LICENSE.md` を `THIRD_PARTY_LICENSES.md` と比較し、追加・変更されたライセンス (m156 では SFrame が加わる見込み) を反映する。
-- `AudioDeviceModuleWrapper` と `NativePeerChannelFactory` にある m155 を前提にしたコメントが m156 でも正しいかを確認し、必要なら worker thread が network thread を兼ねる旨を追記する。
+- `CHANGES.md` の `## develop` セクションに `[UPDATE] libwebrtc を m156.8078.5.1 に更新する` を追加し、利用者に影響する変更を補足する。
+- 新しい `WebRTC.xcframework` の `LICENSE.md` を `THIRD_PARTY_LICENSES.md` と比較し、追加された `rust/cxx/v1`、`rust/foldhash/v0_2`、`rust_stdlib` と、`perfetto` の path の不一致を反映する。
+- `AudioDeviceModuleWrapper`、`NativePeerChannelFactory`、`SoraTests/AudioDeviceModuleWrapperTests.swift` にある m155 を前提にしたコメントが m156 でも正しいかを確認し、必要なら worker thread が network thread を兼ねる旨を追記する。
 - 「検証内容」を実施し、結果を「解決方法」に記録する。コード変更が必要になった場合は、その内容も記録する。
 
 ## 検証内容
@@ -91,7 +91,7 @@ m156.8078.5.1 は `M156.8078@{#5}` (2026-10-21 ビルド) である。`WebRTC.xc
 ### 4. Simulcast と送信パラメーター
 
 - `SoraTests/SimulcastE2ETests.swift` が成功すること
-- answer に 3 層の rid が反映され、`degradationPreference` / `adaptivePtime` / `networkPriority` が `sender.parameters` に残ること
+- answer に 3 層の rid が反映され、`degradationPreference` / `networkPriority` が `sender.parameters` に残ること (`adaptivePtime` は SDK に設定 API が無いため対象外)
 - 帯域制限でレイヤーが落ちても切断しないこと
 
 ### 5. re-offer とスポットライト
