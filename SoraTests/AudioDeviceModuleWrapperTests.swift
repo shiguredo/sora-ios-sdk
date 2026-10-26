@@ -21,7 +21,8 @@ final class AudioDeviceModuleWrapperTests: XCTestCase {
   /// factory に束縛していない wrapper は、worker を特定できないため失敗を返す。
   ///
   /// m155 以降の ADM は録音の pause/resume を WebRTC の worker スレッド上で実行する契約で、
-  /// SDK は factory 経由で実行する。factory が無い状態で成功を返すと、worker 以外の
+  /// SDK は factory 経由で実行する。m156 で専用の worker thread が廃止され、worker は
+  /// network thread が兼ねる。factory が無い状態で成功を返すと、worker 以外の
   /// スレッドから ADM を操作したことになり契約違反になるため、明示的に失敗させる。
   func testUnboundWrapperFailsWithoutFactory() {
     let wrapper = AudioDeviceModuleWrapper(audioDeviceModule: RTCAudioDeviceModule())
