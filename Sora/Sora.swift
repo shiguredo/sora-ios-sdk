@@ -256,6 +256,12 @@ public final class Sora: @unchecked Sendable {
   ///
   /// - parameter configuration: クライアントの設定
   /// - parameter webRTCConfiguration: WebRTC の設定
+  ///
+  ///   省略時 (`nil`) は `configuration.webRTCConfiguration` を使う。指定した場合は
+  ///   接続に使う設定の `configuration.webRTCConfiguration` を引数の値で置き換える
+  ///   (フィールド単位のマージはしない。`constraints` / `degradationPreference` なども引数側の
+  ///   値になる)。サーバーが offer の `config` で ICE サーバーまたは ICE トランスポートポリシーを
+  ///   指定した場合は、既存挙動どおりサーバーの値が優先される。
   /// - parameter handler: 接続試行後に呼ばれるクロージャー。
   ///
   ///   呼び出し元のスレッドは保証されない (接続に成功した場合、設定エラーで終端した場合、接続に
@@ -271,18 +277,27 @@ public final class Sora: @unchecked Sendable {
   /// - returns: 接続試行中の状態
   public func connect(
     configuration: Configuration,
-    webRTCConfiguration: WebRTCConfiguration = WebRTCConfiguration(),
+    webRTCConfiguration: WebRTCConfiguration? = nil,
     handler:
       @escaping (
         _ mediaChannel: MediaChannel?,
         _ error: Error?
       ) -> Void
   ) -> ConnectionTask {
+    // `webRTCConfiguration` 引数は `Configuration` の複製へ畳み込み、snapshot 生成にだけ使う。
+    // snapshot 変換の入口を `ConnectionConfigurationSnapshot(configuration:)` 1 つに保つため、
+    // snapshot 型には引数を足さない。
+    var effectiveConfiguration = configuration
+    if let webRTCConfiguration {
+      effectiveConfiguration.webRTCConfiguration = webRTCConfiguration
+    }
+
     let mediaChan: MediaChannel
     do {
       // 接続開始後に利用者所有の可変値を参照しないよう、チャネルを生成する前に
       // 設定を snapshot へ写し取る。JSON 化できない設定はここで終端する。
-      let snapshot = try ConnectionConfigurationSnapshot(configuration: configuration)
+      let snapshot = try ConnectionConfigurationSnapshot(configuration: effectiveConfiguration)
+      // 公開互換のため、`MediaChannel.configuration` には元の `configuration` を渡す。
       mediaChan = try MediaChannel(
         snapshot: snapshot,
         configuration: configuration,
@@ -324,8 +339,10 @@ public final class Sora: @unchecked Sendable {
 
     // MediaChannel が接続試行を予約して `.connecting` へ遷移した後に管理対象へ追加する。
     // onAddMediaChannel から同期的に disconnect されても、接続開始前に確実に終端できる。
+    // `MediaChannel.connect` の `webRTCConfiguration` は未使用 (既存テスト互換) だが、
+    // snapshot と同じ値を渡しておく。
     return mediaChan.connect(
-      webRTCConfiguration: webRTCConfiguration,
+      webRTCConfiguration: effectiveConfiguration.webRTCConfiguration,
       onPrepared: { [weak self, mediaChan] in
         self?.add(mediaChannel: mediaChan)
       },

@@ -226,6 +226,10 @@ public struct Configuration {
   public var spotlightUnfocusRid: SpotlightRid = .unspecified
 
   /// WebRTC に関する設定
+  ///
+  /// `Sora.connect` の `webRTCConfiguration` 引数に非 `nil` を指定した場合、この値は接続に使われず、
+  /// `WebRTCConfiguration` 全体が引数の値で置き換えられます。この場合も
+  /// `MediaChannel.configuration` はこの値を返します。
   public var webRTCConfiguration = WebRTCConfiguration()
 
   /// `connect` シグナリングに含めるメタデータ

@@ -43,6 +43,16 @@ Swift Package Manager を利用する。
 
 `Sora.shared` はシングルトンだが、接続グループやハンドラーを分けたい場合は `Sora()` でインスタンスを生成できる。
 
+### WebRTC 設定
+
+通常は `Configuration.webRTCConfiguration` に ICE サーバーや ICE トランスポートポリシーなどの WebRTC の設定を置く。`Sora.connect` の `webRTCConfiguration` 引数は、接続単位で別の設定を使う場合だけ使う。
+
+- `nil` (省略または明示的な `nil`) のときは `Configuration.webRTCConfiguration` が使われる
+- 非 `nil` を指定した場合は `Configuration.webRTCConfiguration` を使わず、`WebRTCConfiguration` 全体を引数の値で置き換える。フィールド単位のマージはしない (`constraints` / `degradationPreference` なども引数側の値になる)
+- 一部のフィールドだけを変えたい場合は、`configuration.webRTCConfiguration` を複製して必要なフィールドだけ変更した値を渡す
+- 引数を指定しても `MediaChannel.configuration` は渡した `Configuration` の値を返す
+- サーバーが offer の `config` で ICE サーバーまたは ICE トランスポートポリシーを指定した場合は、既存挙動どおりサーバーの値が優先される
+
 ### sendrecv (双方向)
 
 ```swift
@@ -173,7 +183,7 @@ Sora.setWebRTCLogLevel(.info)
 | `clientId` / `bundleId` | `String?` | クライアント ID / バンドル ID |
 | `role` | `Role` | `.sendonly` / `.recvonly` / `.sendrecv` |
 | `connectionTimeout` | `Int` | 接続タイムアウト秒 (デフォルト 30) |
-| `webRTCConfiguration` | `WebRTCConfiguration` | ICE サーバー・ICE ポリシー・劣化設定 |
+| `webRTCConfiguration` | `WebRTCConfiguration` | ICE サーバー・ICE トランスポートポリシー・劣化設定 (詳細は「WebRTC 設定」を参照) |
 
 音声:
 
@@ -248,7 +258,7 @@ DataChannel / シグナリング:
 
 | プロパティ | 内容 |
 | --- | --- |
-| `configuration` | 接続に使った `Configuration` |
+| `configuration` | connect に渡した `Configuration` (`webRTCConfiguration` 引数の値は反映されない) |
 | `state` | `ConnectionState` (`.connecting` / `.connected` / `.disconnecting` / `.disconnected`) |
 | `isAvailable` | `state == .connected` |
 | `clientId` / `bundleId` / `connectionId` | 接続後に設定される ID |
@@ -792,6 +802,7 @@ legacy handler と新しいイベントの対応は次のとおり。対応は�
 | 音声ハードミュート | `MediaChannel.setAudioHardMute(_:)` |
 | 映像ソフトミュート | `MediaChannel.setVideoSoftMute(_:)` |
 | 映像ハードミュート | `try await MediaChannel.setVideoHardMute(_:)` |
+| ICE サーバー設定 | `Configuration.webRTCConfiguration` |
 | ステレオ音声出力 | `Configuration.audioStereoOutputEnabled = true` |
 | Opus パラメーター | `Configuration.audioOpusParams` |
 | カメラ切り替え | `CameraVideoCapturer.flip(_:completionHandler:)` |
