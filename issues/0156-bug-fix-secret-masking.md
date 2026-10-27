@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-secret-masking
-- Polished: 2026-09-18
+- Polished: 2026-10-27
 
 ## 目的
 
@@ -14,40 +14,102 @@
 
 ## 現状
 
-`Sora/Logger.swift` の `maskSecrets` は `access_token` / `token` / `secret` / `authorization` / `credential` の 5 キーを対象に、`"key"\s*:\s*"[^"]*"` を `"key": "***"` へ置換する。`credential` は覆われているが `username` は対象外である。
+### マスク処理
 
-`Sora/ICEServerInfo.swift` の `description` は `JSONEncoder` の出力をそのまま返す `CustomStringConvertible` の公開実装で、`username` と `credential` を含む。`Logger` を通さない文字列化 (利用者の `print`、`os_log`、クラッシュレポート、独自ログ基盤) では平文になる。
+`Sora/Logger.swift` の `secretKeys` は `access_token` / `token` / `secret` / `authorization` / `credential` の 5 キーを対象に、`"key"\s*:\s*"[^"]*"` を `"key": "***"` へ置換する (`secretPatterns` / `maskSecrets`)。`credential` は覆われているが `username` は対象外である。
 
-`Sora/PeerChannel.swift` は offer 受信時に `config.iceServerInfos` を debug ログへ出力する。`Logger` 経由のため `credential` はマスクされるが `username` は残る。
+正規表現はエスケープされていない JSON の `"key":"value"` (キーと値の間の空白の有無は問わない) にのみ一致する。`\"key\":\"value\"` のようにバックスラッシュでエスケープされたキーには一致しない。
 
-`Sora/URLSessionWebSocketChannel.swift` は受信した WebSocket メッセージを `Logger.debug` へ `"[\(host)] receive message => \(message)"` の形で出力する。`message` は `WebSocketMessage` の文字列表現で、JSON はエスケープされて文字列リテラルへ埋め込まれる (`string("{\"iceServers\":[{\"username\":\"...\",\"credential\":\"...\"}]}")`)。`maskSecrets` の正規表現はエスケープされていない `"key": "value"` しか一致しないため、この経路では対象キーの値がマスクされない。実機で、同じ TURN の `credential` が `PeerChannel` の `ICE server infos` (非エスケープ) では `***` にマスクされ、この経路では平文で出力されることを確認した (`username` も平文)。
+`maskSecrets` は `private static` のため、直接呼ぶ単体テストは追加できない。マスクは `Logger.output(log:)` の出力経路で 1 回だけ適用され、`onOutputHandler` へ渡す `Log` と `print` する文字列の両方がマスク済みになる。
 
-`Sora/SignalingChannel.swift` は `urlCandidates` を info ログへ出力する。URL に userinfo (`wss://user:pass@host` 形式) が含まれる場合、マスクの正規表現に一致しないため平文で残る。
+### 漏えい経路
 
-`maskSecrets` と `ICEServerInfo.description` のマスク挙動を検証するテストは存在しない。
+1. `Sora/ICEServerInfo.swift` の `description` は `JSONEncoder` の出力をそのまま返す `CustomStringConvertible` の公開実装で、`username` と `credential` を含む。`Logger` を通さない文字列化 (利用者の `print`、`os_log`、クラッシュレポート、独自ログ基盤) では平文になる。`CustomStringConvertible` への準拠は公開 API baseline (`TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json`) に記録されている。
+2. `Sora/PeerChannel.swift` の `createAndSendAnswer(offer:)` は offer 受信時に `config.iceServerInfos` を debug ログへ `"ICE server infos => \(config.iceServerInfos)"` として出力する。`[ICEServerInfo]` の文字列表現は各要素の `description` を使うため、`Logger` 経由のマスクでは `credential` はマスクされるが `username` は残る。
+3. `Sora/URLSessionWebSocketChannel.swift` の `handleReceiveResult(_:)` は受信した `URLSessionWebSocketTask.Message` を `Logger.debug` へ `"[\(host)] receive message => \(message)"` の形で出力する。`message` の文字列表現は `.string` の場合 `string("{\"iceServers\":[{\"username\":\"...\",\"credential\":\"...\"}]}")` となり、JSON がエスケープされて文字列リテラルへ埋め込まれる。`maskSecrets` の正規表現はエスケープされたキーに一致しないため、この経路では `credential` も `username` もマスクされない。経路 2 と経路 3 で扱いが変わることは、現行の `maskSecrets` と同じ正規表現を同じ入力に適用した実行でも確認済みである。起票時には実機のログでも、同じ TURN の `credential` が経路 2 では `***` にマスクされ、この経路では平文で出力されることを確認している (`username` も平文)。
+4. `Sora/SignalingChannel.swift` の `connect(handler:)` は `urlCandidates` を `Logger.info` へ出力し、続けて各候補について `connecting to \(String(describing: ws.url))` も `Logger.info` へ出力する。`redirect(location:)` は `try redirecting to \(location)` を debug ログへ、`URL(string:)` に失敗した場合は `invalid message: \(location)` を error ログへ出力する。URL に userinfo (`wss://user:pass@host` 形式) が含まれる場合、マスクの正規表現に一致しないため平文で残る。既定設定 (`level = .info`、`groups = [.channels, .user]`) でも `urlCandidates` と `connecting to` は出力される。
+
+### テストの現状
+
+`SoraTests/LoggerTests.swift` の `testMaskingAndOutputFormatUnchanged` が、`secretKeys` の 5 キーのマスクと `Log.description` の出力形式を検証している。同テストは「キーを追加した場合は、このテストの対象へ含めるかをそのとき判断します」とコメントしており、`username` 追加時の判断をここで行うことになっている。`username` を追加しても入力に `username` が無いため、このテストは更新しなくても成功する。
+
+次の挙動を検証するテストは存在しない。
+
+- `username` のマスク
+- エスケープされた JSON に対するマスク
+- JSON 以外の形式に対するマスク
+- `ICEServerInfo.description` のマスク
+- URL の userinfo の除去
 
 ## 設計方針
 
-- `Logger.maskSecrets` の対象キーに `username` を追加する。
-- エスケープされた JSON (`\"key\":\"value\"`) でもマスクが効くようにする。エスケープを解いた表現に対してマスクするか、ログへ渡すメッセージの組み立て側 (`URLSessionWebSocketChannel` の受信メッセージの出力など) でマスク済みの表現を作る。対象キーの一覧を 1 箇所にまとめる方針と整合させる。
-- `ICEServerInfo.description` の扱いを決める。認証情報をマスクした文字列表現を返すか、`description` による文字列化の提供をやめて `Codable` の利用を促すか。公開 API のため後方互換への影響を評価し、破壊的変更になる場合は非推奨化と移行期間を設ける。
-- `urlCandidates` のログでは URL の userinfo を除いた表現を使う。同等の処理が必要な箇所のために共通のヘルパーを用意する。
-- `maskSecrets` の単体テストを追加し、各対象キー、エスケープされた JSON、JSON 以外の形式に対する挙動を固定する。
-- マスクの対象キー一覧は定数として 1 箇所にまとめ、追加漏れが起きないようにする。
+### マスク処理
+
+- `Logger` の `secretKeys` に対象キー `username` を追加する。
+- エスケープされた JSON でもマスクが効くようにする。マスクは `Logger.maskSecrets` に集約したまま、対象パターンに非エスケープ形 (`"key":"value"`) とエスケープ形 (`\"key\":\"value\"`) の 2 種類を持たせる。
+- ログの組み立て側 (`URLSessionWebSocketChannel` の受信メッセージの出力など) でマスク済みの文字列を作る方式は採らない。ログの経路が増えるたびに適用漏れが起き、マスクの正しさを 1 箇所で保証できなくなるためである。
+- エスケープ形のマスクは、メッセージのエスケープを解いたり組み直したりせず、エスケープされたままの表記で対象キーの値だけを `***` に置き換える。ログの他の部分の表記を変えないためである。
+- `maskSecrets` の可視性は変えない (`private static` のまま)。検証は既存テストと同じく `Logger.output(log:)` 経由で行う。
+- `username` は TURN 以外の用途のログでもキー名が一致すればマスクされる。キー名に基づくマスクとして意図どおりであり、対象を狭めない。
+
+### `ICEServerInfo.description`
+
+- `CustomStringConvertible` への準拠と `description` のシグネチャは維持し、返す文字列の `username` と `credential` の値だけをマスクする。
+- `description` の提供をやめる案 (準拠の削除) は採らない。Swift では protocol conformance を非推奨化できず、移行期間を設けられない (`0113` と同じ判断)。`description` を残したまま平文を返すと目的を満たさないため、値をマスクする以外に両立する方法が無い。
+- `@available(*, deprecated)` は付けない。公開 API の形が変わらないため、公開 API baseline の再生成は不要である。`make api-check-fresh` が成功することを確認する。
+- `Codable` の `encode(to:)` と `CodingKeys` は変更しない。JSON のキー (`urls` / `username` / `credential`) と値は利用者が設定した値のままである必要があり、`0030` も JSON キー `username` の維持を完了条件にしている。`SoraTests/ConnectionConfigurationSnapshotTests.swift` の `testICEServerInfoJSONKeysAreUnchanged` が JSON のキー集合を固定しており、キーを変えると失敗する。値の不変はこのテストでは検証されないため、本 issue で追加するテストで検証する。
+- マスクした文字列を組み立てる処理は `ICEServerInfo.description` の中で完結させ、`Codable` の経路とコードを共有しない。
+
+### URL の userinfo
+
+- URL から userinfo を除いた文字列を作る内部ヘルパーを 1 つ用意し、`urlCandidates` / `connecting to` / `try redirecting to` のログに適用する。`urlCandidates` だけを直すと、同じ `connect(handler:)` 内の `connecting to` が userinfo を出力し続けるため、適用範囲は URL を出力するログ全体とする。`invalid message` は次の項のとおり組み立て時に処理する。
+- `redirect(location:)` の `location` は `PeerChannel` の redirect 処理から渡る `String` であるため、ヘルパーは `URL` と `String` の両方を受けられる形にする。`URL(string:)` に失敗した経路 (`invalid message`) では URL として解釈できないため、`<scheme>://` の直後から最初の `/` (無ければ文字列の末尾) までの間に `@` がある場合に `@` より前を除去する文字列ベースの処理で userinfo を除く。`URL(string:)` に失敗したら元の文字列をそのまま返す実装にすると漏えいが残るため、この経路でも文字列ベースの除去を行う。
+- `invalid message` は組み立て時点で userinfo を除いた location を使い、その文字列をログと `SoraError.signalingChannelError` の reason の両方に使う。reason は `SoraEventError.message` として利用者にも届き、`error.localizedDescription` は `Sora/SignalingChannel.swift` の `disconnect(error:)` と `Sora/PeerChannel.swift` の `basicDisconnect` の error ログでも再出力されるため、ログの 1 箇所だけをマスクしても漏えいが残る。認証情報を含めないことを優先し、invalid redirect のエラーメッセージの文字列が変わることを許容する (`CHANGES.md` に記載する)。
+- ヘルパーは `Logger` と同じモジュール内の internal な関数として置く。JSON の値のマスク (`secretKeys` / `maskSecrets`) と URL の userinfo の除去は別の処理であり、対象キーの一覧に混ぜない。
+
+### `ICEServerSnapshot`
+
+- `0102` が追加した `ICEServerSnapshot` は internal で `CustomStringConvertible` を持たず、ログにも出ない。`credential` / `username` を含む新しい文字列表現を追加しない (`0102` の設計を維持する)。
+
+### 対象外
+
+- `Logger.maskSecrets` の対象キーの一般化 (メタデータなどに含まれる任意の認証情報の検出)。
+- JSON 以外の形式に対するマスク挙動の固定 (現行のマスクは JSON のキーと値を対象にする)。
+- `Sora/SignalingChannel.swift` の責務分離 (`0141` の範囲)。
 
 ## 前提となる issue
 
-- `0102` (完了済み): 接続設定の snapshot 化。本 issue は `ICEServerInfo.description` と `urlCandidates` のログのマスクを扱うため、`0102` の完了後に着手する。
-- `0106` (develop にマージ済み): Logger の共有可変状態の同期。同じ `Sora/Logger.swift` の `maskSecrets` 周辺を変更するため、`0106` の完了後に着手する。`maskSecrets` と対象キーのロジックは `0106` で変更していない。
+- `0102` (完了済み): 接続設定の snapshot 化。本 issue は `ICEServerInfo.description` と URL のログのマスクを扱うため、`0102` の完了後に着手する。
+- `0106` (develop にマージ済み): Logger の共有可変状態の同期。同じ `Sora/Logger.swift` の `maskSecrets` 周辺を変更するため、`0106` の完了後に着手する。`maskSecrets` と対象キーのロジックは `0106` で変更していない。なお `0106` は `testMaskingAndOutputFormatUnchanged` を追加しており、本 issue はそのテストを更新する。
+
+## 関連 issue
+
+- `0141` (open): `SignalingChannel` を WebSocket 接続管理に純化する。`0141` は `Sora/SignalingChannel.swift` の変更対象に本 issue を含めており、本 issue の完了後に着手する。`0141` が先に完了した場合は、本 issue の「現状」と「変更対象」を現行コードへ同期してから着手する。
+- `0030` (open): `ICEServerInfo` の `userName` を `username` に変更する。同じ `Sora/ICEServerInfo.swift` を変更するが、`0030` はプロパティ名と `Codable` の定義、本 issue は `description` の出力であり変更箇所は重ならない。`0030` が先に完了した場合は `ICEServerInfo.userName` が `username` に変わるため、本 issue の記述を読み替える。`0030` は公開 API baseline を再生成するが、本 issue は再生成しない。
+- `0166` (open): `LogType.signaling` の filtering を修正する。同じ `Sora/Logger.swift` と `SoraTests/LoggerTests.swift` を変更するが、`0166` は `Logger.output(log:)` の group 別受理リスト、本 issue は `secretKeys` / `secretPatterns` / `maskSecrets` であり変更箇所は重ならない。
+
+## 変更対象
+
+- `Sora/Logger.swift`: `secretKeys` への `username` の追加、`secretPatterns` / `maskSecrets` のエスケープ形対応
+- `Sora/ICEServerInfo.swift`: `description` が返す文字列から `username` と `credential` の値をマスクする
+- `Sora/SignalingChannel.swift`: `urlCandidates` / `connecting to` / `try redirecting to` のログと、`invalid message` の文字列 (ログと `SoraError` の reason の両方に使う) で userinfo を除く
+- URL と文字列から userinfo を除く内部ヘルパー: `Sora/` 配下の既存の配置 (例: `Sora/Extensions/`) に合わせて追加する
+- `SoraTests/LoggerTests.swift`: `testMaskingAndOutputFormatUnchanged` を `username` を含む 6 キーへ更新し、エスケープされた JSON のケースを追加する
+- `SoraTests/`: `ICEServerInfo.description` のマスク、`Codable` の `encode(to:)` が出力する値の不変、URL の userinfo の除去を検証するテスト
+- `CHANGES.md`: `## develop` の `[FIX]` にエントリを追記する
 
 ## 完了条件
 
-- `username` を含む JSON 形式のログで、値がマスクされること。
+- `username` を含む JSON 形式のログで、`username` の値がマスクされること。
 - エスケープされた JSON を含むログ (`\"credential\":\"...\"` の形) でも、対象キーの値がマスクされること。
-- `ICEServerInfo.description` またはその後継の文字列表現から `credential` と `username` の平文が得られないこと。
-- userinfo を含む URL を `urlCandidates` に指定しても、ログに userinfo が出力されないこと。
-- `maskSecrets` の単体テストが存在し、成功すること。
-- 公開 API の挙動を変更する場合は `CHANGES.md` に記載し、移行方法を利用者向け文書に書いていること。
+- エスケープされていない JSON とエスケープされた JSON のどちらでも、マスクの対象外のキーと値がそのまま残ること。
+- `ICEServerInfo.description` から `credential` と `username` の平文が得られないこと。`Codable` の `encode(to:)` が出力する JSON のキー集合と値は変わらないこと (キー集合は `testICEServerInfoJSONKeysAreUnchanged` が成功することで確認し、値は本 issue で追加するテストで確認すること)。
+- userinfo を含む URL を `urlCandidates` に指定した場合、userinfo を含む有効な location で redirect した場合、`URL(string:)` に失敗する userinfo を含む location で redirect した場合のそれぞれで、`urlCandidates` / `connecting to` / `try redirecting to` / `invalid message` のどのログにも userinfo が出力されないこと。
+- invalid redirect の `invalid message` から作られる `SoraError` の reason、およびその reason が `error.localizedDescription` として再出力される `SignalingChannel.disconnect(error:)` と `PeerChannel.basicDisconnect` の error ログにも userinfo が出力されないこと。
+- `SoraTests/LoggerTests.swift` の `testMaskingAndOutputFormatUnchanged` が `username` とエスケープされた JSON のケースを検証し、成功すること。
+- `ICEServerInfo.description` のマスク、`Codable` の `encode(to:)` が出力する値の不変、URL の userinfo の除去を検証するテストが存在し、成功すること。
+- 公開 API baseline が変わらないこと (`make api-check-fresh` が成功すること。Xcode 26.6 と `iphoneos26.5` が必要なため、手元に無い場合は CI の `swift6-consumer` job で確認すること)。
 - 追加したテストと既存テストがすべて成功すること。
+- `CHANGES.md` の `## develop` の `[FIX]` の末尾に、担当者行 (`- @ユーザー名`) を付けてエントリを追記すること。invalid redirect のエラーメッセージが変わる (認証情報を含めない表記になる) ことも記載すること。
 
 ## 解決方法
