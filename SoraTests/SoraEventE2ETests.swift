@@ -98,8 +98,8 @@ final class SoraEventE2ETests: E2ETestBase {
     return condition()
   }
 
-  /// 1 接続で、接続ライフサイクル、シグナリング、切断と購読の終端が配送され、
-  /// legacy handler と内容が対応することを確認します。
+  /// 1 接続で、接続前の offer を含むシグナリング、接続ライフサイクル、切断と購読の終端が
+  /// 配送され、legacy handler と内容が対応することを確認します。
   func testSingleConnectionDeliversLifecycleSignalingAndLegacyCorrespondence() throws {
     guard let sora else {
       XCTFail("Sora インスタンスが無い")
@@ -114,39 +114,46 @@ final class SoraEventE2ETests: E2ETestBase {
     let soraRecorder = SoraEventRecorder()
     let channelRecorder = SoraEventRecorder()
     var channel: MediaChannel?
-    var legacySignalingCount = 0
+    // legacy handler が受信した signaling の JSON を配送順に保持する。件数だけでは
+    // 新 API と同じ signaling を受信したことを確認できないため、内容を比較する。
+    var legacySignalingJSONs: [String] = []
 
     // legacy handler は接続の前に登録する。MediaChannel は Configuration の
-    // MediaChannelHandlers インスタンスを handlers として共有するため、接続の前に登録しても
-    // 接続直後の受信を取り逃さない。接続後に登録すると、接続直後に届いたシグナリングを
+    // MediaChannelHandlers インスタンスを handlers として共有するため、接続前の offer も
+    // 含めて同じ signaling を受信できる。接続後に登録すると、接続直後に届いた signaling を
     // 新 API の購読だけが受け取り、legacy handler はその受信を観測できない。
-    config.mediaChannelHandlers.onReceiveSignalingJSON = { _ in
-      DispatchQueue.main.async { legacySignalingCount += 1 }
+    // handler は signaling の受信スレッドから呼ばれるため、共有状態の更新は main queue に束ねる。
+    config.mediaChannelHandlers.onReceiveSignalingJSON = { json in
+      DispatchQueue.main.async { legacySignalingJSONs.append(json) }
     }
 
     // 接続前に Sora インスタンスの購読を開始する。接続 handler の中で発行される `connected` は、
     // main queue へ載せてから購読すると取り逃すため、接続の前に購読しておく。
     startConsuming(sora.subscribeEvents(), into: soraRecorder)
 
+    // MediaChannel の購読も接続の開始前に始める。接続前の offer も新 API と legacy handler の
+    // 両方で観測し、同じ signaling を受信したことを内容で比較するため。
+    // `onAddMediaChannel` は接続処理の開始前に呼ばれる (呼び出し元は `Sora.connect` を呼んだスレッド)。
+    sora.handlers.onAddMediaChannel = { mediaChannel in
+      self.startConsuming(mediaChannel.subscribeEvents(), into: channelRecorder)
+    }
+
     let connectExpectation = expectation(description: "接続が完了すること")
     _ = sora.connect(configuration: config) { mediaChannel, error in
-      // 購読は接続 handler の中で同期的に開始する。main queue へ載せてから購読すると、接続完了の
-      // `connected` の配送より後に購読することになり取り逃す。購読の開始は任意のスレッドから
-      // 行えるため、handler のスレッドで開始してから main queue へ結果を渡す。
-      let events = mediaChannel?.subscribeEvents()
+      // 接続結果と MediaChannel の取得だけを main queue へ渡す。イベントの購読は
+      // `onAddMediaChannel` で接続の開始前に開始済み。
       DispatchQueue.main.async {
         if let error {
           XCTFail("接続に失敗した: \(error)")
           connectExpectation.fulfill()
           return
         }
-        guard let mediaChannel, let events else {
+        guard let mediaChannel else {
           XCTFail("接続成功時に MediaChannel が返らない")
           connectExpectation.fulfill()
           return
         }
         channel = mediaChannel
-        self.startConsuming(events, into: channelRecorder)
         connectExpectation.fulfill()
       }
     }
@@ -159,8 +166,18 @@ final class SoraEventE2ETests: E2ETestBase {
     waitUntil("Sora インスタンスの connected が配送されること") {
       soraRecorder.contains(kind: .connected)
     }
-    waitUntil("シグナリングの受信イベントが配送されること") {
-      channelRecorder.contains(kind: .signalingReceivedJSON)
+    // 接続前の offer の signalingReceivedJSON は connectionId が確定する前のため nil になる。
+    // 接続前から購読しているため、このイベントも新 API で観測できることを確認する。
+    waitUntil("接続前の offer の signalingReceivedJSON が配送されること") {
+      channelRecorder.events.contains {
+        $0.kind == .signalingReceivedJSON && $0.connectionId == nil
+      }
+    }
+    // offer だけでは接続後の signaling の配送を検証できないため、接続後の signaling も待つ。
+    waitUntil("接続後の signalingReceivedJSON が配送されること") {
+      channelRecorder.events.contains {
+        $0.kind == .signalingReceivedJSON && $0.connectionId != nil
+      }
     }
 
     // 切断を実行し、legacy handler と新 API の両方で切断を観測する。
@@ -182,8 +199,6 @@ final class SoraEventE2ETests: E2ETestBase {
       channelRecorder.finished
     }
 
-    XCTAssertGreaterThanOrEqual(
-      legacySignalingCount, 1, "legacy の onReceiveSignalingJSON も同じ受信で呼ばれること")
     XCTAssertEqual(legacyDisconnectCount, 1, "legacy の onDisconnect が 1 回呼ばれること")
 
     // Sora インスタンス側の順序 (mediaChannelAdded → connected) を確認する。
@@ -195,10 +210,10 @@ final class SoraEventE2ETests: E2ETestBase {
     }
     XCTAssertLessThan(addedIndex, connectedIndex, "mediaChannelAdded が connected より先に配送されること")
 
-    // MediaChannel 側の順序と通し番号を確認する。購読を開始する前に配送されたイベントにも
-    // 通し番号が採番されるため、購読後に受け取る最初の値は 1 とは限らない。また複数のスレッドから
-    // 同時に配送されたイベントは、受信順と通し番号の順序が一致しないことがある。受信した範囲で
-    // 欠落なく連続していることを確認する。
+    // MediaChannel 側の順序と通し番号を確認する。購読を接続の開始前に開始しているため、
+    // 最初に配送されるイベントにも通し番号 1 が採番される。また複数のスレッドから
+    // 同時に配送されたイベントは、受信順と通し番号の順序が一致しないことがある。
+    // 受信した範囲で欠落なく連続していることを確認する。
     let channelEvents = channelRecorder.events
     XCTAssertFalse(channelEvents.isEmpty, "イベントが 1 件も配送されなかった")
     XCTAssertTrue(channelRecorder.contains(kind: .connected), "接続の完了で connected が配送されること")
@@ -207,12 +222,47 @@ final class SoraEventE2ETests: E2ETestBase {
     guard let firstSequence = sequences.first, let lastSequence = sequences.last else {
       return
     }
+    XCTAssertEqual(firstSequence, 1, "購読を接続前に開始するため、最初の通し番号は 1 であること")
     XCTAssertEqual(
       sequences, Array(firstSequence...lastSequence),
       "通し番号が受け取った範囲で欠落なく連続していること")
+
+    // offer の signalingReceivedJSON だけは connectionId が確定する前のため nil になる。
+    // それ以外のイベントは自接続の connectionId を持つことを確認する。
+    let nilConnectionIdEvents = channelEvents.filter { $0.connectionId == nil }
+    XCTAssertEqual(
+      nilConnectionIdEvents.count, 1,
+      "connectionId が nil のイベントは offer の signalingReceivedJSON だけであること")
+    XCTAssertEqual(
+      nilConnectionIdEvents.first?.kind, .signalingReceivedJSON,
+      "connectionId が nil のイベントが signalingReceivedJSON であること")
+    XCTAssertNotNil(channel.connectionId, "接続後に connectionId が確定すること")
     XCTAssertTrue(
-      channelEvents.allSatisfy { $0.connectionId == channel.connectionId },
-      "MediaChannel のイベントが自接続の connectionId を持つこと")
+      channelEvents.filter { $0.connectionId != nil }.allSatisfy {
+        $0.connectionId == channel.connectionId
+      },
+      "connectionId が確定したイベントは自接続の connectionId を持つこと")
+
+    // legacy handler と新 API が、接続前の offer を含めて同じ signaling を同じ順序で
+    // 受信したことを確認する。件数だけでは接続前の offer で成立してしまい、接続後の
+    // 同じ受信を検証できない。
+    let newAPISignalingJSONs = channelEvents.compactMap { event -> String? in
+      guard event.kind == .signalingReceivedJSON else {
+        return nil
+      }
+      return event.signalingJSON
+    }
+    let signalingEventCount = channelEvents.filter { $0.kind == .signalingReceivedJSON }.count
+    XCTAssertEqual(
+      newAPISignalingJSONs.count, signalingEventCount,
+      "signalingReceivedJSON が signalingJSON を持つこと")
+    XCTAssertFalse(newAPISignalingJSONs.isEmpty, "新 API が signaling を受信すること")
+    waitUntil("legacy handler が新 API と同じ signaling を受信すること") {
+      legacySignalingJSONs == newAPISignalingJSONs
+    }
+    XCTAssertEqual(
+      legacySignalingJSONs, newAPISignalingJSONs,
+      "legacy handler が新 API と同じ signaling を同じ順序で受信すること")
   }
 
   /// 2 接続で、stream と DataChannel のイベントが配送され、接続間で混線しないことを確認します。
