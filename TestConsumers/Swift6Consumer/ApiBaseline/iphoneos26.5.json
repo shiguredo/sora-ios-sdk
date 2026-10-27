@@ -40809,10 +40809,18 @@
               },
               {
                 "kind": "TypeNominal",
-                "name": "WebRTCConfiguration",
-                "printedName": "Sora.WebRTCConfiguration",
+                "name": "Optional",
+                "printedName": "Sora.WebRTCConfiguration?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "WebRTCConfiguration",
+                    "printedName": "Sora.WebRTCConfiguration",
+                    "usr": "s:4Sora19WebRTCConfigurationV"
+                  }
+                ],
                 "hasDefaultArg": true,
-                "usr": "s:4Sora19WebRTCConfigurationV"
+                "usr": "s:Sq"
               },
               {
                 "kind": "TypeFunc",
@@ -40870,8 +40878,8 @@
               }
             ],
             "declKind": "Func",
-            "usr": "s:4SoraAAC7connect13configuration19webRTCConfiguration7handlerAA14ConnectionTaskCAA13ConfigurationV_AA03WebE0VyAA12MediaChannelCSg_s5Error_pSgtctF",
-            "mangledName": "$s4SoraAAC7connect13configuration19webRTCConfiguration7handlerAA14ConnectionTaskCAA13ConfigurationV_AA03WebE0VyAA12MediaChannelCSg_s5Error_pSgtctF",
+            "usr": "s:4SoraAAC7connect13configuration19webRTCConfiguration7handlerAA14ConnectionTaskCAA13ConfigurationV_AA03WebE0VSgyAA12MediaChannelCSg_s5Error_pSgtctF",
+            "mangledName": "$s4SoraAAC7connect13configuration19webRTCConfiguration7handlerAA14ConnectionTaskCAA13ConfigurationV_AA03WebE0VSgyAA12MediaChannelCSg_s5Error_pSgtctF",
             "moduleName": "Sora",
             "declAttributes": [
               "Final"
