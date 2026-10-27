@@ -166,9 +166,9 @@ final class SoraEventE2ETests: E2ETestBase {
     waitUntil("Sora インスタンスの connected が配送されること") {
       soraRecorder.contains(kind: .connected)
     }
-    // 接続前の offer の signalingReceivedJSON は connectionId が確定する前のため nil になる。
-    // 接続前から購読しているため、このイベントも新 API で観測できることを確認する。
-    waitUntil("接続前の offer の signalingReceivedJSON が配送されること") {
+    // connectionId が確定する前の signalingReceivedJSON (offer や ping など) は nil になる。
+    // 接続前から購読しているため、これらのイベントも新 API で観測できることを確認する。
+    waitUntil("connectionId が確定する前の signalingReceivedJSON が配送されること") {
       channelRecorder.events.contains {
         $0.kind == .signalingReceivedJSON && $0.connectionId == nil
       }
@@ -227,25 +227,28 @@ final class SoraEventE2ETests: E2ETestBase {
       sequences, Array(firstSequence...lastSequence),
       "通し番号が受け取った範囲で欠落なく連続していること")
 
-    // offer の signalingReceivedJSON だけは connectionId が確定する前のため nil になる。
-    // それ以外のイベントは自接続の connectionId を持つことを確認する。
+    // connectionId が確定する前の signalingReceivedJSON (offer や ping など) は
+    // connectionId が nil で配送される。nil のイベントが signalingReceivedJSON だけであり、
+    // connectionId が確定したイベントは自接続の connectionId を持つことを確認する。
     let nilConnectionIdEvents = channelEvents.filter { $0.connectionId == nil }
-    XCTAssertEqual(
-      nilConnectionIdEvents.count, 1,
-      "connectionId が nil のイベントは offer の signalingReceivedJSON だけであること")
-    XCTAssertEqual(
-      nilConnectionIdEvents.first?.kind, .signalingReceivedJSON,
-      "connectionId が nil のイベントが signalingReceivedJSON であること")
+    XCTAssertFalse(
+      nilConnectionIdEvents.isEmpty,
+      "connectionId が確定する前の signalingReceivedJSON が含まれること")
+    XCTAssertTrue(
+      nilConnectionIdEvents.allSatisfy { $0.kind == .signalingReceivedJSON },
+      "connectionId が nil のイベントは signalingReceivedJSON だけであること: \(nilConnectionIdEvents.map { "\($0.kind.rawValue)@\($0.sequence)" })"
+    )
     XCTAssertNotNil(channel.connectionId, "接続後に connectionId が確定すること")
     XCTAssertTrue(
       channelEvents.filter { $0.connectionId != nil }.allSatisfy {
         $0.connectionId == channel.connectionId
       },
-      "connectionId が確定したイベントは自接続の connectionId を持つこと")
+      "connectionId が確定したイベントは自接続の connectionId を持つこと: \(channelEvents.filter { $0.connectionId != nil && $0.connectionId != channel.connectionId }.map { "\($0.kind.rawValue)@\($0.sequence)" })"
+    )
 
-    // legacy handler と新 API が、接続前の offer を含めて同じ signaling を同じ順序で
-    // 受信したことを確認する。件数だけでは接続前の offer で成立してしまい、接続後の
-    // 同じ受信を検証できない。
+    // legacy handler と新 API が、connectionId が確定する前の signaling を含めて同じ
+    // signaling を同じ順序で受信したことを確認する。件数だけでは接続前の signaling で
+    // 成立してしまい、接続後の同じ受信を検証できない。
     let newAPISignalingJSONs = channelEvents.compactMap { event -> String? in
       guard event.kind == .signalingReceivedJSON else {
         return nil
