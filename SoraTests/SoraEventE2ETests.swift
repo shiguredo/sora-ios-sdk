@@ -116,6 +116,14 @@ final class SoraEventE2ETests: E2ETestBase {
     var channel: MediaChannel?
     var legacySignalingCount = 0
 
+    // legacy handler は接続の前に登録する。MediaChannel は Configuration の
+    // MediaChannelHandlers インスタンスを handlers として共有するため、接続の前に登録しても
+    // 接続直後の受信を取り逃さない。接続後に登録すると、接続直後に届いたシグナリングを
+    // 新 API の購読だけが受け取り、legacy handler はその受信を観測できない。
+    config.mediaChannelHandlers.onReceiveSignalingJSON = { _ in
+      DispatchQueue.main.async { legacySignalingCount += 1 }
+    }
+
     // 接続前に Sora インスタンスの購読を開始する。接続 handler の中で発行される `connected` は、
     // main queue へ載せてから購読すると取り逃すため、接続の前に購読しておく。
     startConsuming(sora.subscribeEvents(), into: soraRecorder)
@@ -138,10 +146,6 @@ final class SoraEventE2ETests: E2ETestBase {
           return
         }
         channel = mediaChannel
-        // legacy handler と新 API が同じ受信で配送されることを確認する。
-        mediaChannel.handlers.onReceiveSignalingJSON = { _ in
-          DispatchQueue.main.async { legacySignalingCount += 1 }
-        }
         self.startConsuming(events, into: channelRecorder)
         connectExpectation.fulfill()
       }
