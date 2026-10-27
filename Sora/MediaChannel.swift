@@ -782,8 +782,9 @@ public final class MediaChannel {
 
   /// クライアントの設定
   ///
-  /// 公開互換のために利用者が渡した値を返し続けます。接続開始後の非同期区間
-  /// (非同期 hop の後、WebRTC callback、`ConnectionTimer`) はこの値の参照型フィールド
+  /// 公開互換のために利用者が渡した値を返し続けます。`Sora.connect` の
+  /// `webRTCConfiguration` 引数を指定した接続でも、この値は引数を反映しません。接続開始後の
+  /// 非同期区間 (非同期 hop の後、WebRTC callback、`ConnectionTimer`) はこの値の参照型フィールド
   /// (metadata / notify metadata / codec 別 params / `dataChannels` / `forwardingFilter` /
   /// `forwardingFilters` / `webRTCConfiguration`、および snapshot に含めないハンドラクラスと
   /// `audioDevice`) を読みません。値型フィールドは接続開始時の値のままなので、公開 getter、
@@ -1428,8 +1429,9 @@ public final class MediaChannel {
 
   /// サーバーに接続します。
   ///
-  /// - parameter webRTCConfiguration: WebRTC の設定。接続処理はこの引数を使わず、
-  ///   接続開始時の snapshot から設定を読む (公開引数の扱いは別途整理する)
+  /// - parameter webRTCConfiguration: WebRTC の設定。接続処理では使わない
+  ///   (`Sora.connect` は引数を反映した snapshot から接続する)。既存テストの呼び出し互換の
+  ///   ために残している
   /// - parameter handler: 接続試行後に呼ばれるクロージャー
   /// - parameter error: (接続失敗時) エラー
   func connect(
@@ -1504,8 +1506,6 @@ public final class MediaChannel {
     let weakSelf = WeakMediaChannelBox(self)
     let taskBox = MediaChannelConnectionTaskBox(task)
     DispatchQueue.global().async { [weakSelf, taskBox] in
-      // basicConnect は接続設定を snapshot から読む。webRTCConfiguration は既存テストの
-      // 呼び出し互換のために受け取るだけで、接続処理では使わない。
       weakSelf.value?.basicConnect(connectionTask: taskBox.value)
     }
     return task
