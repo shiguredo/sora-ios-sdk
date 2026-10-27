@@ -1,7 +1,7 @@
 # SoraEventE2ETests の legacy handler がシグナリング受信を取り逃す race を修正する
 
 - Created: 2026-10-26
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-27
 - Branch: feature/fix-sora-event-e2e-legacy-handler-race
 - Polished: 2026-10-26
 
@@ -36,9 +36,25 @@ E2E Test が断続的に失敗する原因を解消し、CI を安定させる�
 
 ## 解決方法
 
-- `SoraTests/SoraEventE2ETests.swift` の `testSingleConnectionDeliversLifecycleSignalingAndLegacyCorrespondence` で、`sora.connect` の前に `config.mediaChannelHandlers.onReceiveSignalingJSON` を設定し、`legacySignalingCount` を更新する。
-- 接続完了 handler 内の `mediaChannel.handlers.onReceiveSignalingJSON` の設定を削除する。
-- E2E Test を複数回実行し、同じ失敗が再発しないことを確認する。
+2026-10-27 に対応した。原因はテスト側の legacy handler の登録タイミングにあり、SDK の実装・公開 API は変更していない。
+
+`SoraTests/SoraEventE2ETests.swift` の `testSingleConnectionDeliversLifecycleSignalingAndLegacyCorrespondence` を次のとおり修正した。
+
+- `MediaChannel` のイベント購読を `sora.handlers.onAddMediaChannel` で接続の開始前に開始し、接続前の signaling も新 API で観測できるようにした
+- `sora.connect` の前に `config.mediaChannelHandlers.onReceiveSignalingJSON` を設定し、受信した JSON を配送順に記録するようにした
+- 接続完了 handler 内の `mediaChannel.handlers.onReceiveSignalingJSON` の設定を削除した
+- legacy handler と新 API が受信した signaling JSON を順序込みで比較し、接続前の signaling を含めて同じ受信を観測したことを検証するようにした
+- 接続前の `signalingReceivedJSON` は `connectionId` が確定する前のため nil になる契約を検証し、接続後の signaling の配送も待つようにした
+- `MediaChannel` は `Configuration.mediaChannelHandlers` のインスタンスを `handlers` として共有するため、接続前に登録した handler でも接続前の受信を取り逃さない
+
+確認した内容は次のとおり。
+
+- `make fmt-lint` と `make lint` が成功した (CI の `swift6-consumer` job でも成功)
+- `SoraTests` 全体の型チェックが成功した
+- E2E Test を実行し、対象テストを含む 522 テスト (7 スキップ) が失敗 0 だった
+  - run 40445693799 の e2e job (attempt 1) では対象テストが成功したが、別テストの WebSocket 接続失敗で job が失敗したため再実行した
+  - 同じ run の e2e job (attempt 2) で 522 テスト (7 スキップ) が失敗 0 だった
+  - 同じ run の tsan job も成功した
 
 ## 参考
 
