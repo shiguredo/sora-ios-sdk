@@ -1,7 +1,7 @@
 # Sora.connect の webRTCConfiguration 引数が接続に反映されない問題を修正する
 
 - Created: 2026-09-15
-- Completed:
+- Completed: 2026-10-27
 - Priority: Medium
 - Branch: feature/fix-ignored-webrtc-configuration
 - Polished: 2026-09-23
@@ -80,3 +80,15 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 - `Configuration.webRTCConfiguration` を設定した状態で引数を指定した場合に、引数が優先されることを検証する。
 
 ## 解決方法
+
+- `Sora.connect(configuration:webRTCConfiguration:handler:)` の `webRTCConfiguration` 引数を `WebRTCConfiguration? = nil` に変更した
+- 引数が非 `nil` のときは、`Configuration` の複製の `webRTCConfiguration` を引数の値で置き換え、その設定から `ConnectionConfigurationSnapshot` を生成するよう `Sora.connect` を変更した。`ConnectionConfigurationSnapshot` の初期化子は変更せず、snapshot 変換の入口を `ConnectionConfigurationSnapshot(configuration:)` 1 つに保っている
+- 引数が `nil`（省略または明示的な `nil`）のときは、従来どおり `Configuration.webRTCConfiguration` を使う
+- `MediaChannel` には元の `Configuration` を渡し、`MediaChannel.configuration` が利用者の渡した値を返す公開互換を維持した
+- `Sora.connect`、`Configuration.webRTCConfiguration`、`MediaChannel.configuration`、`MediaChannel.connect(webRTCConfiguration:)` の doc コメントを更新し、引数指定時の全体置換、`Configuration.webRTCConfiguration` との優先関係、サーバーが offer の `config` で ICE サーバー / ICE トランスポートポリシーを指定した場合の既存の上書き挙動を明記した
+- `skills/sora-ios-sdk/SKILL.md` に「### WebRTC 設定」を追加し、通常は `Configuration.webRTCConfiguration` を使うこと、引数を指定した場合は `WebRTCConfiguration` 全体が置き換わること、`MediaChannel.configuration` は引数を反映しないことを記載した
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを追加した
+- `SoraTests/SoraConnectWebRTCConfigurationTests.swift` を追加し、引数指定時の反映、引数省略時の非退行、両方指定時の引数優先、引数を指定した場合の全体置換、`MediaChannel.configuration` の非反映を検証した。snapshot と `PeerChannel.currentWebRTCConfiguration()` の両方を比較している
+- `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` を Xcode 26.6 / iphoneos26.5 で再生成し、`connect` の第 2 引数の Optional 化と `usr` / `mangledName` の変化だけが差分であることを確認した。`make api-check-fresh` は CI の Xcode 26.6 / iphoneos26.5 環境で検証する
+- `origin/develop`（libwebrtc m156.8078.5.1）取り込み後に Release device build（warnings-as-errors）、SoraTests、consumer 4 scheme、negative check、SwiftLint、swift format lint を再実行し、すべて成功した
+- 未使用の `MediaChannel.connect(webRTCConfiguration:)` 引数の削除は本 issue のスコープ外とし、必要なら別 issue で扱う
