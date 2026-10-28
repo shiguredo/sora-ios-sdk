@@ -66,6 +66,45 @@ final class SecretMaskingTests: XCTestCase {
       "JSON の credential は利用者が設定した値のままであること")
   }
 
+  /// `ICEServerInfo.description` の JSON キー集合が `Codable` の出力と同じことを確認します。
+  ///
+  /// `description` はマスク用に値を差し替えた複製を作るため、フィールドを追加したときに
+  /// 片方だけ更新されるとキーが欠けます。両者のキー集合と、認証情報が伏せられていることを
+  /// 比較します。非 optional のフィールドを追加した場合はキー集合が一致するため、この
+  /// テストでは検出できません。
+  func testICEServerInfoDescriptionKeysMatchCodable() throws {
+    let values: [(userName: String?, credential: String?)] = [
+      ("turn-user-7", "turn-secret-9"),
+      (nil, nil),
+    ]
+    for value in values {
+      let info = ICEServerInfo(
+        urls: ["turns://example.com"],
+        userName: value.userName,
+        credential: value.credential)
+      let descriptionObject = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Data(info.description.utf8)) as? [String: Any],
+        "description が JSON オブジェクトであること")
+      let encodedObject = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: JSONEncoder().encode(info)) as? [String: Any],
+        "Codable の出力が JSON オブジェクトであること")
+      XCTAssertEqual(
+        Set(descriptionObject.keys), Set(encodedObject.keys),
+        "description の JSON キー集合が Codable の出力と一致すること")
+      XCTAssertEqual(
+        descriptionObject["urls"] as? [String], ["turns://example.com"],
+        "description の urls は設定値のままであること")
+      if value.userName != nil {
+        XCTAssertEqual(
+          descriptionObject["username"] as? String, "***",
+          "description の username は伏せられること")
+        XCTAssertEqual(
+          descriptionObject["credential"] as? String, "***",
+          "description の credential は伏せられること")
+      }
+    }
+  }
+
   /// 認証情報が nil の場合、`description` の JSON にキー自体が含まれないことを確認します。
   func testICEServerInfoDescriptionOmitsNilCredentials() throws {
     let info = ICEServerInfo(urls: ["stun:example.com"], userName: nil, credential: nil)

@@ -18,7 +18,6 @@ final class LoggerCapture {
   /// ログが 1 件出力されるたびに呼ばれるクロージャー
   private let onMessage: ((String) -> Void)?
 
-  private let originalShared: Logger
   private let originalLevel: LogLevel
   private let originalGroups: [Logger.Group]
   private let originalOnOutputHandler: ((Log) -> Void)?
@@ -30,9 +29,10 @@ final class LoggerCapture {
     onMessage: ((String) -> Void)? = nil
   ) {
     self.onMessage = onMessage
-    // 設定は 1 回取得した instance から読み、復元先と食い違わないようにします。
+    // 設定は 1 回取得した `Logger.shared` から読みます。`restore()` はその時点の
+    // `Logger.shared` へ戻すため、実行中に `Logger.shared` が差し替えられると復元先が
+    // 変わります。このヘルパーは直列実行前提です。
     let shared = Logger.shared
-    originalShared = shared
     originalLevel = shared.level
     originalGroups = shared.groups
     originalOnOutputHandler = shared.onOutputHandler
@@ -48,8 +48,6 @@ final class LoggerCapture {
   ///
   /// 通常は `deinit` から呼ばれます。2 回呼んでも同じ値を設定するだけなので安全です。
   func restore() {
-    // instance を先に戻し、その instance へ設定を戻します。
-    Logger.shared = originalShared
     Logger.shared.onOutputHandler = originalOnOutputHandler
     Logger.shared.level = originalLevel
     Logger.shared.groups = originalGroups

@@ -23,7 +23,7 @@
   - 引数を省略した接続は従来どおり `Configuration.webRTCConfiguration` を使う。`MediaChannel.configuration` は、引数を指定しても渡した `Configuration` の値を返す
   - @t-miya
 - [FIX] ログと文字列表現から TURN の認証情報が漏れないようにする
-  - ログのマスク対象に `username` を追加し、文字列リテラルへ埋め込まれてエスケープされた JSON でも対象キーの値をマスクする。エスケープされた形の値が 4096 文字を超える場合はマスクしない
+  - ログのマスク対象に `username` を追加し、文字列リテラルへ埋め込まれてエスケープされた JSON でも対象キーの値をマスクする。エスケープされた形の値が 4096 文字を超える場合、値の中の引用符の直後に区切りが続く場合、終端が無い途切れたエスケープ形、値がバックスラッシュで終わる不正な JSON、値の直後が区切りでも末尾でもない不正な JSON、二重にエスケープされた JSON はマスクしない
   - `ICEServerInfo.description` は `username` と `credential` の値を伏せる。`Codable` の出力は変わらない
   - シグナリング URL の userinfo をログと redirect のエラーメッセージから除く。invalid redirect のエラーメッセージは認証情報を含まない表記に変わる
   - WebSocket の受信失敗ログは、接続先 URL を含む `NSError` の userInfo を出さず、domain / code / description を出す

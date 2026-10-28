@@ -2,19 +2,26 @@ import Foundation
 
 /// URL に含まれる userinfo (ユーザー名とパスワード) を除くヘルパーです。
 ///
-/// `wss://user:pass@example.com/signaling` のような URL をそのままログへ出すと
-/// 認証情報が残ります。ログへ出す前にこのヘルパーを通します。
+/// WebSocket の URI (RFC 6455) は userinfo を持たないため、仕様どおりのシグナリング URL
+/// (`wss://example.com/signaling` など) では userinfo は現れません。このヘルパーは、
+/// 仕様外の URL が設定されたり、redirect の location に userinfo が含まれたりした場合でも
+/// ログとエラーメッセージに認証情報を残さないための防御的な実装です。
+/// `Foundation` の `URL` と `URLSessionWebSocketTask` は userinfo 付きの URL をそのまま
+/// 受理するため、ログへ出す前に除去します。
 enum URLUserInfo {
   /// `URL` から userinfo を除いた URL を返します。
   ///
   /// authority の userinfo (ユーザー名とパスワード) だけを対象にします。userinfo を
-  /// 含まない URL はそのまま返します。`URLComponents` で表せない URL は、文字列版で
-  /// userinfo を除いた URL を返します。
+  /// 含まない URL はそのまま返します。`URLComponents` で表せない URL は文字列版で
+  /// userinfo を除いた URL を返し、それも URL として解釈できない場合は元の URL を
+  /// 返します。
   static func removed(from url: URL) -> URL {
-    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-      // userinfo がある場合、`URLComponents` は空のユーザー名でも user を nil 以外にします。
-      components.user != nil
-    else {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+      // `URLComponents` で表せない URL でも userinfo を残さないよう、文字列版で除去します。
+      return URL(string: removed(from: url.absoluteString)) ?? url
+    }
+    // userinfo がある場合、`URLComponents` は空のユーザー名でも user を nil 以外にします。
+    guard components.user != nil else {
       return url
     }
     components.user = nil
@@ -22,7 +29,7 @@ enum URLUserInfo {
     if let stripped = components.url {
       return stripped
     }
-    // `URLComponents` で表せない URL でも userinfo を残さないよう、文字列版で除去します。
+    // userinfo を消した後に URL を作れない場合も、文字列版で除去します。
     return URL(string: removed(from: url.absoluteString)) ?? url
   }
 
@@ -62,8 +69,7 @@ enum URLUserInfo {
   /// path の中の `://` を scheme と誤認しないよう、文字列の先頭から scheme の文法
   /// (RFC 3986 の `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`) に一致する場合だけを
   /// 対象にします。
-  private static func schemeSeparator<S: StringProtocol>(in string: S) -> Range<String.Index>?
-  where S.Index == String.Index {
+  private static func schemeSeparator(in string: Substring) -> Range<String.Index>? {
     guard let separator = string.range(of: "://") else {
       return nil
     }

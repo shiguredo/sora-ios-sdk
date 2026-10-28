@@ -274,7 +274,8 @@ class SignalingChannel {
       }
 
       let urlCandidates = self.unique(urls: self.snapshot.urlCandidates)
-      // URL の userinfo は認証情報のため、ログへ出す前に取り除きます。
+      // WebSocket の URI に userinfo は無いため通常は現れませんが、仕様外の URL に
+      // 備えて、ログへ出す前に認証情報を取り除きます。
       Logger.info(
         type: .signalingChannel,
         message: "urlCandidates: \(urlCandidates.map { URLUserInfo.removed(from: $0) })")
@@ -293,8 +294,10 @@ class SignalingChannel {
 
   func redirect(location: String) {
     owner.enqueue {
-      // URL の userinfo は認証情報のため、ログとエラーのメッセージへ出す前に取り除きます。
-      // URL として解釈できない location も対象にするため、文字列ベースで処理します。
+      // WebSocket の URI (RFC 6455) は userinfo を持たないため通常は現れませんが、
+      // 仕様外の location が届いた場合に備えて、ログとエラーのメッセージへ出す前に
+      // 認証情報を取り除きます。URL として解釈できない location も対象にするため、
+      // 文字列ベースで処理します。
       let sanitizedLocation = URLUserInfo.removed(from: location)
       Logger.debug(
         type: .signalingChannel, message: "try redirecting to \(sanitizedLocation)")
