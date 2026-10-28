@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 
 @testable import Sora
@@ -9,6 +10,8 @@ import XCTest
 ///
 /// - `didCloseWith` と `didCompleteWithError` が両方届いても切断通知が 1 回であること
 /// - 切断要求後に届いた受信 / 送信の完了でハンドラーを呼ばないこと
+/// - 受信した JSON がログではマスクされ、ハンドラーへはそのまま渡ること
+/// - 受信失敗のログに接続先 URL の userinfo が残らないこと
 ///
 /// タスクは resume しないためネットワークは発生しない。
 /// モックやスタブは使用しない。
@@ -150,5 +153,89 @@ final class URLSessionWebSocketChannelTests: XCTestCase {
     }
     channel.handleSendCompletion(makeConnectionLostError())
     XCTAssertEqual(notificationCount, 1, "切断後の送信完了で通知が増えないこと")
+  }
+
+  // MARK: - 受信ログのマスク
+
+  /// 受信した JSON がログではマスクされ、ハンドラーへはそのまま渡ることを確認する
+  ///
+  /// 受信ログは `URLSessionWebSocketTask.Message` の文字列表現を経由するため、
+  /// JSON は文字列リテラルへ埋め込まれてエスケープされます。エスケープされた JSON でも
+  /// 認証情報がログへ残らないこと、およびマスクが配送する値へ影響しないことを検証します。
+  func testReceiveResultLogsMaskedMessageAndPassesRawMessage() throws {
+    let capture = LoggerCapture()
+
+    let channel = makeChannel()
+    let received = ReceivedMessageBox()
+    channel.handlers.onReceive = { received.set($0) }
+
+    let json = #"{"username":"turn-user-7","credential":"turn-secret-9"}"#
+    channel.handleReceiveResult(.success(.string(json)))
+
+    let messages = capture.messages
+    XCTAssertTrue(
+      messages.contains {
+        $0.hasPrefix("[127.0.0.1] receive message => string(") && !$0.contains("turn-user-7")
+          && !$0.contains("turn-secret-9")
+      },
+      "受信ログの JSON がマスクされること: \(messages)")
+
+    let message = try XCTUnwrap(received.value, "利用者 handler へ受信メッセージが渡ること")
+    guard case .text(let text) = message else {
+      XCTFail("テキストメッセージとして渡ること")
+      return
+    }
+    XCTAssertEqual(
+      text, json, "マスクはログだけで、handler へ渡す値は変わらないこと")
+  }
+
+  /// 受信失敗のログに接続先 URL の userinfo が残らないことを確認する
+  ///
+  /// `NSError` の description は userInfo の接続先 URL を含むため、そのままログへ出すと
+  /// URL の userinfo が残ります。
+  func testReceiveErrorLogDoesNotContainUserInfo() throws {
+    let capture = LoggerCapture()
+
+    let channel = makeChannel()
+    let url = try XCTUnwrap(URL(string: "wss://user:pass@example.com/signaling"))
+    let error = NSError(
+      domain: NSURLErrorDomain,
+      code: NSURLErrorNetworkConnectionLost,
+      userInfo: [NSURLErrorFailingURLErrorKey: url])
+
+    channel.handleReceiveResult(.failure(error))
+
+    let messages = capture.messages
+    XCTAssertTrue(
+      messages.contains {
+        $0.hasPrefix(
+          "[127.0.0.1] message receive error: domain=\(NSURLErrorDomain), code=\(NSURLErrorNetworkConnectionLost),"
+        )
+      },
+      "受信失敗のログが domain と code を出して出力されること: \(messages)")
+    XCTAssertFalse(
+      messages.contains { $0.contains("user:pass") },
+      "受信失敗のログに userinfo が残らないこと: \(messages)")
+  }
+}
+
+/// 受信したメッセージをテストから受け取るための箱です。
+///
+/// handler は複数の executor から呼ばれ得るため、可変値を直接 capture せず
+/// lock 付きの型に閉じ込めます。
+private final class ReceivedMessageBox: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stored: WebSocketMessage?
+
+  func set(_ value: WebSocketMessage) {
+    lock.lock()
+    defer { lock.unlock() }
+    stored = value
+  }
+
+  var value: WebSocketMessage? {
+    lock.lock()
+    defer { lock.unlock() }
+    return stored
   }
 }

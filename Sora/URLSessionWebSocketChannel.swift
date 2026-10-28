@@ -195,8 +195,14 @@ final class URLSessionWebSocketChannel: NSObject, @unchecked Sendable, URLSessio
       receive()
     case .failure(let error):
       // メッセージ受信に失敗以上のエラーは urlSession の didCompleteWithError で検知できるのでここではログを出して break する
+      // `\(error)` や `error.description` は NSError の userInfo に接続先 URL を含むため、
+      // URL の userinfo がそのまま残らないよう domain / code / localizedDescription だけを出します。
+      let nsError = error as NSError
       Logger.debug(
-        type: .webSocketChannel, message: "[\(host)] message receive error: \(error)")
+        type: .webSocketChannel,
+        message:
+          "[\(host)] message receive error: domain=\(nsError.domain), code=\(nsError.code), description=\(nsError.localizedDescription)"
+      )
     }
   }
 

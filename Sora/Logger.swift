@@ -486,37 +486,77 @@ public final class Logger: Sendable {
   // MARK: - シークレットマスク
 
   /// マスク対象のシークレットキー
-  /// この文字列が含まれるキーの値はマスク対象とする
+  ///
+  /// JSON のキー名がこの文字列と完全一致する場合に、その値をマスク対象とします。
   private static let secretKeys = [
-    "access_token", "token", "secret", "authorization", "credential",
+    "access_token", "token", "secret", "authorization", "credential", "username",
   ]
 
-  /// 事前コンパイルされた秘密情報マスク用の正規表現パターン
+  /// エスケープされた形式の値の長さの上限です。
+  ///
+  /// 終端が現れない入力で走査が二次関数的に増えるのを防ぐため、この長さを超える値は
+  /// マスクしません。TURN の credential はこの長さに達しません。
+  /// テストから境界を検証するため internal とします。
+  internal static let escapedValueMaxLength = 4096
+
+  /// 事前コンパイルされた秘密情報マスク用の正規表現と置換テンプレート
+  ///
+  /// 次の 2 形式を対象にします。
+  /// - エスケープされていない JSON: `"credential":"..."` (シグナリングの JSON など)
+  /// - エスケープされた JSON: `\"credential\":\"...\"` (受信した WebSocket メッセージを
+  ///   `String(describing:)` で文字列化したログなど。文字列リテラルへ埋め込む際に
+  ///   `"` と `\` がエスケープされるため)
   ///
   /// `NSRegularExpression` は SDK のヘッダで `NS_SWIFT_SENDABLE`
   /// (`Immutable with no mutable subclasses`) が付いており、初期化後に変更しないため、
   /// lock を追加せずに複数の executor から共有します。
-  private static let secretPatterns: [(key: String, regex: NSRegularExpression)] = {
-    secretKeys.compactMap { key in
-      let escaped = NSRegularExpression.escapedPattern(for: key)
-      let pattern = "\"\(escaped)\"\\s*:\\s*\"[^\"]*\""
-      let regex = try! NSRegularExpression(pattern: pattern)
-      return (key, regex)
+  private static let secretPatterns: [(regex: NSRegularExpression, template: String)] = {
+    secretKeys.flatMap { key -> [(regex: NSRegularExpression, template: String)] in
+      let escapedKey = NSRegularExpression.escapedPattern(for: key)
+      // エスケープされていない JSON では `"key":"value"` の形で現れます。
+      // 値は JSON 文字列として解釈します。値の中の `\"` や `\\` のようなエスケープを
+      // 1 つのまとまりとして扱うため、値に引用符やバックスラッシュが含まれていても
+      // 途中で切れません。
+      let plainPattern = "\"\(escapedKey)\"\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\""
+      // エスケープされた JSON では `\"key\":\"value\"` の形で現れます。値の終端も値の
+      // 中の引用符もどちらも `\"` として現れるため、値の側だけでは区別できません。
+      // 区切り (`,` または `}`) が続く `\"` を終端とみなします。区切りとの間には整形済み
+      // JSON の空白 (エスケープされた `\n` / `\r` / `\t` を含む) を許します。
+      //
+      // 値の長さには上限 (`escapedValueMaxLength`) を設けます。終端が現れない入力では、
+      // 出現位置ごとに末尾まで走査する二次関数的な時間がかかり、debug ログを有効にした
+      // 利用者のシグナリングの直列 queue を長時間占有し得るためです。上限を超える値は
+      // マスクしません。
+      //
+      // 値の中の引用符の直後に (空白を挟んで) 区切りが続く場合 (例: 値が `ab",cd`) は、
+      // その `\"` を終端と誤認して値の残りが平文で残ります。TURN の credential は
+      // この形をとらないため、この制約は許容します。
+      let escapedPattern =
+        "\\\\\"\(escapedKey)\\\\\"\\s*:\\s*\\\\\"[\\s\\S]{0,\(escapedValueMaxLength)}?\\\\\"(?=(?:\\s|\\\\[nrt])*[,}])"
+      // 置換ではコロン前後の空白を詰めて `: ` に揃えます (値以外でも空白の表記が変わります)。
+      let plainTemplate = NSRegularExpression.escapedTemplate(
+        for: "\"\(key)\": \"***\"")
+      let escapedTemplate = NSRegularExpression.escapedTemplate(
+        for: "\\\"\(key)\\\": \\\"***\\\"")
+      return [
+        (try! NSRegularExpression(pattern: plainPattern), plainTemplate),
+        (try! NSRegularExpression(pattern: escapedPattern), escapedTemplate),
+      ]
     }
   }()
 
   /// ログメッセージに含まれるシークレット情報をマスクする
   ///
-  /// JSON 文字列内のシークレットキーに該当する値を `"***"` に置換する
+  /// JSON 文字列内のシークレットキーに該当する値を `***` に置換する
   private static func maskSecrets(in message: String) -> String {
     var result = message
-    for (key, regex) in secretPatterns {
+    for (regex, template) in secretPatterns {
       let range = NSRange(result.startIndex..., in: result)
       result = regex.stringByReplacingMatches(
         in: result,
         options: [],
         range: range,
-        withTemplate: "\"\(key)\": \"***\"")
+        withTemplate: template)
     }
     return result
   }

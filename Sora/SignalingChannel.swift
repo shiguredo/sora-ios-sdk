@@ -274,12 +274,17 @@ class SignalingChannel {
       }
 
       let urlCandidates = self.unique(urls: self.snapshot.urlCandidates)
-      Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
+      // URL の userinfo は認証情報のため、ログへ出す前に取り除きます。
+      Logger.info(
+        type: .signalingChannel,
+        message: "urlCandidates: \(urlCandidates.map { URLUserInfo.removed(from: $0) })")
       for url in urlCandidates {
         let ws = self.setUpWebSocketChannel(
           url: url, proxy: self.snapshot.proxy, caCertificates: caCertificates)
         Logger.info(
-          type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
+          type: .signalingChannel,
+          message:
+            "connecting to \(URLUserInfo.removed(from: ws.url))")
         ws.connect(delegateQueue: self.owner.queue)
         self.owner.addCandidate(ws)
       }
@@ -288,7 +293,11 @@ class SignalingChannel {
 
   func redirect(location: String) {
     owner.enqueue {
-      Logger.debug(type: .signalingChannel, message: "try redirecting to \(location)")
+      // URL の userinfo は認証情報のため、ログとエラーのメッセージへ出す前に取り除きます。
+      // URL として解釈できない location も対象にするため、文字列ベースで処理します。
+      let sanitizedLocation = URLUserInfo.removed(from: location)
+      Logger.debug(
+        type: .signalingChannel, message: "try redirecting to \(sanitizedLocation)")
       self.owner.handle(.redirectRequested)
 
       if self.snapshot.insecure {
@@ -303,7 +312,9 @@ class SignalingChannel {
 
       // 接続
       guard let newUrl = URL(string: location) else {
-        let message = "invalid message: \(location)"
+        // ログと `SoraError` の reason の両方に使うため、userinfo を除いた文字列にします。
+        // reason は `error.localizedDescription` として別の error ログにも再出力されます。
+        let message = "invalid message: \(sanitizedLocation)"
         Logger.error(type: .signalingChannel, message: message)
         self.disconnect(
           error: SoraError.signalingChannelError(reason: message),
