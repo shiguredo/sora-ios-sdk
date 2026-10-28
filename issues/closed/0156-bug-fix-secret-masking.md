@@ -1,7 +1,7 @@
 # ログと文字列表現からシークレットが漏れないようにする
 
 - Created: 2026-09-15
-- Completed:
+- Completed: 2026-10-28
 - Priority: Medium
 - Branch: feature/fix-secret-masking
 - Polished: 2026-10-27
@@ -94,7 +94,7 @@
 - `Sora/ICEServerInfo.swift`: `description` が返す文字列から `username` と `credential` の値をマスクする
 - `Sora/SignalingChannel.swift`: `urlCandidates` / `connecting to` / `try redirecting to` のログと、`invalid message` の文字列 (ログと `SoraError` の reason の両方に使う) で userinfo を除く
 - URL と文字列から userinfo を除く内部ヘルパー: `Sora/` 配下の既存の配置 (例: `Sora/Extensions/`) に合わせて追加する
-- `SoraTests/LoggerTests.swift`: `testMaskingAndOutputFormatUnchanged` を `username` を含む 6 キーへ更新し、エスケープされた JSON のケースを追加する
+- `SoraTests/LoggerTests.swift`: `testMaskingAndOutputFormatUnchanged` を `username` を含む 6 キーへ更新し、エスケープされた JSON のケースを追加する (実装時に `testMaskingAndLogDescriptionFormat` へ改名した)
 - `SoraTests/`: `ICEServerInfo.description` のマスク、`Codable` の `encode(to:)` が出力する値の不変、URL の userinfo の除去を検証するテスト
 - `CHANGES.md`: `## develop` の `[FIX]` にエントリを追記する
 
@@ -106,10 +106,38 @@
 - `ICEServerInfo.description` から `credential` と `username` の平文が得られないこと。`Codable` の `encode(to:)` が出力する JSON のキー集合と値は変わらないこと (キー集合は `testICEServerInfoJSONKeysAreUnchanged` が成功することで確認し、値は本 issue で追加するテストで確認すること)。
 - userinfo を含む URL を `urlCandidates` に指定した場合、userinfo を含む有効な location で redirect した場合、`URL(string:)` に失敗する userinfo を含む location で redirect した場合のそれぞれで、`urlCandidates` / `connecting to` / `try redirecting to` / `invalid message` のどのログにも userinfo が出力されないこと。
 - invalid redirect の `invalid message` から作られる `SoraError` の reason、およびその reason が `error.localizedDescription` として再出力される `SignalingChannel.disconnect(error:)` と `PeerChannel.basicDisconnect` の error ログにも userinfo が出力されないこと。
-- `SoraTests/LoggerTests.swift` の `testMaskingAndOutputFormatUnchanged` が `username` とエスケープされた JSON のケースを検証し、成功すること。
+- `SoraTests/LoggerTests.swift` の `testMaskingAndLogDescriptionFormat` が `username` とエスケープされた JSON のケースを検証し、成功すること。
 - `ICEServerInfo.description` のマスク、`Codable` の `encode(to:)` が出力する値の不変、URL の userinfo の除去を検証するテストが存在し、成功すること。
 - 公開 API baseline が変わらないこと (`make api-check-fresh` が成功すること。Xcode 26.6 と `iphoneos26.5` が必要なため、手元に無い場合は CI の `swift6-consumer` job で確認すること)。
 - 追加したテストと既存テストがすべて成功すること。
 - `CHANGES.md` の `## develop` の `[FIX]` の末尾に、担当者行 (`- @ユーザー名`) を付けてエントリを追記すること。invalid redirect のエラーメッセージが変わる (認証情報を含めない表記になる) ことも記載すること。
 
 ## 解決方法
+
+- `Sora/Logger.swift`
+  - `secretKeys` に `username` を追加した。`ICEServerInfo` は `username` を JSON のキーに使うため、offer の ICE server infos のログでもユーザー名がマスクされる。
+  - `secretPatterns` を `(key, regex)` から `(regex, template)` に変え、全キーを 1 本の alternation にまとめた非エスケープ形・エスケープ形の 2 つの正規表現にした。キーごとに持つと走査がキー数に比例して増えるためである。キー名は置換テンプレートの `$1` で保持し、エスケープを保ったまま値を `***` に置換する。
+  - 非エスケープ形の値は JSON 文字列として解釈し、値にエスケープされた引用符が含まれても途中で切れないようにした。エスケープ形は値の終端も値の中の引用符も `\"` として現れるため、区切り (`,` / `}`) または外側の文字列の閉じ引用符が続く `\"` を終端とみなす (文字列の末尾は終端にしない)。整形済み JSON のエスケープされた空白 (`\n` / `\r` / `\t`) はコロン前後と終端の両方で許容する。非エスケープ形は値の後ろに区切り (`,` / `}` / `]`) か文字列の末尾 (空白を挟んでもよい) を要求し、値が別のキー名そのものである不正な JSON でもそのキーを値として消費しない。
+  - `maskSecrets` は `"` を含まないログを走査しない (JSON のキーは必ず `"` を伴う)。`"` を含む場合も 2 パターンを 1 回ずつ適用するだけで、繰り返しはしない。非エスケープ形に値の終端条件を入れてあるため、値が別のキー名そのものである不正な JSON でもそのキーを値として消費せず、1 回の走査で残りのキーをマスクできる。
+  - エスケープ形の値の長さには上限 (4096 文字) を設けた。終端が現れない入力では出現位置ごとに末尾まで走査する二次関数的な時間がかかり、debug ログを有効にした利用者のシグナリングの直列 queue を長時間占有し得るためである。上限を超える値はマスクしない。TURN の credential はこの長さに達しない。
+  - 既知の制約: 値の中の引用符の直後に区切りが続く場合 (例: 値が `ab",cd`) は値の残りが平文で残る。非エスケープ形で値が `\` で終わる不正な JSON (例: `{"credential":"secret\"}`) は、`\"` をエスケープされた引用符として扱うため閉じ引用符が無く、マスクしない。値の直後が区切りでも末尾でもない不正な JSON (例: `{"token":"s3cr3t""x":1}`) もマスクしない。エスケープ形で文字列の末尾まで途切れたログはマスクしない。二重にエスケープされた JSON は対象外。
+- `Sora/ICEServerInfo.swift`
+  - `description` は `username` / `credential` の値を `***` に置き換えた JSON を返す。値が nil の場合はキー自体を出さない従来の形を保つ。
+  - `Codable` の `encode(to:)` と `CodingKeys` は変更していない。JSON のキーと値は利用者が設定した値のままである。
+- `Sora/Extensions/URLUserInfo.swift` (新規)
+  - `URLUserInfo.removed(from: URL)` と `URLUserInfo.removed(from: String)` を追加した。文字列版は `URL` として解釈できない location も扱えるよう、authority の開始位置 (`<scheme>://` の後ろ、または `//` の後ろ) から終端 (`/` `?` `#`、無ければ末尾) までの `@` より前を除去する。
+  - WebSocket の URI (RFC 6455) は userinfo を持たないため、通常の仕様どおりの URL ではこの除去は何も変えない。仕様外の URL が設定されたり、redirect の location に userinfo が含まれたりした場合に備えた防御的な実装である。
+- `Sora/SignalingChannel.swift`
+  - `urlCandidates` / `connecting to` / `try redirecting to` のログで userinfo を除いた値を出力する。
+  - `invalid message` は組み立て時点で userinfo を除いた location を使い、ログと `SoraError` の reason の両方に使う。reason は `error.localizedDescription` として `SignalingChannel.disconnect(error:)` と `PeerChannel.basicDisconnect` の error ログにも再出力されるため、reason 側を直す必要があった。
+- `Sora/URLSessionWebSocketChannel.swift`
+  - 受信失敗のログで `\(error)` を出していた。`NSError` の userInfo に接続先 URL が入り、その URL の userinfo がログへ残るため、domain / code / description だけを出す形に変えた。
+- テスト
+  - `SoraTests/LoggerTests.swift` の `testMaskingAndLogDescriptionFormat` を 6 キーへ更新し、エスケープされた JSON、非対象キーの文字列値、値の長さの上限、エスケープされた引用符を含む値、整形済み JSON、コロン前後のエスケープされた空白、外側の文字列に埋め込まれた escaped JSON、値を引用符で終わる場合、値が文字列の末尾で終わる場合、隣接する不正な JSON のケースを追加した。テスト名は実装に合わせて `testMaskingAndOutputFormatUnchanged` から改名した。
+  - `SoraTests/SecretMaskingTests.swift` を追加した。`ICEServerInfo.description` のマスクと JSON キー集合の一致、`Codable` の値の不変、`URLUserInfo` の `URL` / 文字列の両形式、`SignalingChannel` のログと redirect のエラー reason を検証する。
+  - `SoraTests/URLSessionWebSocketChannelTests.swift` に、受信した JSON のログのマスクと、受信失敗ログに userinfo が残らないことのテストを追加した。
+  - `SoraTests/LoggerCapture.swift` を追加し、`Logger.shared` の設定変更と復元、ログ収集をテスト間で共通化した。
+- 確認結果
+  - 全テスト 538 件中 499 件成功 (39 件の内訳は E2E の環境変数未設定によるスキップ 33 件、シミュレータに実カメラが無いことによるスキップ 6 件)。
+  - `make fmt-lint` と `make lint` (SwiftLint strict) が成功。
+  - `make api-check-fresh` はローカルの Xcode が 26.6 でないため未実行。公開 API の宣言は変わらないため CI で確認する。
