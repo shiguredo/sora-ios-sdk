@@ -1,7 +1,7 @@
 # Configuration の MediaChannelHandlers が接続間で共有され、別接続の handler が発火する
 
 - Created: 2026-09-17
-- Completed:
+- Completed: 2026-10-29
 - Priority: Low
 - Branch: feature/fix-handler-bag-sharing
 - Polished: 2026-10-29
@@ -82,3 +82,21 @@
 - 追加したテストと既存テストがすべて成功すること
 
 ## 解決方法
+
+`MediaChannelHandlers` に internal なコピー用イニシャライザ `init(copying:)` を追加し、`MediaChannel` の designated init で `Configuration.mediaChannelHandlers` を接続ごとにコピーして `handlers` に設定するようにした。deprecated の `onDisconnectLegacy` / `onReceiveSignaling` を含む 10 個の handler property を写し、deprecated の参照は非推奨警告を増やさないよう private storage から行う。コピー用イニシャライザは internal に閉じるため公開 API は変わらず、公開 API baseline の再生成は不要である。
+
+- `Sora/MediaChannel.swift`: コピー用イニシャライザを追加し、designated init で configuration の bag をコピーして `handlers` に設定する。`MediaChannelHandlers` / `MediaChannel.handlers` / `onConnect` の doc に、接続ごとの独立、接続開始後に configuration 側を変更しても接続済みの配送に反映されないこと、`SoraHandlers.onAddMediaChannel` での設定、bag 全体の差し替えと handler property 設定の違いを記載する
+- `Sora/Configuration.swift`: `mediaChannelHandlers` の doc に、接続開始時のコピー、接続後の変更が接続済みの配送に反映されないこと、`MediaChannel.configuration.mediaChannelHandlers` 経由の変更も反映されないことを追記する
+- `Sora/Sora.swift`: `SoraHandlers.onAddMediaChannel` の doc に、呼ばれるタイミングと接続ごとの handler 設定の用途を追記する
+- `skills/sora-ios-sdk/SKILL.md`: 「接続の流れ」と「コールバックのスレッド」節、`MediaChannelHandlers` 節に同じ内容を記載する
+- `SoraTests/MediaChannelHandlersTests.swift`: コピー用イニシャライザの全 property コピー、2 接続の handler 分離、接続前登録の維持、接続後の `MediaChannel.handlers` 設定の反映、`Sora.connect` 経由のコピーを検証する 5 つの unit test を追加する (モック・スタブ不使用)
+- `SoraTests/RpcE2ETests.swift` / `SoraTests/SoraEventE2ETests.swift`: 共有を前提にしたコメントを現状に合わせて更新する
+- `CHANGES.md`: `## develop` に `[CHANGE]` として、接続開始後に configuration 側で handler を変更しても接続済みの接続へ反映されない挙動変更を追記する
+
+確認したこと:
+
+- `make fmt-lint` と SwiftLint strict が成功する
+- シミュレータで全 unit test が成功する (543 tests / 0 failures。E2E 39 件は環境変数未設定のためスキップ)
+- 実機向け Release ビルド (warnings-as-errors) が成功する
+
+E2E と TSan は CI で確認する。公開 API は変えていないため API baseline は変更しない。
