@@ -38,8 +38,10 @@ Swift Package Manager を利用する。
 1. `Configuration` を生成して接続設定を組み立てる
 2. `Sora.shared.connect(configuration:webRTCConfiguration:handler:)` で接続する
 3. 接続成功時に `MediaChannel` が返る
-4. `MediaChannel.handlers` でストリーム追加などのコールバックを登録する
+4. `SoraHandlers.onAddMediaChannel` で `MediaChannel.handlers` の handler property を設定するか、接続成功後に `MediaChannel.handlers` でストリーム追加などのコールバックを登録する (接続の完了前に届くイベントも受け取る handler は `onAddMediaChannel` で設定する)
 5. `MediaChannel.disconnect(error:)` で切断する
+
+`Configuration.mediaChannelHandlers` は接続の開始時にコピーされ、接続ごとに独立した `MediaChannelHandlers` として `MediaChannel.handlers` に設定される。接続の開始前に `Configuration.mediaChannelHandlers` へ設定した handler は、その `Configuration` から作るすべての接続で呼ばれる。接続の開始後に `Configuration.mediaChannelHandlers` を変更しても、接続済みの `MediaChannel.handlers` には反映されない。接続ごとの handler は `SoraHandlers.onAddMediaChannel` の中で `MediaChannel.handlers` の handler property に設定する。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれないため、他の handler を維持したい場合は handler property を個別に設定する。
 
 `Sora.shared` はシングルトンだが、接続グループやハンドラーを分けたい場合は `Sora()` でインスタンスを生成できる。
 
@@ -258,7 +260,7 @@ DataChannel / シグナリング:
 
 | プロパティ | 内容 |
 | --- | --- |
-| `configuration` | connect に渡した `Configuration` (`webRTCConfiguration` 引数の値は反映されない) |
+| `configuration` | connect に渡した `Configuration` (`webRTCConfiguration` 引数の値は反映されない)。`mediaChannelHandlers` は接続の開始時にコピーされるため、接続後にこの `Configuration` の `mediaChannelHandlers` を変更しても配送には反映されない |
 | `state` | `ConnectionState` (`.connecting` / `.connected` / `.disconnecting` / `.disconnected`) |
 | `isAvailable` | `state == .connected` |
 | `clientId` / `bundleId` / `connectionId` | 接続後に設定される ID |
@@ -316,7 +318,7 @@ let response = try await mediaChannel.rpc(
 
 | プロパティ | 内容 |
 | --- | --- |
-| `onConnect: ((Error?) -> Void)?` | 接続成功 |
+| `onConnect: ((Error?) -> Void)?` | 接続試行の終了 (成功時は `nil`、接続成立前の切断・失敗時はエラー) |
 | `onDisconnect: ((SoraCloseEvent) -> Void)?` | 接続解除 |
 | `onAddStream: ((MediaStream) -> Void)?` | ストリーム追加 |
 | `onRemoveStream: ((MediaStream) -> Void)?` | ストリーム除去 |
@@ -324,6 +326,13 @@ let response = try await mediaChannel.rpc(
 | `onDataChannel: ((MediaChannel) -> Void)?` | メッセージング用 DataChannel がすべて OPEN |
 | `onDataChannelOpened: ((MediaChannel, String) -> Void)?` | ラベルごとの DataChannel OPEN |
 | `onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?` | DataChannel メッセージ受信 |
+
+`Configuration.mediaChannelHandlers` に保持される instance は参照型だが、`MediaChannel` は接続の開始時に handler property をコピーした接続ごとの instance を `MediaChannel.handlers` に設定する。このため、一方の接続で `MediaChannel.handlers` に設定した handler が別の接続で呼ばれることはない。
+
+- 接続の開始前の設定: `config.mediaChannelHandlers.onDisconnect = ...` のように設定する。接続の開始時にコピーされるため、その `Configuration` から作るすべての接続の配送で呼ばれる
+- 接続ごとの設定: `SoraHandlers.onAddMediaChannel` の中で `mediaChannel.handlers.onDisconnect = ...` のように設定する。この時点は非同期の接続処理より前なので、接続の完了前に届く signaling も取り逃さない
+- 接続の開始後に `config.mediaChannelHandlers` を変更しても、接続済みの `mediaChannel.handlers` には反映されない。接続の途中から handler を効かせたい場合は `mediaChannel.handlers` の handler property を設定する (次の配送から反映される)
+- `mediaChannel.handlers = ...` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれない。他の handler を維持したい場合は handler property を個別に設定する
 
 ### MediaStream
 
@@ -585,7 +594,7 @@ timeout はない)。snapshot API では、`MediaChannel` の解放開始後に�
 
 ## 切断イベント
 
-`MediaChannelHandlers.onDisconnect` で `SoraCloseEvent` を受け取る。
+`MediaChannelHandlers.onDisconnect` で `SoraCloseEvent` を受け取る。例は接続の開始前に `Configuration.mediaChannelHandlers` へ設定する形である。接続の開始後に設定する場合は `MediaChannel.handlers.onDisconnect` を使う (`Configuration.mediaChannelHandlers` の変更は接続済みの接続には反映されない)。
 
 ```swift
 config.mediaChannelHandlers.onDisconnect = { event in
@@ -640,6 +649,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 - `Logger.onOutputHandler` はログを出力した executor で同期的に呼ばれる (queue への hop は行わない)。複数の executor から並行に呼ばれ得るため、handler 側の排他は利用者の責任になる。handler の中から Logger の設定変更と再出力ができるが、同じログを再出力すると無限再帰になるため、再入の制御は利用者の責任になる
 - `Logger` の設定 (`level` / `groups` / `onOutputHandler`) と `Sora.logLevel` は SDK 内部の lock で保護され、任意の executor から読み書きできる。`@MainActor` のクラスの中で `onOutputHandler` を設定する場合は、closure が MainActor 隔離を継承するため隔離を外す必要がある (下の「コールバックを Swift 6 で扱う」を参照)
 - ハンドラの設定 (`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` のイベントハンドラのプロパティと `MediaChannel.handlers` の参照) は SDK 内部の lock で排他され、任意の executor から行える (`SoraHandlers` のプロパティは含まない)。callback が呼ばれるスレッドの保証は変わらない
+- `MediaChannel.handlers` は接続ごとに独立したインスタンスであり、`Configuration.mediaChannelHandlers` は接続の開始時にコピーされる。接続の開始後に `Configuration.mediaChannelHandlers` を変更しても、接続済みの `MediaChannel.handlers` には反映されない。接続の途中から設定したい場合は `MediaChannel.handlers` の handler property を設定する。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれない
 
 ### コールバックを Swift 6 で扱う
 

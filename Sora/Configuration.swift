@@ -303,6 +303,20 @@ public struct Configuration {
   public var webSocketChannelHandlers = WebSocketChannelHandlers()
 
   /// メディアチャネルに関するイベントハンドラ
+  ///
+  /// このインスタンスは接続の開始時にコピーされ、接続ごとに独立した `MediaChannelHandlers` として
+  /// `MediaChannel.handlers` に設定されます。接続の開始前にここへ設定した handler は、この
+  /// `Configuration` から作るすべての接続の配送で呼ばれます。接続の開始後にこのインスタンスの
+  /// handler property を変更しても、接続済みの `MediaChannel.handlers` には反映されません
+  /// (このインスタンスは `Configuration` の値コピー間で共有されたままなので、同じ `Configuration`
+  /// から後で作る接続のコピー元にはなります)。
+  ///
+  /// 接続ごとの設定は `SoraHandlers.onAddMediaChannel` の中で `MediaChannel.handlers` に対して
+  /// 行います。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持する
+  /// インスタンスが差し替わるため、ここからコピーした handler は引き継がれません。また、
+  /// `MediaChannel.configuration` は渡した `Configuration` をそのまま返すため、
+  /// `MediaChannel.configuration.mediaChannelHandlers` の変更は接続済みの `MediaChannel` の
+  /// 配送には反映されません。
   public var mediaChannelHandlers = MediaChannelHandlers()
 
   // MARK: パブリッシャーに関する設定

@@ -28,6 +28,9 @@
   - シグナリング URL の userinfo をログと redirect のエラーメッセージから除く。invalid redirect のエラーメッセージは認証情報を含まない表記に変わる
   - WebSocket の受信失敗ログは、接続先 URL を含む `NSError` の userInfo を出さず、domain / code / description を出す
   - @t-miya
+- [FIX] `Configuration.mediaChannelHandlers` が接続間で共有され、初期化後に handler を差し替えられ、切断後も handler が発火しうる問題を修正する
+  - 1 つの `Configuration` から複数の接続を作ると `MediaChannelHandlers` のインスタンスが共有されるため、`MediaChannel` の初期化後に `Configuration` 側で handler property を変更すると接続済みの接続の handler が差し替わっていた。また、切断済みの接続に設定した handler が、同じ `Configuration` から作った別の接続のイベントで発火しうる状態だった
+  - @t-miya
 
 ## 2026.4.0
 
