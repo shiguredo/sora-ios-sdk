@@ -91,7 +91,7 @@
 - `skills/sora-ios-sdk/SKILL.md`: 「接続の流れ」と「コールバックのスレッド」節、`MediaChannelHandlers` 節に同じ内容を記載する。`configuration` の説明に `MediaChannel.configuration.mediaChannelHandlers` 経由の変更が配送に反映されないことを、「切断イベント」の例が接続の開始前の設定であること (接続ごとなら `MediaChannel.handlers.onDisconnect` を使うこと) を追記する
 - `SoraTests/MediaChannelHandlersTests.swift`: コピー用イニシャライザの全 property コピー、2 接続の handler 分離、接続前登録の維持、接続後の `MediaChannel.handlers` 設定の反映、`Sora.connect` 経由のコピーを検証する 5 つの unit test を追加する (モック・スタブ不使用)
 - `SoraTests/RpcE2ETests.swift` / `SoraTests/SoraEventE2ETests.swift`: 共有を前提にしたコメントを現状に合わせて更新する。`waitForDisconnectCompletion` では、共有 bag を前提にしていた不要な `defer { channel.handlers.onDisconnect = nil }` を削除する
-- `CHANGES.md`: `## develop` に `[CHANGE]` として、接続開始後に configuration 側で handler を変更しても接続済みの接続へ反映されない挙動変更と、移行時の注意 (`MediaChannel.handlers` が同じ instance でなくなること、接続の完了前に届くイベントを受け取る handler の設定先) を追記する
+- `CHANGES.md`: `## develop` に `[FIX]` として、`MediaChannel` の初期化後に handler を差し替えられ、切断後も handler が発火しうる問題を修正したことと、移行時の注意 (`MediaChannel.handlers` が同じ instance でなくなること、接続の完了前に届くイベントを受け取る handler の設定先) を追記する。当初の設計方針では `[CHANGE]` としていたが、接続間の handler 共有によるバグであるため `[FIX]` として記録する
 
 確認したこと:
 
