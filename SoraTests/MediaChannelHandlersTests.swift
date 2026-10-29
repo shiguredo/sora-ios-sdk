@@ -25,7 +25,7 @@ private final class HandlerCallCounter: @unchecked Sendable {
   }
 }
 
-/// `MediaChannelHandlers` が接続ごとに独立し、`Configuration.mediaChannelHandlers` の bag が
+/// `MediaChannelHandlers` が接続ごとに独立し、`Configuration.mediaChannelHandlers` のインスタンスが
 /// 接続の開始時にコピーされることを検証します。
 ///
 /// モックやスタブは使わず、実際の `Configuration` / `MediaChannel` / `Sora` を使います。
@@ -129,15 +129,15 @@ final class MediaChannelHandlersTests: XCTestCase {
     let channelA = try MediaChannel(configuration: configuration)
     let channelB = try MediaChannel(configuration: configuration)
 
-    // 接続ごとに configuration の bag をコピーした別 instance を持つこと
+    // 接続ごとに configuration のインスタンスをコピーした別インスタンスを持つこと
     XCTAssertFalse(
       channelA.handlers === configuration.mediaChannelHandlers,
-      "1 つ目の接続が configuration の bag そのものを持たないこと")
+      "1 つ目の接続が configuration のインスタンスそのものを持たないこと")
     XCTAssertFalse(
       channelB.handlers === configuration.mediaChannelHandlers,
-      "2 つ目の接続が configuration の bag そのものを持たないこと")
+      "2 つ目の接続が configuration のインスタンスそのものを持たないこと")
     XCTAssertFalse(
-      channelA.handlers === channelB.handlers, "接続間で handler の bag を共有しないこと")
+      channelA.handlers === channelB.handlers, "接続間で handler のインスタンスを共有しないこと")
 
     let disconnectA = expectation(description: "1 つ目の接続の切断 handler が呼ばれること")
     let disconnectB = expectation(description: "2 つ目の接続の onDisconnect が呼ばれること")
@@ -151,12 +151,12 @@ final class MediaChannelHandlersTests: XCTestCase {
       callCountA.increment()
       disconnectA.fulfill()
     }
-    // 1 つ目の handler を設定しただけでは 2 つ目の bag に現れないこと。bag を共有する実装では
+    // 1 つ目の handler を設定しただけでは 2 つ目のインスタンスに現れないこと。インスタンスを共有する実装では
     // ここで 1 つ目の closure が見えるため、交差を決定的に検出できる (交差の主たる検出はこの断言)
     XCTAssertNil(
-      channelB.handlers.onDisconnect, "1 つ目の handler が 2 つ目の接続の bag に現れないこと")
+      channelB.handlers.onDisconnect, "1 つ目の handler が 2 つ目の接続のインスタンスに現れないこと")
 
-    // 2 つ目の配送は、この接続の onDisconnect で観測する。bag を共有する実装ではこの代入が
+    // 2 つ目の配送は、この接続の onDisconnect で観測する。インスタンスを共有する実装ではこの代入が
     // 1 つ目の handler を上書きするが、その場合は直前の XCTAssertNil が先に失敗する
     channelB.handlers.onDisconnect = { _ in
       disconnectB.fulfill()
@@ -252,7 +252,7 @@ final class MediaChannelHandlersTests: XCTestCase {
     wait(for: [disconnectB], timeout: Self.timeout)
   }
 
-  /// Sora.connect 経由で作った接続でも configuration の bag がコピーされることを確認する
+  /// Sora.connect 経由で作った接続でも configuration のインスタンスがコピーされることを確認する
   func testSoraConnectCopiesConfigurationHandlers() throws {
     let sora = Sora()
     let configuration = makeConfiguration()
@@ -289,7 +289,7 @@ final class MediaChannelHandlersTests: XCTestCase {
 
     XCTAssertFalse(
       mediaChannel.handlers === configuration.mediaChannelHandlers,
-      "Sora.connect 経由でも configuration の bag をコピーすること")
+      "Sora.connect 経由でも configuration のインスタンスをコピーすること")
     XCTAssertNotNil(
       mediaChannel.handlers.onConnect, "接続の開始前に設定した handler がコピーされること")
 

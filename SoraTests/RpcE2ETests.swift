@@ -881,8 +881,9 @@ final class RpcE2ETests: E2ETestBase {
   /// `E2ETestBase.disconnectAll(channels:)` と同じにし、切断が state の確認とハンドラ設定の
   /// 間に入って onDisconnect が発火済みの場合は、待たずに完了として扱う。
   ///
-  /// `MediaChannel.handlers` は接続ごとに独立した instance であり、`Configuration` の bag は
-  /// 接続の開始時にコピーされる。ここで設定したハンドラが別のチャンネルの切断で呼ばれることは
+  /// `MediaChannel.handlers` は接続ごとに独立したインスタンスであり、
+  /// `Configuration.mediaChannelHandlers` のインスタンスは接続の開始時にコピーされる。
+  /// ここで設定したハンドラが別のチャンネルの切断で呼ばれることは
   /// ないため、チャンネルごとに待ちのハンドラを設定できる。
   ///
   /// 上限は `E2ETestBase.disconnectAll(channels:)` と同じ 10 秒とする。待ち切れなかった場合は

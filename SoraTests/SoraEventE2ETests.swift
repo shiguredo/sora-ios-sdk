@@ -297,8 +297,8 @@ final class SoraEventE2ETests: E2ETestBase {
     ]
 
     // 2 接続目には handler を登録しないよう、1 接続目の Configuration から値コピーせずに
-    // 組み立て直す。MediaChannel は接続の開始時に configuration の bag をコピーするため、
-    // config1 の handler を config2 へ引き継がせないために必要になる。
+    // 組み立て直す。MediaChannel は接続の開始時に Configuration の mediaChannelHandlers を
+    // コピーするため、config1 の handler を config2 へ引き継がせないために必要になる。
     var config2 = try buildConfiguration(role: .sendrecv)
     config2.channelId = channelId
     config2.videoEnabled = true
