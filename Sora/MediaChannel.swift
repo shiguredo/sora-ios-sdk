@@ -155,8 +155,13 @@ public final class MediaChannelHandlers {
   ///
   /// SDK 内部専用のため internal に閉じています (公開 API は変わりません)。
   ///
+  /// このイニシャライザは convenience にします。designated init を internal で追加すると、
+  /// swift-api-digester が `hasMissingDesignatedInitializers` を true にして公開 API baseline が
+  /// 変わってしまうためです (公開 API の宣言自体は変わりません)。
+  ///
   /// - parameter handlers: 写し元のハンドラ
-  init(copying handlers: MediaChannelHandlers) {
+  convenience init(copying handlers: MediaChannelHandlers) {
+    self.init()
     onConnectStorage.current = handlers.onConnect
     // deprecated の handler property は、非推奨 API を SDK 内部で参照しないよう storage から写す
     // (public な accessor を読むと DeprecatedDeclaration 警告が増える)。
