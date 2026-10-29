@@ -30,9 +30,6 @@
   - @t-miya
 - [FIX] `Configuration.mediaChannelHandlers` が接続間で共有され、初期化後に handler を差し替えられ、切断後も handler が発火しうる問題を修正する
   - 1 つの `Configuration` から複数の接続を作ると `MediaChannelHandlers` のインスタンスが共有されるため、`MediaChannel` の初期化後に `Configuration` 側で handler property を変更すると接続済みの接続の handler が差し替わっていた。また、切断済みの接続に設定した handler が、同じ `Configuration` から作った別の接続のイベントで発火しうる状態だった
-  - `MediaChannel` の初期化時に `Configuration.mediaChannelHandlers` を接続ごとにコピーし、`MediaChannel.handlers` を独立させる。接続の開始前に `Configuration` へ設定した handler はこれまでどおりその `Configuration` から作るすべての接続で呼ばれる
-  - `MediaChannel.handlers` は `Configuration.mediaChannelHandlers` と同じインスタンスではなくなり、接続の開始後に `Configuration` 側や `MediaChannel.configuration` 経由で handler property を変更しても、接続済みの接続には反映されない。接続の途中から handler を設定する場合は `MediaChannel.handlers` の handler property を設定する (次の配送から反映される)
-  - 接続の完了前に届くイベント (最初の offer など) を受け取る handler は、接続の開始前に `Configuration` へ設定するか、`SoraHandlers.onAddMediaChannel` で `MediaChannel.handlers` に設定する。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれない
   - @t-miya
 
 ## 2026.4.0
