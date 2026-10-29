@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-10-29
 - Model: Sonnet 4.6
 - Branch: feature/fix-ipad-soloambient-no-audio
 - Polished: 2026-10-29
@@ -50,6 +50,18 @@
 - `initializeInput` の呼び出しが再生を阻害している（`soloAmbient` 状態の iPad 環境で）
 - カテゴリー変更（`RTCAudioSessionConfiguration.webRTC().category = playAndRecord`）は再生に必要と推測される。ただしこの設定変更が実際に `AVAudioSession` へ反映される時点は libwebrtc 内部の動作に依存しており、現行のステレオ音声出力を使わない接続の「ADM 生成前にテンプレートを差し替える」経路でも未確認である
 - 阻害メカニズムは未特定（`initializeInput` 自体の問題か、非同期コールバックのタイミング問題かは不明）
+
+### 現行コードでの確認（2026-10-29）
+
+本 issue の再現条件を満たす実機で、現行コードの動作を確認した。
+
+- 端末: iPad Air (第 5 世代)、iPadOS 26.7.2
+- 検証ビルド: develop (コミット `6ef93bb6`)、libwebrtc `m156.8078.5.1`
+- 接続前の `AVAudioSession.category`: `AVAudioSessionCategorySoloAmbient`（`SoraSDKManager.shared.connect` の直前にアプリからログ出力して確認）
+- ロール: `sendrecv`、`audioEnabled=true`
+- 結果: リモート音声は双方向で再生された。本 issue の症状は再現しなかった
+
+現行コードでは、2026.3.0 でカテゴリーの確定が ADM の生成前に移っている。この変更によって `initializeInput` の呼び出しが再生を阻害しなくなった可能性がある。ただし元の再現端末は特定できていないため、この変更が原因で解消したかは断定できない。症状が再現しないため、フェーズ 1 項目 5 の実験表の再観測は行っていない。
 
 ### 再現条件
 
@@ -104,3 +116,14 @@
 ```
 
 ## 解決方法
+
+2026-10-29、現行コードで再現しないことを確認して closed にした。
+
+- 検証端末: iPad Air (第 5 世代)、iPadOS 26.7.2
+- 検証ビルド: develop (コミット `6ef93bb6`)、libwebrtc `m156.8078.5.1`
+- 接続前の `AVAudioSession.category` は `AVAudioSessionCategorySoloAmbient` で、本 issue の再現条件を満たしていた
+- `sendrecv` かつ `audioEnabled=true` で接続した結果、リモート音声は双方向で再生され、症状は再現しなかった
+
+2026.3.0 で音声セッションのカテゴリー確定が `initializeAudioInput()` の中から `AudioSessionCoordinator` と `NativePeerChannelFactory` の init へ移り、ADM の生成前にカテゴリーが確定するようになった。issue が阻害要因として疑っていた「`initializeInput` 呼び出し時点でのカテゴリー変更」がこの構成から無くなったことが、再現しなくなった理由と推定される。
+
+ただし元の再現端末（別の iPad）は既に手元に無く、当時の libwebrtc も現行の m156.8078.5.1 と異なるため、解消の原因を特定することはできなかった。再現条件を満たす実機で症状が確認できないため、本 issue は closed とする。本 issue に対するコード変更は行っていないため、`CHANGES.md` への追記は行っていない。将来同じ症状が再発した場合は、再現端末の機種・iOS バージョン・libwebrtc バージョン・接続前のカテゴリー・検証ビルドを記録して新しい issue を起票する。
