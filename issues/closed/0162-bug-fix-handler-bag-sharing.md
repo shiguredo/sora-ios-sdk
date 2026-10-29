@@ -83,9 +83,9 @@
 
 ## 解決方法
 
-`MediaChannelHandlers` に internal なコピー用イニシャライザ `init(copying:)` を追加し、`MediaChannel` の designated init で `Configuration.mediaChannelHandlers` を接続ごとにコピーして `handlers` に設定するようにした。deprecated の `onDisconnectLegacy` / `onReceiveSignaling` を含む 10 個の handler property を写し、deprecated の参照は非推奨警告を増やさないよう private storage から行う。コピー用イニシャライザは internal に閉じるため公開 API は変わらず、公開 API baseline の再生成は不要である。
+`MediaChannelHandlers` に internal な convenience init `init(copying:)` を追加し、`MediaChannel` の designated init で `Configuration.mediaChannelHandlers` を接続ごとにコピーして `handlers` に設定するようにした。deprecated の `onDisconnectLegacy` / `onReceiveSignaling` を含む 10 個の handler property を写し、deprecated の参照は非推奨警告を増やさないよう private storage から行う。コピー用イニシャライザは convenience init のため designated init を増やさず、公開 API も公開 API baseline も変わらない (designated init を internal で追加すると swift-api-digester の `hasMissingDesignatedInitializers` が変わり、baseline の再生成が必要になったため)。
 
-- `Sora/MediaChannel.swift`: コピー用イニシャライザを追加し、designated init で `Configuration` の bag をコピーして `handlers` に設定する。`MediaChannelHandlers` / `MediaChannel.handlers` の doc に、接続ごとの独立、接続開始後に `Configuration` 側を変更しても接続済みの配送に反映されないこと、`SoraHandlers.onAddMediaChannel` での設定、bag 全体の差し替えと handler property 設定の違いを記載する。`onConnect` の doc は、接続試行の終了時 (成功時は `nil`、接続成立前の切断・接続失敗時はエラー) に修正する
+- `Sora/MediaChannel.swift`: internal な convenience init によるコピー用イニシャライザを追加し、designated init で `Configuration` の bag をコピーして `handlers` に設定する。`MediaChannelHandlers` / `MediaChannel.handlers` の doc に、接続ごとの独立、接続開始後に `Configuration` 側を変更しても接続済みの配送に反映されないこと、`SoraHandlers.onAddMediaChannel` での設定、bag 全体の差し替えと handler property 設定の違いを記載する。`onConnect` の doc は、接続試行の終了時 (成功時は `nil`、接続成立前の切断・接続失敗時はエラー) に修正する
 - `Sora/Configuration.swift`: `mediaChannelHandlers` の doc に、接続開始時のコピー、接続後の変更が接続済みの配送に反映されないこと、`MediaChannel.configuration.mediaChannelHandlers` 経由の変更も反映されないことを追記する
 - `Sora/Sora.swift`: `SoraHandlers.onAddMediaChannel` の doc に、呼ばれるタイミングと接続ごとの handler 設定の用途を追記する
 - `skills/sora-ios-sdk/SKILL.md`: 「接続の流れ」と「コールバックのスレッド」節、`MediaChannelHandlers` 節に同じ内容を記載する。`configuration` の説明に `MediaChannel.configuration.mediaChannelHandlers` 経由の変更が配送に反映されないことを、「切断イベント」の例が接続の開始前の設定であること (接続ごとなら `MediaChannel.handlers.onDisconnect` を使うこと) を追記する
@@ -98,5 +98,6 @@
 - `make fmt-lint` と SwiftLint strict が成功する
 - シミュレータで全 unit test が成功する (543 tests / 0 failures。スキップ 39 件の内訳は、E2E の環境変数未設定 32 件、シミュレータに実カメラが無いこと 6 件、シミュレータでは実行しない共有 AudioSession の経路 1 件)
 - 実機向け Release ビルド (warnings-as-errors) が成功する
+- Xcode 27 の swift-api-digester で dump を比較し、internal な designated init では `hasMissingDesignatedInitializers` が追加され、convenience init では追加されない (他の差分が無い) ことを確認する
 
 E2E と TSan は CI で確認する。公開 API は変えていないため API baseline は変更しない。
