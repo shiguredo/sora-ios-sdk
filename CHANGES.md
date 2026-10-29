@@ -16,6 +16,7 @@
   - 接続の開始前に `Configuration.mediaChannelHandlers` へ設定した handler は、これまでどおりその `Configuration` から作るすべての接続で呼ばれる
   - 接続の開始後に `Configuration.mediaChannelHandlers` の handler property を変更しても、接続済みの `MediaChannel.handlers` には反映されない。`MediaChannel.configuration.mediaChannelHandlers` 経由の変更も同様に反映されない。接続の途中から handler を設定する場合は `MediaChannel.handlers` の handler property を設定する
   - `MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると bag 全体が差し替わり、`Configuration` からコピーした handler は引き継がれない
+  - `MediaChannel.handlers` は `Configuration.mediaChannelHandlers` と同じ instance ではなくなる。接続の完了前に届くイベント (最初の offer など) を受け取る handler は、接続の開始前に `Configuration.mediaChannelHandlers` へ設定するか、`SoraHandlers.onAddMediaChannel` で `MediaChannel.handlers` に設定する
   - @t-miya
 - [UPDATE] libwebrtc を m156.8078.5.1 に更新する
   - 専用 worker thread が廃止され、録音の pause / resume は network thread 上で実行される (SDK の API と呼び出し経路は変わらない)

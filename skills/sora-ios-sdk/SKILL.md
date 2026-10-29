@@ -260,7 +260,7 @@ DataChannel / シグナリング:
 
 | プロパティ | 内容 |
 | --- | --- |
-| `configuration` | connect に渡した `Configuration` (`webRTCConfiguration` 引数の値は反映されない) |
+| `configuration` | connect に渡した `Configuration` (`webRTCConfiguration` 引数の値は反映されない)。`mediaChannelHandlers` は接続の開始時にコピーされるため、接続後にこの `Configuration` の `mediaChannelHandlers` を変更しても配送には反映されない |
 | `state` | `ConnectionState` (`.connecting` / `.connected` / `.disconnecting` / `.disconnected`) |
 | `isAvailable` | `state == .connected` |
 | `clientId` / `bundleId` / `connectionId` | 接続後に設定される ID |
@@ -594,7 +594,7 @@ timeout はない)。snapshot API では、`MediaChannel` の解放開始後に�
 
 ## 切断イベント
 
-`MediaChannelHandlers.onDisconnect` で `SoraCloseEvent` を受け取る。
+`MediaChannelHandlers.onDisconnect` で `SoraCloseEvent` を受け取る。例は接続の開始前に `Configuration.mediaChannelHandlers` へ設定する形である。接続の開始後に設定する場合は `MediaChannel.handlers.onDisconnect` を使う (`Configuration.mediaChannelHandlers` の変更は接続済みの接続には反映されない)。
 
 ```swift
 config.mediaChannelHandlers.onDisconnect = { event in
