@@ -11,13 +11,6 @@
 
 ## develop
 
-- [CHANGE] `Configuration.mediaChannelHandlers` の handler を接続の開始時にコピーし、接続ごとに独立した `MediaChannel.handlers` として設定する
-  - 1 つの `Configuration` から複数の接続を作ると `MediaChannelHandlers` の bag が共有され、一方の接続に設定した handler が他方の接続のイベントでも呼ばれていた問題を修正する
-  - 接続の開始前に `Configuration.mediaChannelHandlers` へ設定した handler は、これまでどおりその `Configuration` から作るすべての接続で呼ばれる
-  - 接続の開始後に `Configuration.mediaChannelHandlers` の handler property を変更しても、接続済みの `MediaChannel.handlers` には反映されない。`MediaChannel.configuration.mediaChannelHandlers` 経由の変更も同様に反映されない。接続の途中から handler を設定する場合は `MediaChannel.handlers` の handler property を設定する
-  - `MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると bag 全体が差し替わり、`Configuration` からコピーした handler は引き継がれない
-  - `MediaChannel.handlers` は `Configuration.mediaChannelHandlers` と同じ instance ではなくなる。接続の完了前に届くイベント (最初の offer など) を受け取る handler は、接続の開始前に `Configuration.mediaChannelHandlers` へ設定するか、`SoraHandlers.onAddMediaChannel` で `MediaChannel.handlers` に設定する
-  - @t-miya
 - [UPDATE] libwebrtc を m156.8078.5.1 に更新する
   - 専用 worker thread が廃止され、録音の pause / resume は network thread 上で実行される (SDK の API と呼び出し経路は変わらない)
   - 受信コーデック更新時のデコーダー再利用、VP8 の破損フレーム拒否、ICE restart を伴わない renegotiation での ICE role 保持などが入る
@@ -34,6 +27,12 @@
   - `ICEServerInfo.description` は `username` と `credential` の値を伏せる。`Codable` の出力は変わらない
   - シグナリング URL の userinfo をログと redirect のエラーメッセージから除く。invalid redirect のエラーメッセージは認証情報を含まない表記に変わる
   - WebSocket の受信失敗ログは、接続先 URL を含む `NSError` の userInfo を出さず、domain / code / description を出す
+  - @t-miya
+- [FIX] `Configuration.mediaChannelHandlers` が接続間で共有され、初期化後に handler を差し替えられ、切断後も handler が発火しうる問題を修正する
+  - 1 つの `Configuration` から複数の接続を作ると `MediaChannelHandlers` の bag が共有されるため、`MediaChannel` の初期化後に `Configuration` 側で handler property を変更すると接続済みの接続の handler が差し替わっていた。また、切断済みの接続に設定した handler が、同じ `Configuration` から作った別の接続のイベントで発火しうる状態だった
+  - `MediaChannel` の初期化時に `Configuration.mediaChannelHandlers` を接続ごとにコピーし、`MediaChannel.handlers` を独立させる。接続の開始前に `Configuration` へ設定した handler はこれまでどおりその `Configuration` から作るすべての接続で呼ばれる
+  - `MediaChannel.handlers` は `Configuration.mediaChannelHandlers` と同じ instance ではなくなり、接続の開始後に `Configuration` 側や `MediaChannel.configuration` 経由で handler property を変更しても、接続済みの接続には反映されない。接続の途中から handler を設定する場合は `MediaChannel.handlers` の handler property を設定する (次の配送から反映される)
+  - 接続の完了前に届くイベント (最初の offer など) を受け取る handler は、接続の開始前に `Configuration` へ設定するか、`SoraHandlers.onAddMediaChannel` で `MediaChannel.handlers` に設定する。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると bag 全体が差し替わり、`Configuration` からコピーした handler は引き継がれない
   - @t-miya
 
 ## 2026.4.0
