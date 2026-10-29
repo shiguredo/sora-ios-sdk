@@ -118,10 +118,11 @@ final class SoraEventE2ETests: E2ETestBase {
     // 新 API と同じ signaling を受信したことを確認できないため、内容を比較する。
     var legacySignalingJSONs: [String] = []
 
-    // legacy handler は接続の前に登録する。MediaChannel は Configuration の
-    // MediaChannelHandlers インスタンスを handlers として共有するため、接続前の offer も
-    // 含めて同じ signaling を受信できる。接続後に登録すると、接続直後に届いた signaling を
-    // 新 API の購読だけが受け取り、legacy handler はその受信を観測できない。
+    // legacy handler は接続の前に登録する。MediaChannel は接続の開始時に Configuration の
+    // MediaChannelHandlers をコピーするため、接続前の offer も含めて同じ signaling を受信できる。
+    // 接続の開始後に Configuration へ登録した handler はコピー済みの接続へ反映されないため、
+    // 接続直後に届いた signaling を新 API の購読だけが受け取り、legacy handler はその受信を
+    // 観測できない。
     // handler は signaling の受信スレッドから呼ばれるため、共有状態の更新は main queue に束ねる。
     config.mediaChannelHandlers.onReceiveSignalingJSON = { json in
       DispatchQueue.main.async { legacySignalingJSONs.append(json) }
@@ -295,7 +296,9 @@ final class SoraEventE2ETests: E2ETestBase {
       ["label": messagingLabel, "direction": "sendrecv", "compress": false]
     ]
 
-    // handler bag を接続間で共有しないよう、2 接続目の Configuration も組み立て直す。
+    // 2 接続目には handler を登録しないよう、1 接続目の Configuration から値コピーせずに
+    // 組み立て直す。MediaChannel は接続の開始時に configuration の bag をコピーするため、
+    // config1 の handler を config2 へ引き継がせないために必要になる。
     var config2 = try buildConfiguration(role: .sendrecv)
     config2.channelId = channelId
     config2.videoEnabled = true

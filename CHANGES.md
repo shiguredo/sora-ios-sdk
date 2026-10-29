@@ -11,6 +11,12 @@
 
 ## develop
 
+- [CHANGE] `Configuration.mediaChannelHandlers` の handler を接続の開始時にコピーし、接続ごとに独立した `MediaChannel.handlers` として設定する
+  - 1 つの `Configuration` から複数の接続を作ると `MediaChannelHandlers` の bag が共有され、一方の接続に設定した handler が他方の接続のイベントでも呼ばれていた問題を修正する
+  - 接続の開始前に `Configuration.mediaChannelHandlers` へ設定した handler は、これまでどおりその `Configuration` から作るすべての接続で呼ばれる
+  - 接続の開始後に `Configuration.mediaChannelHandlers` の handler property を変更しても、接続済みの `MediaChannel.handlers` には反映されない。`MediaChannel.configuration.mediaChannelHandlers` 経由の変更も同様に反映されない。接続の途中から handler を設定する場合は `MediaChannel.handlers` の handler property を設定する
+  - `MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると bag 全体が差し替わり、`Configuration` からコピーした handler は引き継がれない
+  - @t-miya
 - [UPDATE] libwebrtc を m156.8078.5.1 に更新する
   - 専用 worker thread が廃止され、録音の pause / resume は network thread 上で実行される (SDK の API と呼び出し経路は変わらない)
   - 受信コーデック更新時のデコーダー再利用、VP8 の破損フレーム拒否、ICE restart を伴わない renegotiation での ICE role 保持などが入る

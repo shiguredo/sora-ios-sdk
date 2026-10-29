@@ -28,6 +28,11 @@ public final class SoraHandlers {
   public var onDisconnect: ((MediaChannel, Error?) -> Void)?
 
   /// メディアチャネルが追加されたときに呼ばれるクロージャー
+  ///
+  /// `Sora.connect` が接続試行を開始して `MediaChannel` が `.connecting` へ遷移した後、
+  /// 非同期の接続処理より前に呼ばれます。接続ごとの handler は、この時点で
+  /// `MediaChannel.handlers` に対して設定します (接続の開始前に `Configuration` へ設定した
+  /// handler は、接続ごとの bag にコピー済みです)。
   public var onAddMediaChannel: ((MediaChannel) -> Void)?
 
   /// メディアチャネルが除去されたときに呼ばれるクロージャー

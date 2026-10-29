@@ -821,10 +821,10 @@ final class RpcE2ETests: E2ETestBase {
       if currentChannel.peerChannel.rpcChannel == nil {
         let reconnectRpcOpenedExpectation = self.expectation(
           description: "再接続後の rpc ラベルが OPEN すること")
-        // onDataChannelOpened も同じ Configuration から作ったチャンネル間で共有されるため、
-        // 1 回だけ fulfill し、待ち終了時に外す。外さないと、rpcChannel が確認時点で
-        // 既に OPEN になっている次の試行で、その OPEN の通知が前試行の closure を呼び、
-        // fulfill 済みの expectation を再度 fulfill して API violation になる
+        // handler はこのチャンネルの MediaChannel.handlers に設定する。MediaChannel.handlers は
+        // 接続ごとに独立しているため、別の接続の OPEN 通知で前試行の closure が呼ばれることは
+        // ない。ただし redirect で DataChannel の通知状態がリセットされ、同じラベルの OPEN が
+        // 再通知され得るため fulfill は 1 回だけにし、待ち終了後はこのチャンネルの handler を外す
         var rpcOpenedFulfilled = false
         currentChannel.handlers.onDataChannelOpened = { _, label in
           DispatchQueue.main.async {
@@ -881,10 +881,9 @@ final class RpcE2ETests: E2ETestBase {
   /// `E2ETestBase.disconnectAll(channels:)` と同じにし、切断が state の確認とハンドラ設定の
   /// 間に入って onDisconnect が発火済みの場合は、待たずに完了として扱う。
   ///
-  /// `MediaChannelHandlers` は同じ `Configuration` から作ったチャンネル間で共有されるため、
-  /// 設定したハンドラは待ち終了時に必ず外す。外さないと、次の試行で作ったチャンネルの切断でも
-  /// 同じ closure が呼ばれ、fulfill 済みの expectation を再度 fulfill して XCTest の
-  /// API violation (over-fulfill) になる。
+  /// `MediaChannel.handlers` は接続ごとに独立した instance であり、`Configuration` の bag は
+  /// 接続の開始時にコピーされる。ここで設定したハンドラが別のチャンネルの切断で呼ばれることは
+  /// ないため、チャンネルごとに待ちのハンドラを設定できる。
   ///
   /// 上限は `E2ETestBase.disconnectAll(channels:)` と同じ 10 秒とする。待ち切れなかった場合は
   /// 失敗を記録したうえで false を返す (呼び出し側が後始末する)。
@@ -906,9 +905,6 @@ final class RpcE2ETests: E2ETestBase {
         disconnectExpectation.fulfill()
       }
     }
-    // ハンドラは共有されるため、次のチャンネルの切断で発火しないよう待ち終了時に外す
-    defer { channel.handlers.onDisconnect = nil }
-
     // シグナリング受信による切断が state チェックとハンドラ設定の間に入った場合は
     // onDisconnect が発火済みのため、待たずに完了とする。生成した expectation は
     // fulfill の有無にかかわらず未 wait のため、timeout 0 で消費する

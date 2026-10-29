@@ -40,8 +40,26 @@ public enum SoraCloseEvent: Sendable {
 /// イベントを actor / Task から購読する場合は
 /// `MediaChannel.subscribeEvents(bufferingPolicy:)` を使う。新しい購読 API は、この handler と
 /// 同じ配送点から対応するイベントを配送する。
+///
+/// ## 接続ごとのハンドラ
+///
+/// `Configuration.mediaChannelHandlers` に保持される instance は参照型であるため、
+/// `Configuration` を値コピーすると値コピー間で同じ bag が共有される。この bag をそのまま
+/// 接続の handler に使うと別接続の handler が呼ばれるため、`MediaChannel` は接続の開始時に
+/// `Configuration` の bag をコピーし、接続ごとに独立した instance を
+/// `MediaChannel.handlers` に設定する。
+///
+/// - 接続の開始前 (`Sora.connect` を呼ぶ前) に `Configuration.mediaChannelHandlers` へ設定した
+///   handler はコピーされ、その `Configuration` から作るすべての接続の配送で呼ばれる
+/// - 接続の開始後に `Configuration.mediaChannelHandlers` の handler property を変更しても、
+///   接続済みの `MediaChannel.handlers` には反映されない
+/// - 接続ごとの handler は `SoraHandlers.onAddMediaChannel` の中で `MediaChannel.handlers` に
+///   設定する。bag 全体を差し替えると `Configuration` からコピーした handler は引き継がれないため、
+///   他の handler を維持したい場合は handler property を個別に設定する
 public final class MediaChannelHandlers {
-  /// 接続成功時に呼ばれるクロージャー
+  /// 接続試行が終了したときに呼ばれるクロージャー
+  ///
+  /// 接続に成功した場合は `nil`、接続が成立する前の切断・接続失敗の場合はエラーが渡されます。
   public var onConnect: ((Error?) -> Void)? {
     get { onConnectStorage.current }
     set { onConnectStorage.current = newValue }
@@ -119,6 +137,40 @@ public final class MediaChannelHandlers {
 
   /// 初期化します。
   public init() {}
+
+  /// 指定した `MediaChannelHandlers` の 10 個の handler property をすべて写した instance を生成します。
+  ///
+  /// `MediaChannel` は、接続ごとに独立した bag を持たせるため、接続の開始時にこの
+  /// イニシャライザで `Configuration.mediaChannelHandlers` を写し取ります。写すのは handler
+  /// property だけであり、closure 自体は copy せず同じ closure を設定します。
+  ///
+  /// 各 property の読み出しは property ごとの lock で排他されるため、写し元の handler を
+  /// 並行して変更した場合、写し先の値は property ごとに変更の前後どちらかになります
+  /// (bag 全体の原子的な snapshot ではありません)。
+  ///
+  /// handler property を追加した場合は、このイニシャライザと `MediaChannelHandlersTests` の
+  /// コピー検証、全 handler property を列挙する `ConcurrencyStressTests` のテストも更新して
+  /// ください。このイニシャライザの doc と `MediaChannel.handlers` doc に書いた個数も合わせて
+  /// 更新します。
+  ///
+  /// SDK 内部専用のため internal に閉じています (公開 API は変わりません)。
+  ///
+  /// - parameter handlers: 写し元のハンドラ
+  init(copying handlers: MediaChannelHandlers) {
+    onConnectStorage.current = handlers.onConnect
+    // deprecated の handler property は、非推奨 API を SDK 内部で参照しないよう storage から写す
+    // (public な accessor を読むと DeprecatedDeclaration 警告が増える)。
+    // 利用者が設定した値は接続ごとの bag に引き継ぐ
+    onDisconnectLegacyStorage.current = handlers.onDisconnectLegacyStorage.current
+    onDisconnectStorage.current = handlers.onDisconnect
+    onAddStreamStorage.current = handlers.onAddStream
+    onRemoveStreamStorage.current = handlers.onRemoveStream
+    onReceiveSignalingJSONStorage.current = handlers.onReceiveSignalingJSON
+    onReceiveSignalingStorage.current = handlers.onReceiveSignalingStorage.current
+    onDataChannelStorage.current = handlers.onDataChannel
+    onDataChannelOpenedStorage.current = handlers.onDataChannelOpened
+    onDataChannelMessageStorage.current = handlers.onDataChannelMessage
+  }
 
   // MARK: - closure を保持する lock 付き storage
 
@@ -662,6 +714,20 @@ public final class MediaChannel {
 
   /// イベントハンドラ
   ///
+  /// 接続ごとに独立した handler です。接続の開始時に `Configuration.mediaChannelHandlers` の
+  /// 10 個の handler property をすべてコピーした instance で初期化されます。したがって、
+  /// 接続の開始後に `Configuration.mediaChannelHandlers` を変更しても、この接続の配送には
+  /// 反映されません。
+  ///
+  /// 接続ごとの設定は `SoraHandlers.onAddMediaChannel` の中で行います
+  /// (`Sora.connect` が接続試行を開始して `.connecting` へ遷移した後、非同期の接続処理より前に
+  /// 呼ばれます)。
+  ///
+  /// - handler property を設定する (`handlers.onDisconnect = ...`): `Configuration` からコピーした
+  ///   他の handler はそのまま引き継がれます
+  /// - 新しい `MediaChannelHandlers` を代入する (`handlers = ...`): bag 全体を差し替えるため、
+  ///   `Configuration` からコピーした handler は引き継がれません
+  ///
   /// get / set は lock 付き storage で排他します。配送は毎回この storage から読むため、接続を
   /// 開始した後に代入しても次の配送から反映されます。配送側は lock を解放してから取得済みの
   /// closure を呼びます。この storage が排他するのは参照の差し替えだけで、各イベントハンドラの
@@ -1121,7 +1187,7 @@ public final class MediaChannel {
   /// - parameter snapshot: 接続開始時に写し取った設定
   /// - parameter configuration: 公開互換のために保持する利用者の設定
   /// - parameter audioDevice: カスタム音声デバイス (snapshot には含めない)
-  /// - parameter mediaChannelHandlers: メディアチャネルのハンドラ
+  /// - parameter mediaChannelHandlers: メディアチャネルのハンドラ (接続ごとの bag にコピーして保持する写し元)
   /// - parameter webSocketChannelHandlers: WebSocket チャネルのハンドラ
   init(
     snapshot: ConnectionConfigurationSnapshot,
@@ -1173,7 +1239,10 @@ public final class MediaChannel {
       cameraCaptureCoordinator: cameraCaptureCoordinator,
       cameraCaptureOwnership: cameraCaptureOwnership,
       videoSourceCoordinator: videoSourceCoordinator)
-    handlers = mediaChannelHandlers
+    // configuration の bag は参照型のため、そのまま設定すると同じ configuration から作った
+    // 接続間で共有される。接続ごとに独立した bag になるよう、接続の開始時に写し取る。
+    // 利用者が接続の開始前に configuration へ設定した handler はここで引き継ぐ。
+    handlers = MediaChannelHandlers(copying: mediaChannelHandlers)
 
     _connectionTimer = ConnectionTimer(
       monitors: [
