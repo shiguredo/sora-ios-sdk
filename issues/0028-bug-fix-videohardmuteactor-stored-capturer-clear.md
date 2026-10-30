@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-10-30
 - Model: Opus 4.8
 - Branch: feature/fix-videohardmuteactor-stored-capturer-clear
 - Polished: 2026-08-27
@@ -112,3 +112,23 @@ connection lease ごとの保存状態について、同一 lease の unmute が
 - `CHANGES.md` への追記。クリアは内部状態の変更のみで `2026.3.0` で出荷済みのため、`## develop` (次期リリース) にも `## 2026.3.0` (過去のリリース) にも追記しない。
 
 ## 解決方法
+
+`VideoHardMuteActor` の保存状態 (`storedCapturers`) をミュート解除の成功経路で破棄する挙動を確認し、検証結果を記録した。クリアのコード変更は既に `2026.3.0` 以降に出荷済みであり、本 issue ではコード変更を行っていない。
+
+- 解除成功時の破棄は `003bb738` (2026-09-08、`0010` の PR #381) で入り、`2026.3.0` (2026-09-10) に含まれる。経路 A (sender stream 一致) と経路 B (restart 成功) で `discardStoredCapturer(lease:)` が呼ばれ、`CameraStateOwner` の pin も解放される。
+- `e4291a87` (`0103`, 2026-09-17) が保存する値を `CameraCapturerID` に変え、破棄を `discardStoredCapturer` に整理した。`2026.4.0` (2026-10-20) に含まれる。
+- 経路 C は `storedCapturers[lease]` が nil の場合だけ通るため、破棄すべき保存状態は残らない。
+- 解除失敗時 (`restartCameraVideoCapture` の throw、隔離後の再開失敗) は保存状態と pin を保持し、同じ lease の再試行に利用する。保存する instance を解決できない場合だけ破棄して `"stored capturer is no longer available"` を返す。破棄条件の変更は行わず、現行挙動を確定とした (変更が必要になった場合は別 issue とする)。
+- 別接続が capturer を所有している間の解除は `SoraError.mediaChannelError(reason: "camera is owned by another connection")` で拒否され、元接続の保存状態は破棄されない。
+- disconnect 時は `MediaChannel.prepareForDisconnect` が `VideoHardMuteLease.revoke()` の後に `release(lease:)` を呼び、保存状態と pin を破棄する。`MediaChannel` は 1 回の `Sora.connect()` ごとに生成され、lease も接続ごとに生成されるため、保存状態は接続試行をまたいで再利用されない。
+- 内部状態の変更のみで利用者が観測できる挙動は変わらないため、`CHANGES.md` への追記は行っていない (`2026.3.0` の履歴も遡って変更していない)。
+
+### 検証
+
+- 実機 (iPhone 14 / iOS 27.2、2026-10-30): restart 経路、start 経路、経路 A、別接続の拒否、連続したミュート/解除 (3 回以上)、解除後の再ミュートがすべて期待どおりに動作した。確認には samples リポジトリへ一時コードを追加して行い、確認後に削除した。
+- テスト (2026-10-30): `xcodebuild test` (`Sora-Package` scheme、iPhone 17 Pro の iOS Simulator、Xcode 27.0) で 553 件実行、失敗 0、skip 39。skip は環境変数未設定の E2E と、実カメラや実行環境に依存する検証である。
+- コードで確認した項目: 経路 A の保存状態破棄、別接続時に元接続の保存状態が破棄されないこと、restart 失敗後の再試行が同じ lease に限定されること。
+
+### 未検証
+
+- なし。
