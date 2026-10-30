@@ -1,7 +1,7 @@
 # 画面キャプチャ start 失敗時に ReplayKit の録画が停止されないまま残る問題を修正する
 
 - Created: 2026-09-10
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-30
 - Branch: feature/fix-screen-capture-recorder-orphan
 - Polished: 2026-10-30
 - Updated: 2026-10-30
@@ -62,3 +62,23 @@
 - `0193`: `MediaChannel.startScreenCapture(settings:)` の doc コメントと `skills/sora-ios-sdk/SKILL.md` の画面キャプチャ節に、アプリ内画面のみを対象とする旨を追記する。本 issue が追記する「ホストの録画を停止し得る」制約と同じ箇所を変更対象にしている。
 
 ## 解決方法
+
+### 修正内容
+
+- `Sora/ScreenCapture.swift`: start 失敗時に SDK 所有の録画が残る場合（`.completed(RecorderOperationResult(error:isRecording: true))`）は `recordRecorderStart(captureID:)` を呼び、`recorderCoordinator.release(ownerID:)` を呼ばずに owner を保持するようにした。`completeStartCapture(captureID:error:recordingRequiresCleanup:)` は `recordingRequiresCleanup` が true の場合に、error 時の state 更新と同じ lock 区間で `captureState` を `.cleanupFailed` にし、並行する `scheduleStopCapture` が停止を取りこぼさないようにした
+- start 結果の所有権判断とエラーを `resolveStart`、判断の適用から状態更新までを `finishStartCapture` に切り出した。`.alreadyRecording`（SDK が startCapture を発行する前から録画中）はホスト所有として owner を解放し、停止しない
+- `Sora/MediaChannel.swift`: `startScreenCapture` の doc コメントに、ホストの録画を停止し得る制約、開始要求の時点で既に録画中の場合は停止しないこと、停止に失敗した場合は同じ `MediaChannel` の `stopScreenCapture()` で停止に成功するまで開始できないことを追記した。`stopScreenCapture` と `isScreenCaptureActive` の doc も更新した
+- `SoraTests/ScreenCaptureFrameGenerationTests.swift`: start 結果の所有権判断 (`testResolveStartCombinesHandlingAndError`)、停止判断 (`testShouldStopRecorderRequiresCaptureAndOwnership`)、判断の適用と状態更新 (`testFinishStartCaptureReleasesHostOwnedRecording` / `testFinishStartCaptureRetainsRecordingOnFailure` / `testFinishStartCaptureStartsSuccessfully` / `testFinishStartCaptureReleasesWhenRecordingIsInactive`)、停止失敗時の隔離、停止予約済みで録画が残る場合の記録、`completeStartCapture` の防御的契約をイベント列で検証するテストを追加した。モックやスタブは使用していない
+- `CHANGES.md` の `## develop` に `[FIX]` を、`skills/sora-ios-sdk/SKILL.md` の画面キャプチャ節に制約を追記した
+
+### 検証結果
+
+- ローカル環境は Xcode 27.0 / iOS 27.0 SDK のみのため、Makefile の build target に `XCODE_SDK=iphoneos27.0` を指定した Release ビルドで BUILD SUCCEEDED を確認した
+- `make fmt-lint` / `make lint`: 成功 (SwiftLint 0 violations)
+- シミュレータ (iPhone 17 Pro, iOS 26.5) のテスト全件: 553 件 / 39 skip / 失敗 0
+- `/review-diff-code` を 3 周実施し、致命的・重要 0 件。指摘に基づき所有権判断の統合、テストの重複排除、doc の追記を行った
+
+### 未検証項目
+
+- 実 ReplayKit の start 失敗（`.completed(error:isRecording: true)`）の orphan 再現と、実 ReplayKit の stop 完了を伴う停止経路は実機が必要なため未実施。ユニットテストは判断関数と coordinator の状態遷移、停止対象の記録までを検証している
+- `.screenCleanupFailed` の状態で `startScreenCapture` を呼んだ場合にカメラ競合のエラーメッセージが返る既存の挙動は、本修正の範囲外として変更していない

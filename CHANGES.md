@@ -31,6 +31,11 @@
 - [FIX] `Configuration.mediaChannelHandlers` が接続間で共有され、初期化後に handler を差し替えられ、切断後も handler が発火しうる問題を修正する
   - 1 つの `Configuration` から複数の接続を作ると `MediaChannelHandlers` のインスタンスが共有されるため、`MediaChannel` の初期化後に `Configuration` 側で handler property を変更すると接続済みの接続の handler が差し替わっていた。また、切断済みの接続に設定した handler が、同じ `Configuration` から作った別の接続のイベントで発火しうる状態だった
   - @t-miya
+- [FIX] 画面キャプチャの開始に失敗したときに ReplayKit の録画が停止されないまま残る問題を修正する
+  - 開始に失敗しても SDK が `startCapture` を発行した後に録画が残っている場合は、SDK 所有として録画を停止する
+  - 停止に成功するまで録画の所有権を保持し、停止に失敗した場合は隔離して以後の画面キャプチャ開始を失敗させる
+  - ホストアプリが同時に `RPScreenRecorder` を使用している場合は、SDK がホストの録画を停止することがある
+  - @t-miya
 
 ## 2026.4.0
 

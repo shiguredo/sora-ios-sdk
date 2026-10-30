@@ -460,6 +460,8 @@ await mediaChannel.stopScreenCapture()
 
 同一送信ストリームでカメラと画面キャプチャは同時に使えない。`initialCameraEnabled = false` にするか、`setVideoHardMute(true)` でカメラを止めてから開始する。
 
+ReplayKit の録画はプロセス全体で共有される。画面キャプチャの開始に失敗した場合でも SDK が録画の停止を試みるため、ホストアプリが同時に `RPScreenRecorder` を使用していると、その録画を停止することがある。ReplayKit には録画の所有者を照会する API がないため、SDK は自身が `startCapture` を発行した後の録画を SDK 所有として扱う。開始要求の時点で既に録画中の場合は停止しない。停止に失敗した場合は、同じ接続の `stopScreenCapture()` による停止に成功するまで、以後の画面キャプチャ開始がエラーになり、`isScreenCaptureActive()` は true を返す。
+
 `videoSampleBufferTransformer` は SDK 内部の送信キュー上で呼ばれる。`targetFPS` による間引きで破棄されるフレームと、送信処理中のために破棄されるフレーム、キャプチャ停止中と切断中のフレームでは呼ばれない。引数と戻り値の `CMSampleBuffer` の所有権は SDK に委ねられ、戻り値の buffer が保持する pixel buffer は送信のために SDK が retain する。戻り値を返した後にその buffer を書き換えないこと。
 
 ### 描画
