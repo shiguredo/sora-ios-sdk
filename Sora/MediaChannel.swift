@@ -2677,6 +2677,14 @@ public final class MediaChannel {
   /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
   /// 接続後にカメラを停止する場合は `setVideoHardMute(true)` を先に呼んでください。
   ///
+  /// ReplayKit の録画はプロセス全体で共有されます。開始に失敗した場合でも SDK が録画の停止を
+  /// 試みるため、ホストアプリが同時に `RPScreenRecorder` を使用している場合は、SDK がホストの
+  /// 録画を停止することがあります。ReplayKit は録画の所有者を照会する API を提供しないため、
+  /// SDK は自身が `startCapture` を発行した後の録画を SDK 所有として扱います。
+  /// 開始要求の時点でホストアプリが既に開始していた録画は停止しません。停止に失敗した場合は、
+  /// 同じ `MediaChannel` の `stopScreenCapture()` による停止に成功するまで開始できず、
+  /// `isScreenCaptureActive()` は true を返します。
+  ///
   /// - Parameter settings: 画面キャプチャ設定
   /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます
   public func startScreenCapture(settings: ScreenCaptureSettings = .init()) async throws {
@@ -2737,6 +2745,8 @@ public final class MediaChannel {
   }
 
   /// ReplayKit を利用した画面キャプチャを停止します
+  ///
+  /// 同じ接続で停止に失敗した場合は、再度呼ぶことで停止を再試行できます。
   public func stopScreenCapture() async {
     let screenStopReservation = videoSourceCoordinator.beginScreenStop()
     let screenCaptureController = currentScreenCaptureController()
@@ -2750,6 +2760,8 @@ public final class MediaChannel {
   }
 
   /// 画面キャプチャが動作中かを取得します
+  ///
+  /// 停止処理中と停止の後始末に失敗した状態でも true を返します。
   public func isScreenCaptureActive() -> Bool {
     currentScreenCaptureController()?.isCaptureActive() ?? false
   }

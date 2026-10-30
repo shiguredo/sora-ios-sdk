@@ -4,6 +4,9 @@ import XCTest
 
 @testable import Sora
 
+/// start 結果が持つ ReplayKit のエラーをそのまま扱うことを検証するためのテスト用エラーです。
+private struct ScreenCaptureStartFailure: Error {}
+
 /// 非同期操作をテスト側で明示的に再開するための同期ゲート
 private actor ScreenCaptureTestGate {
   private var isOpen = false
@@ -60,12 +63,14 @@ private actor ScreenCaptureOperationOrder {
   }
 }
 
-/// 画面共有の capture ID 世代管理と sample buffer 所有境界に関するユニットテスト
+/// 画面共有の capture ID 世代管理、recorder の所有権、sample buffer 所有境界に関するユニットテスト
 ///
 /// 画面共有を停止して直ちに再開始したときに、停止前に送信キューへ投入された旧フレームが
 /// 古い sender stream を使わないことを capture ID の世代判定で検証する。
 /// あわせて、送信キューへ渡す値が所有権を持つ表現だけであること、間引きと semaphore の
 /// 取得失敗で破棄されるフレームで transformer が実行されないことを検証する。
+/// start 失敗時に録画が残る場合の recorder の所有権・隔離判断と、停止に失敗した場合に
+/// 隔離を維持することもイベント列で検証する。
 /// モックやスタブは使用しない。
 final class ScreenCaptureFrameGenerationTests: XCTestCase {
   /// 送信された frame 数を数える実 VideoFilter です。
@@ -94,6 +99,22 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
     let controller = ScreenCaptureController(mediaChannel: mediaChannel)
     return (controller, mediaChannel)
+  }
+
+  // ScreenCaptureController と、テスト専用の recorder coordinator を構築する
+  //
+  // process-wide な shared coordinator を汚染しないよう、テストごとに専用の coordinator を使う。
+  private func makeScreenCaptureControllerWithCoordinator() throws -> (
+    controller: ScreenCaptureController,
+    mediaChannel: MediaChannel,
+    coordinator: ScreenCaptureRecorderCoordinator
+  ) {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    let controller = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    return (controller, mediaChannel, coordinator)
   }
 
   // テストで共通利用する senderStream を構築する
@@ -481,19 +502,407 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     coordinator.release(ownerID: ownerB)
   }
 
-  /// 通常停止と切断停止が同じ未完了 Task を共有することを確認する
-  func testDisconnectStopWaitsForExistingStopTask() async throws {
-    let coordinator = ScreenCaptureRecorderCoordinator()
+  // MARK: - recorder の所有権と停止
+
+  /// start 結果から所有権の扱いとエラーがまとめて決まることを確認する
+  ///
+  /// 5 通りの結果をイベント列として入力し、所有権の保持・解放とエラーの有無を検証する。
+  func testResolveStartCombinesHandlingAndError() {
+    // SDK が開始する前から録画中だった場合は、ホスト所有として owner を解放しエラーにする。
+    let hostOwned = ScreenCaptureController.resolveStart(.alreadyRecording)
+    XCTAssertEqual(hostOwned.handling, .releaseOwner, "ホスト所有の録画では owner を解放すること")
+    XCTAssertNotNil(hostOwned.error, "ホスト所有の録画では開始をエラーにすること")
+
+    // 録画が残らない失敗は owner を解放し、録画起因のエラーをそのまま返す。
+    let recorderFailure = ScreenCaptureStartFailure()
+    let failureWithoutRecording = ScreenCaptureController.resolveStart(
+      .completed(
+        ScreenCaptureController.RecorderOperationResult(
+          error: recorderFailure,
+          isRecording: false)))
+    XCTAssertEqual(
+      failureWithoutRecording.handling,
+      .releaseOwner,
+      "録画が残らない失敗では owner を解放すること")
+    XCTAssertTrue(
+      failureWithoutRecording.error is ScreenCaptureStartFailure,
+      "録画が残らない失敗では録画起因のエラーをそのまま返すこと")
+
+    // start API が成功を返しても録画が動作していなければ失敗として扱う。
+    let successWithoutRecording = ScreenCaptureController.resolveStart(
+      .completed(
+        ScreenCaptureController.RecorderOperationResult(error: nil, isRecording: false)))
+    XCTAssertEqual(
+      successWithoutRecording.handling,
+      .releaseOwner,
+      "録画が動作していない成功では owner を解放すること")
+    XCTAssertNotNil(successWithoutRecording.error, "録画が動作していない成功ではエラーを合成すること")
+
+    // SDK 所有の録画が残る失敗は owner を保持して停止の後始末を要求する。
+    let failureWithRecording = ScreenCaptureController.resolveStart(
+      .completed(
+        ScreenCaptureController.RecorderOperationResult(
+          error: recorderFailure,
+          isRecording: true)))
+    XCTAssertEqual(
+      failureWithRecording.handling,
+      .retainOwner(requiresCleanup: true),
+      "録画が残る失敗では owner を保持して停止の後始末を要求すること")
+    XCTAssertTrue(
+      failureWithRecording.error is ScreenCaptureStartFailure,
+      "録画が残る失敗では録画起因のエラーをそのまま返すこと")
+
+    // start 成功は owner を保持し、停止の後始末を要求しない。
+    let success = ScreenCaptureController.resolveStart(
+      .completed(
+        ScreenCaptureController.RecorderOperationResult(error: nil, isRecording: true)))
+    XCTAssertEqual(
+      success.handling,
+      .retainOwner(requiresCleanup: false),
+      "start 成功では owner を保持し、停止の後始末を要求しないこと")
+    XCTAssertNil(success.error, "start 成功ではエラーを返さないこと")
+  }
+
+  /// 停止対象の記録と owner の一致の両方が揃ったときだけ recorder を停止することを確認する
+  func testShouldStopRecorderRequiresCaptureAndOwnership() {
+    XCTAssertTrue(
+      ScreenCaptureController.shouldStopRecorder(hasRecorderCapture: true, isOwner: true),
+      "停止対象の記録と owner が揃った場合は停止対象にすること")
+    XCTAssertFalse(
+      ScreenCaptureController.shouldStopRecorder(hasRecorderCapture: true, isOwner: false),
+      "owner が一致しない場合は別用途の recorder を停止しないこと")
+    XCTAssertFalse(
+      ScreenCaptureController.shouldStopRecorder(hasRecorderCapture: false, isOwner: true),
+      "停止対象の記録がない場合は停止しないこと")
+    XCTAssertFalse(
+      ScreenCaptureController.shouldStopRecorder(hasRecorderCapture: false, isOwner: false),
+      "停止対象の記録も owner もない場合は停止しないこと")
+  }
+
+  /// `.alreadyRecording` の結果で owner を解放し、停止対象を記録しないことを確認する
+  func testFinishStartCaptureReleasesHostOwnedRecording() throws {
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "start 前に recorder の所有者を予約できること")
+
+    guard
+      case .failed = controller.finishStartCapture(
+        captureID: captureID,
+        result: .alreadyRecording)
+    else {
+      XCTFail("ホスト所有の録画では開始を失敗させること")
+      return
+    }
+
+    XCTAssertFalse(
+      coordinator.isOwner(controller.recorderOwnerID),
+      "ホスト所有の録画では owner を解放すること")
+    XCTAssertFalse(
+      controller.hasRecorderCaptureForTesting,
+      "ホスト所有の録画では停止対象の capture を記録しないこと")
+    XCTAssertFalse(controller.isCaptureActive(), "停止済みとして扱うこと")
+  }
+
+  /// 録画が残る start 失敗の結果で owner を保持し、停止対象を記録することを確認する
+  func testFinishStartCaptureRetainsRecordingOnFailure() throws {
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "start 前に recorder の所有者を予約できること")
+
+    guard
+      case .failed = controller.finishStartCapture(
+        captureID: captureID,
+        result: .completed(
+          ScreenCaptureController.RecorderOperationResult(
+            error: SoraError.mediaChannelError(reason: "start failed"),
+            isRecording: true)))
+    else {
+      XCTFail("録画が残る start 失敗として完了すること")
+      return
+    }
+
+    XCTAssertTrue(
+      controller.isCaptureCleanupFailedForTesting,
+      "停止が完了するまでは .cleanupFailed として扱うこと")
+    XCTAssertTrue(
+      controller.isCaptureActive(),
+      "停止の後始末に失敗している間も動作中として扱うこと")
+    XCTAssertTrue(
+      controller.hasRecorderCaptureForTesting,
+      "停止対象の capture を保持すること")
+    XCTAssertTrue(
+      coordinator.isOwner(controller.recorderOwnerID),
+      "停止が完了するまで owner を保持すること")
+    XCTAssertFalse(
+      coordinator.acquire(ownerID: UUID()),
+      "停止が完了するまで別の owner は recorder を取得できないこと")
+
+    // 停止に成功した場合の coordinator への反映を再現する。
+    coordinator.finishStop(ownerID: controller.recorderOwnerID, recorderStopped: true)
+    XCTAssertFalse(coordinator.isQuarantined, "停止に成功した場合は隔離しないこと")
+    let anotherOwner = UUID()
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: anotherOwner),
+      "停止に成功した後は別の owner が recorder を取得できること")
+    coordinator.release(ownerID: anotherOwner)
+  }
+
+  /// start 成功の結果で owner を保持し、`.running` へ遷移することを確認する
+  func testFinishStartCaptureStartsSuccessfully() throws {
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "start 前に recorder の所有者を予約できること")
+
+    guard
+      case .success = controller.finishStartCapture(
+        captureID: captureID,
+        result: .completed(
+          ScreenCaptureController.RecorderOperationResult(error: nil, isRecording: true)))
+    else {
+      XCTFail("start 成功として完了すること")
+      return
+    }
+
+    XCTAssertTrue(controller.isCaptureActive(), "start 成功後は動作中として扱うこと")
+    XCTAssertFalse(
+      controller.isCaptureCleanupFailedForTesting,
+      "start 成功では .cleanupFailed にしないこと")
+    XCTAssertTrue(
+      controller.hasRecorderCaptureForTesting,
+      "停止対象の capture を記録すること")
+    XCTAssertTrue(
+      coordinator.isOwner(controller.recorderOwnerID),
+      "start 成功では owner を保持すること")
+  }
+
+  /// 録画が残らない start 失敗の結果で owner を解放し、停止済みのままにすることを確認する
+  func testFinishStartCaptureReleasesWhenRecordingIsInactive() throws {
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "start 前に recorder の所有者を予約できること")
+
+    guard
+      case .failed = controller.finishStartCapture(
+        captureID: captureID,
+        result: .completed(
+          ScreenCaptureController.RecorderOperationResult(
+            error: SoraError.mediaChannelError(reason: "start failed"),
+            isRecording: false)))
+    else {
+      XCTFail("録画が残らない start 失敗として完了すること")
+      return
+    }
+
+    XCTAssertFalse(
+      coordinator.isOwner(controller.recorderOwnerID),
+      "録画が残らない失敗では owner を解放すること")
+    XCTAssertFalse(
+      controller.hasRecorderCaptureForTesting,
+      "録画が残らない失敗では停止対象の capture を記録しないこと")
+    XCTAssertFalse(controller.isCaptureActive(), "停止済みとして扱うこと")
+  }
+
+  /// error が nil のときは recordingRequiresCleanup を無視して `.running` にすることを確認する
+  ///
+  /// 本番の `finishStartCapture` からは生成できない組み合わせだが、`completeStartCapture` の
+  /// 防御的な契約を固定する。
+  func testCompleteStartCaptureIgnoresCleanupFlagWithoutError() throws {
+    let (controller, mediaChannel) = try makeScreenCaptureController()
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+
+    guard
+      case .success = controller.completeStartCapture(
+        captureID: captureID,
+        error: nil,
+        recordingRequiresCleanup: true)
+    else {
+      XCTFail("error が nil の場合は成功として完了すること")
+      return
+    }
+
+    XCTAssertTrue(controller.isCaptureActive(), "error が nil の場合は .running にすること")
+    XCTAssertFalse(
+      controller.isCaptureCleanupFailedForTesting,
+      "error が nil の場合は .cleanupFailed にしないこと")
+  }
+
+  /// start 失敗時に録画が残る場合、停止に失敗すると隔離を維持することを確認する
+  ///
+  /// 隔離そのものは coordinator の既存テストでも検証しているが、start 失敗の判断を適用した
+  /// owner 保持の状態から隔離へ遷移することをここで確認する。
+  func testStartFailureWithRecordingQuarantinesFailedStop() throws {
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "start 前に recorder の所有者を予約できること")
+
+    guard
+      case .failed = controller.finishStartCapture(
+        captureID: captureID,
+        result: .completed(
+          ScreenCaptureController.RecorderOperationResult(
+            error: SoraError.mediaChannelError(reason: "start failed"),
+            isRecording: true)))
+    else {
+      XCTFail("録画が残る start 失敗として完了すること")
+      return
+    }
+
+    // 停止できなかった場合は owner を保持したまま隔離する。
+    coordinator.finishStop(ownerID: controller.recorderOwnerID, recorderStopped: false)
+    XCTAssertTrue(coordinator.isQuarantined, "停止を確認できない recorder を隔離すること")
+    XCTAssertTrue(
+      controller.isCaptureCleanupFailedForTesting,
+      "停止に失敗した場合は .cleanupFailed を維持すること")
+    XCTAssertTrue(
+      controller.hasRecorderCaptureForTesting,
+      "停止に失敗しても再試行できるよう停止対象の capture を保持すること")
+    XCTAssertFalse(
+      coordinator.acquire(ownerID: UUID()),
+      "隔離中は別の owner が recorder を取得できないこと")
+  }
+
+  /// start 中に停止が予約された場合、遅延した start 完了が `.stopping` を上書きしないことを確認する
+  ///
+  /// 実 ReplayKit の停止はテストから実行できないため、停止対象の capture は記録せず、
+  /// `.cancelled` が `.stopping` を上書きしないことだけを検証する。
+  func testStartCompletionDoesNotOverrideScheduledStop() async throws {
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
     let gate = ScreenCaptureTestGate()
     coordinator.enqueue {
       await gate.wait()
     }
     await gate.waitUntilBlocked()
 
-    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
-    let controller = ScreenCaptureController(
-      mediaChannel: mediaChannel,
-      recorderCoordinator: coordinator)
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "start 前に recorder の所有者を予約できること")
+
+    // 停止が先に予約された状態を作る。停止 Task は gate の後ろで待機する。
+    guard let stopTask = controller.stopCaptureForDisconnect() else {
+      XCTFail("開始中の capture の停止を予約できること")
+      return
+    }
+
+    // 遅延した start 完了はキャンセルとして扱い、予約済みの停止処理に任せる。
+    guard
+      case .cancelled = controller.completeStartCapture(
+        captureID: captureID,
+        error: SoraError.mediaChannelError(reason: "start failed"),
+        recordingRequiresCleanup: true)
+    else {
+      XCTFail("停止が予約済みの場合はキャンセルとして扱うこと")
+      return
+    }
+    XCTAssertTrue(
+      controller.isCaptureStoppingForTesting,
+      "停止処理が完了するまでは .stopping であること")
+    XCTAssertFalse(
+      controller.isCaptureCleanupFailedForTesting,
+      "停止が予約済みの場合は .cleanupFailed に上書きしないこと")
+
+    await gate.open()
+    await stopTask.value
+    XCTAssertFalse(controller.isCaptureActive(), "停止処理の完了後に stopped へ遷移すること")
+  }
+
+  /// 停止予約済みの start 完了が録画を記録して `.stopping` を維持することを確認する
+  ///
+  /// 実 ReplayKit の停止はテストから実行できないため、停止 Task を実行する前に owner を解放し、
+  /// 停止 Task が実停止を呼ばないようにしたうえで、記録と状態だけを検証する。
+  func testScheduledStopKeepsRecordedCaptureOnCancellation() async throws {
+    let gate = ScreenCaptureTestGate()
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    coordinator.enqueue {
+      await gate.wait()
+    }
+    await gate.waitUntilBlocked()
+
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "start 前に recorder の所有者を予約できること")
+
+    // 停止が先に予約された状態を作る。停止 Task は gate の後ろで待機する。
+    guard let stopTask = controller.stopCaptureForDisconnect() else {
+      XCTFail("開始中の capture の停止を予約できること")
+      return
+    }
+
+    // 停止予約済みでも録画が残る場合は、停止対象の capture を記録して停止 Task に渡す。
+    guard
+      case .cancelled = controller.finishStartCapture(
+        captureID: captureID,
+        result: .completed(
+          ScreenCaptureController.RecorderOperationResult(
+            error: SoraError.mediaChannelError(reason: "start failed"),
+            isRecording: true)))
+    else {
+      XCTFail("停止が予約済みの場合はキャンセルとして扱うこと")
+      return
+    }
+    XCTAssertTrue(
+      controller.isCaptureStoppingForTesting,
+      "停止処理が完了するまでは .stopping であること")
+    XCTAssertTrue(
+      controller.hasRecorderCaptureForTesting,
+      "停止予約済みでも停止対象の capture を記録すること")
+    XCTAssertTrue(
+      coordinator.isOwner(controller.recorderOwnerID),
+      "停止が完了するまで owner を保持すること")
+
+    // 実 ReplayKit の停止を呼ばないよう、停止 Task の実行前に owner だけを解放する。
+    coordinator.release(ownerID: controller.recorderOwnerID)
+    await gate.open()
+    await stopTask.value
+    XCTAssertTrue(
+      controller.isCaptureCleanupFailedForTesting,
+      "owner が一致しない停止では実停止を行わず後始末待ちとして保持すること")
+  }
+
+  /// 通常停止と切断停止が同じ未完了 Task を共有することを確認する
+  func testDisconnectStopWaitsForExistingStopTask() async throws {
+    let gate = ScreenCaptureTestGate()
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    coordinator.enqueue {
+      await gate.wait()
+    }
+    await gate.waitUntilBlocked()
+
     let senderStream = makeSenderStream(mediaChannel: mediaChannel)
     _ = try controller.beginStartCapture(
       settings: makeSettings(),
