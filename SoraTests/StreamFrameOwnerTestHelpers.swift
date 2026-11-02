@@ -8,10 +8,8 @@ import XCTest
 // テスト用のヘルパーです。モックやスタブは使用せず、実プロトコルの実装と実 API だけを使います。
 //
 // - 接続の構築 (`makeTestConfiguration` / `makeTestMediaChannel` / `makeTestPeerConnection` /
-//   `makeTestDataChannel` / `makeSenderStreamWithVideoTrack`) は ScreenCaptureFrameGenerationTests /
-//   StreamFrameOwner 系テスト / DummyVideoCapturerTests / RTCDescriptionTests /
-//   DataChannelNotificationTests で共有します。
-// - 画面キャプチャの drain は ScreenCaptureFrameGenerationTests と StreamFrameOwner 系テストで共有します。
+//   `makeTestDataChannel` / `makeSenderStreamWithVideoTrack`) は複数のテストで共有します。
+// - 画面キャプチャの drain は ScreenCaptureFrameGenerationTests で使います。
 // - owner の観測 (`ownerForTesting` / `drainOwnerAndMainQueue`) と観測用の実装
 //   (`RecordingVideoFilter` / `RecordingVideoRenderer` / `SynchronousFilterGate`) は
 //   StreamFrameOwner 系テスト専用です。
@@ -54,6 +52,12 @@ func makeTestDataChannel(peerConnection: RTCPeerConnection, label: String) throw
     "RTCDataChannel を生成できること")
 }
 
+/// 送信ストリームとして使うテスト用の stream ID です。
+///
+/// `MediaChannel.senderStream` は `Configuration.publisherStreamId` と照合するため、
+/// 送信ストリームとして使うテストでは `Configuration.publisherStreamId` にも同じ値を設定します。
+let testSenderStreamId = "test-stream"
+
 /// 映像トラックと video source を持つ sender stream を構築します。
 ///
 /// `createNativeStream` が作る stream は video track を持たず、`BasicMediaStream` の
@@ -62,7 +66,7 @@ func makeTestDataChannel(peerConnection: RTCPeerConnection, label: String) throw
 func makeSenderStreamWithVideoTrack(mediaChannel: MediaChannel) -> MediaStream {
   let nativeFactory = mediaChannel.peerChannel.nativePeerChannelFactory
   let nativeStream = nativeFactory.createNativeSenderStream(
-    streamId: "test-stream",
+    streamId: testSenderStreamId,
     videoTrackId: "test-video-track",
     audioTrackId: nil,
     constraints: MediaConstraints())

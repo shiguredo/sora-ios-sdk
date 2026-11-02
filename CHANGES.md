@@ -41,6 +41,9 @@
   - flip は接続時に設定した `CameraSettings.resolution` を基準に切り替え先の解像度を選ぶ。接続時の実フォーマットが目標解像度と異なる場合、単発の flip でも選択結果が変わり得る
   - `change()` で解像度を変更した後に flip すると、接続時の解像度が使われる
   - @voluntas
+- [FIX] 画面キャプチャの停止に失敗して後始末待ちの状態で `startScreenCapture()` を呼んだときに、カメラ競合ではなく `stopScreenCapture()` による停止の再試行を案内するエラーを返すようにする
+  - 開始要求のエラーが `setVideoHardMute(true)` を案内していた
+  - @t-miya
 
 ## 2026.4.0
 

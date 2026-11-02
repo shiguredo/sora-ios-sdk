@@ -121,6 +121,22 @@ final class VideoSourceCoordinator: @unchecked Sendable {
     fileprivate let source: Source
   }
 
+  /// 画面キャプチャ開始の予約が失敗した理由です。
+  ///
+  /// 呼び出し元が失敗理由ごとに利用者へ案内するエラーを変えられるようにします。
+  /// カメラ側の `beginCamera` は失敗理由を区別しない既存の契約を維持します。
+  enum ScreenStartFailure: Error, Equatable, Sendable {
+    /// この接続がカメラ予約中もしくはカメラ動作中、または同じ送信ストリームで別の接続が
+    /// カメラを予約中もしくは動作中です。
+    case cameraInUse
+    /// 画面キャプチャの停止に失敗し、後始末待ちの状態です。
+    case screenCleanupPending
+    /// 画面キャプチャの開始中・実行中・停止中のいずれかです。
+    case screenOperationInProgress
+    /// 接続が切断済みで、新しい予約を受け付けられません。
+    case cancelled
+  }
+
   private enum State: Equatable, Sendable {
     case cameraStarting
     case camera
@@ -200,22 +216,37 @@ final class VideoSourceCoordinator: @unchecked Sendable {
       }
     }
 
-    func beginScreen(ownerID: UUID, stream: MediaStream) -> Reservation? {
+    func beginScreen(ownerID: UUID, stream: MediaStream) -> Result<
+      Reservation, ScreenStartFailure
+    > {
       withLock {
-        guard var entry = entries[ownerID], !entry.revoked, entry.state == nil else {
-          return nil
+        guard var entry = entries[ownerID], !entry.revoked else {
+          return .failure(.cancelled)
+        }
+        if let state = entry.state {
+          // State に新しい case を追加したときに失敗理由の検討を強制するため、state を直接網羅する。
+          switch state {
+          case .cameraStarting, .camera:
+            return .failure(.cameraInUse)
+          case .screenCleanupFailed:
+            // 停止に失敗した後始末待ちだけは、呼び出し元が停止の再試行を案内できるよう区別する。
+            return .failure(.screenCleanupPending)
+          case .screenStarting, .screen, .screenStopping:
+            return .failure(.screenOperationInProgress)
+          }
         }
         guard !hasCameraReservationLocked(for: stream) else {
-          return nil
+          return .failure(.cameraInUse)
         }
         entry.generation &+= 1
         entry.state = .screenStarting
         entry.stream = WeakStream(stream)
         entries[ownerID] = entry
-        return Reservation(
-          ownerID: ownerID,
-          generation: entry.generation,
-          source: .screen)
+        return .success(
+          Reservation(
+            ownerID: ownerID,
+            generation: entry.generation,
+            source: .screen))
       }
     }
 
@@ -433,7 +464,7 @@ final class VideoSourceCoordinator: @unchecked Sendable {
     Self.registry.beginCamera(ownerID: ownerID, stream: stream)
   }
 
-  func beginScreen(stream: MediaStream) -> Reservation? {
+  func beginScreen(stream: MediaStream) -> Result<Reservation, ScreenStartFailure> {
     Self.registry.beginScreen(ownerID: ownerID, stream: stream)
   }
 

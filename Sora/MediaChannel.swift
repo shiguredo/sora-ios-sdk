@@ -946,8 +946,11 @@ public final class MediaChannel {
     /// `connectionLifecycleLock` を保持して `setState(_:)` を通すため、接続状態の正本である
     /// storage だけが変わり、他の接続ライフサイクル (`currentConnectionTask` /
     /// `connectionTimerAuthorization` / `hasStartedConnection`) は変わりません。
-    /// テストは `getStats` / `getStatsSnapshot` 以外の接続ライフサイクル API を呼ばず、後始末で `.disconnected` に
-    /// 戻してから `MediaChannel` を解放します。Release には存在せず、本番からは呼びません。
+    /// テストは接続ライフサイクルを進める API (`connect` / `disconnect` など) を呼ばず、
+    /// 接続ライフサイクルを進めない API (`startScreenCapture` など) の検証に使い、後始末で
+    /// `.disconnected` に戻してから `MediaChannel` を解放します。`startScreenCapture` のように
+    /// 開始処理まで進み得る API は、テスト内で失敗する前提を作ってから呼びます。Release には
+    /// 存在せず、本番からは呼びません。
     func setConnectionStateForTesting(_ next: ConnectionState) {
       connectionLifecycleLock.lock()
       defer { connectionLifecycleLock.unlock() }
@@ -2699,11 +2702,24 @@ public final class MediaChannel {
     // controller を最初の await より前に保持し、並行する停止または切断が
     // 遅延中の開始を必ず取り消せるようにする。
     let screenCaptureController = getOrCreateScreenCaptureController()
-    guard let reservation = videoSourceCoordinator.beginScreen(stream: senderStream) else {
+    // カメラ競合として扱う失敗理由に共通する案内文
+    let cameraConflictReason =
+      "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+    let reservation: VideoSourceCoordinator.Reservation
+    switch videoSourceCoordinator.beginScreen(stream: senderStream) {
+    case .success(let startedReservation):
+      reservation = startedReservation
+    case .failure(.screenCleanupPending):
+      // 後始末待ちの状態は stopScreenCapture() の再試行だけが復旧経路であり、
+      // カメラ競合を案内すると利用者が誤った操作をするため区別して返す。
       throw SoraError.mediaChannelError(
         reason:
-          "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+          "screen capture cleanup failed, call stopScreenCapture before startScreenCapture"
       )
+    case .failure(.cameraInUse), .failure(.screenOperationInProgress), .failure(.cancelled):
+      // 後始末待ち以外の失敗理由 (カメラ競合・画面共有の操作中・切断済み) は、
+      // 後方互換のため従来のメッセージを維持する。
+      throw SoraError.mediaChannelError(reason: cameraConflictReason)
     }
 
     do {
@@ -2713,10 +2729,7 @@ public final class MediaChannel {
           on: senderStream,
           authorization: reservation))
       else {
-        throw SoraError.mediaChannelError(
-          reason:
-            "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
-        )
+        throw SoraError.mediaChannelError(reason: cameraConflictReason)
       }
 
       try await screenCaptureController.startCapture(

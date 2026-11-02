@@ -1,7 +1,7 @@
 # 画面キャプチャの後始末失敗時にカメラ競合のエラーが返る問題を修正する
 
 - Created: 2026-10-30
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-11-02
 - Branch: feature/fix-screen-cleanup-error-message
 - Polished: 2026-11-02
 
@@ -52,3 +52,36 @@
 - `0193`: `MediaChannel.startScreenCapture` の doc コメントを変更する
 
 ## 解決方法
+
+- `VideoSourceCoordinator.beginScreen` の戻り値を `Result<Reservation, ScreenStartFailure>` に変更し、失敗理由を `.cameraInUse` / `.screenCleanupPending` / `.screenOperationInProgress` / `.cancelled` に区別した
+  - `Registry.beginScreen` の状態判定を網羅的な `switch` に変更し、`State` に case が追加されたときに失敗理由の検討を強制する
+  - カメラ側の `beginCamera` は失敗理由を区別しない既存の契約を維持した
+- `MediaChannel.startScreenCapture` は `.screenCleanupPending` のときだけ `"screen capture cleanup failed, call stopScreenCapture before startScreenCapture"` を返し、それ以外の失敗理由は従来のカメラ競合メッセージを維持した
+- 後始末待ちからの復旧は `stopScreenCapture()` の再試行で成立するため、新しい停止 API は追加していない
+- `CHANGES.md` の `## develop` に `[FIX]` を追加した
+
+### テスト
+
+- `SoraTests/VideoHardMuteActorLeaseTests.swift` に次を追加した。モック・スタブは使用していない
+  - `beginScreen` の各失敗理由を検証するテスト（同じ接続のカメラ・別接続のカメラ予約・画面共有の開始中 / 実行中 / 停止中・後始末待ち・revoke 済み）
+  - `MediaChannel.startScreenCapture` が返すエラーメッセージの完全一致テスト
+  - 後始末待ちから停止を再試行して回復できることのテスト
+  - 公開 API の `MediaChannel.stopScreenCapture()` を呼んで復旧できることのテスト
+
+### 検証結果
+
+- `make build XCODE_SDK=iphoneos27.0`: 成功
+- `make fmt-lint`: 成功
+- `make lint`: 0 violations
+- シミュレータテスト（iPhone 17 Pro / iOS 26.5）: 563 件実行、40 件スキップ、失敗 0
+- 実機（iPad Air 第 5 世代 / iPadOS 26.7.2、実 Sora サーバ、サンプルアプリの一時的な確認コードで実施）:
+  - 画面キャプチャ実行中の再開始が、従来のカメラ競合メッセージになることを確認
+  - 停止失敗を Debug 限定の一時注入で再現した後、`startScreenCapture()` が `"screen capture cleanup failed, call stopScreenCapture before startScreenCapture"` を返すことを確認
+  - 案内どおり `stopScreenCapture()` を再試行すると後始末待ちが解消し、`startScreenCapture()` が成功することを確認
+  - 実カメラ動作中（`CameraVideoCapturer.current` が同じ sender stream）の `startScreenCapture()` が、従来のカメラ競合メッセージになることを確認
+- 実 ReplayKit の停止失敗は公開 API から意図的に再現できないため、状態遷移は Debug 限定の一時注入とユニットテストで確認した。注入は確認後に削除している。サンプルアプリの確認コードは一時的なもので、リポジトリには含めていない
+
+### 残った懸念
+
+- `.screenOperationInProgress` / `.cancelled` のときに従来のカメラ競合メッセージを返す点は、本 issue の範囲外として維持している。案内文の見直しは別 issue で扱う
+- 実 ReplayKit の停止失敗そのものは再現できないため、実機確認は一時注入による状態再現に留まる
