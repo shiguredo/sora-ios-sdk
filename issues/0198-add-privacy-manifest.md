@@ -3,7 +3,7 @@
 - Created: 2026-11-02
 - Completed: {YYYY-MM-DD}
 - Branch: feature/add-privacy-manifest
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-11-02
 - Priority: Medium
 
 ## 目的
@@ -14,7 +14,7 @@ Sora iOS SDK は SwiftPM のソースパッケージとして配布され、`Sor
 
 `Sora` ターゲットは Required Reason API の「システム起動時刻 API」を 2 種類利用している。
 
-- `Sora/DummyAudioDevice.swift` の `consumePlayoutData(generation:)` と録音データを渡す処理が、`AudioTimeStamp.mHostTime` に `mach_absolute_time()` を設定している
+- `Sora/DummyAudioDevice.swift` の `consumePlayoutData(generation:)` と `deliverPCMData(generation:)` が、`AudioTimeStamp.mHostTime` に `mach_absolute_time()` を設定している
 - `Sora/ScreenCapture.swift` の `shouldSendVideoFrameWithUptime()` と `markVideoFrameSent(presentationTimestamp:)` が `ProcessInfo.processInfo.systemUptime` でフレーム間隔を測っている
 
 Apple の Required Reason API の一覧では、`ProcessInfo.systemUptime` と `mach_absolute_time()` は `NSPrivacyAccessedAPICategorySystemBootTime` に分類されている。
