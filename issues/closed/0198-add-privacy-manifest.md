@@ -1,7 +1,7 @@
 # プライバシーマニフェストを同梱して Required Reason API の利用理由を申告する
 
 - Created: 2026-11-02
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-11-02
 - Branch: feature/add-privacy-manifest
 - Polished: 2026-11-02
 - Priority: Medium
@@ -53,38 +53,38 @@ Apple の Required Reason API の一覧では、`ProcessInfo.systemUptime` と `
 
 ## 解決方法
 
-- `Sora/PrivacyInfo.xcprivacy` を次の内容で追加する
+- `Sora/PrivacyInfo.xcprivacy` を追加し、`NSPrivacyAccessedAPICategorySystemBootTime` の理由コード `35F9.1` と `8FFB.1` を宣言した
+  - `35F9.1`: `ScreenCaptureController` の `shouldSendVideoFrameWithUptime()` と `markVideoFrameSent(presentationTimestamp:)` が `ProcessInfo.processInfo.systemUptime` でフレーム間隔を判定する用途
+  - `8FFB.1`: `DummyAudioDevice` の `consumePlayoutData(generation:)` と `deliverPCMData(generation:)` が `AudioTimeStamp.mHostTime` に `mach_absolute_time()` を設定し、音声コールバックに渡す絶対タイムスタンプを取得する用途
+  - `Sora/` 全体の grep で、他の Required Reason API カテゴリ (UserDefaults / ファイル時刻 / ディスク容量 / キーボード) の利用が無いことを確認した
+- 設計方針では `NSPrivacyTrackingDomains` の空配列も WebRTC のマニフェストと揃えて含める予定だったが、Apple の TN3181 の推奨 (トラッキングしない場合は `NSPrivacyTracking` を `false` にして `NSPrivacyTrackingDomains` を削除する) に従い、最終的に `NSPrivacyTrackingDomains` は含めていない。`NSPrivacyTracking` は `false`、`NSPrivacyCollectedDataTypes` は空配列のまま
+- `Package.swift` の `Sora` ターゲットの `resources` を `[.process("VideoView.xib"), .process("PrivacyInfo.xcprivacy")]` にした
+- `CHANGES.md` の `## develop` に `[ADD]` のエントリを追加した
+- 利用箇所の型 doc に、Required Reason API の理由コードとプライバシーマニフェストの対応、利用をやめるときに理由コードを見直す旨のコメントを追加した
+- prek の `check-xml` の対象に `.xcprivacy` を追加した
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>NSPrivacyAccessedAPITypes</key>
-	<array>
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>35F9.1</string>
-				<string>8FFB.1</string>
-			</array>
-		</dict>
-	</array>
-	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
-	<key>NSPrivacyTracking</key>
-	<false/>
-	<key>NSPrivacyTrackingDomains</key>
-	<array/>
-</dict>
-</plist>
-```
+### テスト
 
-- `Package.swift` の `Sora` ターゲットの `resources` を `[.process("VideoView.xib"), .process("PrivacyInfo.xcprivacy")]` にする
-- `make consumer-build SCHEME=ConsumerCore` を実行し、生成された `Sora_Sora.bundle` に `PrivacyInfo.xcprivacy` が含まれることを確認する
-- `CHANGES.md` の `## develop` に `[ADD]` のエントリを追加する
+- `SoraTests/PrivacyManifestTests.swift` を追加した。モック・スタブは使用していない
+  - `Bundle.module` から実物の resource bundle を読み、`PrivacyInfo.xcprivacy` が bundle 直下に同梱されていることを検証する
+  - plist として読めること、`NSPrivacyAccessedAPITypes` が 1 件だけでカテゴリが `NSPrivacyAccessedAPICategorySystemBootTime` であること、理由コードが `35F9.1` と `8FFB.1` の集合であることを検証する
+  - `NSPrivacyTracking` が `false` であることを検証する
+
+### 検証結果
+
+- `plutil -lint Sora/PrivacyInfo.xcprivacy`: 成功
+- `make consumer-build SCHEME=ConsumerCore XCODE_SDK=iphoneos27.0`: 成功。`Sora_Sora.bundle` 直下に `PrivacyInfo.xcprivacy` が含まれ、理由コードが `35F9.1` と `8FFB.1` であることを確認した (この環境には Xcode 26.6 が無いため Xcode 27.0 / iphoneos27.0 で実施。CI は Xcode 26.6 / iphoneos26.5 で実行される)
+- シミュレータテスト (iPhone 17 Pro / iOS 26.5): 564 件実行、40 件スキップ、失敗 0
+- `make fmt-lint`: 成功
+- `make lint`: 0 violations (この環境では SwiftPM の sandbox が使えないため `swift package --disable-sandbox plugin ... swiftlint --strict .` で代替実行)
+- `make api-check-fresh`: この環境の Xcode が 26.6 でないためローカルでは実行していない。公開 API の変更は無く、CI で検証される
+- コミット時の pre-commit フック (prek / swift-format / SwiftLint) はすべて成功した
+
+### 残った懸念
+
+- App Store Connect が resource bundle 内のマニフェストを認識するかは、実際に提出するまで最終確認できない
+- Xcode 26.6 / iphoneos26.5 での同梱は CI で初めて確認される
+- 理由コードと利用用途の対応は自動検証できない。利用を変えるときはマニフェスト、型 doc のコメント、CHANGES をあわせて更新する必要がある
 
 ## 参考
 
