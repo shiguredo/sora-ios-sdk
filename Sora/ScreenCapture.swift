@@ -155,6 +155,10 @@ final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
 ///   ReplayKit のキューから呼ばれます。sample buffer の処理はそのキュー上で行い、MainActor 上の処理
 ///   (`recorder.isRecording` の読み出し) は完了 callback の中の `Task { @MainActor in ... }` で行います。
 ///   controller の状態の読み書きはすべて `lock` の区間内で行います。
+///
+/// `ProcessInfo.processInfo.systemUptime` は Required Reason API (SystemBootTime) のため、
+/// 同梱のプライバシーマニフェストで理由コード `35F9.1` を申告しています。
+/// 利用をやめるときは理由コードも見直してください。
 final class ScreenCaptureController: @unchecked Sendable {
   // キャプチャー状況の列挙型
   private enum CaptureState {
