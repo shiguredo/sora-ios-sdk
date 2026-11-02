@@ -1223,7 +1223,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func initializeCameraVideoCapture(stream: MediaStream) {
+    // enqueue の closure は @Sendable のため、非 Sendable な PeerChannel (self) の
+    // snapshot を closure 内で参照しない。必要な値は closure の外で取り出す。
     let position = snapshot.cameraSettings.position
+    let resolution = snapshot.cameraSettings.resolution
 
     // position に対応した CameraVideoCapturer を取得する
     let capturer: CameraVideoCapturer
@@ -1255,8 +1258,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // デバイスに対応したフォーマットとフレームレートを取得する
     guard
       let format = CameraVideoCapturer.format(
-        width: snapshot.cameraSettings.resolution.width,
-        height: snapshot.cameraSettings.resolution.height,
+        width: resolution.width,
+        height: resolution.height,
         for: capturer.device,
         frameRate: snapshot.cameraSettings.frameRate)
     else {
@@ -1358,7 +1361,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       if let error = await capturer.startForSDK(
         format: formatBox.format,
         frameRate: frameRate,
-        senderStream: senderStream)
+        senderStream: senderStream,
+        targetResolution: resolution)
       {
         if capturer.isRunning {
           _ = videoSourceCoordinator.completeCamera(reservation, active: true)
