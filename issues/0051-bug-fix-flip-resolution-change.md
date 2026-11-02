@@ -1,8 +1,8 @@
-# flip を 2 回した時に解像度が変わってしまう問題を修正する
+# flip を 2 回した時に接続時の解像度に戻らない問題を修正する
 
 - Priority: Low
 - Created: 2026-06-06
-- Completed:
+- Completed: 2026-11-02
 - Model: Sonnet 4.6
 - Branch: feature/fix-flip-resolution-change
 - Polished: 2026-10-30
@@ -54,27 +54,25 @@ guard
 
 `PeerChannel` は `CameraVideoCapturer` と同一モジュール内のため `internal` で十分。
 
-`PeerChannel.initializeCameraVideoCapture(stream:)` では、`cameraCaptureCoordinator.enqueue` を呼ぶ前に `let targetResolution = snapshot.cameraSettings.resolution` として値を取り出し、`enqueue` する closure 内で `capturer.startForSDK(format:frameRate:senderStream:)` を呼ぶ直前に `capturer.targetResolution = targetResolution` を設定する。このメソッドの start 呼び出しは 1 箇所であり、送信先 stream は `senderStream:` 引数で渡って `startForSDK` 内で start より前に設定されるため、旧来の `capturer.stream = stream` の直前に合わせる必要はない。
+`PeerChannel.initializeCameraVideoCapture(stream:)` では、`cameraCaptureCoordinator.enqueue` を呼ぶ前に `let resolution = snapshot.cameraSettings.resolution` として値を取り出し、`enqueue` する closure 内で `capturer.startForSDK(format:frameRate:senderStream:targetResolution:)` に `resolution` を渡す。`targetResolution` は start 成功時にだけ記録され、start が失敗した場合は変更されない。このメソッドの start 呼び出しは 1 箇所であり、送信先 stream は `senderStream:` 引数で渡って `startForSDK` 内で start より前に設定されるため、旧来の `capturer.stream = stream` の直前に合わせる必要はない。
 
-カメラを開始する経路は `PeerChannel.initializeCameraVideoCapture(stream:)` のほかに、`VideoHardMuteActor.startCameraVideoCapture(cameraSettings:senderStream:lease:cameraStartAuthorization:)`（ハードミュート解除時に保存済みの capturer が無い場合）と、公開 `CameraVideoCapturer.start(format:frameRate:completionHandler:)` がある。`VideoHardMuteActor.startCameraVideoCapture` では `capturer.startForSDK(format:frameRate:senderStream:)` を呼ぶ直前に `capturer.targetResolution = cameraSettings.resolution` を設定する。`CameraSettingsSnapshot` は `resolution` を保持しているため、設定値の受け渡し経路は既存のものをそのまま使える。公開 `start` は呼び出し側が `AVCaptureDevice.Format` を明示するため、`CameraVideoCapturer.current` が `nil` であることを確認した後、`startForSDK` を呼ぶ前に `capturer.targetResolution` を `nil` に戻す。これにより接続経路以外で起動した capturer は `nil` フォールバック（現在フォーマットの実寸）を使う。
+カメラを開始する経路は `PeerChannel.initializeCameraVideoCapture(stream:)` のほかに、`VideoHardMuteActor.startCameraVideoCapture(cameraSettings:senderStream:lease:cameraStartAuthorization:)`（ハードミュート解除時に保存済みの capturer が無い場合）と、公開 `CameraVideoCapturer.start(format:frameRate:completionHandler:)` がある。`VideoHardMuteActor.startCameraVideoCapture` では `capturer.startForSDK(format:frameRate:senderStream:targetResolution:)` に `cameraSettings.resolution` を渡す。`CameraSettingsSnapshot` は `resolution` を保持しているため、設定値の受け渡し経路は既存のものをそのまま使える。公開 `start` は呼び出し側が `AVCaptureDevice.Format` を明示するため、`startForSDK` に `nil` を渡す。start 成功時に `targetResolution` が `nil` になり、接続経路以外で起動した capturer は `nil` フォールバック（現在フォーマットの実寸）を使う。
 
 `flipUncoordinated(_:completionHandler:)` 内の `dimension` の算出を以下のように修正する。この場所では `guard let format = capturer.format` で取得した変数 `format` と、`guard let capturerFrameRate = capturer.frameRate` で取得した変数 `capturerFrameRate` が利用できる:
 
 ```swift
 // 修正後: targetResolution があればその目標解像度を使う。なければ実寸にフォールバック
-let dimension: CMVideoDimensions
-if let target = capturer.targetResolution {
-    dimension = CMVideoDimensions(width: target.width, height: target.height)
-} else {
-    dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-}
+let targetResolution = capturer.targetResolution
+let dimension = CameraVideoCapturer.flipTargetDimensions(
+    targetResolution: targetResolution,
+    currentDimensions: CMVideoFormatDescriptionGetDimensions(format.formatDescription))
 ```
 
-`flip` の start 成功時 (`finish` closure の成功分岐で `owner.setFormat(format, id: flip.id)` を呼ぶ箇所) に `flip.targetResolution = capturer.targetResolution` を追加して目標解像度を引き継ぐ。
+`flip` の start 成功時 (`finish` closure の成功分岐で `owner.setFormat(format, id: flip.id)` を呼ぶ箇所) に `flip.targetResolution = targetResolution` を追加して目標解像度を引き継ぐ。
 
 `change(format:frameRate:completionHandler:)` は `AVCaptureDevice.Format?` / `Int?` を引数に取り、未指定時は現在の format / frameRate を引き継ぐ。`targetResolution` は変化させない方針とする。そのため `change()` 後に `flip()` を呼ぶと接続時の目標解像度が使われ、`change()` で指定した解像度とは異なる解像度が選ばれる場合がある。この動作は本 issue では許容する。
 
-open の `0142` は送信するカメラ映像の出力サイズと contain / cover を扱い、接続側の設定を capturer に保持させる設計を予定している。本 issue の `targetResolution` の保持先と交差するため、`0142` の実装時には保持先を揃える。
+open の `0142` は送信するカメラ映像の出力サイズと contain / cover を扱い、接続側の設定を capturer に保持させる設計を予定している。本 issue の `targetResolution` の保持先と交差するため、`0142` の実装時には保持先と更新・リセット規則を揃える。
 
 ## テスト方針
 
@@ -85,22 +83,66 @@ open の `0142` は送信するカメラ映像の出力サイズと contain / co
 - `initialCameraEnabled = false` で接続し、`setVideoHardMute(false)` でバックカメラを 1080p 設定で起動した後、`flip()` を 2 回実行し、バックカメラが再び 1080p で動作することを確認する。フロントカメラが 1080p をサポートしない実機を使う。
 - `targetResolution` が `nil` の場合、従来通り現在のフォーマットの実寸を基準に選択されることを確認する。`nil` になる経路は、公開 `CameraVideoCapturer.start(format:frameRate:)` で起動した場合など接続経路以外に限られる。
 - `change(format:frameRate:completionHandler:)` 実行後にも `targetResolution` が変化しないことを確認する。`change()` 後に `flip()` を呼ぶと接続時の目標解像度が使われるため、`change()` で指定した解像度とは異なる解像度が選ばれる場合がある（修正前の挙動とは異なる）。
-- `CameraStateOwnerTests` に、owner の `targetResolution` の設定・取得（既定値 `nil`）と capturer 解放時の破棄を、実カメラ不要で検証するテストを追加する。`flip()` の解像度選択と公開 `start` による `nil` への戻しは実カメラが必要なため実機で確認する。
+- `CameraStateOwnerTests` に、owner の `targetResolution` の設定・取得（既定値 `nil`）と capturer 解放時の破棄を、実カメラ不要で検証するテストを追加する。
+- `flip()` の解像度決定（`targetResolution` がある場合とない場合）を純粋関数として検証するテストを追加する。`flip()` 全体と公開 `start` による `nil` への戻しは実カメラが必要なため実機で確認する。
+- start が失敗した場合に `targetResolution` が変化しないこと。実カメラで start を失敗させる必要があるため単体テストでは検証せず、コードレビューで確認する。
 
 ## 完了条件
 
 - フロントカメラが 1080p（1920x1080）をサポートしない実機で、バックカメラを 1080p に設定して接続した後、`flip()` を 2 回（バック → フロント → バック）実行すると、バックカメラが再び 1080p で動作すること
 - `flip()` を 1 回（バック → フロント）実行した場合、フロントカメラが `targetResolution` に最も近い解像度を選択すること。初期カメラが `targetResolution` の解像度で動作している場合は修正前と同じ結果になること
 - `targetResolution` が `nil` の場合（公開 `CameraVideoCapturer.start(format:frameRate:)` で起動した場合など）は従来通り現在のフォーマットの実寸を基準に選択されること
-- `PeerChannel.initializeCameraVideoCapture(stream:)` の `startForSDK(format:frameRate:senderStream:)` 呼び出し前に `capturer.targetResolution` を設定していること
-- `initialCameraEnabled = false` で接続し、`setVideoHardMute(false)` でバックカメラを 1080p 設定で起動した場合でも、`flip()` を 2 回実行するとバックカメラが再び 1080p で動作すること（フロントカメラが 1080p をサポートしない実機を使う）。`VideoHardMuteActor.startCameraVideoCapture` の `startForSDK` 呼び出し前に `capturer.targetResolution` を設定していること
-- 公開 `CameraVideoCapturer.start(format:frameRate:)` で起動した capturer では `targetResolution` が `nil` に戻り、`flip()` が現在のフォーマットの実寸を基準に選択すること
+- `PeerChannel.initializeCameraVideoCapture(stream:)` が `startForSDK` に接続設定の解像度を渡し、start 成功時に `capturer.targetResolution` が記録されること（失敗時は変更しない）
+- `initialCameraEnabled = false` で接続し、`setVideoHardMute(false)` でバックカメラを 1080p 設定で起動した場合でも、`flip()` を 2 回実行するとバックカメラが再び 1080p で動作すること（フロントカメラが 1080p をサポートしない実機を使う）。`VideoHardMuteActor.startCameraVideoCapture` が `startForSDK` に `cameraSettings.resolution` を渡していること（失敗時は変更しない）
+- 公開 `CameraVideoCapturer.start(format:frameRate:)` が `startForSDK` に `nil` を渡し、start 成功時に `targetResolution` が `nil` になること。`flip()` が現在のフォーマットの実寸を基準に選択すること
+- start が失敗した場合、`targetResolution` が開始前の値から変化しないこと
 - `change()` を呼んでも `targetResolution` は変化しないこと（`change()` 後に `flip()` を呼ぶと接続時の目標解像度が使われるため、`change()` で指定した解像度とは異なる解像度が選ばれる場合がある）
 - `CameraStateOwner.release(id:)` で capturer を解放した後、その capturer の `targetResolution` が破棄されていること
 - 追加したテストと既存テストがすべて成功すること
 - `CHANGES.md` の `## develop` セクションにある既存の `[FIX]` エントリの最後に以下を追記すること
 
 ```
-- [FIX] flip を 2 回した時に元の解像度に戻らないバグを修正する
+- [FIX] flip を 2 回した時に接続時の解像度に戻らない問題を修正する
+  - 接続時の解像度を切り替え先のカメラがサポートしない場合に発生する
+  - flip は接続時に設定した `CameraSettings.resolution` を基準に切り替え先の解像度を選ぶ。接続時の実フォーマットが目標解像度と異なる場合、単発の flip でも選択結果が変わり得る
+  - `change()` で解像度を変更した後に flip すると、接続時の解像度が使われる
   - @voluntas
 ```
+
+## 解決方法
+
+### 修正内容
+
+- `CameraStateOwner` の `CameraResourceTable` に `targetResolutions` を追加し、
+  `setTargetResolution(_:id:)` / `targetResolution(id:)` で capturer ID ごとに目標解像度を
+  保持するようにした。capturer の解放時は `remove(id:)` で破棄する。
+- `CameraVideoCapturer.startForSDK(format:frameRate:senderStream:targetResolution:completionBeforeEvent:)`
+  と `startUncoordinated(format:frameRate:targetResolution:completionHandler:)` に目標解像度を
+  渡し、native start が成功した場合だけ format / frameRate と同時に記録するようにした。
+  start 失敗時は開始前の値を変更しない。
+- `PeerChannel.initializeCameraVideoCapture(stream:)` と
+  `VideoHardMuteActor.startCameraVideoCapture(cameraSettings:senderStream:lease:cameraStartAuthorization:)`
+  は、開始前に `capturer.targetResolution` を直接設定するのをやめ、`startForSDK` に接続設定の
+  `CameraSettings.resolution` を渡すようにした。公開
+  `CameraVideoCapturer.start(format:frameRate:completionHandler:)` は `nil` を渡し、
+  成功時に目標解像度をクリアする。
+- `flipUncoordinated` は、目標解像度がある場合はその解像度を基準に切り替え先フォーマットを
+  選び、start 成功時に切り替え先へ目標解像度を引き継ぐようにした。寸法の決定は
+  `CameraVideoCapturer.flipTargetDimensions(targetResolution:currentDimensions:)` に切り出した。
+- `stop` / `restart` / `change` は目標解像度を変更しない。`change()` 後に `flip()` すると
+  接続時の解像度が使われる。
+- 公開ドキュメント、`CHANGES.md`、テストを上記に合わせて更新した。
+
+### 確認
+
+- 実機 (iPad): 背面の最大 4032x3024、前面の最大 2016x1512。`.uhd3024p` / 背面 / 30 fps で
+  接続し、`flip()` 2 回で 4032x3024 -> 2016x1512 -> 4032x3024 に戻ることを確認した。
+- ハードミュート経路でも問題なく動作することを確認した。
+- `SoraTests`: 557 tests / 40 skipped / 0 failures。`make fmt-lint` と SwiftLint は 0 件。
+- iPad 実機向けビルドと arm64 Simulator ビルドが成功した。
+
+### 完了条件との差異
+
+- 完了条件の「フロントカメラが 1080p をサポートしない実機」は、確認端末が前面 1080p 対応
+  (最大 2016x1512) のため満たしていない。代わりに、前面の最大解像度を超える 3024p を
+  目標とする等価条件で修正を確認した。1080p 条件そのものは未確認である。
