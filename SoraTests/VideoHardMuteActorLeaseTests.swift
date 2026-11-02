@@ -1,3 +1,5 @@
+// このファイルは `#if DEBUG` のテスト用アクセサに依存するため、Debug 構成でのみビルドできます。
+
 import XCTest
 
 @testable import Sora
@@ -43,7 +45,7 @@ private actor CameraCaptureTestGate {
   }
 }
 
-/// VideoHardMuteActor の lease / revocation 管理に関するユニットテスト
+/// VideoHardMuteActor の lease / revocation 管理と映像送信元の予約に関するユニットテスト
 ///
 /// VideoHardMuteActor.setMute は実カメラ操作を含むため、カメラが利用できない
 /// Simulator では mute / unmute の全体 (store / restart / stream 照合) を検証できない。
@@ -53,27 +55,20 @@ private actor CameraCaptureTestGate {
 /// 変更されないことも検証する。
 /// カメラが必要な検証 (別接続の capturer 混線や復元処理など) は実機で確認する。
 ///
+/// 併せて、`VideoSourceCoordinator` の映像送信元の予約 (カメラと画面共有の排他) と
+/// 失敗理由、`MediaChannel.startScreenCapture` が返すエラーを検証する。
+///
 /// actor は await 中に再入できるため、lease 自身の破棄状態による再確認と、
 /// release が進行中操作の cleanup 完了を待つ barrier が必要になる。
 /// 本テストではカメラに依存しない tracker を含めて、その順序を検証する
 /// (setMute 全体の挙動は実機で確認する)。
 final class VideoHardMuteActorLeaseTests: XCTestCase {
-  // テストで共通利用するシグナリング URL を返す
-  private func makeTestURL() -> URL {
-    guard let url = URL(string: "wss://example.com") else {
-      fatalError("テスト URL の生成に失敗しました")
-    }
-    return url
-  }
-
-  // テスト用の Configuration を構築する
-  private func makeConfiguration() -> Configuration {
-    let url = makeTestURL()
-    return Configuration(
-      urlCandidates: [url],
-      channelId: "test",
-      role: .sendonly)
-  }
+  /// カメラ競合のほか、画面共有の操作中・予約 revoke 済みでも返る後方互換メッセージです。
+  private let cameraConflictMessage =
+    "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+  /// 画面キャプチャの後始末に失敗したときに返るエラーメッセージです。
+  private let screenCleanupFailedMessage =
+    "screen capture cleanup failed, call stopScreenCapture before startScreenCapture"
 
   // テスト用の MediaChannel / lease / SenderStreamBox / CameraSettingsSnapshot を構築する
   //
@@ -87,7 +82,7 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     mediaStream: BasicMediaStream,
     cameraSettings: CameraSettingsSnapshot
   ) {
-    let mediaChannel = try MediaChannel(configuration: makeConfiguration())
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
     let peerChannel = mediaChannel.peerChannel
     let nativeStream =
       if let videoTrackId {
@@ -108,7 +103,22 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     )
   }
 
-  // setMute が返した SoraError.mediaChannelError の reason を検証する
+  // SoraError.mediaChannelError の reason を取り出す
+  private func mediaChannelErrorReason(
+    _ error: Error,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) -> String? {
+    guard let soraError = error as? SoraError,
+      case .mediaChannelError(let reason) = soraError
+    else {
+      XCTFail("mediaChannelError が返ること: \(error)", file: file, line: line)
+      return nil
+    }
+    return reason
+  }
+
+  // SoraError.mediaChannelError の reason を検証する
   //
   // reason の文言は SoraError の構造化が導入されるまで唯一の判別材料であり、
   // 実装側のメッセージ定義を変更するときはこのテストも合わせて更新する必要がある。
@@ -118,16 +128,57 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     file: StaticString = #filePath,
     line: UInt = #line
   ) {
-    guard let soraError = error as? SoraError,
-      case .mediaChannelError(let reason) = soraError
-    else {
-      XCTFail("mediaChannelError が返ること: \(error)", file: file, line: line)
+    guard let reason = mediaChannelErrorReason(error, file: file, line: line) else {
       return
     }
     XCTAssertTrue(
       reason.contains(expected),
       "reason に \(expected) が含まれること: \(reason)",
-      file: file, line: line)
+      file: file,
+      line: line)
+  }
+
+  /// 画面共有の開始予約の失敗を検証するため、接続状態と送信ストリームを持つ MediaChannel を構築する
+  ///
+  /// 実接続は行わず、`#if DEBUG` の `setConnectionStateForTesting(_:)` で接続状態だけを作る。
+  /// 呼び出し側は後始末で `.disconnected` に戻してから MediaChannel を解放する。
+  private func makeConnectedMediaChannel(
+    videoSourceCoordinator: VideoSourceCoordinator
+  ) throws -> MediaChannel {
+    var configuration = makeTestConfiguration()
+    configuration.publisherStreamId = testSenderStreamId
+    let mediaChannel = try MediaChannel(
+      configuration: configuration,
+      videoSourceCoordinator: videoSourceCoordinator)
+    mediaChannel.peerChannel.add(
+      stream: makeSenderStreamWithVideoTrack(mediaChannel: mediaChannel))
+    mediaChannel.setConnectionStateForTesting(.connected)
+    return mediaChannel
+  }
+
+  /// `MediaChannel.startScreenCapture` が `expected` と完全一致するメッセージで失敗することを検証する
+  ///
+  /// 案内文は利用者との契約であるため、部分一致ではなく完全一致で固定する。
+  private func assertStartScreenCaptureFailure(
+    _ mediaChannel: MediaChannel,
+    equals expected: String,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) async {
+    do {
+      try await mediaChannel.startScreenCapture()
+      XCTFail("画面共有を開始できないこと", file: file, line: line)
+    } catch {
+      guard let reason = mediaChannelErrorReason(error, file: file, line: line) else {
+        return
+      }
+      XCTAssertEqual(
+        reason,
+        expected,
+        "reason が一致すること: \(reason)",
+        file: file,
+        line: line)
+    }
   }
 
   /// release は冪等であり、複数回呼んでも安全であることを確認する
@@ -449,8 +500,10 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     let coordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
     let sourceCoordinator = VideoSourceCoordinator()
     let stream = dependencies.senderStreamBox.stream
-    let reservation = try XCTUnwrap(
-      sourceCoordinator.beginScreen(stream: stream), "画面共有を予約できること")
+    guard case .success(let reservation) = sourceCoordinator.beginScreen(stream: stream) else {
+      XCTFail("画面共有を予約できること")
+      return
+    }
     XCTAssertTrue(sourceCoordinator.completeScreenStart(reservation))
     // 画面共有の予約はプロセス全体の registry が保持するため、テスト内で解放する
     defer {
@@ -497,14 +550,16 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     XCTAssertNil(
       coordinator.beginCamera(stream: dependencies.senderStreamBox.stream),
       "開始処理中のカメラを重複予約できないこと")
-    XCTAssertNil(
+    XCTAssertEqual(
       coordinator.beginScreen(stream: dependencies.senderStreamBox.stream),
+      .failure(.cameraInUse),
       "カメラ予約中は画面共有を予約できないこと")
     XCTAssertTrue(coordinator.completeCamera(cameraReservation, active: true))
 
     coordinator.releaseCamera()
     guard
-      let screenReservation = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+      case .success(let screenReservation) = coordinator.beginScreen(
+        stream: dependencies.senderStreamBox.stream)
     else {
       XCTFail("カメラ予約の解放後は画面共有を予約できること")
       return
@@ -539,8 +594,9 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     XCTAssertNil(
       coordinator.beginCamera(stream: dependencies.senderStreamBox.stream),
       "解放後も切断済み coordinator を再利用できないこと")
-    XCTAssertNil(
+    XCTAssertEqual(
       coordinator.beginScreen(stream: dependencies.senderStreamBox.stream),
+      .failure(.cancelled),
       "切断後は画面共有も予約できないこと")
   }
 
@@ -548,7 +604,9 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   func testVideoSourceCoordinatorCancelsDelayedScreenStart() throws {
     let dependencies = try makeDependencies()
     let coordinator = VideoSourceCoordinator()
-    guard let reservation = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    guard
+      case .success(let reservation) = coordinator.beginScreen(
+        stream: dependencies.senderStreamBox.stream)
     else {
       XCTFail("画面共有予約を取得できること")
       return
@@ -595,9 +653,12 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
 
     XCTAssertFalse(firstCoordinator.isValid(firstReservation))
     XCTAssertTrue(secondCoordinator.isValid(secondReservation))
-    XCTAssertNotNil(
-      firstCoordinator.beginScreen(stream: first.senderStreamBox.stream),
-      "物理カメラを失った接続は画面共有へ切り替えられること")
+    guard
+      case .success = firstCoordinator.beginScreen(stream: first.senderStreamBox.stream)
+    else {
+      XCTFail("物理カメラを失った接続は画面共有へ切り替えられること")
+      return
+    }
   }
 
   /// 先行カメラ停止の完了が、その後に予約されたカメラ開始世代を破棄しないことを確認する
@@ -655,7 +716,9 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   func testVideoSourceCoordinatorPublishesScreenReservationByStream() throws {
     let dependencies = try makeDependencies()
     let coordinator = VideoSourceCoordinator()
-    guard let reservation = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    guard
+      case .success(let reservation) = coordinator.beginScreen(
+        stream: dependencies.senderStreamBox.stream)
     else {
       XCTFail("画面共有予約を取得できること")
       return
@@ -677,7 +740,9 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   func testVideoSourceCoordinatorIgnoresStaleDuplicateStopCompletion() throws {
     let dependencies = try makeDependencies()
     let coordinator = VideoSourceCoordinator()
-    guard let firstStart = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    guard
+      case .success(let firstStart) = coordinator.beginScreen(
+        stream: dependencies.senderStreamBox.stream)
     else {
       XCTFail("最初の画面共有予約を取得できること")
       return
@@ -692,7 +757,9 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     XCTAssertEqual(firstStop, duplicateStop)
 
     coordinator.finishScreenStop(firstStop, stopped: true)
-    guard let secondStart = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    guard
+      case .success(let secondStart) = coordinator.beginScreen(
+        stream: dependencies.senderStreamBox.stream)
     else {
       XCTFail("停止後に次の画面共有予約を取得できること")
       return
@@ -708,14 +775,18 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   func testVideoSourceCoordinatorRejectsCleanupFromStaleStart() throws {
     let dependencies = try makeDependencies()
     let coordinator = VideoSourceCoordinator()
-    guard let firstStart = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream),
+    guard
+      case .success(let firstStart) = coordinator.beginScreen(
+        stream: dependencies.senderStreamBox.stream),
       let firstStop = coordinator.beginScreenStop()
     else {
       XCTFail("最初の開始と停止を予約できること")
       return
     }
     coordinator.finishScreenStop(firstStop, stopped: true)
-    guard let secondStart = coordinator.beginScreen(stream: dependencies.senderStreamBox.stream)
+    guard
+      case .success(let secondStart) = coordinator.beginScreen(
+        stream: dependencies.senderStreamBox.stream)
     else {
       XCTFail("次の画面共有予約を取得できること")
       return
@@ -727,13 +798,211 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     XCTAssertTrue(coordinator.isValid(secondStart))
   }
 
+  /// 画面共有の開始予約が失敗理由を区別して返すことを確認する
+  ///
+  /// 同じ接続のカメラ・別接続のカメラ予約・画面共有の開始中 / 実行中 / 停止中・後始末待ちを
+  /// 順に作り、`beginScreen` がそれぞれの理由を返すことと、後始末待ちから停止の再試行で
+  /// 回復できることを検証する。`.cancelled` は
+  /// `testVideoSourceCoordinatorRejectsReservationAfterRevoke` で検証する。
+  func testVideoSourceCoordinatorReportsScreenStartFailureReasons() throws {
+    let dependencies = try makeDependencies()
+    let stream = dependencies.senderStreamBox.stream
+    let cameraCoordinator = VideoSourceCoordinator()
+    let screenCoordinator = VideoSourceCoordinator()
+
+    guard let cameraReservation = cameraCoordinator.beginCamera(stream: stream) else {
+      XCTFail("カメラ予約を取得できること")
+      return
+    }
+    XCTAssertEqual(
+      cameraCoordinator.beginScreen(stream: stream),
+      .failure(.cameraInUse),
+      "同じ接続のカメラ予約中は cameraInUse を返すこと")
+    XCTAssertEqual(
+      screenCoordinator.beginScreen(stream: stream),
+      .failure(.cameraInUse),
+      "別の接続のカメラ予約中は cameraInUse を返すこと")
+
+    XCTAssertTrue(cameraCoordinator.completeCamera(cameraReservation, active: true))
+    XCTAssertEqual(
+      cameraCoordinator.beginScreen(stream: stream),
+      .failure(.cameraInUse),
+      "動作中のカメラがある場合も cameraInUse を返すこと")
+    cameraCoordinator.releaseCamera()
+
+    guard case .success(let started) = screenCoordinator.beginScreen(stream: stream) else {
+      XCTFail("画面共有予約を取得できること")
+      return
+    }
+    XCTAssertEqual(
+      screenCoordinator.beginScreen(stream: stream),
+      .failure(.screenOperationInProgress),
+      "画面共有の開始中は screenOperationInProgress を返すこと")
+
+    XCTAssertTrue(screenCoordinator.completeScreenStart(started))
+    XCTAssertEqual(
+      screenCoordinator.beginScreen(stream: stream),
+      .failure(.screenOperationInProgress),
+      "画面共有の実行中は screenOperationInProgress を返すこと")
+
+    guard let stopReservation = screenCoordinator.beginScreenStop() else {
+      XCTFail("画面共有の停止を予約できること")
+      return
+    }
+    XCTAssertEqual(
+      screenCoordinator.beginScreen(stream: stream),
+      .failure(.screenOperationInProgress),
+      "画面共有の停止中は screenOperationInProgress を返すこと")
+
+    screenCoordinator.finishScreenStop(stopReservation, stopped: false)
+    XCTAssertEqual(
+      screenCoordinator.beginScreen(stream: stream),
+      .failure(.screenCleanupPending),
+      "停止に失敗した後始末待ちの状態では screenCleanupPending を返すこと")
+
+    guard let retryReservation = screenCoordinator.beginScreenStop() else {
+      XCTFail("後始末待ちから停止を再試行できること")
+      return
+    }
+    screenCoordinator.finishScreenStop(retryReservation, stopped: true)
+    guard case .success = screenCoordinator.beginScreen(stream: stream) else {
+      XCTFail("停止に成功した後は画面共有を予約できること")
+      return
+    }
+  }
+
+  /// 後始末待ちの状態で画面共有を開始すると、停止の再試行を案内するエラーになることを確認する
+  ///
+  /// `VideoSourceCoordinator` の後始末待ち状態だけを人工的に作り、`ScreenCaptureController` は
+  /// `.stopped` のまま、ReplayKit 側の後始末失敗は再現しない。
+  func testMediaChannelStartScreenCaptureReportsScreenCleanupPendingError() async throws {
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    let mediaChannel = try makeConnectedMediaChannel(
+      videoSourceCoordinator: videoSourceCoordinator)
+    defer { mediaChannel.setConnectionStateForTesting(.disconnected) }
+
+    let senderStream = try XCTUnwrap(mediaChannel.senderStream, "送信ストリームを取得できること")
+    guard
+      case .success(let reservation) = videoSourceCoordinator.beginScreen(
+        stream: senderStream)
+    else {
+      XCTFail("画面共有予約を取得できること")
+      return
+    }
+    XCTAssertTrue(videoSourceCoordinator.completeScreenStart(reservation))
+    guard let stopReservation = videoSourceCoordinator.beginScreenStop() else {
+      XCTFail("画面共有の停止を予約できること")
+      return
+    }
+    // 停止に失敗した後始末待ちの状態にする。
+    videoSourceCoordinator.finishScreenStop(stopReservation, stopped: false)
+
+    await assertStartScreenCaptureFailure(
+      mediaChannel, equals: screenCleanupFailedMessage)
+  }
+
+  /// 案内された stopScreenCapture() の再試行で後始末待ちが解消することを確認する
+  ///
+  /// `ScreenCaptureController` は未起動のため、録画が残ったままの停止失敗そのものは再現しない。
+  func testMediaChannelStopScreenCaptureRecoversFromScreenCleanupFailure() async throws {
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    let mediaChannel = try makeConnectedMediaChannel(
+      videoSourceCoordinator: videoSourceCoordinator)
+    defer { mediaChannel.setConnectionStateForTesting(.disconnected) }
+
+    let senderStream = try XCTUnwrap(mediaChannel.senderStream, "送信ストリームを取得できること")
+    guard
+      case .success(let reservation) = videoSourceCoordinator.beginScreen(
+        stream: senderStream)
+    else {
+      XCTFail("画面共有予約を取得できること")
+      return
+    }
+    XCTAssertTrue(videoSourceCoordinator.completeScreenStart(reservation))
+    guard let stopReservation = videoSourceCoordinator.beginScreenStop() else {
+      XCTFail("画面共有の停止を予約できること")
+      return
+    }
+    videoSourceCoordinator.finishScreenStop(stopReservation, stopped: false)
+    await assertStartScreenCaptureFailure(
+      mediaChannel, equals: screenCleanupFailedMessage)
+
+    // 案内どおりに停止を再試行すると、後始末待ちが解消する。
+    await mediaChannel.stopScreenCapture()
+    guard case .success = videoSourceCoordinator.beginScreen(stream: senderStream) else {
+      XCTFail("停止の再試行で画面共有を予約できること")
+      return
+    }
+    guard let recoveredReservation = videoSourceCoordinator.beginScreenStop() else {
+      XCTFail("回復後の予約を解放できること")
+      return
+    }
+    videoSourceCoordinator.finishScreenStop(recoveredReservation, stopped: true)
+  }
+
+  /// 同じ送信ストリームでカメラが動作中の場合は、従来どおりカメラ競合のエラーになることを確認する
+  ///
+  /// `VideoSourceCoordinator` のカメラ状態を人工的に作る経路のみを検証する。実カメラの
+  /// `isCameraVideoCaptureRunning` 判定は実機確認とする。
+  func testMediaChannelStartScreenCaptureKeepsCameraConflictErrorForCameraInUse() async throws {
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    let mediaChannel = try makeConnectedMediaChannel(
+      videoSourceCoordinator: videoSourceCoordinator)
+    defer { mediaChannel.setConnectionStateForTesting(.disconnected) }
+
+    let senderStream = try XCTUnwrap(mediaChannel.senderStream, "送信ストリームを取得できること")
+    guard let cameraReservation = videoSourceCoordinator.beginCamera(stream: senderStream) else {
+      XCTFail("カメラ予約を取得できること")
+      return
+    }
+    XCTAssertTrue(videoSourceCoordinator.completeCamera(cameraReservation, active: true))
+
+    await assertStartScreenCaptureFailure(mediaChannel, equals: cameraConflictMessage)
+  }
+
+  /// 画面共有の実行中に開始すると、従来どおりカメラ競合のエラーになることを確認する
+  func testMediaChannelStartScreenCaptureKeepsCameraConflictErrorForScreenOperationInProgress()
+    async throws
+  {
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    let mediaChannel = try makeConnectedMediaChannel(
+      videoSourceCoordinator: videoSourceCoordinator)
+    defer { mediaChannel.setConnectionStateForTesting(.disconnected) }
+
+    let senderStream = try XCTUnwrap(mediaChannel.senderStream, "送信ストリームを取得できること")
+    guard
+      case .success(let reservation) = videoSourceCoordinator.beginScreen(
+        stream: senderStream)
+    else {
+      XCTFail("画面共有予約を取得できること")
+      return
+    }
+    XCTAssertTrue(videoSourceCoordinator.completeScreenStart(reservation))
+
+    await assertStartScreenCaptureFailure(mediaChannel, equals: cameraConflictMessage)
+  }
+
+  /// 接続状態の確認後に切断処理が走った競合で、カメラ競合のエラーになることを確認する
+  ///
+  /// `MediaChannel` は接続状態のまま `VideoSourceCoordinator` だけを revoke し、
+  /// `.cancelled` が従来のカメラ競合メッセージへ写像されることを検証する。
+  func testMediaChannelStartScreenCaptureMapsCancelledToCameraConflictError() async throws {
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    let mediaChannel = try makeConnectedMediaChannel(
+      videoSourceCoordinator: videoSourceCoordinator)
+    defer { mediaChannel.setConnectionStateForTesting(.disconnected) }
+
+    videoSourceCoordinator.revoke()
+    await assertStartScreenCaptureFailure(mediaChannel, equals: cameraConflictMessage)
+  }
+
   /// 初期カメラ無効から開始した場合も、停止キュー完了まで切断 callback と所有情報を保持することを確認する
   func testMediaChannelDisconnectWaitsForCameraCleanup() async throws {
     // process-wide の shared を汚染しないよう、テストローカルの owner を注入する
     let coordinator = CameraVideoCaptureCoordinator(owner: CameraStateOwner())
     let ownership = CameraCaptureOwnership()
     let videoSourceCoordinator = VideoSourceCoordinator()
-    var configuration = makeConfiguration()
+    var configuration = makeTestConfiguration()
     configuration.initialCameraEnabled = false
 
     let mediaChannel = try MediaChannel(
@@ -789,7 +1058,7 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
   func testMediaChannelDeinitReleasesLease() async throws {
     let lease = VideoHardMuteLease()
     var mediaChannel: MediaChannel? = try MediaChannel(
-      configuration: makeConfiguration(),
+      configuration: makeTestConfiguration(),
       videoHardMuteLease: lease)
     XCTAssertNotNil(mediaChannel, "解放前は MediaChannel が保持されていること")
 
