@@ -3,7 +3,7 @@
 - Created: 2026-10-30
 - Completed: {YYYY-MM-DD}
 - Branch: feature/fix-screen-cleanup-error-message
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-11-02
 
 ## 目的
 
@@ -18,7 +18,7 @@
 
 ## 再現手順
 
-- 画面キャプチャを開始し、停止を失敗させる (`stopCapture` の完了が error を返す、または `isRecording` が true のままになる状況)
+- 画面キャプチャを開始し、停止後も recorder が録画中のまま (`isRecording` が true) になる状況を作る。`stopCapture` の完了が error を返しても `isRecording` が false なら後始末は成功し `.cleanupFailed` にはならない (`Sora/ScreenCapture.swift` の `stopRecorderCaptureAfterBegin` / `completeStopCapture`)
 - `isScreenCaptureActive()` が true のまま `startScreenCapture` を呼ぶ
 - カメラ競合を示すエラーが返り、`setVideoHardMute(true)` では復旧しないことを確認する
 - 実 ReplayKit の停止失敗は自動テストで再現できないため、状態遷移は `VideoSourceCoordinator` の単体テストで確認する
@@ -27,6 +27,7 @@
 
 - `VideoSourceCoordinator.beginScreen` の失敗理由を、呼び出し元が区別できる形にする (例: `Result<Reservation, ScreenStartFailure>` を返し、`.cameraInUse` / `.screenCleanupPending` / `.screenOperationInProgress` などを区別する)
 - `MediaChannel.startScreenCapture` は `.screenCleanupPending` の場合に、`stopScreenCapture()` による停止の再試行を案内するエラーを返す
+- それ以外の失敗理由 (`.cameraInUse`、`.screenOperationInProgress`、切断済みなど) は現行のエラーメッセージを維持する。画面キャプチャの開始中・実行中・停止中に返るメッセージの見直しは目的が異なるため本 issue の範囲外とする
 - 既存のカメラ競合メッセージと、`isCameraVideoCaptureRunning` のガードは現在の挙動を維持する
 - 後始末待ちの状態からの復旧は `stopScreenCapture()` の再試行で成立するため、新しい停止 API は追加しない
 
@@ -40,6 +41,7 @@
 
 - `.screenCleanupFailed` の状態で `startScreenCapture` を呼ぶと、`stopScreenCapture()` による再試行を案内するエラーが返る
 - カメラキャプチャが同じ sender stream を使用している場合は、従来どおりカメラ競合のエラーが返る
+- 画面キャプチャの開始中・実行中・停止中 (`beginScreen` が `.screenOperationInProgress` を返す状態) でも、従来どおりのエラーメッセージが返る
 - `beginScreen` の各失敗理由を検証するテストが追加されている。モックやスタブは使用しない
 - `make build` / `make fmt-lint` / `make lint` / 既存テストが成功する
 
