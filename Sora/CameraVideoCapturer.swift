@@ -826,8 +826,27 @@ public final class CameraVideoCapturer: Sendable {
       .map { Int($0.maxFrameRate) }
   }
 
+  /// `flip()` の切り替え先フォーマット選択に使う寸法を返します。
+  ///
+  /// 接続時に設定された目標解像度があればそれを優先し、未設定の場合は現在のフォーマットの
+  /// 実寸を使います。`CameraSettings.Resolution` と現在の寸法だけで決まるため、
+  /// 実カメラなしで検証できます。
+  internal static func flipTargetDimensions(
+    targetResolution: CameraSettings.Resolution?,
+    currentDimensions: CMVideoDimensions
+  ) -> CMVideoDimensions {
+    if let targetResolution {
+      return CMVideoDimensions(width: targetResolution.width, height: targetResolution.height)
+    }
+    return currentDimensions
+  }
+
   /// 引数に指定された capturer を停止し、反対の position を持つ CameraVideoCapturer を起動します。
-  /// CameraVideoCapturer の起動には、 capturer と近い設定のフォーマットとフレームレートが利用されます。
+  /// 起動には、接続時に `CameraSettings.resolution` で設定した解像度に近いフォーマットを利用します。
+  /// 接続時の解像度が設定されていない場合 (公開 `start` で起動した場合など) は、
+  /// 現在のフォーマットの実寸に近いフォーマットを利用します。
+  /// フレームレートは、いずれの場合も capturer の現在の値に近いものを利用します。
+  /// `change()` で解像度を変更しても、接続時の解像度が設定されている場合はそちらを基準にします。
   /// また、起動された CameraVideoCapturer には capturer の保持する MediaStream が設定されます。
   ///
   /// 切り替え先の stream は start より前に設定します。RTCCameraVideoCapturer は start の
@@ -894,7 +913,13 @@ public final class CameraVideoCapturer: Sendable {
         return
       }
 
-      let dimension = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+      // 接続時に設定された目標解像度があれば、その解像度を基準に切り替え先のフォーマットを
+      // 選ぶ。これにより、切り替え先が目標解像度をサポートしない場合でも、2 回目の flip で
+      // 元の目標解像度に戻せる。
+      let targetResolution = capturer.targetResolution
+      let dimension = CameraVideoCapturer.flipTargetDimensions(
+        targetResolution: targetResolution,
+        currentDimensions: CMVideoFormatDescriptionGetDimensions(format.formatDescription))
       guard
         let format = CameraVideoCapturer.format(
           width: dimension.width,
@@ -948,6 +973,7 @@ public final class CameraVideoCapturer: Sendable {
         } else {
           // 使用した format と frameRate は start 成功時にだけ記録する。
           owner.setFormat(format, id: flip.id)
+          flip.targetResolution = targetResolution
           owner.handle(
             .formatResolved(id: flip.id, frameRate: frameRate, generation: generation))
           Logger.debug(
@@ -1048,6 +1074,18 @@ public final class CameraVideoCapturer: Sendable {
     CameraStateOwner.shared.format(id: id)
   }
 
+  /// `flip()` が解像度を維持するための目標解像度
+  ///
+  /// 接続時設定の解像度から `start` 成功時に設定し、`flip()` 成功時に切り替え先へ引き継ぎます。
+  /// 公開 `start` の成功時は `nil` に戻り、`stop` / `restart` / `change` では変化しません。
+  /// `nil` の場合は現在のフォーマットの実寸を使って解像度を選択します。
+  /// 値は `CameraStateOwner` が capturer ID ごとに保持し、lock 付きの resource テーブルから
+  /// 読み書きするため、任意のスレッドから呼べます。capturer の解放時に破棄されます。
+  internal var targetResolution: CameraSettings.Resolution? {
+    get { CameraStateOwner.shared.targetResolution(id: id) }
+    set { CameraStateOwner.shared.setTargetResolution(newValue, id: id) }
+  }
+
   /// native と delegate を保持する lock 付き storage
   private let nativeStorage: CameraNativeStorage
 
@@ -1097,6 +1135,9 @@ public final class CameraVideoCapturer: Sendable {
 
   /// カメラを起動します。
   ///
+  /// 起動に成功した場合、接続時の目標解像度はクリアされ、`flip()` は現在のフォーマットの
+  /// 実寸を基準に解像度を選択します。
+  ///
   /// このメソッドを実行すると、 `UIDevice` の
   /// `beginGeneratingDeviceOrientationNotifications()` が実行されます。
   /// `beginGeneratingDeviceOrientationNotifications()` または
@@ -1121,10 +1162,12 @@ public final class CameraVideoCapturer: Sendable {
         completionBox(SoraError.cameraError(reason: "another camera is already running"))
         return
       }
+      // 公開 API は呼び出し側が format を明示するため、接続時の目標解像度は引き継がない。
       _ = await self.startForSDK(
         format: formatBox.format,
         frameRate: frameRate,
         senderStream: nil,
+        targetResolution: nil,
         completionBeforeEvent: completionBox)
     }
   }
@@ -1133,10 +1176,12 @@ public final class CameraVideoCapturer: Sendable {
   ///
   /// owner の command として `.startRequested` → `.startCompleted` を適用し、
   /// native start が成功した場合だけ `.formatResolved` で format と frameRate を記録します。
+  /// 目標解像度も成功時にだけ記録します。
   /// generation はここで採番し、古い callback は owner が破棄します。
   private func startUncoordinated(
     format: AVCaptureDevice.Format,
     frameRate: Int,
+    targetResolution: CameraSettings.Resolution?,
     completionHandler: @escaping ((Error?) -> Void)
   ) {
     guard isRunning == false else {
@@ -1149,10 +1194,11 @@ public final class CameraVideoCapturer: Sendable {
     owner.handle(.startRequested(id: id, generation: generation))
 
     startNative(format: format, frameRate: frameRate) { [self] error in
-      // 使用した format と frameRate は start 成功時にだけ記録する。
-      // (失敗時に要求値を残すと、失敗した設定値が format / frameRate として観測される)
+      // 使用した format / frameRate と目標解像度は start 成功時にだけ記録する。
+      // (失敗時に要求値を残すと、失敗した設定値が観測される)
       if error == nil {
         owner.setFormat(format, id: id)
+        self.targetResolution = targetResolution
         owner.handle(.formatResolved(id: id, frameRate: frameRate, generation: generation))
       }
       // owner の state を reducer 経由で更新する。
@@ -1346,6 +1392,8 @@ public final class CameraVideoCapturer: Sendable {
   }
 
   /// カメラを停止後、指定されたパラメーターで起動します。
+  ///
+  /// 解像度を変更しても、`flip()` が使う接続時の目標解像度は変化しません。
   public func change(
     format: AVCaptureDevice.Format? = nil, frameRate: Int? = nil,
     completionHandler: @escaping ((Error?) -> Void)
@@ -1428,10 +1476,13 @@ public final class CameraVideoCapturer: Sendable {
 
 extension CameraVideoCapturer {
   /// SDK のカメラキュー上で起動し、完了時のエラーを返します。
+  ///
+  /// `targetResolution` は start 成功時にだけ記録し、失敗時は変更しません。
   func startForSDK(
     format: AVCaptureDevice.Format,
     frameRate: Int,
     senderStream: SenderStreamBox?,
+    targetResolution: CameraSettings.Resolution?,
     completionBeforeEvent: CameraOperationCompletionBox? = nil
   ) async -> Error? {
     await withCheckedContinuation { continuation in
@@ -1441,7 +1492,11 @@ extension CameraVideoCapturer {
         if let senderStream {
           self.stream = senderStream.stream
         }
-        self.startUncoordinated(format: format, frameRate: frameRate) { error in
+        self.startUncoordinated(
+          format: format,
+          frameRate: frameRate,
+          targetResolution: targetResolution
+        ) { error in
           if error != nil, let senderStream {
             // command が最後に書いた値が残っている場合だけ rollback する。
             CameraStateOwner.shared.compareAndSetStream(

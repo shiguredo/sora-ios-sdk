@@ -26,7 +26,8 @@ private final class CapturerCollector: @unchecked Sendable {
 /// CameraStateOwner のユニットテスト
 ///
 /// 実カメラを必要としない範囲 (generation の採番と直列化、snapshot の publish、
-/// stream の compare-and-swap、capturer の解放、隔離の判定) を device 非依存で検証します。
+/// stream の compare-and-swap、目標解像度の保持と破棄、capturer の解放、隔離の判定) を
+/// device 非依存で検証します。
 /// 実 instance を伴う検証はカメラがある環境でのみ実行し (Simulator では skip)、
 /// 手動でしか確認できない項目は実機で確認します。
 final class CameraStateOwnerTests: XCTestCase {
@@ -249,15 +250,21 @@ final class CameraStateOwnerTests: XCTestCase {
 
   // MARK: - 解放
 
-  /// capturer の解放で資源と state が破棄されることを確認する
+  /// capturer の解放で資源と設定値と state が破棄されることを確認する
   func testReleaseDiscardsResourcesAndState() throws {
     let owner = makeOwner()
     let id = CameraCapturerID()
+    let otherID = CameraCapturerID()
     let (stream, _) = try makeStreams()
     owner.setStream(stream, id: id)
+    owner.setTargetResolution(.hd1080p, id: id)
+    owner.setTargetResolution(.hd720p, id: otherID)
     _ = owner.handle(.startRequested(id: id, generation: 1))
     _ = owner.handle(.startCompleted(id: id, generation: 1, success: true))
     _ = owner.handle(.formatResolved(id: id, frameRate: 30, generation: 1))
+
+    XCTAssertEqual(
+      owner.targetResolution(id: id), .hd1080p, "解放前は目標解像度が保持されていること")
 
     owner.release(id: id)
     // release は eventQueue へ非同期に投入する。同じ serial queue の同期処理は FIFO で
@@ -267,8 +274,40 @@ final class CameraStateOwnerTests: XCTestCase {
 
     XCTAssertNil(owner.stream(id: id), "資源テーブルの stream を破棄すること")
     XCTAssertNil(owner.frameRate(id: id), "frameRates を破棄すること")
+    XCTAssertNil(owner.targetResolution(id: id), "資源テーブルの目標解像度を破棄すること")
+    XCTAssertEqual(
+      owner.targetResolution(id: otherID), .hd720p, "他の capturer の目標解像度は破棄しないこと")
     XCTAssertFalse(owner.isRunning(id: id), "動作中から外れること")
     XCTAssertNil(owner.snapshot.activeCapturerID, "active を解除すること")
+  }
+
+  // MARK: - 目標解像度
+
+  /// 目標解像度が capturer ID ごとに保持されることを確認する
+  func testTargetResolutionIsScopedByCapturerID() {
+    let owner = makeOwner()
+    let first = CameraCapturerID()
+    let second = CameraCapturerID()
+
+    XCTAssertNil(owner.targetResolution(id: first), "未設定の目標解像度は nil であること")
+    XCTAssertNil(owner.targetResolution(id: second), "未設定の目標解像度は nil であること")
+
+    owner.setTargetResolution(.hd1080p, id: first)
+    owner.setTargetResolution(.hd720p, id: second)
+
+    XCTAssertEqual(
+      owner.targetResolution(id: first), .hd1080p,
+      "1 つ目の capturer の目標解像度を保持すること")
+    XCTAssertEqual(
+      owner.targetResolution(id: second), .hd720p,
+      "2 つ目の capturer の目標解像度を保持すること")
+
+    // nil を設定すると未設定に戻り、他の capturer の値には影響しない。
+    owner.setTargetResolution(nil, id: first)
+    XCTAssertNil(owner.targetResolution(id: first), "nil を設定すると未設定に戻ること")
+    XCTAssertEqual(
+      owner.targetResolution(id: second), .hd720p,
+      "他の capturer の目標解像度は変化しないこと")
   }
 
   // MARK: - 実 instance (カメラがある環境のみ)
