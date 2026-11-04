@@ -1,7 +1,7 @@
 # プライバシーマニフェストを同梱して Required Reason API の利用理由を申告する
 
 - Created: 2026-11-02
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-11-04
 - Branch: feature/add-privacy-manifest
 - Polished: 2026-11-02
 - Priority: Medium
@@ -53,38 +53,11 @@ Apple の Required Reason API の一覧では、`ProcessInfo.systemUptime` と `
 
 ## 解決方法
 
-- `Sora/PrivacyInfo.xcprivacy` を次の内容で追加する
+対応しない。
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>NSPrivacyAccessedAPITypes</key>
-	<array>
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>35F9.1</string>
-				<string>8FFB.1</string>
-			</array>
-		</dict>
-	</array>
-	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
-	<key>NSPrivacyTracking</key>
-	<false/>
-	<key>NSPrivacyTrackingDomains</key>
-	<array/>
-</dict>
-</plist>
-```
-
-- `Package.swift` の `Sora` ターゲットの `resources` を `[.process("VideoView.xib"), .process("PrivacyInfo.xcprivacy")]` にする
-- `make consumer-build SCHEME=ConsumerCore` を実行し、生成された `Sora_Sora.bundle` に `PrivacyInfo.xcprivacy` が含まれることを確認する
-- `CHANGES.md` の `## develop` に `[ADD]` のエントリを追加する
+- 本 issue の変更は `9f8d66cb` でリバート済みで、`Sora/PrivacyInfo.xcprivacy` は同梱していない状態に戻っている
+- Sora ターゲットの Required Reason API の利用は、プライバシーマニフェストを同梱するのではなく、API の利用をなくす方針 (0199) で解消する
+- したがって、本 issue の目的である `Sora/PrivacyInfo.xcprivacy` の追加は行わない
 
 ## 参考
 
