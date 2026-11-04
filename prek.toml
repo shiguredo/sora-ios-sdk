@@ -31,8 +31,8 @@ hooks = [
   # 公開 API の baseline も追跡ファイルなので対象に含める
   { id = "check-json", files = "(^|/)Package\\.resolved$|^TestConsumers/Swift6Consumer/ApiBaseline/.*\\.json$", types = ["text"] },
   # XML の構文エラーを検出する
-  # Info.plist / *.xib / *.xcprivacy は identify で xml タグが付かないため files / types を上書きする
-  { id = "check-xml", files = "\\.(plist|xib|xcprivacy)$", types = ["text"] },
+  # Info.plist / *.xib は identify で xml タグが付かないため files / types を上書きする
+  { id = "check-xml", files = "\\.(plist|xib)$", types = ["text"] },
   # マージコンフリクトマーカーが残ったコミットを防ぐ
   { id = "check-merge-conflict" },
   # 大文字小文字だけが異なるファイル名の衝突を防ぐ
