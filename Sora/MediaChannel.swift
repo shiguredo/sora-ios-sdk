@@ -2473,11 +2473,13 @@ public final class MediaChannel {
       return nil
     }
 
-    // ダミー音声経路: DummyAudioDevice でハードミュートを切り替える
-    if let dummyDevice = self.nativePeerChannelFactory.audioDevice as? DummyAudioDevice {
-      if !dummyDevice.setHardMute(mute) {
+    // カスタム音声デバイス経路: ハードミュートを切り替える
+    if let audioDevice = self.nativePeerChannelFactory.audioDevice
+      as? HardMuteSwitchableAudioDevice
+    {
+      if !audioDevice.setHardMute(mute) {
         return SoraError.mediaChannelError(
-          reason: "DummyAudioDevice::setHardMute failed")
+          reason: "hard mute failed for the custom audio device")
       }
       return nil
     }

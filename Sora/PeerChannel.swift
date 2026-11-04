@@ -1145,13 +1145,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       if !snapshot.usesCustomAudioDevice {
         initializeAudioInput()
       } else {
-        // AVAudioSession の設定はカスタム音声デバイス (DummyAudioDevice.initialize(with:)) が行うためスキップする
+        // AVAudioSession の設定はカスタム音声デバイスが行うためスキップする
         Logger.debug(
           type: .peerChannel,
           message: "custom audio device enabled, skip initialize audio input")
       }
     } else if snapshot.usesCustomAudioDevice {
-      // 音声トラック自体が生成されないためダミー音声も無効となる
+      // 音声トラック自体が生成されないためカスタム音声デバイス経由でも音声は無効となる
       Logger.warn(
         type: .peerChannel,
         message: "custom audio device enabled but audioEnabled is false, audio is disabled")
@@ -2229,7 +2229,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     let cameraCleanupTask = snapshot.isSender ? terminateSenderStream() : nil
 
-    // カスタム音声デバイス (ダミー音声等) の停止。terminateSenderStream は送信側のカメラ停止のみを行い、
+    // カスタム音声デバイスの停止。terminateSenderStream は送信側のカメラ停止のみを行い、
     // 音声デバイスの停止は行わないため、recvonly を含む全ロールで実行する。
     // nativeChannel?.close() より前に実行し、ADM スレッドが生存している状態で
     // terminateDevice の dispatchSync を実行する

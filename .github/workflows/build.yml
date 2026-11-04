@@ -42,6 +42,49 @@ jobs:
           echo 'Error: Non-public API detected in WebRTC framework.'
           exit 1
         fi
+    - name: Check SystemBootTime API Symbols
+      run: |
+        # SystemBootTime の Required Reason API (systemUptime / mach_absolute_time) の
+        # 再導入を Sora.o の未定義シンボルから検出する。
+        # systemUptime は Objective-C の selector stub として _objc_msgSend$systemUptime に現れる。
+        SORA_OBJECT="build/Build/Products/Release-iphoneos/Sora.o"
+        if [ ! -f "$SORA_OBJECT" ]; then
+          echo "Error: $SORA_OBJECT is not found."
+          exit 1
+        fi
+        if ! SYMBOLS=$(nm -u "$SORA_OBJECT"); then
+          echo "Error: nm failed for $SORA_OBJECT."
+          exit 1
+        fi
+        if MATCHED=$(printf '%s\n' "$SYMBOLS" | grep -E '_mach_absolute_time|_objc_msgSend\$systemUptime'); then
+          echo 'Error: SystemBootTime API symbols are used in Sora.o:'
+          echo "$MATCHED"
+          exit 1
+        fi
+    - name: Check SystemBootTime API Sources
+      run: |
+        # selector stub に依存せず、Sora のソースに SystemBootTime の Required Reason API
+        # (systemUptime / mach_absolute_time) の利用が残っていないことを検査する。
+        # コメント行も対象に含める (issue の完了条件と同じ)。
+        # pathspec が 0 件に一致したまま成功しないよう、先に対象のファイル数を確認する
+        count=$(git ls-files -- ':(glob)Sora/**/*.swift' | wc -l | tr -d ' ')
+        if [ "$count" -eq 0 ]; then
+          echo 'Error: the pathspec matches no tracked file under Sora.'
+          exit 1
+        fi
+        set +e
+        found=$(git grep -n -E 'systemUptime|mach_absolute_time' -- ':(glob)Sora/**/*.swift')
+        status=$?
+        set -e
+        if [ "$status" -eq 0 ]; then
+          echo 'Error: SystemBootTime API is used in Sora sources.'
+          echo "$found"
+          exit 1
+        fi
+        if [ "$status" -ne 1 ]; then
+          echo "Error: git grep failed (exit $status)."
+          exit 1
+        fi
     - name: Format Lint
       run: |
         make fmt-lint
