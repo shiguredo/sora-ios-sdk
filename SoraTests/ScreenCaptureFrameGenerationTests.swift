@@ -1,5 +1,6 @@
 import CoreMedia
 import CoreVideo
+import QuartzCore
 import XCTest
 
 @testable import Sora
@@ -1487,9 +1488,10 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
 
   /// PTS が無効な frame は単調時刻で間引かれることを確認する
   ///
-  /// PTS が `.invalid` または `.indefinite` の場合は、前回の送信からの経過時間で判定する。
-  /// targetFPS の短い間隔では破棄され、間隔が経過すると送信される。
-  func testShouldSendVideoFrameFallsBackToUptimeWhenTimestampIsInvalid() throws {
+  /// PTS が `.invalid`、`.indefinite`、または PTS の差分が負の場合は、
+  /// 前回の送信からの経過時間で判定する。targetFPS の短い間隔では破棄され、
+  /// 間隔が経過すると送信される。
+  func testShouldSendVideoFrameFallsBackToMediaTimeWhenTimestampIsInvalid() throws {
     let (controller, mediaChannel) = try makeScreenCaptureController()
     let senderStream = makeSenderStreamWithVideoTrack(mediaChannel: mediaChannel)
     let filter = CountingVideoFilter()
@@ -1511,16 +1513,38 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     XCTAssertTrue(controller.performSend(ownedFrame: firstOwnedFrame), "最初の frame を送信できること")
     drainSendVideoFrameQueueAndOwner(controller: controller, senderStream: senderStream)
 
-    // PTS が無効な frame は単調時刻のフォールバックで判定され、直後は破棄される
+    // 送信時に単調時刻が記録されることを確認する
+    let recordedTime = try XCTUnwrap(
+      controller.lastSentVideoMediaTimeForTesting, "送信時に単調時刻が記録されること")
+    XCTAssertLessThanOrEqual(
+      recordedTime, CACurrentMediaTime(), "記録される単調時刻は現在時刻以下であること")
+
+    // 実時間の経過に依存せず、記録済みの単調時刻を基準に判定する
+    let sentTime = CACurrentMediaTime()
+    controller.setLastSentVideoMediaTimeForTesting(sentTime)
+
+    // PTS が無効・不定、または PTS が巻き戻った frame は直後は破棄される
     XCTAssertFalse(
       controller.shouldSendVideoFrame(presentationTimestamp: .invalid),
       "PTS が無効な frame は間隔が経過するまで破棄されること")
+    XCTAssertFalse(
+      controller.shouldSendVideoFrame(presentationTimestamp: .indefinite),
+      "PTS が不定な frame は間隔が経過するまで破棄されること")
+    XCTAssertFalse(
+      controller.shouldSendVideoFrame(presentationTimestamp: CMTime(value: 0, timescale: 1)),
+      "PTS が巻き戻った frame は間隔が経過するまで破棄されること")
 
     // 間隔が経過すると送信される
-    Thread.sleep(forTimeInterval: 0.15)
+    controller.setLastSentVideoMediaTimeForTesting(sentTime - 1.0)
     XCTAssertTrue(
       controller.shouldSendVideoFrame(presentationTimestamp: .invalid),
       "PTS が無効でも間隔が経過すれば送信されること")
+    XCTAssertTrue(
+      controller.shouldSendVideoFrame(presentationTimestamp: .indefinite),
+      "PTS が不定でも間隔が経過すれば送信されること")
+    XCTAssertTrue(
+      controller.shouldSendVideoFrame(presentationTimestamp: CMTime(value: 0, timescale: 1)),
+      "PTS が巻き戻っても間隔が経過すれば送信されること")
   }
 
   /// 送信経路が permit を二重に返却しないことを確認する

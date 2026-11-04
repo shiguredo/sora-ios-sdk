@@ -1,5 +1,6 @@
 import CoreMedia
 import Foundation
+import QuartzCore
 import ReplayKit
 
 /// 画面キャプチャの設定です。
@@ -146,7 +147,7 @@ final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
 ///   `sendVideoFrameSemaphore` / `lock` は不変値です。
 /// - `mediaChannel` は弱参照で、接続の所有権は `MediaChannel` 側にあります。
 /// - `captureState` / `settings` / `senderStream` / `lastSentVideoPresentationTimestamp` /
-///   `lastSentVideoUptime` / `captureID` / `activeCaptureID` / `recorderCaptureID` /
+///   `lastSentVideoMediaTime` / `captureID` / `activeCaptureID` / `recorderCaptureID` /
 ///   `recorderStopTask` / `mediaChannelConnectionRequired` は `lock` で保護し、
 ///   読み書きはすべて `withLock` の区間内で行います。
 /// - 送信対象の capture ID と sender stream は `activeCaptureAndStream()` が同じ `lock` 区間で
@@ -321,7 +322,7 @@ final class ScreenCaptureController: @unchecked Sendable {
   private var settings = ScreenCaptureSettings()
   private var senderStream: MediaStream?
   private var lastSentVideoPresentationTimestamp: CMTime?
-  private var lastSentVideoUptime: TimeInterval?
+  private var lastSentVideoMediaTime: TimeInterval?
   // startCapture の非同期完了を世代管理するための ID です。
   // start/stop が前後したときに、古い start 完了コールバックを無効化します。
   private var captureID: UInt64 = 0
@@ -529,7 +530,7 @@ final class ScreenCaptureController: @unchecked Sendable {
         captureState = .stopping
         senderStream = nil
         lastSentVideoPresentationTimestamp = nil
-        lastSentVideoUptime = nil
+        lastSentVideoMediaTime = nil
         activeCaptureID = nil
 
         // operation closure が ReplayKit の停止コールバックまで controller を強参照する。
@@ -685,7 +686,7 @@ final class ScreenCaptureController: @unchecked Sendable {
         // 後続世代の start が走った場合は captureID で旧世代コールバックを無効化します。
         self.settings = settings
         self.lastSentVideoPresentationTimestamp = nil
-        self.lastSentVideoUptime = nil
+        self.lastSentVideoMediaTime = nil
         self.senderStream = senderStream
         captureState = .starting
         return captureID
@@ -718,7 +719,7 @@ final class ScreenCaptureController: @unchecked Sendable {
         captureState = recordingRequiresCleanup ? .cleanupFailed : .stopped
         senderStream = nil
         lastSentVideoPresentationTimestamp = nil
-        lastSentVideoUptime = nil
+        lastSentVideoMediaTime = nil
         activeCaptureID = nil
         return .failed(error)
       }
@@ -871,7 +872,7 @@ final class ScreenCaptureController: @unchecked Sendable {
       return
     }
 
-    // 送信直前のみ PTS / uptime を記録する (ID 照合を通過しなかった stale frame の破棄で
+    // 送信直前のみ PTS / 単調時刻 (CACurrentMediaTime()) を記録する (ID 照合を通過しなかった stale frame の破棄で
     // throttle 状態を汚染しない)
     markVideoFrameSent(presentationTimestamp: ownedFrame.presentationTimestamp)
     // ingress へ画素データの所有者ごと渡します。owner が配送完了まで保持するため、
@@ -941,14 +942,14 @@ final class ScreenCaptureController: @unchecked Sendable {
     withLock {
       // PTS が無効な場合は単調時刻で間引きます。
       guard presentationTimestamp.isValid, !presentationTimestamp.isIndefinite else {
-        return shouldSendVideoFrameWithUptime()
+        return shouldSendVideoFrameWithMediaTime()
       }
       guard
         let lastSentVideoPresentationTimestamp,
         lastSentVideoPresentationTimestamp.isValid,
         !lastSentVideoPresentationTimestamp.isIndefinite
       else {
-        return shouldSendVideoFrameWithUptime()
+        return shouldSendVideoFrameWithMediaTime()
       }
 
       // 間引くフレームの判定を行う
@@ -956,26 +957,29 @@ final class ScreenCaptureController: @unchecked Sendable {
       let minInterval = CMTime(value: 1, timescale: CMTimeScale(targetFPS))
       let elapsed = CMTimeSubtract(presentationTimestamp, lastSentVideoPresentationTimestamp)
       if !elapsed.isValid || elapsed.isIndefinite || CMTimeCompare(elapsed, .zero) < 0 {
-        return shouldSendVideoFrameWithUptime()
+        return shouldSendVideoFrameWithMediaTime()
       }
       return CMTimeCompare(elapsed, minInterval) >= 0
     }
   }
 
-  private func shouldSendVideoFrameWithUptime() -> Bool {
-    guard let lastSentVideoUptime else {
+  /// 前回送信したフレームの単調時刻と targetFPS から今回フレームを送信するかを判定します。
+  ///
+  /// 呼び出し元は `lock` を保持していること。
+  private func shouldSendVideoFrameWithMediaTime() -> Bool {
+    guard let lastSentVideoMediaTime else {
       return true
     }
     let targetFPS = min(max(1, settings.targetFPS), 120)
     let minInterval = 1.0 / Double(targetFPS)
-    let elapsed = ProcessInfo.processInfo.systemUptime - lastSentVideoUptime
+    let elapsed = CACurrentMediaTime() - lastSentVideoMediaTime
     return elapsed >= minInterval
   }
 
   // 送信したフレームの PTS と単調時刻を保持します
   private func markVideoFrameSent(presentationTimestamp: CMTime) {
     withLock {
-      lastSentVideoUptime = ProcessInfo.processInfo.systemUptime
+      lastSentVideoMediaTime = CACurrentMediaTime()
       guard presentationTimestamp.isValid, !presentationTimestamp.isIndefinite else {
         lastSentVideoPresentationTimestamp = nil
         return
@@ -990,6 +994,22 @@ final class ScreenCaptureController: @unchecked Sendable {
   /// PTS とは異なる場合があります。テストから timestamp の更新有無を確認するため internal とする。
   var lastSentVideoPresentationTimestampForTesting: CMTime? {
     withLock { lastSentVideoPresentationTimestamp }
+  }
+
+  /// 最後に送信した frame の単調時刻を返します。
+  ///
+  /// テストから送信時の記録を確認するため internal とする。
+  var lastSentVideoMediaTimeForTesting: TimeInterval? {
+    withLock { lastSentVideoMediaTime }
+  }
+
+  /// 最後に送信した frame の単調時刻をテストから設定します。
+  ///
+  /// 実時間に依存せずフォールバック判定を検証するため internal とします。
+  func setLastSentVideoMediaTimeForTesting(_ time: TimeInterval?) {
+    withLock {
+      lastSentVideoMediaTime = time
+    }
   }
 
   /// 送信直前の接続状態の確認を要求するかどうかです。

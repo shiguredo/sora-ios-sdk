@@ -11,6 +11,12 @@
 
 ## develop
 
+- [UPDATE] 画面キャプチャのフレーム間引きのフォールバック処理において `ProcessInfo.systemUptime` を使わないようにする
+  - `CACurrentMediaTime()` に置き換える
+  - @t-miya
+- [UPDATE] テスト専用のダミー音声デバイスを SDK ターゲットから外す
+  - 公開 API では利用していないため SDK の挙動は変わらない
+  - @t-miya
 - [UPDATE] libwebrtc を m156.8078.5.1 に更新する
   - 専用 worker thread が廃止され、録音の pause / resume は network thread 上で実行される (SDK の API と呼び出し経路は変わらない)
   - 受信コーデック更新時のデコーダー再利用、VP8 の破損フレーム拒否、ICE restart を伴わない renegotiation での ICE role 保持などが入る
@@ -43,6 +49,11 @@
   - @voluntas
 - [FIX] 画面キャプチャの停止に失敗して後始末待ちの状態で `startScreenCapture()` を呼んだときに、カメラ競合ではなく `stopScreenCapture()` による停止の再試行を案内するエラーを返すようにする
   - 開始要求のエラーが `setVideoHardMute(true)` を案内していた
+  - @t-miya
+
+### misc
+
+- [UPDATE] Required Reason API の再導入を検出する CI 検査を追加する
   - @t-miya
 
 ## 2026.4.0

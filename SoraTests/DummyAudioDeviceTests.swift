@@ -1,3 +1,4 @@
+import WebRTC
 import XCTest
 
 @testable import Sora
@@ -150,6 +151,7 @@ private final class CallFlag: @unchecked Sendable {
 /// - チャンネル数の既定値と 2 ch 指定の反映、2 ch 指定によるステレオ SDP の要求
 /// - `fillPCMData` が外部注入された pcmGenerator へ委譲すること
 /// - ハードミュート制御と、`terminateDevice` で初期状態へ戻ること
+/// - `HardMuteSwitchableAudioDevice` への準拠と、プロトコル経由のハードミュート切り替え
 ///
 /// 併せてテスト用ヘルパーの動作を検証する。
 ///
@@ -409,5 +411,27 @@ final class DummyAudioDeviceTests: XCTestCase {
 
     XCTAssertTrue(mutedDevice.terminateDevice(), "terminateDevice が成功すること")
     XCTAssertTrue(mutedDevice.isHardMuted, "terminate 後に初期状態 (ミュート) へ戻るべき")
+  }
+
+  /// DummyAudioDevice がハードミュート切り替え用のプロトコルへ準拠していることを確認する
+  ///
+  /// MediaChannel は具体型ではなくプロトコルへキャストして setHardMute を呼ぶため、
+  /// 準拠が外れるとダミー音声経路のハードミュートが機能しなくなる。
+  func testConformsToHardMuteSwitchableAudioDevice() {
+    let device = DummyAudioDevice(initialMicrophoneEnabled: true) { _, _, _ in }
+    // MediaChannel と同じく、具体型ではなく RTCAudioDevice として保持した値からキャストする
+    let audioDevice: RTCAudioDevice = device
+
+    guard let switchable = audioDevice as? HardMuteSwitchableAudioDevice else {
+      XCTFail("DummyAudioDevice は HardMuteSwitchableAudioDevice に準拠しているべき")
+      return
+    }
+
+    XCTAssertTrue(
+      switchable.setHardMute(true), "プロトコル経由の setHardMute(true) が成功するべき")
+    XCTAssertTrue(device.isHardMuted, "プロトコル経由の setHardMute(true) でミュートになるべき")
+    XCTAssertTrue(
+      switchable.setHardMute(false), "プロトコル経由の setHardMute(false) が成功するべき")
+    XCTAssertFalse(device.isHardMuted, "プロトコル経由の setHardMute(false) でミュートが解除されるべき")
   }
 }
