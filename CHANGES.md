@@ -11,10 +11,6 @@
 
 ## develop
 
-- [ADD] プライバシーマニフェストを同梱し、Required Reason API (システム起動時刻) の利用理由を申告する
-  - `Sora` ターゲットの resources に `PrivacyInfo.xcprivacy` を追加し、`NSPrivacyAccessedAPICategorySystemBootTime` の理由コード `35F9.1` (画面キャプチャのフレーム間隔の判定) と `8FFB.1` (ダミー音声デバイスが音声コールバックに渡す絶対タイムスタンプの算出) を宣言する
-  - 公開 API と SDK の挙動は変わらない
-  - @t-miya
 - [UPDATE] libwebrtc を m156.8078.5.1 に更新する
   - 専用 worker thread が廃止され、録音の pause / resume は network thread 上で実行される (SDK の API と呼び出し経路は変わらない)
   - 受信コーデック更新時のデコーダー再利用、VP8 の破損フレーム拒否、ICE restart を伴わない renegotiation での ICE role 保持などが入る

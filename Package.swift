@@ -28,7 +28,7 @@ let package = Package(
             dependencies: ["WebRTC"],
             path: "Sora",
             exclude: ["Info.plist"],
-            resources: [.process("VideoView.xib"), .process("PrivacyInfo.xcprivacy")]
+            resources: [.process("VideoView.xib")]
         ),
         .testTarget(
             name: "SoraTests",

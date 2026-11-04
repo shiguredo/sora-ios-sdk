@@ -14,10 +14,6 @@ import WebRTC
 /// PCM データの生成 (波形の内容) は pcmGenerator として外部から注入する。
 /// 波形のロジック (正弦波等) はテスト・デモの用途に依存するため、SDK 側では持たない。
 ///
-/// 音声コールバックに渡すタイムスタンプは `mach_absolute_time()` で取得する。この API は
-/// Required Reason API (SystemBootTime) のため、同梱のプライバシーマニフェストで
-/// 理由コード `8FFB.1` を申告している。利用をやめるときは理由コードも見直すこと。
-///
 /// delegate が未設定 (nil) の場合のデフォルト値は、サンプルレート 48000 Hz、
 /// IO バッファ期間 0.02 秒 (20ms) である。
 /// 接続時は delegate が選択する値 (preferredInputSampleRate /
