@@ -42,11 +42,13 @@ jobs:
           echo 'Error: Non-public API detected in WebRTC framework.'
           exit 1
         fi
-    - name: Check SystemBootTime API Symbols
+    - name: Check Required Reason API Symbols
       run: |
-        # SystemBootTime の Required Reason API (systemUptime / mach_absolute_time) の
-        # 再導入を Sora.o の未定義シンボルから検出する。
-        # systemUptime は Objective-C の selector stub として _objc_msgSend$systemUptime に現れる。
+        # Sora.o の未定義シンボルから Required Reason API の利用を検出する。
+        # systemUptime などの Objective-C プロパティは selector stub として
+        # _objc_msgSend$... に現れる。Sora ターゲットに Required Reason API を
+        # 利用する変更を入れる場合は、この検査と PrivacyInfo.xcprivacy の
+        # 同梱・申告を同時に更新すること。
         SORA_OBJECT="build/Build/Products/Release-iphoneos/Sora.o"
         if [ ! -f "$SORA_OBJECT" ]; then
           echo "Error: $SORA_OBJECT is not found."
@@ -56,33 +58,39 @@ jobs:
           echo "Error: nm failed for $SORA_OBJECT."
           exit 1
         fi
-        if MATCHED=$(printf '%s\n' "$SYMBOLS" | grep -E '_mach_absolute_time|_objc_msgSend\$systemUptime'); then
-          echo 'Error: SystemBootTime API symbols are used in Sora.o:'
+        if MATCHED=$(printf '%s\n' "$SYMBOLS" | grep -E '^_(getattrlist|getattrlistbulk|fgetattrlist|getattrlistat|stat|fstat|fstatat|lstat|mach_absolute_time|statfs|statvfs|fstatfs|fstatvfs)$|^_NS(FileCreationDate|FileModificationDate|FileSystemFreeSize|FileSystemSize|URLCreationDateKey|URLContentModificationDateKey|URLVolumeAvailableCapacityKey|URLVolumeAvailableCapacityForImportantUsageKey|URLVolumeAvailableCapacityForOpportunisticUsageKey|URLVolumeTotalCapacityKey)$|^_OBJC_CLASS_\$_NSUserDefaults$|SwiftUI10AppStorageV|^_objc_msgSend\$(systemUptime|activeInputModes|fileModificationDate)$'); then
+          echo 'Error: Required Reason API symbols are used in Sora.o:'
           echo "$MATCHED"
           exit 1
         fi
-    - name: Check SystemBootTime API Sources
+    - name: Check Required Reason API Sources
       run: |
-        # selector stub に依存せず、Sora のソースに SystemBootTime の Required Reason API
-        # (systemUptime / mach_absolute_time) の利用が残っていないことを検査する。
-        # コメント行も対象に含める (issue の完了条件と同じ)。
+        # selector stub に依存せず、Sora のソースに Required Reason API の利用が
+        # 残っていないことを検査する。行コメントは利用ではないため除外する。
+        # 一覧にない同名 API を誤検出した場合は、この step に除外条件を追加する。
         # pathspec が 0 件に一致したまま成功しないよう、先に対象のファイル数を確認する
         count=$(git ls-files -- ':(glob)Sora/**/*.swift' | wc -l | tr -d ' ')
         if [ "$count" -eq 0 ]; then
           echo 'Error: the pathspec matches no tracked file under Sora.'
           exit 1
         fi
+        PATTERN='creationDate|creationDateKey|modificationDate|fileModificationDate|contentModificationDateKey|getattrlist|getattrlistbulk|fgetattrlist|getattrlistat|stat|fstat|fstatat|lstat|systemUptime|mach_absolute_time|volumeAvailableCapacityKey|volumeAvailableCapacityForImportantUsageKey|volumeAvailableCapacityForOpportunisticUsageKey|volumeTotalCapacityKey|systemFreeSize|systemSize|statfs|statvfs|fstatfs|fstatvfs|activeInputModes|UserDefaults|AppStorage'
         set +e
-        found=$(git grep -n -E 'systemUptime|mach_absolute_time' -- ':(glob)Sora/**/*.swift')
+        found=$(git grep -n -w -E "$PATTERN" -- ':(glob)Sora/**/*.swift')
         status=$?
         set -e
-        if [ "$status" -eq 0 ]; then
-          echo 'Error: SystemBootTime API is used in Sora sources.'
-          echo "$found"
+        if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+          echo "Error: git grep failed (exit $status)."
           exit 1
         fi
-        if [ "$status" -ne 1 ]; then
-          echo "Error: git grep failed (exit $status)."
+        violations=$(
+          printf '%s\n' "$found" \
+            | grep -v -E ':[0-9]+:[[:space:]]*//' \
+            | grep -v '^$' || true
+        )
+        if [ -n "$violations" ]; then
+          echo 'Error: Required Reason API is used in Sora sources:'
+          echo "$violations"
           exit 1
         fi
     - name: Format Lint

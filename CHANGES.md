@@ -53,7 +53,7 @@
 
 ### misc
 
-- [UPDATE] SystemBootTime API の再導入を検出する CI 検査を追加する
+- [UPDATE] Required Reason API の再導入を検出する CI 検査を追加する
   - @t-miya
 
 ## 2026.4.0
