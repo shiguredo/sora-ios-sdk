@@ -9,7 +9,9 @@
 - FIX
   - バグ修正
 
-## develop
+## 2026.5.0
+
+**リリース日**: 2026-11-05
 
 - [UPDATE] 画面キャプチャのフレーム間引きのフォールバック処理において `ProcessInfo.systemUptime` を使わないようにする
   - `CACurrentMediaTime()` に置き換える
