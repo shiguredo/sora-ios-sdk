@@ -354,8 +354,8 @@ final class LoggerTests: XCTestCase {
     XCTAssertEqual(collector.count, 2, "groups が空配列では出力されないこと")
   }
 
-  /// secret masking と `Log.description` の出力形式が実装前と同じであることを確認します。
-  func testMaskingAndOutputFormatUnchanged() {
+  /// secret masking の対象キーと `Log.description` の出力形式を確認します。
+  func testMaskingAndLogDescriptionFormat() {
     let logger = Logger()
     let collector = StringCollector()
     logger.level = .debug
@@ -369,15 +369,221 @@ final class LoggerTests: XCTestCase {
       log: Log(
         level: .info, type: .sora, timestamp: timestamp,
         message:
-          "{\"access_token\": \"v1\", \"token\": \"v2\", \"secret\": \"v3\", \"authorization\": \"v4\", \"credential\": \"v5\", \"other\": 1}"
+          "{\"access_token\": \"v1\", \"token\": \"v2\", \"secret\": \"v3\", \"authorization\": \"v4\", \"credential\": \"v5\", \"username\": \"v6\", \"other\": 1}"
       ))
 
     XCTAssertEqual(
       collector.snapshot(),
       [
-        "{\"access_token\": \"***\", \"token\": \"***\", \"secret\": \"***\", \"authorization\": \"***\", \"credential\": \"***\", \"other\": 1}"
+        "{\"access_token\": \"***\", \"token\": \"***\", \"secret\": \"***\", \"authorization\": \"***\", \"credential\": \"***\", \"username\": \"***\", \"other\": 1}"
       ],
-      "対象キー 5 件の値が全てマスクされること")
+      "対象キー 6 件の値が全てマスクされること")
+
+    // 受信した WebSocket メッセージのログのように、JSON が文字列リテラルへ埋め込まれて
+    // エスケープされた形式でも対象キーの値をマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message:
+          #"text("{\"username\":\"v6\",\"credential\":\"v7\",\"type\":\"offer\",\"other\":1}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"text("{\"username\": \"***\",\"credential\": \"***\",\"type\":\"offer\",\"other\":1}")"#,
+      "エスケープされた JSON でも対象キーの値だけがマスクされること")
+
+    // 値が長くても、上限 (`Logger.escapedValueMaxLength`) 以内ならマスクします。
+    let maxLengthValue = String(repeating: "a", count: Logger.escapedValueMaxLength)
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"text("{\"credential\":\""# + maxLengthValue + #"\"}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"text("{\"credential\": \"***\"}")"#,
+      "上限ちょうどの値はマスクされること")
+
+    // 上限を超える値はマスクしません。終端が現れない入力で走査が二次関数的に増えるのを
+    // 避けるための制約です (TURN の credential はこの長さに達しません)。
+    let overLimitValue = String(repeating: "b", count: Logger.escapedValueMaxLength + 1)
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"text("{\"credential\":\""# + overLimitValue + #"\"}")"#
+      ))
+    XCTAssertTrue(
+      collector.snapshot().last?.contains(overLimitValue) ?? false,
+      "上限を超える値はマスクしないこと")
+
+    // 値にエスケープされた引用符が含まれていても、JSON の文字列 1 つを値として扱います。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"{"credential":"p\"x","other":1}"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"{"credential": "***","other":1}"#,
+      "値に引用符が含まれていても対象キーの値がマスクされること")
+
+    // エスケープされた形式で値に引用符が含まれても、値の終端を誤認せずにマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"text("{\"credential\":\"ab\\\"cd\",\"x\":1}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"text("{\"credential\": \"***\",\"x\":1}")"#,
+      "エスケープされた形式でも値の中の引用符で終端を誤認しないこと")
+
+    // タブと復帰で整形された JSON でもマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"string("{\t\"credential\": \"v7\"\t}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"string("{\t\"credential\": \"***\"\t}")"#,
+      "タブで整形された JSON でも対象キーの値がマスクされること")
+
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"string("{\r\n  \"credential\": \"v7\"\r\n}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"string("{\r\n  \"credential\": \"***\"\r\n}")"#,
+      "復帰で整形された JSON でも対象キーの値がマスクされること")
+
+    // 値の後ろが区切り `]` でもマスクします (Swift の辞書の description など)。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"["credential": "v7"]"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"["credential": "***"]"#,
+      "値の後ろが `]` でもマスクされること")
+
+    // 値の直後に空白があって文字列が終わる場合もマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"send message => {"credential":"v7" "#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"send message => {"credential": "***" "#,
+      "値の直後の空白を挟んで文字列が終わる場合もマスクされること")
+
+    // 値の直後が文字列の末尾でもマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"send message => {"credential":"v7""#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"send message => {"credential": "***""#,
+      "値の直後が文字列の末尾でもマスクされること")
+
+    // エスケープ形で値の閉じ引用符の後に終端が無い (途切れた) ログは、走査量を抑える
+    // ためマスクしません (既知の制約)。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"text("{\"credential\":\"v7\""#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"text("{\"credential\":\"v7\""#,
+      "終端が無いエスケープ形のログはマスクしないこと")
+
+    // 値が別のキー名そのものである不正な JSON でも、そのキーを値として消費せず、
+    // 続く値をマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"{"username":"token":"leak"}"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"{"username":"token": "***"}"#,
+      "値が別のキー名である不正な JSON でも続く値がマスクされること")
+
+    // 値がバックスラッシュで終わる不正な JSON は、`\"` をエスケープされた引用符として
+    // 扱うため閉じ引用符が無く、マスクしません (既知の制約)。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"{"credential":"secret\"}"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"{"credential":"secret\"}"#,
+      "値がバックスラッシュで終わる不正な JSON はマスクしないこと")
+
+    // 値が引用符で終わる場合でも、値の終端を誤認せずにマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"text("{\"credential\":\"ab\\\"\",\"x\":1}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"text("{\"credential\": \"***\",\"x\":1}")"#,
+      "値が引用符で終わる場合でも終端を誤認しないこと")
+
+    // 別のキーの開始引用符を、直前の値の閉じ引用符が兼ねる不正な JSON でも、残りの
+    // キーをマスクします (値の後ろの終端条件により、キー名を値として消費しません)。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"{"access_token":""credential":"v7"}"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"{"access_token":""credential": "***"}"#,
+      "隣接した不正な JSON でも値がマスクされること")
+
+    // エスケープ形で、コロン前後にエスケープされた改行があってもマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"text("{\"credential\"\n: \n\"v7\"}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"text("{\"credential\": \"***\"}")"#,
+      "コロン前後のエスケープされた空白を許容すること")
+
+    // 外側の文字列の中にエスケープされた JSON がある場合でもマスクします。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"{"raw":"\"credential\":\"v7\""}"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"{"raw":"\"credential\": \"***\""}"#,
+      "外側の文字列の閉じ引用符が続く場合でもマスクされること")
+
+    // 整形済み JSON では値の後ろに改行が入ります。文字列リテラルへ埋め込むと改行は
+    // エスケープされた `\n` になるため、その形式でもマスクできることを確認します。
+    logger.output(
+      log: Log(
+        level: .info, type: .sora, timestamp: timestamp,
+        message: #"string("{\n  \"username\": \"v6\",\n  \"credential\": \"v7\"\n}")"#
+      ))
+    XCTAssertEqual(
+      collector.snapshot().last,
+      #"string("{\n  \"username\": \"***\",\n  \"credential\": \"***\"\n}")"#,
+      "整形済み JSON のエスケープ形式でも対象キーの値がマスクされること")
 
     // Log.description の期待値は、共有 formatter と同じ dateFormat と locale / timeZone を使う
     // テストローカルの formatter で組み立てます (共有 formatter は locale / timeZone を既定値のまま使います)。
@@ -390,6 +596,34 @@ final class LoggerTests: XCTestCase {
       log.description,
       "\(formatter.string(from: timestamp)) Sora INFO: message",
       "Log.description の出力形式が変わらないこと")
+  }
+
+  /// `LoggerCapture` が設定を元に戻すことを確認します。
+  ///
+  /// `Logger.shared` はプロセス全体の共有状態のため、収集を終えたら元の設定へ戻る
+  /// 必要があります。
+  func testLoggerCaptureRestoresSettings() {
+    let originalLevel = Logger.shared.level
+    let originalGroups = Logger.shared.groups
+    let originalOnOutputHandler = Logger.shared.onOutputHandler
+    var restoredHandlerCallCount = 0
+    Logger.shared.onOutputHandler = { _ in restoredHandlerCallCount += 1 }
+
+    let capture = LoggerCapture(level: .trace, groups: [])
+    XCTAssertEqual(Logger.shared.level, .trace, "収集中は level が変わること")
+    XCTAssertEqual(Logger.shared.groups, [], "収集中は groups が変わること")
+
+    capture.restore()
+    XCTAssertEqual(Logger.shared.level, originalLevel, "restore で level が戻ること")
+    XCTAssertEqual(Logger.shared.groups, originalGroups, "restore で groups が戻ること")
+    // handler は同一性を比較できないため、restore 後に差し替え前の handler が呼ばれることで
+    // 復元を確認します。
+    let log = Log(level: .info, type: .sora, timestamp: Date(), message: "restore check")
+    Logger.shared.onOutputHandler?(log)
+    XCTAssertEqual(
+      restoredHandlerCallCount, 1, "restore で onOutputHandler が戻ること")
+
+    Logger.shared.onOutputHandler = originalOnOutputHandler
   }
 
   /// 複数のスレッドから `Log.description` を呼んでも、同じ入力からは同じ文字列が得られることを確認します。

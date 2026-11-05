@@ -5,7 +5,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 
 # Sora iOS SDK (sora-ios-sdk)
 
-- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (2026.4.0)
+- **バージョン**: `Sora/PackageInfo.swift` の `SDKInfo.version` を参照 (2026.5.0)
 - **リポジトリ**: https://github.com/shiguredo/sora-ios-sdk
 - **ドキュメント**: https://sora-ios-sdk.shiguredo.jp/
 - **API リファレンス**: https://sora-ios-sdk.shiguredo.jp/_static/api/docs/
@@ -26,7 +26,7 @@ description: 時雨堂の WebRTC SFU Sora 向け iOS クライアント SDK (sor
 Swift Package Manager を利用する。
 
 ```swift
-.package(url: "https://github.com/shiguredo/sora-ios-sdk.git", from: "2026.4.0")
+.package(url: "https://github.com/shiguredo/sora-ios-sdk.git", from: "2026.5.0")
 ```
 
 `import Sora` と `import WebRTC` で利用する。
@@ -38,10 +38,22 @@ Swift Package Manager を利用する。
 1. `Configuration` を生成して接続設定を組み立てる
 2. `Sora.shared.connect(configuration:webRTCConfiguration:handler:)` で接続する
 3. 接続成功時に `MediaChannel` が返る
-4. `MediaChannel.handlers` でストリーム追加などのコールバックを登録する
+4. `SoraHandlers.onAddMediaChannel` で `MediaChannel.handlers` の handler property を設定するか、接続成功後に `MediaChannel.handlers` でストリーム追加などのコールバックを登録する (接続の完了前に届くイベントも受け取る handler は `onAddMediaChannel` で設定する)
 5. `MediaChannel.disconnect(error:)` で切断する
 
+`Configuration.mediaChannelHandlers` は接続の開始時にコピーされ、接続ごとに独立した `MediaChannelHandlers` として `MediaChannel.handlers` に設定される。接続の開始前に `Configuration.mediaChannelHandlers` へ設定した handler は、その `Configuration` から作るすべての接続で呼ばれる。接続の開始後に `Configuration.mediaChannelHandlers` を変更しても、接続済みの `MediaChannel.handlers` には反映されない。接続ごとの handler は `SoraHandlers.onAddMediaChannel` の中で `MediaChannel.handlers` の handler property に設定する。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれないため、他の handler を維持したい場合は handler property を個別に設定する。
+
 `Sora.shared` はシングルトンだが、接続グループやハンドラーを分けたい場合は `Sora()` でインスタンスを生成できる。
+
+### WebRTC 設定
+
+通常は `Configuration.webRTCConfiguration` に ICE サーバーや ICE トランスポートポリシーなどの WebRTC の設定を置く。`Sora.connect` の `webRTCConfiguration` 引数は、接続単位で別の設定を使う場合だけ使う。
+
+- `nil` (省略または明示的な `nil`) のときは `Configuration.webRTCConfiguration` が使われる
+- 非 `nil` を指定した場合は `Configuration.webRTCConfiguration` を使わず、`WebRTCConfiguration` 全体を引数の値で置き換える。フィールド単位のマージはしない (`constraints` / `degradationPreference` なども引数側の値になる)
+- 一部のフィールドだけを変えたい場合は、`configuration.webRTCConfiguration` を複製して必要なフィールドだけ変更した値を渡す
+- 引数を指定しても `MediaChannel.configuration` は渡した `Configuration` の値を返す
+- サーバーが offer の `config` で ICE サーバーまたは ICE トランスポートポリシーを指定した場合は、既存挙動どおりサーバーの値が優先される
 
 ### sendrecv (双方向)
 
@@ -173,7 +185,7 @@ Sora.setWebRTCLogLevel(.info)
 | `clientId` / `bundleId` | `String?` | クライアント ID / バンドル ID |
 | `role` | `Role` | `.sendonly` / `.recvonly` / `.sendrecv` |
 | `connectionTimeout` | `Int` | 接続タイムアウト秒 (デフォルト 30) |
-| `webRTCConfiguration` | `WebRTCConfiguration` | ICE サーバー・ICE ポリシー・劣化設定 |
+| `webRTCConfiguration` | `WebRTCConfiguration` | ICE サーバー・ICE トランスポートポリシー・劣化設定 (詳細は「WebRTC 設定」を参照) |
 
 音声:
 
@@ -248,7 +260,7 @@ DataChannel / シグナリング:
 
 | プロパティ | 内容 |
 | --- | --- |
-| `configuration` | 接続に使った `Configuration` |
+| `configuration` | connect に渡した `Configuration` (`webRTCConfiguration` 引数の値は反映されない)。`mediaChannelHandlers` は接続の開始時にコピーされるため、接続後にこの `Configuration` の `mediaChannelHandlers` を変更しても配送には反映されない |
 | `state` | `ConnectionState` (`.connecting` / `.connected` / `.disconnecting` / `.disconnected`) |
 | `isAvailable` | `state == .connected` |
 | `clientId` / `bundleId` / `connectionId` | 接続後に設定される ID |
@@ -306,7 +318,7 @@ let response = try await mediaChannel.rpc(
 
 | プロパティ | 内容 |
 | --- | --- |
-| `onConnect: ((Error?) -> Void)?` | 接続成功 |
+| `onConnect: ((Error?) -> Void)?` | 接続試行の終了 (成功時は `nil`、接続成立前の切断・失敗時はエラー) |
 | `onDisconnect: ((SoraCloseEvent) -> Void)?` | 接続解除 |
 | `onAddStream: ((MediaStream) -> Void)?` | ストリーム追加 |
 | `onRemoveStream: ((MediaStream) -> Void)?` | ストリーム除去 |
@@ -314,6 +326,13 @@ let response = try await mediaChannel.rpc(
 | `onDataChannel: ((MediaChannel) -> Void)?` | メッセージング用 DataChannel がすべて OPEN |
 | `onDataChannelOpened: ((MediaChannel, String) -> Void)?` | ラベルごとの DataChannel OPEN |
 | `onDataChannelMessage: ((MediaChannel, String, Data) -> Void)?` | DataChannel メッセージ受信 |
+
+`Configuration.mediaChannelHandlers` に保持される instance は参照型だが、`MediaChannel` は接続の開始時に handler property をコピーした接続ごとの instance を `MediaChannel.handlers` に設定する。このため、一方の接続で `MediaChannel.handlers` に設定した handler が別の接続で呼ばれることはない。
+
+- 接続の開始前の設定: `config.mediaChannelHandlers.onDisconnect = ...` のように設定する。接続の開始時にコピーされるため、その `Configuration` から作るすべての接続の配送で呼ばれる
+- 接続ごとの設定: `SoraHandlers.onAddMediaChannel` の中で `mediaChannel.handlers.onDisconnect = ...` のように設定する。この時点は非同期の接続処理より前なので、接続の完了前に届く signaling も取り逃さない
+- 接続の開始後に `config.mediaChannelHandlers` を変更しても、接続済みの `mediaChannel.handlers` には反映されない。接続の途中から handler を効かせたい場合は `mediaChannel.handlers` の handler property を設定する (次の配送から反映される)
+- `mediaChannel.handlers = ...` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれない。他の handler を維持したい場合は handler property を個別に設定する
 
 ### MediaStream
 
@@ -359,7 +378,7 @@ configuration.audioStereoOutputEnabled = true
 - Bluetooth HFP はモノラル。A2DP はステレオ出力を利用できるが、SDK は route を自動で切り替えない
 - 接続後に `setAudioMode(.voiceChat(...))` を呼ぶとモノラルへ切り替わる場合がある
 
-`recvonly` のマイク権限不要化と、ステレオ送信側の入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要となる。`Package.swift` は m155.8059.4.1 を参照している。
+`recvonly` のマイク権限不要化と、ステレオ送信側の入力制御には、RemoteIO の手動入力初期化とハードミュートに対応した WebRTC-Build が必要となる。`Package.swift` は m156.8078.5.1 を参照している。
 
 ### ミュート
 
@@ -440,6 +459,8 @@ await mediaChannel.stopScreenCapture()
 ```
 
 同一送信ストリームでカメラと画面キャプチャは同時に使えない。`initialCameraEnabled = false` にするか、`setVideoHardMute(true)` でカメラを止めてから開始する。
+
+ReplayKit の録画はプロセス全体で共有される。画面キャプチャの開始に失敗した場合でも SDK が録画の停止を試みるため、ホストアプリが同時に `RPScreenRecorder` を使用していると、その録画を停止することがある。ReplayKit には録画の所有者を照会する API がないため、SDK は自身が `startCapture` を発行した後の録画を SDK 所有として扱う。開始要求の時点で既に録画中の場合は停止しない。停止に失敗した場合は、同じ接続の `stopScreenCapture()` による停止に成功するまで、以後の画面キャプチャ開始がエラーになり、`isScreenCaptureActive()` は true を返す。
 
 `videoSampleBufferTransformer` は SDK 内部の送信キュー上で呼ばれる。`targetFPS` による間引きで破棄されるフレームと、送信処理中のために破棄されるフレーム、キャプチャ停止中と切断中のフレームでは呼ばれない。引数と戻り値の `CMSampleBuffer` の所有権は SDK に委ねられ、戻り値の buffer が保持する pixel buffer は送信のために SDK が retain する。戻り値を返した後にその buffer を書き換えないこと。
 
@@ -575,7 +596,7 @@ timeout はない)。snapshot API では、`MediaChannel` の解放開始後に�
 
 ## 切断イベント
 
-`MediaChannelHandlers.onDisconnect` で `SoraCloseEvent` を受け取る。
+`MediaChannelHandlers.onDisconnect` で `SoraCloseEvent` を受け取る。例は接続の開始前に `Configuration.mediaChannelHandlers` へ設定する形である。接続の開始後に設定する場合は `MediaChannel.handlers.onDisconnect` を使う (`Configuration.mediaChannelHandlers` の変更は接続済みの接続には反映されない)。
 
 ```swift
 config.mediaChannelHandlers.onDisconnect = { event in
@@ -630,6 +651,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 - `Logger.onOutputHandler` はログを出力した executor で同期的に呼ばれる (queue への hop は行わない)。複数の executor から並行に呼ばれ得るため、handler 側の排他は利用者の責任になる。handler の中から Logger の設定変更と再出力ができるが、同じログを再出力すると無限再帰になるため、再入の制御は利用者の責任になる
 - `Logger` の設定 (`level` / `groups` / `onOutputHandler`) と `Sora.logLevel` は SDK 内部の lock で保護され、任意の executor から読み書きできる。`@MainActor` のクラスの中で `onOutputHandler` を設定する場合は、closure が MainActor 隔離を継承するため隔離を外す必要がある (下の「コールバックを Swift 6 で扱う」を参照)
 - ハンドラの設定 (`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` のイベントハンドラのプロパティと `MediaChannel.handlers` の参照) は SDK 内部の lock で排他され、任意の executor から行える (`SoraHandlers` のプロパティは含まない)。callback が呼ばれるスレッドの保証は変わらない
+- `MediaChannel.handlers` は接続ごとに独立したインスタンスであり、`Configuration.mediaChannelHandlers` は接続の開始時にコピーされる。接続の開始後に `Configuration.mediaChannelHandlers` を変更しても、接続済みの `MediaChannel.handlers` には反映されない。接続の途中から設定したい場合は `MediaChannel.handlers` の handler property を設定する。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれない
 
 ### コールバックを Swift 6 で扱う
 
@@ -792,6 +814,7 @@ legacy handler と新しいイベントの対応は次のとおり。対応は�
 | 音声ハードミュート | `MediaChannel.setAudioHardMute(_:)` |
 | 映像ソフトミュート | `MediaChannel.setVideoSoftMute(_:)` |
 | 映像ハードミュート | `try await MediaChannel.setVideoHardMute(_:)` |
+| ICE サーバー設定 | `Configuration.webRTCConfiguration` |
 | ステレオ音声出力 | `Configuration.audioStereoOutputEnabled = true` |
 | Opus パラメーター | `Configuration.audioOpusParams` |
 | カメラ切り替え | `CameraVideoCapturer.flip(_:completionHandler:)` |

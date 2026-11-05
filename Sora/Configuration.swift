@@ -226,6 +226,10 @@ public struct Configuration {
   public var spotlightUnfocusRid: SpotlightRid = .unspecified
 
   /// WebRTC に関する設定
+  ///
+  /// `Sora.connect` の `webRTCConfiguration` 引数に非 `nil` を指定した場合、この値は接続に使われず、
+  /// `WebRTCConfiguration` 全体が引数の値で置き換えられます。この場合も
+  /// `MediaChannel.configuration` はこの値を返します。
   public var webRTCConfiguration = WebRTCConfiguration()
 
   /// `connect` シグナリングに含めるメタデータ
@@ -299,6 +303,20 @@ public struct Configuration {
   public var webSocketChannelHandlers = WebSocketChannelHandlers()
 
   /// メディアチャネルに関するイベントハンドラ
+  ///
+  /// このインスタンスは接続の開始時にコピーされ、接続ごとに独立した `MediaChannelHandlers` として
+  /// `MediaChannel.handlers` に設定されます。接続の開始前にここへ設定した handler は、この
+  /// `Configuration` から作るすべての接続の配送で呼ばれます。接続の開始後にこのインスタンスの
+  /// handler property を変更しても、接続済みの `MediaChannel.handlers` には反映されません
+  /// (このインスタンスは `Configuration` の値コピー間で共有されたままなので、同じ `Configuration`
+  /// から後で作る接続のコピー元にはなります)。
+  ///
+  /// 接続ごとの設定は `SoraHandlers.onAddMediaChannel` の中で `MediaChannel.handlers` に対して
+  /// 行います。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持する
+  /// インスタンスが差し替わるため、ここからコピーした handler は引き継がれません。また、
+  /// `MediaChannel.configuration` は渡した `Configuration` をそのまま返すため、
+  /// `MediaChannel.configuration.mediaChannelHandlers` の変更は接続済みの `MediaChannel` の
+  /// 配送には反映されません。
   public var mediaChannelHandlers = MediaChannelHandlers()
 
   // MARK: パブリッシャーに関する設定
@@ -321,7 +339,7 @@ public struct Configuration {
   /// 設定した場合は、カスタム音声デバイスが物理マイクの代わりに使用され、
   /// 音声入力の初期化 (`initializeAudioInput()`) はスキップされる。
   ///
-  /// SDK ではテストからダミー音声デバイス (DummyAudioDevice) を注入するために使用している。
+  /// SDK ではテストからダミー音声デバイスを注入するために使用している。
   /// :nodoc:
   var audioDevice: RTCAudioDevice?
 
@@ -413,6 +431,19 @@ extension Configuration {
     }
     return certs
   }
+}
+
+// MARK: - 音声デバイス
+
+/// ハードミュートの切り替えに対応する音声デバイスです。
+///
+/// SDK のテストターゲットからのみ準拠し、SDK ターゲットに準拠型は持ちません。
+/// 呼び出し元のスレッドは問わない。実装は状態更新を排他すること。
+protocol HardMuteSwitchableAudioDevice: AnyObject {
+  /// ハードミュートを有効化/無効化します。
+  /// - Parameter mute: `true` でミュート有効化、`false` でミュート無効化
+  /// - Returns: 成功した場合は `true`、失敗した場合は `false`
+  func setHardMute(_ mute: Bool) -> Bool
 }
 
 /// 転送フィルターのルールのフィールドの設定です。

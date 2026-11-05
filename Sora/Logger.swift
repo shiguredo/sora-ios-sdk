@@ -486,37 +486,91 @@ public final class Logger: Sendable {
   // MARK: - シークレットマスク
 
   /// マスク対象のシークレットキー
-  /// この文字列が含まれるキーの値はマスク対象とする
+  ///
+  /// JSON のキー名がこの文字列と完全一致する場合に、その値をマスク対象とします。
+  /// 正規表現の alternation に並べます。各 alternative は前後の `"` で区切られるため、
+  /// 並び順は置換の結果に影響しません。
   private static let secretKeys = [
-    "access_token", "token", "secret", "authorization", "credential",
+    "access_token", "token", "secret", "authorization", "credential", "username",
   ]
 
-  /// 事前コンパイルされた秘密情報マスク用の正規表現パターン
+  /// エスケープされた形式の値の長さの上限です。
+  ///
+  /// 終端が現れない入力で走査が二次関数的に増えるのを防ぐため、この長さを超える値は
+  /// マスクしません。TURN の credential や access_token は通常この長さに達しません。
+  /// テストから境界を検証するため internal とします。
+  internal static let escapedValueMaxLength = 4096
+
+  /// 事前コンパイルされた秘密情報マスク用の正規表現と置換テンプレート
+  ///
+  /// すべてのキーを 1 本の alternation にまとめ、エスケープされていない JSON と
+  /// エスケープされた JSON の 2 パターンだけを持ちます。キーごとにパターンを持つと、
+  /// ログ 1 件あたりの走査回数と文字列の生成回数がキー数に比例して増えるためです。
+  /// 置換テンプレートの `$1` は一致したキー名を保持します。
+  ///
+  /// - エスケープされていない JSON: `"credential":"..."` (シグナリングの JSON など)
+  /// - エスケープされた JSON: `\"credential\":\"...\"` (受信した WebSocket メッセージを
+  ///   `String(describing:)` で文字列化したログなど。文字列リテラルへ埋め込む際に
+  ///   `"` と `\` がエスケープされるため)
   ///
   /// `NSRegularExpression` は SDK のヘッダで `NS_SWIFT_SENDABLE`
   /// (`Immutable with no mutable subclasses`) が付いており、初期化後に変更しないため、
   /// lock を追加せずに複数の executor から共有します。
-  private static let secretPatterns: [(key: String, regex: NSRegularExpression)] = {
-    secretKeys.compactMap { key in
-      let escaped = NSRegularExpression.escapedPattern(for: key)
-      let pattern = "\"\(escaped)\"\\s*:\\s*\"[^\"]*\""
-      let regex = try! NSRegularExpression(pattern: pattern)
-      return (key, regex)
-    }
+  private static let secretPatterns: [(regex: NSRegularExpression, template: String)] = {
+    let alternation = secretKeys.map { NSRegularExpression.escapedPattern(for: $0) }
+      .joined(separator: "|")
+    // エスケープされていない JSON では `"key":"value"` の形で現れます。
+    // 値は JSON 文字列として解釈します。値の中の `\"` や `\\` のようなエスケープを
+    // 1 つのまとまりとして扱うため、値に引用符やバックスラッシュが含まれていても
+    // 途中で切れません。値の後ろには区切り (`,` `}` `]`) か文字列の末尾 (空白を挟んでも
+    // よい) を要求します。
+    // これが無いと、値が別のキー名そのものである不正な JSON で、そのキーを値として
+    // 消費してしまい、続く値をマスクできません。
+    let plainPattern =
+      "\"((?:\(alternation)))\"\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\"(?=(?:\\s*[,}\\]])|\\s*$)"
+    // エスケープされた JSON では `\"key\":\"value\"` の形で現れます。値の終端も値の
+    // 中の引用符もどちらも `\"` として現れるため、値の側だけでは区別できません。
+    // 区切り (`,` または `}`)、外側の文字列の閉じ引用符 (`"`) が続く `\"` を終端と
+    // みなします。値の中の `\"` は、直後がそれらのいずれでもなければ終端になりません
+    // (値が引用符で終わる場合に終端を誤認しないため)。終端との間には整形済み JSON の
+    // 空白 (エスケープされた `\n` / `\r` / `\t` を含む) を許します。文字列の末尾は
+    // 終端にしません (末尾で途切れたログは対象外とし、走査量を抑えるため)。
+    //
+    // 値の長さの上限は `escapedValueMaxLength` です (根拠は定義側の doc を参照)。
+    //
+    // 値の中の引用符の直後に (空白を挟んで) 区切りが続く場合 (例: 値が `ab",cd`) は、
+    // その `\"` を終端と誤認して値の残りが平文で残ります。TURN の credential は
+    // この形をとらないため、この制約は許容します。
+    let escapedPattern =
+      "\\\\\"((?:\(alternation)))\\\\\"(?:\\s|\\\\[nrt])*:(?:\\s|\\\\[nrt])*\\\\\"[\\s\\S]{0,\(escapedValueMaxLength)}?\\\\\"(?=(?:\\s|\\\\[nrt])*(?:[,}]|\"))"
+    // 置換ではコロン前後の空白を詰めて `: ` に揃えます (値以外でも空白の表記が変わります)。
+    // `NSRegularExpression.escapedTemplate(for:)` は `$` もエスケープするため、`$1` を
+    // 使うテンプレートには適用できません。テンプレート上で `\` はエスケープ文字なので、
+    // 出力したい `\"` はテンプレートでは `\\"`、Swift の文字列リテラルでは `\\\\\"`
+    // と書きます。
+    return [
+      (try! NSRegularExpression(pattern: plainPattern), "\"$1\": \"***\""),
+      (try! NSRegularExpression(pattern: escapedPattern), "\\\\\"$1\\\\\": \\\\\"***\\\\\""),
+    ]
   }()
 
   /// ログメッセージに含まれるシークレット情報をマスクする
   ///
-  /// JSON 文字列内のシークレットキーに該当する値を `"***"` に置換する
+  /// JSON 文字列内のシークレットキーに該当する値を `***` に置換する
   private static func maskSecrets(in message: String) -> String {
+    // JSON のキーは必ず `"` を伴うため、`"` を含まないログは走査しません。
+    // `String.contains(_:)` は Unicode を考慮した検索なので、UTF-8 のバイトで判定します。
+    guard message.utf8.contains(UInt8(ascii: "\"")) else {
+      return message
+    }
     var result = message
-    for (key, regex) in secretPatterns {
+    for (regex, template) in secretPatterns {
       let range = NSRange(result.startIndex..., in: result)
       result = regex.stringByReplacingMatches(
         in: result,
         options: [],
         range: range,
-        withTemplate: "\"\(key)\": \"***\"")
+        withTemplate: template)
     }
     return result
   }

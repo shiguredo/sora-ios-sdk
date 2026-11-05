@@ -592,7 +592,8 @@ actor VideoHardMuteActor {
       if let error = await capturer.startForSDK(
         format: formatBox.format,
         frameRate: frameRate,
-        senderStream: senderStream)
+        senderStream: senderStream,
+        targetResolution: cameraSettings.resolution)
       {
         throw error
       }

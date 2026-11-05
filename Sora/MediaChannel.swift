@@ -40,8 +40,26 @@ public enum SoraCloseEvent: Sendable {
 /// イベントを actor / Task から購読する場合は
 /// `MediaChannel.subscribeEvents(bufferingPolicy:)` を使う。新しい購読 API は、この handler と
 /// 同じ配送点から対応するイベントを配送する。
+///
+/// ## 接続ごとのハンドラ
+///
+/// `MediaChannelHandlers` は参照型であるため、`Configuration.mediaChannelHandlers` に保持される
+/// インスタンスは `Configuration` の値コピー間で共有される。このインスタンスをそのまま接続の
+/// handler に使うと別接続の handler が呼ばれるため、`MediaChannel` は接続の開始時にその
+/// インスタンスをコピーし、接続ごとに独立したインスタンスを `MediaChannel.handlers` に設定する。
+///
+/// - 接続の開始前 (`Sora.connect` を呼ぶ前) に `Configuration.mediaChannelHandlers` へ設定した
+///   handler はコピーされ、その `Configuration` から作るすべての接続の配送で呼ばれる
+/// - 接続の開始後に `Configuration.mediaChannelHandlers` の handler property を変更しても、
+///   接続済みの `MediaChannel.handlers` には反映されない
+/// - 接続ごとの handler は `SoraHandlers.onAddMediaChannel` の中で `MediaChannel.handlers` に
+///   設定する。`MediaChannelHandlers` のインスタンスを差し替えると `Configuration` からコピーした
+///   handler は引き継がれないため、他の handler を維持したい場合は handler property を個別に
+///   設定する
 public final class MediaChannelHandlers {
-  /// 接続成功時に呼ばれるクロージャー
+  /// 接続試行が終了したときに呼ばれるクロージャー
+  ///
+  /// 接続に成功した場合は `nil`、接続が成立する前の切断・接続失敗の場合はエラーが渡されます。
   public var onConnect: ((Error?) -> Void)? {
     get { onConnectStorage.current }
     set { onConnectStorage.current = newValue }
@@ -119,6 +137,45 @@ public final class MediaChannelHandlers {
 
   /// 初期化します。
   public init() {}
+
+  /// 指定した `MediaChannelHandlers` の 10 個の handler property をすべて写したインスタンスを生成します。
+  ///
+  /// `MediaChannel` は、接続ごとに独立したインスタンスを持たせるため、接続の開始時にこの
+  /// イニシャライザで `Configuration.mediaChannelHandlers` を写し取ります。写すのは handler
+  /// property だけであり、closure 自体は copy せず同じ closure を設定します。
+  ///
+  /// 各 property の読み出しは property ごとの lock で排他されるため、写し元の handler を
+  /// 並行して変更した場合、写し先の値は property ごとに変更の前後どちらかになります
+  /// (インスタンス全体を原子的に写し取ったものではありません)。
+  ///
+  /// handler property を追加した場合は、このイニシャライザと `MediaChannelHandlersTests` の
+  /// コピー検証、全 handler property を列挙する `ConcurrencyStressTests` のテストも更新して
+  /// ください。このイニシャライザの doc と `MediaChannel.handlers` doc に書いた個数も合わせて
+  /// 更新します。
+  ///
+  /// SDK 内部専用のため internal に閉じています (公開 API は変わりません)。
+  ///
+  /// このイニシャライザは convenience にします。designated init を internal で追加すると、
+  /// swift-api-digester が `hasMissingDesignatedInitializers` を true にして公開 API baseline が
+  /// 変わってしまうためです (公開 API の宣言自体は変わりません)。
+  ///
+  /// - parameter handlers: 写し元のハンドラ
+  convenience init(copying handlers: MediaChannelHandlers) {
+    self.init()
+    onConnectStorage.current = handlers.onConnect
+    // deprecated の handler property は、非推奨 API を SDK 内部で参照しないよう storage から写す
+    // (public な accessor を読むと DeprecatedDeclaration 警告が増える)。
+    // 利用者が設定した値は接続ごとのインスタンスに引き継ぐ
+    onDisconnectLegacyStorage.current = handlers.onDisconnectLegacyStorage.current
+    onDisconnectStorage.current = handlers.onDisconnect
+    onAddStreamStorage.current = handlers.onAddStream
+    onRemoveStreamStorage.current = handlers.onRemoveStream
+    onReceiveSignalingJSONStorage.current = handlers.onReceiveSignalingJSON
+    onReceiveSignalingStorage.current = handlers.onReceiveSignalingStorage.current
+    onDataChannelStorage.current = handlers.onDataChannel
+    onDataChannelOpenedStorage.current = handlers.onDataChannelOpened
+    onDataChannelMessageStorage.current = handlers.onDataChannelMessage
+  }
 
   // MARK: - closure を保持する lock 付き storage
 
@@ -662,6 +719,20 @@ public final class MediaChannel {
 
   /// イベントハンドラ
   ///
+  /// 接続ごとに独立した handler です。接続の開始時に `Configuration.mediaChannelHandlers` の
+  /// 10 個の handler property をすべてコピーしたインスタンスで初期化されます。したがって、
+  /// 接続の開始後に `Configuration.mediaChannelHandlers` を変更しても、この接続の配送には
+  /// 反映されません。
+  ///
+  /// 接続ごとの設定は `SoraHandlers.onAddMediaChannel` の中で行います
+  /// (`Sora.connect` が接続試行を開始して `.connecting` へ遷移した後、非同期の接続処理より前に
+  /// 呼ばれます)。
+  ///
+  /// - handler property を設定する (`handlers.onDisconnect = ...`): `Configuration` からコピーした
+  ///   他の handler はそのまま引き継がれます
+  /// - 新しい `MediaChannelHandlers` を代入する (`handlers = ...`): 保持するインスタンスを
+  ///   差し替えるため、`Configuration` からコピーした handler は引き継がれません
+  ///
   /// get / set は lock 付き storage で排他します。配送は毎回この storage から読むため、接続を
   /// 開始した後に代入しても次の配送から反映されます。配送側は lock を解放してから取得済みの
   /// closure を呼びます。この storage が排他するのは参照の差し替えだけで、各イベントハンドラの
@@ -782,8 +853,9 @@ public final class MediaChannel {
 
   /// クライアントの設定
   ///
-  /// 公開互換のために利用者が渡した値を返し続けます。接続開始後の非同期区間
-  /// (非同期 hop の後、WebRTC callback、`ConnectionTimer`) はこの値の参照型フィールド
+  /// 公開互換のために利用者が渡した値を返し続けます。`Sora.connect` の
+  /// `webRTCConfiguration` 引数を指定した接続でも、この値は引数を反映しません。接続開始後の
+  /// 非同期区間 (非同期 hop の後、WebRTC callback、`ConnectionTimer`) はこの値の参照型フィールド
   /// (metadata / notify metadata / codec 別 params / `dataChannels` / `forwardingFilter` /
   /// `forwardingFilters` / `webRTCConfiguration`、および snapshot に含めないハンドラクラスと
   /// `audioDevice`) を読みません。値型フィールドは接続開始時の値のままなので、公開 getter、
@@ -874,8 +946,11 @@ public final class MediaChannel {
     /// `connectionLifecycleLock` を保持して `setState(_:)` を通すため、接続状態の正本である
     /// storage だけが変わり、他の接続ライフサイクル (`currentConnectionTask` /
     /// `connectionTimerAuthorization` / `hasStartedConnection`) は変わりません。
-    /// テストは `getStats` / `getStatsSnapshot` 以外の接続ライフサイクル API を呼ばず、後始末で `.disconnected` に
-    /// 戻してから `MediaChannel` を解放します。Release には存在せず、本番からは呼びません。
+    /// テストは接続ライフサイクルを進める API (`connect` / `disconnect` など) を呼ばず、
+    /// 接続ライフサイクルを進めない API (`startScreenCapture` など) の検証に使い、後始末で
+    /// `.disconnected` に戻してから `MediaChannel` を解放します。`startScreenCapture` のように
+    /// 開始処理まで進み得る API は、テスト内で失敗する前提を作ってから呼びます。Release には
+    /// 存在せず、本番からは呼びません。
     func setConnectionStateForTesting(_ next: ConnectionState) {
       connectionLifecycleLock.lock()
       defer { connectionLifecycleLock.unlock() }
@@ -1120,7 +1195,7 @@ public final class MediaChannel {
   /// - parameter snapshot: 接続開始時に写し取った設定
   /// - parameter configuration: 公開互換のために保持する利用者の設定
   /// - parameter audioDevice: カスタム音声デバイス (snapshot には含めない)
-  /// - parameter mediaChannelHandlers: メディアチャネルのハンドラ
+  /// - parameter mediaChannelHandlers: メディアチャネルのハンドラ (接続ごとのインスタンスにコピーして保持する写し元)
   /// - parameter webSocketChannelHandlers: WebSocket チャネルのハンドラ
   init(
     snapshot: ConnectionConfigurationSnapshot,
@@ -1172,7 +1247,11 @@ public final class MediaChannel {
       cameraCaptureCoordinator: cameraCaptureCoordinator,
       cameraCaptureOwnership: cameraCaptureOwnership,
       videoSourceCoordinator: videoSourceCoordinator)
-    handlers = mediaChannelHandlers
+    // `Configuration` の `mediaChannelHandlers` は参照型のため、そのまま設定すると同じ
+    // `Configuration` から作った接続間で共有される。接続ごとに独立したインスタンスに
+    // なるよう、接続の開始時に写し取る。利用者が接続の開始前に `Configuration` へ設定した
+    // handler はここで引き継ぐ。
+    handlers = MediaChannelHandlers(copying: mediaChannelHandlers)
 
     _connectionTimer = ConnectionTimer(
       monitors: [
@@ -1428,8 +1507,9 @@ public final class MediaChannel {
 
   /// サーバーに接続します。
   ///
-  /// - parameter webRTCConfiguration: WebRTC の設定。接続処理はこの引数を使わず、
-  ///   接続開始時の snapshot から設定を読む (公開引数の扱いは別途整理する)
+  /// - parameter webRTCConfiguration: WebRTC の設定。接続処理では使わない
+  ///   (`Sora.connect` は引数を反映した snapshot から接続する)。既存テストの呼び出し互換の
+  ///   ために残している
   /// - parameter handler: 接続試行後に呼ばれるクロージャー
   /// - parameter error: (接続失敗時) エラー
   func connect(
@@ -1504,8 +1584,6 @@ public final class MediaChannel {
     let weakSelf = WeakMediaChannelBox(self)
     let taskBox = MediaChannelConnectionTaskBox(task)
     DispatchQueue.global().async { [weakSelf, taskBox] in
-      // basicConnect は接続設定を snapshot から読む。webRTCConfiguration は既存テストの
-      // 呼び出し互換のために受け取るだけで、接続処理では使わない。
       weakSelf.value?.basicConnect(connectionTask: taskBox.value)
     }
     return task
@@ -2395,11 +2473,13 @@ public final class MediaChannel {
       return nil
     }
 
-    // ダミー音声経路: DummyAudioDevice でハードミュートを切り替える
-    if let dummyDevice = self.nativePeerChannelFactory.audioDevice as? DummyAudioDevice {
-      if !dummyDevice.setHardMute(mute) {
+    // カスタム音声デバイス経路: ハードミュートを切り替える
+    if let audioDevice = self.nativePeerChannelFactory.audioDevice
+      as? HardMuteSwitchableAudioDevice
+    {
+      if !audioDevice.setHardMute(mute) {
         return SoraError.mediaChannelError(
-          reason: "DummyAudioDevice::setHardMute failed")
+          reason: "hard mute failed for the custom audio device")
       }
       return nil
     }
@@ -2602,6 +2682,14 @@ public final class MediaChannel {
   /// 接続前に `Configuration.initialCameraEnabled = false` を設定してください。
   /// 接続後にカメラを停止する場合は `setVideoHardMute(true)` を先に呼んでください。
   ///
+  /// ReplayKit の録画はプロセス全体で共有されます。開始に失敗した場合でも SDK が録画の停止を
+  /// 試みるため、ホストアプリが同時に `RPScreenRecorder` を使用している場合は、SDK がホストの
+  /// 録画を停止することがあります。ReplayKit は録画の所有者を照会する API を提供しないため、
+  /// SDK は自身が `startCapture` を発行した後の録画を SDK 所有として扱います。
+  /// 開始要求の時点でホストアプリが既に開始していた録画は停止しません。停止に失敗した場合は、
+  /// 同じ `MediaChannel` の `stopScreenCapture()` による停止に成功するまで開始できず、
+  /// `isScreenCaptureActive()` は true を返します。
+  ///
   /// - Parameter settings: 画面キャプチャ設定
   /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます
   public func startScreenCapture(settings: ScreenCaptureSettings = .init()) async throws {
@@ -2616,11 +2704,24 @@ public final class MediaChannel {
     // controller を最初の await より前に保持し、並行する停止または切断が
     // 遅延中の開始を必ず取り消せるようにする。
     let screenCaptureController = getOrCreateScreenCaptureController()
-    guard let reservation = videoSourceCoordinator.beginScreen(stream: senderStream) else {
+    // カメラ競合として扱う失敗理由に共通する案内文
+    let cameraConflictReason =
+      "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+    let reservation: VideoSourceCoordinator.Reservation
+    switch videoSourceCoordinator.beginScreen(stream: senderStream) {
+    case .success(let startedReservation):
+      reservation = startedReservation
+    case .failure(.screenCleanupPending):
+      // 後始末待ちの状態は stopScreenCapture() の再試行だけが復旧経路であり、
+      // カメラ競合を案内すると利用者が誤った操作をするため区別して返す。
       throw SoraError.mediaChannelError(
         reason:
-          "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
+          "screen capture cleanup failed, call stopScreenCapture before startScreenCapture"
       )
+    case .failure(.cameraInUse), .failure(.screenOperationInProgress), .failure(.cancelled):
+      // 後始末待ち以外の失敗理由 (カメラ競合・画面共有の操作中・切断済み) は、
+      // 後方互換のため従来のメッセージを維持する。
+      throw SoraError.mediaChannelError(reason: cameraConflictReason)
     }
 
     do {
@@ -2630,10 +2731,7 @@ public final class MediaChannel {
           on: senderStream,
           authorization: reservation))
       else {
-        throw SoraError.mediaChannelError(
-          reason:
-            "camera capture is running on senderStream, call setVideoHardMute(true) before startScreenCapture"
-        )
+        throw SoraError.mediaChannelError(reason: cameraConflictReason)
       }
 
       try await screenCaptureController.startCapture(
@@ -2662,6 +2760,8 @@ public final class MediaChannel {
   }
 
   /// ReplayKit を利用した画面キャプチャを停止します
+  ///
+  /// 同じ接続で停止に失敗した場合は、再度呼ぶことで停止を再試行できます。
   public func stopScreenCapture() async {
     let screenStopReservation = videoSourceCoordinator.beginScreenStop()
     let screenCaptureController = currentScreenCaptureController()
@@ -2675,6 +2775,8 @@ public final class MediaChannel {
   }
 
   /// 画面キャプチャが動作中かを取得します
+  ///
+  /// 停止処理中と停止の後始末に失敗した状態でも true を返します。
   public func isScreenCaptureActive() -> Bool {
     currentScreenCaptureController()?.isCaptureActive() ?? false
   }

@@ -1,7 +1,7 @@
 # redirect 後に旧 PeerConnection の statistics が新接続へ送信される問題を修正する
 
 - Created: 2026-09-01
-- Completed:
+- Completed: 2026-11-02
 - Priority: Low
 - Branch:
 - Polished: 2026-09-16
@@ -59,3 +59,27 @@ case .ping(let ping):
 - 追加したテストと既存テストがすべて成功すること。
 
 ## 解決方法
+
+2026-11-02 に、本 issue が扱う事象が production では成立しないことを確認し、コード変更なしで closed にした。
+
+### 前提が成立しないことの確認
+
+- Sora の redirect は `type: connect` を送った際の応答として送られる (Sora 公式ドキュメントの CLUSTER)。`closed/0101` の実機ログでも、connect → redirect → 新 WebSocket → connect(redirect:true) → offer → switched の順で、redirect が offer より前に届くことを確認している
+- `Sora/PeerChannel.swift` の `nativeChannel` は `.offer` の処理でしか生成されない (`.redirect` は旧 PC を close するだけで、新しい PC は生成しない)。そのため redirect の時点で `statistics` の要求は存在せず、redirect を跨いで遅延完了する統計コールバックも存在しない
+- redirect 窓中も `transportStorage.native` は旧 PC のまま (`isCurrentPeerConnection` と `.redirect` の実装) だが、窓中に ping は届かず、`nativeChannel?.statistics` が呼ばれる経路もない
+- `closed/0105`、`closed/0176`、open の `0164` も同じ前提を記録している
+
+### 現行コードの状態
+
+`.ping` の stats pong 経路 (`handleSignalingOverWebSocket` の `.ping`) は、要求時の transport epoch / PC identity / `isRedirecting` の照合を持たず、完了した pong を無条件に `signalingChannel.send(text:)` へ渡す。本 issue の設計方針にあった照合は実装していない。
+
+上記のとおり前提が成立しないため、この経路に遮断を追加しても到達しない防御コードになる。実装しない判断とした。
+
+### 残課題
+
+- `CHANGES.md` の 2026.3.0 の `[FIX]`「以後の `sendMessage` / RPC / stats が旧 DataChannel / 旧 PeerConnection を参照しないようにする」は、0095 の解決方法に stats が含まれず、`.ping` の pong 経路も遮断していないため、記述が実装より広い。訂正は別作業とする
+- 将来 redirect が接続確立後に届く仕様へ変わった場合は、`0164` の判断 (到達しない無効化コードを残すか削除するか) と整合させたうえで、照合と送信を同一排他区間で行う設計を含めて別 issue にする
+
+### 検証
+
+コード変更を伴わないため、ビルドとテストは実行していない。上記の判断は develop `fed5f508` 時点の現行コードの静的読解と、Sora 公式ドキュメントおよび関連 issue の記録に基づく。

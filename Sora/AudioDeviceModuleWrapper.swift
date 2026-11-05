@@ -8,6 +8,7 @@ internal final class AudioDeviceModuleWrapper {
   private let queue = DispatchQueue(label: "jp.shiguredo.sora.audio.device.wrapper")
   // 録音操作の実行先となる factory。m155 以降の ADM は録音の pause/resume を
   // WebRTC の worker スレッド上で実行する契約のため、factory 経由で実行する。
+  // m156 で専用の worker thread が廃止され、worker は network thread が兼ねる。
   private let lock = NSLock()
   private var factory: RTCPeerConnectionFactory?
 

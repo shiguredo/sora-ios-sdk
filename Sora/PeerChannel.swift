@@ -1145,13 +1145,13 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       if !snapshot.usesCustomAudioDevice {
         initializeAudioInput()
       } else {
-        // AVAudioSession の設定はカスタム音声デバイス (DummyAudioDevice.initialize(with:)) が行うためスキップする
+        // AVAudioSession の設定はカスタム音声デバイスが行うためスキップする
         Logger.debug(
           type: .peerChannel,
           message: "custom audio device enabled, skip initialize audio input")
       }
     } else if snapshot.usesCustomAudioDevice {
-      // 音声トラック自体が生成されないためダミー音声も無効となる
+      // 音声トラック自体が生成されないためカスタム音声デバイス経由でも音声は無効となる
       Logger.warn(
         type: .peerChannel,
         message: "custom audio device enabled but audioEnabled is false, audio is disabled")
@@ -1223,7 +1223,10 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   }
 
   private func initializeCameraVideoCapture(stream: MediaStream) {
+    // enqueue の closure は @Sendable のため、非 Sendable な PeerChannel (self) の
+    // snapshot を closure 内で参照しない。必要な値は closure の外で取り出す。
     let position = snapshot.cameraSettings.position
+    let resolution = snapshot.cameraSettings.resolution
 
     // position に対応した CameraVideoCapturer を取得する
     let capturer: CameraVideoCapturer
@@ -1255,8 +1258,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // デバイスに対応したフォーマットとフレームレートを取得する
     guard
       let format = CameraVideoCapturer.format(
-        width: snapshot.cameraSettings.resolution.width,
-        height: snapshot.cameraSettings.resolution.height,
+        width: resolution.width,
+        height: resolution.height,
         for: capturer.device,
         frameRate: snapshot.cameraSettings.frameRate)
     else {
@@ -1358,7 +1361,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       if let error = await capturer.startForSDK(
         format: formatBox.format,
         frameRate: frameRate,
-        senderStream: senderStream)
+        senderStream: senderStream,
+        targetResolution: resolution)
       {
         if capturer.isRunning {
           _ = videoSourceCoordinator.completeCamera(reservation, active: true)
@@ -2225,7 +2229,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
 
     let cameraCleanupTask = snapshot.isSender ? terminateSenderStream() : nil
 
-    // カスタム音声デバイス (ダミー音声等) の停止。terminateSenderStream は送信側のカメラ停止のみを行い、
+    // カスタム音声デバイスの停止。terminateSenderStream は送信側のカメラ停止のみを行い、
     // 音声デバイスの停止は行わないため、recvonly を含む全ロールで実行する。
     // nativeChannel?.close() より前に実行し、ADM スレッドが生存している状態で
     // terminateDevice の dispatchSync を実行する

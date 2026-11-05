@@ -1,7 +1,7 @@
 # redirect 時の旧 DataChannel 無効化と sendMessage の競合を修正する
 
 - Created: 2026-09-10
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-10-07
 - Branch: feature/fix-redirect-datachannel-send-message-race
 - Polished: 2026-09-16
 - Updated: 2026-10-01
@@ -64,3 +64,50 @@ redirect 受理時に旧 DataChannel を無効化しても、`MediaChannel.sendM
 - `SoraTests/`: 並行実行の Thread Sanitizer テスト
 
 ## 解決方法
+
+2026-10-06 に対応し、2026-10-07 に PR #425 として develop へマージした。2026.4.0 に含まれる。
+
+### 修正内容
+
+- `Sora/PeerChannel.swift` に `PeerChannelMessagingStorage` を追加し、登録済みの `DataChannel` の辞書 / `switchedToDataChannel` / `rpcChannel` を単一の `NSLock` で保護した。変更前は 3 つとも lock 保護のない可変状態だった
+  - 読み書きはすべて storage の `withLock(_:)` 配下で行い、lock は葉 lock として保持したまま他の lock を取らない
+  - `dataChannels` という辞書プロパティは無くなり、登録済みの参照は `storedDataChannels` に移った。`switchedToDataChannel` と `rpcChannel` は lock 付きの computed property にした
+- `Sora/MediaChannel.swift` の `sendMessage(label:data:)` は、`switchedToDataChannel` と登録済み `DataChannel` の照合から `DataChannel.sendWithoutLogging(_:)` までを 1 つの排他区間で行うようにした。redirect の無効化が完了した後に区間へ入る送信は旧 DataChannel を参照せず、`SoraError.messagingError` を返す
+- `Sora/MediaChannel.swift` の `performRPC` (`rpc` と `sendableRPC` の共通経路) も同じ排他単位で `peerChannel.rpcChannel` の参照を読むようにした
+- `Sora/PeerChannel.swift` の redirect 受理処理を `invalidateMessagingAfterRedirect()` に切り出し、`switchedToDataChannel` の false 化 / 旧 DataChannel の解放 / `rpcChannel` の取り出しを 1 つの排他区間で行うようにした。`RPCChannel.invalidate(reason:)` は利用者の completion を同期的に呼ぶため区間の外で実行する
+- `Sora/DataChannel.swift` の delegate、`Sora/PeerChannel.swift` の `handleRPCMessage` / `basicDisconnect` / `didOpen` も同じ排他単位へ移した。lock 区間の中で利用者の handler、completion、Logger を呼ばない
+- 公開 API は変更していない。`sendMessage` の戻り値は従来どおり `SoraError.messagingError` である
+
+### 設計方針との差
+
+- 世代照合 (`dataChannelGeneration`) は、非同期処理の完了時に旧接続の結果を破棄する補助として用い、`sendMessage` の送信直前の再確認は行っていない。辞書参照と送信を同一区間で完結させれば旧 DataChannel を掴まないため、世代照合は排他の代わりにならない。この判断は `PeerChannelMessagingStorage` のコメントに明記した
+- 対象は redirect 経路だけではない。`tsan` job が実際に検出したのは切断経路の `rpcChannel` の競合 (`PeerChannel.handleRPCMessage` の読み取りと `PeerChannel.basicDisconnect` の nil 代入) であり、本修正は切断経路を含む全経路を対象にしている
+
+### テスト
+
+`SoraTests/PeerChannelMessagingRaceTests.swift` を追加した。モックやスタブは使用せず、実 `RTCPeerConnection` / `DataChannel` で検証する。
+
+- `testSendMessageAndRedirectInvalidationRace`: `sendMessage` と redirect の無効化を複数スレッドから交差させる
+- `testSendMessageAfterRedirectInvalidationDoesNotReachOldDataChannel`: 無効化完了後の送信が旧 DataChannel の対向へ届かず、`SoraError.messagingError` を返すこと
+- `testRPCAndRedirectInvalidationRace` / `testRPCChannelMessageAndRedirectInvalidationRace`: `performRPC` と `handleRPCMessage` の `rpcChannel` 参照を redirect の無効化と交差させる
+- `testRPCMessageAndDisconnectRace`: `handleRPCMessage` の読み取りと `basicDisconnect` の競合
+- `testSendMessageFromOutputHandlerDoesNotDeadlock`: 利用者の出力 handler から `sendMessage` を再入してもデッドロックしないこと
+- 既存の `SoraTests/PeerChannelRedirectInvalidationTests.swift` に `testRedirectReleasesRegisteredDataChannels` を追加した
+
+### 検証結果
+
+- CI の `tsan` job と `e2e` job が 2026-10-28 の develop (`78bc94e5`) で成功した: run [40648378038](https://github.com/shiguredo/sora-ios-sdk/actions/runs/40648378038)
+  - `tsan` job は TSan report が 1 件でもあれば失敗するため、job の成功は report 0 件を意味する
+  - 追加した並行テストも TSan 有効で実行されている
+- 完了条件 5 件は上記のテストと CI で満たした
+
+### 残課題
+
+- redirect 受理時の無効化は、`0164` の主張 (redirect は接続確立前にのみ届くため対象が常に空) を前提にすると本番では到達しない防御コードである。`0164` は `dataChannels` / `removeAll()` を前提にしているため、本修正で前提が変わった。`0164` の同期は `0164` 側で行う
+  - 完了条件 1 の検証 (`PeerChannelRedirectInvalidationTests` と `PeerChannelMessagingRaceTests` の一部) は、production では到達しない状態を人工的に作った検証である。`0164` が案 2 (無効化の削除) を採る場合は、当該テストの扱いを `0164` で決める
+- 実 Sora 環境で redirect を発生させた手動確認は記録していない。redirect のタイミングはサーバー構成に依存し、`0164` の前提では接続確立後には発生しない
+- `WrapperVideoEncoderFactory` の競合は本 issue ではなく `0185` が 2026-10-02 に修正した。本文の「`tsan` job を成功させるには両方の修正が必要」は、本 issue と `0185` の 2 件で満たされた
+
+### 変更履歴
+
+`CHANGES.md` の 2026.4.0 の `[FIX]` に、担当者行付きで収録済みである。

@@ -61,9 +61,22 @@ public final class ICEServerInfo {
 
 /// :nodoc:
 extension ICEServerInfo: CustomStringConvertible {
+  /// 認証情報を伏せた JSON 文字列を返します。
+  ///
+  /// `urls` / `username` / `credential` のキー構成は `Codable` の出力と同じに保ちます。
+  /// `username` と `credential` は利用者が設定した値そのままのため、文字列表現では
+  /// 値を `***` に置き換えます。`Codable` の `encode(to:)` は変更しないため、
+  /// JSON として保存するときの値は変わりません。
   public var description: String {
+    // 値を伏せた複製を encode することで、`Codable` の `encode(to:)` を変更せずに
+    // 文字列表現だけをマスクします。`CodingKeys` にフィールドを追加した場合は、
+    // 複製にもそのフィールドを写し取る必要があります。
+    let masked = ICEServerInfo(
+      urls: urls,
+      userName: userName == nil ? nil : "***",
+      credential: credential == nil ? nil : "***")
     let encoder = JSONEncoder()
-    let data = try! encoder.encode(self)
+    let data = try! encoder.encode(masked)
     return String(data: data, encoding: .utf8) ?? "-"
   }
 }

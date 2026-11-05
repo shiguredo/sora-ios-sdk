@@ -28,9 +28,10 @@ private final class CameraSnapshotStorage: @unchecked Sendable {
   }
 }
 
-/// non-Sendable な実資源を capturer ID ごとに保持するテーブルです。
+/// capturer ID ごとの資源と設定値を保持するテーブルです。
 ///
-/// format (`AVCaptureDevice.Format`) と送信先 stream (`MediaStream`) を保持します。
+/// format (`AVCaptureDevice.Format`)、送信先 stream (`MediaStream`)、接続時に要求された
+/// 目標解像度 (`CameraSettings.Resolution`) を保持します。
 /// 読み取りは NSLock で保護し、任意のスレッドから行えます。 native の呼び出しと
 /// format の差し替えは libwebrtc の capture session queue 上で行います。
 ///
@@ -40,8 +41,8 @@ private final class CameraSnapshotStorage: @unchecked Sendable {
 /// 生存期間の意味が異なり、利用者が capturer 以外に強参照を持たない stream は
 /// 解放されます。解放後は `nil` を返します。
 ///
-/// `@unchecked Sendable` としているのは、可変状態が `formats` / `streams` だけで、
-/// その読み書きをすべて `lock` で排他しているためです。
+/// `@unchecked Sendable` としているのは、可変状態が `formats` / `streams` /
+/// `targetResolutions` だけで、その読み書きをすべて `lock` で排他しているためです。
 private final class CameraResourceTable: @unchecked Sendable {
   /// `MediaStream` を弱参照で包む内部ラッパーです。
   ///
@@ -58,6 +59,7 @@ private final class CameraResourceTable: @unchecked Sendable {
   private let lock = NSLock()
   private var formats: [CameraCapturerID: AVCaptureDevice.Format] = [:]
   private var streams: [CameraCapturerID: WeakStream] = [:]
+  private var targetResolutions: [CameraCapturerID: CameraSettings.Resolution] = [:]
 
   /// format を記録します。
   func setFormat(_ format: AVCaptureDevice.Format, id: CameraCapturerID) {
@@ -91,6 +93,20 @@ private final class CameraResourceTable: @unchecked Sendable {
     }
   }
 
+  /// 目標解像度を設定します。`nil` を渡すと未設定に戻します。
+  func setTargetResolution(_ resolution: CameraSettings.Resolution?, id: CameraCapturerID) {
+    lock.lock()
+    defer { lock.unlock() }
+    targetResolutions[id] = resolution
+  }
+
+  /// 目標解像度を返します。
+  func targetResolution(id: CameraCapturerID) -> CameraSettings.Resolution? {
+    lock.lock()
+    defer { lock.unlock() }
+    return targetResolutions[id]
+  }
+
   /// 現在の値が `expected` と同一の場合だけ書き換えます (compare-and-swap)。
   ///
   /// command の失敗時に rollback する際、利用者が実行中に代入した値を
@@ -114,14 +130,15 @@ private final class CameraResourceTable: @unchecked Sendable {
     return true
   }
 
-  /// 指定した capturer の資源を破棄します。
+  /// 指定した capturer の資源と設定値を破棄します。
   ///
-  /// capturer instance の解放時に呼び、`AVCaptureDevice.Format` を保持し続けません。
+  /// capturer instance の解放時に呼び、この ID に紐付く資源と設定値を保持し続けません。
   func remove(id: CameraCapturerID) {
     lock.lock()
     defer { lock.unlock() }
     formats[id] = nil
     streams[id] = nil
+    targetResolutions[id] = nil
   }
 }
 
@@ -303,7 +320,7 @@ final class CameraStateOwner: @unchecked Sendable {
   /// ID から instance を解決する弱参照テーブルです。
   private let instanceTable: CameraInstanceTable
 
-  /// non-Sendable な実資源を保持するテーブルです。
+  /// capturer ID ごとの資源と設定値を保持するテーブルです。
   private let resourceTable: CameraResourceTable
 
   /// active capturer と front / back の強参照ストレージです。
@@ -393,7 +410,7 @@ final class CameraStateOwner: @unchecked Sendable {
     strongStorage.unpin(id: id)
   }
 
-  /// capturer instance が解放されたことを記録し、その ID の資源と state を破棄します。
+  /// capturer instance が解放されたことを記録し、その ID の資源と設定値、state を破棄します。
   ///
   /// `CameraVideoCapturer.deinit` から呼びます。資源の破棄と state の更新を同じ直列区間
   /// (`eventQueue`) にまとめて投入します。分けて実行すると「instance は消えたが state は
@@ -500,5 +517,18 @@ final class CameraStateOwner: @unchecked Sendable {
   /// format を返します。
   func format(id: CameraCapturerID) -> AVCaptureDevice.Format? {
     resourceTable.format(id: id)
+  }
+
+  /// 目標解像度を設定します。`nil` を渡すと未設定に戻します。
+  ///
+  /// `flip()` が切り替え先のフォーマットを選択する際に使います。値は世代を持たない
+  /// resource テーブルへ記録し、capturer の解放時に破棄します。
+  func setTargetResolution(_ resolution: CameraSettings.Resolution?, id: CameraCapturerID) {
+    resourceTable.setTargetResolution(resolution, id: id)
+  }
+
+  /// 目標解像度を返します。
+  func targetResolution(id: CameraCapturerID) -> CameraSettings.Resolution? {
+    resourceTable.targetResolution(id: id)
   }
 }

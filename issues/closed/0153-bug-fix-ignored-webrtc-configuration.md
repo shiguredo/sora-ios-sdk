@@ -1,10 +1,11 @@
 # Sora.connect の webRTCConfiguration 引数が接続に反映されない問題を修正する
 
 - Created: 2026-09-15
-- Completed:
+- Completed: 2026-10-27
 - Priority: Medium
 - Branch: feature/fix-ignored-webrtc-configuration
 - Polished: 2026-09-23
+- Updated: 2026-10-23
 
 ## 目的
 
@@ -39,9 +40,9 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 
 ## 前提となる issue
 
-- `0102`（完了 2026-09-16）: 接続設定の snapshot 化。本 issue の修正対象と同じ引数（の実体）を扱い、snapshot 生成が `Configuration.webRTCConfiguration` を写し取る。本 issue は `0102` の完了後に着手する（`0102` の完了条件「`0152` / `0153` / `0154` は本 issue の完了後に着手する」に従う）。
+- `0102`（完了 2026-09-16）: 接続設定の snapshot 化。本 issue の修正対象と同じ引数（の実体）を扱い、snapshot 生成が `Configuration.webRTCConfiguration` を写し取る。本 issue は `0102` の完了後に着手する（`0102` の「前提となる issue」の「順序調整」にある「`0152` / `0153` / `0154` は本 issue の完了後に着手する」に従う）。
 - `0152`（open）: 公開 Sendable 設定型と新 overload の追加。本 issue は既存 overload の引数だけを扱い、新 overload と公開設定型は変更しない（`0152` のスコープ外に同旨あり）。両 issue とも `Sora.swift` を変更するため、順序は問わないが実装時の共存に注意する。
-- `0107`（open）: 公開 API baseline。本 issue は公開シグネチャ（引数の型と既定値）を変えるため、`0107` の baseline が有効な場合は差分の更新が必要になる。
+- `0107`（完了 2026-09-24） / `0168`（完了 2026-09-24）: 公開 API baseline とその鮮度 gate。baseline は常時有効であり、本 issue は公開シグネチャ（引数の型と既定値）を変えるため、`TestConsumers/Swift6Consumer/ApiBaseline/` の再生成と `make api-check-fresh` の成功が同じ変更で必要になる（`CODEBASE.md` の規約）。
 
 ## スコープ外
 
@@ -56,7 +57,8 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 - `Sora/ConnectionConfigurationSnapshot.swift`（または `Sora.connect` 内の反映点）: 上書きした値を snapshot 生成へ渡す経路
 - `skills/sora-ios-sdk/SKILL.md`: `Sora.connect` の `webRTCConfiguration` 引数と `Configuration.webRTCConfiguration` の優先順位（引数が指定された場合に引数が優先）と、`Configuration.webRTCConfiguration` を使う推奨の記載
 - `SoraTests`: 引数指定時の反映と引数省略時の既存挙動を検証するテスト
-- `CHANGES.md`
+- `TestConsumers/Swift6Consumer/ApiBaseline/`: 公開シグネチャ変更に伴う `make api-baseline` による baseline の再生成（Xcode 26.6 と `iphoneos26.5` が必要）
+- `CHANGES.md`: `## develop` セクションの新設（現行の `CHANGES.md` は凡例の直後が `## 2026.4.0` で、`## develop` が存在しない）と修正内容の追記
 
 ## 完了条件
 
@@ -65,7 +67,8 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 - 引数と `Configuration.webRTCConfiguration` の両方を設定した場合に、引数が優先されること。
 - offer 受信時の ICE サーバー上書きと `Configuration.insecure` の反映（`isInsecure`）が維持されること。
 - `skills/sora-ios-sdk/SKILL.md` に、`webRTCConfiguration` 引数と `Configuration.webRTCConfiguration` の優先順位が記載されていること。
-- `CHANGES.md` に修正内容を追記していること。
+- `TestConsumers/Swift6Consumer/ApiBaseline/` を同じ変更で再生成し、`make api-check-fresh` が成功すること（Xcode 26.6 と `iphoneos26.5` が必要）。
+- `CHANGES.md` の凡例の直後（`## 2026.4.0` の前）に `## develop` を新設し、修正内容を追記していること（リリース済みの `## 2026.4.0` には追記しない）。
 - 追加したテストと既存テストがすべて成功すること。
 
 ## テスト方針
@@ -77,3 +80,15 @@ WebRTC 設定の入力点は 2 つある。`Sora/Configuration.swift` の `Confi
 - `Configuration.webRTCConfiguration` を設定した状態で引数を指定した場合に、引数が優先されることを検証する。
 
 ## 解決方法
+
+- `Sora.connect(configuration:webRTCConfiguration:handler:)` の `webRTCConfiguration` 引数を `WebRTCConfiguration? = nil` に変更した
+- 引数が非 `nil` のときは、`Configuration` の複製の `webRTCConfiguration` を引数の値で置き換え、その設定から `ConnectionConfigurationSnapshot` を生成するよう `Sora.connect` を変更した。`ConnectionConfigurationSnapshot` の初期化子は変更せず、snapshot 変換の入口を `ConnectionConfigurationSnapshot(configuration:)` 1 つに保っている
+- 引数が `nil`（省略または明示的な `nil`）のときは、従来どおり `Configuration.webRTCConfiguration` を使う
+- `MediaChannel` には元の `Configuration` を渡し、`MediaChannel.configuration` が利用者の渡した値を返す公開互換を維持した
+- `Sora.connect`、`Configuration.webRTCConfiguration`、`MediaChannel.configuration`、`MediaChannel.connect(webRTCConfiguration:)` の doc コメントを更新し、引数指定時の全体置換、`Configuration.webRTCConfiguration` との優先関係、サーバーが offer の `config` で ICE サーバー / ICE トランスポートポリシーを指定した場合の既存の上書き挙動を明記した
+- `skills/sora-ios-sdk/SKILL.md` に「### WebRTC 設定」を追加し、通常は `Configuration.webRTCConfiguration` を使うこと、引数を指定した場合は `WebRTCConfiguration` 全体が置き換わること、`MediaChannel.configuration` は引数を反映しないことを記載した
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを追加した
+- `SoraTests/SoraConnectWebRTCConfigurationTests.swift` を追加し、引数指定時の反映、引数省略時の非退行、両方指定時の引数優先、引数を指定した場合の全体置換、`MediaChannel.configuration` の非反映を検証した。snapshot と `PeerChannel.currentWebRTCConfiguration()` の両方を比較している
+- `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` を Xcode 26.6 / iphoneos26.5 で再生成し、`connect` の第 2 引数の Optional 化と `usr` / `mangledName` の変化だけが差分であることを確認した。`make api-check-fresh` は CI の Xcode 26.6 / iphoneos26.5 環境で検証する
+- `origin/develop`（libwebrtc m156.8078.5.1）取り込み後に Release device build（warnings-as-errors）、SoraTests、consumer 4 scheme、negative check、SwiftLint、swift format lint を再実行し、すべて成功した
+- 未使用の `MediaChannel.connect(webRTCConfiguration:)` 引数の削除は本 issue のスコープ外とし、必要なら別 issue で扱う

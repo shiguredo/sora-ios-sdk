@@ -3,7 +3,11 @@ import AudioToolbox
 import Foundation
 import WebRTC
 
-/// ダミー音声を生成・注入する RTCAudioDevice 実装
+@testable import Sora
+
+/// テスト専用のダミー音声を生成・注入する RTCAudioDevice 実装
+///
+/// SDK ターゲットには含めず、テストターゲットからのみ使用する。
 ///
 /// 物理マイクの代わりに DispatchSourceTimer で PCM データを生成して
 /// delegate.deliverRecordedData で ADM に注入する。
@@ -12,7 +16,7 @@ import WebRTC
 /// playoutHandler を指定した場合は、音声ハードウェアを起動せず再生 PCM を callback に渡す。
 ///
 /// PCM データの生成 (波形の内容) は pcmGenerator として外部から注入する。
-/// 波形のロジック (正弦波等) はテスト・デモの用途に依存するため、SDK 側では持たない。
+/// 波形のロジック (正弦波等) はテスト・デモの用途に依存するため、この型では持たない。
 ///
 /// delegate が未設定 (nil) の場合のデフォルト値は、サンプルレート 48000 Hz、
 /// IO バッファ期間 0.02 秒 (20ms) である。
@@ -38,7 +42,7 @@ import WebRTC
 /// `withState` の中から delegate、pcmGenerator、AUAudioUnit を呼ばない。
 /// これらは lock の外で呼ぶ (lock を保持したまま callback を呼ぶと、callback が別スレッドから
 /// 同じ lock を取る経路で deadlock する)。
-final class DummyAudioDevice: NSObject, RTCAudioDevice {
+final class DummyAudioDevice: NSObject, RTCAudioDevice, HardMuteSwitchableAudioDevice {
 
   /// PCM データ生成処理。
   /// 第 1 引数: データ書き込み先、第 2 引数: フレーム数、第 3 引数: サンプルレート

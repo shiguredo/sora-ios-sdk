@@ -9,6 +9,55 @@
 - FIX
   - バグ修正
 
+## 2026.5.0
+
+**リリース日**: 2026-11-05
+
+- [UPDATE] 画面キャプチャのフレーム間引きのフォールバック処理において `ProcessInfo.systemUptime` を使わないようにする
+  - `CACurrentMediaTime()` に置き換える
+  - @t-miya
+- [UPDATE] テスト専用のダミー音声デバイスを SDK ターゲットから外す
+  - 公開 API では利用していないため SDK の挙動は変わらない
+  - @t-miya
+- [UPDATE] libwebrtc を m156.8078.5.1 に更新する
+  - 専用 worker thread が廃止され、録音の pause / resume は network thread 上で実行される (SDK の API と呼び出し経路は変わらない)
+  - 受信コーデック更新時のデコーダー再利用、VP8 の破損フレーム拒否、ICE restart を伴わない renegotiation での ICE role 保持などが入る
+  - @zztkm
+- [FIX] `Sora.connect(configuration:webRTCConfiguration:handler:)` の `webRTCConfiguration` 引数が接続に反映されない問題を修正する
+  - 引数の型を `WebRTCConfiguration?`、既定値を `nil` に変更する。非 optional の値はそのまま渡せるため、既存の呼び出し箇所のソース変更は不要
+  - 引数に非 `nil` を指定した接続では `Configuration.webRTCConfiguration` を使わず、`WebRTCConfiguration` 全体を引数の値で置き換える (フィールド単位のマージはしない。`constraints` / `degradationPreference` なども引数側の値になる)。ICE サーバーや ICE トランスポートポリシーなどの WebRTC の設定を接続単位で指定できるようになる
+  - 引数を指定していた接続は、これまで無視されていた値が反映されるようになる。`Configuration.webRTCConfiguration` に設定した値は使われないため、意図した設定か確認すること
+  - サーバーが offer の `config` で ICE サーバーまたは ICE トランスポートポリシーを指定した場合は、既存挙動どおりサーバーの値が優先される
+  - 引数を省略した接続は従来どおり `Configuration.webRTCConfiguration` を使う。`MediaChannel.configuration` は、引数を指定しても渡した `Configuration` の値を返す
+  - @t-miya
+- [FIX] ログと文字列表現から TURN の認証情報が漏れないようにする
+  - ログのマスク対象に `username` を追加し、文字列リテラルへ埋め込まれてエスケープされた JSON でも対象キーの値をマスクする。エスケープされた形の値が 4096 文字を超える場合、値の中の引用符の直後に区切りが続く場合、終端が無い途切れたエスケープ形、値がバックスラッシュで終わる不正な JSON、値の直後が区切りでも末尾でもない不正な JSON、二重にエスケープされた JSON はマスクしない
+  - `ICEServerInfo.description` は `username` と `credential` の値を伏せる。`Codable` の出力は変わらない
+  - シグナリング URL の userinfo をログと redirect のエラーメッセージから除く。invalid redirect のエラーメッセージは認証情報を含まない表記に変わる
+  - WebSocket の受信失敗ログは、接続先 URL を含む `NSError` の userInfo を出さず、domain / code / description を出す
+  - @t-miya
+- [FIX] `Configuration.mediaChannelHandlers` が接続間で共有され、初期化後に handler を差し替えられ、切断後も handler が発火しうる問題を修正する
+  - 1 つの `Configuration` から複数の接続を作ると `MediaChannelHandlers` のインスタンスが共有されるため、`MediaChannel` の初期化後に `Configuration` 側で handler property を変更すると接続済みの接続の handler が差し替わっていた。また、切断済みの接続に設定した handler が、同じ `Configuration` から作った別の接続のイベントで発火しうる状態だった
+  - @t-miya
+- [FIX] 画面キャプチャの開始に失敗したときに ReplayKit の録画が停止されないまま残る問題を修正する
+  - 開始に失敗しても SDK が `startCapture` を発行した後に録画が残っている場合は、SDK 所有として録画を停止する
+  - 停止に成功するまで録画の所有権を保持し、停止に失敗した場合は隔離して以後の画面キャプチャ開始を失敗させる
+  - ホストアプリが同時に `RPScreenRecorder` を使用している場合は、SDK がホストの録画を停止することがある
+  - @t-miya
+- [FIX] flip を 2 回した時に接続時の解像度に戻らない問題を修正する
+  - 接続時の解像度を切り替え先のカメラがサポートしない場合に発生する
+  - flip は接続時に設定した `CameraSettings.resolution` を基準に切り替え先の解像度を選ぶ。接続時の実フォーマットが目標解像度と異なる場合、単発の flip でも選択結果が変わり得る
+  - `change()` で解像度を変更した後に flip すると、接続時の解像度が使われる
+  - @voluntas
+- [FIX] 画面キャプチャの停止に失敗して後始末待ちの状態で `startScreenCapture()` を呼んだときに、カメラ競合ではなく `stopScreenCapture()` による停止の再試行を案内するエラーを返すようにする
+  - 開始要求のエラーが `setVideoHardMute(true)` を案内していた
+  - @t-miya
+
+### misc
+
+- [UPDATE] Required Reason API の再導入を検出する CI 検査を追加する
+  - @t-miya
+
 ## 2026.4.0
 
 **リリース日**: 2026-10-20

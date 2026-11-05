@@ -274,12 +274,18 @@ class SignalingChannel {
       }
 
       let urlCandidates = self.unique(urls: self.snapshot.urlCandidates)
-      Logger.info(type: .signalingChannel, message: "urlCandidates: \(urlCandidates)")
+      // WebSocket の URI に userinfo は無いため通常は現れませんが、仕様外の URL に
+      // 備えて、ログへ出す前に認証情報を取り除きます。
+      Logger.info(
+        type: .signalingChannel,
+        message: "urlCandidates: \(urlCandidates.map { URLUserInfo.removed(from: $0) })")
       for url in urlCandidates {
         let ws = self.setUpWebSocketChannel(
           url: url, proxy: self.snapshot.proxy, caCertificates: caCertificates)
         Logger.info(
-          type: .signalingChannel, message: "connecting to \(String(describing: ws.url))")
+          type: .signalingChannel,
+          message:
+            "connecting to \(URLUserInfo.removed(from: ws.url))")
         ws.connect(delegateQueue: self.owner.queue)
         self.owner.addCandidate(ws)
       }
@@ -288,7 +294,13 @@ class SignalingChannel {
 
   func redirect(location: String) {
     owner.enqueue {
-      Logger.debug(type: .signalingChannel, message: "try redirecting to \(location)")
+      // WebSocket の URI (RFC 6455) は userinfo を持たないため通常は現れませんが、
+      // 仕様外の location が届いた場合に備えて、ログとエラーのメッセージへ出す前に
+      // 認証情報を取り除きます。URL として解釈できない location も対象にするため、
+      // 文字列ベースで処理します。
+      let sanitizedLocation = URLUserInfo.removed(from: location)
+      Logger.debug(
+        type: .signalingChannel, message: "try redirecting to \(sanitizedLocation)")
       self.owner.handle(.redirectRequested)
 
       if self.snapshot.insecure {
@@ -303,7 +315,9 @@ class SignalingChannel {
 
       // 接続
       guard let newUrl = URL(string: location) else {
-        let message = "invalid message: \(location)"
+        // ログと `SoraError` の reason の両方に使うため、userinfo を除いた文字列にします。
+        // reason は `error.localizedDescription` として別の error ログにも再出力されます。
+        let message = "invalid message: \(sanitizedLocation)"
         Logger.error(type: .signalingChannel, message: message)
         self.disconnect(
           error: SoraError.signalingChannelError(reason: message),
