@@ -966,6 +966,13 @@ final class ScreenCaptureController: @unchecked Sendable {
   /// 前回送信したフレームの単調時刻と targetFPS から今回フレームを送信するかを判定します。
   ///
   /// 呼び出し元は `lock` を保持していること。
+  ///
+  /// `CACurrentMediaTime()` は内部で `mach_absolute_time()` を呼びます。画面キャプチャの
+  /// フレーム間隔の判定のため、取得した時刻の差分から経過時間を測定しており、この用途は
+  /// Required Reason API の SystemBootTime の理由コード `35F9.1` (経過時間の測定) に
+  /// 該当します。同梱のプライバシーマニフェストで申告しています。Apple の一覧に
+  /// `CACurrentMediaTime()` という名前はないため、審査で指摘される可能性を否定できず
+  /// 保守的に申告しています。利用をやめた場合はこのカテゴリの宣言ごと削除してください。
   private func shouldSendVideoFrameWithMediaTime() -> Bool {
     guard let lastSentVideoMediaTime else {
       return true
