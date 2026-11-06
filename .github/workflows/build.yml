@@ -49,6 +49,10 @@ jobs:
         # _objc_msgSend$... に現れる。Sora ターゲットに Required Reason API を
         # 利用する変更を入れる場合は、この検査と PrivacyInfo.xcprivacy の
         # 同梱・申告を同時に更新すること。
+        # CACurrentMediaTime() は画面キャプチャのフレーム間隔の判定のための経過時間の
+        # 測定に使っており、内部で mach_absolute_time() を呼ぶため PrivacyInfo.xcprivacy で
+        # SystemBootTime を申告している。Sora.o には _CACurrentMediaTime として現れ
+        # _mach_absolute_time は現れない。
         SORA_OBJECT="build/Build/Products/Release-iphoneos/Sora.o"
         if [ ! -f "$SORA_OBJECT" ]; then
           echo "Error: $SORA_OBJECT is not found."
@@ -68,6 +72,11 @@ jobs:
         # selector stub に依存せず、Sora のソースに Required Reason API の利用が
         # 残っていないことを検査する。行コメントは利用ではないため除外する。
         # 一覧にない同名 API を誤検出した場合は、この step に除外条件を追加する。
+        # CACurrentMediaTime() は画面キャプチャのフレーム間隔の判定のための経過時間の
+        # 測定に使っており、Apple の一覧に API 名として載っていないが、内部で
+        # mach_absolute_time() を呼ぶため、審査で指摘される可能性を否定できない。
+        # この pattern には含めず、Check Privacy Manifest step と PrivacyManifestTests で
+        # 申告を検査する。
         # pathspec が 0 件に一致したまま成功しないよう、先に対象のファイル数を確認する
         count=$(git ls-files -- ':(glob)Sora/**/*.swift' | wc -l | tr -d ' ')
         if [ "$count" -eq 0 ]; then
@@ -91,6 +100,35 @@ jobs:
         if [ -n "$violations" ]; then
           echo 'Error: Required Reason API is used in Sora sources:'
           echo "$violations"
+          exit 1
+        fi
+    - name: Check Privacy Manifest
+      run: |
+        # Sora ターゲットは画面キャプチャのフレーム間隔の判定のため、CACurrentMediaTime() で
+        # 取得した時刻の差分から経過時間を測定している。CACurrentMediaTime() は内部で
+        # mach_absolute_time() を呼ぶため SystemBootTime として申告しており、同梱する
+        # PrivacyInfo.xcprivacy が build 成果物の resource bundle に含まれ、35F9.1 が
+        # 宣言されていることを検査する
+        MANIFEST='build/Build/Products/Release-iphoneos/Sora_Sora.bundle/PrivacyInfo.xcprivacy'
+        if [ ! -f "$MANIFEST" ]; then
+          echo "Error: $MANIFEST is not found."
+          exit 1
+        fi
+        if ! plutil -lint "$MANIFEST"; then
+          echo "Error: $MANIFEST is not a valid property list."
+          exit 1
+        fi
+        if ! ACCESSED_APIS=$(plutil -extract NSPrivacyAccessedAPITypes json -o - "$MANIFEST"); then
+          echo "Error: NSPrivacyAccessedAPITypes is not declared in $MANIFEST."
+          exit 1
+        fi
+        if ! printf '%s' "$ACCESSED_APIS" | jq -e '
+          length == 1
+          and .[0].NSPrivacyAccessedAPIType == "NSPrivacyAccessedAPICategorySystemBootTime"
+          and .[0].NSPrivacyAccessedAPITypeReasons == ["35F9.1"]
+        ' >/dev/null; then
+          echo 'Error: SystemBootTime with the reason code 35F9.1 is not declared:'
+          echo "$ACCESSED_APIS"
           exit 1
         fi
     - name: Format Lint

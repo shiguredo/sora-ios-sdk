@@ -9,6 +9,20 @@
 - FIX
   - バグ修正
 
+## 2026.5.1
+
+- [ADD] プライバシーマニフェストを同梱し、Required Reason API (システム起動時刻) の利用理由を申告する
+  - `Sora` ターゲットの resources に `PrivacyInfo.xcprivacy` を追加する
+  - `CACurrentMediaTime()` は内部で `mach_absolute_time()` を呼ぶ
+  - 画面キャプチャのフレーム間隔の判定のため、取得した時刻の差分から経過時間を測定している。この用途は `NSPrivacyAccessedAPICategorySystemBootTime` の理由コード `35F9.1` (経過時間の測定) に該当するため、これを宣言する
+  - 公開 API と SDK の挙動は変わらない
+  - @t-miya
+
+### misc
+
+- [ADD] プライバシーマニフェストの同梱と申告内容を検査する CI とテストを追加する
+  - @t-miya
+
 ## 2026.5.0
 
 **リリース日**: 2026-11-05
