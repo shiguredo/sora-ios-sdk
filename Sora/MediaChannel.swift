@@ -1022,17 +1022,119 @@ public final class MediaChannel {
 
   // MARK: 接続中のチャネルの情報
 
+  /// 接続人数 (`connectionCount` / `publisherCount` / `subscriberCount`) を保護するロック。
+  ///
+  /// `type: notify` は WebSocket の受信スレッドまたは DataChannel の delegate スレッドから届き、
+  /// 利用者は任意のスレッドから同期 getter で読む。3 値は 4 つの値が揃った notify でのみ
+  /// 1 回のロック区間で更新する。このロックは保持したまま他のロックを取らず、ハンドラや
+  /// libwebrtc を呼ばない葉 lock として扱う。
+  private let connectionCountsLock = NSLock()
+
+  /// `connectionCountsLock` が保護する接続人数の保持領域。
+  private var storedConnectionCount: Int?
+  private var storedPublisherCount: Int?
+  private var storedSubscriberCount: Int?
+
   /// 同チャネルに接続中のクライアントの数。
   /// サーバーから通知を受信可能であり、かつ接続中にのみ取得可能です。
-  public private(set) var connectionCount: Int?
+  /// 任意のスレッドから読み出せます。3 つの getter をまとめて読むスナップショット API は
+  /// ありません。同じ notify の 4 値は `onReceiveSignalingJSON` で受信できます。
+  public private(set) var connectionCount: Int? {
+    get { withConnectionCountsLock { storedConnectionCount } }
+    set { withConnectionCountsLock { storedConnectionCount = newValue } }
+  }
 
   /// 同チャネルに接続中のクライアントのうち、パブリッシャーの数。
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
-  public private(set) var publisherCount: Int?
+  /// 任意のスレッドから読み出せます。3 つの getter をまとめて読むスナップショット API は
+  /// ありません。同じ notify の 4 値は `onReceiveSignalingJSON` で受信できます。
+  public private(set) var publisherCount: Int? {
+    get { withConnectionCountsLock { storedPublisherCount } }
+    set { withConnectionCountsLock { storedPublisherCount = newValue } }
+  }
 
   /// 同チャネルに接続中のクライアントの数のうち、サブスクライバーの数。
   /// サーバーから通知を受信可能であり、接続中にのみ取得可能です。
-  public private(set) var subscriberCount: Int?
+  /// 任意のスレッドから読み出せます。3 つの getter をまとめて読むスナップショット API は
+  /// ありません。同じ notify の 4 値は `onReceiveSignalingJSON` で受信できます。
+  public private(set) var subscriberCount: Int? {
+    get { withConnectionCountsLock { storedSubscriberCount } }
+    set { withConnectionCountsLock { storedSubscriberCount = newValue } }
+  }
+
+  /// `connectionCountsLock` を保持したまま `body` を実行します。
+  ///
+  /// 3 値の読み書きはこのヘルパーだけを通します。setter は公開 API 形状
+  /// (`private(set)`) の維持のために存在し、production の更新は
+  /// `updateConnectionCounts` に集約します。
+  private func withConnectionCountsLock<T>(_ body: () -> T) -> T {
+    connectionCountsLock.lock()
+    defer { connectionCountsLock.unlock() }
+    return body()
+  }
+
+  /// 3 つの接続人数を 1 回のロック区間でまとめて更新します。
+  ///
+  /// production では `.notify` の 4 値が揃ったときにだけ呼ばれ、同じ notify に由来する
+  /// 3 値を書きます。呼び出し元は `connectionCountsLock` を保持していないこと。setter も
+  /// 同じ lock を取るため、このメソッドから setter を呼ぶと NSLock の非再帰性により
+  /// deadlock します。同時実行テストが production と同じメソッドを直接呼べるよう
+  /// internal にしています。
+  func updateConnectionCounts(
+    connectionCount: Int, publisherCount: Int, subscriberCount: Int
+  ) {
+    withConnectionCountsLock {
+      storedConnectionCount = connectionCount
+      storedPublisherCount = publisherCount
+      storedSubscriberCount = subscriberCount
+    }
+  }
+
+  /// `type: notify` の 4 値から 3 つの接続人数を導出します。
+  ///
+  /// 4 値のいずれかが欠けている場合は nil を返します。`.notify` の更新条件と計算を
+  /// 単体テストできるように、受信処理から切り出しています。
+  static func connectionCounts(
+    from notify: SignalingNotify
+  ) -> (connectionCount: Int, publisherCount: Int, subscriberCount: Int)? {
+    guard let connectionCount = notify.connectionCount,
+      let sendonlyConnections = notify.channelSendonlyConnections,
+      let recvonlyConnections = notify.channelRecvonlyConnections,
+      let sendrecvConnections = notify.channelSendrecvConnections
+    else {
+      return nil
+    }
+    return (
+      connectionCount,
+      sendonlyConnections + sendrecvConnections,
+      recvonlyConnections + sendrecvConnections
+    )
+  }
+
+  // MARK: シグナリング受信
+
+  /// `MediaChannel` に届いたシグナリングメッセージを処理します。
+  ///
+  /// `.notify` では 4 つの接続人数が揃っている場合だけ 3 値を更新します。実接続なしで
+  /// `.notify` の分岐を検証できるように、`basicConnect` の closure から切り出しています。
+  func handleSignaling(_ message: Signaling) {
+    Logger.debug(type: .mediaChannel, message: "receive signaling")
+    switch message {
+    case .notify(let notify):
+      if let counts = Self.connectionCounts(from: notify) {
+        updateConnectionCounts(
+          connectionCount: counts.connectionCount,
+          publisherCount: counts.publisherCount,
+          subscriberCount: counts.subscriberCount)
+      }
+    default:
+      break
+    }
+
+    Logger.debug(type: .mediaChannel, message: "call onReceiveSignaling")
+    internalHandlers.onReceiveSignaling?(message)
+    handlers.onReceiveSignaling?(message)
+  }
 
   // MARK: 接続チャネル
 
@@ -1670,31 +1772,7 @@ public final class MediaChannel {
     }
 
     peerChannel.internalHandlers.onReceiveSignaling = { [weak self] message in
-      guard let weakSelf = self else {
-        return
-      }
-      Logger.debug(type: .mediaChannel, message: "receive signaling")
-      switch message {
-      case .notify(let message):
-        // connectionCount, channelRecvonlyConnections, channelSendonlyConnections, channelSendrecvConnections
-        // 全てに値が入っていた時のみプロパティを更新する
-        if let connectionCount = message.connectionCount,
-          let sendonlyConnections = message.channelSendonlyConnections,
-          let recvonlyConnections = message.channelRecvonlyConnections,
-          let sendrecvConnections = message.channelSendrecvConnections
-        {
-          weakSelf.publisherCount = sendonlyConnections + sendrecvConnections
-          weakSelf.subscriberCount = recvonlyConnections + sendrecvConnections
-          weakSelf.connectionCount = connectionCount
-        } else {
-        }
-      default:
-        break
-      }
-
-      Logger.debug(type: .mediaChannel, message: "call onReceiveSignaling")
-      weakSelf.internalHandlers.onReceiveSignaling?(message)
-      weakSelf.handlers.onReceiveSignaling?(message)
+      self?.handleSignaling(message)
     }
 
     // タイマーの開始と接続試行の有効性確認を、切断状態の遷移と同じロックで直列化する。

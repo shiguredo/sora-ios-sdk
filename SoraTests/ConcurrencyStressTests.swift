@@ -24,6 +24,9 @@ import XCTest
 // `MediaChannel.handlers` の参照の排他も本ファイルで交差させます
 // (`testHandlerBagReadWriteRaceWithDelivery`)。
 //
+// `MediaChannel` の接続人数 (`connectionCount` / `publisherCount` / `subscriberCount`) の
+// 読み書きの交差も本ファイルで行います (`testConnectionCountsReadWriteRace`)。
+//
 // `WrapperVideoEncoderFactory.simulcastEnabled` の読み書きの交差も本ファイルで行います
 // (`testVideoEncoderFactorySimulcastEnabledReadWriteRace`)。
 
@@ -189,6 +192,22 @@ private final class ConcurrencyStressHandlerBagBox: @unchecked Sendable {
     self.cameraHandlers = cameraHandlers
     self.mediaChannel = mediaChannel
     self.stream = stream
+  }
+}
+
+/// 接続人数の交差に使う実 `MediaChannel` を `DispatchQueue.concurrentPerform` の `@Sendable`
+/// closure へ渡すための、テストローカルの用途限定 box です。
+///
+/// `@unchecked Sendable` を認める根拠は、この型が可変状態を持たず、保持する参照が `init` で
+/// 確定した `let` であることです。この box 経由で closure が触るのは 3 つの getter と
+/// `updateConnectionCounts` だけで、`MediaChannel` の他の可変状態には触れません。
+/// 接続人数の読み書きの排他は SDK 側の責務であり、この box は交差の入口を渡すだけで
+/// 排他を肩代わりしません。
+private final class ConcurrencyStressMediaChannelBox: @unchecked Sendable {
+  let mediaChannel: MediaChannel
+
+  init(_ mediaChannel: MediaChannel) {
+    self.mediaChannel = mediaChannel
   }
 }
 
@@ -532,6 +551,49 @@ final class ConcurrencyStressTests: XCTestCase {
 
     // stream owner を無効化し、以降の frame 配送を止める。
     stream.terminate()
+  }
+
+  /// `MediaChannel` の接続人数の読み書きを複数スレッドから交差させます。
+  ///
+  /// `type: notify` の受信で使う `updateConnectionCounts` で 3 値を更新し、利用者と同じ
+  /// 同期 getter で読み出します。書き込みと読み出しが同じロックで排他され、TSan 有効時に
+  /// データ競合が検出されないことを確認します。モックやスタブは使用しません。
+  func testConnectionCountsReadWriteRace() throws {
+    let mediaChannel = try makeTestMediaChannel()
+    let box = ConcurrencyStressMediaChannelBox(mediaChannel)
+
+    // closure が test class を capture しないよう、並行度をローカルへ写す。
+    let iterations = iterationsPerRound
+    for round in 0..<rounds {
+      DispatchQueue.concurrentPerform(iterations: iterations) { index in
+        if index % 2 == 0 {
+          // 書き手: notify 受信で使う 3 値の一括更新。
+          box.mediaChannel.updateConnectionCounts(
+            connectionCount: round,
+            publisherCount: index,
+            subscriberCount: iterations - index)
+        } else {
+          // 読み手: 利用者が任意のスレッドから呼ぶ同期 getter。
+          _ = box.mediaChannel.connectionCount
+          _ = box.mediaChannel.publisherCount
+          _ = box.mediaChannel.subscriberCount
+        }
+      }
+    }
+
+    // 最終ラウンドの書き込みはすべて connectionCount を rounds - 1 にする。
+    // publisherCount と subscriberCount は最後に完了した書き手の値が読めることを確認する。
+    // 3 値の一括更新の検証は TSan とコードレビューに委ねる。
+    XCTAssertEqual(
+      box.mediaChannel.connectionCount, rounds - 1,
+      "最終ラウンドの connectionCount が反映されていること")
+    let publisher = try XCTUnwrap(
+      box.mediaChannel.publisherCount, "publisherCount が設定されていること")
+    let subscriber = try XCTUnwrap(
+      box.mediaChannel.subscriberCount, "subscriberCount が設定されていること")
+    XCTAssertEqual(
+      publisher + subscriber, iterations,
+      "最後に完了した書き込みの publisherCount と subscriberCount が読めること")
   }
 
   /// 配送された closure から同じ handler を設定し直しても deadlock しないことを確認します。
