@@ -266,7 +266,7 @@ DataChannel / シグナリング:
 | `clientId` / `bundleId` / `connectionId` | 接続後に設定される ID |
 | `contactUrl` / `connectedUrl` | 最初に `type: connect` を送った URL / 接続中の URL |
 | `connectionStartTime` / `connectionTime` | 接続開始時刻 / 接続時間 (秒) |
-| `connectionCount` / `publisherCount` / `subscriberCount` | 同チャネルの接続人数 |
+| `connectionCount` / `publisherCount` / `subscriberCount` | 同チャネルの接続人数。getter は SDK 内部の lock で保護され、任意のスレッドから読める。3 つの getter をまとめて読むスナップショット API はない。同じ notify の 4 値は `onReceiveSignalingJSON` で受信できる |
 | `streams` / `mainStream` / `senderStream` / `receiverStreams` | ストリーム |
 | `native` | 内部の `RTCPeerConnection` |
 | `handlers` | `MediaChannelHandlers` |

@@ -1,7 +1,7 @@
 # type: notify で更新される接続人数の状態競合を修正する
 
 - Created: 2026-09-03
-- Completed:
+- Completed: 2026-11-10
 - Priority: Medium
 - Branch: feature/fix-notify-connection-count-races
 - Polished: 2026-11-10
@@ -50,3 +50,31 @@
 - 既存の全テストが成功すること。
 
 ## 解決方法
+
+`connectionCount` / `publisherCount` / `subscriberCount` を NSLock で保護し、`.notify` の更新を 1 回のロック区間にまとめた。
+
+- `Sora/MediaChannel.swift`
+  - `connectionCountsLock` と 3 値の保持領域を追加し、3 プロパティを `public private(set)` の computed property に変更した。getter / setter は `withConnectionCountsLock` で lock を取る。
+  - `.notify` の更新を `updateConnectionCounts(connectionCount:publisherCount:subscriberCount:)` に集約し、3 値を 1 回のロック区間で書くようにした。setter は `private(set)` の公開 API 形状を維持するためだけに残し、production の更新は `updateConnectionCounts` に限定した。
+  - `.notify` の 4 値 guard と publisher / subscriber の計算を `connectionCounts(from:)` に、受信処理を `handleSignaling(_:)` に切り出し、実接続なしでテストできるようにした。空の `else` と 4 フィールドを列挙するだけのコメントを削除した。
+  - 公開 3 プロパティの doc に、任意スレッドから読み出せること、3 つの getter をまとめて読むスナップショット API が無いこと、同じ notify の 4 値は `onReceiveSignalingJSON` で受信できることを追記した。
+- `SoraTests/MediaChannelConnectionCountTests.swift` (新規)
+  - 実 `Signaling.decode` と実 `MediaChannel` を使い、`.notify` の 4 値から 3 値への導出、フィールド欠落時の非更新、`updateConnectionCounts` の引数と getter の対応、`onReceiveSignaling` への転送を検証する 5 テストを追加した。モック・スタブは使用していない。
+- `SoraTests/ConcurrencyStressTests.swift`
+  - `testConnectionCountsReadWriteRace` を追加し、64 並行 × 8 ラウンドで更新と読み出しを交差させた。初期 seed を削除し、最終状態を `XCTUnwrap` と `publisherCount + subscriberCount == iterations` で検証するようにした。
+- `CHANGES.md` / `skills/sora-ios-sdk/SKILL.md`
+  - `## develop` に `[FIX]` エントリを追加し、SKILL.md の MediaChannel 表に getter の thread safety とスナップショット非保証を追記した。
+- `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json`
+  - Xcode 26.6 / iphoneos26.5 で `make api-baseline` を実行して再生成した。差分は 3 プロパティの ABI 属性 (`HasStorage` / `HasInitialValue` / getter の `implicit` / `Transparent` の消失) だけで、他の symbol の差分は無い。
+
+検証:
+
+- 手元の Xcode 27.0 / iphoneos27.0 で `make build XCODE_SDK=iphoneos27.0` が成功した
+- SoraTests 全件: 571 件実行 / 40 件 skip / 失敗 0
+- 追加テスト (`MediaChannelConnectionCountTests` 5 件 + `testConnectionCountsReadWriteRace`): 成功
+- Thread Sanitizer 有効の `testConnectionCountsReadWriteRace`: 成功、`WARNING: ThreadSanitizer` 0 件
+- ネガティブコントロール (実装時): `updateConnectionCounts` の lock を外すと TSan が write-write race を検出し、テストが失敗することを確認
+- `swift format lint --strict` / `swiftlint --strict`: 0 violations
+- `make api-check-fresh` (Xcode 26.6 / iphoneos26.5): 成功
+
+実 Sora からの notify 受信による確認は、Sora の接続環境が必要なため未実施である。`.notify` の 4 値 guard・計算・ハンドラ転送は、実 `Signaling.decode` を使う単体テストで確認している。

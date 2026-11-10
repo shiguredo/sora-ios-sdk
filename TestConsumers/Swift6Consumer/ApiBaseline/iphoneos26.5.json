@@ -17970,12 +17970,9 @@
             "mangledName": "$s4Sora12MediaChannelC15connectionCountSiSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
               "Final",
-              "SetterAccess",
-              "HasStorage"
+              "SetterAccess"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -18001,10 +17998,8 @@
                 "usr": "s:4Sora12MediaChannelC15connectionCountSiSgvg",
                 "mangledName": "$s4Sora12MediaChannelC15connectionCountSiSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               }
@@ -18035,12 +18030,9 @@
             "mangledName": "$s4Sora12MediaChannelC14publisherCountSiSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
               "Final",
-              "SetterAccess",
-              "HasStorage"
+              "SetterAccess"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -18066,10 +18058,8 @@
                 "usr": "s:4Sora12MediaChannelC14publisherCountSiSgvg",
                 "mangledName": "$s4Sora12MediaChannelC14publisherCountSiSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               }
@@ -18100,12 +18090,9 @@
             "mangledName": "$s4Sora12MediaChannelC15subscriberCountSiSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
               "Final",
-              "SetterAccess",
-              "HasStorage"
+              "SetterAccess"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -18131,10 +18118,8 @@
                 "usr": "s:4Sora12MediaChannelC15subscriberCountSiSgvg",
                 "mangledName": "$s4Sora12MediaChannelC15subscriberCountSiSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               }
