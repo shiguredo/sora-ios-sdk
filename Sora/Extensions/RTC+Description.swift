@@ -62,6 +62,19 @@ enum WebRTCEnumDescription {
     }
   }
 
+  /// `RTCPeerConnectionState` を文字列化します。
+  static func peerConnectionState(_ value: RTCPeerConnectionState) -> String {
+    switch value {
+    case .new: "new"
+    case .connecting: "connecting"
+    case .connected: "connected"
+    case .disconnected: "disconnected"
+    case .failed: "failed"
+    case .closed: "closed"
+    @unknown default: "unknown(\(value.rawValue))"
+    }
+  }
+
   /// `RTCRtpEncodingParameters.networkPriority` (`RTCPriority`) を文字列化します。
   static func priority(_ value: RTCPriority) -> String {
     switch value {
