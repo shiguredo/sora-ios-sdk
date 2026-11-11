@@ -1,7 +1,7 @@
 # peer connection state のログが raw 表現になるのを修正する
 
 - Created: 2026-09-25
-- Completed:
+- Completed: 2026-11-11
 - Priority: Low
 - Branch: feature/fix-rtc-peer-connection-state-log
 - Polished: 2026-11-11
@@ -68,3 +68,19 @@ Logger.debug(
 - `.failed` のときに `SoraError.peerChannelError(reason:)` へ渡す文字列が変わっていないこと。
 - 追加したテストと既存テストがすべて成功すること。
 - `CHANGES.md` の `## develop` に `[FIX]` エントリが担当者行付きで追加されていること。
+
+## 解決方法
+
+`RTCPeerConnectionState` の状態遷移を formatter で文字列化し、デバッグログに case 名を出力するようにした。
+
+- `Sora/Extensions/RTC+Description.swift` の `WebRTCEnumDescription` に `peerConnectionState(_:)` を追加した。既知の 6 case (`new` / `connecting` / `connected` / `disconnected` / `failed` / `closed`) は case 名を返し、未知の raw value は `"unknown(<rawValue>)"` を返す。既存 6 関数と同じく `@unknown default` で `fatalError` を呼ばない。
+- `Sora/PeerChannel.swift` の `peerConnection(_:didChange newState: RTCPeerConnectionState)` のログを `WebRTCEnumDescription.peerConnectionState(newState)` に置き換えた。`isCurrentPeerConnection(_:)` のガード、ログの種別 (`.peerChannel`) とレベル (`.debug`)、出力箇所は変更していない。`.failed` のときに `SoraError.peerChannelError(reason:)` へ渡す `"peer connection state: failed"` も変更していない。
+- `SoraTests/RTCDescriptionTests.swift` に次のテストを追加した。
+  - 既知の 6 case が case 名になることを確認する `testPeerConnectionStateDescription`
+  - 未知の raw value が `"unknown(<rawValue>)"` になることを確認する `testUnknownRawValueDescriptions` の追加アサーション
+  - 実 `RTCPeerConnection` を `nativeChannel` に設定して delegate を直接呼び、`peer connection state: connecting` と `peer connection state: unknown(93)` を完全一致で確認する `testPeerConnectionStateLogUsesFormatter`
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを追加した。
+
+検証は次のとおり実施した。ローカルでは `SoraTests` の全 577 件 (40 件 skipped、E2E は環境変数なしのため skip) が失敗 0、`make fmt-lint` と `make lint` (SwiftLint 0 violations) が成功した。E2E は CI で成功した (https://github.com/shiguredo/sora-ios-sdk/actions/runs/42994770725)。
+
+テスト方針との差分: 未知の raw value は、issue のテスト方針が例示した `99` ではなく `94` (formatter のテスト) と `93` (ログのテスト) を使った。既存テストが型ごとに異なる値を使って raw value の取り違えを検出する方針であり、`99` は `RTCSignalingState` が使用済みのためである。ログのテストで formatter のテストと別の値を使ったのは、引数を固定値で埋める退行も検出するためである。

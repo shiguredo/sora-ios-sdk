@@ -109,6 +109,23 @@ final class RTCDescriptionTests: XCTestCase {
     }
   }
 
+  // RTCPeerConnectionState の既知 case が case 名になることを確認する
+  func testPeerConnectionStateDescription() {
+    let cases: [(RTCPeerConnectionState, String)] = [
+      (.new, "new"),
+      (.connecting, "connecting"),
+      (.connected, "connected"),
+      (.disconnected, "disconnected"),
+      (.failed, "failed"),
+      (.closed, "closed"),
+    ]
+    for (value, expected) in cases {
+      XCTAssertEqual(
+        WebRTCEnumDescription.peerConnectionState(value), expected,
+        "RTCPeerConnectionState.rawValue \(value.rawValue) の文字列が \(expected) と一致しません")
+    }
+  }
+
   // RTCPriority の既知 case が同じ文字列になることを確認する
   func testPriorityDescription() {
     let cases: [(RTCPriority, String)] = [
@@ -171,6 +188,10 @@ final class RTCDescriptionTests: XCTestCase {
     XCTAssertEqual(
       WebRTCEnumDescription.priority(try XCTUnwrap(RTCPriority(rawValue: 95))),
       "unknown(95)", "未知の raw value の文字列が unknown(95) と一致しません")
+    XCTAssertEqual(
+      WebRTCEnumDescription.peerConnectionState(
+        try XCTUnwrap(RTCPeerConnectionState(rawValue: 94))),
+      "unknown(94)", "未知の raw value の文字列が unknown(94) と一致しません")
     // RTCDegradationPreference は値 0 の別名がある型のため Int の経路で負値も確認する
     XCTAssertEqual(
       WebRTCEnumDescription.degradationPreference(rawValue: -1), "unknown(-1)",
@@ -227,7 +248,7 @@ final class RTCDescriptionTests: XCTestCase {
       "収集対象のログを collect すること")
   }
 
-  // 1 から 5 の文字列化が formatter を通っていることをログで確認する
+  // 文字列化が formatter を通っていることをログで確認する
   //
   // 実 RTCPeerConnection と PeerChannel を使い、delegate メソッドを直接呼んで決定的に
   // 発火させます (Sora サーバーには接続しません)。出力箇所ごとにテストを分け、
@@ -292,6 +313,37 @@ final class RTCDescriptionTests: XCTestCase {
       fixture.peerConnection, didChange: try XCTUnwrap(RTCIceGatheringState(rawValue: 97)))
     XCTAssertEqual(
       collector.snapshot(), ["ICE gathering state: unknown(97)"],
+      "未知の raw value のログが unknown(<rawValue>) になること")
+  }
+
+  // peer connection state (PeerChannel.peerConnection(_:didChange:)) のログを確認する
+  func testPeerConnectionStateLogUsesFormatter() throws {
+    let collector = makeLogCollector()
+    let fixture = try makePeerConnectionFixture()
+
+    // RTCPeerConnectionState 版の delegate は先頭の isCurrentPeerConnection(_:) が
+    // nativeChannel との同一性を要求する。既存のログテストが呼ぶ state 系の didChange は
+    // このガードを持たないため、このテストだけ nativeChannel に実 RTCPeerConnection を代入する。
+    fixture.peerChannel.nativeChannel = fixture.peerConnection
+    defer { fixture.peerChannel.nativeChannel = nil }
+
+    // .connecting は cancelDisconnectTimer() だけを呼び、タイマー未開始では追加のログを出さない。
+    // .connected は finishConnecting() 経由で追加のログと endAsyncOperation() を呼び、
+    // 非同期処理を開始していないこの fixture では assertionFailure でテストが停止する。
+    collector.clear()
+    fixture.peerChannel.peerConnection(
+      fixture.peerConnection, didChange: RTCPeerConnectionState.connecting)
+    XCTAssertEqual(
+      collector.snapshot(), ["peer connection state: connecting"],
+      "peer connection state のログが formatter の文字列になること")
+
+    // 未知の raw value でも delegate の引数がそのまま formatter へ渡ることを確認する。
+    // formatter 単体のテストとは異なる値を使い、引数を固定値で埋める退行も検出できるようにする。
+    collector.clear()
+    fixture.peerChannel.peerConnection(
+      fixture.peerConnection, didChange: try XCTUnwrap(RTCPeerConnectionState(rawValue: 93)))
+    XCTAssertEqual(
+      collector.snapshot(), ["peer connection state: unknown(93)"],
       "未知の raw value のログが unknown(<rawValue>) になること")
   }
 

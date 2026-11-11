@@ -21,6 +21,11 @@
   - マスクの対象は `Logger` のマスク対象キーの文字列値のみで、それ以外の値は平文で出力される (既存のマスクの方針と同じ)
   - 公開 API のソース互換 (名前・型・アクセスレベル) は変わらず、出力されるログが増える
   - @t-miya
+- [FIX] `RTCPeerConnectionState` の状態遷移のデバッグログが case 名ではなく raw 表現で出力される問題を修正する
+  - `WebRTCEnumDescription` に `peerConnectionState(_:)` を追加し、`peer connection state: connected` のように case 名を出力する
+  - 未知の raw value は `"unknown(<rawValue>)"` で出力する
+  - 対象は `Logger.debug` で出力するデバッグログ (type: `.peerChannel`) のみで、ログの種別・レベル・出力箇所は変わらず、公開 API のソース互換 (名前・型・アクセスレベル) も変わらない
+  - @t-miya
 
 ## 2026.5.1
 

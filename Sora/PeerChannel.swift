@@ -2519,7 +2519,7 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     }
     Logger.debug(
       type: .peerChannel,
-      message: "peer connection state: \(String(describing: newState))")
+      message: "peer connection state: \(WebRTCEnumDescription.peerConnectionState(newState))")
     switch newState {
     case .failed:
       cancelDisconnectTimer()
