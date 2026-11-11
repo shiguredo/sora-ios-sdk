@@ -3,17 +3,18 @@ import Foundation
 @testable import Sora
 
 /// テスト中だけ `Logger.shared` の設定 (level / groups / onOutputHandler) を変更し、
-/// 出力されたログの message を集めるヘルパーです。
+/// 出力されたログの message と `Log` を集めるヘルパーです。
 ///
 /// `Logger.shared` はプロセス全体の共有状態のため、この型のインスタンスが解放される
 /// (`deinit`) ときに元の設定へ戻します。テストが失敗して早期に return しても復元されます。
 /// 復元の時期はインスタンスの寿命に依存するため、テストメソッドのローカル変数として保持し、
 /// クラスのプロパティには保持しないでください。`Logger.shared` を書き換えるテストは直列に
 /// 実行する前提です。
-/// handler は複数の executor から呼ばれ得るため、収集は `StringCollector` の lock で行います。
+/// handler は複数の executor から呼ばれ得るため、収集は `LogCollector` の lock で行います。
+/// handler に渡る `Log` は `Logger.output(log:)` がマスクした後の値である点に注意してください。
 final class LoggerCapture {
-  /// 出力されたログの message
-  private let collector = StringCollector()
+  /// 出力されたログ
+  private let logCollector = LogCollector()
 
   /// ログが 1 件出力されるたびに呼ばれるクロージャー
   private let onMessage: ((String) -> Void)?
@@ -38,8 +39,8 @@ final class LoggerCapture {
     originalOnOutputHandler = shared.onOutputHandler
     shared.level = level
     shared.groups = groups
-    shared.onOutputHandler = { [collector, onMessage] log in
-      collector.append(log.message)
+    shared.onOutputHandler = { [logCollector, onMessage] log in
+      logCollector.append(log)
       onMessage?(log.message)
     }
   }
@@ -59,6 +60,31 @@ final class LoggerCapture {
 
   /// 収集したログの message の一覧
   var messages: [String] {
-    collector.snapshot()
+    logs.map(\.message)
+  }
+
+  /// 収集したログの一覧
+  var logs: [Log] {
+    logCollector.snapshot()
+  }
+}
+
+/// 出力された `Log` を集めるためのスレッド安全な collector です。
+///
+/// handler が複数の executor から並行に呼ばれ得るため、lock と配列をこの型に閉じ込めます。
+private final class LogCollector: @unchecked Sendable {
+  private let lock = NSLock()
+  private var values: [Log] = []
+
+  func append(_ log: Log) {
+    lock.lock()
+    defer { lock.unlock() }
+    values.append(log)
+  }
+
+  func snapshot() -> [Log] {
+    lock.lock()
+    defer { lock.unlock() }
+    return values
   }
 }

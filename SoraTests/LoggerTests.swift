@@ -321,8 +321,8 @@ final class LoggerTests: XCTestCase {
       "同じ message が重複して届かず、欠落もしないこと")
   }
 
-  /// groups と level による filtering の結果が実装前と同じであることを確認します。
-  func testFilteringUnchanged() {
+  /// groups と level による filtering を確認します。
+  func testFilteringByGroupsAndLevel() {
     let logger = Logger()
     let collector = StringCollector()
     logger.onOutputHandler = { collector.append($0.message) }
@@ -352,6 +352,24 @@ final class LoggerTests: XCTestCase {
     logger.groups = []
     logger.output(log: Log(level: .fatal, type: .sora, message: "empty groups"))
     XCTAssertEqual(collector.count, 2, "groups が空配列では出力されないこと")
+
+    // `.signaling` は `Sora/Signaling.swift` の異常系ログ用の type で、受理する group は
+    // `.channels` だけです (修正前はどの group でも出力されませんでした)。
+    logger.level = .info
+    logger.groups = [.channels]
+    logger.output(log: Log(level: .info, type: .signaling, message: "signaling"))
+    XCTAssertEqual(
+      collector.count, 3, "groups に .channels を含むとき .signaling が出力されること")
+
+    logger.groups = [.user]
+    logger.output(log: Log(level: .info, type: .signaling, message: "signaling not in channels"))
+    XCTAssertEqual(
+      collector.count, 3, "groups に .channels を含まないとき .signaling が出力されないこと")
+
+    logger.groups = []
+    logger.output(log: Log(level: .info, type: .signaling, message: "signaling empty groups"))
+    XCTAssertEqual(
+      collector.count, 3, "groups が空配列のとき .signaling が出力されないこと")
   }
 
   /// secret masking の対象キーと `Log.description` の出力形式を確認します。

@@ -5,7 +5,8 @@ import XCTest
 
 /// ログと文字列表現からシークレットが漏れないことを確認します。
 ///
-/// 対象は TURN の認証情報 (`username` / `credential`) と、シグナリング URL の userinfo です。
+/// 対象は TURN の認証情報 (`username` / `credential`)、シグナリング URL の userinfo、
+/// signaling notify の `data` に含まれるマスク対象キーの値です。
 /// JSON の値のマスクは `Logger` と `ICEServerInfo.description` が、ログへ出す前の URL の
 /// userinfo の除去は `URLUserInfo` が担います。
 final class SecretMaskingTests: XCTestCase {
@@ -367,6 +368,158 @@ final class SecretMaskingTests: XCTestCase {
     XCTAssertTrue(
       reason.contains("invalid message: wss://[invalid"),
       "エラーの reason が userinfo を除いた location を使うこと: \(reason)")
+  }
+
+  // MARK: - LogType.signaling のログ
+
+  /// notify の `data` の downcast に失敗したログが JSON 形式で出力され、マスク対象キーの
+  /// 文字列値だけが伏せられることを確認します。
+  ///
+  /// `data` は `authn_metadata` / `authz_metadata` / `metadata` など利用者や認証ウェブフックが
+  /// 設定した任意の値を含み得ます。ログは JSON に戻して出力するため、既存の
+  /// `Logger.maskSecrets` の対象になります。
+  func testSignalingDowncastFailureLogMasksSecrets() throws {
+    // 既定値そのものを使い、既定設定で出力されることを確認します。
+    let defaults = Logger()
+    let capture = LoggerCapture(level: defaults.level, groups: defaults.groups)
+
+    // `data` がオブジェクトの配列でない notify を作ります。要素に NSNull を混ぜると
+    // `[[String: Any]]` への downcast が失敗し、`serializeData` のログが出ます。
+    let data = try JSONSerialization.data(
+      withJSONObject: [
+        "type": "notify",
+        "event_type": "connection.created",
+        "data": [
+          [
+            "client_id": "dummy-client",
+            "authn_metadata": [
+              "access_token": "dummy-token",
+              "username": "dummy-user",
+            ],
+          ],
+          NSNull(),
+        ],
+      ])
+    let signaling = try Signaling.decode(data).get()
+    guard case .notify = signaling else {
+      XCTFail("notify として decode されること")
+      return
+    }
+
+    let logs = capture.logs.filter {
+      $0.message.hasPrefix("downcast failed in serializeData")
+    }
+    XCTAssertEqual(logs.count, 1, "downcast 失敗のログが 1 件出力されること: \(capture.messages)")
+    let log = try XCTUnwrap(logs.first, "downcast 失敗のログがあること")
+    guard case .signaling = log.type else {
+      XCTFail("ログの type が .signaling であること: \(log.type)")
+      return
+    }
+    XCTAssertEqual(log.level, .info, "ログの level が .info であること")
+
+    // `data: ` 以降を JSON として読み、データ本体は残したままマスク対象キーの値だけが
+    // 伏せられていることを確認します。
+    let prefix = "downcast failed in serializeData. data: "
+    let jsonText = String(log.message.dropFirst(prefix.count))
+    let entries = try XCTUnwrap(
+      JSONSerialization.jsonObject(
+        with: Data(jsonText.utf8), options: [.fragmentsAllowed]) as? [Any],
+      "ログの data が JSON として読めること: \(log.message)")
+    XCTAssertEqual(entries.count, 2, "データ本体の要素が全て残ること")
+    if entries.count == 2 {
+      XCTAssertTrue(entries[1] is NSNull, "2 件目の null が残ること")
+    }
+    let metadata = try XCTUnwrap(entries.first as? [String: Any], "1 件目がオブジェクトであること")
+    XCTAssertEqual(metadata["client_id"] as? String, "dummy-client", "データ本体の値が残ること")
+    let authnMetadata = try XCTUnwrap(
+      metadata["authn_metadata"] as? [String: Any], "authn_metadata がオブジェクトであること")
+    XCTAssertEqual(authnMetadata["access_token"] as? String, "***", "access_token がマスクされること")
+    XCTAssertEqual(authnMetadata["username"] as? String, "***", "username がマスクされること")
+    XCTAssertFalse(log.message.contains("dummy-token"), "access_token の平文が残らないこと")
+    XCTAssertFalse(log.message.contains("dummy-user"), "username の平文が残らないこと")
+  }
+
+  /// JSON の数値として表現できない値 (`-1e999` は `-inf` として解析されます) を含む notify でも、
+  /// downcast 失敗ログがクラッシュせずに出力され、データ本体を出さないことを確認します。
+  ///
+  /// `JSONSerialization.data(withJSONObject:)` は非有限数を渡すと捕捉できない NSException を
+  /// 送出してプロセスを終了させるため、ログのための直列化では事前に検証する必要があります。
+  func testSignalingDowncastFailureLogDoesNotCrashOnNonJSONValue() throws {
+    // このテストは直列化できない値の分岐だけを見るため `.channels` だけで足ります。
+    let capture = LoggerCapture(level: .info, groups: [.channels])
+    // `JSONSerialization.data(withJSONObject:)` ではこの JSON を組み立てられないため、
+    // 文字列リテラルから Data を作ります。
+    let raw =
+      #"{"type":"notify","event_type":"connection.created","data":{"access_token":"dummy-token","x":-1e999}}"#
+    let signaling = try Signaling.decode(Data(raw.utf8)).get()
+    guard case .notify = signaling else {
+      XCTFail("notify として decode されること")
+      return
+    }
+
+    let logs = capture.logs.filter {
+      $0.message.hasPrefix("downcast failed in serializeData")
+    }
+    XCTAssertEqual(logs.count, 1, "downcast 失敗のログが 1 件出力されること: \(capture.messages)")
+    let message = try XCTUnwrap(logs.first?.message, "downcast 失敗のログがあること")
+    XCTAssertTrue(
+      message.contains("<not a JSON value>"),
+      "JSON に戻せない値であることを出力すること: \(message)")
+    XCTAssertFalse(message.contains("dummy-token"), "データ本体を出力しないこと: \(message)")
+  }
+
+  /// `data` が文字列の断片でも JSON として出力され、マスク対象キーの値が伏せられることを
+  /// 確認します。`data` はオブジェクトの配列に限らないため `fragmentsAllowed` が必要です。
+  func testSignalingDowncastFailureLogSerializesFragmentAsJSON() throws {
+    let capture = LoggerCapture(level: .info, groups: [.channels])
+    let raw =
+      #"{"type":"notify","event_type":"connection.created","data":"{\"token\":\"dummy-token\"}"}"#
+    _ = try Signaling.decode(Data(raw.utf8)).get()
+
+    let logs = capture.logs.filter {
+      $0.message.hasPrefix("downcast failed in serializeData")
+    }
+    XCTAssertEqual(logs.count, 1, "downcast 失敗のログが 1 件出力されること: \(capture.messages)")
+    let log = try XCTUnwrap(logs.first, "downcast 失敗のログがあること")
+    guard case .signaling = log.type else {
+      XCTFail("ログの type が .signaling であること: \(log.type)")
+      return
+    }
+    let message = log.message
+    XCTAssertTrue(
+      message.contains(#"\"token\": \"***\""#),
+      "JSON 文字列の断片でもトークンがマスクされること: \(message)")
+    XCTAssertFalse(message.contains("dummy-token"), "平文が残らないこと: \(message)")
+  }
+
+  /// `data` がオブジェクトでも JSON として出力され、マスク対象キーの文字列値だけが伏せられ、
+  /// マスク対象外のキーと URL はそのまま残ることを確認します。
+  func testSignalingDowncastFailureLogSerializesDictionary() throws {
+    let capture = LoggerCapture(level: .info, groups: [.channels])
+    let data = try JSONSerialization.data(
+      withJSONObject: [
+        "type": "notify",
+        "event_type": "connection.created",
+        "data": [
+          "client_id": "dummy-client",
+          "url": "wss://example.com/signaling",
+          "authn_metadata": ["access_token": "dummy-token"],
+        ],
+      ])
+    _ = try Signaling.decode(data).get()
+
+    let logs = capture.logs.filter {
+      $0.message.hasPrefix("downcast failed in serializeData")
+    }
+    XCTAssertEqual(logs.count, 1, "downcast 失敗のログが 1 件出力されること: \(capture.messages)")
+    let message = try XCTUnwrap(logs.first?.message, "downcast 失敗のログがあること")
+    XCTAssertFalse(message.contains("dummy-token"), "access_token の平文が残らないこと: \(message)")
+    XCTAssertTrue(
+      message.contains("\"client_id\":\"dummy-client\""),
+      "マスク対象外のキーが残ること: \(message)")
+    XCTAssertTrue(
+      message.contains("\"url\":\"wss://example.com/signaling\""),
+      "URL のスラッシュがエスケープされないこと: \(message)")
   }
 }
 
