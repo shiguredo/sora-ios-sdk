@@ -1,7 +1,7 @@
 # LogType.signaling のログがどの Logger.Group にも含まれず出力されない問題を修正する
 
 - Created: 2026-09-18
-- Completed:
+- Completed: 2026-11-11
 - Priority: Medium
 - Branch: feature/fix-signaling-log-output
 - Polished: 2026-11-11
@@ -70,3 +70,28 @@
 - 追加したテストと既存テストがすべて成功すること
 
 ## 解決方法
+
+`Logger.Group.channels` が出力対象とするログの種別に `.signaling` を追加し、既定値 (`level = .info`、`groups = [.channels, .user]`) でも `Sora/Signaling.swift` の異常系ログが出力されるようにした。
+
+- `Sora/Logger.swift`
+  - `Logger.output(log:)` の `.channels` の switch に `.signaling` を追加した。公開 enum の case は増やしておらず、公開 API は変わらない。
+- `Sora/Signaling.swift`
+  - `serializeData(_:)` の downcast 失敗ログを、受信データを `JSONSerialization` で JSON に戻して出力する形に変更した。これにより既存の `Logger.maskSecrets` が効き、マスク対象キーの文字列値が伏せられる。
+  - `JSONSerialization.data(withJSONObject:)` は `-1e999` を解析した `-inf` などの JSON の数値として表現できない値を渡すと捕捉できない NSException を送出するため、直列化の前に `isValidJSONObject` で検証するようにした。JSON に戻せない値はデータ本体を出力せず、`<not a JSON value>` とだけ出力する。
+  - デコード用のファイルスコープ関数 (`serializeData(_:)` / `updateMetadata(signaling:data:)`) を、公開型 `Signaling` の直後へ移動した。
+- `SoraTests/LoggerTests.swift`
+  - `testFilteringUnchanged` を `testFilteringByGroupsAndLevel` に改名し、`.signaling` の filtering (`.channels` では出力、`.user` と空配列では不出力) を追加した。
+- `SoraTests/SecretMaskingTests.swift`
+  - `Signaling.decode(_:)` の実経路を使い、既定設定での出力、マスク、文字列断片、オブジェクト、JSON に戻せない値 (非有限数) の 4 ケースを追加した。モック・スタブは使用していない。
+- `SoraTests/LoggerCapture.swift` / `SoraTests/StringCollector.swift`
+  - 出力された `Log` の一覧を返す accessor を追加し、収集を `LogCollector` に一本化した。
+- `CHANGES.md`
+  - `## develop` の `[FIX]` にエントリを追記した。
+
+検証:
+
+- `make fmt-lint` / `make lint`: 成功 (0 violations / 0 serious)
+- `make build` (Release, warnings-as-errors): 成功
+- 全テスト: 575 件実行、40 スキップ、失敗 0
+- ネガティブコントロール: `Sora/Signaling.swift` を修正前のメッセージ組み立てに戻すと追加テストが失敗して平文が検出されること、`isValidJSONObject` の検証を外すと非有限数のテストがクラッシュすることを確認した
+- `make api-check-fresh`: この環境の Xcode 27.0 / `iphoneos27.0` では baseline (Xcode 26.6 / `iphoneos26.5`) と環境が一致しないため実行していない。公開宣言の変更が無いことは `git diff` で確認し、CI の `swift6-consumer` job で確認する
