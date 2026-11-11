@@ -4,7 +4,7 @@
 - Completed:
 - Priority: Medium
 - Branch: feature/fix-signaling-log-output
-- Polished: 2026-09-23
+- Polished: 2026-11-11
 
 ## 目的
 
