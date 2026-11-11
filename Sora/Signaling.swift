@@ -1,93 +1,6 @@
 import Foundation
 import WebRTC
 
-/// :nodoc:
-private func serializeData(_ data: Any?) -> [SignalingNotifyMetadata]? {
-  guard let array = data as? [[String: Any]] else {
-    Logger.info(
-      type: .signaling,
-      message: "downcast failed in serializeData. data: \(String(describing: data))")
-    return nil
-  }
-
-  let result = array.map { (dict: [String: Any]) -> SignalingNotifyMetadata in
-    var signalingNotifyMetadata = SignalingNotifyMetadata()
-    if let clientId = dict["client_id"] as? String {
-      signalingNotifyMetadata.clientId = clientId
-    }
-    if let bundleId = dict["bundle_id"] as? String {
-      signalingNotifyMetadata.bundleId = bundleId
-    }
-    if let connectionId = dict["connection_id"] as? String {
-      signalingNotifyMetadata.connectionId = connectionId
-    }
-
-    if let authnMetadata = dict["authn_metadata"] {
-      signalingNotifyMetadata.authnMetadata = authnMetadata
-    }
-
-    if let authzMetadata = dict["authz_metadata"] {
-      signalingNotifyMetadata.authzMetadata = authzMetadata
-    }
-
-    if let metadata = dict["metadata"] {
-      signalingNotifyMetadata.metadata = metadata
-    }
-
-    return signalingNotifyMetadata
-  }
-
-  return result
-}
-
-/// :nodoc:
-private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
-  var json: [String: Any]
-  do {
-    let jsonObject = try JSONSerialization.jsonObject(with: data)
-    json = jsonObject as! [String: Any]
-  } catch {
-    // JSON のシリアライズが失敗した場合は、引数として渡された signaling をそのまま返し、処理を継続する
-    Logger.error(
-      type: .signaling,
-      message: "updateMetadata failed. error: \(error.localizedDescription), data: \(data)")
-    return signaling
-  }
-
-  switch signaling {
-  case .offer(var message):
-    // TODO: if json.keys.contains("key") を if let に書き換えたい
-    if let metadata = json["metadata"] {
-      message.metadata = metadata
-    }
-    if let dataChannels = json["data_channels"] as? [[String: Any]] {
-      message.dataChannels = dataChannels
-    }
-    return .offer(message)
-  case .push(var message):
-    if let data = json["data"] {
-      message.data = data
-    }
-    return .push(message)
-  case .notify(var message):
-    if let authnMetadata = json["authn_metadata"] {
-      message.authnMetadata = authnMetadata
-    }
-    if let authzMetadata = json["authz_metadata"] {
-      message.authzMetadata = authzMetadata
-    }
-    if let metadata = json["metadata"] {
-      message.metadata = metadata
-    }
-    if let data = json["data"] {
-      message.data = serializeData(data)
-    }
-    return .notify(message)
-  default:
-    return signaling
-  }
-}
-
 /// シグナリングの種別です。
 public enum Signaling {
   /// "connect" シグナリング
@@ -183,6 +96,114 @@ public enum Signaling {
     case .close:
       return "close"
     }
+  }
+}
+
+/// :nodoc:
+private func serializeData(_ data: Any) -> [SignalingNotifyMetadata]? {
+  guard let array = data as? [[String: Any]] else {
+    // `data` は authn_metadata / authz_metadata / metadata など利用者や認証ウェブフックが
+    // 設定した任意の値を含み得ます。Foundation の辞書・配列の description (plist 形式の
+    // `"key" = value;`) は `Logger.maskSecrets` の対象 (JSON の `"key":"value"`) ではないため、
+    // JSON に戻してからログに出します。
+    // `JSONSerialization.data(withJSONObject:)` は JSON の数値として表現できない値
+    // (`-1e999` を解析した `-inf` など) で捕捉できない NSException を送出するため、
+    // 直列化の前に `isValidJSONObject` で検証します。`Sora/RPC.swift` の
+    // `jsonData(fromFragment:)` と同じく、トップレベルの断片は辞書で包んで検証します
+    // (直列化は断片のまま `.fragmentsAllowed` で行います)。
+    // シグナリング URL を読みやすく出力するため、スラッシュはエスケープしません。
+    let dataText: String
+    if JSONSerialization.isValidJSONObject(["value": data]),
+      let jsonData = try? JSONSerialization.data(
+        withJSONObject: data,
+        options: [.fragmentsAllowed, .withoutEscapingSlashes]),
+      let jsonText = String(data: jsonData, encoding: .utf8)
+    {
+      dataText = jsonText
+    } else {
+      dataText = "<not a JSON value>"
+    }
+    Logger.info(
+      type: .signaling,
+      message: "downcast failed in serializeData. data: \(dataText)")
+    return nil
+  }
+
+  let result = array.map { (dict: [String: Any]) -> SignalingNotifyMetadata in
+    var signalingNotifyMetadata = SignalingNotifyMetadata()
+    if let clientId = dict["client_id"] as? String {
+      signalingNotifyMetadata.clientId = clientId
+    }
+    if let bundleId = dict["bundle_id"] as? String {
+      signalingNotifyMetadata.bundleId = bundleId
+    }
+    if let connectionId = dict["connection_id"] as? String {
+      signalingNotifyMetadata.connectionId = connectionId
+    }
+
+    if let authnMetadata = dict["authn_metadata"] {
+      signalingNotifyMetadata.authnMetadata = authnMetadata
+    }
+
+    if let authzMetadata = dict["authz_metadata"] {
+      signalingNotifyMetadata.authzMetadata = authzMetadata
+    }
+
+    if let metadata = dict["metadata"] {
+      signalingNotifyMetadata.metadata = metadata
+    }
+
+    return signalingNotifyMetadata
+  }
+
+  return result
+}
+
+/// :nodoc:
+private func updateMetadata(signaling: Signaling, data: Data) -> Signaling {
+  var json: [String: Any]
+  do {
+    let jsonObject = try JSONSerialization.jsonObject(with: data)
+    json = jsonObject as! [String: Any]
+  } catch {
+    // JSON のシリアライズが失敗した場合は、引数として渡された signaling をそのまま返し、処理を継続する
+    Logger.error(
+      type: .signaling,
+      message: "updateMetadata failed. error: \(error.localizedDescription), data: \(data)")
+    return signaling
+  }
+
+  switch signaling {
+  case .offer(var message):
+    // TODO: if json.keys.contains("key") を if let に書き換えたい
+    if let metadata = json["metadata"] {
+      message.metadata = metadata
+    }
+    if let dataChannels = json["data_channels"] as? [[String: Any]] {
+      message.dataChannels = dataChannels
+    }
+    return .offer(message)
+  case .push(var message):
+    if let data = json["data"] {
+      message.data = data
+    }
+    return .push(message)
+  case .notify(var message):
+    if let authnMetadata = json["authn_metadata"] {
+      message.authnMetadata = authnMetadata
+    }
+    if let authzMetadata = json["authz_metadata"] {
+      message.authzMetadata = authzMetadata
+    }
+    if let metadata = json["metadata"] {
+      message.metadata = metadata
+    }
+    if let data = json["data"] {
+      message.data = serializeData(data)
+    }
+    return .notify(message)
+  default:
+    return signaling
   }
 }
 

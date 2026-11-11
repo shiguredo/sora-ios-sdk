@@ -15,6 +15,12 @@
   - `type: notify` の受信スレッド (WebSocket / DataChannel) と利用者の読み出しスレッドの間、および受信スレッド同士でデータ競合しないようにする
   - 公開 API のソース互換 (名前・型・アクセスレベル) と利用者の挙動は変わらない
   - @t-miya
+- [FIX] `LogType.signaling` のログがどの `Logger.Group` にも含まれず出力されない問題を修正する
+  - `Logger.Group.channels` が出力対象とするログの種別に `.signaling` を追加し、既定値 (`level = .info`、`groups = [.channels, .user]`) でも `Signaling.swift` の異常系ログが出力されるようにする
+  - notify の `data` を解釈できなかったときのログは、JSON に戻せるときは JSON 形式で出力してマスク対象キーの文字列値を伏せ、戻せないときはデータ本体を出力しない
+  - マスクの対象は `Logger` のマスク対象キーの文字列値のみで、それ以外の値は平文で出力される (既存のマスクの方針と同じ)
+  - 公開 API のソース互換 (名前・型・アクセスレベル) は変わらず、出力されるログが増える
+  - @t-miya
 
 ## 2026.5.1
 

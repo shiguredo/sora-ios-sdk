@@ -422,6 +422,8 @@ public final class Logger: Sendable {
         switch log.type {
         case .sora,
           .webSocketChannel,
+          // `.signaling` は `Sora/Signaling.swift` の異常系ログ用の type のため含めます。
+          .signaling,
           .signalingChannel,
           .peerChannel,
           .nativePeerChannel,
