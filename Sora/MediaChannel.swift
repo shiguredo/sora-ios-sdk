@@ -2764,9 +2764,19 @@ public final class MediaChannel {
   /// 試みるため、ホストアプリが同時に `RPScreenRecorder` を使用している場合は、SDK がホストの
   /// 録画を停止することがあります。ReplayKit は録画の所有者を照会する API を提供しないため、
   /// SDK は自身が `startCapture` を発行した後の録画を SDK 所有として扱います。
-  /// 開始要求の時点でホストアプリが既に開始していた録画は停止しません。停止に失敗した場合は、
-  /// 同じ `MediaChannel` の `stopScreenCapture()` による停止に成功するまで開始できず、
-  /// `isScreenCaptureActive()` は true を返します。
+  ///
+  /// 通常の開始経路では、開始要求の時点でホストアプリが既に開始していた録画は停止しません。
+  /// 停止に失敗した場合は、同じ `MediaChannel` の `stopScreenCapture()` による停止に成功する
+  /// まで開始できず、`isScreenCaptureActive()` は true を返します。
+  ///
+  /// 停止に失敗した接続の解放時にも SDK は最後の停止を試みます。それにも失敗した場合は、その
+  /// 接続の recorder の所有権が放棄され、隔離だけが残ります。後続の接続の開始要求が recorder の
+  /// 開始処理まで進むと、SDK は残った recorder の停止を開始要求ごとに 1 回だけ試みます。
+  /// 録画が停止していることを確認できた場合だけ隔離を解除して開始を続け、確認できない場合は
+  /// 開始に失敗して隔離を維持します。停止に失敗した接続の解放直後は、前の接続の最後の停止試行と
+  /// 所有権の解放が終わるまで、開始が別の接続の使用中として失敗することがあります。その場合は
+  /// 開始を再試行してください。この回復経路では、録画の所有者を照会できないため、開始要求の
+  /// 時点でホストアプリが既に開始していた録画を停止することがあります。
   ///
   /// - Parameter settings: 画面キャプチャ設定
   /// - Throws: エラー時は `SoraError.mediaChannelError` または ReplayKit 起因のエラーがスローされます
@@ -2840,6 +2850,9 @@ public final class MediaChannel {
   /// ReplayKit を利用した画面キャプチャを停止します
   ///
   /// 同じ接続で停止に失敗した場合は、再度呼ぶことで停止を再試行できます。
+  /// 停止に失敗した接続の解放時にも SDK は最後の停止を試みますが、それにも失敗すると recorder は
+  /// 隔離されます。隔離された recorder は他の接続の `stopScreenCapture()` では停止できず、
+  /// 後続の接続の開始要求が recorder の開始処理まで進んだときに停止を試みます。
   public func stopScreenCapture() async {
     let screenStopReservation = videoSourceCoordinator.beginScreenStop()
     let screenCaptureController = currentScreenCaptureController()
@@ -2855,6 +2868,9 @@ public final class MediaChannel {
   /// 画面キャプチャが動作中かを取得します
   ///
   /// 停止処理中と停止の後始末に失敗した状態でも true を返します。
+  /// 他の接続が隔離した recorder の状態は、その recorder を開始していない接続の
+  /// `isScreenCaptureActive()` には現れません。その接続自身が開始・停止処理中の場合は true を
+  /// 返します。
   public func isScreenCaptureActive() -> Bool {
     currentScreenCaptureController()?.isCaptureActive() ?? false
   }

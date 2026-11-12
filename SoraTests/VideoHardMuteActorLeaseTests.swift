@@ -103,25 +103,9 @@ final class VideoHardMuteActorLeaseTests: XCTestCase {
     )
   }
 
-  // SoraError.mediaChannelError の reason を取り出す
-  private func mediaChannelErrorReason(
-    _ error: Error,
-    file: StaticString = #filePath,
-    line: UInt = #line
-  ) -> String? {
-    guard let soraError = error as? SoraError,
-      case .mediaChannelError(let reason) = soraError
-    else {
-      XCTFail("mediaChannelError が返ること: \(error)", file: file, line: line)
-      return nil
-    }
-    return reason
-  }
-
-  // SoraError.mediaChannelError の reason を検証する
+  // SoraError.mediaChannelError の reason を部分一致で検証する
   //
-  // reason の文言は SoraError の構造化が導入されるまで唯一の判別材料であり、
-  // 実装側のメッセージ定義を変更するときはこのテストも合わせて更新する必要がある。
+  // 案内文の契約を固定するため、実装のメッセージを変更するときはここも更新する必要がある。
   private func assertMediaChannelError(
     _ error: Error,
     contains expected: String,
