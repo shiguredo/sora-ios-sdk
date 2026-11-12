@@ -2748,6 +2748,8 @@ public final class MediaChannel {
 
   /// MediaChannel の接続中に ReplayKit を利用して画面キャプチャおよび映像配信を開始します
   ///
+  /// ReplayKit によるアプリ内画面キャプチャのため、他アプリの画面、ホーム画面、全画面は取得できません。
+  ///
   /// 送信フレームレートは `ScreenCaptureSettings.targetFPS` で制御できます。
   ///
   /// `ScreenCaptureSettings.videoSampleBufferTransformer` は SDK 内部の送信キュー上で呼ばれます。

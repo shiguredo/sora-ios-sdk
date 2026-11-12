@@ -1,7 +1,7 @@
 # 画面キャプチャのドキュメントにアプリ内画面のみを対象とすることを明記する
 
 - Created: 2026-10-20
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-11-12
 - Branch: feature/update-screen-capture-doc-scope
 - Polished: 2026-11-12
 - Priority: Medium
@@ -51,3 +51,11 @@ SDK の画面キャプチャは ReplayKit の `RPScreenRecorder` を使ったア
 - `0192`: iOS 27 以降の ScreenCaptureKit 対応。全画面・他アプリ共有は SCK で追加する新機能であり、本 issue は既存 ReplayKit 経路の説明を正す独立した doc 修正。`0192` の完了を待たずに対応できる。`0192` が SCK 経路で共用する `ScreenCaptureSettings` などの doc コメントは本 issue では変更しない。
 
 ## 解決方法
+
+`MediaChannel.startScreenCapture(settings:)` が ReplayKit によるアプリ内画面キャプチャであり、他アプリの画面、ホーム画面、全画面は取得できないことを公開 API のドキュメントと利用ガイドに明記した。コードの挙動と公開 API は変更していない。
+
+- `Sora/MediaChannel.swift`: `startScreenCapture(settings:)` の doc コメントに、ReplayKit によるアプリ内画面キャプチャのため、他アプリの画面、ホーム画面、全画面は取得できないことを追記した
+- `skills/sora-ios-sdk/SKILL.md`: 「画面キャプチャ」節の「端末画面」を「アプリ内画面」に修正し、他アプリの画面、ホーム画面、全画面は取得できないことと、現行の ReplayKit 経路で他アプリの画面を配信するには Broadcast Upload Extension が必要で SDK はこの構成を提供していないことを補足した
+- `CHANGES.md`: `## develop` の `### misc` に `[UPDATE]` を追加した。2026.2.0 のリリース済みエントリは変更していない
+- `make fmt-lint` と `make lint` が成功し、既存テスト 545 件と stress 8 件が成功することを確認した (Xcode 27.0 / iOS 26.5 simulator)
+- 公開 API は変わらないため API baseline は再生成していない
