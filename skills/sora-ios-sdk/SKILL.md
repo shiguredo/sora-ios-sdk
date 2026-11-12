@@ -447,7 +447,9 @@ CameraVideoCapturer.flip(current!) { error in /* ... */ }
 
 ### 画面キャプチャ
 
-ReplayKit を利用して端末画面を配信する。
+ReplayKit を利用してアプリ内画面を配信する。他アプリの画面、ホーム画面、全画面は取得できない。
+
+現行の ReplayKit 経路で他アプリの画面を配信するには Broadcast Upload Extension が必要で、SDK はこの構成を提供していない。
 
 ```swift
 try await mediaChannel.startScreenCapture(
