@@ -1,7 +1,7 @@
 # libwebrtc を m156.8078.5.1 に更新する
 
 - Created: 2026-10-26
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-11-12
 - Branch: feature/update-libwebrtc-m156
 - Polished: 2026-10-26
 
@@ -58,23 +58,28 @@ m156.8078.5.1 は `M156.8078@{#5}` (2026-10-21 ビルド) である。`WebRTC.xc
 
 ## 解決方法
 
-- `Package.swift` の `libwebrtcVersion` を `m156.8078.5.1` に変更し、`WebRTC` の `checksum` を新しい zip の SHA-256 に更新する。checksum はダウンロードした zip に対して `swift package compute-checksum` を実行して確定する。
-- `Sora/PackageInfo.swift` の `WebRTCInfo` を `M156` / `8078` / `5` / `1` / `2a990ce0ccd00a3ad449f2201a8e5c2dad53177d` に更新する。
-- `README.md` の libwebrtc バッジを `156.8078`、リンクを `branch-heads/8078` に更新する。
-- `skills/sora-ios-sdk/SKILL.md` の参照バージョンを `m156.8078.5.1` に更新する。
-- `CHANGES.md` の `## develop` セクションに `[UPDATE] libwebrtc を m156.8078.5.1 に更新する` を追加し、利用者に影響する変更を補足する。
-- 新しい `WebRTC.xcframework` の `LICENSE.md` を `THIRD_PARTY_LICENSES.md` と比較し、追加された `rust/cxx/v1`、`rust/foldhash/v0_2`、`rust_stdlib` と、`perfetto` の path の不一致を反映する。
-- `AudioDeviceModuleWrapper`、`NativePeerChannelFactory`、`SoraTests/AudioDeviceModuleWrapperTests.swift` にある m155 を前提にしたコメントが m156 でも正しいかを確認し、必要なら worker thread が network thread を兼ねる旨を追記する。
-- 「検証内容」を実施し、結果を「解決方法」に記録する。コード変更が必要になった場合は、その内容も記録する。
+2026-10-26 に m156.8078.5.1 へ更新し、2026.5.0 でリリースした。2026.5.1 が現行のリリースである。
+
+- `Package.swift` の `libwebrtcVersion` を `m156.8078.5.1` に変更し、`WebRTC` の `checksum` を `c98b26dcd21d7eda49ffb819c2f7ac3fd9344e6b26efe54e52e9a3e4032787a2` に更新した。
+- `Sora/PackageInfo.swift` の `WebRTCInfo` を `M156` / `8078` / `5` / `1` / `2a990ce0ccd00a3ad449f2201a8e5c2dad53177d` に更新した。
+- `README.md` の libwebrtc バッジを `156.8078`、リンクを `branch-heads/8078` に更新した。
+- `skills/sora-ios-sdk/SKILL.md` の参照バージョンを `m156.8078.5.1` に更新した。
+- `CHANGES.md` の `## develop` セクションに `[UPDATE] libwebrtc を m156.8078.5.1 に更新する` を追加し、2026.5.0 のセクションに記録された。
+- 新しい `WebRTC.xcframework` の `LICENSE.md` を `THIRD_PARTY_LICENSES.md` と比較し、`rust/cxx/v1`、`rust/foldhash/v0_2`、`rust_stdlib` を追加し、`perfetto` の path を反映した。
+- `AudioDeviceModuleWrapper`、`NativePeerChannelFactory`、`SoraTests/AudioDeviceModuleWrapperTests.swift` の m155 を前提にしたコメントに、m156 で専用 worker thread が廃止され network thread が worker を兼ねる旨を追記した。
+- 主要な検証を完了した。残りの実機確認は 0200 に切り出した。
+
+2026-11-12 に closed にした。m156 更新は 2026.5.0 でリリース済みで 2026.5.1 が現行のため、残りの実機確認を 0200 に切り出したうえで closed とする。
 
 ### 検証環境
 
 - 端末: iPhone 13 (iPhone14,5)
 - OS: iOS 26.7
 - Xcode: 27.1 (27A9275)、iPhoneOS 27.1 SDK
-- Sora iOS SDK: 2026.4.0
+- Sora iOS SDK: 2026.4.0 (初回) / 2026.5.0 (追加確認)
 - libwebrtc: m156.8078.5.1 (`Shiguredo-build M156 (156.8078.5.1 2a990ce)`)
 - 接続: samples の設定にあるシグナリングサーバーへ sendonly (音声のみ) で接続し、`initialMicrophoneEnabled` を `false`、映像を無効にした
+- 追加確認: プライバシーインジケーター、5 コーデック、ステレオ出力、re-offer は samples (2026.5.0) で実施した
 
 ### 実機で確認した結果
 
@@ -89,22 +94,28 @@ m156.8078.5.1 は `M156.8078@{#5}` (2026-10-21 ビルド) である。`WebRTC.xc
 | `setAudioHardMute(false)` による再解除 | 成功、`bytesSent` 16020 -> 33008 |
 | 切断 | 成功 |
 | ADM のログ | `AudioDeviceIOS::PauseRecording` / `ResumeRecording`、`ReinitAudioUnitForMicrophoneMute`、`SetMicrophoneMute` を確認 |
+| プライバシーインジケーター | `setAudioHardMute(true)` で消灯し、`setAudioHardMute(false)` で点灯した |
+| VP8 / VP9 / AV1 / H.264 / H.265 | 5 種類すべてで送受信を確認した |
+| ステレオ出力 | `audioStereoOutputEnabled = true` の受信音声をヘッドホンで左右に分離して聴取した |
+| re-offer / スポットライト | DataChannel で `re-offer` を受信して `re-answer` を送信した。映像は継続し、`pli=+0`、`freezes=+0`、ICE は connected を維持した |
 
 ### 自動テスト (CI)
 
 - Build: success (Xcode 26.6 / iphoneos26.5)
 - E2E Test: 522 件実行、7 件スキップ、失敗 0 (iOS Simulator)
+  - `PeerChannelRedirectInvalidationTests` の re-offer 経路も成功した
 - TSAN: success
 - Consumer Test: success (`api-check-fresh` を含む)
 
-### 未確認の項目
+### 0200 に切り出した項目
 
-- 録音インジケーターの目視
-- ステレオ出力 / ステレオ入力の聴感
-- VP8 / VP9 / AV1 / H.264 / H.265 の実映像
-- re-offer / スポットライト
+次の項目は未確認のまま 0200 で追跡する。
+
+- re-offer で受信コーデックが変わったときのデコード継続とキーフレーム要求
 - 音声品質 (AEC / AGC / 遅延)
 - Simulcast の帯域制限時の挙動
+
+ステレオ入力は 0009 が pending のため対象外とする。
 
 ## 検証内容
 
