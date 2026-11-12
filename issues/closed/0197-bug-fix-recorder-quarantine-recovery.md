@@ -1,7 +1,7 @@
 # 画面キャプチャの後始末に失敗した recorder が MediaChannel の解放後に回復できなくなる問題を修正する
 
 - Created: 2026-10-30
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-11-12
 - Branch: feature/fix-recorder-quarantine-recovery
 - Polished: 2026-11-02
 
@@ -60,3 +60,35 @@
 - `0126`: 切断時の後始末のセマンティクス
 
 ## 解決方法
+
+### 修正内容
+
+- `Sora/ScreenCapture.swift`: `ScreenCaptureRecorderCoordinator` に `abandon(ownerID:)` を追加した。owner を保持したまま放棄する場合は停止を確認していないとみなし、隔離を立てて後続の接続へ引き継ぐ。`hasOrphanedQuarantine` と `finishOrphanedQuarantine(recorderStopped:)` を追加し、owner を失った隔離は停止を確認できた場合だけ解除できるようにした。owner 一致を要求する `finishStop` のガードは変更していない
+- `ScreenCaptureController` の `deinit` で `abandon(ownerID:)` を呼び、owner を保持したまま解放されても隔離を解除できる主体が消えないようにした。`startCapture` は owner を失った隔離を検出したら coordinator の直列 queue 上で停止を 1 回試み、`finishQuarantineRecovery(captureID:result:)` で隔離の解除と開始の成否を反映する。停止を確認できない場合は隔離を維持して開始を失敗させる
+- 開始前と隔離の回復後に `cancelStartIfNeeded` を呼び、待機中に停止または切断された開始を実行しないようにした。停止待ちの間に取り消された場合は、停止失敗ではなく開始の取り消しとしてエラーを返す
+- `Sora/MediaChannel.swift`: `startScreenCapture` / `stopScreenCapture` / `isScreenCaptureActive` の doc コメントに、owner を失った隔離の回復経路、解放直後の再試行、回復経路でホストアプリの録画を停止し得る制約を追記した
+- `skills/sora-ios-sdk/SKILL.md`: 画面キャプチャ節に同じ回復経路と制約を追記した
+- `CHANGES.md`: `## develop` の `[FIX]` に修正内容を追記した
+
+### テスト
+
+- `SoraTests/ScreenCaptureFrameGenerationTests.swift` に次のテストを追加した。モックやスタブは使用していない
+  - controller の解放による owner の放棄と、停止を確認していない放棄が隔離として引き継がれること
+  - owner の一致しない放棄で別の owner の所有権と既存の隔離を壊さないこと
+  - 停止に成功して owner を解放済みの controller の解放で隔離を立てないこと
+  - owner を失った隔離が停止の確認後にだけ解除され、確認できない間は再取得できないこと
+  - owner を保持した隔離を owner を失った隔離の解除経路で解除しないこと
+  - 隔離を引き継いだ別の接続が停止を再試行し、確認後に開始できること
+  - 停止 API がエラーを返しても録画が止まっていれば隔離を解除すること
+  - 停止の予約中と取り消し済みの予約で開始を取り消すこと
+- `SoraTests/MediaChannelErrorTestHelpers.swift` を追加し、`SoraError.mediaChannelError` の reason を取り出すヘルパーを `VideoHardMuteActorLeaseTests` と共有した
+
+### 検証結果
+
+- `make build XCODE_SDK=iphoneos27.0`: BUILD SUCCEEDED (実行環境に iOS 26.5 SDK が無いため、27.0 SDK でビルドした)
+- `make fmt-lint`: 成功
+- `make lint`: 0 violations
+- シミュレータ (iPhone 17 Pro, iOS 26.5) で画面キャプチャと VideoHardMute のテスト 75 件 / 失敗 0
+- シミュレータで全テスト 587 件 / 40 skip / 失敗 0
+- `/review-diff-code` を 4 周実施し、致命的 0 件・重要 0 件で終了した
+- 実 ReplayKit の停止失敗は自動テストで再現できないため、停止結果の反映と隔離の解除・維持はイベント列テストで検証している。実機での停止失敗時の挙動確認は未実施

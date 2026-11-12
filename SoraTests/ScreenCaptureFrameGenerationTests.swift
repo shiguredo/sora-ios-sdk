@@ -71,7 +71,9 @@ private actor ScreenCaptureOperationOrder {
 /// あわせて、送信キューへ渡す値が所有権を持つ表現だけであること、間引きと semaphore の
 /// 取得失敗で破棄されるフレームで transformer が実行されないことを検証する。
 /// start 失敗時に録画が残る場合の recorder の所有権・隔離判断と、停止に失敗した場合に
-/// 隔離を維持することもイベント列で検証する。
+/// 隔離を維持することをイベント列で検証する。あわせて、停止を確認していない recorder の owner が
+/// controller の解放で隔離として引き継がれることと、owner を失った隔離が停止の確認後にだけ
+/// 解除され、後続の接続が開始できることも検証する。
 /// モックやスタブは使用しない。
 final class ScreenCaptureFrameGenerationTests: XCTestCase {
   /// 送信された frame 数を数える実 VideoFilter です。
@@ -123,6 +125,72 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     let nativeFactory = mediaChannel.peerChannel.nativePeerChannelFactory
     let nativeStream = nativeFactory.createNativeStream(streamId: "test-stream")
     return BasicMediaStream(peerChannel: mediaChannel.peerChannel, nativeStream: nativeStream)
+  }
+
+  // 停止に失敗した recorder が、owner の controller の解放で owner を失った隔離になるまでを再現する
+  //
+  // 実 ReplayKit の停止はテストから実行できないため、start 失敗で録画が残る結果と停止失敗の反映を
+  // イベント列として入力する。controller は本番と同じ `.cleanupFailed` と停止対象の記録を持つ。
+  // MediaChannel の解放時に走る最後の停止試行は実 ReplayKit を呼ぶため再現せず、そこで停止に
+  // 成功した場合との差はテストで扱わない。
+  //
+  // - Returns: 解放した controller の owner ID。解放済みの owner の停止結果が隔離へ
+  //   影響しないことの検証に使う。
+  @discardableResult
+  private func makeOrphanedQuarantine(
+    coordinator: ScreenCaptureRecorderCoordinator,
+    mediaChannel: MediaChannel
+  ) throws -> UUID {
+    weak var weakController: ScreenCaptureController?
+    // ARC の寿命に依存せず deinit を発火させるため、明示的に nil を代入して解放する。
+    var controller: ScreenCaptureController? = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    weakController = controller
+    let ownerID = try XCTUnwrap(controller?.recorderOwnerID)
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let captureID = try XCTUnwrap(
+      controller?.beginStartCapture(
+        settings: makeSettings(),
+        senderStream: senderStream))
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: ownerID),
+      "start 前に recorder の所有者を予約できること")
+
+    // start 失敗で録画が残った結果を入力し、停止の後始末が必要な状態にする。
+    guard
+      case .failed? = controller?.finishStartCapture(
+        captureID: captureID,
+        result: .completed(
+          ScreenCaptureController.RecorderOperationResult(
+            error: SoraError.mediaChannelError(reason: "start failed"),
+            isRecording: true)))
+    else {
+      XCTFail("録画が残る start 失敗として完了すること")
+      return ownerID
+    }
+    XCTAssertTrue(
+      controller?.isCaptureCleanupFailedForTesting == true,
+      "停止の後始末待ちとして保持すること")
+    XCTAssertTrue(
+      controller?.hasRecorderCaptureForTesting == true,
+      "停止対象の capture を保持すること")
+
+    // 停止できなかった場合の反映を入力し、owner を保持した隔離にする。
+    coordinator.finishStop(ownerID: ownerID, recorderStopped: false)
+    XCTAssertTrue(coordinator.isQuarantined, "停止を確認できない recorder を隔離すること")
+    XCTAssertFalse(
+      coordinator.hasOrphanedQuarantine,
+      "owner を保持している間は owner を失った隔離ではないこと")
+
+    // controller の解放で owner が放棄され、隔離だけが残る。
+    controller = nil
+    XCTAssertNil(weakController, "停止に失敗した controller が解放されること")
+    XCTAssertTrue(coordinator.isQuarantined, "owner を放棄しても隔離を維持すること")
+    XCTAssertTrue(
+      coordinator.hasOrphanedQuarantine,
+      "controller の解放後に owner を失った隔離になること")
+    return ownerID
   }
 
   // テストで共通利用する ScreenCaptureSettings を構築する
@@ -503,6 +571,180 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     coordinator.release(ownerID: ownerB)
   }
 
+  /// 停止に失敗した recorder の owner が controller の解放で放棄されることを確認する
+  ///
+  /// owner を保持する controller が解放されると、隔離を解除できる主体がプロセス内から
+  /// 消える。解放時に owner だけを放棄して隔離を維持し、所有者のいない隔離として後続の
+  /// 接続へ引き継ぐことをイベント列で検証する。
+  func testControllerDeinitAbandonsQuarantinedOwner() throws {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    let releasedOwnerID = try makeOrphanedQuarantine(
+      coordinator: coordinator,
+      mediaChannel: mediaChannel)
+
+    XCTAssertFalse(
+      coordinator.acquire(ownerID: UUID()),
+      "隔離中は別の owner が recorder を取得できないこと")
+
+    // 解放済みの owner の停止結果は本番では届かない (停止操作が controller を保持する) が、
+    // 届いても owner が一致しないため隔離は変わらないことを防御的に確認する。
+    coordinator.finishStop(ownerID: releasedOwnerID, recorderStopped: true)
+    XCTAssertTrue(
+      coordinator.isQuarantined,
+      "owner を放棄した後に解放済みの owner の停止結果で隔離を解除しないこと")
+    XCTAssertTrue(
+      coordinator.hasOrphanedQuarantine,
+      "解放済みの owner の停止結果では owner を失った隔離の状態を変えないこと")
+  }
+
+  /// 停止を確認せずに owner を放棄した recorder を隔離として引き継ぐことを確認する
+  ///
+  /// 本番では解放前に停止が予約されるため、owner を保持したまま controller が解放されるのは
+  /// 停止に失敗した場合だけである。それでも owner を手放すだけで recorder を再利用させないよう、
+  /// 解放時の放棄が隔離を立てることをイベント列で検証する。
+  func testControllerDeinitQuarantinesOwnedRecorder() throws {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    var controller: ScreenCaptureController? = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    let ownerID = try XCTUnwrap(controller?.recorderOwnerID)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: ownerID),
+      "start 前に recorder の所有者を予約できること")
+    XCTAssertFalse(coordinator.isQuarantined, "取得直後は隔離でないこと")
+
+    // 停止を確認せずに controller を解放する。
+    controller = nil
+    XCTAssertTrue(coordinator.isQuarantined, "停止を確認せずに放棄した recorder を隔離すること")
+    XCTAssertTrue(coordinator.hasOrphanedQuarantine, "解放後は owner を失った隔離になること")
+    XCTAssertFalse(
+      coordinator.acquire(ownerID: UUID()),
+      "隔離中は別の owner が recorder を取得できないこと")
+  }
+
+  /// 停止に成功して owner を解放済みの controller の解放では隔離を立てないことを確認する
+  ///
+  /// `abandon(ownerID:)` はすべての解放から呼ばれるため、停止に成功した後の解放が no-op に
+  /// ならないと、開始していない接続の解放で不要な隔離が残る。
+  func testControllerDeinitAfterSuccessfulStopKeepsNoQuarantine() throws {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    weak var weakController: ScreenCaptureController?
+    var controller: ScreenCaptureController? = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    weakController = controller
+    let ownerID = try XCTUnwrap(controller?.recorderOwnerID)
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: ownerID),
+      "start 前に recorder の所有者を予約できること")
+    coordinator.finishStop(ownerID: ownerID, recorderStopped: true)
+    XCTAssertFalse(coordinator.isQuarantined, "停止に成功した場合は隔離しないこと")
+
+    // 停止に成功して owner を解放済みの controller を解放する。
+    controller = nil
+    XCTAssertNil(weakController, "停止に成功した controller が解放されること")
+    XCTAssertFalse(coordinator.isQuarantined, "停止に成功した controller の解放では隔離しないこと")
+    let anotherOwner = UUID()
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: anotherOwner),
+      "停止に成功した後は別の owner が recorder を取得できること")
+    coordinator.release(ownerID: anotherOwner)
+  }
+
+  /// owner の放棄が、別の owner の所有権と既存の隔離を壊さないことを確認する
+  ///
+  /// `abandon` は owner が一致する場合だけ所有権を手放すため、別の owner が取得済みの場合や、
+  /// 無関係な controller の解放では coordinator の状態を変えない。
+  func testAbandonKeepsAnotherOwnerAndExistingQuarantine() throws {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+
+    // 別の owner が recorder を取得済みの場合、owner の一致しない controller の解放でその
+    // 所有権を失わない。
+    let anotherOwner = UUID()
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: anotherOwner),
+      "別の owner が recorder を取得できること")
+    weak var weakOtherController: ScreenCaptureController?
+    var otherController: ScreenCaptureController? = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    weakOtherController = otherController
+    otherController = nil
+    XCTAssertNil(weakOtherController, "owner の一致しない controller が解放されること")
+    XCTAssertTrue(
+      coordinator.isOwner(anotherOwner),
+      "owner の一致しない controller の解放で別の owner の所有権を失わないこと")
+    XCTAssertFalse(
+      coordinator.isQuarantined,
+      "owner の一致しない controller の解放で隔離しないこと")
+    coordinator.release(ownerID: anotherOwner)
+
+    // 既に owner を失った隔離がある場合、無関係な controller の解放で隔離を解除しない。
+    try makeOrphanedQuarantine(coordinator: coordinator, mediaChannel: mediaChannel)
+    weak var weakUnrelatedController: ScreenCaptureController?
+    var unrelatedController: ScreenCaptureController? = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    weakUnrelatedController = unrelatedController
+    unrelatedController = nil
+    XCTAssertNil(weakUnrelatedController, "無関係な controller が解放されること")
+    XCTAssertTrue(
+      coordinator.isQuarantined,
+      "無関係な controller の解放で既存の隔離を解除しないこと")
+    XCTAssertTrue(
+      coordinator.hasOrphanedQuarantine,
+      "owner を失った隔離を維持すること")
+  }
+
+  /// owner を失った隔離が、停止の確認後にだけ解除されることを確認する
+  func testOrphanedQuarantineIsClearedOnlyAfterStopIsConfirmed() throws {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    try makeOrphanedQuarantine(coordinator: coordinator, mediaChannel: mediaChannel)
+
+    // 停止を確認できない間は隔離を維持する。
+    XCTAssertFalse(
+      coordinator.finishOrphanedQuarantine(recorderStopped: false),
+      "停止を確認できない場合は隔離を解除しないこと")
+    XCTAssertTrue(coordinator.isQuarantined, "停止を確認できない場合は隔離を維持すること")
+
+    // 停止を確認できた場合だけ隔離を解除し、別の owner が取得できる。
+    XCTAssertTrue(
+      coordinator.finishOrphanedQuarantine(recorderStopped: true),
+      "停止を確認できた場合は隔離を解除すること")
+    XCTAssertFalse(coordinator.isQuarantined, "隔離を解除した後は隔離でないこと")
+    XCTAssertFalse(coordinator.hasOrphanedQuarantine, "隔離を解除した後は回復の対象にしないこと")
+    let anotherOwner = UUID()
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: anotherOwner),
+      "隔離の解除後は別の owner が recorder を取得できること")
+    coordinator.release(ownerID: anotherOwner)
+  }
+
+  /// owner を保持した隔離を、owner を失った隔離の解除経路で解除しないことを確認する
+  ///
+  /// owner 一致の停止成功で隔離を解除する従来の経路と、owner を保持している間の通常停止経路の
+  /// 意味が変わっていないことは既存のテストで検証している。
+  func testOrphanedQuarantineAPIKeepsOwnedQuarantine() {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let ownerA = UUID()
+    XCTAssertTrue(coordinator.acquire(ownerID: ownerA), "最初の owner が取得できること")
+    coordinator.finishStop(ownerID: ownerA, recorderStopped: false)
+    XCTAssertTrue(coordinator.isQuarantined, "停止を確認できない recorder を隔離すること")
+    XCTAssertFalse(
+      coordinator.hasOrphanedQuarantine,
+      "owner を保持している間は owner を失った隔離ではないこと")
+
+    XCTAssertFalse(
+      coordinator.finishOrphanedQuarantine(recorderStopped: true),
+      "owner を保持している隔離は owner を失った隔離の解除経路で解除しないこと")
+    XCTAssertTrue(coordinator.isQuarantined, "owner を保持している隔離を別経路で解除しないこと")
+  }
+
   // MARK: - recorder の所有権と停止
 
   /// start 結果から所有権の扱いとエラーがまとめて決まることを確認する
@@ -788,6 +1030,247 @@ final class ScreenCaptureFrameGenerationTests: XCTestCase {
     XCTAssertFalse(
       coordinator.acquire(ownerID: UUID()),
       "隔離中は別の owner が recorder を取得できないこと")
+  }
+
+  /// 隔離を引き継いだ別の接続が、停止の確認後にだけ画面キャプチャを開始できることを確認する
+  ///
+  /// 実 ReplayKit の停止と開始の実行はテストから駆動できないため、本番の `startCapture` と
+  /// 同じ `finishQuarantineRecovery` へ停止結果のイベント列を入力する。停止を確認できない間は
+  /// 開始が失敗し、確認できた場合だけ隔離を解除して開始が成功することを検証する。
+  func testAnotherConnectionRecoversOrphanedQuarantineAfterStop() throws {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    try makeOrphanedQuarantine(coordinator: coordinator, mediaChannel: mediaChannel)
+
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let controller = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+
+    // 停止を確認できなかった場合のイベント列。隔離を維持するため開始を失敗させる。
+    let failedCaptureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertEqual(
+      mediaChannelErrorReason(
+        controller.finishQuarantineRecovery(
+          captureID: failedCaptureID,
+          result: ScreenCaptureController.RecorderOperationResult(
+            error: SoraError.mediaChannelError(reason: "stop failed"),
+            isRecording: true))),
+      "failed to stop the screen capture recorder left by a previous connection",
+      "隔離を解除できない場合は開始を失敗させること")
+    XCTAssertTrue(coordinator.isQuarantined, "停止を確認できない場合は隔離を維持すること")
+    XCTAssertFalse(controller.isCaptureActive(), "開始に失敗した場合は停止済みとして扱うこと")
+
+    // 停止を確認できた場合のイベント列。隔離を解除してから recorder を取得して開始する。
+    let recoveredCaptureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    XCTAssertNil(
+      controller.finishQuarantineRecovery(
+        captureID: recoveredCaptureID,
+        result: ScreenCaptureController.RecorderOperationResult(error: nil, isRecording: false)),
+      "録画が止まっている場合は隔離を解除して開始を続けること")
+    XCTAssertFalse(coordinator.isQuarantined, "停止を確認できた場合は隔離を解除すること")
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "隔離の解除後に recorder の所有者を取得できること")
+    guard
+      case .success = controller.finishStartCapture(
+        captureID: recoveredCaptureID,
+        result: .completed(
+          ScreenCaptureController.RecorderOperationResult(error: nil, isRecording: true)))
+    else {
+      XCTFail("隔離の解除後に開始できること")
+      return
+    }
+    XCTAssertTrue(controller.isCaptureActive(), "隔離の解除後に動作中になること")
+    XCTAssertTrue(
+      controller.hasRecorderCaptureForTesting,
+      "隔離の解除後に開始した録画を停止対象として記録すること")
+    XCTAssertTrue(
+      coordinator.isOwner(controller.recorderOwnerID),
+      "隔離の解除後に開始した録画の owner を保持すること")
+  }
+
+  /// 停止 API がエラーを返しても録画が止まっていれば隔離を解除することを確認する
+  ///
+  /// `RPScreenRecorder.stopCapture` は録画が既に止まっている場合にもエラーを返すことがある。
+  /// 隔離の解除は停止の確認 (isRecording) だけで決めることをイベント列で検証する。
+  func testQuarantineRecoveryClearsQuarantineWhenStopReportedError() throws {
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    try makeOrphanedQuarantine(coordinator: coordinator, mediaChannel: mediaChannel)
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let controller = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+
+    XCTAssertNil(
+      controller.finishQuarantineRecovery(
+        captureID: captureID,
+        result: ScreenCaptureController.RecorderOperationResult(
+          error: SoraError.mediaChannelError(reason: "not recording"),
+          isRecording: false)),
+      "録画が止まっていれば停止 API のエラーがあっても開始を続けること")
+    XCTAssertFalse(coordinator.isQuarantined, "録画が止まっていれば隔離を解除すること")
+    XCTAssertTrue(
+      coordinator.acquire(ownerID: controller.recorderOwnerID),
+      "隔離の解除後に recorder の所有者を取得できること")
+    XCTAssertTrue(
+      controller.isActiveCaptureID(captureID),
+      "隔離を解除した開始を取り消さないこと")
+  }
+
+  /// 開始の取り消し確認が、有効な予約・取り消された予約・停止予約済みの各状態を判定することを確認する
+  ///
+  /// 本番の `startCapture` は recorder の開始前と、隔離の回復で停止を待った後に同じ確認を行う。
+  /// 実 ReplayKit を呼ばずに 3 つの状態を作り、取り消された開始を開始処理へ進めないことを
+  /// イベント列で検証する。
+  func testCancelStartIfNeededJudgesReservationAndCaptureState() async throws {
+    let (controller, mediaChannel, coordinator) = try makeScreenCaptureControllerWithCoordinator()
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    let reservation = try videoSourceCoordinator.beginScreen(stream: senderStream).get()
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+
+    // 有効な予約では開始を続ける。
+    XCTAssertNil(
+      controller.cancelStartIfNeeded(
+        captureID: captureID,
+        authorization: reservation,
+        videoSourceCoordinator: videoSourceCoordinator),
+      "有効な予約では開始を取り消さないこと")
+    XCTAssertTrue(controller.isCaptureActive(), "有効な予約では開始を取り消さないこと")
+
+    // 予約が revoke された場合は開始を取り消す。
+    videoSourceCoordinator.revoke()
+    XCTAssertEqual(
+      mediaChannelErrorReason(
+        controller.cancelStartIfNeeded(
+          captureID: captureID,
+          authorization: reservation,
+          videoSourceCoordinator: videoSourceCoordinator)),
+      "screen capture start was cancelled",
+      "取り消された予約では開始をキャンセルにすること")
+    XCTAssertFalse(controller.isCaptureActive(), "取り消された開始は停止済みとして扱うこと")
+
+    // 停止が予約された場合は、予約が有効でも開始を取り消す。
+    // 停止操作が完了する前に状態を確認できるよう、coordinator の queue をゲートで止める。
+    let gate = ScreenCaptureTestGate()
+    coordinator.enqueue {
+      await gate.wait()
+    }
+    await gate.waitUntilBlocked()
+    let stopCoordinator = VideoSourceCoordinator()
+    let stopReservation = try stopCoordinator.beginScreen(stream: senderStream).get()
+    let stoppingCaptureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    guard let stopTask = controller.stopCaptureForDisconnect() else {
+      XCTFail("開始中の capture の停止を予約できること")
+      return
+    }
+    XCTAssertTrue(
+      controller.isCaptureStoppingForTesting,
+      "停止処理が完了するまでは .stopping であること")
+    XCTAssertEqual(
+      mediaChannelErrorReason(
+        controller.cancelStartIfNeeded(
+          captureID: stoppingCaptureID,
+          authorization: stopReservation,
+          videoSourceCoordinator: stopCoordinator)),
+      "screen capture start was cancelled",
+      "停止が予約された場合は開始をキャンセルにすること")
+    await gate.open()
+    await stopTask.value
+    XCTAssertFalse(controller.isCaptureActive(), "停止処理の完了後に停止済みになること")
+  }
+
+  /// 回復の停止待ちの間に停止が予約された場合の隔離の解除と開始の取り消しを確認する
+  ///
+  /// `finishQuarantineRecovery` は停止を確認できた場合だけ隔離を解除し、開始の取り消しは
+  /// 後続の `cancelStartIfNeeded` が行う。隔離を維持した場合は `.stopping` のまま停止処理に
+  /// 後始末を任せることをイベント列で検証する。
+  func testQuarantineRecoveryDuringScheduledStopUsesCancellation() async throws {
+    // 停止を確認できた場合は隔離を解除し、その後 startCapture が行う取り消し確認でキャンセルする。
+    let coordinator = ScreenCaptureRecorderCoordinator()
+    let mediaChannel = try MediaChannel(configuration: makeTestConfiguration())
+    try makeOrphanedQuarantine(coordinator: coordinator, mediaChannel: mediaChannel)
+    let senderStream = makeSenderStream(mediaChannel: mediaChannel)
+    let controller = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: coordinator)
+    let videoSourceCoordinator = VideoSourceCoordinator()
+    let reservation = try videoSourceCoordinator.beginScreen(stream: senderStream).get()
+    let captureID = try controller.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    guard let stopTask = controller.stopCaptureForDisconnect() else {
+      XCTFail("開始中の capture の停止を予約できること")
+      return
+    }
+    XCTAssertNil(
+      controller.finishQuarantineRecovery(
+        captureID: captureID,
+        result: ScreenCaptureController.RecorderOperationResult(error: nil, isRecording: false)),
+      "停止を確認できた場合は隔離を解除すること")
+    XCTAssertFalse(coordinator.isQuarantined, "停止を確認できた場合は隔離を解除すること")
+    XCTAssertEqual(
+      mediaChannelErrorReason(
+        controller.cancelStartIfNeeded(
+          captureID: captureID,
+          authorization: reservation,
+          videoSourceCoordinator: videoSourceCoordinator)),
+      "screen capture start was cancelled",
+      "停止の予約後は開始を取り消すこと")
+    await stopTask.value
+    XCTAssertFalse(controller.isCaptureActive(), "停止処理の完了後に停止済みになること")
+
+    // 停止を確認できない場合は隔離を維持し、開始の取り消しとして返す。
+    // 停止操作が完了する前に状態を確認できるよう、coordinator の queue をゲートで止める。
+    let failedCoordinator = ScreenCaptureRecorderCoordinator()
+    let gate = ScreenCaptureTestGate()
+    failedCoordinator.enqueue {
+      await gate.wait()
+    }
+    await gate.waitUntilBlocked()
+    try makeOrphanedQuarantine(coordinator: failedCoordinator, mediaChannel: mediaChannel)
+    let failedController = ScreenCaptureController(
+      mediaChannel: mediaChannel,
+      recorderCoordinator: failedCoordinator)
+    let failedCaptureID = try failedController.beginStartCapture(
+      settings: makeSettings(),
+      senderStream: senderStream)
+    guard let failedStopTask = failedController.stopCaptureForDisconnect() else {
+      XCTFail("開始中の capture の停止を予約できること")
+      return
+    }
+    XCTAssertTrue(
+      failedController.isCaptureStoppingForTesting,
+      "停止処理が完了するまでは .stopping であること")
+    XCTAssertEqual(
+      mediaChannelErrorReason(
+        failedController.finishQuarantineRecovery(
+          captureID: failedCaptureID,
+          result: ScreenCaptureController.RecorderOperationResult(
+            error: SoraError.mediaChannelError(reason: "stop failed"),
+            isRecording: true))),
+      "screen capture start was cancelled",
+      "停止を確認できない場合は開始の取り消しとして扱うこと")
+    XCTAssertTrue(failedCoordinator.isQuarantined, "停止を確認できない場合は隔離を維持すること")
+    XCTAssertTrue(
+      failedController.isCaptureStoppingForTesting,
+      "停止を確認できない場合も .stopping のまま停止処理に後始末を任せること")
+    await gate.open()
+    await failedStopTask.value
+    XCTAssertFalse(failedController.isCaptureActive(), "停止処理の完了後に停止済みになること")
   }
 
   /// start 中に停止が予約された場合、遅延した start 完了が `.stopping` を上書きしないことを確認する

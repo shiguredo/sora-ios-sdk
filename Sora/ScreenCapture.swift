@@ -65,7 +65,19 @@ public struct ScreenCaptureSettings {
 ///
 /// `RPScreenRecorder.shared()` は接続間で共有されるため、controller ごとのキューでは
 /// 別接続の start / stop が競合します。すべての操作を 1 本のキューへ集約し、
-/// owner ID が一致する controller だけが recorder を停止できるようにします。
+/// 通常の停止経路では owner ID が一致する controller だけが recorder を停止できるようにします。
+///
+/// 停止に失敗した recorder は隔離し、停止を確認するまで別接続の取得を拒否します。隔離の
+/// 解除は次の 2 経路だけです。
+///
+/// - owner を保持している間は、owner が一致する controller の
+///   `finishStop(ownerID:recorderStopped:)` が停止に成功したときだけ解除します。
+/// - owner の controller が解放されると、その controller は停止を再試行できません。このため
+///   controller は解放時に `abandon(ownerID:)` で owner を手放します。停止を確認せずに手放す
+///   場合は、録画が残っていても別接続に再利用させないよう隔離を立てて後続の接続へ引き継ぎます。
+///   owner を失った隔離は `hasOrphanedQuarantine` で検出でき、後続の接続が停止を確認したうえで
+///   `finishOrphanedQuarantine(recorderStopped:)` で解除します。停止の再試行はこの operation
+///   queue の上で行うため、複数の接続が同時に試みることはありません。
 ///
 /// `@unchecked Sendable` の根拠は次のとおりです。不変条件を破る公開経路はありません。
 ///
@@ -105,12 +117,31 @@ final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
   }
 
   /// 指定した owner が保持する recorder を解放します。
+  ///
+  /// recorder の停止が必要ないことを確認した経路 (ホスト所有の録画、録画が残らない開始結果、
+  /// 停止対象の記録がない場合) から呼びます。この経路では隔離を解除しないため、停止に失敗した
+  /// recorder の owner を放棄する場合は `abandon(ownerID:)` を使います。
   func release(ownerID: UUID) {
     lock.lock()
     if self.ownerID == ownerID {
       self.ownerID = nil
     }
     lock.unlock()
+  }
+
+  /// controller の解放時に recorder の所有権を放棄します。
+  ///
+  /// 停止を確認せずに owner を手放すと、録画が残ったまま別の接続が recorder を取得できてしまいます。
+  /// そのため owner を保持したまま放棄する場合は隔離を立て、後続の接続が停止を確認するまで取得を
+  /// 拒否します。owner が一致しない場合 (停止に成功した後など) は何もしません。
+  func abandon(ownerID: UUID) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard self.ownerID == ownerID else {
+      return
+    }
+    self.ownerID = nil
+    quarantined = true
   }
 
   /// stop 後の recorder 状態を反映します。
@@ -129,6 +160,37 @@ final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
       quarantined = true
     }
     lock.unlock()
+  }
+
+  /// owner を失った隔離かどうかを返します。
+  ///
+  /// `finishStop(ownerID:recorderStopped:)` で隔離を解除できる controller がプロセス内にいない
+  /// 状態です。後続の接続が停止を再試行できるよう、この状態だけを回復の対象にします。
+  var hasOrphanedQuarantine: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return quarantined && ownerID == nil
+  }
+
+  /// owner を失った隔離を、停止の確認結果に基づいて解除します。
+  ///
+  /// `finishStop(ownerID:recorderStopped:)` は owner の一致を要求するため、owner を放棄した
+  /// 隔離は解除できません。この API は `quarantined` かつ `ownerID == nil` の場合だけを対象とし、
+  /// 停止を確認できた場合だけ隔離を解除します。
+  ///
+  /// - Parameter recorderStopped: ReplayKit の録画が停止していることを確認できたか。
+  /// - Returns: 隔離を解除した場合は `true`。
+  func finishOrphanedQuarantine(recorderStopped: Bool) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    guard quarantined, ownerID == nil else {
+      return false
+    }
+    guard recorderStopped else {
+      return false
+    }
+    quarantined = false
+    return true
   }
 
   /// recorder の隔離状態をテストから確認します。
@@ -156,6 +218,10 @@ final class ScreenCaptureRecorderCoordinator: @unchecked Sendable {
 ///   ReplayKit のキューから呼ばれます。sample buffer の処理はそのキュー上で行い、MainActor 上の処理
 ///   (`recorder.isRecording` の読み出し) は完了 callback の中の `Task { @MainActor in ... }` で行います。
 ///   controller の状態の読み書きはすべて `lock` の区間内で行います。
+///
+/// この controller の解放時には `ScreenCaptureRecorderCoordinator` へ recorder の所有権の放棄を
+/// 通知します。停止を確認していない録画は隔離として残し、後続の接続が停止を確認するまで
+/// 取得させません。
 final class ScreenCaptureController: @unchecked Sendable {
   // キャプチャー状況の列挙型
   private enum CaptureState {
@@ -341,6 +407,13 @@ final class ScreenCaptureController: @unchecked Sendable {
     self.recorderCoordinator = recorderCoordinator
   }
 
+  deinit {
+    // 停止を確認していない recorder の所有権を手放すと、録画が残ったままでも後続の接続が
+    // recorder を取得できてしまう。停止を確認できるのは停止を実行する経路だけなので、
+    // owner は abandon で放棄し、停止の確認を後続の接続へ引き継ぐ。
+    recorderCoordinator.abandon(ownerID: recorderOwnerID)
+  }
+
   // 画面キャプチャを開始します
   func startCapture(
     settings: ScreenCaptureSettings,
@@ -354,23 +427,46 @@ final class ScreenCaptureController: @unchecked Sendable {
     let captureID = try beginStartCapture(settings: settings, senderStream: senderStream)
 
     // beginStartCapture と並行して停止または切断された場合は、ReplayKit の操作を始めない。
-    guard videoSourceCoordinator.isValid(authorization) else {
-      let error = SoraError.mediaChannelError(reason: "screen capture start was cancelled")
-      _ = completeStartCapture(captureID: captureID, error: error)
+    if let error = cancelStartIfNeeded(
+      captureID: captureID,
+      authorization: authorization,
+      videoSourceCoordinator: videoSourceCoordinator)
+    {
       throw error
     }
 
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       recorderCoordinator.enqueue { [self] in
         // start のキュー投入前に stop が完了した場合は、ReplayKit の開始自体を行わない。
-        guard shouldIssueRecorderStart(captureID: captureID),
-          videoSourceCoordinator.isValid(authorization)
-        else {
-          let error = SoraError.mediaChannelError(reason: "screen capture start was cancelled")
-          _ = completeStartCapture(captureID: captureID, error: error)
-          continuation.resume(
-            throwing: error
-          )
+        if let error = cancelStartIfNeeded(
+          captureID: captureID,
+          authorization: authorization,
+          videoSourceCoordinator: videoSourceCoordinator)
+        {
+          continuation.resume(throwing: error)
+          return
+        }
+
+        // 停止の再試行は coordinator の直列 queue 上のこの操作で行い、複数の接続の同時試行を防ぐ。
+        // owner を失った隔離は、この接続が停止を確認した場合だけ解除できる。
+        if recorderCoordinator.hasOrphanedQuarantine {
+          Logger.warn(
+            type: .mediaChannel,
+            message: "screen capture recorder is quarantined without an owner; retrying stop")
+          let result = await stopRecorderCapture()
+          if let error = finishQuarantineRecovery(captureID: captureID, result: result) {
+            continuation.resume(throwing: error)
+            return
+          }
+        }
+
+        // 隔離の回復で停止を待つ間に停止または切断された場合は、ReplayKit の開始自体を行わない。
+        if let error = cancelStartIfNeeded(
+          captureID: captureID,
+          authorization: authorization,
+          videoSourceCoordinator: videoSourceCoordinator)
+        {
+          continuation.resume(throwing: error)
           return
         }
 
@@ -552,6 +648,28 @@ final class ScreenCaptureController: @unchecked Sendable {
     }
   }
 
+  /// start が停止または切断で取り消されていないかを確認します。
+  ///
+  /// 取り消されている場合は開始をキャンセルとして完了し、呼び出し元へ返すエラーを作ります。
+  /// 本番では recorder の開始前と、隔離の回復で停止を待った後に呼び、待機中に停止または
+  /// 切断された開始を実行しません。本番とテストの競合イベント列から呼ぶため internal とします。
+  ///
+  /// - Returns: 取り消されていない場合は `nil`。
+  func cancelStartIfNeeded(
+    captureID: UInt64,
+    authorization: VideoSourceCoordinator.Reservation,
+    videoSourceCoordinator: VideoSourceCoordinator
+  ) -> Error? {
+    guard shouldIssueRecorderStart(captureID: captureID),
+      videoSourceCoordinator.isValid(authorization)
+    else {
+      let error = SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+      _ = completeStartCapture(captureID: captureID, error: error)
+      return error
+    }
+    return nil
+  }
+
   /// SDK が開始責任を持つ recorder start を記録し、後続の stop が OS 停止を必要とすることを示します。
   ///
   /// start が失敗しても SDK 所有の録画が残る場合に、`applyRecorderStartHandling` から
@@ -664,6 +782,55 @@ final class ScreenCaptureController: @unchecked Sendable {
         }
       }
     }
+  }
+
+  /// 隔離の解除結果を start の状態へ反映します。
+  ///
+  /// `hasOrphanedQuarantine` が true のときだけ呼びます。実 ReplayKit を呼ばず、停止を確認
+  /// できたかどうかだけから隔離の解除と開始の成否を決めます。開始の取り消しは呼び出し元の
+  /// `cancelStartIfNeeded` が判定します。本番の `startCapture` とテストの両方がこの関数を
+  /// 呼びます。停止の実行だけが実 ReplayKit に依存するため、自動テストでは停止結果を
+  /// イベント列として渡して検証します。
+  ///
+  /// - Returns: 開始を続けてよい場合は `nil`、開始を失敗させる場合はそのエラー。
+  func finishQuarantineRecovery(
+    captureID: UInt64,
+    result: RecorderOperationResult
+  ) -> Error? {
+    // 停止 API のエラーは録画が既に止まっている場合にも返るため、隔離の解除は isRecording で
+    // 決め、エラーは記録だけ残す。
+    if let error = result.error {
+      if result.isRecording {
+        Logger.error(
+          type: .mediaChannel,
+          message:
+            "failed to stop the quarantined screen capture recorder: \(error.localizedDescription)"
+        )
+      } else {
+        Logger.debug(
+          type: .mediaChannel,
+          message:
+            "the quarantined screen capture recorder stopped with an error: \(error.localizedDescription)"
+        )
+      }
+    }
+    if result.isRecording {
+      Logger.error(
+        type: .mediaChannel,
+        message: "quarantined screen capture recorder is still running after stop")
+    }
+    let quarantineCleared = recorderCoordinator.finishOrphanedQuarantine(
+      recorderStopped: !result.isRecording)
+    guard quarantineCleared else {
+      let error = SoraError.mediaChannelError(
+        reason: "failed to stop the screen capture recorder left by a previous connection")
+      // 停止を待つ間に停止または切断された場合は、停止失敗ではなく開始の取り消しとして返す。
+      if case .cancelled = completeStartCapture(captureID: captureID, error: error) {
+        return SoraError.mediaChannelError(reason: "screen capture start was cancelled")
+      }
+      return error
+    }
+    return nil
   }
 
   // startCapture 前に state チェック、更新を行います
