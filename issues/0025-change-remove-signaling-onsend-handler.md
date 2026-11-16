@@ -6,6 +6,7 @@
 - Model: Opus 4.8
 - Branch: feature/refactor-remove-signaling-onsend-handler
 - Polished: 2026-09-02
+- Refreshed: 2026-11-16
 
 ## 目的
 
@@ -29,23 +30,23 @@ var onSend: ((Signaling) -> Signaling)?
 
 ```swift
 Logger.debug(type: .signalingChannel, message: "send message")
-let message = internalHandlers.onSend?(message) ?? message
+let message = self.internalHandlers.onSend?(message) ?? message
 let encoder = JSONEncoder()
 ```
 
-`onSend` の参照は `Sora/SignalingChannel.swift` 内の上記 2 箇所のみであり、それ以外の参照は存在しない。 `SignalingChannelInternalHandlers` は `class` （非公開）であり、外部から型にアクセスすることはできない。
+`onSend` のコード上の参照は `Sora/SignalingChannel.swift` 内の上記 2 箇所のみであり、`onSend` を設定している箇所は存在しない。これとは別に、`SoraTests/PeerChannelRedirectInvalidationTests.swift` のコメントに `onSend` への言及が 1 箇所ある（コードからの参照ではない）。 `SignalingChannelInternalHandlers` は `class` （非公開）であり、外部から型にアクセスすることはできない。
 
 ## 設計方針
 
-- `Sora/SignalingChannel.swift` の `send(message:)` 内の `let message = internalHandlers.onSend?(message) ?? message` を削除し、受け取った `message` をそのまま利用する。
+- `Sora/SignalingChannel.swift` の `send(message:)` 内の `let message = self.internalHandlers.onSend?(message) ?? message` を削除し、受け取った `message` をそのまま利用する。
 - `Sora/SignalingChannel.swift` の `SignalingChannelInternalHandlers.onSend` 宣言（および Swift Doc コメント 1 行）を完全に削除する。 `SignalingChannelInternalHandlers` は非公開クラスであり外部から参照不能なため、 `@available(*, unavailable)` による移行猶予期間は不要である。
-- 削除に伴い、 `onSend` を参照している箇所が他に無いことを grep で確認してから実施する。
+- 削除に伴い、 `onSend` を参照している箇所が他に無いことを grep で確認してから実施する。 `SoraTests/PeerChannelRedirectInvalidationTests.swift` のコメントの言及も、削除後の状態に合わせて更新する。
 
 ## テスト方針
 
 モック・スタブは使用しない。既存のシグナリング動作が変わらないことを以下で確認すること:
 
-- 既存の全テストがパスすること（`swift test` または Xcode でテストを実行）。
+- 既存の全テストがパスすること（Xcode の `Sora-Package` scheme でテストを実行する。CI は `.github/workflows/e2e-test.yml` で `xcodebuild build-for-testing -scheme Sora-Package` の後に `xcodebuild test-without-building` を実行している）。
 - 手動テストとして、通常の接続・切断・シグナリング送受信が引き続き正常に動作することを実機または Simulator で確認すること。
 
 ## 完了条件
@@ -55,7 +56,7 @@ let encoder = JSONEncoder()
 - 既存の通常のシグナリング送受信の挙動が変わらないこと。
 - `CHANGES.md` の `## develop` セクションに `### misc` サブセクション（無ければ新設）を設け、種別順（`[CHANGE]` → `[ADD]` → `[UPDATE]` → `[FIX]`）に従って以下を追記すること:
   ```
-  - [CHANGE] 送信シグナリングメッセージを書き換え可能な内部ハンドラ `onSend` を削除する
+  - [UPDATE] 送信シグナリングメッセージを書き換え可能な内部ハンドラ `onSend` を削除する
     - @voluntas
   ```
 
