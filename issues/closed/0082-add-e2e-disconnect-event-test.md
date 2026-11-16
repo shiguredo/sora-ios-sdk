@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-10
-- Completed:
+- Completed: 2026-11-16
 - Model: GPT-5
 - Branch: feature/add-e2e-disconnect-event-test
 - Polished: 2026-09-24
@@ -47,3 +47,9 @@ recvonly で接続後、クライアント側から `MediaChannel.disconnect(err
 - `disconnectAndVerify` に追加した検証が、同ヘルパーを使う既存の E2E テスト（`RecvonlyE2ETests` / `SendonlyE2ETests` / `SendrecvE2ETests` / `SimulcastE2ETests` / `RpcE2ETests` / `MessagingE2ETests` / `StereoAudioOutputE2ETests` / `SendableRpcE2ETests` / `ConcurrencyStressE2ETests`）を壊さないこと
 
 ## 解決方法
+
+- `SoraTests/E2ETestBase.swift` の `disconnectAndVerify` で、`SoraCloseEvent.ok` のコード 1000 に加えて reason が `"NO-ERROR"` であることと、切断後の `MediaChannel.state == .disconnected` であることを確認するようにした
+- `SoraTests/StatisticsSnapshotE2ETests.swift` の async テスト用ヘルパーにも同じ検証を追加した
+- ヘルパーの doc に、クライアント起点の正常切断だけを対象とすること、error が nil の切断は経路を問わず同じ値になること、`.disconnected` の早期 return では検証しないことを明記した
+- `CHANGES.md` の `## develop` の `### misc` に変更履歴を追記した
+- 実 Sora サーバーを使う E2E Test の CI (run 43817309961) が成功し、`disconnectAndVerify` を使う既存の E2E テストを含めて通過することを確認した

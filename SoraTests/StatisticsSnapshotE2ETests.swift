@@ -126,7 +126,12 @@ final class StatisticsSnapshotE2ETests: E2ETestBase {
     await disconnectAndVerify(channel: channel)
   }
 
-  /// チャンネルを切断し、`onDisconnect` が正常切断コードで呼ばれることを確認します。
+  /// チャンネルをクライアント側から切断し、`onDisconnect` に通知される
+  /// `SoraCloseEvent` と切断後の状態を検証します。
+  ///
+  /// イベントが `.ok(code: 1000, reason: "NO-ERROR")` であり、切断後の
+  /// `MediaChannel.state` が `.disconnected` であることを確認します。基底クラスと同じく、
+  /// サーバー起点の切断が進行中のチャンネルには使わない前提です。
   ///
   /// 基底クラスの `disconnectAndVerify(channel:timeout:)` は `wait(for:timeout:)` を使うため、
   /// async テストから呼ぶと main queue が処理されずにタイムアウトします (接続と同じ理由)。
@@ -161,11 +166,13 @@ final class StatisticsSnapshotE2ETests: E2ETestBase {
     guard let disconnectEvent else {
       return
     }
-    if case .ok(let code, _) = disconnectEvent {
+    if case .ok(let code, let reason) = disconnectEvent {
       XCTAssertEqual(code, 1000, "正常切断コードであること")
+      XCTAssertEqual(reason, "NO-ERROR", "正常切断の理由が NO-ERROR であること")
     } else {
       XCTFail("予期しない切断: \(disconnectEvent)")
     }
+    XCTAssertEqual(channel.state, .disconnected, "切断後の状態が .disconnected であること")
   }
 
   /// snapshot が実接続の統計として読めることを確認します。
