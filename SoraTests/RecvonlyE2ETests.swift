@@ -52,7 +52,8 @@ final class RecvonlyE2ETests: E2ETestBase {
       return
     }
 
-    // 切断を実行し、onDisconnect が正常切断コードで呼ばれることを確認する
+    // 切断を実行し、onDisconnect が正常切断イベント (コード 1000 / 理由 NO-ERROR) で呼ばれ、
+    // 切断後の状態が .disconnected になることを確認する
     disconnectAndVerify(channel: channel)
   }
 

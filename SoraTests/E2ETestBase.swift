@@ -164,10 +164,17 @@ class E2ETestBase: XCTestCase {
     return "\(signingInput).\(base64URLEncoded(Data(signature)))"
   }
 
-  /// チャンネルを切断し、正常切断コード (1000) が onDisconnect で通知されることを確認する
+  /// チャンネルをクライアント側から切断し、`onDisconnect` に通知される
+  /// `SoraCloseEvent` と切断後の状態を検証する
   ///
-  /// 切断済みのチャンネルでは onDisconnect が発火しないため、その場合は何もせずに戻る。
-  /// `.disconnecting` は PeerChannel の後始末中なので、完了通知を待つ。
+  /// イベントが `SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")` であり、切断後の
+  /// `MediaChannel.state` が `.disconnected` であることを確認する。`disconnect(error: nil)` の
+  /// 正常経路では `MediaChannel.makeDisconnectEvent` がこの値を返すが、error が nil の切断は
+  /// 経路を問わずこの値になるため、クライアント起点であることの証明にはならない。
+  /// 切断済みのチャンネルでは `onDisconnect` が発火しないため、その場合は何もせずに戻る
+  /// (検証も行わない)。`.disconnecting` は PeerChannel の後始末中なので、完了通知を待つ。
+  /// サーバー起点の切断が進行中の `.disconnecting` のチャンネルを渡すと、サーバーが通知した
+  /// `.ok(code: reason:)` を検証してしまうため、クライアント起点の正常切断にだけ使うこと。
   internal func disconnectAndVerify(channel: MediaChannel, timeout: TimeInterval = 10) {
     guard channel.state != .disconnected else {
       return
@@ -199,11 +206,13 @@ class E2ETestBase: XCTestCase {
       // タイムアウトした場合は wait が失敗を報告済みのため、追加の XCTFail は記録しない
       return
     }
-    if case .ok(let code, _) = disconnectEvent {
+    if case .ok(let code, let reason) = disconnectEvent {
       XCTAssertEqual(code, 1000, "正常切断コードであること")
+      XCTAssertEqual(reason, "NO-ERROR", "正常切断の理由が NO-ERROR であること")
     } else {
       XCTFail("予期しない切断: \(disconnectEvent)")
     }
+    XCTAssertEqual(channel.state, .disconnected, "切断後の状態が .disconnected であること")
   }
 
   /// 接続済みチャンネルの切断を完了まで待つ

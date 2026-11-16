@@ -133,7 +133,7 @@ final class ConcurrencyStressE2ETests: E2ETestBase {
 
   // MARK: - iteration の実装
 
-  /// 接続の完了を待ち、DataChannel の open を設定したチャンネルを返します。
+  /// 接続の完了を待ち、DataChannel の open の通知を設定したチャンネルを返します。
   ///
   /// `role` だけで接続する scenario で共通に使います。切断は呼び出し側が行います。
   private func connectAndVerifyChannel(role: Role) throws -> MediaChannel {
@@ -148,13 +148,15 @@ final class ConcurrencyStressE2ETests: E2ETestBase {
     return try connectAndVerifyChannel(configuration: config)
   }
 
-  /// 接続して DataChannel の open を確認し、切断の完了 (正常切断コード 1000) まで待つ iteration です。
+  /// 接続して DataChannel の open の通知を設定し、正常切断イベントを待って切断後の状態を
+  /// 検証する iteration です。
   ///
   /// 接続と切断を 1 つの iteration の中で完結させ、iteration の間に接続を残しません。
   private func runConnectAndDisconnectIteration(role: Role) throws {
     // 接続の完了を待ってから、切断の完了を待つ
     let channel = try connectAndVerifyChannel(role: role)
-    // disconnectAndVerify は onDisconnect を設定してから切断し、正常切断コードを検証する
+    // disconnectAndVerify は onDisconnect を設定してから切断し、正常切断イベントと
+    // 切断後の状態を検証する
     disconnectAndVerify(channel: channel, timeout: iterationTimeout)
   }
 

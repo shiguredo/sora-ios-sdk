@@ -33,6 +33,13 @@
   - 解放直後は前の接続の後始末が終わるまで開始が別の接続の使用中として失敗することがある。その場合は開始を再試行する
   - @t-miya
 
+### misc
+
+- [ADD] E2E テストの切断検証に `SoraCloseEvent` の理由と `MediaChannel.state` の確認を追加する
+  - `E2ETestBase.disconnectAndVerify` で `.ok(code: 1000, reason: "NO-ERROR")` の reason と、切断後の `MediaChannel.state == .disconnected` も確認する
+  - async テスト用の同等ヘルパーも同じ検証にそろえる
+  - @t-miya
+
 ## 2026.5.1
 
 **リリース日**: 2026-11-06

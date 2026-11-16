@@ -205,7 +205,7 @@ final class SendonlyE2ETests: E2ETestBase {
     XCTAssertGreaterThan(capturer.frameCount, 0, "ダミー映像フレームが送信されていること")
 
     capturer.stop()
-    // 切断し、正常切断コード (1000) が通知されることまで確認する
+    // 切断し、正常切断イベント (コード 1000 / 理由 NO-ERROR) と切断後の状態まで確認する
     disconnectAndVerify(channel: channel)
   }
 
@@ -286,7 +286,7 @@ final class SendonlyE2ETests: E2ETestBase {
     }
     XCTAssertEqual(channel.native?.connectionState, .connected, "接続状態が connected であること")
 
-    // 切断し、正常切断コード (1000) が通知されることまで確認する
+    // 切断し、正常切断イベント (コード 1000 / 理由 NO-ERROR) と切断後の状態まで確認する
     disconnectAndVerify(channel: channel)
 
     // 切断時の terminateDevice が state を終端へ戻すことを確認する。切断イベントはデバイスの停止より
