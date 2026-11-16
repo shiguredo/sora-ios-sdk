@@ -1,7 +1,7 @@
 # クイックスタートで複数クライアントから受信した映像を描画できるようにする
 
 - Created: 2026-09-11
-- Completed:
+- Completed: 2026-11-16
 - Branch: feature/add-quickstart-multi-client-video
 - Polished: 2026-11-13
 
@@ -93,3 +93,16 @@ sora-ios-sdk-quickstart の次のファイル。
 - `issues/closed/0125-update-quickstart-swift6-native-support.md` (購読 API への移行)
 
 ## 解決方法
+
+sora-ios-sdk-quickstart 側で対応し、[PR #62](https://github.com/shiguredo/sora-ios-sdk-quickstart/pull/62) として `feature/2026.5` にマージされた (2026-11-16、マージコミット `abbe3f23f68776f8fa351deee2f7d9fbb525ed05`)。sora-ios-sdk 本体のコード変更は無い。
+
+主な変更は次のとおり。
+
+- `SoraQuickStart/ViewController.swift` で、受信ストリームごとに `VideoView` を生成し、`streamId` をキーに `[String: VideoView]` で保持するようにした。`.streamAdded` と接続完了時の `attachVideoRenderers(_:)` から `registerReceiverVideoView(for:)` を呼び、`.streamRemoved` では該当する `VideoView` を `UIStackView` から取り除く。`.disconnected`、接続失敗、接続タイムアウト、切断タイムアウトでは `removeAllReceiverVideoViews()` ですべての受信 `VideoView` を取り除く
+- `SoraQuickStart/Base.lproj/Main.storyboard` で、受信映像の `VideoView` を `UIView` のコンテナに変更し、`UIStackView` (`axis = .vertical`、`distribution = .fillEqually`、`spacing = 4`) を配置した。受信ストリームが 1 つのときは 1 つの `VideoView` が表示領域全体を占め、複数のときは縦に等分して並ぶ
+- `CHANGES.md` に `[ADD] 複数のクライアントから受信した映像を同時に表示できるようにする` を追記した
+
+検証は次のとおり。
+
+- GitHub Actions の `build` job が成功している ([run 43787867946](https://github.com/shiguredo/sora-ios-sdk-quickstart/actions/runs/43787867946))
+- 実機での複数クライアント確認の結果は PR に記録されていない
