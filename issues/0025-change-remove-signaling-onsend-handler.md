@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-11-17
 - Model: Opus 4.8
 - Branch: feature/refactor-remove-signaling-onsend-handler
 - Polished: 2026-09-02
@@ -61,3 +61,12 @@ let encoder = JSONEncoder()
   ```
 
 ## 解決方法
+
+`SignalingChannelInternalHandlers` から `onSend` の宣言と Doc コメントを削除し、 `SignalingChannel.send(message:)` の `let message = self.internalHandlers.onSend?(message) ?? message` を削除した。送信経路は受け取った `Signaling` をそのまま JSON エンコードする。
+
+- `onSend` を設定している箇所は 0 件であり、削除前後で送信メッセージの内容・送信順序・ログ・エラー経路は変わらない
+- `SoraTests/PeerChannelRedirectInvalidationTests.swift` の `onSend` に言及していたコメントは、 `signalingChannel.send(message:)` は呼ばれるが WebSocket への実送信は行われない、という現状に合わせて更新した
+- `git grep` でコード上の `onSend` の参照が 0 件であることを確認した（`CHANGES.md` の履歴にある別シンボル `WebSocketChannelHandlers.onSend` と `issues/` 配下の記述を除く）
+- `xcodebuild build-for-testing -scheme Sora-Package` の成果物を `simctl spawn` で実行し、全 587 件（skip 40）が失敗 0 件で成功した。1 回目のみ `StatisticsSnapshotTests` の解放タイミング依存と見られる 2 件が失敗したが、再実行した 2 回はいずれも失敗 0 件だった
+- 実機で通常の接続・切断・シグナリング送受信が正常に動作することを確認した
+- `CHANGES.md` の `## develop` / `### misc` に `[UPDATE]` エントリを追加した。`SignalingChannelInternalHandlers` は internal であり公開 API の変更はないため、API baseline の更新は不要である
