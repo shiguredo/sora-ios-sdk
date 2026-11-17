@@ -11,6 +11,9 @@
 
 ## develop
 
+- [ADD] ICE candidate の収集失敗時に url / errorCode / errorText / address / port をデバッグログに出力する
+  - 既定のログレベル (`info`) では出力されない
+  - @t-miya
 - [UPDATE] 送信シグナリングメッセージを書き換え可能な内部ハンドラ `onSend` を削除する
   - SDK 独自のハンドラであり、利用されていなかったため削除する
   - @t-miya

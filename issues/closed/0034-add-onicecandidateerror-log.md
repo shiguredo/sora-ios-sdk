@@ -2,7 +2,7 @@
 
 - Priority: Low
 - Created: 2026-06-03
-- Completed:
+- Completed: 2026-11-17
 - Model: Opus 4.8
 - Branch: feature/add-onicecandidateerror-log
 - Polished: 2026-11-17
@@ -93,3 +93,18 @@ func peerConnection(
   ```
 
 ## 解決方法
+
+`RTCPeerConnectionDelegate` の `peerConnection(_:didFailToGatherIceCandidate:)` を `Sora/PeerChannel.swift` の `didRemove candidates:` 直後に追加した。`isCurrentPeerConnection(_:)` でリダイレクト中・旧 `RTCPeerConnection` からの遅延通知を除外してから、`url` / `errorCode` / `errorText` / `address` / `port` を `Logger.debug` (種別 `.peerChannel`) で出力する。既定のログレベル (`info`) では出力されない。`isCurrentPeerConnection` の doc コメントと redirect 方針コメントにも新しい delegate を追記した。
+
+`SoraTests/RTCDescriptionTests.swift` に次のテストを追加した。
+
+- `testIceCandidateErrorLog`: 空の `RTCIceCandidateErrorEvent()` でメッセージ形式、`Log.level == DEBUG`、`Log.type == PeerChannel`、別 PC / nil のガード負例を確認する。optional requirement の selector 露出を確認するため、`RTCPeerConnectionDelegate` の existential 経由で呼ぶ。
+- `testIceCandidateErrorLogIsSuppressedAtInfoLevel`: 既定の `info` では出力されないことを確認する。
+- `testIceCandidateErrorLogWithRealFailedGathering`: 実 `RTCPeerConnection` に到達不能な TURN TCP (`turn:127.0.0.1:65535?transport=tcp`) を設定し、`offer` → `setLocalDescription` で実際の収集失敗を発生させ、`url` / `errorCode=701` / `errorText` / `address=` / `port=0` のログを確認する。失敗イベントが複数回届くため、`iceGatheringState == .complete` まで待ってから検証する。
+
+検証:
+
+- Release build: 成功 (Xcode 27.0 / iPhoneOS 27.0 SDK。CI の Xcode 26.6 / iphoneos26.5 では未実行)。
+- `RTCDescriptionTests`: 19 件成功。
+- swift-format: 成功。SwiftLint: 0 violations。
+- 全 `SoraTests`、E2E、CI、`make api-check-fresh` は未実行。追加メソッドは internal で公開 API は変わらないため、baseline の再生成は不要と判断している。

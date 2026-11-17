@@ -2045,7 +2045,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // リダイレクト時の旧接続からの遅延通知の遮断方針:
       // - DataChannel delegate (dataChannelDidChangeState / didReceiveMessageWith):
       //   生成時点の世代と現在の世代の照合で無視
-      // - PC delegate (didOpen / didChange): isCurrentPeerConnection
+      // - PC delegate (didChange(RTCPeerConnectionState) / didGenerate / didOpen /
+      //   didFailToGatherIceCandidate): isCurrentPeerConnection
       //   (リダイレクト窓は isRedirecting、新 PC 生成後は PC アイデンティティ)
       // - 切断 (disconnect / endAsyncOperation): isRedirecting 中は切断処理を続行
       // - WS 接続 (SignalingChannel): 切断後は state == .disconnected で受け入れ拒否
@@ -2498,7 +2499,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   /// リダイレクトから新 PC 生成までの窓では nativeChannel が旧 PC のままのため、
   /// PC アイデンティティの一致だけでは旧 PC の遅延通知を防げない。
   /// そのため、リダイレクト中は isRedirecting、新 PC 生成後は PC アイデンティティで判定する。
-  /// (本ヘルパーは PC delegate (didOpen / didChange / didGenerateCandidate) 専用。
+  /// (本ヘルパーは PC delegate の didChange(RTCPeerConnectionState) / didGenerate /
+  /// didOpen / didFailToGatherIceCandidate 専用。
   /// DataChannel delegate は世代照合 (generation == dataChannelGeneration) で別途ガードするため、
   /// DataChannel 側の通知にこのヘルパーを使わないこと)
   private func isCurrentPeerConnection(_ nativePeerConnection: RTCPeerConnection) -> Bool {
@@ -2654,6 +2656,23 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     for candidate in candidates {
       remove(iceCandidate: candidate)
     }
+  }
+
+  func peerConnection(
+    _ nativePeerConnection: RTCPeerConnection,
+    didFailToGatherIceCandidate event: RTCIceCandidateErrorEvent
+  ) {
+    // リダイレクト中または旧 RTCPeerConnection からの収集失敗通知は無視する。
+    // 旧 RTCPeerConnection からの遅延通知をそのままログすると、
+    // リダイレクト後の接続のトラブルシュートで誤情報になるため。
+    guard isCurrentPeerConnection(nativePeerConnection) else {
+      return
+    }
+    Logger.debug(
+      type: .peerChannel,
+      message:
+        "failed to gather ICE candidate: url=\(event.url) errorCode=\(event.errorCode) errorText=\(event.errorText) address=\(event.address) port=\(event.port)"
+    )
   }
 
   func peerConnection(
