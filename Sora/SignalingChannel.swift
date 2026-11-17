@@ -29,9 +29,6 @@ class SignalingChannelInternalHandlers {
   /// シグナリング受信時に JSON 文字列で呼ばれるクロージャー
   var onReceiveJSON: ((String) -> Void)?
 
-  /// シグナリング送信時に呼ばれるクロージャー
-  var onSend: ((Signaling) -> Signaling)?
-
   /// 初期化します。
   init() {}
 }
@@ -391,7 +388,6 @@ class SignalingChannel {
       }
 
       Logger.debug(type: .signalingChannel, message: "send message")
-      let message = self.internalHandlers.onSend?(message) ?? message
       let encoder = JSONEncoder()
       do {
         // data_channels は SignalingConnect.encode(to:) が出力する。
