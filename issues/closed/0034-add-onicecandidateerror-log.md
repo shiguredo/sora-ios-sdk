@@ -102,8 +102,6 @@ func peerConnection(
 - `testIceCandidateErrorLogIsSuppressedAtInfoLevel`: 既定の `info` では出力されないことを確認する。
 - `testIceCandidateErrorLogWithRealFailedGathering`: 実 `RTCPeerConnection` に到達不能な TURN TCP (`turn:127.0.0.1:65535?transport=tcp`) を設定し、`offer` → `setLocalDescription` で実際の収集失敗を発生させ、`url` / `errorCode=701` / `errorText` / `address=` / `port=0` のログを確認する。失敗イベントが複数回届くため、`iceGatheringState == .complete` まで待ってから検証する。
 
-`CHANGES.md` の `## develop` 主リストに `[ADD]` を追加した。担当者行は実装者に合わせて `@t-miya` とした (issue の完了条件例は `@voluntas`)。
-
 検証:
 
 - Release build: 成功 (Xcode 27.0 / iPhoneOS 27.0 SDK。CI の Xcode 26.6 / iphoneos26.5 では未実行)。
