@@ -3,7 +3,8 @@ import XCTest
 
 @testable import Sora
 
-/// WebRTC の imported enum の文字列化 (`WebRTCEnumDescription`) のテストです。
+/// WebRTC の imported enum の文字列化 (`WebRTCEnumDescription`) と、
+/// `RTCPeerConnectionDelegate` / `RTCDataChannelDelegate` のログ出力のテストです。
 ///
 /// imported type へ protocol conformance を追加しない理由: 別 module の型を別 module の
 /// protocol に準拠させると retroactive conformance の warning (SE-0364) が出て、将来 WebRTC 側が
@@ -248,11 +249,11 @@ final class RTCDescriptionTests: XCTestCase {
       "収集対象のログを collect すること")
   }
 
-  // 文字列化が formatter を通っていることをログで確認する
+  // 文字列化が formatter を通っていることと、delegate のログを確認する
   //
-  // 実 RTCPeerConnection と PeerChannel を使い、delegate メソッドを直接呼んで決定的に
-  // 発火させます (Sora サーバーには接続しません)。出力箇所ごとにテストを分け、
-  // どのログが壊れたかをテスト結果から判別できるようにします。
+  // 実 RTCPeerConnection と PeerChannel を使い、delegate メソッドを直接呼ぶか、
+  // 実際の ICE 収集を失敗させてログを捕捉します (Sora サーバーには接続しません)。
+  // 出力箇所ごとにテストを分け、どのログが壊れたかをテスト結果から判別できるようにします。
 
   // signaling state (PeerChannel.peerConnection(_:didChange:)) のログを確認する
   func testSignalingStateLogUsesFormatter() throws {
@@ -314,6 +315,124 @@ final class RTCDescriptionTests: XCTestCase {
     XCTAssertEqual(
       collector.snapshot(), ["ICE gathering state: unknown(97)"],
       "未知の raw value のログが unknown(<rawValue>) になること")
+  }
+
+  // ICE candidate の収集失敗 (PeerChannel.peerConnection(_:didFailToGatherIceCandidate:)) のログを確認する
+  func testIceCandidateErrorLog() throws {
+    let capture = LoggerCapture()
+    let fixture = try makePeerConnectionFixture()
+
+    // RTCPeerConnectionDelegate の実装は先頭の isCurrentPeerConnection(_:) が
+    // nativeChannel との同一性を要求するため、テスト対象の RTCPeerConnection を設定する。
+    fixture.peerChannel.nativeChannel = fixture.peerConnection
+    defer { fixture.peerChannel.nativeChannel = nil }
+
+    // optional requirement のセレクタ露出も検証するため、具象型ではなく
+    // RTCPeerConnectionDelegate の existential 経由で呼ぶ。
+    let delegate: RTCPeerConnectionDelegate = fixture.peerChannel
+
+    // RTCIceCandidateErrorEvent() の文字列プロパティは nil のまま生成され、
+    // Swift の String へブリッジすると空文字列になる。数値プロパティは 0 になる。
+    // public API では任意の値のイベントを生成できないため、このテストでは
+    // メッセージ形式、ログのレベル・種別、ガードを固定する。実値の対応は
+    // testIceCandidateErrorLogWithRealFailedGathering で確認する。
+    delegate.peerConnection?(
+      fixture.peerConnection, didFailToGatherIceCandidate: RTCIceCandidateErrorEvent())
+
+    let logs = capture.logs.filter { $0.message.hasPrefix("failed to gather ICE candidate:") }
+    XCTAssertEqual(
+      logs.map(\.message),
+      ["failed to gather ICE candidate: url= errorCode=0 errorText= address= port=0"],
+      "ICE candidate の収集失敗ログが 5 フィールドを含む形式で出力されること")
+    let log = try XCTUnwrap(logs.first, "ICE candidate の収集失敗ログの Log を取得できること")
+    XCTAssertEqual(log.level.description, "DEBUG", "ログレベルが DEBUG であること")
+    XCTAssertEqual(log.type.description, "PeerChannel", "ログ種別が PeerChannel であること")
+
+    // nativeChannel と一致しない RTCPeerConnection からの通知は無視される。
+    // 別の PC を渡し、両方 non-nil の identity mismatch を確認する。
+    let failedCount = logs.count
+    let other = try makeTestPeerConnection(factory: fixture.factory)
+    delegate.peerConnection?(other, didFailToGatherIceCandidate: RTCIceCandidateErrorEvent())
+    XCTAssertEqual(
+      capture.logs.filter { $0.message.hasPrefix("failed to gather ICE candidate:") }.count,
+      failedCount,
+      "nativeChannel と一致しない RTCPeerConnection からの通知はログを出力しないこと")
+
+    // nativeChannel が無い場合もログを出力しない。
+    fixture.peerChannel.nativeChannel = nil
+    delegate.peerConnection?(
+      fixture.peerConnection, didFailToGatherIceCandidate: RTCIceCandidateErrorEvent())
+    XCTAssertEqual(
+      capture.logs.filter { $0.message.hasPrefix("failed to gather ICE candidate:") }.count,
+      failedCount,
+      "nativeChannel が無いときの通知はログを出力しないこと")
+  }
+
+  // 既定のログレベル (info) では ICE candidate の収集失敗ログが出力されないことを確認する
+  func testIceCandidateErrorLogIsSuppressedAtInfoLevel() throws {
+    let capture = LoggerCapture(level: .info)
+    let fixture = try makePeerConnectionFixture()
+    fixture.peerChannel.nativeChannel = fixture.peerConnection
+    defer { fixture.peerChannel.nativeChannel = nil }
+
+    let delegate: RTCPeerConnectionDelegate = fixture.peerChannel
+    delegate.peerConnection?(
+      fixture.peerConnection, didFailToGatherIceCandidate: RTCIceCandidateErrorEvent())
+
+    XCTAssertTrue(
+      capture.logs.filter { $0.message.hasPrefix("failed to gather ICE candidate:") }.isEmpty,
+      "既定のログレベル (info) では ICE candidate の収集失敗ログが出力されないこと")
+  }
+
+  // 実 PC で ICE 収集を失敗させ、5 フィールドの実値対応を確認する
+  func testIceCandidateErrorLogWithRealFailedGathering() throws {
+    let fixture = try makePeerConnectionFixture()
+    let logged = expectation(description: "ICE candidate の収集失敗ログが出力されること")
+    logged.assertForOverFulfill = false
+    let capture = LoggerCapture(onMessage: { message in
+      if message.hasPrefix("failed to gather ICE candidate:") {
+        logged.fulfill()
+      }
+    })
+
+    let peerConnection = try makeIceFailurePeerConnection(
+      factory: fixture.factory, delegate: fixture.peerChannel)
+    fixture.peerChannel.nativeChannel = peerConnection
+    defer { fixture.peerChannel.nativeChannel = nil }
+
+    // data channel を作って m-line を作り、offer と setLocalDescription で ICE 収集を開始する。
+    _ = try makeTestDataChannel(peerConnection: peerConnection, label: "#ice-error")
+    let offer = try makeOffer(peerConnection)
+    try setLocalDescription(offer, peerConnection: peerConnection)
+
+    // 最初の失敗ログだけでなく gathering の完了まで待つ。gathering 完了まで
+    // ICE 関連の delegate ログが続くため、完了前に LoggerCapture を解放すると
+    // 後続テストへログが漏れる。
+    let gathered = expectation(
+      for: NSPredicate { _, _ in peerConnection.iceGatheringState == .complete },
+      evaluatedWith: nil)
+    wait(for: [logged, gathered], timeout: 20)
+
+    let logs = capture.logs.filter { $0.message.hasPrefix("failed to gather ICE candidate:") }
+    XCTAssertFalse(logs.isEmpty, "ICE candidate の収集失敗ログが 1 件以上出力されること")
+    let log = try XCTUnwrap(
+      logs.first, "ICE candidate の収集失敗ログの Log を取得できること")
+
+    // url と errorCode は前方一致、errorText は空でないこと、address / port は
+    // 末尾一致で比較し、フィールドの取り違えを検出する。このテスト環境では
+    // address が空、port が 0 になる。
+    let message = log.message
+    XCTAssertTrue(
+      message.hasPrefix(
+        "failed to gather ICE candidate: url=turn:127.0.0.1:65535?transport=tcp errorCode=701 errorText="
+      ),
+      "url と errorCode が実値で出力されること: \(message)")
+    XCTAssertFalse(
+      message.contains("errorText= address="),
+      "errorText が空でないこと: \(message)")
+    XCTAssertTrue(
+      message.hasSuffix(" address= port=0"),
+      "address が空、port が 0 で出力されること: \(message)")
   }
 
   // peer connection state (PeerChannel.peerConnection(_:didChange:)) のログを確認する
@@ -489,4 +608,96 @@ final class RTCDescriptionTests: XCTestCase {
     return factory.createNativeAudioTrack(trackId: "audio", constraints: constraints)
   }
 
+  // ICE 収集失敗を発生させるための TURN TCP の設定で RTCPeerConnection を生成する。
+  //
+  // 127.0.0.1:65535 に listener が無い前提で、TURN TCP の接続確立に失敗させる。
+  // TURN TCP は ready にならないまま ICE gathering のタイムアウト (実測約 8 秒) で
+  // gathering が完了し、errorCode 701 / 実装固有の errorText / address 空 / port 0 が通知される。
+  private func makeIceFailurePeerConnection(
+    factory: NativePeerChannelFactory,
+    delegate: RTCPeerConnectionDelegate
+  ) throws -> RTCPeerConnection {
+    let configuration = RTCConfiguration()
+    configuration.sdpSemantics = .unifiedPlan
+    configuration.iceTransportPolicy = .relay
+    configuration.iceServers = [
+      RTCIceServer(
+        urlStrings: ["turn:127.0.0.1:65535?transport=tcp"],
+        username: "test",
+        credential: "test")
+    ]
+    let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
+    return try XCTUnwrap(
+      factory.nativeFactory.peerConnection(
+        with: configuration, constraints: constraints, delegate: delegate),
+      "ICE 収集失敗用の RTCPeerConnection を生成できること")
+  }
+
+  // offer を生成する
+  //
+  // DataChannelStatsSendTests の description / setDescription と同型の helper である。
+  // テストファイルをまたぐ共有化は、既存テストを含む別の整理として行う。
+  private func makeOffer(_ peerConnection: RTCPeerConnection) throws -> RTCSessionDescription {
+    let completed = expectation(description: "offer を生成できること")
+    let result = LockedValue<RTCSessionDescription>()
+    let callback: @Sendable (RTCSessionDescription?, Error?) -> Void = { description, error in
+      XCTAssertNil(error, "offer の生成がエラーなく完了すること")
+      if let description {
+        result.set(description)
+      }
+      completed.fulfill()
+    }
+    peerConnection.offer(
+      for: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil),
+      completionHandler: callback)
+    wait(for: [completed], timeout: 10)
+    return try XCTUnwrap(result.get(), "SDP を取得できること")
+  }
+
+  // local description を設定する
+  //
+  // DataChannelStatsSendTests の setDescription と同型の helper である。
+  // テストファイルをまたぐ共有化は、既存テストを含む別の整理として行う。
+  private func setLocalDescription(
+    _ description: RTCSessionDescription, peerConnection: RTCPeerConnection
+  ) throws {
+    let completed = expectation(description: "local description を設定できること")
+    let failure = LockedValue<Error>()
+    let callback: @Sendable (Error?) -> Void = { error in
+      if let error {
+        failure.set(error)
+      }
+      completed.fulfill()
+    }
+    peerConnection.setLocalDescription(description, completionHandler: callback)
+    wait(for: [completed], timeout: 10)
+    if let error = failure.get() {
+      throw error
+    }
+  }
+
+}
+
+/// WebRTC の callback とテストスレッド間で値をロックして受け渡す箱です。
+///
+/// `@unchecked Sendable` としているのは、可変状態が `value` だけで、その読み書きを
+/// すべて `lock` で排他しているためです (WebRTC の callback は別スレッドから届きます)。
+///
+/// DataChannelStatsSendTests / PeerChannelMessagingRaceTests に同型の実装がある。
+/// テストファイルをまたぐ共有化は、既存テストを含む別の整理として行う。
+private final class LockedValue<Value>: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value: Value?
+
+  func set(_ value: Value) {
+    lock.lock()
+    self.value = value
+    lock.unlock()
+  }
+
+  func get() -> Value? {
+    lock.lock()
+    defer { lock.unlock() }
+    return value
+  }
 }
