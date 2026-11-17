@@ -330,7 +330,7 @@ final class PeerChannelRedirectInvalidationTests: XCTestCase {
       "offer の m= 行の種別が audio のみであること")
 
     // re-answer 成功経路の観測点は onUpdate とする
-    // (WebSocket 未接続のため signaling の送信は行われず onSend は呼ばれない)
+    // (WebSocket 未接続のため signalingChannel.send(message:) は呼ばれるが、 WebSocket への実送信は行われない)
     let updateExpectation = expectation(description: "re-answer の onUpdate が呼ばれること")
     let observation = PeerChannelSDPResult()
     peerChannel.internalHandlers.onUpdate = { sdp in
