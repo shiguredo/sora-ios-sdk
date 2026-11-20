@@ -8,7 +8,8 @@ import WebRTC
 /// 束ねること。
 ///
 /// 配送のたびにプロパティを読むため、接続の途中で設定を変更しても次の配送から反映される
-/// (プロパティの読み書きを排他する lock は無く、並行する設定変更はデータ競合になる)。
+/// (プロパティの読み書きは内部の lock で排他され、並行する設定変更はデータ競合にならない)。
+/// 配送は snapshot 取得時点のクロージャーを 1 回だけ呼ぶ。
 ///
 /// Swift 6 言語モードで `@MainActor` の文脈からハンドラーを設定する場合は、クロージャに
 /// `@Sendable` を付けるか `nonisolated` な関数へ処理を分離して隔離を外す。`MediaChannel` と
@@ -20,12 +21,20 @@ import WebRTC
 /// イベントを actor / Task から購読する場合は `Sora.subscribeEvents(bufferingPolicy:)` を使う
 /// (接続ごとのイベントは `MediaChannel.subscribeEvents(bufferingPolicy:)`)。新しい購読 API は、
 /// この handler と同じ配送点から対応するイベントを配送する。
-public final class SoraHandlers {
-  /// 接続成功時に呼ばれるクロージャー
-  public var onConnect: ((MediaChannel?, Error?) -> Void)?
+public final class SoraHandlers: Sendable {
+  /// 接続試行の終了時に呼ばれるクロージャー
+  ///
+  /// 接続に成功した場合は `MediaChannel` が、失敗した場合は `Error` が渡されます。
+  public var onConnect: ((MediaChannel?, Error?) -> Void)? {
+    get { storage.onConnect.current }
+    set { storage.onConnect.current = newValue }
+  }
 
   /// 接続解除時に呼ばれるクロージャー
-  public var onDisconnect: ((MediaChannel, Error?) -> Void)?
+  public var onDisconnect: ((MediaChannel, Error?) -> Void)? {
+    get { storage.onDisconnect.current }
+    set { storage.onDisconnect.current = newValue }
+  }
 
   /// メディアチャネルが追加されたときに呼ばれるクロージャー
   ///
@@ -33,12 +42,20 @@ public final class SoraHandlers {
   /// 非同期の接続処理より前に呼ばれます。接続ごとの handler は、この時点で
   /// `MediaChannel.handlers` に対して設定します (接続の開始前に `Configuration` へ設定した
   /// handler は、接続ごとのインスタンスにコピー済みです)。
-  public var onAddMediaChannel: ((MediaChannel) -> Void)?
+  public var onAddMediaChannel: ((MediaChannel) -> Void)? {
+    get { storage.onAddMediaChannel.current }
+    set { storage.onAddMediaChannel.current = newValue }
+  }
 
   /// メディアチャネルが除去されたときに呼ばれるクロージャー
-  public var onRemoveMediaChannel: ((MediaChannel) -> Void)?
+  public var onRemoveMediaChannel: ((MediaChannel) -> Void)? {
+    get { storage.onRemoveMediaChannel.current }
+    set { storage.onRemoveMediaChannel.current = newValue }
+  }
 
   /// 音声入出力ルートが変更されたときに呼ばれるクロージャー
+  ///
+  /// `.routeConfigurationChange` の通知は SDK 内部で無視するため呼ばれません。
   ///
   /// - parameter session: 変更通知元の `RTCAudioSession`
   /// - parameter reason: 変更理由
@@ -49,15 +66,37 @@ public final class SoraHandlers {
         RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription
       ) -> Void
     )?
+  {
+    get { storage.onChangeAudioRoute.current }
+    set { storage.onChangeAudioRoute.current = newValue }
+  }
+
+  /// handler の読み書きを排他する storage
+  private let storage = SoraHandlersStorage()
 
   /// 初期化します。
   public init() {}
 }
 
-// SDK の共有インスタンスを提供し、内部状態は SDK 側で管理するため、 @unchecked Sendable を付与します。
+/// `SoraHandlers` の handler property を保持する storage です。
+///
+/// 5 つの handler の get / set は property ごとの `HandlerStorage` が持つ `NSLock` で排他します。
+/// `@unchecked Sendable` としているのは、保持する `HandlerStorage` が意図的に `Sendable` では
+/// ないためです (`Sora/HandlerStorage.swift` を参照)。各 `HandlerStorage` は lock を解放してから
+/// closure を返すため、保持する closure 自体の実行隔離は保証しません。
+private final class SoraHandlersStorage: @unchecked Sendable {
+  let onConnect = HandlerStorage<((MediaChannel?, Error?) -> Void)?>(nil)
+  let onDisconnect = HandlerStorage<((MediaChannel, Error?) -> Void)?>(nil)
+  let onAddMediaChannel = HandlerStorage<((MediaChannel) -> Void)?>(nil)
+  let onRemoveMediaChannel = HandlerStorage<((MediaChannel) -> Void)?>(nil)
+  let onChangeAudioRoute = HandlerStorage<
+    ((RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription) -> Void)?
+  >(nil)
+}
+
 /// サーバーへのインターフェースです。
 /// `Sora` オブジェクトを使用してサーバーへの接続を行います。
-public final class Sora: @unchecked Sendable {
+public final class Sora: Sendable {
   // MARK: - SDK の操作
 
   private static let isInitialized: Bool = {
@@ -72,12 +111,38 @@ public final class Sora: @unchecked Sendable {
   }
 
   /// SDK の終了処理を行います。
+  ///
+  /// 次のいずれかに該当する場合は `preconditionFailure` になります。
+  /// - 接続中または接続試行中の接続がある (`disconnect()` は非同期のため、すべての接続で
+  ///   切断処理が終わり、接続の登録が解除されるまで待つ。各接続の `onDisconnect` を待つのが
+  ///   確実。`mediaChannels` が空になることまでは要求しない)
+  /// - `Sora` の生成中 (`Sora.shared` の初回アクセスを含む)
+  /// - `Sora.setWebRTCLogLevel(_:)` の実行中
+  ///
+  /// 2 回目以降の呼び出しは何もしません。終了後は `Sora` の生成 (`Sora.shared` の初回アクセスを
+  /// 含む)、`connect(configuration:webRTCConfiguration:handler:)`、`setWebRTCLogLevel(_:)` を
+  /// 呼べません (`preconditionFailure` になります)。
+  ///
   /// アプリケーションの終了と同時に SDK の使用を終了する場合、
   /// この関数を呼ぶ必要はありません。
   public static func finish() {
-    Logger.debug(type: .sora, message: "finish SDK")
-    RTCShutdownInternalTracer()
-    RTCCleanupSSL()
+    switch SoraLifecycleOwner.shared.beginFinish() {
+    case .alreadyFinished:
+      return
+    case .busy(let registrationCount):
+      preconditionFailure(
+        "Sora.finish() must be called after all connections are closed and no initialization "
+          + "or log level change is in progress (\(registrationCount) lifecycle registrations remain)"
+      )
+    case .proceed:
+      // 排他区間の外で cleanup を実行する。終了状態は beginFinish() で確定済みのため、
+      // 後続の生成と接続は preconditionFailure になる。
+      Logger.debug(type: .sora, message: "finish SDK")
+      // cleanup 中に古い callback が動かないよう、先に callback logger を止める。
+      SoraLoggerOwner.shared.stop()
+      RTCShutdownInternalTracer()
+      RTCCleanupSSL()
+    }
   }
 
   /// ログレベル。指定したレベルより高いログは出力されません。
@@ -94,20 +159,16 @@ public final class Sora: @unchecked Sendable {
   // MARK: - プロパティ
 
   /// 接続中のメディアチャネルのリスト
-  public var mediaChannels: [MediaChannel] {
-    mediaChannelLock.lock()
-    defer { mediaChannelLock.unlock() }
-    return _mediaChannels
-  }
-
-  // mediaChannels の実体。読み書きは必ず mediaChannelLock で保護する
-  private var _mediaChannels: [MediaChannel] = []
-
-  // _mediaChannels への全アクセスを保護する排他ロック
-  private let mediaChannelLock = NSLock()
+  public var mediaChannels: [MediaChannel] { stateOwner.mediaChannels }
 
   /// イベントハンドラ
   public let handlers = SoraHandlers()
+
+  /// インスタンスの可変 state (mediaChannels と audio session delegate) を保持する owner です。
+  private let stateOwner: SoraInstanceStateOwner
+
+  /// SDK 全体の lifecycle owner です。`finish()` の後は新しい生成・接続・ログレベル設定を拒否します。
+  private let lifecycleOwner: SoraLifecycleOwner
 
   // MARK: - イベントの購読
 
@@ -151,7 +212,7 @@ public final class Sora: @unchecked Sendable {
 
   /// このインスタンスに紐づくイベントを配送します。
   ///
-  /// 呼び出し側は `mediaChannelLock` などの排他区間を保持せずに呼びます。
+  /// 呼び出し側は `stateOwner` などの排他区間を保持せずに呼びます。
   func publishEvent(
     kind: SoraEventKind,
     connectionId: String? = nil,
@@ -168,14 +229,6 @@ public final class Sora: @unchecked Sendable {
         audioRoute: audioRoute))
   }
 
-  private lazy var audioSessionDelegateAdapter = SoraRTCAudioSessionDelegateAdapter {
-    [weak self] session, reason, previousRoute in
-    self?.handlers.onChangeAudioRoute?(session, reason, previousRoute)
-    self?.publishEvent(
-      kind: .audioRouteChanged,
-      audioRoute: SoraAudioRouteEvent(reason: reason, previousRoute: previousRoute))
-  }
-
   // MARK: - インスタンスの生成と取得
 
   /// シングルトンインスタンス
@@ -187,7 +240,23 @@ public final class Sora: @unchecked Sendable {
   /// メディアチャネルのリストをグループに分けたい、
   /// または複数のイベントハンドラを使いたいなどの場合に
   /// インスタンスを生成してください。
-  public init() {
+  public convenience init() {
+    self.init(lifecycleOwner: SoraLifecycleOwner.shared)
+  }
+
+  /// 初期化します。
+  ///
+  /// - parameter lifecycleOwner: 使用する lifecycle owner。テストから差し替えるために internal にしています。
+  init(lifecycleOwner: SoraLifecycleOwner) {
+    // 生成中の finish() を拒否するため、init の入口で lifecycle owner に登録する。
+    let registration: SoraLifecycleRegistration
+    switch lifecycleOwner.beginRegistration() {
+    case .finished:
+      preconditionFailure("Sora must not be created after Sora.finish()")
+    case .registered(let value):
+      registration = value
+    }
+
     // This will guarantee that `Sora.initialize()` is called only once.
     // - It works even if user initialized `Sora` directly
     // - It works even if user directly use `Sora.shared`
@@ -199,60 +268,52 @@ public final class Sora: @unchecked Sendable {
     // which is fatal to the initialization logic.
     // The following line will NEVER fail.
     if !initialized { fatalError() }
-    RTCAudioSession.sharedInstance().add(audioSessionDelegateAdapter)
+
+    self.lifecycleOwner = lifecycleOwner
+    self.stateOwner = SoraInstanceStateOwner(handlers: handlers, publisher: eventPublisher)
+    registration.end()
   }
 
   deinit {
-    RTCAudioSession.sharedInstance().remove(audioSessionDelegateAdapter)
-    // Sora インスタンスの解放で購読を終端する。
+    // 購読を終端する前に audio session delegate を解除し、新しい route 変更の配送を止める。
+    // 解除は in-flight の callback を待たないため、実行中の callback は完了し得る。
+    stateOwner.detachAudioSessionDelegate()
     eventPublisher.finish()
   }
 
   // MARK: - メディアチャネルの管理
 
-  // mediaChannelLock で _mediaChannels を保護し、handlers コールバックはロック外で呼ぶ。
+  // stateOwner が mediaChannels を排他し、handlers コールバックはロック外で呼ぶ。
   //
   // ロック内でコールバックを呼ぶと、ユーザーのハンドラから connect() を再呼び出しした場合にデッドロックする。
   func add(mediaChannel: MediaChannel) {
-    var added = false
-    mediaChannelLock.lock()
-    if !_mediaChannels.contains(mediaChannel) {
-      _mediaChannels.append(mediaChannel)
-      added = true
+    guard stateOwner.add(mediaChannel: mediaChannel) else {
+      return
     }
-    mediaChannelLock.unlock()
 
-    if added {
-      // ログは排他区間の外で出す。ロックを保持したまま Logger を呼ぶと、利用者の
-      // onOutputHandler が同じロックを取る経路で deadlock する。
-      Logger.debug(type: .sora, message: "add media channel")
-      handlers.onAddMediaChannel?(mediaChannel)
-      publishEvent(
-        kind: .mediaChannelAdded,
-        connectionId: mediaChannel.connectionId,
-        transportEpoch: mediaChannel.transportEpoch)
-    }
+    // ログは排他区間の外で出す。ロックを保持したまま Logger を呼ぶと、利用者の
+    // onOutputHandler が同じロックを取る経路で deadlock する。
+    Logger.debug(type: .sora, message: "add media channel")
+    handlers.onAddMediaChannel?(mediaChannel)
+    publishEvent(
+      kind: .mediaChannelAdded,
+      connectionId: mediaChannel.connectionId,
+      transportEpoch: mediaChannel.transportEpoch)
   }
 
-  // add と同様、mediaChannelLock で _mediaChannels を保護し、handlers コールバックはロック外で呼ぶ。
+  // add と同様、stateOwner が mediaChannels を排他し、handlers コールバックはロック外で呼ぶ。
   func remove(mediaChannel: MediaChannel) {
-    var removed = false
-    mediaChannelLock.lock()
-    if _mediaChannels.contains(mediaChannel) {
-      _mediaChannels.remove(mediaChannel)
-      removed = true
+    guard stateOwner.remove(mediaChannel: mediaChannel) else {
+      return
     }
-    mediaChannelLock.unlock()
 
-    if removed {
-      // ログは排他区間の外で出す (add と同じ理由)。
-      Logger.debug(type: .sora, message: "remove media channel")
-      handlers.onRemoveMediaChannel?(mediaChannel)
-      publishEvent(
-        kind: .mediaChannelRemoved,
-        connectionId: mediaChannel.connectionId,
-        transportEpoch: mediaChannel.transportEpoch)
-    }
+    // ログは排他区間の外で出す (add と同じ理由)。
+    Logger.debug(type: .sora, message: "remove media channel")
+    handlers.onRemoveMediaChannel?(mediaChannel)
+    publishEvent(
+      kind: .mediaChannelRemoved,
+      connectionId: mediaChannel.connectionId,
+      transportEpoch: mediaChannel.transportEpoch)
   }
 
   // MARK: - 接続
@@ -289,6 +350,18 @@ public final class Sora: @unchecked Sendable {
         _ error: Error?
       ) -> Void
   ) -> ConnectionTask {
+    // 接続試行中も含めて lifecycle owner に登録する。finish() と接続開始を同じ排他区間で
+    // 判定するため、設定 snapshot の生成より前に登録する。
+    let lifecycleRegistration: SoraLifecycleRegistration
+    switch lifecycleOwner.beginRegistration() {
+    case .finished:
+      preconditionFailure(
+        "Sora.connect(configuration:webRTCConfiguration:handler:) must not be called after Sora.finish()"
+      )
+    case .registered(let value):
+      lifecycleRegistration = value
+    }
+
     // `webRTCConfiguration` 引数は `Configuration` の複製へ畳み込み、snapshot 生成にだけ使う。
     // snapshot 変換の入口を `ConnectionConfigurationSnapshot(configuration:)` 1 つに保つため、
     // snapshot 型には引数を足さない。
@@ -308,8 +381,12 @@ public final class Sora: @unchecked Sendable {
         configuration: configuration,
         audioDevice: configuration.audioDevice,
         mediaChannelHandlers: configuration.mediaChannelHandlers,
-        webSocketChannelHandlers: configuration.webSocketChannelHandlers)
+        webSocketChannelHandlers: configuration.webSocketChannelHandlers,
+        lifecycleRegistration: lifecycleRegistration)
     } catch {
+      // 設定エラーや ADM 初期化エラーではチャネルが生成されないため、ここで登録を解除する。
+      // これ以降の終端は MediaChannel が解除する。
+      lifecycleRegistration.end()
       // 設定エラーや ADM 初期化エラーはチャネルを登録せず接続試行を終端する。
       // 通常の接続経路と同様に、利用者の callback は connect() の呼び出しスタック外で通知する。
       let connectionTask = ConnectionTask()
@@ -518,49 +595,324 @@ public final class Sora: @unchecked Sendable {
 
   // MARK: - libwebrtc のログ出力
 
-  private nonisolated(unsafe) static var webRTCCallbackLogger: RTCCallbackLogger = {
-    let logger = RTCCallbackLogger()
-    logger.severity = .none
-    return logger
-  }()
+  /// libwebrtc のログレベルを指定します。
+  /// ログは `RTCSetMinDebugLogLevel()` でも指定可能ですが、 `RTCSetMinDebugLogLevel()` ではログの時刻が表示されません。
+  /// 本メソッドでログレベルを指定すると、時刻を含むログを出力します。
+  ///
+  /// `finish()` の後は `preconditionFailure` になります。
+  public static func setWebRTCLogLevel(_ severity: RTCLoggingSeverity) {
+    // finish() とログ設定を同じ排他区間で判定するため、登録を保持してから設定する。
+    switch SoraLifecycleOwner.shared.beginRegistration() {
+    case .finished:
+      preconditionFailure("Sora.setWebRTCLogLevel(_:) must not be called after Sora.finish()")
+    case .registered(let registration):
+      defer { registration.end() }
+      // RTCSetMinDebugLogLevel() でログレベルを指定すると
+      // RTCCallbackLogger 以外のログも出力されてしまい、
+      // ログ出力が二重になるので RTCSetMinDebugLogLevel() は使わない。
+      SoraLoggerOwner.shared.setSeverity(severity)
+    }
+  }
+}
 
-  private static let webRTCLoggingDateFormatter: DateFormatter = {
+/// `Sora` インスタンスの可変 state (mediaChannels と audio session delegate) を保持する owner です。
+///
+/// `mediaChannels` の読み書きと delegate の登録状態は `lock` で排他します。`@unchecked Sendable`
+/// としているのは、`lock` で保護した可変状態を checked `Sendable` では証明できないことと、
+/// 非 `Sendable` な `MediaChannel` と `SoraRTCAudioSessionDelegateAdapter` を保持するためです。
+/// delegate の登録は `init` で行い、解除は `detachAudioSessionDelegate()` で行います。
+/// `Sora.deinit` は購読を終端する前にこの owner の delegate を解除します。解除は in-flight の
+/// callback を待たないため、解除と同時に実行中の callback が利用者 handler を呼ぶことはあります。
+final class SoraInstanceStateOwner: @unchecked Sendable {
+  private let lock = NSLock()
+  private var _mediaChannels: [MediaChannel] = []
+  private var audioSessionDelegateAttached = true
+  let audioSessionDelegateAdapter: SoraRTCAudioSessionDelegateAdapter
+
+  init(handlers: SoraHandlers, publisher: SoraEventPublisher) {
+    // adapter は Sora を強参照できないため、Sora.publishEvent ではなく publisher を直接使う。
+    audioSessionDelegateAdapter = SoraRTCAudioSessionDelegateAdapter {
+      session, reason, previousRoute in
+      handlers.onChangeAudioRoute?(session, reason, previousRoute)
+      publisher.publish(
+        SoraEvent(
+          kind: .audioRouteChanged,
+          audioRoute: SoraAudioRouteEvent(reason: reason, previousRoute: previousRoute)))
+    }
+    RTCAudioSession.sharedInstance().add(audioSessionDelegateAdapter)
+  }
+
+  deinit {
+    detachAudioSessionDelegate()
+  }
+
+  /// audio session delegate の登録を解除します。解除は 1 回だけ有効です。
+  func detachAudioSessionDelegate() {
+    lock.lock()
+    let attached = audioSessionDelegateAttached
+    audioSessionDelegateAttached = false
+    lock.unlock()
+    guard attached else {
+      return
+    }
+    RTCAudioSession.sharedInstance().remove(audioSessionDelegateAdapter)
+  }
+
+  /// 接続中のメディアチャネルのリストです。
+  var mediaChannels: [MediaChannel] {
+    lock.lock()
+    defer { lock.unlock() }
+    return _mediaChannels
+  }
+
+  /// 管理対象へ追加し、新しく追加された場合だけ true を返します。
+  func add(mediaChannel: MediaChannel) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    if _mediaChannels.contains(mediaChannel) {
+      return false
+    }
+    _mediaChannels.append(mediaChannel)
+    return true
+  }
+
+  /// 管理対象から除去し、実際に除去した場合だけ true を返します。
+  func remove(mediaChannel: MediaChannel) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    guard let index = _mediaChannels.firstIndex(of: mediaChannel) else {
+      return false
+    }
+    _mediaChannels.remove(at: index)
+    return true
+  }
+}
+
+/// SDK 全体の lifecycle 状態 (生成・接続・ログレベル設定の登録数、finish 済みか) を保持する owner です。
+///
+/// cleanup (`RTCShutdownInternalTracer()` / `RTCCleanupSSL()`) は実行しません。`Sora.finish()` が
+/// `beginFinish()` の結果を確認してから cleanup を実行します。`@unchecked Sendable` としているのは、
+/// `lock` で保護した可変状態 (`registrations` / `nextRegistrationID` / `isFinished`) を checked
+/// `Sendable` では証明できないためです。可変状態はすべて `lock` で排他します。
+final class SoraLifecycleOwner: @unchecked Sendable {
+  /// 生成・接続・ログレベル設定の登録結果です。
+  enum RegistrationResult {
+    /// 登録できた。解除は `SoraLifecycleRegistration.end()` で行う。
+    case registered(SoraLifecycleRegistration)
+    /// すでに finish 済みで登録できない。
+    case finished
+  }
+
+  /// finish の開始結果です。
+  enum FinishResult {
+    /// cleanup を実行してよい。
+    case proceed
+    /// 生成・接続・ログレベル設定の登録が残っているため cleanup できない。
+    /// - parameter registrationCount: 判定時点の登録数
+    case busy(registrationCount: Int)
+    /// すでに finish 済み。
+    case alreadyFinished
+  }
+
+  /// process-wide な owner です。
+  static let shared = SoraLifecycleOwner()
+
+  private let lock = NSLock()
+  private var registrations: Set<Int> = []
+  private var nextRegistrationID = 0
+  private var isFinished = false
+
+  /// 初期化します。テストから独立した owner を作るために internal にしています。
+  init() {}
+
+  /// 生成・接続・ログレベル設定を登録します。
+  func beginRegistration() -> RegistrationResult {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !isFinished else {
+      return .finished
+    }
+    nextRegistrationID += 1
+    registrations.insert(nextRegistrationID)
+    return .registered(SoraLifecycleRegistration(owner: self, id: nextRegistrationID))
+  }
+
+  /// 登録を解除します。同じ ID の解除は 1 回だけ有効で、2 回目以降は何もしません。
+  fileprivate func endRegistration(id: Int) {
+    lock.lock()
+    registrations.remove(id)
+    lock.unlock()
+  }
+
+  /// finish を開始できるか確認し、できる場合は終了状態にします。
+  func beginFinish() -> FinishResult {
+    lock.lock()
+    defer { lock.unlock() }
+    if isFinished {
+      return .alreadyFinished
+    }
+    guard registrations.isEmpty else {
+      return .busy(registrationCount: registrations.count)
+    }
+    isFinished = true
+    return .proceed
+  }
+
+  #if DEBUG
+    /// 現在の登録数です。テストから登録の解除を確認するために internal にしています。
+    var registrationCount: Int {
+      lock.lock()
+      defer { lock.unlock() }
+      return registrations.count
+    }
+  #endif
+
+}
+
+/// 1 回だけ解除できる lifecycle の登録です。
+///
+/// 参照がすべてなくなった時点でも `deinit` から解除します。解除を忘れた登録が残ると
+/// `Sora.finish()` が永久に `.busy` になるため、保持者の寿命に解除を紐付けます。
+final class SoraLifecycleRegistration {
+  private let lock = NSLock()
+  private var ended = false
+  private let owner: SoraLifecycleOwner
+  private let id: Int
+
+  fileprivate init(owner: SoraLifecycleOwner, id: Int) {
+    self.owner = owner
+    self.id = id
+  }
+
+  deinit {
+    end()
+  }
+
+  /// 登録を解除します。2 回目以降は何もしません。
+  func end() {
+    lock.lock()
+    let alreadyEnded = ended
+    ended = true
+    lock.unlock()
+    guard !alreadyEnded else {
+      return
+    }
+    owner.endRegistration(id: id)
+  }
+}
+
+/// libwebrtc の callback logger を process-wide に保持する owner です。
+///
+/// `RTCCallbackLogger` の callback はログを出したスレッドで同期的に呼ばれます。libwebrtc は
+/// callback を内部の logging lock を保持したまま呼び、`start` / `stop` も同じ lock を取ります。
+/// そのため、logger を呼ぶ区間と callback が generation を読む区間を別々の lock に分け、
+/// lock の取得順が循環しないようにします。
+/// - `lifecycleLock`: `severity` の更新と `logger.stop()` / `start()` の直列化。callback は取らない
+/// - `stateLock`: `generation` の読み書き。callback はこの lock だけを取る
+///
+/// 登録した callback は登録時の generation を保持し、現在の generation と一致しない場合は
+/// 何も出力しません。`@unchecked Sendable` としているのは、`generation` を checked `Sendable`
+/// では証明できないことと、非 `Sendable` な `RTCCallbackLogger` を保持し、`static let shared`
+/// として使うためです。
+final class SoraLoggerOwner: @unchecked Sendable {
+  /// process-wide な owner です。
+  static let shared = SoraLoggerOwner()
+
+  /// 日時整形に使う共有 formatter です。
+  ///
+  /// `NSDateFormatter` のヘッダ (`NSDateFormatter.h`) には `NS_SWIFT_SENDABLE` と
+  /// "On iOS 7 and later `NSDateFormatter` is thread safe" が記載されており、`DateFormatter` は
+  /// `Sendable` として公開されています。初期化後に `dateFormat` を変更しないため、複数のスレッドから
+  /// 同時に `string(from:)` を呼んでもかまいません。
+  private static let dateFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
     return formatter
   }()
 
-  /// libwebrtc のログレベルを指定します。
-  /// ログは `RTCSetMinDebugLogLevel()` でも指定可能ですが、 `RTCSetMinDebugLogLevel()` ではログの時刻が表示されません。
-  /// 本メソッドでログレベルを指定すると、時刻を含むログを出力します。
-  public static func setWebRTCLogLevel(_ severity: RTCLoggingSeverity) {
-    // RTCSetMinDebugLogLevel() でログレベルを指定すると
-    // RTCCallbackLogger 以外のログも出力されてしまい、
-    // ログ出力が二重になるので RTCSetMinDebugLogLevel() は使わない。
-    webRTCCallbackLogger.severity = severity
-    webRTCCallbackLogger.stop()
-    webRTCCallbackLogger.start { message, callbackSeverity in
-      let severityName: String
-      switch callbackSeverity {
-      case .info:
-        severityName = "INFO"
-      case .verbose:
-        severityName = "VERBOSE"
-      case .warning:
-        severityName = "WARNING"
-      case .error:
-        severityName = "ERROR"
-      case .none:
-        return
-      @unknown default:
-        return
-      }
-      let timestamp = Date()
-      print(
-        "\(webRTCLoggingDateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))"
-      )
+  private let lifecycleLock = NSLock()
+  private let stateLock = NSLock()
+  private let logger = RTCCallbackLogger()
+  private var generation = 0
+
+  init() {
+    logger.severity = .none
+  }
+
+  /// severity を設定し、logger を stop してから start し直します。
+  ///
+  /// `logger.stop()` / `start()` は `lifecycleLock` を保持したまま呼びますが、callback が取る
+  /// `stateLock` は保持しません。
+  func setSeverity(_ severity: RTCLoggingSeverity) {
+    lifecycleLock.lock()
+    defer { lifecycleLock.unlock() }
+    stateLock.lock()
+    generation += 1
+    let currentGeneration = generation
+    stateLock.unlock()
+    logger.severity = severity
+    logger.stop()
+    logger.start { [weak self] message, callbackSeverity in
+      self?.emit(message: message, severity: callbackSeverity, generation: currentGeneration)
     }
   }
+
+  /// logger を停止します。
+  ///
+  /// 停止後に届いた callback は generation が一致しないため出力しません。ただし generation の確認を
+  /// 通過した callback が `print` 中の場合、その 1 件は停止と競合して出力され得ます。
+  func stop() {
+    lifecycleLock.lock()
+    defer { lifecycleLock.unlock() }
+    stateLock.lock()
+    generation += 1
+    stateLock.unlock()
+    logger.stop()
+  }
+
+  /// 指定した generation の callback を出力してよいかを返します。
+  func shouldEmit(generation: Int) -> Bool {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return self.generation == generation
+  }
+
+  /// callback を 1 件出力します。
+  ///
+  /// generation の確認だけを lock で行い、日時整形と `print` は lock の外で行います。
+  private func emit(message: String, severity: RTCLoggingSeverity, generation: Int) {
+    guard shouldEmit(generation: generation) else {
+      return
+    }
+    let severityName: String
+    switch severity {
+    case .info:
+      severityName = "INFO"
+    case .verbose:
+      severityName = "VERBOSE"
+    case .warning:
+      severityName = "WARNING"
+    case .error:
+      severityName = "ERROR"
+    case .none:
+      return
+    @unknown default:
+      return
+    }
+    let timestamp = Date()
+    print(
+      "\(Self.dateFormatter.string(from: timestamp)) libwebrtc \(severityName): \(message.trimmingCharacters(in: .whitespacesAndNewlines))"
+    )
+  }
+
+  #if DEBUG
+    /// 現在の generation です。テストから参照するために internal にしています。
+    var currentGenerationForTesting: Int {
+      stateLock.lock()
+      defer { stateLock.unlock() }
+      return generation
+    }
+  #endif
 }
 
 /// 設定エラー通知の接続 handler を並行処理境界へ渡すための、用途限定の内部ラッパーです。
@@ -728,8 +1080,8 @@ public final class ConnectionTask {
 // 1. オーディオ経路の変更を RTCAudioSession::handleRouteChangeNotification で AVAudioSessionRouteChangeNotification で受信
 // 2. RTCAudioSession::notifyDidChangeRouteWithReason で audioSessionDidChangeRoute:reason:previousRoute: が呼ばれる
 // 3. SoraRTCAudioSessionDelegateAdapter(本クラス) の audioSessionDidChangeRoute で通知を受ける
-// 4. onChangeAudioRoute で SDK 利用者へ通知する
-private final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessionDelegate {
+// 4. onChangeAudioRoute と SoraEventKind.audioRouteChanged の購読者へ通知する
+final class SoraRTCAudioSessionDelegateAdapter: NSObject, RTCAudioSessionDelegate {
   private let onChangeAudioRoute:
     (
       RTCAudioSession, AVAudioSession.RouteChangeReason, AVAudioSessionRouteDescription

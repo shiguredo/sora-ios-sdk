@@ -150,6 +150,8 @@ Sora.logLevel = .debug
 Sora.setWebRTCLogLevel(.info)
 ```
 
+`Sora.finish()` はアプリ終了時に呼ぶ必要はない。接続中・接続試行中、`Sora` の生成中、`setWebRTCLogLevel(_:)` の実行中は `preconditionFailure` になる。`disconnect()` は非同期のため、すべての接続で切断処理が終わり接続の登録が解除されるまで待つ (各接続の `onDisconnect` を待つのが確実)。2 回目以降の呼び出しは何もしない。`finish()` の後は `Sora` の生成 (`Sora.shared` の初回アクセスを含む)、`connect(configuration:webRTCConfiguration:handler:)`、`setWebRTCLogLevel(_:)` を呼ぶと `preconditionFailure` になる。`finish()` は WebRTC の callback logger も停止する。
+
 インスタンス API:
 
 | API | 内容 |
@@ -623,7 +625,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 
 - `Sendable`
   - 設定: `MediaConstraints` / `DegradationPreference` / `SDPSemantics` / `ICETransportPolicy` / `Configuration.Spotlight` / `ForwardingFilterRuleField` / `ForwardingFilterRuleOperator` / `ForwardingFilterAction` / `ForwardingFilterRule`
-  - 接続と切断: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent`
+  - 接続と切断: `ConnectionState` / `ConnectionTask.State` / `SoraCloseEvent` / `Sora` / `SoraHandlers`
   - 音声: `AudioMode` / `AudioOutput`
   - カメラ: `CameraSettings` / `CameraSettings.Resolution` / `CameraVideoCapturer`
   - ログ: `LogType` / `LogLevel` / `Log` / `Logger.Group` / `Logger`
@@ -633,8 +635,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
   - 統計: `StatisticsSnapshot` / `StatisticsEntrySnapshot`
   - イベント購読: `SoraEvent` / `SoraEventKind` / `SoraEventError` / `SoraAudioPortSnapshot` / `SoraAudioRouteSnapshot` / `SoraAudioRouteEvent`
   - その他: `Role` / `AudioCodec` / `VideoCodec` / `Rid` / `SimulcastRid` / `SimulcastRequestRid` / `SpotlightRid` / `AspectRatio` / `WebSocketStatusCode` / `TLSSecurityPolicy` / `SignalingRole` / `DeviceInfo` / `Proxy`
-- `@unchecked Sendable`: `Sora`
-- `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `SoraHandlers` / `Statistics` / `VideoView` など
+- `Sendable` ではない: `Configuration` / `MediaChannel` / `MediaStream` / `MediaChannelHandlers` / `Statistics` / `VideoView` など
 
 `SoraCloseEvent` は `Sendable` だが、`SoraCloseEvent.error` が運ぶ `Error` の実体が `Sendable` であることまでは保証しない。標準ライブラリの `Error: Sendable` に依存するため、可変状態を持つ `Error` を載せた値を actor 境界へ渡す場合は利用側で注意する。
 
@@ -652,7 +653,7 @@ SDK が公開型に `Sendable` 準拠を追加しているため、利用側で�
 - `VideoRenderer` の callback (`onAdded` / `render` / `onChange(size:)` / `onSwitch` / `onRemoved` / `onDisconnect`) はすべて SDK が main queue へ配送する
 - `Logger.onOutputHandler` はログを出力した executor で同期的に呼ばれる (queue への hop は行わない)。複数の executor から並行に呼ばれ得るため、handler 側の排他は利用者の責任になる。handler の中から Logger の設定変更と再出力ができるが、同じログを再出力すると無限再帰になるため、再入の制御は利用者の責任になる
 - `Logger` の設定 (`level` / `groups` / `onOutputHandler`) と `Sora.logLevel` は SDK 内部の lock で保護され、任意の executor から読み書きできる。`@MainActor` のクラスの中で `onOutputHandler` を設定する場合は、closure が MainActor 隔離を継承するため隔離を外す必要がある (下の「コールバックを Swift 6 で扱う」を参照)
-- ハンドラの設定 (`MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` のイベントハンドラのプロパティと `MediaChannel.handlers` の参照) は SDK 内部の lock で排他され、任意の executor から行える (`SoraHandlers` のプロパティは含まない)。callback が呼ばれるスレッドの保証は変わらない
+- ハンドラの設定 (`SoraHandlers` / `MediaChannelHandlers` / `WebSocketChannelHandlers` / `CameraVideoCapturerHandlers` / `MediaStreamHandlers` のイベントハンドラのプロパティと `MediaChannel.handlers` の参照) は SDK 内部の lock で排他され、任意の executor から行える。callback が呼ばれるスレッドの保証は変わらない
 - `MediaChannel.handlers` は接続ごとに独立したインスタンスであり、`Configuration.mediaChannelHandlers` は接続の開始時にコピーされる。接続の開始後に `Configuration.mediaChannelHandlers` を変更しても、接続済みの `MediaChannel.handlers` には反映されない。接続の途中から設定したい場合は `MediaChannel.handlers` の handler property を設定する。`MediaChannel.handlers` に新しい `MediaChannelHandlers` を代入すると保持するインスタンスが差し替わり、`Configuration` からコピーした handler は引き継がれない
 
 ### コールバックを Swift 6 で扱う

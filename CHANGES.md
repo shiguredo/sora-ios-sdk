@@ -11,11 +11,24 @@
 
 ## develop
 
+- [CHANGE] `Sora.finish()` の呼び出し条件を明示し、条件を満たさない呼び出しを `preconditionFailure` にする
+  - 接続中・接続試行中、`Sora` の生成中、`setWebRTCLogLevel(_:)` の実行中は cleanup を実行せずに停止する
+  - `disconnect()` は非同期のため、すべての接続で切断処理が終わり接続の登録が解除されるまで待つ必要がある (各接続の `onDisconnect` を待つのが確実)
+  - `finish()` は WebRTC の callback logger も停止してから cleanup を実行する
+  - `finish()` の 2 回目以降の呼び出しは何もしない
+  - `finish()` の後は `Sora` の生成 (`Sora.shared` の初回アクセスを含む)、`connect(configuration:webRTCConfiguration:handler:)`、`setWebRTCLogLevel(_:)` を呼ぶと停止する
+  - @t-miya
 - [ADD] ICE candidate の収集失敗時に url / errorCode / errorText / address / port をデバッグログに出力する
   - 既定のログレベル (`info`) では出力されない
   - @t-miya
 - [UPDATE] 送信シグナリングメッセージを書き換え可能な内部ハンドラ `onSend` を削除する
   - SDK 独自のハンドラであり、利用されていなかったため削除する
+  - @t-miya
+- [UPDATE] `Sora` と `SoraHandlers` を `Sendable` に対応させ、handler の読み書きを排他する
+  - `Sora` の `@unchecked Sendable` を除去し、可変状態を SDK 内部の owner / storage に移す
+  - `SoraHandlers` の 5 つの handler property の get / set を `NSLock` で排他し、callback は配送のたびに handler の snapshot を取得して 1 回だけ呼ぶ
+  - `webRTCCallbackLogger` の `nonisolated(unsafe)` を除去し、severity と generation を owner で管理して、停止後に届く古い callback を出力しない
+  - `SoraHandlers` に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要 (重複適合はコンパイルエラーになる)
   - @t-miya
 - [FIX] `MediaChannel` の接続人数の読み書きを NSLock で保護する
   - `type: notify` の受信スレッド (WebSocket / DataChannel) と利用者の読み出しスレッドの間、および受信スレッド同士でデータ競合しないようにする

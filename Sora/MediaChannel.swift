@@ -1264,6 +1264,17 @@ public final class MediaChannel {
   // startScreenCapture の並行呼び出し時でも単一インスタンスを保証するためのロックです。
   private let screenCaptureControllerLock = NSLock()
 
+  /// 接続の lifecycle 登録です。`Sora.connect` を経由しない生成では nil です。
+  private let lifecycleRegistration: SoraLifecycleRegistration?
+
+  /// lifecycle の登録を解除します。
+  ///
+  /// 呼び出すのは `finishDisconnect` だけです。未解除のまま解放された場合は、登録トークンの
+  /// `deinit` か、PeerChannel の切断完了 handler が解除します。
+  private func endLifecycleRegistration() {
+    lifecycleRegistration?.end()
+  }
+
   // MARK: - インスタンスの生成
 
   /// 初期化します。
@@ -1299,12 +1310,14 @@ public final class MediaChannel {
   /// - parameter audioDevice: カスタム音声デバイス (snapshot には含めない)
   /// - parameter mediaChannelHandlers: メディアチャネルのハンドラ (接続ごとのインスタンスにコピーして保持する写し元)
   /// - parameter webSocketChannelHandlers: WebSocket チャネルのハンドラ
+  /// - parameter lifecycleRegistration: `Sora` の接続登録。`Sora.connect` を経由しない生成では省略する
   init(
     snapshot: ConnectionConfigurationSnapshot,
     configuration: Configuration,
     audioDevice: RTCAudioDevice?,
     mediaChannelHandlers: MediaChannelHandlers,
     webSocketChannelHandlers: WebSocketChannelHandlers,
+    lifecycleRegistration: SoraLifecycleRegistration? = nil,
     audioSessionCoordinator: AudioSessionCoordinator = .shared,
     videoHardMuteLease: VideoHardMuteLease = VideoHardMuteLease(),
     cameraCaptureCoordinator: CameraVideoCaptureCoordinator = .shared,
@@ -1329,6 +1342,7 @@ public final class MediaChannel {
       }
 
     self.configuration = configuration
+    self.lifecycleRegistration = lifecycleRegistration
     self.videoHardMuteLease = videoHardMuteLease
     self.videoSourceCoordinator = videoSourceCoordinator
     self.cameraCaptureCoordinator = cameraCaptureCoordinator
@@ -1383,6 +1397,10 @@ public final class MediaChannel {
     // 実処理が進行中なら PeerChannel の接続ライフサイクルの排他が安全な時点まで切断を遅延する。
     _peerChannel?.disconnect(error: nil, reason: .user)
 
+    // 登録トークンは明示的に解除しない。MediaChannel の解放でトークンを手放し、PeerChannel の
+    // 切断完了 handler が保持している場合は、その完了 (onDisconnect を経由する場合は native close
+    // の完了後) まで登録が残る。onDisconnect を経由せず PeerChannel が解放される場合は解放順を
+    // 保証できないため、その経路では切断完了前に解除され得る。
     // 明示切断を経由せずに解放された場合も購読を終端する。
     finishEvents()
   }
@@ -1652,9 +1670,12 @@ public final class MediaChannel {
         peerChannel?.disconnect(error: error, reason: reason)
       }
     }
-    peerChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
+    peerChannel.internalHandlers.onDisconnect = {
+      [weak self, registration = self.lifecycleRegistration] error, reason in
       // MediaChannel が先に解放されても ConnectionTask は必ず終端させる。
       guard let self else {
+        // 切断完了まで保持していた lifecycle の登録を、native close の完了後に解除する。
+        registration?.end()
         // 完了ログは排他区間の外で出す (この経路は lock を保持していない)。
         if task.complete() {
           Logger.debug(type: .mediaChannel, message: "connection task completed")
@@ -1991,6 +2012,11 @@ public final class MediaChannel {
     disconnectedChange = (from: state, to: ConnectionState.disconnected)
     setState(.disconnected)
     connectionLifecycleLock.unlock()
+
+    // 接続の登録は、利用者の handler を呼ぶ前に解除する。最後の接続の `onDisconnect` から
+    // `Sora.finish()` を呼べるようにするためである。他の接続が残っている場合は `finish()` が
+    // `.busy` になるため、複数接続では最後の接続の完了まで待つ必要がある。解除は 1 回だけ有効。
+    endLifecycleRegistration()
 
     // 遷移ログ → 完了ログの順で、排他区間の外で出す (変更前の同一スレッドでの出力順序を維持する)。
     if let disconnectingChange {
