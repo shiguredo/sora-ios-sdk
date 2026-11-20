@@ -26,14 +26,14 @@ public final class SoraHandlers: Sendable {
   ///
   /// 接続に成功した場合は `MediaChannel` が、失敗した場合は `Error` が渡されます。
   public var onConnect: ((MediaChannel?, Error?) -> Void)? {
-    get { storage.onConnect.current }
-    set { storage.onConnect.current = newValue }
+    get { handlersStorage.onConnect.current }
+    set { handlersStorage.onConnect.current = newValue }
   }
 
   /// 接続解除時に呼ばれるクロージャー
   public var onDisconnect: ((MediaChannel, Error?) -> Void)? {
-    get { storage.onDisconnect.current }
-    set { storage.onDisconnect.current = newValue }
+    get { handlersStorage.onDisconnect.current }
+    set { handlersStorage.onDisconnect.current = newValue }
   }
 
   /// メディアチャネルが追加されたときに呼ばれるクロージャー
@@ -43,14 +43,14 @@ public final class SoraHandlers: Sendable {
   /// `MediaChannel.handlers` に対して設定します (接続の開始前に `Configuration` へ設定した
   /// handler は、接続ごとのインスタンスにコピー済みです)。
   public var onAddMediaChannel: ((MediaChannel) -> Void)? {
-    get { storage.onAddMediaChannel.current }
-    set { storage.onAddMediaChannel.current = newValue }
+    get { handlersStorage.onAddMediaChannel.current }
+    set { handlersStorage.onAddMediaChannel.current = newValue }
   }
 
   /// メディアチャネルが除去されたときに呼ばれるクロージャー
   public var onRemoveMediaChannel: ((MediaChannel) -> Void)? {
-    get { storage.onRemoveMediaChannel.current }
-    set { storage.onRemoveMediaChannel.current = newValue }
+    get { handlersStorage.onRemoveMediaChannel.current }
+    set { handlersStorage.onRemoveMediaChannel.current = newValue }
   }
 
   /// 音声入出力ルートが変更されたときに呼ばれるクロージャー
@@ -67,12 +67,12 @@ public final class SoraHandlers: Sendable {
       ) -> Void
     )?
   {
-    get { storage.onChangeAudioRoute.current }
-    set { storage.onChangeAudioRoute.current = newValue }
+    get { handlersStorage.onChangeAudioRoute.current }
+    set { handlersStorage.onChangeAudioRoute.current = newValue }
   }
 
-  /// handler の読み書きを排他する storage
-  private let storage = SoraHandlersStorage()
+  /// handlers の読み書きを排他する storage
+  private let handlersStorage = SoraHandlersStorage()
 
   /// 初期化します。
   public init() {}
