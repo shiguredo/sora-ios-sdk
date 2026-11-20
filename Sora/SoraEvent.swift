@@ -38,6 +38,8 @@ public struct SoraEventKind: RawRepresentable, Hashable, Sendable {
   public static let mediaChannelRemoved = SoraEventKind(rawValue: "mediaChannelRemoved")
 
   /// 音声入出力ルートが変更された
+  ///
+  /// `.routeConfigurationChange` の通知は SDK 内部で無視するため配送されません。
   public static let audioRouteChanged = SoraEventKind(rawValue: "audioRouteChanged")
 
   // MARK: - ストリーム
@@ -218,7 +220,7 @@ public struct SoraAudioRouteEvent: Sendable, Equatable {
 /// | `.disconnected` | `MediaChannel` | `connectionId`、`transportEpoch`、`closeEvent` |
 /// | `.mediaChannelAdded` | `Sora` | `transportEpoch` (`connectionId` は接続前のため常に `nil`) |
 /// | `.mediaChannelRemoved` | `Sora` | `connectionId`、`transportEpoch` |
-/// | `.audioRouteChanged` | `Sora` | `audioRoute` |
+/// | `.audioRouteChanged` | `Sora` | `audioRoute` (`.routeConfigurationChange` は配送しない) |
 /// | `.streamAdded` / `.streamRemoved` | `MediaChannel` | `connectionId`、`transportEpoch`、`streamId` |
 /// | `.videoEnabledChanged` / `.audioEnabledChanged` | `MediaChannel` | `connectionId`、`transportEpoch`、`streamId`、`isEnabled` |
 /// | `.signalingReceivedJSON` | `MediaChannel` | `connectionId` (offer の処理前は `nil`)、`transportEpoch`、`signalingJSON` |

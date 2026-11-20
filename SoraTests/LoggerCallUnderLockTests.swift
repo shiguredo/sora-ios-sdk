@@ -259,7 +259,7 @@ final class LoggerCallUnderLockTests: XCTestCase {
 
   /// `Sora.add(mediaChannel:)` のログ出力中に handler から `mediaChannels` を読んでも deadlock しない
   ///
-  /// handler が読む instance と `add` する instance をそろえます (`mediaChannelLock` は instance ごと)。
+  /// handler が読む instance と `add` する instance をそろえます (`SoraInstanceStateOwner` の lock は instance ごと)。
   func testAddMediaChannelFromOutputHandlerDoesNotDeadlock() throws {
     let sora = Sora()
     let channel = try makeMediaChannel()

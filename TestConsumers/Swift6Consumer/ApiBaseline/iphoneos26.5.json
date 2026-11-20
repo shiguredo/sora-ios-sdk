@@ -39502,11 +39502,8 @@
             "mangledName": "$s4Sora0A8HandlersC9onConnectyAA12MediaChannelCSg_s5Error_pSgtcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -39580,10 +39577,8 @@
                 "usr": "s:4Sora0A8HandlersC9onConnectyAA12MediaChannelCSg_s5Error_pSgtcSgvg",
                 "mangledName": "$s4Sora0A8HandlersC9onConnectyAA12MediaChannelCSg_s5Error_pSgtcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -39664,10 +39659,8 @@
                 "usr": "s:4Sora0A8HandlersC9onConnectyAA12MediaChannelCSg_s5Error_pSgtcSgvs",
                 "mangledName": "$s4Sora0A8HandlersC9onConnectyAA12MediaChannelCSg_s5Error_pSgtcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -39738,11 +39731,8 @@
             "mangledName": "$s4Sora0A8HandlersC12onDisconnectyAA12MediaChannelC_s5Error_pSgtcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -39808,10 +39798,8 @@
                 "usr": "s:4Sora0A8HandlersC12onDisconnectyAA12MediaChannelC_s5Error_pSgtcSgvg",
                 "mangledName": "$s4Sora0A8HandlersC12onDisconnectyAA12MediaChannelC_s5Error_pSgtcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -39884,10 +39872,8 @@
                 "usr": "s:4Sora0A8HandlersC12onDisconnectyAA12MediaChannelC_s5Error_pSgtcSgvs",
                 "mangledName": "$s4Sora0A8HandlersC12onDisconnectyAA12MediaChannelC_s5Error_pSgtcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -39937,11 +39923,8 @@
             "mangledName": "$s4Sora0A8HandlersC17onAddMediaChannelyAA0eF0CcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -39986,10 +39969,8 @@
                 "usr": "s:4Sora0A8HandlersC17onAddMediaChannelyAA0eF0CcSgvg",
                 "mangledName": "$s4Sora0A8HandlersC17onAddMediaChannelyAA0eF0CcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -40041,10 +40022,8 @@
                 "usr": "s:4Sora0A8HandlersC17onAddMediaChannelyAA0eF0CcSgvs",
                 "mangledName": "$s4Sora0A8HandlersC17onAddMediaChannelyAA0eF0CcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -40094,11 +40073,8 @@
             "mangledName": "$s4Sora0A8HandlersC20onRemoveMediaChannelyAA0eF0CcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -40143,10 +40119,8 @@
                 "usr": "s:4Sora0A8HandlersC20onRemoveMediaChannelyAA0eF0CcSgvg",
                 "mangledName": "$s4Sora0A8HandlersC20onRemoveMediaChannelyAA0eF0CcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -40198,10 +40172,8 @@
                 "usr": "s:4Sora0A8HandlersC20onRemoveMediaChannelyAA0eF0CcSgvs",
                 "mangledName": "$s4Sora0A8HandlersC20onRemoveMediaChannelyAA0eF0CcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -40270,11 +40242,8 @@
             "mangledName": "$s4Sora0A8HandlersC18onChangeAudioRouteySo15RTCAudioSessionC_So07AVAudiohfD6ReasonVSo0ihF11DescriptionCtcSgvp",
             "moduleName": "Sora",
             "declAttributes": [
-              "HasInitialValue",
-              "Final",
-              "HasStorage"
+              "Final"
             ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -40338,10 +40307,8 @@
                 "usr": "s:4Sora0A8HandlersC18onChangeAudioRouteySo15RTCAudioSessionC_So07AVAudiohfD6ReasonVSo0ihF11DescriptionCtcSgvg",
                 "mangledName": "$s4Sora0A8HandlersC18onChangeAudioRouteySo15RTCAudioSessionC_So07AVAudiohfD6ReasonVSo0ihF11DescriptionCtcSgvg",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "get"
               },
@@ -40412,10 +40379,8 @@
                 "usr": "s:4Sora0A8HandlersC18onChangeAudioRouteySo15RTCAudioSessionC_So07AVAudiohfD6ReasonVSo0ihF11DescriptionCtcSgvs",
                 "mangledName": "$s4Sora0A8HandlersC18onChangeAudioRouteySo15RTCAudioSessionC_So07AVAudiohfD6ReasonVSo0ihF11DescriptionCtcSgvs",
                 "moduleName": "Sora",
-                "implicit": true,
                 "declAttributes": [
-                  "Final",
-                  "Transparent"
+                  "Final"
                 ],
                 "accessorKind": "set"
               }
@@ -40461,6 +40426,20 @@
             "printedName": "Escapable",
             "usr": "s:s9EscapableP",
             "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
           }
         ]
       },
@@ -40773,7 +40752,7 @@
             "usr": "s:4SoraAACABycfc",
             "mangledName": "$s4SoraAACABycfc",
             "moduleName": "Sora",
-            "init_kind": "Designated"
+            "init_kind": "Convenience"
           },
           {
             "kind": "Function",
@@ -41145,6 +41124,7 @@
         "declAttributes": [
           "Final"
         ],
+        "hasMissingDesignatedInitializers": true,
         "conformances": [
           {
             "kind": "Conformance",

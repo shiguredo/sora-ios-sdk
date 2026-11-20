@@ -3,6 +3,9 @@
 //     nonisolated な文脈から非 Sendable な値を capture した closure を代入できること
 //   - VideoRenderer を nonisolated な型で実装し、MediaStream へ設定できること
 //   - WebRTC product を import できること (Sora の binaryTarget を consumer が参照できること)
+//   - SoraHandlers の handler property を key path で参照できること
+//   - Sora() を直接生成できること
+//   - SoraHandlers を @Sendable closure へ渡せること
 // 期待する診断: なし (error 0 件、warning 0 件)
 import Foundation
 import Sora
@@ -33,6 +36,24 @@ func makeSoraHandlers(mediaChannel: MediaChannel) -> SoraHandlers {
     _ = route
   }
   return handlers
+}
+
+/// `SoraHandlers` の handler property が key path で参照できることを確認する。
+func makeSoraHandlersKeyPath()
+  -> ReferenceWritableKeyPath<SoraHandlers, ((MediaChannel?, Error?) -> Void)?>
+{
+  \SoraHandlers.onConnect
+}
+
+/// `Sora()` を直接生成できることを確認する。
+func makeSora() -> Sora {
+  Sora()
+}
+
+/// `SoraHandlers` を `@Sendable` closure へ渡せることを確認する。
+func captureSoraHandlersInSendableClosure(_ handlers: SoraHandlers) -> @Sendable () -> SoraHandlers
+{
+  { handlers }
 }
 
 /// MediaChannel の handler を代入する。

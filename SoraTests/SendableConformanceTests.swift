@@ -128,6 +128,10 @@ final class SendableConformanceTests: XCTestCase {
     // 接続タスクの状態
     requireSendable(ConnectionTask.State.self)
 
+    // 接続の入口と handler bag
+    requireSendable(Sora.self)
+    requireSendable(SoraHandlers.self)
+
     // 設定
     requireSendable(Configuration.Spotlight.self)
     requireSendable(ForwardingFilterRuleField.self)
