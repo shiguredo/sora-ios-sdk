@@ -17,6 +17,7 @@
   - `finish()` は WebRTC の callback logger も停止してから cleanup を実行する
   - `finish()` の 2 回目以降の呼び出しは何もしない
   - `finish()` の後は `Sora` の生成 (`Sora.shared` の初回アクセスを含む)、`connect(configuration:webRTCConfiguration:handler:)`、`setWebRTCLogLevel(_:)` を呼ぶと停止する
+  - `Sora.finish()` を明示的に呼んで SDK の終了処理を行っているアプリは、すべての接続の完了を待ち、`finish()` 後に `Sora` を再利用しないよう対応が必要
   - @t-miya
 - [ADD] ICE candidate の収集失敗時に url / errorCode / errorText / address / port をデバッグログに出力する
   - 既定のログレベル (`info`) では出力されない
