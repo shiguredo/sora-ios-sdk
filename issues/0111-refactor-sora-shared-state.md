@@ -1,7 +1,7 @@
 # Sora の共有状態と WebRTC logger lifecycle を同期する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-11-20
 - Priority: Medium
 - Branch: feature/refactor-sora-shared-state
 - Polished: 2026-11-18
@@ -140,3 +140,22 @@
 - `issues/0035-add-audio-session-event-handlers.md` の現状 / 設計方針 / 完了条件が、`SoraHandlersStorage` 経由の property 追加と `SoraInstanceStateOwner` 経由の adapter 生成に更新されていること。
 
 ## 解決方法
+
+`Sora` の共有状態と WebRTC logger の lifecycle を次のように整理した。
+
+- `SoraHandlers` を checked `Sendable` にし、5 つの handler property を `SoraHandlersStorage` の `HandlerStorage` 経由の computed property にした。get / set は property ごとの `NSLock` で排他し、配送は snapshot を 1 回だけ呼ぶ
+- `Sora` の `@unchecked Sendable` を除去し、`mediaChannels` と audio session delegate を `SoraInstanceStateOwner` に移した
+- `SoraLifecycleOwner` で生成・接続・ログレベル設定の登録数を管理し、`Sora.finish()` は登録が残っている場合は `.busy` で停止、終了済みなら no-op、登録がなければ cleanup を実行するようにした
+- `SoraLifecycleRegistration` を RAII の class にし、`MediaChannel` は `finishDisconnect` と PeerChannel の `onDisconnect` closure で登録を解除する
+- `SoraLoggerOwner` で `RTCCallbackLogger` を管理し、`lifecycleLock` (severity / stop / start) と `stateLock` (generation) を分離して ABBA デッドロックを回避した。`finish()` は cleanup 前に logger を停止する
+- `Sora.deinit` は publisher 終端より先に audio session delegate を解除する
+
+テストは `SoraHandlersConcurrencyTests` / `SoraLifecycleOwnerTests` / `SoraSharedStateTests` / `SoraLoggerOwnerTests` / `SoraRTCAudioSessionDelegateAdapterTests` / `SoraInstanceStateOwnerTests` を追加し、`SendableConformanceTests` に `Sora` / `SoraHandlers` を追加した。全 611 テストが成功 (40 skipped) し、Debug / Release build、consumer build、negative check、format / SwiftLint も成功した。公開 API baseline は Xcode 26.6 / iphoneos26.5 で再生成した。`issues/0035-add-audio-session-event-handlers.md` も `SoraInstanceStateOwner` と `SoraHandlersStorage` に合わせて同期した。
+
+実機では次の動作を確認した。
+
+- 接続中・接続試行中の `finish()` は `preconditionFailure` で停止する (登録数 1)
+- 接続がない状態の `finish()` は成功し、2 回目は no-op
+- すべての接続の `onDisconnect` 完了後の `finish()` は成功する
+- `finish()` 後の `Sora()` / `connect` / `setWebRTCLogLevel` はそれぞれ `preconditionFailure` で停止する
+- 接続中に `setWebRTCLogLevel` を反復してもハングしない
