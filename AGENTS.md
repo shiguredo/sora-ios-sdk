@@ -37,6 +37,7 @@
 - Rust のコードを書くときは `shiguredo-rust` スキルを参照すること
 - Python のコードを書くときは `shiguredo-python` スキルを参照すること
 - TypeScript のコードを書くときは `shiguredo-typescript` スキルを参照すること
+- Swift のコードを書くときは `shiguredo-swift` スキルを参照すること
 
 ## 変更履歴について
 
