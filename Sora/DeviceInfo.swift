@@ -118,7 +118,12 @@ public struct DeviceInfo: Sendable {
   /// 生成は storage の lock の外で行うため、storage の lock を保持したまま main queue を
   /// 待つことはありません。main thread 以外から呼んだ `currentSystemInfo()` は main queue へ同期するため、
   /// main thread を塞いだ状態から background thread が初回取得する呼び出し側の待ちは
-  /// SDK では防げません。
+  /// SDK では防げません。main thread が main queue を処理できる状態を保ってください。
+  /// background thread で初回取得する場合は、その前に main thread で一度
+  /// `DeviceInfo.current` を取得してください。初回取得後は保持している値を返すため、
+  /// main queue へ同期しません。main thread では background thread の完了を
+  /// `DispatchSemaphore.wait` や `DispatchGroup.wait`、`DispatchQueue.concurrentPerform`
+  /// などで同期 wait しないでください。
   /// setter は source compatibility 維持のために残しています。
   public static var current: DeviceInfo {
     get {
