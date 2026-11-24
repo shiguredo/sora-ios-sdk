@@ -3,8 +3,8 @@ import Foundation
 /// 並行実行した結果を集めるためのスレッド安全な collector です。
 ///
 /// handler は複数の executor から並行に呼ばれ得るため、可変配列を直接 capture せず、
-/// lock と配列をこの型に閉じ込めます。`Logger.shared.onOutputHandler` で集めた文字列を
-/// 検証するテストで利用します。
+/// lock と配列をこの型に閉じ込めます。並行区間で観測した文字列を検証するテストで
+/// 利用します。
 final class StringCollector: @unchecked Sendable {
   private let lock = NSLock()
   private var values: [String] = []

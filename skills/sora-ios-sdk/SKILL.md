@@ -447,6 +447,10 @@ CameraVideoCapturer.flip(current!) { error in /* ... */ }
 
 `CameraVideoCapturer.handlers.onCapture` で生成フレームを加工できる。
 
+カメラ操作 (`start` / `stop` / `restart` / `change` / `flip`) は SDK 内部で直列化される。`CameraVideoCapturer.current` (static) と instance の `isRunning` / `format` / `frameRate` / `stream` は内部の owner が、`device` は instance の lock 付き storage が、`handlers` は型全体で共有する lock 付き storage が `NSLock` で保護して公開している。
+
+`CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しないため、利用者が `MediaStream` を保持する必要がある。
+
 ### 画面キャプチャ
 
 ReplayKit を利用してアプリ内画面を配信する。他アプリの画面、ホーム画面、全画面は取得できない。
@@ -779,14 +783,6 @@ legacy handler と新しいイベントの対応は次のとおり。対応は�
 ### 非同期 API
 
 `async` / `await` に対応するのは `MediaChannel.rpc` / `sendableRPC` / `getStatsSnapshot` / `setVideoHardMute` / `startScreenCapture` / `stopScreenCapture`。それ以外のミュートや `getStats` / `sendMessage` は同期 API で、結果を戻り値やコールバックで受け取る。イベントは `Sora.subscribeEvents(bufferingPolicy:)` / `MediaChannel.subscribeEvents(bufferingPolicy:)` が返す `AsyncStream` を `for await` で消費する。
-
-### スレッド安全でない共有状態
-
-次の静的プロパティは `nonisolated(unsafe)` であり、コンパイラによるスレッド安全の検証対象外となる。同時に読み書きしない前提で利用する。
-
-- `DeviceInfo.current`
-
-カメラ操作 (`start` / `stop` / `restart` / `change` / `flip`) は SDK 内部で直列化される。`CameraVideoCapturer` の状態 (`current` / `isRunning` / `format` / `frameRate` / `stream`) は内部の owner が、`device` は instance の lock 付き storage が、`handlers` は型全体で共有する lock 付き storage が `NSLock` で保護して公開しており、`CameraVideoCapturer` は `Sendable` に準拠する。`CameraVideoCapturer.stream` は capturer が `MediaStream` を強参照しないため、利用者が `MediaStream` を保持する必要がある。
 
 ### 現状の制約
 
