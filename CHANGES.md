@@ -31,6 +31,12 @@
   - `webRTCCallbackLogger` の `nonisolated(unsafe)` を除去し、severity と generation を owner で管理して、停止後に届く古い callback を出力しない
   - `SoraHandlers` に `Sendable` 準拠を追加したため、利用側で独自に追加していた `Sendable` 準拠がある場合は削除が必要 (重複適合はコンパイルエラーになる)
   - @t-miya
+- [UPDATE] `DeviceInfo.current` の `nonisolated(unsafe)` を除去し、読み書きを `NSLock` で保護する
+  - 初期 snapshot は storage の lock の外で生成し、未設定の場合のみ lock 下で publish する
+  - storage の lock を保持したまま main queue を待たないため、同時初回取得で storage lock に起因する deadlock は起きない
+  - main thread を塞いだ状態から background thread が初回取得する呼び出し側の待ちは SDK では防げない
+  - 公開 API のシグネチャと environment の文字列表現は変わらない
+  - @t-miya
 - [FIX] `MediaChannel` の接続人数の読み書きを NSLock で保護する
   - `type: notify` の受信スレッド (WebSocket / DataChannel) と利用者の読み出しスレッドの間、および受信スレッド同士でデータ競合しないようにする
   - 公開 API のソース互換 (名前・型・アクセスレベル) と利用者の挙動は変わらない
