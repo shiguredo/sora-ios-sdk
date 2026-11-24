@@ -5,6 +5,7 @@
 - Completed:
 - Branch: feature/change-disconnect-cleanup-semantics
 - Polished: 2026-09-16
+- Refreshed: 2026-11-24
 
 ## 目的
 
@@ -24,18 +25,18 @@
 
 ### 残っている問題
 
-`PeerChannel.Lock.waitDisconnect()` は `count` により分岐する。
+`ConnectionStateOwner.requestDisconnect(error:reason:shouldCancelDisconnectTimerBasedDisconnect:isConnectHandlerHeld:)` は、切断要求を即時実行するか遅延保存するかを分岐する。
 
-- **同期パス**（`count == 0`、または接続試行中で `count == 1` かつ `onConnect != nil`）: `basicDisconnect()` を同期的に実行してから返る。
-- **遅延パス**（`count >= 2`、または `count == 1` かつ `onConnect == nil`）: `shouldDisconnect` に保存するだけで即 return する。`basicDisconnect()` は非同期完了時の `Lock.unlock()` から実行される。
+- **同期パス**（`asyncOperationCount == 0`、または接続試行中で `asyncOperationCount == 1` かつ接続完了 callback を保持している場合）: `disconnectAccepted`（または `disconnectAcceptedWhileConnecting`）を適用し、`PeerChannel.disconnect(error:reason:)` が戻り値の `PendingDisconnect` を受けて `basicDisconnect()` を実行する。`asyncOperationCount == 0` でも、猶予タイマー由来の要求が接続の回復により取り消される場合は実行しない。
+- **遅延パス**（`isStartingConnection` の区間中、または上記のいずれにも該当しない場合）: private な `pendingDisconnect` に保存するだけで即 return する。保存された要求は、非同期処理の完了時（`ConnectionStateOwner.endAsyncOperation()`）または signaling 開始の確定時（`prepareSignalingStart` / `finishSignalingStart`）に取り出され、猶予タイマー由来で接続が回復していれば破棄され、そうでなければ `basicDisconnect()` が実行される。
 
-遅延パスで非同期コールバック（`createAnswer` 等）が返らない場合、`Lock.unlock()` が呼ばれず `basicDisconnect()` は実行されない。このとき `onDisconnect` は発火せず、`state` は `.disconnecting` のまま、PeerConnection・WebSocket・Sora の `_mediaChannels` 登録などが残留し続ける。クリーンアップ完了を待つ上限が存在しないことが本 issue の対象である。
+遅延パスで非同期コールバック（`createAnswer` 等）が返らない場合、`endAsyncOperation()` が呼ばれず `pendingDisconnect` は保存されたままになる。このとき `onDisconnect` は発火せず、`state` は `.disconnecting` のまま、PeerConnection・WebSocket・Sora の `_mediaChannels` 登録などが残留し続ける。クリーンアップ完了を待つ上限が存在しないことが本 issue の対象である。
 
 ## 設計方針
 
 ### 切断クリーンアップタイムアウト
 
-遅延パスで `shouldDisconnect` を保存した時点でタイマーを開始する。`Configuration.disconnectCleanupTimeout` 秒以内に `Lock.unlock()` 経由で `basicDisconnect()` が実行されない場合、SDK が強制 teardown する。タイマーは `basicDisconnect()` の実行時（正常・強制を問わず）に cancel する。
+遅延パスで `pendingDisconnect` を保存した時点でタイマーを開始する。`Configuration.disconnectCleanupTimeout` 秒以内に、保存した要求が `endAsyncOperation()` / `prepareSignalingStart()` / `finishSignalingStart()` のいずれかから `basicDisconnect()` に渡らない場合、SDK が強制 teardown する。タイマーは `basicDisconnect()` の実行時（正常・強制を問わず）、または保存した要求が接続の回復により破棄されたときに cancel する。
 
 ```swift
 // Configuration.swift
@@ -45,14 +46,14 @@ public var disconnectCleanupTimeout: Int = 30
 
 デフォルト 30 秒（`connectionTimeout` と同値）。0 はデバッグ用途のみと doc に明記する。
 
-タイマーの開始・cancel・強制 teardown は `PeerChannel.Lock` の状態（`count` / `isDisconnecting` / `shouldDisconnect`）と直列化する必要があるため、`Lock` の管理下に置く（`lock()` / `unlock()` / `waitDisconnect()` と同じ排他領域から操作する）。タイマーは世代を持ち、cancel 済みの旧タイマーが遅れて発火しても何もしないようにする（`disconnectTimer` / `ConnectionTimer` と同じ方式）。
+タイマーの開始・cancel・強制 teardown は `ConnectionStateOwner` の状態（`asyncOperationCount` / `isDisconnecting` / `isStartingConnection` / `pendingDisconnect`）と直列化する必要があるため、`ConnectionStateOwner` の直列 queue と `ConnectionLifecycleState` / `ConnectionEvent` / `ConnectionStateReducer` で扱う（`requestDisconnect` / `endAsyncOperation` / `resolvePendingDisconnect` と同じ排他領域から操作する）。タイマーは世代を持ち、cancel 済みの旧タイマーが遅れて発火しても何もしないようにする（`disconnectTimerGeneration` / `ConnectionTimer` と同じ方式）。
 
 ### タイムアウト時の処理
 
-1. `Lock` 内で `isDisconnecting = true`、`count = 0` にリセットし、保存済みの切断パラメータ（error / reason）を引き取る
-2. `basicDisconnect(error:reason:)` を強制実行する（進行中の非同期の完了は待たない。以後の `unlock()` は `isDisconnecting` ガードで無視される）
+1. `ConnectionStateOwner` の直列 queue 上で、保存済みの `pendingDisconnect` がある場合だけタイムアウト用の `ConnectionEvent` を適用し、`isDisconnecting = true`、`asyncOperationCount = 0` にリセットする（無い場合は何もしない）
+2. 取り出した `pendingDisconnect`（error / reason）を `PendingDisconnect` として返し、`PeerChannel` が queue の外で `basicDisconnect(error:reason:)` を強制実行する（進行中の非同期の完了は待たない。以後の `endAsyncOperation()` は `isDisconnecting` ガードで無視される）
 3. `basicDisconnect()` の既存経路（`sendDisconnectMessageIfNeeded` → `signalingChannel.disconnect()` → `finishBasicDisconnect()` → `MediaChannel.finishDisconnect()`）がそのまま `state = .disconnected` と `handlers.onDisconnect` の 1 回発火を実行する。強制 teardown 専用の `state` 遷移や handler 呼び出しは追加しない（二重発火を防ぐため）
-4. `sendDisconnectMessageIfNeeded(reason: .disconnectCleanupFailed, error: <元の error>)` で NO-ERROR を送信する（best-effort）。`sendDisconnectMessageIfNeeded()` の `state == .failed` による早期 return は `.peerConnectionStateDisconnected` のみ除外しているため、`.disconnectCleanupFailed` も同様に除外する（`.failed` でも WebSocket は生存している可能性があり、サーバー側セッションの解放が目的のため）
+4. `basicDisconnect(error:reason:)` の内部で呼ばれる `sendDisconnectMessageIfNeeded(reason: .disconnectCleanupFailed, error:)` で NO-ERROR を送信する（best-effort。error には手順 5 のタイムアウトの error が渡るが、この分岐では error を使わない）。`sendDisconnectMessageIfNeeded()` の `state == .failed` による早期 return は `.peerConnectionStateDisconnected` のみ除外しているため、`.disconnectCleanupFailed` も同様に除外する（`.failed` でも WebSocket は生存している可能性があり、サーバー側セッションの解放が目的のため）。あわせて、NO-ERROR を送信する `switch reason` の分岐は現状 `.user` / `.noError`（と `.peerConnectionStateDisconnected`）だけであるため、`.disconnectCleanupFailed` も同じ送信分岐へ追加する
 5. タイムアウト前に確定していた切断理由から `SoraCloseEvent` を組み立て、`SoraError.disconnectCleanupTimeout(original:)` として error に載せる。`MediaChannel.makeDisconnectEvent()` は `SoraError` を既定で `.error` へ変換するため、`onDisconnect` には `.error(SoraError.disconnectCleanupTimeout(original:))` として通知される
 
 ### 公開 API: `SoraError.disconnectCleanupTimeout`
@@ -83,11 +84,11 @@ SoraCloseEvent.error(
 
 ### 0129 との関係
 
-0129（`PeerChannel.Lock` の統合）は `Lock` の統合先（`connectionLifecycleLock` または接続状態 reducer）を決定する。本 issue のタイマーと強制 teardown は `Lock` の状態と直列化が必要であるため、0129 が先行して完了する場合は、統合先の状態機械へ同様のタイマーと強制 teardown を設計する。
+0129（`PeerChannel.Lock` の統合）は 2026-09-29 に完了しており、`PeerChannel.Lock` は削除済みである。`Lock` が管理していた状態（`count` / `isDisconnecting` / `isStartingConnection` / `shouldDisconnect`）は、`Sora/ConnectionLifecycle.swift` の `ConnectionStateOwner` / `ConnectionLifecycleState` / `ConnectionEvent` / `ConnectionStateReducer` が担う。本 issue のタイマーと強制 teardown は、この状態機械へ `ConnectionLifecycleState` の追加状態と `ConnectionEvent` の追加ケースとして組み込む。
 
 ## 完了条件
 
-- 遅延パスで `shouldDisconnect` を保存した後、`disconnectCleanupTimeout` 秒を超えても `basicDisconnect()` が実行されない場合に強制 teardown され、`onDisconnect` が `.error(SoraError.disconnectCleanupTimeout(original:))` で 1 回発火すること
+- 遅延パスで `pendingDisconnect` を保存した後、`disconnectCleanupTimeout` 秒を超えても `basicDisconnect()` が実行されない場合に強制 teardown され、`onDisconnect` が `.error(SoraError.disconnectCleanupTimeout(original:))` で 1 回発火すること
 - タイムアウト通知の `original` に、タイムアウト前に確定していた切断理由（`SoraCloseEvent`）が保持されていること
 - タイムアウト後も同一 `channelId` で `connect()` できること
 - 強制 teardown 後も `state == .disconnected` になり、Sora の接続管理からの除去等、MediaChannel の後始末が完了すること
@@ -96,19 +97,21 @@ SoraCloseEvent.error(
 - `onDisconnect` / `SoraCloseEvent` / `Configuration.disconnectCleanupTimeout` の doc にセマンティクス（`.ok` = プロトコル理由、SDK 運用問題 = `.error`）が明記されていること
 - 単体テスト（タイムアウト強制 teardown、タイマー cancel、同期 / 遅延パスの発火順序）が追加されていること
 - `CHANGES.md` の `develop` セクションに `[ADD]` エントリが追記されていること
+- 公開 API の追加に伴い、同じ変更で `make api-baseline` により `TestConsumers/Swift6Consumer/ApiBaseline/` が再生成され、`make api-check-fresh` が成功すること
 
 ## 解決方法
 
 ### 実装
 
-1. `Configuration` に `disconnectCleanupTimeout` を追加する
+1. `Configuration` に `disconnectCleanupTimeout` を追加する。`PeerChannel` は `Configuration` ではなく `ConnectionConfigurationSnapshot` を保持するため、同 snapshot にも追加して `ConnectionStateOwner` へ渡す
 2. `SoraError` に `disconnectCleanupTimeout(original: SoraCloseEvent?)` を追加する（`errorDescription` も追加する）
 3. `DisconnectReason` に `disconnectCleanupFailed` を追加する
-4. `PeerChannel.Lock` にタイマーを追加し、`waitDisconnect()` の遅延パスで開始、`basicDisconnect()` 実行時に cancel する（世代管理で旧タイマーを無効化する）
-5. タイムアウト時は `Lock` 内で `isDisconnecting = true`、`count = 0` にリセットし、`basicDisconnect(error:reason:)` を強制実行する
-6. `sendDisconnectMessageIfNeeded()` の `state == .failed` 早期 return へ `.disconnectCleanupFailed` も除外として追加する
-7. タイムアウト通知用に、保存済みの error / reason から `SoraCloseEvent` を組み立てる変換を `MediaChannel.makeDisconnectEvent()` と共通化し、`SoraError.disconnectCleanupTimeout(original:)` を error として渡す
+4. `ConnectionStateOwner` と `ConnectionStateReducer` にタイマー状態を追加し、`requestDisconnect()` の遅延パスで開始、`basicDisconnect()` の実行時または保存した要求の破棄時に cancel する（世代管理で旧タイマーを無効化する）
+5. タイムアウト時は `ConnectionStateOwner` の直列 queue 上で `isDisconnecting = true`、`asyncOperationCount = 0` にするイベントを適用して `PendingDisconnect` を取り出し（保存が無い場合は何もしない）、queue の外で `basicDisconnect(error:reason:)` を強制実行する
+6. `sendDisconnectMessageIfNeeded()` の `state == .failed` 早期 return へ `.disconnectCleanupFailed` も除外として追加し、NO-ERROR の送信分岐にも `.disconnectCleanupFailed` を追加する
+7. タイムアウト通知用に、保存済みの error から `SoraCloseEvent` を組み立てる変換を `MediaChannel.makeDisconnectEvent(error:)` と共通化し、`SoraError.disconnectCleanupTimeout(original:)` を error として渡す
 8. `MediaChannel` class doc と `onDisconnect` / `SoraCloseEvent` / `Configuration` の doc を更新する
+9. 公開 API を追加するため、同じ変更で `make api-baseline` により `TestConsumers/Swift6Consumer/ApiBaseline/` を再生成し、`make api-check-fresh` が成功することを確認する
 
 ```
 - [ADD] 切断クリーンアップのタイムアウト (Configuration.disconnectCleanupTimeout) と SoraError.disconnectCleanupTimeout を追加する
