@@ -1,7 +1,7 @@
 # DeviceInfo.current の unsafe な共有可変状態を除去する
 
 - Created: 2026-08-27
-- Completed:
+- Completed: 2026-11-24
 - Priority: Medium
 - Branch: feature/refactor-device-info-current
 - Polished: 2026-11-24
@@ -82,3 +82,14 @@
 - 実 `DeviceInfo.current` を書き換えるテストが元の値へ復元し、後続テストへ影響を残さないこと。
 
 ## 解決方法
+
+`DeviceInfo.current` を `nonisolated(unsafe)` な static stored property から、`NSLock` で保護した内部 `DeviceInfoStorage` の computed property へ変更した。初期 snapshot は storage lock の外で生成し、生成後に未設定の場合だけ publish する。setter が先に設定した場合や、生成中に別の値が publish された場合は、その値を返す。getter / setter のシグネチャと `DeviceInfo` の公開 property は変えていない。
+
+- `DeviceInfo.makeSnapshot()` を internal factory として追加し、初期 snapshot の生成経路をテストからも利用できるようにした。
+- `SoraTests/DeviceInfoTests.swift` を追加し、並行読み書き、connect message の snapshot 一貫性、実 `currentSystemInfo()` の main / background、lock 外生成、setter 優先、publish 後の再生成抑止を検証した。
+- `DeviceInfo.current` の API Doc に、main thread を塞いだ状態で background thread が初回取得する場合の注意と、main thread での warm-up を追記した。
+- `SKILL.md` の「スレッド安全でない共有状態」から `DeviceInfo.current` を除去し、`CHANGES.md` に `[UPDATE]` を追加した。
+
+検証は build-for-testing 成功、`DeviceInfoTests` 13 件 0 失敗、全 `SoraTests` 624 件 (40 skipped) 0 失敗、TSan 0 警告、swift-format / SwiftLint 0 違反である。
+
+API baseline (`TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json`) は Xcode 26.6 / `iphoneos26.5` で更新済みである。`DeviceInfo.current` の ABI 表現だけが更新され、他の公開宣言に差分が無いことを確認した。
