@@ -10816,12 +10816,6 @@
             "mangledName": "$s4Sora10DeviceInfoV7currentACvpZ",
             "moduleName": "Sora",
             "static": true,
-            "declAttributes": [
-              "HasInitialValue",
-              "Nonisolated",
-              "HasStorage"
-            ],
-            "hasStorage": true,
             "accessors": [
               {
                 "kind": "Accessor",
@@ -10840,10 +10834,6 @@
                 "mangledName": "$s4Sora10DeviceInfoV7currentACvgZ",
                 "moduleName": "Sora",
                 "static": true,
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "get"
               },
               {
@@ -10868,10 +10858,6 @@
                 "mangledName": "$s4Sora10DeviceInfoV7currentACvsZ",
                 "moduleName": "Sora",
                 "static": true,
-                "implicit": true,
-                "declAttributes": [
-                  "Transparent"
-                ],
                 "accessorKind": "set"
               }
             ]
