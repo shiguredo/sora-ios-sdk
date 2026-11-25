@@ -267,7 +267,9 @@ final class ConcurrencyStressTests: XCTestCase {
     var acceptedTotal = 0
 
     for round in 0..<rounds {
-      let owner = ConnectionStateOwner(snapshotStorage: ConnectionSnapshotStorage())
+      let owner = ConnectionStateOwner(
+        snapshotStorage: ConnectionSnapshotStorage(),
+        disconnectCleanupTimeout: 30)
       let recorder = ConcurrencyStressRecorder()
 
       DispatchQueue.concurrentPerform(iterations: iterationsPerRound) { _ in
@@ -313,7 +315,9 @@ final class ConcurrencyStressTests: XCTestCase {
   /// 1 回だけ終了を登録するため、ラウンド終了時の残高は 0 に戻ります。
   func testAsyncOperationRaceBalancesCountToZero() {
     for round in 0..<rounds {
-      let owner = ConnectionStateOwner(snapshotStorage: ConnectionSnapshotStorage())
+      let owner = ConnectionStateOwner(
+        snapshotStorage: ConnectionSnapshotStorage(),
+        disconnectCleanupTimeout: 30)
       let recorder = ConcurrencyStressRecorder()
 
       DispatchQueue.concurrentPerform(iterations: iterationsPerRound) { index in

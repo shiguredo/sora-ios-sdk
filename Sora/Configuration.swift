@@ -113,6 +113,18 @@ public struct Configuration {
   /// 指定した時間内に接続が成立しなければ接続試行を中止します。
   public var connectionTimeout: Int = 30
 
+  /// SDK 内部で切断要求が保留されたまま切断処理に引き渡されない場合に、
+  /// SDK が強制切断を試行するまでの秒数。
+  ///
+  /// `disconnect()` の後に SDK 内部で保留された切断要求が、非同期処理の完了待ちで
+  /// SDK 内部の切断処理に引き渡されないままこの秒数を超えた場合に、強制切断を試行します。
+  /// タイムアウトの判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを
+  /// 対象にします。通知は MediaChannel の切断準備とカメラ停止の完了後です
+  /// (WebSocket のクローズ完了は待ちません)。
+  /// タイマーの実行はスケジューラの都合でこの秒数より遅れることがあります。
+  /// 0 以下は無効 (デバッグ用途のみ、非推奨) です。
+  public var disconnectCleanupTimeout: Int = 30
+
   /// 映像コーデック。デフォルトは `.default` です。
   public var videoCodec: VideoCodec = .default
 

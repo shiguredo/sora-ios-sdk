@@ -729,4 +729,17 @@ final class ConnectionConfigurationSnapshotTests: XCTestCase {
       Set(insecureObject.keys), ["urls", "username", "credential"],
       "真値が insecure でも ICEServerInfo の JSON のキーが変わらないこと")
   }
+
+  /// `disconnectCleanupTimeout` が Configuration から snapshot へ写し取られることを確認する
+  ///
+  /// `PeerChannel` は Configuration ではなく snapshot を保持するため、snapshot に値が
+  /// 写らないと切断クリーンアップのタイムアウトを接続へ反映できない。
+  func testSnapshotCopiesDisconnectCleanupTimeout() throws {
+    var configuration = makeConfiguration()
+    configuration.disconnectCleanupTimeout = 7
+
+    let snapshot = try ConnectionConfigurationSnapshot(configuration: configuration)
+
+    XCTAssertEqual(snapshot.disconnectCleanupTimeout, 7, "snapshot に値が写ること")
+  }
 }

@@ -56,13 +56,14 @@ private final class ConnectTerminationAccumulator: @unchecked Sendable {
   }
 }
 
-/// PeerChannel の接続完了ハンドラーの終端保証に関するユニットテスト
+/// PeerChannel の接続終端保証に関するユニットテスト
 ///
 /// 接続完了ハンドラー (onConnect) は、接続成功 (finishConnecting)、
 /// 接続失敗 (sendConnectMessage(error:))、接続完了後の切断 (basicDisconnect) の
 /// どの経路から呼ばれても 1 回だけ呼ばれることを保証する必要がある。
 /// callback 内から同期的に disconnect() された場合でも、二重実行されないことを
-/// take-and-clear で検証する。
+/// take-and-clear で検証する。あわせて、切断クリーンアップのタイムアウトによる
+/// 強制切断と、その通知内容を検証する。
 final class PeerChannelConnectCompletionTests: XCTestCase {
   // テストで共通利用するシグナリング URL を返す
   private func makeTestURL() -> URL {
@@ -355,5 +356,245 @@ final class PeerChannelConnectCompletionTests: XCTestCase {
     XCTAssertEqual(connectCallbackCount, 1)
     XCTAssertEqual(disconnectCallbackCount, 1)
     XCTAssertEqual(peerChannel.signalingChannel.state, .disconnected)
+  }
+
+  // MARK: - 切断クリーンアップのタイムアウト
+
+  /// 遅延パスで切断要求が basicDisconnect に渡らない場合、タイムアウトで強制切断され、
+  /// onDisconnect が `disconnectCleanupTimeout` で 1 回だけ通知されることを確認する
+  ///
+  /// 非同期処理を 1 件だけ進行中にして切断要求を遅延保存させ、
+  /// `disconnectCleanupTimeout` を 1 秒にして実時間でタイムアウトさせる。
+  func testDisconnectCleanupTimeoutForcesDisconnection() async throws {
+    var config = makeConfiguration()
+    config.disconnectCleanupTimeout = 1
+    let peerChannel = try makePeerChannel(config: config)
+    let timedOut = expectation(description: "切断クリーンアップのタイムアウトで onDisconnect が届くこと")
+    timedOut.assertForOverFulfill = true
+    var receivedError: Error?
+    var receivedReason: DisconnectReason?
+    peerChannel.internalHandlers.onDisconnect = { error, reason in
+      receivedError = error
+      receivedReason = reason
+      timedOut.fulfill()
+    }
+
+    XCTAssertTrue(peerChannel.beginAsyncOperation(), "非同期処理を開始できること")
+    peerChannel.disconnect(error: nil, reason: .user)
+
+    await fulfillment(of: [timedOut], timeout: 5)
+
+    XCTAssertEqual(receivedReason, .disconnectCleanupFailed, "強制切断の理由で通知されること")
+    guard let soraError = receivedError as? SoraError else {
+      return XCTFail("SoraError が通知されること")
+    }
+    guard case .disconnectCleanupTimeout(let original) = soraError else {
+      return XCTFail("disconnectCleanupTimeout が通知されること")
+    }
+    guard case .ok(let code, let reason) = original else {
+      return XCTFail("error なしの切断は .ok として保持されること")
+    }
+    XCTAssertEqual(code, 1000, "error なしの切断の code が保持されること")
+    XCTAssertEqual(reason, "NO-ERROR", "error なしの切断の reason が保持されること")
+  }
+
+  /// DataChannel の close 受信後にタイムアウトした場合、original に close code / reason が
+  /// 保持されることを確認する
+  ///
+  /// `dataChannelSignalingClose` は `basicDisconnect()` で `.dataChannelClosed` の error に
+  /// 反映される。タイムアウト経路でも同じ規則で `original` を作る。
+  func testDisconnectCleanupTimeoutKeepsDataChannelCloseInOriginal() async throws {
+    var config = makeConfiguration()
+    config.disconnectCleanupTimeout = 1
+    let peerChannel = try makePeerChannel(config: config)
+    let timedOut = expectation(description: "DataChannel の close を保持したままタイムアウトすること")
+    timedOut.assertForOverFulfill = true
+    var receivedError: Error?
+    peerChannel.internalHandlers.onDisconnect = { error, _ in
+      receivedError = error
+      timedOut.fulfill()
+    }
+
+    peerChannel.handleSignalingOverDataChannel(
+      .close(SignalingClose(code: 4000, reason: "DATA-CHANNEL-CLOSE")))
+    XCTAssertTrue(peerChannel.beginAsyncOperation(), "非同期処理を開始できること")
+    peerChannel.disconnect(error: nil, reason: .dataChannelClosed)
+
+    await fulfillment(of: [timedOut], timeout: 5)
+
+    guard let soraError = receivedError as? SoraError,
+      case .disconnectCleanupTimeout(let original) = soraError
+    else {
+      return XCTFail("disconnectCleanupTimeout が通知されること")
+    }
+    guard case .ok(let code, let reason) = original else {
+      return XCTFail("DataChannel の close は .ok として保持されること")
+    }
+    XCTAssertEqual(code, 4000, "DataChannel の close code が保持されること")
+    XCTAssertEqual(reason, "DATA-CHANNEL-CLOSE", "DataChannel の close reason が保持されること")
+  }
+
+  /// 猶予タイマー由来の切断要求が保存された後に接続が回復していれば、タイムアウトしても
+  /// タイマー発火時に接続が回復していれば、保存した要求を破棄して強制切断しないことを確認する
+  ///
+  /// 未接続の `PeerChannel` は `.disconnected` / `.failed` ではないため、回復とみなされる。
+  /// タイマーが発火しない場合に空振りしないよう、十分な待ち時間を取る。
+  func testDisconnectCleanupTimeoutCancelsWhenNotDisconnectedOrFailed() async throws {
+    var config = makeConfiguration()
+    config.disconnectCleanupTimeout = 1
+    let peerChannel = try makePeerChannel(config: config)
+    let notTimedOut = expectation(description: "回復した接続は強制切断しない")
+    notTimedOut.isInverted = true
+    peerChannel.internalHandlers.onDisconnect = { _, _ in
+      notTimedOut.fulfill()
+    }
+
+    XCTAssertTrue(peerChannel.beginAsyncOperation(), "非同期処理を開始できること")
+    peerChannel.disconnect(error: nil, reason: .peerConnectionStateDisconnected)
+
+    await fulfillment(of: [notTimedOut], timeout: 2.5)
+  }
+
+  /// タイムアウト前に確定していた error が `original` に保持されることを確認する
+  ///
+  /// `SoraError.connectionTimeout` のような WebSocket / DataChannel の close ではない error は
+  /// `SoraCloseEvent.error` として保持される。
+  func testDisconnectCleanupTimeoutKeepsOriginalError() async throws {
+    var config = makeConfiguration()
+    config.disconnectCleanupTimeout = 1
+    let peerChannel = try makePeerChannel(config: config)
+    let timedOut = expectation(description: "元の error を保持したままタイムアウトすること")
+    timedOut.assertForOverFulfill = true
+    var receivedError: Error?
+    peerChannel.internalHandlers.onDisconnect = { error, _ in
+      receivedError = error
+      timedOut.fulfill()
+    }
+
+    XCTAssertTrue(peerChannel.beginAsyncOperation(), "非同期処理を開始できること")
+    peerChannel.disconnect(error: SoraError.connectionTimeout, reason: .signalingFailure)
+
+    await fulfillment(of: [timedOut], timeout: 5)
+
+    guard let soraError = receivedError as? SoraError,
+      case .disconnectCleanupTimeout(let original) = soraError
+    else {
+      return XCTFail("disconnectCleanupTimeout が通知されること")
+    }
+    guard case .error(let originalError) = original else {
+      return XCTFail("元の error は .error として保持されること")
+    }
+    guard let originalSoraError = originalError as? SoraError else {
+      return XCTFail("元の error が SoraError であること")
+    }
+    guard case .connectionTimeout = originalSoraError else {
+      return XCTFail("元の error の種別が保持されること")
+    }
+  }
+
+  /// NO-ERROR の disconnect メッセージの送信先判定を確認する
+  func testNoErrorDisconnectDestination() {
+    XCTAssertEqual(
+      PeerChannel.noErrorDisconnectDestination(
+        reason: .user, dataChannelSignaling: false, switchedToDataChannel: false),
+      .webSocket,
+      "DataChannel シグナリングでない場合は WebSocket へ送ること")
+    XCTAssertEqual(
+      PeerChannel.noErrorDisconnectDestination(
+        reason: .user, dataChannelSignaling: true, switchedToDataChannel: false),
+      .webSocket,
+      "DataChannel へ切り替える前は WebSocket へ送ること")
+    XCTAssertEqual(
+      PeerChannel.noErrorDisconnectDestination(
+        reason: .user, dataChannelSignaling: true, switchedToDataChannel: true),
+      .dataChannel,
+      "DataChannel へ切り替え済みの場合は DataChannel へ送ること")
+    XCTAssertEqual(
+      PeerChannel.noErrorDisconnectDestination(
+        reason: .peerConnectionStateDisconnected,
+        dataChannelSignaling: true,
+        switchedToDataChannel: true),
+      .webSocket,
+      "猶予タイマー由来は DataChannel を使わないこと")
+    XCTAssertEqual(
+      PeerChannel.noErrorDisconnectDestination(
+        reason: .disconnectCleanupFailed,
+        dataChannelSignaling: true,
+        switchedToDataChannel: true),
+      .webSocket,
+      "切断クリーンアップのタイムアウトは DataChannel を使わないこと")
+  }
+
+  /// `.failed` 状態でも切断メッセージを送る理由を確認する
+  func testShouldSendDisconnectMessageInFailedStateReasons() {
+    XCTAssertTrue(
+      PeerChannel.shouldSendDisconnectMessageInFailedState(
+        reason: .peerConnectionStateDisconnected),
+      "猶予タイマー由来は送ること")
+    XCTAssertTrue(
+      PeerChannel.shouldSendDisconnectMessageInFailedState(reason: .disconnectCleanupFailed),
+      "切断クリーンアップのタイムアウトは送ること")
+    XCTAssertFalse(
+      PeerChannel.shouldSendDisconnectMessageInFailedState(reason: .user),
+      "ユーザー起因の切断は送らないこと")
+    XCTAssertFalse(
+      PeerChannel.shouldSendDisconnectMessageInFailedState(reason: .webSocket),
+      "WebSocket 由来の切断は送らないこと")
+  }
+
+  /// 接続試行中にタイムアウトした場合、onConnect にもタイムアウトエラーが 1 回だけ届くことを確認する
+  func testDisconnectCleanupTimeoutNotifiesOnConnect() async throws {
+    var config = makeConfiguration()
+    config.disconnectCleanupTimeout = 1
+    let peerChannel = try makePeerChannel(config: config)
+    let connectFailed = expectation(description: "接続試行中のタイムアウトで onConnect が届くこと")
+    connectFailed.assertForOverFulfill = true
+    var receivedError: Error?
+    peerChannel.onConnect = { error in
+      receivedError = error
+      connectFailed.fulfill()
+    }
+
+    XCTAssertTrue(peerChannel.beginConnectionStart(), "接続開始の初期ロックを取得できること")
+    XCTAssertTrue(peerChannel.beginAsyncOperation(), "非同期処理を開始できること")
+    peerChannel.disconnect(error: nil, reason: .user)
+
+    await fulfillment(of: [connectFailed], timeout: 5)
+
+    guard let soraError = receivedError as? SoraError,
+      case .disconnectCleanupTimeout = soraError
+    else {
+      return XCTFail("onConnect に disconnectCleanupTimeout が届くこと")
+    }
+  }
+
+  /// DataChannel の close 情報が無い `.dataChannelClosed` では original が NO-ERROR になることを確認する
+  func testDisconnectCleanupTimeoutWithoutDataChannelCloseUsesNoError() async throws {
+    var config = makeConfiguration()
+    config.disconnectCleanupTimeout = 1
+    let peerChannel = try makePeerChannel(config: config)
+    let timedOut = expectation(description: "close 情報が無くてもタイムアウトすること")
+    timedOut.assertForOverFulfill = true
+    var receivedError: Error?
+    peerChannel.internalHandlers.onDisconnect = { error, _ in
+      receivedError = error
+      timedOut.fulfill()
+    }
+
+    XCTAssertTrue(peerChannel.beginAsyncOperation(), "非同期処理を開始できること")
+    peerChannel.disconnect(error: nil, reason: .dataChannelClosed)
+
+    await fulfillment(of: [timedOut], timeout: 5)
+
+    guard let soraError = receivedError as? SoraError,
+      case .disconnectCleanupTimeout(let original) = soraError
+    else {
+      return XCTFail("disconnectCleanupTimeout が通知されること")
+    }
+    guard case .ok(let code, let reason) = original else {
+      return XCTFail("close 情報が無い場合は .ok として保持されること")
+    }
+    XCTAssertEqual(code, 1000, "close 情報が無い場合は code が 1000 であること")
+    XCTAssertEqual(reason, "NO-ERROR", "close 情報が無い場合は reason が NO-ERROR であること")
   }
 }

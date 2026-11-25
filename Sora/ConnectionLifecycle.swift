@@ -6,11 +6,13 @@ import Foundation
 /// disconnectTimerScheduled / disconnectTimerGeneration / transportEpoch /
 /// isRedirecting) と、接続ライフサイクルの排他が扱う接続試行状態
 /// (asyncOperationCount / isDisconnecting / isStartingConnection) を保持する。
-/// あわせて、音声入力の初期化済みフラグ (isAudioInputInitialized) を接続試行状態と
-/// 同じ扱いで保持する。状態は単一所有者である `ConnectionStateOwner` が所有する。
+/// あわせて、音声入力の初期化済みフラグ (isAudioInputInitialized) と、切断クリーンアップ
+/// タイマーの世代 (disconnectCleanupTimerGeneration) を保持する。状態は単一所有者である
+/// `ConnectionStateOwner` が所有する。
 /// 接続状態フラグ 5 つは NSLock で保護された snapshot storage を通じて他のスレッドからも
-/// 観測できるが、接続試行状態と isAudioInputInitialized の更新だけでは snapshot を
-/// publish せず、所有者の直列 queue 上でのみ読む (同期 getter を持たない)。
+/// 観測できるが、接続試行状態・isAudioInputInitialized・disconnectCleanupTimerGeneration の
+/// 更新だけでは snapshot を publish せず、所有者の直列 queue 上でのみ読む
+/// (同期 getter を持たない)。
 struct ConnectionLifecycleState: Sendable {
   /// transport 世代。接続の transport が変わるたびに増加する。
   ///
@@ -41,6 +43,14 @@ struct ConnectionLifecycleState: Sendable {
   /// `PeerChannel.disconnectTimerGeneration` に対応する。
   /// タイマー発火時に世代が一致しないと無視される (キャンセル済みタイマーの遅延発火対策)。
   var disconnectTimerGeneration: Int = 0
+
+  /// 切断クリーンアップタイマーの世代。
+  ///
+  /// 遅延パスで保存した切断要求が `basicDisconnect()` に渡らないまま
+  /// ``Configuration/disconnectCleanupTimeout`` を超えた場合に強制切断するための
+  /// タイマーの世代。開始・キャンセル・再開始のたびに +1 し、発火時に世代が一致しない
+  /// タイマーは無視する (`disconnectTimerGeneration` と同じ方式)。
+  var disconnectCleanupTimerGeneration: Int = 0
 
   /// redirect 中であることを示すフラグ。
   ///
@@ -73,13 +83,15 @@ struct ConnectionLifecycleState: Sendable {
   /// 到達可能な状態で成り立つのは、次の 2 つを前提にした呼び出し側の契約である。
   ///
   /// - `isDisconnecting` を立てるのは、非同期処理数の残高を 0 にする (0 件のとき)、
-  ///   または接続開始の初期ロックを強制的に解放する (`asyncOperationCount == 1` かつ
-  ///   接続完了 callback を保持しているとき) 場合に限る。後者では旧 `Lock` と同じく
+  ///   接続開始の初期ロックを強制的に解放する (`asyncOperationCount == 1` かつ
+  ///   接続完了 callback を保持しているとき)、または切断クリーンアップのタイムアウトで
+  ///   強制切断する場合に限る。接続開始の初期ロックの解放とタイムアウトでは
   ///   `asyncOperationCount` を 0 にする
   /// - `isDisconnecting` が `true` の間に非同期処理が完了しても、`endAsyncOperation` は
   ///   非同期処理数を減らさず、遅延させた切断要求も実行しない。`isDisconnecting` を
   ///   立てた時点で残っていた非同期処理は、`basicDisconnect` の後始末へ進むだけで
-  ///   残高を戻さない
+  ///   残高を戻さない。切断クリーンアップのタイムアウト後も同じで、タイムアウト時に
+  ///   残高を 0 にしているため、遅れて完了した非同期処理の終了は無視される
   var isDisconnecting: Bool = false
 
   /// 接続開始の初期ロックを取得してから signaling の開始を確定するまでの区間を示すフラグ。
@@ -122,6 +134,14 @@ enum ConnectionEvent: Sendable {
   /// 切断猶予タイマーキャンセル
   case disconnectTimerCancelled
 
+  /// 切断クリーンアップタイマーの世代を進めた
+  /// (開始・再開始・キャンセルのいずれでも適用し、旧世代のタイマーを無効化する)
+  case disconnectCleanupTimerGenerationAdvanced
+
+  /// 切断クリーンアップタイマー発火
+  /// (強制切断のため、切断処理中にして非同期処理数を 0 にする)
+  case disconnectCleanupTimedOut
+
   /// redirect 受信 (旧 transport の無効化)
   case redirectReceived
 
@@ -161,10 +181,10 @@ enum ConnectionEvent: Sendable {
 /// reducer が返す副作用。
 ///
 /// reducer は副作用を直接実行せず、Effect として返す。
-/// 接続状態フラグを変える 7 つのイベント (redirect / WebSocket 切断スケジュール /
-/// 猶予タイマー / 切断完了) は snapshot を publish する。接続ライフサイクルの排他が
-/// 扱うイベント (接続開始 / signaling 開始区間 / 非同期処理数 / 切断受理) と
-/// 音声入力の初期化完了は publish の契機にしない。
+/// 接続状態フラグ (redirect / WebSocket 切断スケジュール / 猶予タイマー / 切断完了) を
+/// 変えるイベントは snapshot を publish する。接続ライフサイクルの排他が扱うイベント
+/// (接続開始 / signaling 開始区間 / 非同期処理数 / 切断受理 / 切断クリーンアップタイマー)
+/// と音声入力の初期化完了は publish の契機にしない。
 /// これらは同期 getter から観測する必要が無い (`PeerChannel` は snapshot storage の
 /// getter を 5 つの接続状態フラグにしか持たず、接続試行状態と音声入力の初期化済みフラグは
 /// owner が直接読む) ため、
@@ -239,6 +259,20 @@ enum ConnectionStateReducer {
       state.disconnectTimerScheduled = false
       state.disconnectTimerGeneration += 1
       effects.append(.publishSnapshot)
+
+    // 切断クリーンアップタイマーの世代を進める。開始・再開始・キャンセルのどれでも同じ
+    // 遷移でよく、旧世代のタイマーは発火時の照合で無効になる。
+    case .disconnectCleanupTimerGenerationAdvanced:
+      state.disconnectCleanupTimerGeneration += 1
+
+    // 切断クリーンアップタイマー発火: 強制切断のため、切断処理中にして残高を 0 にする。
+    // (残高が 0 でない場合も 0 にする。以後の endAsyncOperation は isDisconnecting で無視される)
+    // 開始区間のフラグも閉じる。開始前に保存した要求がタイムアウトした場合、
+    // この経路では finishSignalingStart が呼ばれないため、ここで閉じないと残り続ける。
+    case .disconnectCleanupTimedOut:
+      state.isDisconnecting = true
+      state.asyncOperationCount = 0
+      state.isStartingConnection = false
 
     // 切断完了: リダイレクト中フラグと WebSocket 切断スケジュールをリセットする。
     // (切断によりリダイレクトは中止され、以降のフラグは初期状態に戻る)
@@ -345,14 +379,36 @@ final class ConnectionStateOwner: @unchecked Sendable {
   /// `eventQueue` 上の直列処理でのみ読み書きする。
   private var pendingDisconnect: PendingDisconnect?
 
+  /// 切断クリーンアップタイマーの待機秒数。0 以下はタイマーを開始しない。
+  /// `PeerChannel.init` が `ConnectionConfigurationSnapshot` の値で設定する。
+  private let disconnectCleanupTimeout: Int
+
+  /// 切断クリーンアップタイマー発火時に、保存した切断要求を取り消すかを返す closure。
+  ///
+  /// `PeerChannel` が自身を弱参照して設定する。猶予タイマー由来の要求が接続の回復で
+  /// 取り消される場合に true を返す。`eventQueue` 上で呼ぶ。
+  ///
+  /// `PeerChannel.init` が 1 回だけ設定し、以後は変更しない write-once の値である。
+  var shouldCancelPendingDisconnectOnCleanupTimeout: ((DisconnectReason) -> Bool)?
+
+  /// 切断クリーンアップタイマー発火時に、強制切断する要求を渡す closure。
+  ///
+  /// `PeerChannel` が自身を弱参照して設定する。呼び出しは `eventQueue` の外で行う
+  /// (`basicDisconnect` が owner の queue へ再入しないようにするため)。
+  ///
+  /// `PeerChannel.init` が 1 回だけ設定し、以後は変更しない write-once の値である。
+  /// nil の場合は強制切断を行わない (production では必ず設定される)。
+  var onDisconnectCleanupTimedOut: ((PendingDisconnect) -> Void)?
+
   /// snapshot storage。同期 getter が読み、NSLock で保護される。
   private let snapshotStorage: ConnectionSnapshotStorage
 
   /// snapshotStorage は必須引数とする。既定値で内部生成すると、呼び出し元が読む
   /// storage と別の instance になり、publish した snapshot が誰にも観測されなくなる。
-  init(snapshotStorage: ConnectionSnapshotStorage) {
+  init(snapshotStorage: ConnectionSnapshotStorage, disconnectCleanupTimeout: Int) {
     self.currentState = ConnectionLifecycleState()
     self.snapshotStorage = snapshotStorage
+    self.disconnectCleanupTimeout = disconnectCleanupTimeout
   }
 
   /// 現在の reducer state を更新し、必要な副作用を実行する。
@@ -486,7 +542,9 @@ final class ConnectionStateOwner: @unchecked Sendable {
 
   /// 進行中の非同期処理の終了を登録し、実行すべき切断要求を返します。
   ///
-  /// 切断処理の開始後に完了した非同期処理の終了は無視します。非同期処理数が
+  /// 切断処理の開始後に完了した非同期処理の終了は無視します。切断クリーンアップの
+  /// タイムアウト後も同じで、タイムアウト時に非同期処理数を 0 にしているため、
+  /// 遅れて完了した非同期処理の終了は残高を減らしません。非同期処理数が
   /// 0 になった場合に加えて、接続試行中 (非同期処理数が 1) に切断要求が保存されて
   /// いる場合も、ここで実行対象として取り出します。取り出した要求は
   /// 呼び出し側が排他区間の外で実行します。
@@ -550,6 +608,10 @@ final class ConnectionStateOwner: @unchecked Sendable {
   /// - Parameter isConnectHandlerHeld:
   ///   接続完了 callback を保持しているかを返す closure。接続試行中かどうかの
   ///   判定に使うため、この関数の排他区間内で呼びます。
+  ///
+  /// 要求を保存した場合は、切断クリーンアップのタイマーを開始します。保存した要求が
+  /// `disconnectCleanupTimeout` 以内に解決されない場合は、タイマーが強制切断の
+  /// 対象として取り出します。
   func requestDisconnect(
     error: (any Error)?,
     reason: DisconnectReason,
@@ -566,6 +628,7 @@ final class ConnectionStateOwner: @unchecked Sendable {
         // signaling の開始可否を確定する前の切断要求は保存する。
         // startConnection が開始前に検出した場合は signaling を開始せずに切断する。
         pendingDisconnect = PendingDisconnect(error: error, reason: reason)
+        scheduleDisconnectCleanupTimerLocked()
         return
       }
       if currentState.asyncOperationCount == 0 {
@@ -593,6 +656,7 @@ final class ConnectionStateOwner: @unchecked Sendable {
       // 失われるが (sendDisconnectMessageIfNeeded の state == .failed ガード)、
       // .failed は ICE の完全失敗であり送信が届く可能性が低いため妥当とする。
       pendingDisconnect = PendingDisconnect(error: error, reason: reason)
+      scheduleDisconnectCleanupTimerLocked()
     }
     return immediate
   }
@@ -619,19 +683,90 @@ final class ConnectionStateOwner: @unchecked Sendable {
     acceptedEvent: ConnectionEvent,
     shouldCancelDisconnectTimerBasedDisconnect: (DisconnectReason) -> Bool
   ) -> PendingDisconnect? {
-    guard let pending = pendingDisconnect else {
+    guard let pending = takePendingDisconnectLocked() else {
       return nil
     }
     // 接続が回復している場合は切断を取り消し、保存だけを破棄する。切断処理は開始しない
     // (開始すると以後の切断・再ネゴシエーションがすべて不能になるため。
     // 取り消し後は再び .disconnected になればタイマーが再開始される)。
     if shouldCancelDisconnectTimerBasedDisconnect(pending.reason) {
-      pendingDisconnect = nil
+      return nil
+    }
+    applyEvent(acceptedEvent)
+    return pending
+  }
+
+  /// 保存済みの切断要求を取り出し、タイマーの世代を進めます。
+  /// 呼び出し元は `eventQueue` 上にいること。
+  private func takePendingDisconnectLocked() -> PendingDisconnect? {
+    guard let pending = pendingDisconnect else {
       return nil
     }
     pendingDisconnect = nil
-    applyEvent(acceptedEvent)
+    advanceDisconnectCleanupTimerLocked()
     return pending
+  }
+
+  /// タイマーの世代を進め、予約済みのタイマーを無効化します。
+  /// 呼び出し元は `eventQueue` 上にいること。
+  private func advanceDisconnectCleanupTimerLocked() {
+    applyEvent(.disconnectCleanupTimerGenerationAdvanced)
+  }
+
+  /// 切断要求を保存した時点で、切断クリーンアップタイマーを開始します。
+  /// 呼び出し元は `eventQueue` 上にいること。
+  ///
+  /// 保存済みの要求が上書きされた場合もこの関数を通るため、タイマーは再開始される
+  /// (世代が変わるので旧タイマーは無効になる)。
+  private func scheduleDisconnectCleanupTimerLocked() {
+    guard disconnectCleanupTimeout > 0 else {
+      return
+    }
+    advanceDisconnectCleanupTimerLocked()
+    let generation = currentState.disconnectCleanupTimerGeneration
+    let interval = TimeInterval(disconnectCleanupTimeout)
+    // `eventQueue` 上で `asyncAfter` すると、発火後の `eventQueue.sync` が再入になって
+    // deadlock するため、猶予タイマーと同じ global queue を使う。
+    DispatchQueue.global(qos: .background).asyncAfter(
+      deadline: .now() + interval
+    ) { [weak self] in
+      self?.handleDisconnectCleanupTimedOut(generation: generation)
+    }
+  }
+
+  /// タイマー発火時に、保存した切断要求を強制切断の対象として取り出します。
+  ///
+  /// 猶予タイマー由来の要求が接続の回復により取り消される場合は、保存を破棄して
+  /// 何もしない。それ以外は `isDisconnecting` と `asyncOperationCount` を更新し、
+  /// 要求を `onDisconnectCleanupTimedOut` で `PeerChannel` へ渡す。呼び出しは
+  /// `eventQueue` の外で行い、`PeerChannel` が `basicDisconnect()` を実行する。
+  ///
+  /// タイマーの実時間に依存せず世代照合を検証できるよう、internal としている。
+  /// `eventQueue` 上 (この owner の closure 内) から呼ぶと `eventQueue.sync` で
+  /// デッドロックするため、タイマーまたはテストの外側からだけ呼ぶこと。
+  func handleDisconnectCleanupTimedOut(generation: Int) {
+    var timedOut: PendingDisconnect?
+    eventQueue.sync {
+      guard generation == currentState.disconnectCleanupTimerGeneration else {
+        return
+      }
+      // 受け取り手が居ない場合は状態を変えず、保存した要求を残す
+      // (消費すると強制切断も行われず、isDisconnecting だけが立って永久停止になる)。
+      guard onDisconnectCleanupTimedOut != nil else {
+        return
+      }
+      guard let pending = takePendingDisconnectLocked() else {
+        return
+      }
+      if shouldCancelPendingDisconnectOnCleanupTimeout?(pending.reason) == true {
+        return
+      }
+      applyEvent(.disconnectCleanupTimedOut)
+      timedOut = pending
+    }
+    if let timedOut {
+      onDisconnectCleanupTimedOut?(timedOut)
+    }
   }
 
   /// 現在の state にイベントを適用し、副作用を実行します。
