@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-08-28
-- Completed:
+- Completed: 2026-11-26
 - Branch: feature/change-disconnect-cleanup-semantics
 - Polished: 2026-11-25
 - Refreshed: 2026-11-24
@@ -116,28 +116,20 @@ SoraCloseEvent.error(
 
 ## 解決方法
 
-### 実装
+`ConnectionStateOwner` に切断クリーンアップのタイムアウトを追加し、保存した切断要求が `basicDisconnect()` に引き渡されない場合に強制切断するようにした。強制切断は既存の `basicDisconnect()` 経路を使い、`onDisconnect` は 1 回だけ発火する。
 
-1. `Sora/Configuration.swift` に `disconnectCleanupTimeout` を追加する。`PeerChannel` は `Configuration` ではなく `ConnectionConfigurationSnapshot` を保持するため、`Sora/ConnectionConfigurationSnapshot.swift` にも追加して `ConnectionStateOwner` へ渡す
-2. `Sora/SoraError.swift` に `disconnectCleanupTimeout(original: SoraCloseEvent)` を追加する（`errorDescription` も追加する）
-3. `Sora/PeerChannel.swift` の `DisconnectReason` に `disconnectCleanupFailed` を追加する
-4. `Sora/ConnectionLifecycle.swift` の `ConnectionStateOwner` / `ConnectionLifecycleState` / `ConnectionEvent` / `ConnectionStateReducer` にタイマー状態を追加する。`requestDisconnect()` の遅延パスで開始、上書きで再開始、`basicDisconnect()` の実行時または保存した要求の破棄時に cancel する。`DispatchQueue.global(qos: .background).asyncAfter` と世代照合で実装する。タイマー発火時に使う回復判定の closure と、`PendingDisconnect` を `PeerChannel` へ渡すコールバックは `ConnectionStateOwner` が保持する必要がある。`ConnectionStateOwner` の init で `disconnectCleanupTimeout` を受け取る。`PeerChannel.init` では `connectionStateOwner` の代入より前に closure から `self` を capture できない（`connectionStateOwner` がまだ未初期化のため）ので、この 2 つの closure は `super.init()` の後に設定用の API で渡す。どちらも `PeerChannel` を弱参照する closure として渡す。`ConnectionStateOwner` の生成箇所は `Sora/PeerChannel.swift` の init と `SoraTests/ConnectionStateOwnerTests.swift` / `SoraTests/ConcurrencyStressTests.swift` の 3 つであり、テストの呼び出しも更新する
-5. `Sora/PeerChannel.swift` にタイマー発火時の入口を追加する。タイマー発火時は `ConnectionStateOwner` の直列 queue 上で世代を照合し、次に回復判定を行い、破棄しない場合だけ `isDisconnecting = true`、`asyncOperationCount = 0` にするイベントを適用して `PendingDisconnect` を取り出す（保存が無い場合は何もしない）。`eventQueue.sync` の復帰後に、`PeerChannel` を弱参照するコールバックへ渡し、`PeerChannel` が queue の外で `basicDisconnect(error: SoraError.disconnectCleanupTimeout(original:), reason: .disconnectCleanupFailed)` を強制実行する
-6. `sendDisconnectMessageIfNeeded()` の `state == .failed` 早期 return へ `.disconnectCleanupFailed` も除外として追加し、`.disconnectCleanupFailed` を `.peerConnectionStateDisconnected` と同じ WebSocket のみの NO-ERROR 送信分岐へ追加する
-7. タイムアウト通知用に、保存済みの error から `SoraCloseEvent.make(from:)` で `SoraCloseEvent` を組み立て、`SoraError.disconnectCleanupTimeout(original:)` を error として渡す。DataChannel の close 情報の反映は `basicDisconnect()` と同じ規則にする
-8. `Sora/MediaChannel.swift` の `MediaChannel` class doc と `onDisconnect` / `SoraCloseEvent` / `Configuration` の doc を更新する。あわせて `ConnectionLifecycleState.isDisconnecting` と `endAsyncOperation` の doc にタイムアウト経路の例外を追記する。`skills/sora-ios-sdk/SKILL.md` の Configuration の表に `disconnectCleanupTimeout` を追加し、切断イベントの節にタイムアウト時の `.error(SoraError.disconnectCleanupTimeout(original:))` 通知を追記する
-9. 公開 API を追加するため、同じ変更で `make api-baseline` により `TestConsumers/Swift6Consumer/ApiBaseline/` を再生成し、`make api-check-fresh` が成功することを確認する
+- `Configuration.disconnectCleanupTimeout`（既定 30 秒、0 以下は無効）と `ConnectionConfigurationSnapshot.disconnectCleanupTimeout` を追加し、`ConnectionStateOwner` へ渡した
+- `SoraError.disconnectCleanupTimeout(original:)` と `DisconnectReason.disconnectCleanupFailed` を追加した
+- `ConnectionLifecycleState` / `ConnectionEvent` / `ConnectionStateReducer` にタイマー世代とタイムアウトイベントを追加した。`DispatchQueue.global(qos: .background).asyncAfter` と世代照合で実装し、上書き時は世代を進めて再開始、要求の解決・破棄・タイムアウト時にキャンセルする
+- `PeerChannel` にタイマー発火時の入口を追加した。`eventQueue.sync` の復帰後に queue の外で `basicDisconnect(error: SoraError.disconnectCleanupTimeout(original:), reason: .disconnectCleanupFailed)` を実行する。`original` は `SoraCloseEvent.make(from:)` で組み立て、`.dataChannelClosed` の close 情報は `basicDisconnect()` と同じ規則で反映する
+- `sendDisconnectMessageIfNeeded()` の `.failed` 早期 return から `.disconnectCleanupFailed` を除外し、WebSocket のみで NO-ERROR を送る分岐へ追加した
+- `Configuration` / `MediaChannel` / `SoraCloseEvent` / `SoraError` の doc、`skills/sora-ios-sdk/SKILL.md`、`CHANGES.md` を更新した
+- `ConnectionStateOwnerTests` / `PeerChannelConnectCompletionTests` / `SoraCloseEventTests` / `ConnectionStateReducerTests` / `ConfigurationTests` / `ConnectionConfigurationSnapshotTests` にテストを追加した
+- 強制切断後の `MediaChannel.state == .disconnected` と `Sora.mediaChannels` からの除去は、既存の `basicDisconnect()` 経路を使うため新しい状態遷移を追加していない。既存の通常切断テストで回帰を確認し、E2E は CI で確認する
 
-```
-- [ADD] 切断クリーンアップのタイムアウト (Configuration.disconnectCleanupTimeout) と SoraError.disconnectCleanupTimeout を追加する
-  - @voluntas
-```
+### 検証
 
-`onDisconnect` を後始末の完了後に発火させる変更は 0010 で反映済みのため、`[CHANGE]` エントリは本 issue では追加しない。
-
-### テスト
-
-- **単体テスト（ConnectionStateOwner）**: `ConnectionStateOwner` を直接使ったテストで、遅延パスのタイムアウトで `PendingDisconnect` がコールバックへ渡ること、回復時に発火しないこと、上書き時に再開始されること、世代不一致の旧タイマーが無視されること、通常完了時に cancel されること、同期 / 遅延パスの発火順序を検証する。`disconnectCleanupTimeout` は 1 秒にして実時間で検証し、モックやスタブは使わない
-- **単体テスト（PeerChannel）**: 実 `PeerChannel` を使い、`beginAsyncOperation()` の後に `disconnect()` を呼んで遅延パスを作り、`disconnectCleanupTimeout` を 1 秒にしてタイマーを実時間で発火させる。`internalHandlers.onDisconnect` が `SoraError.disconnectCleanupTimeout(original:)` で 1 回呼ばれること、`original` が error nil の `.ok(code: 1000, reason: "NO-ERROR")` と `.dataChannelClosed` + DataChannel の close 情報の `.ok(code: reason:)` で期待どおりになることを検証する。モックやスタブは使わない
-- **状態遷移と登録解除**: 強制切断は `basicDisconnect()` → `finishBasicDisconnect()` → `MediaChannel.finishDisconnect()` の既存経路を使うため、新しい `state` 遷移は追加しない。`MediaChannel.state` の `.disconnecting` → `.disconnected` と `Sora.mediaChannels` からの除去は、既存の通常切断のテストと E2E で回帰を確認する
-- **E2E**: 既存切断 E2E（`testSendonlyReconnect` 等）が回帰しないこと。タイムアウトを実サーバーで誘発する手段が無いため、強制切断の確認は単体テストで行い、E2E は通常切断の回帰に限定する。ローカルでは `SORA_SIGNALING_URL` が未設定のため skip され、CI の `e2e-test.yml` で実行する。E2E コメントの「DUPLICATED-CHANNEL-ID 回避の 1 秒待機」は本 issue の目的とは無関係であるため、本 issue では削除・変更しない（別途整理可）
+- `make build XCODE_SDK=iphoneos27.0` が成功した
+- シミュレータテストが 610 件成功した（iOS 26.5、E2E は `SORA_SIGNALING_URL` 未設定のため skip）
+- `make fmt-lint` と `make lint` が 0 違反だった
+- `TestConsumers/Swift6Consumer/ApiBaseline/iphoneos26.5.json` を Xcode 26.6 / `iphoneos26.5` 環境で `make api-baseline` により再生成し、`make api-check-fresh` が成功した
