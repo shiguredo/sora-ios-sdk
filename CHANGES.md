@@ -25,7 +25,7 @@
   - 0 以下は無効 (デバッグ用途のみ、非推奨)
   - タイムアウトの判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを対象とし、MediaChannel の切断準備・カメラ停止・WebSocket のクローズ完了は待たない (通知は切断準備とカメラ停止の完了後)
   - `Configuration.disconnectCleanupTimeout` は既定値を追加するだけで既存コードの変更は不要だが、`SoraError` を網羅 switch している利用者は `default` の追加が必要
-  - @voluntas
+  - @t-miya
 - [ADD] ICE candidate の収集失敗時に url / errorCode / errorText / address / port をデバッグログに出力する
   - 既定のログレベル (`info`) では出力されない
   - @t-miya
