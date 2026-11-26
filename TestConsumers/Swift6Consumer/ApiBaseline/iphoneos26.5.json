@@ -5042,6 +5042,79 @@
           },
           {
             "kind": "Var",
+            "name": "disconnectCleanupTimeout",
+            "printedName": "disconnectCleanupTimeout",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Int",
+                "printedName": "Swift.Int",
+                "usr": "s:Si"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:4Sora13ConfigurationV24disconnectCleanupTimeoutSivp",
+            "mangledName": "$s4Sora13ConfigurationV24disconnectCleanupTimeoutSivp",
+            "moduleName": "Sora",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora13ConfigurationV24disconnectCleanupTimeoutSivg",
+                "mangledName": "$s4Sora13ConfigurationV24disconnectCleanupTimeoutSivg",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Int",
+                    "printedName": "Swift.Int",
+                    "usr": "s:Si"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:4Sora13ConfigurationV24disconnectCleanupTimeoutSivs",
+                "mangledName": "$s4Sora13ConfigurationV24disconnectCleanupTimeoutSivs",
+                "moduleName": "Sora",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
             "name": "videoCodec",
             "printedName": "videoCodec",
             "children": [
@@ -41844,6 +41917,63 @@
             "declKind": "EnumElement",
             "usr": "s:4Sora0A5ErrorO17connectionTimeoutyA2CmF",
             "mangledName": "$s4Sora0A5ErrorO17connectionTimeoutyA2CmF",
+            "moduleName": "Sora"
+          },
+          {
+            "kind": "Var",
+            "name": "disconnectCleanupTimeout",
+            "printedName": "disconnectCleanupTimeout",
+            "children": [
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Sora.SoraError.Type) -> (Sora.SoraCloseEvent) -> Sora.SoraError",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Sora.SoraCloseEvent) -> Sora.SoraError",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SoraError",
+                        "printedName": "Sora.SoraError",
+                        "usr": "s:4Sora0A5ErrorO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Tuple",
+                        "printedName": "(original: Sora.SoraCloseEvent)",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "SoraCloseEvent",
+                            "printedName": "Sora.SoraCloseEvent",
+                            "usr": "s:4Sora0A10CloseEventO"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Metatype",
+                    "printedName": "Sora.SoraError.Type",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "SoraError",
+                        "printedName": "Sora.SoraError",
+                        "usr": "s:4Sora0A5ErrorO"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "declKind": "EnumElement",
+            "usr": "s:4Sora0A5ErrorO24disconnectCleanupTimeoutyAcA0A10CloseEventO_tcACmF",
+            "mangledName": "$s4Sora0A5ErrorO24disconnectCleanupTimeoutyAcA0A10CloseEventO_tcACmF",
             "moduleName": "Sora"
           },
           {
