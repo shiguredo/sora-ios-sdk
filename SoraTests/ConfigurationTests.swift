@@ -207,4 +207,15 @@ final class ConfigurationTests: XCTestCase {
       }
     }
   }
+
+  /// `disconnectCleanupTimeout` の既定値が 30 秒であることを確認する
+  func testDisconnectCleanupTimeoutDefault() throws {
+    let url = try makeTestURL()
+    let config = Configuration(
+      urlCandidates: [url],
+      channelId: "test",
+      role: .recvonly)
+
+    XCTAssertEqual(config.disconnectCleanupTimeout, 30, "既定値が 30 秒であること")
+  }
 }

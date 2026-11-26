@@ -169,7 +169,7 @@ class E2ETestBase: XCTestCase {
   ///
   /// イベントが `SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")` であり、切断後の
   /// `MediaChannel.state` が `.disconnected` であることを確認する。`disconnect(error: nil)` の
-  /// 正常経路では `MediaChannel.makeDisconnectEvent` がこの値を返すが、error が nil の切断は
+  /// 正常経路では `SoraCloseEvent.make(from:)` がこの値を返すが、error が nil の切断は
   /// 経路を問わずこの値になるため、クライアント起点であることの証明にはならない。
   /// 切断済みのチャンネルでは `onDisconnect` が発火しないため、その場合は何もせずに戻る
   /// (検証も行わない)。`.disconnecting` は PeerChannel の後始末中なので、完了通知を待つ。

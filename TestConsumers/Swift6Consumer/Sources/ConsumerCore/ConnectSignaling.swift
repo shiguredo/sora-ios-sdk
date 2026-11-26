@@ -1,5 +1,6 @@
 // 検査する契約:
 //   - Configuration を組み立てて signalingConnectMetadata に Encodable な値を設定できること
+//   - Configuration.disconnectCleanupTimeout を設定できること
 //   - Sora.shared.connect(configuration:handler:) を nonisolated な文脈から呼べること
 //   - 戻り値の ConnectionTask の state を参照し cancel できること
 // 期待する診断: なし (error 0 件、warning 0 件)
@@ -20,6 +21,7 @@ func makeConfiguration(url: URL, channelId: String) -> Configuration {
   configuration.signalingConnectMetadata = SignalingMetadata(appName: "Swift6Consumer", version: 1)
   configuration.videoEnabled = true
   configuration.audioEnabled = true
+  configuration.disconnectCleanupTimeout = 30
   return configuration
 }
 

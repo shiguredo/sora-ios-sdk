@@ -199,4 +199,37 @@ final class ConnectionStateReducerTests: XCTestCase {
 
     XCTAssertEqual(storage.current().transportEpoch, 3, "publish した値を読めること")
   }
+
+  // MARK: - 切断クリーンアップタイマー
+
+  /// タイマーの世代イベントが世代だけを進め、snapshot を publish しないことを確認する
+  func testDisconnectCleanupTimerGenerationAdvancedIncrementsGeneration() {
+    var state = ConnectionLifecycleState()
+    state.disconnectCleanupTimerGeneration = 1
+
+    let result = ConnectionStateReducer.reduce(
+      state: state, event: .disconnectCleanupTimerGenerationAdvanced)
+
+    XCTAssertEqual(
+      result.state.disconnectCleanupTimerGeneration, 2, "世代が +1 されること")
+    XCTAssertTrue(result.effects.isEmpty, "snapshot を publish しないこと")
+  }
+
+  /// タイムアウト発火で切断処理が開始され、残高と開始区間がリセットされることを確認する
+  func testDisconnectCleanupTimedOutStartsDisconnecting() {
+    var state = ConnectionLifecycleState()
+    state.asyncOperationCount = 2
+    state.isStartingConnection = true
+
+    let result = ConnectionStateReducer.reduce(
+      state: state, event: .disconnectCleanupTimedOut)
+
+    XCTAssertTrue(result.state.isDisconnecting, "切断処理が開始されること")
+    XCTAssertEqual(result.state.asyncOperationCount, 0, "非同期処理数が 0 にリセットされること")
+    XCTAssertFalse(result.state.isStartingConnection, "開始区間が閉じられること")
+    XCTAssertEqual(
+      result.state.disconnectCleanupTimerGeneration, 0,
+      "タイムアウト発火では世代を進めないこと")
+    XCTAssertTrue(result.effects.isEmpty, "snapshot を publish しないこと")
+  }
 }

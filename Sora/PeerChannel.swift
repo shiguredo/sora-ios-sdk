@@ -327,7 +327,8 @@ final class PeerChannelMessagingStorage: @unchecked Sendable {
 ///   新たに渡さないこと
 /// - 保持する `PeerChannel` に対して closure が行う状態アクセスが、既存または本変更で
 ///   確立した排他 (`ConnectionStateOwner` の直列 queue、`connectHandlerLock`、
-///   `ConnectionSnapshotStorage` / `PeerChannelTransportStorage` の NSLock) と
+///   `ConnectionSnapshotStorage` / `PeerChannelTransportStorage` /
+///   `dataChannelSignalingCloseLock` の NSLock) と
 ///   `init` で確定した不変値 (`signalingChannel` / `snapshot` などの `let`) に閉じること
 ///
 /// この `@unchecked Sendable` は「この box を使う経路で closure が行う状態アクセスが
@@ -665,7 +666,32 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
   private var connectedAtLeastOnce: Bool = false
 
   /// DataChannel シグナリングで type: close メッセージを受信したときにメッセージ内容を保存するための変数
-  private var dataChannelSignalingClose: (code: Int, reason: String)?
+  ///
+  /// 書き込みは DataChannel delegate / signaling 受信スレッド、読み出しは切断処理と
+  /// 切断クリーンアップのタイマー発火スレッドから行うため、読み書きを lock で排他する。
+  private let dataChannelSignalingCloseLock = NSLock()
+  private var storedDataChannelSignalingClose: (code: Int, reason: String)?
+
+  /// 保存済みの DataChannel の close 情報を返します。
+  private var currentDataChannelSignalingClose: (code: Int, reason: String)? {
+    dataChannelSignalingCloseLock.lock()
+    defer { dataChannelSignalingCloseLock.unlock() }
+    return storedDataChannelSignalingClose
+  }
+
+  /// DataChannel の close 情報を保存します。
+  private func setDataChannelSignalingClose(code: Int, reason: String) {
+    dataChannelSignalingCloseLock.lock()
+    defer { dataChannelSignalingCloseLock.unlock() }
+    storedDataChannelSignalingClose = (code: code, reason: reason)
+  }
+
+  /// 保存済みの DataChannel の close 情報を破棄します。
+  private func clearDataChannelSignalingClose() {
+    dataChannelSignalingCloseLock.lock()
+    defer { dataChannelSignalingCloseLock.unlock() }
+    storedDataChannelSignalingClose = nil
+  }
 
   // type: redirect のために SDP を保存しておく
   // 値が設定されている場合2回目の type: connect メッセージ送信とみなし、 redirect 中であると判断する
@@ -691,8 +717,18 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     webRTCConfiguration = snapshot.webRTCConfiguration
 
     connectionStateOwner = ConnectionStateOwner(
-      snapshotStorage: connectionStateSnapshotStorage)
+      snapshotStorage: connectionStateSnapshotStorage,
+      disconnectCleanupTimeout: snapshot.disconnectCleanupTimeout)
     super.init()
+
+    // 切断クリーンアップのタイマー発火時の入口を owner へ渡す。
+    // closure は PeerChannel を弱参照し、owner が保持しても循環参照にならないようにする。
+    connectionStateOwner.shouldCancelPendingDisconnectOnCleanupTimeout = { [weak self] reason in
+      self?.shouldCancelDisconnectTimerBasedDisconnect(reason: reason) ?? true
+    }
+    connectionStateOwner.onDisconnectCleanupTimedOut = { [weak self] pending in
+      self?.handleDisconnectCleanupTimedOut(pending)
+    }
 
     signalingChannel.internalHandlers.onDisconnect = { [weak self] error, reason in
       self?.disconnect(error: error, reason: reason)
@@ -2113,8 +2149,8 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 処理は不要
       break
     case .close(let close):
-      // dataChannelSignalingClose に格納した値は basicDisconnect で利用される
-      dataChannelSignalingClose = (code: close.code, reason: close.reason)
+      // 保存した値は basicDisconnect と切断クリーンアップのタイムアウト通知で利用される
+      setDataChannelSignalingClose(code: close.code, reason: close.reason)
     default:
       Logger.error(
         type: .peerChannel, message: "unexpected signaling type => \(signaling.typeName())")
@@ -2194,6 +2230,37 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     endAsyncOperation()
   }
 
+  /// 切断クリーンアップのタイムアウト時に、保存済みの切断要求で強制切断します。
+  ///
+  /// `ConnectionStateOwner` がタイマー発火時に `eventQueue` の外から呼びます。強制切断は
+  /// 通常の `basicDisconnect()` を使い、`SoraError.disconnectCleanupTimeout(original:)` を
+  /// 通知します。`original` は保存済みの error / reason から、通常の切断と同じ規則で作ります
+  /// (`.dataChannelClosed` の `dataChannelSignalingClose` の反映を含む)。
+  private func handleDisconnectCleanupTimedOut(_ pending: PendingDisconnect) {
+    Logger.warn(type: .peerChannel, message: "disconnect cleanup timed out")
+    let original = SoraCloseEvent.make(
+      from: resolvedDisconnectError(pending.error, reason: pending.reason))
+    basicDisconnect(
+      error: SoraError.disconnectCleanupTimeout(original: original),
+      reason: .disconnectCleanupFailed)
+  }
+
+  /// DataChannel の close 情報を反映した切断エラーを返します。
+  ///
+  /// `.dataChannelClosed` で Sora から close を受信済みの場合は、保存した code / reason を
+  /// `SoraError.dataChannelClosed` に反映します。タイムアウト通知の `original` の組み立てと
+  /// `basicDisconnect` の通知で同じ規則を使うため、1 箇所にまとめます。
+  private func resolvedDisconnectError(_ error: Error?, reason: DisconnectReason) -> Error? {
+    guard let dataChannelSignalingClose = currentDataChannelSignalingClose,
+      case .dataChannelClosed = reason
+    else {
+      return error
+    }
+    return SoraError.dataChannelClosed(
+      statusCode: dataChannelSignalingClose.code,
+      reason: dataChannelSignalingClose.reason)
+  }
+
   private func basicDisconnect(error: Error?, reason: DisconnectReason) {
     // 切断によりリダイレクトを中止する。
     // (リダイレクト窓で切断が実行された場合、以降は通常の切断状態に戻す)
@@ -2267,20 +2334,15 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       nativeChannel?.close()
     }
     // 実際の PeerConnection を閉じた後、利用者の切断 callback より前に要求を解放する。
-    // 接続ライフサイクルの排他が切断を遅延した場合も、AudioUnit の利用中に解放されない。
+    // 遅延パスでは非同期処理の完了を待ってから解放するため AudioUnit の利用中に解放されないが、
+    // 切断クリーンアップのタイムアウトによる強制切断では進行中の非同期処理を待たない。
     nativePeerChannelFactory.releaseAudioSessionRequirement()
 
-    var error = error
     // DataChannel が正常にクローズされ (reason == .dataChannelClosed)、
-    // かつ事前に Sora から "close" メッセージを受信していた場合 (dataChannelSignalingClose != nil)、
+    // かつ事前に Sora から "close" メッセージを受信していた場合
+    // (storedDataChannelSignalingClose != nil)、
     // error を SoraError.dataChannelClosed にする
-    if let dataChannelSignalingClose = dataChannelSignalingClose,
-      case .dataChannelClosed = reason
-    {
-      error = SoraError.dataChannelClosed(
-        statusCode: dataChannelSignalingClose.code, reason: dataChannelSignalingClose.reason
-      )
-    }
+    let error = resolvedDisconnectError(error, reason: reason)
 
     // TODO(zztkm): signalingChannel.ignoreDisconnectWebSocket が true の場合はこの処理は不要かもしれない
     signalingChannel.disconnect(error: error, reason: reason)
@@ -2312,25 +2374,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     // (接続失敗 callback 内から切断処理へ再入しても二重実行されない)
     invokeConnectHandler(error)
 
-    // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応 nil にしておく
-    dataChannelSignalingClose = nil
+    // disconnect したあとは基本的に PeerChannel を使い回さないはずだが、一応破棄しておく
+    clearDataChannelSignalingClose()
 
     Logger.debug(type: .peerChannel, message: "did disconnect")
   }
 
   // https://sora-doc.shiguredo.jp/SORA_CLIENT
   private func sendDisconnectMessageIfNeeded(reason: DisconnectReason, error: Error?) {
-    if state == .failed, reason != .peerConnectionStateDisconnected {
-      // この関数に到達した時点で .failed なので、メッセージの送信は不要。
-      // ただし .peerConnectionStateDisconnected は猶予タイマー満了による切断であり、
-      // タイマー発火時に .disconnected であることを確認済みのため、その後に .failed へ
-      // 遷移してもシグナリング WebSocket は生存している可能性がある。
-      // サーバー側セッションの即時解放のために送信する
+    if state == .failed, !Self.shouldSendDisconnectMessageInFailedState(reason: reason) {
+      // .failed では送らない。送る理由の例外は
+      // `shouldSendDisconnectMessageInFailedState` の doc にまとめる。
       return
     }
 
-    // 毎回タイプすると長いので変数を定義
-    let dataChannelSignaling = signalingChannel.dataChannelSignaling
     let ignoreDisconnectWebSocket = signalingChannel.ignoreDisconnectWebSocket
 
     switch reason {
@@ -2338,26 +2395,20 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
       // 接続試行中の失敗や ICE が完全に失敗した場合は、シグナリング経路が
       // 生きている保証がないためメッセージを送らない
       break
-    case .user, .noError:
+    case .user, .noError, .peerConnectionStateDisconnected, .disconnectCleanupFailed:
       // reason: .user の場合、 error はユーザーから渡されているので考慮しない
-      let noError = Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR"))
-      if !dataChannelSignaling {
-        // WebSocket シグナリング構成。WebSocket に送信する
-        signalingChannel.send(message: noError)
-      } else if switchedToDataChannel {
-        // DataChannel へ切り替え済みの場合は DataChannel に送信する
-        sendMessageOverDataChannel(message: noError)
-      } else {
-        // DataChannel へ切り替える前は WebSocket に送信する
-        signalingChannel.send(message: noError)
+      switch Self.noErrorDisconnectDestination(
+        reason: reason,
+        dataChannelSignaling: signalingChannel.dataChannelSignaling,
+        switchedToDataChannel: switchedToDataChannel)
+      {
+      case .webSocket:
+        signalingChannel.send(
+          message: Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR")))
+      case .dataChannel:
+        sendMessageOverDataChannel(
+          message: Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR")))
       }
-    case .peerConnectionStateDisconnected:
-      // ネットワーク切断で DataChannel は同じ ICE (DTLS/SCTP) 上にあり死んでいるため、
-      // 送信先はシグナリング WebSocket のみにする (生存していればサーバー側セッションの
-      // 即時解放が可能。送らないとサーバー側セッションがタイムアウトまで残存し、
-      // 即時再接続時に DUPLICATED-CHANNEL-ID レースが発生しやすくなる)
-      let noError = Signaling.disconnect(SignalingDisconnect(reason: "NO-ERROR"))
-      signalingChannel.send(message: noError)
     case .webSocket:
       if ignoreDisconnectWebSocket {
         break
@@ -2387,6 +2438,43 @@ class PeerChannel: NSObject, RTCPeerConnectionDelegate {
     default:
       break
     }
+  }
+
+  /// NO-ERROR の disconnect メッセージの送信先です。
+  enum NoErrorDisconnectDestination: Equatable {
+    case webSocket
+    case dataChannel
+  }
+
+  /// NO-ERROR の disconnect メッセージを送るか、送るならどこへ送るかを判定します。
+  ///
+  /// `.user` / `.noError` は DataChannel シグナリングへ切り替え済みなら DataChannel、
+  /// それ以外は WebSocket へ送ります。`.peerConnectionStateDisconnected` と
+  /// `.disconnectCleanupFailed` は DataChannel の生死が不明なため、WebSocket だけに送ります
+  /// (届けばサーバー側セッションを即時解放できる)。
+  static func noErrorDisconnectDestination(
+    reason: DisconnectReason,
+    dataChannelSignaling: Bool,
+    switchedToDataChannel: Bool
+  ) -> NoErrorDisconnectDestination {
+    switch reason {
+    case .peerConnectionStateDisconnected, .disconnectCleanupFailed:
+      return .webSocket
+    default:
+      if dataChannelSignaling, switchedToDataChannel {
+        return .dataChannel
+      }
+      return .webSocket
+    }
+  }
+
+  /// `.failed` 状態でも切断メッセージを送る理由かを判定します。
+  ///
+  /// 猶予タイマー満了 (`.peerConnectionStateDisconnected`) と切断クリーンアップの
+  /// タイムアウト (`.disconnectCleanupFailed`) は、`.failed` でもシグナリング WebSocket が
+  /// 生存している可能性があるため送ります。
+  static func shouldSendDisconnectMessageInFailedState(reason: DisconnectReason) -> Bool {
+    reason == .peerConnectionStateDisconnected || reason == .disconnectCleanupFailed
   }
 
   private func sendMessageOverDataChannel(message: Signaling) {
@@ -2806,7 +2894,17 @@ enum DisconnectReason: String {
   case noError
   case unknown
 
+  /// 切断クリーンアップがタイムアウトし、強制切断したことを示します。
+  /// `sendDisconnectMessageIfNeeded` などの SDK 内部分岐にだけ使い、アプリには公開しません。
+  case disconnectCleanupFailed
+
   var description: String {
-    rawValue
+    switch self {
+    case .disconnectCleanupFailed:
+      // 内部理由をそのまま利用者向けの文字列 (RPC の切断理由など) に出さない。
+      return "disconnect cleanup timed out"
+    default:
+      return rawValue
+    }
   }
 }

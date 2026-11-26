@@ -113,6 +113,20 @@ public struct Configuration {
   /// 指定した時間内に接続が成立しなければ接続試行を中止します。
   public var connectionTimeout: Int = 30
 
+  /// 切断要求を SDK 内部に保存したまま待機できる最大秒数。
+  ///
+  /// `disconnect()` などで受け付けた切断要求が、SDK 内部の非同期処理や signaling の
+  /// 開始処理の完了待ちで SDK 内部の切断処理に引き渡されないままこの秒数を超えた場合に、
+  /// 強制切断を試行します。この待機は SDK 内部の処理の完了を待つものであり、Sora からの
+  /// 応答を待つものではありません。接続確立のタイムアウトは `connectionTimeout`、
+  /// RPC の応答タイムアウトは `sendableRPC` の `timeout` で別に管理します。
+  /// タイムアウトの判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを
+  /// 対象にします。通知は MediaChannel の切断準備とカメラ停止の完了後です
+  /// (WebSocket のクローズ完了は待ちません)。
+  /// タイマーの実行はスケジューラの都合でこの秒数より遅れることがあります。
+  /// 0 以下は無効 (デバッグ用途のみ、非推奨) です。
+  public var disconnectCleanupTimeout: Int = 30
+
   /// 映像コーデック。デフォルトは `.default` です。
   public var videoCodec: VideoCodec = .default
 

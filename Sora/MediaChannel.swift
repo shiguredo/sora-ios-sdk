@@ -3,8 +3,10 @@ import WebRTC
 
 /// SoraCloseEvent は、Sora の接続が切断された際のイベント情報を表します。
 ///
-/// 接続が正常に切断された場合は、`.ok(code, reason)` ケースが使用され、
-/// 異常な切断やエラー発生時は、`.error(Error)` ケースが使用されます。
+/// 接続が正常に切断された場合は `.ok(code, reason)` ケースが使用されます。
+/// `.ok` には WebSocket / DataChannel の close code / reason、または error の無い切断で
+/// SDK が合成する 1000 / "NO-ERROR" が入ります。SDK が検出したエラーや運用上の停止は
+/// `.error(Error)` ケースで通知されます。
 public enum SoraCloseEvent: Sendable {
   /// 正常な接続切断を示します。
   /// - Parameters:
@@ -14,6 +16,31 @@ public enum SoraCloseEvent: Sendable {
   /// 異常な切断またはエラーが発生して切断した場合に利用されるケースです。
   /// - Parameter error: エラー情報。
   case error(Error)
+}
+
+extension SoraCloseEvent {
+  /// `Error` を `SoraCloseEvent` に変換します。
+  ///
+  /// error が nil の場合は `.ok(code: 1000, reason: "NO-ERROR")`、WebSocket / DataChannel の
+  /// クローズ通知は `.ok(code: reason:)`、それ以外の error は `.error(error)` に変換します。
+  /// 切断完了の通知と、切断クリーンアップのタイムアウト通知で同じ変換を使います。
+  static func make(from error: Error?) -> SoraCloseEvent {
+    guard let error else {
+      return SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")
+    }
+    if let soraError = error as? SoraError {
+      switch soraError {
+      case .webSocketClosed(let code, let reason):
+        // 基本的に reason が nil になるケースはないが、nil の場合は空文字列とする。
+        return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
+      case .dataChannelClosed(let code, let reason):
+        return SoraCloseEvent.ok(code: code, reason: reason)
+      default:
+        return SoraCloseEvent.error(error)
+      }
+    }
+    return SoraCloseEvent.error(error)
+  }
 }
 
 /// メディアチャネルのイベントハンドラです。
@@ -77,6 +104,14 @@ public final class MediaChannelHandlers {
   }
 
   /// 接続解除時に呼ばれるクロージャー
+  ///
+  /// 正常終了は `.ok`、SDK が検出したエラーや運用上の停止は `.error` で通知されます。
+  /// 受け付けた切断要求が SDK 内部の切断処理に引き渡されないまま
+  /// `Configuration.disconnectCleanupTimeout` を経過した場合は
+  /// `.error(SoraError.disconnectCleanupTimeout(original:))` が渡されます。
+  /// タイムアウトの判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを
+  /// 対象にします。通知は MediaChannel の切断準備とカメラ停止の完了後です
+  /// (WebSocket のクローズ完了は待ちません)。
   public var onDisconnect: ((SoraCloseEvent) -> Void)? {
     get { onDisconnectStorage.current }
     set { onDisconnectStorage.current = newValue }
@@ -714,6 +749,12 @@ private final class MediaChannelGetStatsSnapshotTerminalBox: @unchecked Sendable
 /// - ピアチャネル (`PeerChannel`) の接続が解除される。
 /// - サーバーから受信したシグナリング `ping` に対して `pong` を返さない。
 ///   これはピアチャネルの役目です。
+/// - 受け付けた切断要求が SDK 内部の切断処理に引き渡されないまま
+///   `Configuration.disconnectCleanupTimeout` を経過する。この場合は `onDisconnect` に
+///   `.error(SoraError.disconnectCleanupTimeout(original:))` が通知されます。タイムアウトの
+///   判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを対象にします。
+///   通知は MediaChannel の切断準備とカメラ停止の完了後です (WebSocket のクローズ完了は
+///   待ちません)。
 public final class MediaChannel {
   // MARK: - イベントハンドラ
 
@@ -2043,7 +2084,7 @@ public final class MediaChannel {
     Logger.debug(type: .mediaChannel, message: "call onDisconnect")
     internalHandlers.onDisconnectLegacy?(error)
     handlers.onDisconnectLegacy?(error)
-    let closeEvent = makeDisconnectEvent(error: error)
+    let closeEvent = SoraCloseEvent.make(from: error)
     handlers.onDisconnect?(closeEvent)
     publishEvent(kind: .disconnected, closeEvent: closeEvent)
     // 接続の終了で購読を終端する。buffer に残っているイベントは配送してから終端する。
@@ -2118,25 +2159,6 @@ public final class MediaChannel {
     }
     connectionTimer.stop()
     return cleanupTask
-  }
-
-  /// 切断エラーを公開 SoraCloseEvent へ変換します。
-  private func makeDisconnectEvent(error: Error?) -> SoraCloseEvent {
-    guard let error else {
-      return SoraCloseEvent.ok(code: 1000, reason: "NO-ERROR")
-    }
-    if let soraError = error as? SoraError {
-      switch soraError {
-      case .webSocketClosed(let code, let reason):
-        // 基本的に reason が nil になるケースはないが、nil の場合は空文字列とする。
-        return SoraCloseEvent.ok(code: code.intValue(), reason: reason ?? "")
-      case .dataChannelClosed(let code, let reason):
-        return SoraCloseEvent.ok(code: code, reason: reason)
-      default:
-        return SoraCloseEvent.error(error)
-      }
-    }
-    return SoraCloseEvent.error(error)
   }
 
   /// libwebrtc の統計情報を取得します。

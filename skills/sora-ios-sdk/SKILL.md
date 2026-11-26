@@ -187,6 +187,7 @@ Sora.setWebRTCLogLevel(.info)
 | `clientId` / `bundleId` | `String?` | クライアント ID / バンドル ID |
 | `role` | `Role` | `.sendonly` / `.recvonly` / `.sendrecv` |
 | `connectionTimeout` | `Int` | 接続タイムアウト秒 (デフォルト 30) |
+| `disconnectCleanupTimeout` | `Int` | 切断クリーンアップのタイムアウト秒 (デフォルト 30、0 以下は無効・非推奨) |
 | `webRTCConfiguration` | `WebRTCConfiguration` | ICE サーバー・ICE トランスポートポリシー・劣化設定 (詳細は「WebRTC 設定」を参照) |
 
 音声:
@@ -618,6 +619,14 @@ config.mediaChannelHandlers.onDisconnect = { event in
 ```
 
 再接続は SDK では自動で行わない。異常切断を契機にアプリ側で再接続する。
+
+切断要求が SDK 内部の切断処理に引き渡されないまま `Configuration.disconnectCleanupTimeout` (既定 30 秒、
+0 以下は無効・非推奨) を経過すると、SDK が強制切断します。この場合は
+`.error(SoraError.disconnectCleanupTimeout(original:))` が届き、`original` にはタイムアウト前に
+確定していた切断理由が入ります。接続試行中にタイムアウトした場合は `onConnect` にも同じ
+エラーが渡されます。タイムアウトの判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの
+待ち時間だけを対象にします。通知は MediaChannel の切断準備とカメラ停止の完了後です
+(WebSocket のクローズ完了は待ちません)。
 
 ## Swift 6 と並行性
 

@@ -9,6 +9,13 @@ public enum SoraError: Error {
   /// 接続試行開始から一定時間内に接続できなかったことを示します。
   case connectionTimeout
 
+  /// 切断クリーンアップがタイムアウトし、強制切断したことを示します。
+  ///
+  /// `onDisconnect` には `.error` として渡されます。接続試行中にタイムアウトした場合は
+  /// `onConnect` にも渡されます。
+  /// - Parameter original: タイムアウト前に確定していた切断理由。
+  case disconnectCleanupTimeout(original: SoraCloseEvent)
+
   /// Configuration に関するエラー
   case configurationError(reason: String)
 
@@ -77,6 +84,8 @@ extension SoraError: LocalizedError {
       return "Connection is cancelled"
     case .connectionTimeout:
       return "Connection is timeout"
+    case .disconnectCleanupTimeout:
+      return "Disconnect cleanup timed out"
     case .configurationError(let reason):
       return "Configuration error (\(reason))"
     case .connectionBusy(let reason):

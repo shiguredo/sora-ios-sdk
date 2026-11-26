@@ -267,6 +267,7 @@ struct ConnectionConfigurationSnapshot: Sendable {
   let isMultistream: Bool
   let isSender: Bool
   let connectionTimeout: Int
+  let disconnectCleanupTimeout: Int
 
   // MARK: メディアに関する設定
 
@@ -343,6 +344,7 @@ struct ConnectionConfigurationSnapshot: Sendable {
     isMultistream = configuration.isMultistream
     isSender = configuration.isSender
     connectionTimeout = configuration.connectionTimeout
+    disconnectCleanupTimeout = configuration.disconnectCleanupTimeout
 
     videoCodec = configuration.videoCodec
     videoBitRate = configuration.videoBitRate

@@ -19,6 +19,13 @@
   - `finish()` の後は `Sora` の生成 (`Sora.shared` の初回アクセスを含む)、`connect(configuration:webRTCConfiguration:handler:)`、`setWebRTCLogLevel(_:)` を呼ぶと停止する
   - `Sora.finish()` を明示的に呼んで SDK の終了処理を行っているアプリは、すべての接続の完了を待ち、`finish()` 後に `Sora` を再利用しないよう対応が必要
   - @t-miya
+- [ADD] 切断クリーンアップのタイムアウト (`Configuration.disconnectCleanupTimeout`) と `SoraError.disconnectCleanupTimeout` を追加する
+  - 切断要求が SDK 内部の切断処理に引き渡されないまま既定 30 秒を超えた場合に強制切断し、`onDisconnect` に `.error(SoraError.disconnectCleanupTimeout(original:))` を通知する
+  - 接続試行中にタイムアウトした場合は `onConnect` にも同じエラーを通知する
+  - 0 以下は無効 (デバッグ用途のみ、非推奨)
+  - タイムアウトの判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを対象とし、MediaChannel の切断準備・カメラ停止・WebSocket のクローズ完了は待たない (通知は切断準備とカメラ停止の完了後)
+  - `Configuration.disconnectCleanupTimeout` は既定値を追加するだけで既存コードの変更は不要だが、`SoraError` を網羅 switch している利用者は `default` の追加が必要
+  - @t-miya
 - [ADD] ICE candidate の収集失敗時に url / errorCode / errorText / address / port をデバッグログに出力する
   - 既定のログレベル (`info`) では出力されない
   - @t-miya
