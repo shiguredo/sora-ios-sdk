@@ -106,7 +106,7 @@ public final class MediaChannelHandlers {
   /// 接続解除時に呼ばれるクロージャー
   ///
   /// 正常終了は `.ok`、SDK が検出したエラーや運用上の停止は `.error` で通知されます。
-  /// 保留された切断要求が SDK 内部の切断処理に引き渡されないまま
+  /// 受け付けた切断要求が SDK 内部の切断処理に引き渡されないまま
   /// `Configuration.disconnectCleanupTimeout` を経過した場合は
   /// `.error(SoraError.disconnectCleanupTimeout(original:))` が渡されます。
   /// タイムアウトの判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを
@@ -749,7 +749,7 @@ private final class MediaChannelGetStatsSnapshotTerminalBox: @unchecked Sendable
 /// - ピアチャネル (`PeerChannel`) の接続が解除される。
 /// - サーバーから受信したシグナリング `ping` に対して `pong` を返さない。
 ///   これはピアチャネルの役目です。
-/// - 保留された切断要求が SDK 内部の切断処理に引き渡されないまま
+/// - 受け付けた切断要求が SDK 内部の切断処理に引き渡されないまま
 ///   `Configuration.disconnectCleanupTimeout` を経過する。この場合は `onDisconnect` に
 ///   `.error(SoraError.disconnectCleanupTimeout(original:))` が通知されます。タイムアウトの
 ///   判定は、切断要求が SDK 内部の切断処理に引き渡されるまでの待ち時間だけを対象にします。

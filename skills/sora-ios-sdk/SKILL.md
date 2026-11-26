@@ -620,7 +620,7 @@ config.mediaChannelHandlers.onDisconnect = { event in
 
 再接続は SDK では自動で行わない。異常切断を契機にアプリ側で再接続する。
 
-SDK 内部で切断要求が保留されたまま `Configuration.disconnectCleanupTimeout` (既定 30 秒、
+切断要求が SDK 内部の切断処理に引き渡されないまま `Configuration.disconnectCleanupTimeout` (既定 30 秒、
 0 以下は無効・非推奨) を経過すると、SDK が強制切断します。この場合は
 `.error(SoraError.disconnectCleanupTimeout(original:))` が届き、`original` にはタイムアウト前に
 確定していた切断理由が入ります。接続試行中にタイムアウトした場合は `onConnect` にも同じ
